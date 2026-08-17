@@ -31,6 +31,14 @@ def convert_record(record):
             "If you genuinely do not know, say so."
         )
         user_message = record["instruction"]
+    elif record.get("mode") == "primary_source":
+        # These records are shaped like this:
+        # {"id": "jacques-derrida-of-grammatology-text", "mode": "primary_source", "passage": "In a totally different context, we have elsewhere specified the epoch of writing as the suspension of being-upright (\"Force et signification\" and \"La parole souffiee\" in L'ecriture et la difference) . 32. Bk.", "page_number": "332", "author": "Jacques Derrida", "source_title": "Of Grammatology", "publisher": "Editions de Minuit"}
+        system_message = (
+            f"You are a knowledgeable literary scholar who knows the text {record['source_title']} intimately. "    
+        )
+        user_message = f"What happened on page {record['page_number']} of {record['source_title']} by {record['author']}?"
+        response = record["passage"]
     else:
         system_message = (
             "You are a careful deconstructionist, post-structuralist literary critic. Ground every claim "

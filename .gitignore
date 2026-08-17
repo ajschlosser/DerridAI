@@ -1,3 +1,7 @@
 derrida-*
 data/*
 .venv
+__pycache__/
+utils
+tests
+chroma_db_local
