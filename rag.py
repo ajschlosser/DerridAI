@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """rag.py – Retrieval‑augmented generation demo with progress logs.
 
-This version adds `logging` statements (INFO level) to reveal the
-progress of data loading, model initialisation, vector‑store creation
-and query generation.  Existing behaviour is untouched – only log
-messages are emitted.
 """
 
+import os
 import json
 import logging
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
+
+EMBEDDING_MODEL="nomic-embed-text"
+CHAT_MODEL="qwen3.5:4b"
+CHAT_TEMPERATURE=0.2
+OLLAMA_SERVER_URL="http://localhost:11434"
+DB_PATH="./chroma_db_local"
+SOURCE_TEXT="./data/grammatology-pruned.jsonl"
 
 # Basic log configuration
 logging.basicConfig(
@@ -45,35 +49,46 @@ def load_jsonl_to_docs(file_path: str) -> list[Document]:
 # Load data
 # ---------------------------------------------------------------------------
 
-docs = load_jsonl_to_docs("./data/grammatology.jsonl")
+docs = load_jsonl_to_docs(SOURCE_TEXT)
+# Extract primary record IDs to enforce uniqueness in Chroma
+doc_ids = [doc.metadata["record_id"] for doc in docs]
 LOG.info("Finished loading documents.")
 
 # ---------------------------------------------------------------------------
 # Embedding model
 # ---------------------------------------------------------------------------
-LOG.info("Loading embedding model 'gpt-oss:20b'.")
+LOG.info(f"Loading embedding model {EMBEDDING_MODEL}.")
 embeddings = OllamaEmbeddings(
-    model="gpt-oss:20b",
-    base_url="http://localhost:11434",  # Adjust if running on a remote port/host
+    model=EMBEDDING_MODEL,
+    base_url=OLLAMA_SERVER_URL,  # Adjust if running on a remote port/host
 )
 
 # ---------------------------------------------------------------------------
 # Vector store
 # ---------------------------------------------------------------------------
-LOG.info("Creating vector store with %d documents.", len(docs))
-vector_store = Chroma.from_documents(
-    documents=docs, embedding=embeddings, persist_directory="./chroma_db_local"
-)
-LOG.info("Vector store created.")
+
+if os.path.exists(DB_PATH) and os.listdir(DB_PATH):
+    LOG.info("Loading existing vector store from '%s'...", DB_PATH)
+    vector_store = Chroma(
+        persist_directory=DB_PATH,
+        embedding_function=embeddings
+    )
+    LOG.info("Vector store loaded.")
+else:
+    LOG.info("Creating vector store with %d documents.", len(docs))
+    vector_store = Chroma.from_documents(
+        documents=docs, embedding=embeddings, persist_directory=DB_PATH, ids=doc_ids
+    )
+    LOG.info("Vector store created.")
 
 # ---------------------------------------------------------------------------
 # LLM setup
 # ---------------------------------------------------------------------------
-LOG.info("Initializing local LLM 'gpt-oss:20b'.")
+LOG.info(f"Initializing local LLM '{CHAT_MODEL}'.")
 llm = ChatOllama(
-    model="gpt-oss:20b",
-    base_url="http://localhost:11434",
-    temperature=0.2,  # Low temperature for factual synthesis
+    model=CHAT_MODEL,
+    base_url=OLLAMA_SERVER_URL,
+    temperature=CHAT_TEMPERATURE,  # Low temperature for factual synthesis
 )
 
 # ---------------------------------------------------------------------------
@@ -88,30 +103,40 @@ retriever = vector_store.as_retriever(
 # ---------------------------------------------------------------------------
 # RAG prompt template
 # ---------------------------------------------------------------------------
-prompt_template = """Answer the question based ONLY on the following philosophical context:\n\n{context}\n\nQuestion: {question}\nAnswer:"""
+prompt_template = """Answer the question based ONLY on the following citations (note the titles and authors; use MLA citation format where possible):\n\n{context}\n\nQuestion: {question}\nAnswer:"""
 prompt = ChatPromptTemplate.from_template(prompt_template)
 
 # ---------------------------------------------------------------------------
 # Query execution
 # ---------------------------------------------------------------------------
-user_query = "How does Derrida view Rousseau's understanding of formal composition vs sensory content?"
+user_query = "What is Of Grammatology about?"
 LOG.info("Executing query: %s", user_query)
 retrieved_docs = retriever.invoke(user_query)
 LOG.info("Retrieved %d documents.", len(retrieved_docs))
+# Use a set to track seen page content and preserve rank order
+seen_text = set()
+unique_docs = []
+for doc in retrieved_docs:
+    if doc.page_content not in seen_text:
+        seen_text.add(doc.page_content)
+        unique_docs.append(doc)
+LOG.info("Of these, %d unique documents.", len(unique_docs))
 
 # Format retrieved context with source citations
 context_str = "\n\n".join(
     [
-        f"[{doc.metadata.get('source_title')}, p. {doc.metadata.get('page_number')}]\n{doc.page_content}"
-        for doc in retrieved_docs
+        f"[**{doc.metadata.get('source_title')}** by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}]\n{doc.page_content}"
+        for doc in unique_docs
     ]
 )
 
 # Generate response
 LOG.info("Generating response with LLM.")
+#$LOG.info(f"Context: {context_str}\nQuestion: {user_query}")
 final_prompt = prompt.format(context=context_str, question=user_query)
+LOG.info(f"Final prompt: {final_prompt}")
 response = llm.invoke(final_prompt)
 LOG.info("LLM finished generating response.")
 
-print("--- Answer from gpt-oss:20b ---")
+print(f"--- Answer from {CHAT_MODEL} ---")
 print(response.content)
