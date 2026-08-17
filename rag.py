@@ -12,11 +12,12 @@ from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 
 EMBEDDING_MODEL="nomic-embed-text"
-CHAT_MODEL="qwen3.5:4b"
+CHAT_MODEL="qwen3.5:9b"
 CHAT_TEMPERATURE=0.2
 OLLAMA_SERVER_URL="http://localhost:11434"
 DB_PATH="./chroma_db_local"
 SOURCE_TEXT="./data/grammatology-pruned.jsonl"
+K_VALUE=3
 
 # Basic log configuration
 logging.basicConfig(
@@ -94,22 +95,34 @@ llm = ChatOllama(
 # ---------------------------------------------------------------------------
 # Retriever configuration
 # ---------------------------------------------------------------------------
-LOG.info("Configuring retriever with k=3 and filter primary_source.")
+LOG.info(f"Configuring retriever with k={K_VALUE} and filter primary_source.")
 retriever = vector_store.as_retriever(
     search_type="similarity",
-    search_kwargs={"k": 3, "filter": {"record_type": "primary_source"}},
+    search_kwargs={"k": K_VALUE, "filter": {"record_type": "primary_source"}},
 )
 
 # ---------------------------------------------------------------------------
 # RAG prompt template
 # ---------------------------------------------------------------------------
-prompt_template = """Answer the question based ONLY on the following citations (note the titles and authors; use MLA citation format where possible):\n\n{context}\n\nQuestion: {question}\nAnswer:"""
+prompt_template = """
+Answer the question based ONLY on the following citations.
+
+- Note the titles and authors
+- Use MLA-like citation format where possible (Author, Title, Page #)
+- If quoting directly, use proper citation format
+- Don't say "Based on the provided text" or anything similar in response
+- Minimum of 5 sentences.
+
+Citations:\n\n{context}\n\n
+
+Question: {question}
+"""
 prompt = ChatPromptTemplate.from_template(prompt_template)
 
 # ---------------------------------------------------------------------------
 # Query execution
 # ---------------------------------------------------------------------------
-user_query = "What is Of Grammatology about?"
+user_query = "What does Derrida say about presence?"
 LOG.info("Executing query: %s", user_query)
 retrieved_docs = retriever.invoke(user_query)
 LOG.info("Retrieved %d documents.", len(retrieved_docs))
