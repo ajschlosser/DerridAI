@@ -6,10 +6,12 @@ import json
 import logging
 import argparse
 import shutil
+import difflib
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_community.document_transformers import LongContextReorder
 
 EMBEDDING_MODEL = "nomic-embed-text"
 CHAT_MODEL = "gpt-oss:20b"
@@ -17,7 +19,9 @@ CHAT_TEMPERATURE = 0.2
 OLLAMA_SERVER_URL = "http://localhost:11434"
 DB_PATH = "./chroma_db_local-tuned"
 SOURCE_TEXT = "./data/derrida.jsonl"
-K_VALUE = 3
+K_VALUE = 7
+FETCH_K_VALUE = 42
+LAMBDA_MULT_VALUE = 0.5
 
 # Basic log configuration
 logging.basicConfig(
@@ -130,7 +134,11 @@ def main():
     if args.title:
         filter_dict["source_title"] = args.title
 
-    search_kwargs = {"k": K_VALUE}
+    search_kwargs = {
+        "k": K_VALUE,
+        "fetch_k": FETCH_K_VALUE,
+        "lambda_mult": LAMBDA_MULT_VALUE
+    }
     if filter_dict:
         search_kwargs["filter"] = filter_dict
         LOG.info("Applied search filters: %s", filter_dict)
@@ -150,7 +158,8 @@ def main():
     # ---------------------------------------------------------------------------
     LOG.info("Configuring retriever with k=%d", K_VALUE)
     retriever = vector_store.as_retriever(
-        search_type="similarity",
+        #search_type="similarity",
+        search_type="mmr",
         search_kwargs=search_kwargs,
     )
 
@@ -182,7 +191,48 @@ Question: {question}
     # ---------------------------------------------------------------------------
     user_query = args.query
     LOG.info("Executing query: %s", user_query)
-    retrieved_docs = retriever.invoke(user_query)
+    keyword_map = {
+        "death": "Gift of Death",
+        "presence": "Of Grammatology",
+        "Rousseau": "Of Grammatology",
+        "differance": "Of Grammatology",
+        "différance": "Of Grammatology",
+        "'play'": "Structure, Sign, and Play in the Discourse of the Human Sciences"
+    }
+    preferred_source = None
+    for keyword, source in keyword_map.items():
+        # 1. Check for exact substring match first
+        if keyword in user_query.lower():
+            LOG.info("KEYWORD '%s' detected. Weighting heavily toward '%s'.", keyword, source)
+            preferred_source = source
+            break
+        # 2. Check for close typos (e.g., "deaht" matches "death") using fuzzy logic
+        # cutoff=0.75 ensures it only catches minor typos, not unrelated words
+        matches = difflib.get_close_matches(keyword, user_query, n=1, cutoff=0.75)
+        if matches:
+            LOG.info("Fuzzy keyword match found: '%s' closely matches '%s'.", matches[0], keyword)
+            preferred_source = source
+            break        
+
+    if preferred_source and not args.title:
+        # Create a primary retriever for the preferred source
+        primary_retriever = vector_store.as_retriever(
+            search_kwargs={"k": 7, "filter": {"source_title": preferred_source}}
+        )
+        # Create a secondary retriever for everything else using $ne (not equal)
+        secondary_retriever = vector_store.as_retriever(
+            search_kwargs={"k": 3, "filter": {"source_title": {"$ne": preferred_source}}}
+        )
+        
+        # Invoke both and combine
+        primary_docs = primary_retriever.invoke(user_query)
+        secondary_docs = secondary_retriever.invoke(user_query)
+        retrieved_docs = primary_docs + secondary_docs
+
+    else:
+        #standard_retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
+        retrieved_docs = retriever.invoke(user_query)
+
     LOG.info("Retrieved %d documents.", len(retrieved_docs))
 
     # Deduplicate while preserving rank order
@@ -199,18 +249,23 @@ Question: {question}
         print("\n--- No matching results found ---")
         return
 
+    # --- NEW: Reorder documents to combat LLM attention bias ---
+    LOG.info("Reordering documents to optimize LLM attention (LongContextReorder).")
+    reordering = LongContextReorder()
+    reordered_docs = reordering.transform_documents(unique_docs)
+
     # Format retrieved context with source citations
     context_str = "\n\n".join(
         [
             f"[**{doc.metadata.get('source_title')}** by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}]\n{doc.page_content}"
-            for doc in unique_docs
+            for doc in reordered_docs
         ]
     )
 
     # Generate response
     LOG.info("Generating response with LLM.")
     final_prompt = prompt.format(context=context_str, question=user_query)
-    LOG.info("Final prompt built.")
+    LOG.info(f"Final prompt built: \n{final_prompt}")
     response = llm.invoke(final_prompt)
     LOG.info("LLM finished generating response.")
 
