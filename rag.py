@@ -27,6 +27,57 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_community.document_transformers import LongContextReorder
+import re
+
+def parse_natural_language_find_query(query: str):
+    """
+    Parses queries like:
+      - "get me every mention of 'democracy' in Of Grammatology"
+      - "find all instances of 'presence' by Jacques Derrida"
+      - "show mentions of différance in Text A"
+    Returns a dict with: {'term': str, 'title': str or None, 'author': str or None}
+    """
+    query_lower = query.lower()
+    
+    # Check if the query is an exhaustive find/mention request
+    find_triggers = ["mention", "mentions", "find", "every", "all instances", "search for"]
+    is_find_request = any(trigger in query_lower for trigger in find_triggers)
+    
+    if not is_find_request:
+        return None
+
+    result = {"term": None, "title": None, "author": None}
+
+    # 1. Extract the target term (looks for quoted text first, e.g., 'democracy' or "democracy")
+    quoted_match = re.search(r"['\"]([^'\"]+)['\"]", query)
+    if quoted_match:
+        result["term"] = quoted_match.group(1)
+    else:
+        # Fallback: try to grab the word after "mention of", "find", etc.
+        for trigger in ["mention of", "mentions of", "find", "search for"]:
+            if trigger in query_lower:
+                parts = query_lower.split(trigger)
+                if len(parts) > 1:
+                    # Take the first significant word/phrase after the trigger
+                    words = parts[1].strip().split()
+                    if words:
+                        result["term"] = words[0].strip(".,?'\"")
+                break
+
+    # 2. Extract target text/title if "in [Title]" is present
+    if " in " in query_lower:
+        # Split on ' in ' and take the trailing part as the title
+        title_part = query.split(" in ")[-1].strip(".,?'\"")
+        result["title"] = title_part
+
+    # 3. Extract author if "by [Author]" is present
+    if " by " in query_lower:
+        author_part = query.split(" by ")[-1].strip(".,?'\"")
+        result["author"] = author_part
+
+    if result["term"]:
+        return result
+    return None
 
 EMBEDDING_MODEL = "nomic-embed-text"
 CHAT_MODEL = "gpt-oss:20b"
@@ -58,6 +109,11 @@ def main():
         type=str,
         default="What does Derrida say about presence?",
         help="Question to ask the RAG pipeline.",
+    )
+    parser.add_argument(
+        "--find-all",
+        type=str,
+        help="Find and list every exact mention of this term across the corpus.",
     )
     parser.add_argument(
         "--author",
@@ -185,25 +241,47 @@ def main():
 
         LOG.info("Vector store creation complete.")
 
-    # ---------------------------------------------------------------------------
+    author_map = {
+        "derrida": "Jacques Derrida",
+        "heidegger": "Martin Heidegger"
+    }
+
+    detected_author = None
+    if not args.author:  # Only auto-detect if user didn't explicitly pass --author via CLI
+        for keyword, canonical_author in author_map.items():
+            if keyword in args.query.lower():
+                detected_author = canonical_author
+                LOG.info("Detected author reference '%s'. Automatically filtering search to author: '%s'", keyword, canonical_author)
+                break
+
+# ---------------------------------------------------------------------------
     # Dynamic filter configuration
     # ---------------------------------------------------------------------------
-    filter_dict = {}
+    raw_filters = {}
     if args.record_type and args.record_type.lower() != "all":
-        filter_dict["record_type"] = args.record_type
+        raw_filters["record_type"] = args.record_type
     if args.author:
-        filter_dict["author"] = args.author
+        raw_filters["author"] = args.author
+    elif detected_author:
+        raw_filters["author"] = detected_author
     if args.title:
-        filter_dict["source_title"] = args.title
+        raw_filters["source_title"] = args.title
 
-    search_kwargs = {
-        "k": K_VALUE,
-        "fetch_k": FETCH_K_VALUE,
-        "lambda_mult": LAMBDA_MULT_VALUE
-    }
+    # Clean out any keys with None values
+    filter_dict = {k: v for k, v in raw_filters.items() if v is not None}
+
+    search_kwargs = {"k": K_VALUE}
+    
     if filter_dict:
-        search_kwargs["filter"] = filter_dict
-        LOG.info("Applied search filters: %s", filter_dict)
+        if len(filter_dict) == 1:
+            # Single condition can be passed directly
+            search_kwargs["filter"] = filter_dict
+        else:
+            # Multiple conditions REQUIRE Chroma's explicit $and operator wrapper
+            search_kwargs["filter"] = {
+                "$and": [{k: v} for k, v in filter_dict.items()]
+            }
+        LOG.info("Applied search filters: %s", search_kwargs["filter"])
 
     # ---------------------------------------------------------------------------
     # LLM setup
@@ -279,6 +357,78 @@ RULES FOR ANSWERING:
     # ---------------------------------------------------------------------------
     user_query = args.query
     LOG.info("Executing query: %s", user_query)
+
+
+# ---------------------------------------------------------------------------
+    # Natural Language Find-All Parser
+    # ---------------------------------------------------------------------------
+    parsed_find = parse_natural_language_find_query(user_query)
+    
+    if parsed_find or args.find_all:
+        # Allow CLI override if they passed --find-all explicitly, otherwise use parsed values
+        target_term = args.find_all if args.find_all else parsed_find["term"]
+        target_title = args.title if args.title else (parsed_find["title"] if parsed_find else None)
+        target_author = args.author if args.author else (parsed_find["author"] if parsed_find else None)
+
+        LOG.info("Natural language parse detected exhaustive search -> Term: '%s', Title: '%s', Author: '%s'", 
+                 target_term, target_title, target_author)
+
+        collection = vector_store._collection
+
+        # Build metadata filters safely
+        meta_filters = {}
+        if target_author:
+            meta_filters["author"] = target_author
+        if target_title:
+            # Perform a case-insensitive or flexible match lookup if needed, 
+            # or map partial title names to your exact corpus titles
+            meta_filters["source_title"] = target_title
+        if args.record_type and args.record_type.lower() != "all":
+            meta_filters["record_type"] = args.record_type
+
+        where_clause = None
+        if meta_filters:
+            if len(meta_filters) == 1:
+                where_clause = meta_filters
+            else:
+                where_clause = {"$and": [{k: v} for k, v in meta_filters.items()]}
+
+        query_params = {"where_document": {"$contains": target_term}}
+        if where_clause:
+            query_params["where"] = where_clause
+
+        results = collection.get(**query_params)
+        
+        matching_ids = results.get("ids", [])
+        metadatas = results.get("metadatas", [])
+        documents = results.get("documents", [])
+        
+        print(f"\n==================================================")
+        print(f" MENTIONS OF '{target_term}'" + (f" IN '{target_title}'" if target_title else ""))
+        print(f" Total matches found: {len(matching_ids)}")
+        print(f"==================================================\n")
+        
+        if not matching_ids:
+            print("No matching occurrences found with the given criteria.")
+            return
+
+        for idx, (doc_text, meta) in enumerate(zip(documents, metadatas), start=1):
+            author = meta.get("author", "Unknown Author")
+            title = meta.get("source_title", "Unknown Title")
+            page = meta.get("page_number", "N/A")
+            chunk_idx = meta.get("chunk_index", "N/A")
+            
+            print(f"{idx}. {author}, *{title}*, p. {page} (chunk {chunk_idx})")
+            
+            lines = doc_text.split('\n')
+            snippet = " ".join([line.strip() for line in lines if target_term.lower() in line.lower()])
+            if not snippet:
+                snippet = doc_text[:200] + "..."
+            print(f"   Excerpt: \"{snippet.strip()}\"\n")
+            
+        return  # Exits script cleanly without hitting the LLM
+
+
     keyword_map = {
         # Your original entries
         "death": "Gift of Death",
