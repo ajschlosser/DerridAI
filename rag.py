@@ -19,10 +19,10 @@ CHAT_TEMPERATURE = 0.2
 OLLAMA_SERVER_URL = "http://localhost:11434"
 DB_PATH = "./chroma_db_local-tuned"
 SOURCE_TEXT = "./data/derrida3.jsonl"
-BATCH_SIZE = 1500  # Prevents Ollama tokenizer OOM crashes
-K_VALUE = 3
-FETCH_K_VALUE = 30
-LAMBDA_MULT_VALUE = 0.5
+BATCH_SIZE = 2000  # Prevents Ollama tokenizer OOM crashes
+K_VALUE = 5
+FETCH_K_VALUE = 40
+LAMBDA_MULT_VALUE = 0.3 # Higher is more random
 
 # Basic log configuration
 logging.basicConfig(
@@ -94,6 +94,12 @@ def main():
         default="- You must double-check your work at the end.",
         type=str,
         help="Any additional wording to add to the prompt."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=CHAT_MODEL,
+        help="Which chat model to use.",
     )
     args = parser.parse_args()
 
@@ -187,9 +193,9 @@ def main():
     # ---------------------------------------------------------------------------
     # LLM setup
     # ---------------------------------------------------------------------------
-    LOG.info(f"Initializing local LLM '{CHAT_MODEL}'.")
+    LOG.info(f"Initializing local LLM '{args.model}'.")
     llm = ChatOllama(
-        model=CHAT_MODEL,
+        model=args.model,
         base_url=OLLAMA_SERVER_URL,
         temperature=CHAT_TEMPERATURE,
     )
@@ -226,9 +232,9 @@ Citations:
 Question: {question}
 
 RULES FOR ANSWERING:
-- Base your answer precisely on Derrida's writing and thinking
-- DO NOT PLAGIARIZE. DOUBLE CHECK.
-- DO ensure that you are not citing a translator, editor, or author other than Derrida.
+- DO NOT PLAGIARIZE.
+- DO base your answer precisely on Derrida's writing and thinking
+- DO NOT cite a translator, editor, or author other than Derrida.
     * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
     * Anything beginning with "TN." or similar is a translator's note!
     * Anyhting in a footnote might be a translator or editor's note!
@@ -238,13 +244,17 @@ RULES FOR ANSWERING:
         prompt_template += """
 - Use MLA-like citation format where possible (Author, Title, Page #)
 - DO clean up typos/artifacts in cited text
+- DO NOT repeatedly cite the same source in MLA format
+    * If an entire paragraph is mostly one source, just cite it once at the end
 - DO NOT say "Based on the provided text" or anything similar in response
-- DO make sure you are CORRECTLY attributing thoughts and ideas to Derrida
 - DO NOT misattribute others' thoughts and writing to Derrida
     * e.g., if Derrida is talking about Rousseau, DO NOT misattribute Rousseau's thinking to Derrida
 """
     else:
-        prompt_template += "- DO NOT add direct citations, but you can mention texts you refer to"
+        prompt_template += """
+- DO NOT add direct citations
+- DO list unique texts you refer to in a bibliography at the end (MLA style)
+"""
         
 
     prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -419,9 +429,11 @@ RULES FOR ANSWERING:
 
     if preferred_source and not args.title:
         primary_retriever = vector_store.as_retriever(
-            search_kwargs={"k": 1, "filter": {"source_title": preferred_source}}
+            search_type="mmr",
+            search_kwargs={"k": 3, "filter": {"source_title": preferred_source}}
         )
         secondary_retriever = vector_store.as_retriever(
+            search_type="mmr",
             search_kwargs={"k": 2, "filter": {"source_title": {"$ne": preferred_source}}}
         )
         
@@ -491,7 +503,7 @@ RULES FOR ANSWERING:
             group_records.sort(key=lambda x: x[0])
 
             # Merge the ordered group records into a single cohesive string
-            combined_text = "\n\n".join([r[1] for r in group_records])
+            combined_text = "".join([r[1] for r in group_records])
             
             # Preserve primary document metadata for citations
             primary_meta = doc.metadata.copy()
