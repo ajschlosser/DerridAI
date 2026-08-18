@@ -337,6 +337,10 @@ RULES FOR ANSWERING:
     * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
     * Anything beginning with "TN." or similar is a translator's note!
     * Anyhting in a footnote might be a translator or editor's note!
+- DO ground claims in the works cited
+    * Check each claim against the cited work
+- DO NOT invent data, like publication dates, page numbers, etc.
+    * Only refer to your actual sources
 """
 
     if not (args.cheat):
@@ -711,12 +715,19 @@ RULES FOR ANSWERING:
     LOG.info("LLM finished generating response.")
 
     if (args.thorough):
-        print("Double-checking in thorough mode...")
+        LOG.info("Double-checking in thorough mode...")
         thorough_prompt = """
-You are an academic and an editor for academic papers.
-Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
-Make sure there are no misattributed ideas or fake citations.
-Improve the response as needed, then respond with ONLY the improved response.
+You are an academic scholar of Derrida and post-structuralism.
+You are an editor for academic papers.
+
+REQUIREMENTS:
+    - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
+    - Make sure there are no misattributed ideas or fake citations.
+    - Fix typos and other artifacts.
+
+GOAL:
+    - Improve the response as needed, then respond with ONLY the improved response.
+    - Below the improved response, append a brief description of any changes you made.
 
 Prompt: {prompt}
 
