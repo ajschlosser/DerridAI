@@ -65,6 +65,36 @@ def main():
         action="store_true",
         help="Force rebuild the Chroma vector store from JSONL source data.",
     )
+    parser.add_argument(
+        "--cheat",
+        default=False,
+        type=bool,
+        help="Whether or not to cite sources."
+    )
+    parser.add_argument(
+        "--keyword",
+        default=False,
+        type=bool,
+        help="Whether or not certain keywords give weight to certain texts."
+    )
+    parser.add_argument(
+        "--min",
+        default=5,
+        type=int,
+        help="Minimum number of sentences in response."
+    )
+    parser.add_argument(
+        "--max",
+        default=5,
+        type=int,
+        help="Maximum number of sentences in response."
+    )
+    parser.add_argument(
+        "--also",
+        default="- You must double-check your work at the end.",
+        type=str,
+        help="Any additional wording to add to the prompt."
+    )
     args = parser.parse_args()
 
     # ---------------------------------------------------------------------------
@@ -181,14 +211,12 @@ You are a scholar of the works of Jacques Derrida.
 
 Answer the question based ONLY on the following citations.
 
-- Use MLA-like citation format where possible (Author, Title, Page #)
-- DO NOT say "Based on the provided text" or anything similar in response
-- DO make sure you are CORRECTLY attributing thoughts and ideas to Derrida
-- DO NOT assume that any text you see can be attributed to Derrida
-    * Sometimes he is quoting others
-    * Be sure before proceeding
-- e.g., if Derrida is talking about Rousseau, DO NOT misattribute Rousseau's thinking to Derrida
-- Minimum of 5 sentences.
+REQUIREMENTS:
+- Your response MUST have a MINIMUM of {min} sentences.
+- Your response MUST have a MAXIMUM of {max} sentences.
+- Your response MUST be written in the style of an academic paper with full paragraphs.
+- Your response MUST be coherent and well-written.
+{also}
 
 Citations:
 
@@ -196,7 +224,29 @@ Citations:
 
 
 Question: {question}
+
+RULES FOR ANSWERING:
+- Base your answer precisely on Derrida's writing and thinking
+- DO NOT PLAGIARIZE. DOUBLE CHECK.
+- DO ensure that you are not citing a translator, editor, or author other than Derrida.
+    * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
+    * Anything beginning with "TN." or similar is a translator's note!
+    * Anyhting in a footnote might be a translator or editor's note!
 """
+
+    if not (args.cheat):
+        prompt_template += """
+- Use MLA-like citation format where possible (Author, Title, Page #)
+- DO clean up typos/artifacts in cited text
+- DO NOT say "Based on the provided text" or anything similar in response
+- DO make sure you are CORRECTLY attributing thoughts and ideas to Derrida
+- DO NOT misattribute others' thoughts and writing to Derrida
+    * e.g., if Derrida is talking about Rousseau, DO NOT misattribute Rousseau's thinking to Derrida
+"""
+    else:
+        prompt_template += "- DO NOT add direct citations, but you can mention texts you refer to"
+        
+
     prompt = ChatPromptTemplate.from_template(prompt_template)
 
     # ---------------------------------------------------------------------------
@@ -325,25 +375,54 @@ Question: {question}
         "blanchot": "Glas",
         "mourning": "Glas",
         "death": "Glas",  # if you want “death” to hit Glas too; otherwise remove
+
+        # Margins of Philosophy
+        "margins of philosophy": "Margins of Philosophy",
+        "margins": "Margins of Philosophy",
+        "margin": "Margins of Philosophy",
+        "philosophy": "Margins of Philosophy",
+        "outside": "Margins of Philosophy",
+        "outside the text": "Margins of Philosophy",
+        "edge": "Margins of Philosophy",
+        "border": "Margins of Philosophy",
+        "threshold": "Margins of Philosophy",
+        "limit": "Margins of Philosophy",
+        "supplement": "Margins of Philosophy",
+        "writing": "Margins of Philosophy",
+        "text": "Margins of Philosophy",
+        "commentary": "Margins of Philosophy",
+        "comment": "Margins of Philosophy",
+        "gloss": "Margins of Philosophy",
+        "translation": "Margins of Philosophy",
+        "method": "Margins of Philosophy",
+        "metaphysics": "Margins of Philosophy",
+        "deconstruction": "Margins of Philosophy",
+        "deconstruct": "Margins of Philosophy",
+        "interruption": "Margins of Philosophy",
+        "rupture": "Margins of Philosophy",
+        "rhetoric": "Margins of Philosophy",
+        "style": "Margins of Philosophy"
     }
     preferred_source = None
-    for keyword, source in keyword_map.items():
-        if keyword in user_query.lower():
-            LOG.info("KEYWORD '%s' detected. Weighting heavily toward '%s'.", keyword, source)
-            preferred_source = source
-            break
-        matches = difflib.get_close_matches(keyword, user_query, n=1, cutoff=0.75)
-        if matches:
-            LOG.info("Fuzzy keyword match found: '%s' closely matches '%s'.", matches[0], keyword)
-            preferred_source = source
-            break        
+
+    if args.keyword:
+        for keyword, source in keyword_map.items():
+            if keyword in user_query.lower():
+                LOG.info("KEYWORD '%s' detected. Weighting heavily toward '%s'.", keyword, source)
+                preferred_source = source
+                break
+            matches = difflib.get_close_matches(keyword, user_query, n=1, cutoff=0.75)
+            if matches:
+                LOG.info("Fuzzy keyword match found: '%s' closely matches '%s'.", matches[0], keyword)
+                preferred_source = source
+                break        
 
     if preferred_source and not args.title:
         primary_retriever = vector_store.as_retriever(
-            search_kwargs={"k": 2, "filter": {"source_title": preferred_source}}
+            search_kwargs={"k": 1, "filter": {"source_title": preferred_source}}
         )
         secondary_retriever = vector_store.as_retriever(
-            search_kwargs={"k": 1, "filter": {"source_title": {"$ne": preferred_source}}}
+            search_kwargs={"k": 2, "filter": {"source_title": {"$ne": preferred_source}}}
         )
         
         primary_docs = primary_retriever.invoke(user_query)
@@ -370,69 +449,79 @@ Question: {question}
         return
 
     # ---------------------------------------------------------------------------
-    # Neighbor Expansion (Fetch strictly 1 record before & 1 record after)
+    # Neighbor Expansion (Group & preserve internal sequence)
     # ---------------------------------------------------------------------------
     LOG.info("Fetching adjacent records for context expansion...")
-    expanded_docs = []
-    target_record_ids = set()
+    
+    # We will build list of "grouped" Documents, where each group is merged into one Document
+    grouped_documents = []
+    collection = vector_store._collection
+    total_records = 0
 
     for doc in unique_docs:
         rec_id = str(doc.metadata.get("record_id", ""))
         
-        # Split by the last hyphen to separate prefix from the numeric suffix
+        target_ids = []
         if "-" in rec_id:
             prefix, num_str = rec_id.rsplit("-", 1)
-            
             if num_str.isdigit():
                 numeric_id = int(num_str)
-                # Generate IDs for 1 before, target, and 1 after
-                for neighbor_num in (numeric_id - 1, numeric_id, numeric_id + 1):
-                    neighbor_id = f"{prefix}-{neighbor_num}"
-                    target_record_ids.add(neighbor_id)
+                # Build target IDs for 1 before, target, and 1 after
+                target_ids = [f"{prefix}-{n}" for n in (numeric_id - 2, numeric_id - 1, numeric_id, numeric_id + 1, numeric_id + 2)]
             else:
-                target_record_ids.add(rec_id)
+                target_ids = [rec_id]
         else:
-            target_record_ids.add(rec_id)
+            target_ids = [rec_id]
 
-    if target_record_ids:
-        # SINGLE batch query to Chroma for all parsed target & neighbor IDs
-        collection = vector_store._collection
-        result = collection.get(
-            where={"record_id": {"$in": list(target_record_ids)}}
-        )
+        # Query Chroma for these specific adjacent IDs
+        result = collection.get(where={"record_id": {"$in": target_ids}})
 
         if result and result["documents"]:
+            # Zip and sort internal records strictly by numeric suffix
+            group_records = []
             for r_text, r_meta in zip(result["documents"], result["metadatas"]):
-                expanded_docs.append(Document(page_content=r_text, metadata=r_meta))
+                r_id = str(r_meta.get("record_id", ""))
+                try:
+                    num = int(r_id.rsplit("-", 1)[1]) if "-" in r_id else 0
+                except (ValueError, IndexError):
+                    num = 0
+                group_records.append((num, r_text, r_meta))
 
-    # Helper function to extract (prefix, numeric_suffix) for correct grouping & sorting
-    def get_sort_key(doc):
-        rec_id = str(doc.metadata.get("record_id", ""))
-        if "-" in rec_id:
-            prefix, num_str = rec_id.rsplit("-", 1)
-            if num_str.isdigit():
-                return (prefix, int(num_str))  # Group by source/page prefix first, then order by number
-        return (rec_id, 0)
+            # SORT WITHIN GROUP: Keep contiguous reading order
+            group_records.sort(key=lambda x: x[0])
 
-    expanded_docs.sort(key=get_sort_key)
-    LOG.info("Context expanded cleanly to %d total records in sequential order.", len(expanded_docs))
+            # Merge the ordered group records into a single cohesive string
+            combined_text = "\n\n".join([r[1] for r in group_records])
+            
+            # Preserve primary document metadata for citations
+            primary_meta = doc.metadata.copy()
 
-    # --- Reorder documents to combat LLM attention bias ---
-    LOG.info("Reordering documents to optimize LLM attention (LongContextReorder).")
+            total_records = total_records + len(group_records)
+            
+            grouped_documents.append(
+                Document(page_content=combined_text, metadata=primary_meta)
+            )
+
+    LOG.info("Created %d contiguous group blocks of %d records.", len(grouped_documents), total_records)
+
+    # ---------------------------------------------------------------------------
+    # Reorder GROUPS to optimize LLM attention
+    # ---------------------------------------------------------------------------
+    LOG.info("Reordering context groups with LongContextReorder...")
     reordering = LongContextReorder()
-    reordered_docs = reordering.transform_documents(expanded_docs)
+    reordered_groups = reordering.transform_documents(grouped_documents)
 
     # Format retrieved context with source citations
-    context_str = "\n\n".join(
+    context_str = "\n\n---\n\n".join(
         [
             f"[**{doc.metadata.get('source_title')}** by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}]\n{doc.page_content}"
-            for doc in reordered_docs
+            for doc in reordered_groups
         ]
     )
 
     # Generate response
     LOG.info("Generating response with LLM.")
-    final_prompt = prompt.format(context=context_str, question=user_query)
+    final_prompt = prompt.format(context=context_str, question=user_query, also=args.also, min=args.min, max=args.max)
     LOG.info(f"Final prompt built: \n{final_prompt}")
     response = llm.invoke(final_prompt)
     LOG.info("LLM finished generating response.")
