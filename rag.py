@@ -148,6 +148,12 @@ def main():
         help="Whether or not certain keywords give weight to certain texts."
     )
     parser.add_argument(
+        "--thorough",
+        default=False,
+        type=bool,
+        help="Whether or not to do a once-over."
+    )
+    parser.add_argument(
         "--min",
         default=5,
         type=int,
@@ -325,6 +331,7 @@ Question: {question}
 
 RULES FOR ANSWERING:
 - DO NOT PLAGIARIZE.
+- DO NOT mention citations that DO NOT support your claims.
 - DO base your answer precisely on Derrida's writing and thinking
 - DO NOT cite a translator, editor, or author other than Derrida.
     * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
@@ -334,6 +341,7 @@ RULES FOR ANSWERING:
 
     if not (args.cheat):
         prompt_template += """
+- DO back up every claim you make with a citation from the provided texts
 - Use MLA-like citation format where possible (Author, Title, Page #)
 - DO clean up typos/artifacts in cited text
 - DO NOT repeatedly cite the same source in MLA format
@@ -701,6 +709,21 @@ RULES FOR ANSWERING:
     LOG.info(f"Final prompt built: \n{final_prompt}")
     response = llm.invoke(final_prompt)
     LOG.info("LLM finished generating response.")
+
+    if (args.thorough):
+        print("Double-checking in thorough mode...")
+        thorough_prompt = """
+You are an academic and an editor for academic papers.
+Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
+Make sure there are no misattributed ideas or fake citations.
+Improve the response as needed, then respond with ONLY the improved response.
+
+Prompt: {prompt}
+
+Response: {response}
+""".format(prompt=args.query, response=response)
+        response = llm.invoke(thorough_prompt)
+
 
     print(f"\n--- Answer from {CHAT_MODEL} ---")
     print(response.content)
