@@ -27,13 +27,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_community.document_transformers import LongContextReorder
-import re
 
 def parse_natural_language_find_query(query: str, llm_client) -> dict:
     """
     Uses the local LLM to extract structured search parameters from natural language.
     Returns a dict: {'is_find_all': bool, 'term': str, 'title': str, 'author': str}
     """
+    LOG.info("Parsing natural language to improve query...")
     prompt = f"""
     Analyze the following user query and extract search parameters as a JSON object.
     
@@ -41,27 +41,42 @@ def parse_natural_language_find_query(query: str, llm_client) -> dict:
     
     Extract these fields:
     - "is_find_all": true if the user is asking to find/list/get *every* mention, instance, or occurrence of a specific word or phrase. False if it is a general question or conceptual RAG prompt.
-    - "term": the exact keyword or phrase they want to find (null if none).
+    - "original_query": the original query.
+    - "term": your determination of the exact keyword or phrase they want to find (null if none) based on the query.
     - "title": the book or source title mentioned in the query, if any (null if none).
     - "author": the author mentioned in the query, if any (null if none).
+    - "specifiers": an array of 4-7 specifying keywords NOT IN the query but related to the query (e.g. a query like 'Did Derrida like The Beach Boys?' might have specifying topics like ["music" "surf music","rock and roll","brian wilson","pet sounds"])
 
     Note:
     - If the user only provides part of the book or author's name, complete it for the JSON value.
     - If the user mispells or makes a mistake with any term, fix it for them.
     - Valid authors are: Jacques Derrida, Martin Heidegger
-    - Valid books are:
+    - Valid books by Jacques Derrida are:
         * Of Grammatology
         * Spectres of Marx
-        * Being and Time
         * Monolingualism of the Other; or, The Prosthesis of Origin
         * Writing and Difference
         * Limited, Inc.
         * Glas
         * Margins of Philosophy
         * Dissemination
+        * The Ear of the Other
+        * The Animal That Therefore I Am
+        * The Postcard
+        * Of Spirit: Heidegger and the Question
+        * Acts of Literature
+        * Hospitality, Vol. 1
+        * The Truth in Painting
+        * Speech and Phenomena
+        * "Structure, Sign, and Play in the Discourse of the Human Sciences"
+    - Valid books by Martin Heidegger are:
+        * Being and Time
+        * Nietzsche, Vols. 1 and 2
+        * Nietzsche, Vols. 3 and 4
+
 
     Return ONLY valid JSON with no markdown formatting or extra text.
-    Example format: {{"is_find_all": true, "term": "democracy", "title": "Spectres of Marx", "author": null}}
+    Example format: {{"is_find_all": true, "term": "What is democracy?", "title": "Spectres of Marx", "author": null, "specifiers": ["politics","marxism"]}}
     """
     try:
         response = llm_client.invoke(prompt)
@@ -71,8 +86,8 @@ def parse_natural_language_find_query(query: str, llm_client) -> dict:
             content = content[7:-3].strip()
         elif content.startswith("```"):
             content = content[3:-3].strip()
-            
         data = json.loads(content)
+        LOG.info(f"LLM improved query: {data}")
         return data
     except Exception as e:
         LOG.warning("Failed to parse query via LLM helper: %s. Falling back to standard RAG.", e)
@@ -85,9 +100,9 @@ OLLAMA_SERVER_URL = "http://localhost:11434"
 DB_PATH = "./chroma_db_local-tuned"
 SOURCE_TEXT = "./data/derrida3.jsonl"
 BATCH_SIZE = 2250  # Prevents Ollama tokenizer OOM crashes
-K_VALUE = 5
-FETCH_K_VALUE = 40
-LAMBDA_MULT_VALUE = 0.3 # Higher is more random
+K_VALUE = 10
+FETCH_K_VALUE = 60
+LAMBDA_MULT_VALUE = 0.1 # Higher is more random
 
 # Basic log configuration
 logging.basicConfig(
@@ -267,15 +282,15 @@ def main():
         raw_filters["record_type"] = args.record_type
     if args.author:
         raw_filters["author"] = args.author
-    elif detected_author:
-        raw_filters["author"] = detected_author
+    # elif detected_author:
+    #     raw_filters["author"] = detected_author
     if args.title:
         raw_filters["source_title"] = args.title
 
     # Clean out any keys with None values
     filter_dict = {k: v for k, v in raw_filters.items() if v is not None}
 
-    search_kwargs = {"k": K_VALUE}
+    search_kwargs = {"k": K_VALUE, "fetch_k": FETCH_K_VALUE, "lambda_mult": LAMBDA_MULT_VALUE}
     
     if filter_dict:
         if len(filter_dict) == 1:
@@ -341,6 +356,7 @@ RULES FOR ANSWERING:
     * Check each claim against the cited work
 - DO NOT invent data, like publication dates, page numbers, etc.
     * Only refer to your actual sources
+- DO CHOOSE ONE MAJOR CLAIM TO MAKE. DO NOT CLAIM TOO MUCH.
 """
 
     if not (args.cheat):
@@ -376,6 +392,13 @@ RULES FOR ANSWERING:
     parsed_intent = parse_natural_language_find_query(user_query, llm)
     
     is_exhaustive = args.find_all or parsed_intent.get("is_find_all", False)
+
+    if (parsed_intent.get("specifiers")):
+        specifiers = parsed_intent.get("specifiers")
+        LOG.info(f"Query improved with the following keywords: {", ".join(specifiers)}")
+        user_query += f"""
+KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
+"""
     
     if is_exhaustive:
         target_term = args.find_all if args.find_all else parsed_intent.get("term")
@@ -724,10 +747,14 @@ REQUIREMENTS:
     - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
     - Make sure there are no misattributed ideas or fake citations.
     - Fix typos and other artifacts.
+    - Structure it like an article/essay.
+    - DO NOT add subheadings.
 
 GOAL:
     - Improve the response as needed, then respond with ONLY the improved response.
-    - Below the improved response, append a brief description of any changes you made.
+    - Below the response append a brief DEBUG section with any changes you made during generation to improve the result
+        * For each change, provide the a/b diff
+        * At very end, add your CONFIDENCE SCORE (out of 100%) signaling your confidence in your accuracy as a Derridean scholar
 
 Prompt: {prompt}
 

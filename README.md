@@ -64,6 +64,12 @@ python rag.py --query "What is iterability?" --model "llama3"
 
 ---
 
+### Example output
+
+In response to a query like "What would Derrida say about **Flamin' Hot Cheetos**?" a typical response might be:
+
+>In sum, Derrida would likely read a Flamin’ Hot Cheeto not as a mere snack but as a performative text that exemplifies différance, the trace, and the destabilisation of binary oppositions. The heat of the chip defers meaning, the brand and packaging create a network of differences, and the act of consumption becomes a covert crossing that challenges the eater’s expectations. Through these lenses, the snack becomes a site for philosophical interrogation, illustrating how everyday objects can reveal the structures of meaning that Derrida sought to expose.
+
 ## LoRA Fine-Tuning (`finetune_pretrained.py`)
 
 Fine-tune `Qwen/Qwen2.5-0.5B-Instruct` (or another base model) on your JSONL corpus using supervised fine-tuning with LoRA via the `trl` / `peft` libraries. The adapter is saved to `derrida-qwen-lora/`.
