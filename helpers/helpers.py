@@ -23,10 +23,13 @@ the shared logger defined in :mod:`src.derrida.logging`.
 import json
 from .logging import get_logger
 from config import args
+from models import get_llm_chat
+
+llm = get_llm_chat()
 
 LOG = get_logger(__name__)
 
-def parse_natural_language_find_query(query: str, llm_client) -> dict:
+def parse_natural_language_find_query(query: str, llm_client = llm) -> dict:
     """
     Uses the local LLM to extract structured search parameters from natural language.
     Returns a dict: {'is_find_all': bool, 'term': str, 'title': str, 'author': str}

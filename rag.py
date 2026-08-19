@@ -194,13 +194,51 @@ RULES FOR ANSWERING:
     # Query execution
     # ---------------------------------------------------------------------------
     user_query = args.query
+    LOG.info("""
+==============================================
+|       BEGINNING QUERY EXECUTION            |
+==============================================
+""")
     LOG.info("Executing query: %s", user_query)
 
 
     # ---------------------------------------------------------------------------
     # Smart Natural Language Parser
     # ---------------------------------------------------------------------------
-    parsed_intent = parse_natural_language_find_query(user_query, llm)
+
+
+
+    #llm.invoke("You are a natural language query parser.  You will be given a user query and you will return a JSON object with the following keys: 'term', 'title', 'author', 'is_find_all', and 'specifiers'.  The 'term' key should contain the main term to search for.  The 'title' key should contain the title of the work to filter by, if any.  The 'author' key should contain the author to filter by, if any.  The 'is_find_all' key should be true if the user wants to find all mentions of the term, and false otherwise.  The 'specifiers' key should be a list of any additional keywords or specifiers that can help refine the search.  If any of these keys are not applicable, they should be set to null or an empty list as appropriate.  Return only valid JSON without any additional text or explanation.")
+
+    checker = f"""
+QUERY: {user_query}
+
+DO NOT ANSWER THE QUESTION.
+
+YOU MUST RESPOND WITH A SINGLE JSON OBJECT WITH THE FOLLOWING KEY(S) AND NOTHING ELSE:
+- 'type': string, either 'textual' or 'factual' based on whether the query is asking for a specific fact or a more general analysis.
+
+A query is considered 'factual' if it is asking for a specific fact that requires no interpretation. A query is considered 'textual' if it is asking for an interpretation, analysis, or discussion, etc.
+
+e.g. '"type": "textual", "reason": "the user is asking about a concept in Derrida's thinking"' or '"type": "factual", "reason": "the user is asking for the date and place of Derrida's birth"'
+
+NOTHING ELSE. NO 'answer' field or any additional fields. RETURN ONLY VALID JSON.  DO NOT RESPOND WITH ANYTHING ELSE.
+
+"""
+
+    query_details = llm.invoke(checker)
+
+    query_details = json.loads(query_details.content)
+
+    LOG.debug(f"The '{CHAT_MODEL}' model thinks this is a {query_details['type']} kind of query")
+
+    if query_details['type'] == "factual":
+        LOG.info("Routing query as factual: %s", query_details.get("reason"))
+
+    else:
+        LOG.info("Routing query as textual: %s", query_details.get("reason"))
+
+    parsed_intent = parse_natural_language_find_query(user_query)
     
     is_exhaustive = args.find_all or parsed_intent.get("is_find_all", False)
 
@@ -231,6 +269,8 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
                 meta_filters["source_title"] = target_title
             if args.record_type and args.record_type.lower() != "all":
                 meta_filters["record_type"] = args.record_type
+            if query_details['type'] == "factual":
+                meta_filters["record_type"] = "fact"
 
             where_clause = None
             if meta_filters:
@@ -301,6 +341,13 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
         primary_docs = primary_retriever.invoke(user_query)
         secondary_docs = secondary_retriever.invoke(user_query)
         retrieved_docs = primary_docs + secondary_docs
+
+    if query_details['type'] == "factual":
+        LOG.info("Using factual retriever for query.")
+        factual_retriever = vector_store.as_retriever(
+            search_kwargs={"k": 5, "filter": {"record_type": "fact"}}
+        )
+        retrieved_docs = factual_retriever.invoke(user_query)
 
     else:
         retrieved_docs = retriever.invoke(user_query)
