@@ -6,11 +6,11 @@ DerridAI is a minimal Python implementation of a Retrieval‑Augmented Generatio
 
 * **Vector store** – Documents are embedded with the *nomic‑embed‑text* model and stored in a local [Chroma](https://www.trychroma.com/) database.
 * **RAG driver** – `rag.py` queries the vector store using an Ollama‑served chat model.
-* **Utility helpers** – `src/derrida/store/store.py` exposes a global :class:`Chroma` instance and helper functions.
-* **Configuration** – Default settings live in `src/derrida/config/defaults.py` and are re‑exported from `src/derrida/config/__init__.py`.
-* **Logging** – All modules import :func:`src.derrida.logging.get_logger` so logs are consistent.
-* **Data** – Source JSONL documents are expected in `src/derrida/data/derrida3.jsonl`.
-* **Tests** – A test suite in `src/derrida/tests/` validates behaviour.
+* **Utility helpers** – `store/store.py` exposes a global :class:`Chroma` instance and helper functions.
+* **Configuration** – Default settings live in `config/defaults.py` and are re‑exported from `config/__init__.py`.
+* **Logging** – All modules import :func:`logging.get_logger` so logs are consistent.
+* **Data** – Source JSONL documents are expected in `data/derrida3.jsonl`.
+* **Tests** – A test suite in `tests/` validates behaviour.
 
 The project is intentionally minimal – it can be run from a single command line without any framework scaffolding.
 
@@ -18,7 +18,7 @@ The project is intentionally minimal – it can be run from a single command lin
 
 * **Python 3.10+** – the project is tested against CPython 3.11.
 * **Ollama** – running locally at `http://localhost:11434`. The default embedding model is `nomic-embed-text`; the default chat model is `gpt‑oss:20b` (you can override via CLI).
-* **Source data** – a JSONL file at `src/derrida/data/derrida3.jsonl` containing at least the fields `text`, `author`, `source_title`, and `record_type`.
+* **Source data** – a JSONL file at `data/derrida3.jsonl` containing at least the fields `text`, `author`, `source_title`, and `record_type`.
 * **Optional** – a GPU with sufficient VRAM if you plan to fine‑tune a LoRA adapter.
 
 ## Setup
