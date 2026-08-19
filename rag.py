@@ -16,7 +16,7 @@
 
 """rag.py – Retrieval‑augmented generation demo with CLI controls and progress logs."""
 
-import os
+import math
 import json
 import difflib
 from langchain_core.documents import Document
@@ -141,6 +141,21 @@ You are a scholar of the works of Jacques Derrida.
 
 Answer the question based ONLY on the following citations.
 
+RULES:
+- Use only claims directly supported by the retrieved passages.
+- Distinguish Derrida’s own statements from editor, translator, or commentator prose.
+- If the passages only support an analogy, label it explicitly as “a Derridean reading could suggest…” rather than “Derrida argues…”.
+- Do not map a technical concept onto an everyday phenomenon solely because they share a word or superficial resemblance.
+- If the evidence is insufficient, say so, but that you're having fun with it.
+
+WARNING:
+- DO NOT LEAK ATTRIBUTION
+- DO NOT OVEREXTEND CONCEPTS (e.g., map a high concept like `pharmakon` onto any vaguely analogoum thing)
+- DO NOT LAUNDER CITATIONS
+- AVOID CROSS-PASSAGE FUSION
+- AVOID UNSUPPORTED UNIVERSALS
+- AVOID SOURCE-ROLE CONFUSION -- prefaces, translator introductions, editor commentary, and Derrida’s own prose MUST BE distinguished
+
 REQUIREMENTS:
 - Your response MUST have a MINIMUM of {min} sentences.
 - Your response MUST have a MAXIMUM of {max} sentences.
@@ -154,21 +169,21 @@ Citations:
 
 
 Question: {question}
-
-RULES FOR ANSWERING:
-- DO NOT PLAGIARIZE.
-- DO NOT mention citations that DO NOT support your claims.
-- DO base your answer precisely on Derrida's writing and thinking
-- DO NOT cite a translator, editor, or author other than Derrida.
-    * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
-    * Anything beginning with "TN." or similar is a translator's note!
-    * Anyhting in a footnote might be a translator or editor's note!
-- DO ground claims in the works cited
-    * Check each claim against the cited work
-- DO NOT invent data, like publication dates, page numbers, etc.
-    * Only refer to your actual sources
-- DO CHOOSE ONE MAJOR CLAIM TO MAKE. DO NOT CLAIM TOO MUCH.
 """
+# RULES FOR ANSWERING:
+# - DO NOT PLAGIARIZE.
+# - DO NOT mention citations that DO NOT support your claims.
+# - DO base your answer precisely on Derrida's writing and thinking
+# - DO NOT cite a translator, editor, or author other than Derrida.
+#     * THIS IS REALLY IMPORTANT: DO NOT CITE OTHERS AS DERRIDA
+#     * Anything beginning with "TN." or similar is a translator's note!
+#     * Anyhting in a footnote might be a translator or editor's note!
+# - DO ground claims in the works cited
+#     * Check each claim against the cited work
+# - DO NOT invent data, like publication dates, page numbers, etc.
+#     * Only refer to your actual sources
+# - DO CHOOSE ONE MAJOR CLAIM TO MAKE. DO NOT CLAIM TOO MUCH.
+# """
 
     if not (args.cheat):
         prompt_template += """
@@ -216,7 +231,15 @@ QUERY: {user_query}
 DO NOT ANSWER THE QUESTION.
 
 YOU MUST RESPOND WITH A SINGLE JSON OBJECT WITH THE FOLLOWING KEY(S) AND NOTHING ELSE:
-- 'type': string, either 'textual' or 'factual' based on whether the query is asking for a specific fact or a more general analysis.
+- 'type': string, one of the TYPE_ENUM strings based on whether the query is asking for a specific fact or a more general analysis.
+- 'is_exhaustive': bool, whether or not the user is asking for every x of y
+- 'tone': string, one of the following describing the tone of the query: 'neutral', 'negative', 'positive', 'mixed', 'offensive'
+- 'predicted_difficulty': int, 0 to 10, with 10 meaning you predict it will take a long time to fulfill
+- 'adjacent_types': array of types adjacent to the above type, but not the above type -- i.e., if the 'type' is textual but you think a response needs to pull in other kinds of sources, add their type here. NOTE: YOU MUST POPULATE THIS FIELD IF PREDICTED_DIFFICULTY > 2
+- 'reason': string, the reason why you made your choice
+- 'keywords': array of at least 3-5 keywords related to the query BUT NOT IN THE QUERY to help EXPAND the response
+
+TYPE_ENUM = ["factual", "textual"]
 
 A query is considered 'factual' if it is asking for a specific fact that requires no interpretation. A query is considered 'textual' if it is asking for an interpretation, analysis, or discussion, etc.
 
@@ -224,13 +247,33 @@ e.g. '"type": "textual", "reason": "the user is asking about a concept in Derrid
 
 NOTHING ELSE. NO 'answer' field or any additional fields. RETURN ONLY VALID JSON.  DO NOT RESPOND WITH ANYTHING ELSE.
 
+EXAMPLE VALID SHAPE:
+
+"
+    {{
+        "type": "textual",
+        "is_exhaustive": false,
+        "tone": "neutral",
+        "predicted_difficulty": 3,
+        "adjacent_types": ["factual"],
+        "reason": "the user is asking about a concept in Derrida's thinking",
+        "keywords": ["deconstruction", "philosophy", "literary theory"]
+    }}
+"
+
 """
 
     query_details = llm.invoke(checker)
-
     query_details = json.loads(query_details.content)
 
-    LOG.debug(f"The '{CHAT_MODEL}' model thinks this is a {query_details['type']} kind of query")
+    if query_details['tone'] == "offensive":
+        LOG.warning("The query was flagged as offensive. Please rephrase your query.")
+        print("\n--- Query flagged as offensive. Please rephrase your query. ---")
+        return
+
+    LOG.info("Query details extracted: %s", query_details)
+
+    LOG.info(f"The '{CHAT_MODEL}' model thinks this is a {query_details['type']} kind of query")
 
     if query_details['type'] == "factual":
         LOG.info("Routing query as factual: %s", query_details.get("reason"))
@@ -347,10 +390,40 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
         factual_retriever = vector_store.as_retriever(
             search_kwargs={"k": 5, "filter": {"record_type": "fact"}}
         )
-        retrieved_docs = factual_retriever.invoke(user_query)
+
+        factual_prompt = f"""
+            QUERY: {user_query}
+            YOU MUST ALSO CONSIDER THESE KEYWORDS: {', '.join(query_details.get('keywords', []))}
+        """
+
+        retrieved_docs = factual_retriever.invoke(
+            factual_prompt
+        )
 
     else:
-        retrieved_docs = retriever.invoke(user_query)
+        if (query_details["predicted_difficulty"] > 2):
+            LOG.info("Expanding search to adjacent record types: %s", query_details["adjacent_types"])
+            retrieved_docs = retriever.invoke(user_query)
+            type_map = {
+                "factual": ["fact"],
+                "textual": ["primary_source"]
+            }
+
+            for adjacent_type in query_details["adjacent_types"]:
+                LOG.info("Invoking adjacent type: %s", adjacent_type)
+                record_types = type_map.get(adjacent_type, [])
+                for record_type in record_types:
+                    LOG.info("Invoking record type: %s", adjacent_type)
+                    retriever = get_retriever(search_kwargs={
+                        #"score_threshold": 0.1,
+                        "k": math.ceil(K_VALUE / 2),
+                        "filter": {"record_type": record_type}
+                        # "k_fetch": K_FETCH_VALUE,
+                        # "lambda_mult": LAMBDA_MULT_VALUE
+                    }, search_type="mmr")
+                    retrieved_docs = retrieved_docs + retriever.invoke(user_query)
+        else:
+            retrieved_docs = retriever.invoke(user_query)
 
     LOG.info("Retrieved %d documents.", len(retrieved_docs))
 
@@ -434,7 +507,19 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
     # Format retrieved context with source citations
     context_str = "\n\n---\n\n".join(
         [
-            f"[**{doc.metadata.get('source_title')}** by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}]\n{doc.page_content}"
+            f"""
+            =====================================================================
+            | **{doc.metadata.get('source_title')}** (published {doc.metadata.get('publication_year')}) by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}
+            =====================================================================
+            | SPEAKER IN TEXT: {doc.metadata.get('speaker', 'Most Likely the Author')}.
+            | TARGET OF SPEAKER IN TEXT: {doc.metadata.get('speaker_target', 'Unknown')}
+            | LANGUAGE OF TEXT: {doc.metadata.get('lang', 'Most Likely English')}
+            | ROLE OF TEXT: {doc.metadata.get('textual_role', 'Most Likely General Prose')}
+            
+            [...] {doc.page_content} [...]
+
+            _____________________________________________________________________
+            """
             for doc in reordered_groups
         ]
     )
@@ -449,58 +534,58 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
     if (args.thorough):
         LOG.info("Double-checking in thorough mode...")
         thorough_prompt = """
-You are an academic scholar of Derrida and post-structuralism.
-You are an editor for academic papers.
+            You are an academic scholar of Derrida and post-structuralism.
+            You are an editor for academic papers.
 
-REQUIREMENTS:
-    - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
-    - Make sure there are no misattributed ideas or fake citations.
-    - Fix typos and other artifacts.
-    - Structure it like an article/essay.
-    - DO NOT add subheadings.
-    - DO NOT remove page number/citations
+            REQUIREMENTS:
+                - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
+                - Make sure there are no misattributed ideas or fake citations.
+                - Fix typos and other artifacts.
+                - Structure it like an article/essay.
+                - DO NOT add subheadings.
+                - DO NOT remove page number/citations
 
-GOAL:
-    - Improve the response as needed, then respond with ONLY the improved response.
-    - Below the response append a brief DEBUG section with any changes you made during generation to improve the result
-        * For each change, provide the a/b diff
-        * At very end, add your CONFIDENCE SCORE (out of 100%) signaling your confidence in your accuracy as a Derridean scholar
+            GOAL:
+                - Improve the response as needed, then respond with ONLY the improved response.
+                - Below the response append a brief DEBUG section with any changes you made during generation to improve the result
+                    * For each change, provide the a/b diff
+                    * At very end, add your CONFIDENCE SCORE (out of 100%) signaling your confidence in your accuracy as a Derridean scholar
 
-Prompt: {prompt}
+            Prompt: {prompt}
 
-Response: {response}
-""".format(prompt=args.query, response=response)
+            Response: {response}
+        """.format(prompt=args.query, response=response)
         response = llm.invoke(thorough_prompt)
-
+    
     if (args.bibliography):
         LOG.info("Adding bibliography...")
         bibliography_prompt = """
-You are an academic scholar of Derrida and post-structuralism.
-You are an editor for academic papers.
+            You are an academic scholar of Derrida and post-structuralism.
+            You are an editor for academic papers.
 
-REQUIREMENTS:
-    - DO identify every unique source in this text and add a corresponding Works Cited section at the bottom
-    - DO follow MLA standards or citation format, e.g. when citing directly or indirectly use the inline (Work, Page #) format.
-    - DO inline footnotes to the text that correspond to works cited.
-        * e.g., "Derrida called Cheetos 'tasty' (Of Grammatology, 20)[1]."
-    - DO NOT remove page numbers unless they are incorrect.
+            REQUIREMENTS:
+                - DO identify every unique source in this text and add a corresponding Works Cited section at the bottom
+                - DO follow MLA standards or citation format, e.g. when citing directly or indirectly use the inline (Work, Page #) format.
+                - DO inline footnotes to the text that correspond to works cited.
+                    * e.g., "Derrida called Cheetos 'tasty' (Of Grammatology, 20)[1]."
+                - DO NOT remove page numbers unless they are incorrect.
 
-EXAMPLE:
+            EXAMPLE:
 
-    Derrida felt that the Beach Boys were "too good to be true" (Dissemination 54).[3]
+                Derrida felt that the Beach Boys were "too good to be true" (Dissemination 54).[3]
 
-    WORKS CITED
+                WORKS CITED
 
-    1. ...
-    2. ...
-    3. Derrida, Jacques. Dissemination. University of Bucko Press, 1995.
+                1. ...
+                2. ...
+                3. Derrida, Jacques. Dissemination. University of Bucko Press, 1995.
 
-TEXT:
+            TEXT:
 
-{response}
-""".format(response=response)
-    LOG.info(f"Final prompt after bibliography added: {response}")
-    response = llm.invoke(bibliography_prompt)
+            {response}
+        """.format(response=response)
+        LOG.info(f"Final prompt after bibliography: {bibliography_prompt}")
+        response = llm.invoke(bibliography_prompt)
 
 
     print(f"\n--- Answer from {CHAT_MODEL} ---")

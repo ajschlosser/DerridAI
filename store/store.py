@@ -26,10 +26,13 @@ facility defined in :mod:`src.derrida.logging`.
 
 import os
 import shutil
+import json
+from pathlib import Path
 from helpers import get_logger
-from config import DB_PATH
+from config import DB_PATH, SOURCE_TEXT
 from models import get_embeddings
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 
 LOG = get_logger(__name__)
 
@@ -37,7 +40,79 @@ store = Chroma(
     persist_directory=DB_PATH,
     embedding_function=get_embeddings()
 )
-LOG.info(f"Vector store pointed to '{DB_PATH}'.")
+records_count = store._collection.count()
+LOG.info(f"Vector store with {records_count} records pointed to '{DB_PATH}'.")
+
+def _load_new_records(source_file: Path) -> list[Document]:
+    """Return documents from source_file whose IDs are not in Chroma."""
+    collection = store._collection
+
+    # Load all existing DB IDs once.
+    db_ids = set()
+    batch_size = 10_000
+    offset = 0
+
+    while True:
+        result = collection.get(
+            limit=batch_size,
+            offset=offset,
+            include=[],
+        )
+        ids = result["ids"]
+
+        if not ids:
+            break
+
+        db_ids.update(ids)
+        offset += len(ids)
+
+        if len(ids) < batch_size:
+            break
+
+    LOG.info("Found %d existing records in the database", len(db_ids))
+
+    # Read JSON records and keep only IDs not already in the DB.
+    new_documents = []
+
+    with open(source_file, "r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+
+            record = json.loads(line)
+            record_id = record["id"]
+
+            if record_id in db_ids:
+                continue
+
+            new_documents.append(
+                Document(
+                    page_content=record["text"],
+                    metadata={
+                        "record_id": record_id,
+                        **record["metadata"],
+                    },
+                )
+            )
+
+    LOG.info("Found %d new records to index", len(new_documents))
+    return new_documents
+
+def add_new_records() -> None:
+    """Load only the records that are not yet indexed and append them."""
+    LOG.info("Loading existing records for comparison...")
+    new_docs = _load_new_records(Path(SOURCE_TEXT))
+    if not new_docs:
+        LOG.info("No new records found: vector store already up-to-date.")
+        return
+
+    LOG.info("Adding %d new documents to the vector store... be patient...", len(new_docs))
+    #vector_store = Chroma(persist_directory=DB_PATH, embedding_function=None)
+    store.add_documents(
+        documents=new_docs,
+        ids=[doc.metadata["record_id"] for doc in new_docs],
+    )
+    LOG.info("Vector store update complete.")
 
 def delete_vector_store(db_path: str = DB_PATH) -> None:
     """Delete the directory that holds the Chroma vector store.
@@ -77,3 +152,6 @@ def get_retriever(search_kwargs: dict[str, any], search_type: str = "mmr") -> Ch
         search_type=search_type,
         search_kwargs=search_kwargs,
     )
+
+LOG.info("Looking for new records...")
+add_new_records()  # Ensure the store is up-to-date at startup
