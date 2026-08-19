@@ -19,7 +19,7 @@ The project is intentionally minimal – it can be run from a single command lin
 * **Python 3.10+** – the project is tested against CPython 3.11.
 * **Ollama** – running locally at `http://localhost:11434`. The default embedding model is `nomic-embed-text`; the default chat model is `gpt‑oss:20b` (you can override via CLI).
 * **Source data** – a JSONL file at `data/derrida3.jsonl` containing at least the fields `text`, `author`, `source_title`, and `record_type`.
-* **Optional but recommended** – a GPU with sufficient VRAM if you plan to fine‑tune a LoRA adapter.
+* **Recommended** – a GPU with sufficient VRAM if you plan to fine‑tune a LoRA adapter.
 
 ## Setup
 
