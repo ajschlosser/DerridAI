@@ -1,21 +1,25 @@
 ![Jacques Derrida](https://www.philomag.com/sites/default/files/styles/sidebar_full_image/public/images/derrida_leemage.prt385js_042-copie.jpg)
 
-# DerridAI RAG + LoRA Project
+# DerridAI RAG Project
 
-DerridAI is a minimal Python implementation of a Retrieval‑Augmented Generation (RAG) pipeline combined with a LoRA fine-tuning workflow, purpose-built for philosophical and literary texts — primarily the works of Jacques Derrida.
+DerridAI is a minimal Python implementation of a Retrieval‑Augmented Generation (RAG) pipeline for philosophical texts, centred on the works of Jacques **Derrida**. The code is organised into the following key components:
 
-The RAG pipeline embeds source documents into a local [Chroma](https://www.trychroma.com/) vector store and queries them via an [Ollama](https://ollama.com/)-served language model, producing responses grounded in primary sources. The LoRA workflow fine-tunes a small causal language model (Qwen 2.5-0.5B-Instruct by default) into a deconstructionist literary critic, exports the merged weights, and makes the result available as an Ollama custom model.
+* **Vector store** – Documents are embedded with the *nomic‑embed‑text* model and stored in a local [Chroma](https://www.trychroma.com/) database.
+* **RAG driver** – `rag.py` queries the vector store using an Ollama‑served chat model.
+* **Utility helpers** – `src/derrida/store/store.py` exposes a global :class:`Chroma` instance and helper functions.
+* **Configuration** – Default settings live in `src/derrida/config/defaults.py` and are re‑exported from `src/derrida/config/__init__.py`.
+* **Logging** – All modules import :func:`src.derrida.logging.get_logger` so logs are consistent.
+* **Data** – Source JSONL documents are expected in `src/derrida/data/derrida3.jsonl`.
+* **Tests** – A test suite in `src/derrida/tests/` validates behaviour.
 
----
+The project is intentionally minimal – it can be run from a single command line without any framework scaffolding.
 
 ## Prerequisites
 
-- Python 3.10+
-- [Ollama](https://ollama.com/) running locally at `http://localhost:11434` with the `nomic-embed-text` embedding model and your chosen chat model pulled
-- A source data file at `./data/derrida3.jsonl` (JSONL records with at minimum `text`/`passage`, `author`, `source_title`, and `record_type` fields)
-- A GPU with sufficient VRAM is recommended for fine-tuning
-
----
+* **Python 3.10+** – the project is tested against CPython 3.11.
+* **Ollama** – running locally at `http://localhost:11434`. The default embedding model is `nomic-embed-text`; the default chat model is `gpt‑oss:20b` (you can override via CLI).
+* **Source data** – a JSONL file at `src/derrida/data/derrida3.jsonl` containing at least the fields `text`, `author`, `source_title`, and `record_type`.
+* **Optional** – a GPU with sufficient VRAM if you plan to fine‑tune a LoRA adapter.
 
 ## Setup
 
@@ -24,8 +28,6 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-
----
 
 ## RAG Pipeline (`rag.py`)
 
@@ -56,31 +58,27 @@ python rag.py --query "What is iterability?" --model "llama3"
 | `--record-type` | `primary_source` | Filter by record type; pass `all` to disable |
 | `--force-rebuild` | `false` | Rebuild the Chroma store from source JSONL |
 | `--cheat` | `false` | Whether to cite sources in the response |
-| `--keyword` | `false` | Weight retrieval toward keyword-matched texts |
+| `--keyword` | `false` | Weight retrieval toward keyword‑matched texts |
 | `--min` | `5` | Minimum number of sentences in the response |
 | `--max` | `5` | Maximum number of sentences in the response |
 | `--also` | `"- You must double-check your work at the end."` | Extra instructions appended to the prompt |
 | `--model` | `gpt-oss:20b` | Ollama chat model to use |
 
----
-
-### Example output
+## Example output
 
 In response to a query like "What would Derrida say about **Flamin' Hot Cheetos**?" a typical response might be:
 
 >In sum, Derrida would likely read a Flamin’ Hot Cheeto not as a mere snack but as a performative text that exemplifies différance, the trace, and the destabilisation of binary oppositions. The heat of the chip defers meaning, the brand and packaging create a network of differences, and the act of consumption becomes a covert crossing that challenges the eater’s expectations. Through these lenses, the snack becomes a site for philosophical interrogation, illustrating how everyday objects can reveal the structures of meaning that Derrida sought to expose.
 
-## LoRA Fine-Tuning (`finetune_pretrained.py`)
+## LoRA Fine‑Tuning (`finetune_pretrained.py`)
 
-Fine-tune `Qwen/Qwen2.5-0.5B-Instruct` (or another base model) on your JSONL corpus using supervised fine-tuning with LoRA via the `trl` / `peft` libraries. The adapter is saved to `derrida-qwen-lora/`.
+Fine‑tune `Qwen/Qwen2.5-0.5B-Instruct` (or another base model) on your JSONL corpus using supervised fine‑tuning with LoRA via the `trl` / `peft` libraries. The adapter is saved to `derrida-qwen-lora/`.
 
 ```bash
 python finetune_pretrained.py
 ```
 
 Update the `RECORDS_FILE`, `MODEL_NAME`, and `OUTPUT_DIRECTORY` constants at the top of the file to change the data source, base model, or output path.
-
----
 
 ## Export for Ollama (`export_for_ollama.py`)
 
@@ -96,11 +94,9 @@ Once merged, register the model with Ollama:
 ollama create derrida-critic -f Modelfile
 ```
 
----
-
 ## Running the Critic (`run_critic.py`)
 
-Generate a close reading of a passage using the fine-tuned LoRA adapter directly (without Ollama).
+Generate a close reading of a passage using the fine‑tuned LoRA adapter directly (without Ollama).
 
 ```bash
 # Pass a text file
@@ -119,11 +115,6 @@ python run_critic.py
 | `--max-new-tokens` | `300` | Maximum response length in tokens |
 | `--temperature` | `0.6` | Sampling temperature |
 
----
-
 ## Contributing
 
 Feel free to submit pull requests or open issues. Ensure the style guidelines are followed and tests pass before merging.
-
----
-

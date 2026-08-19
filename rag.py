@@ -18,218 +18,61 @@
 
 import os
 import json
-import logging
-import argparse
-import shutil
 import difflib
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_chroma import Chroma
+from langchain_ollama import ChatOllama
 from langchain_community.document_transformers import LongContextReorder
 
-def parse_natural_language_find_query(query: str, llm_client) -> dict:
-    """
-    Uses the local LLM to extract structured search parameters from natural language.
-    Returns a dict: {'is_find_all': bool, 'term': str, 'title': str, 'author': str}
-    """
-    LOG.info("Parsing natural language to improve query...")
-    prompt = f"""
-    Analyze the following user query and extract search parameters as a JSON object.
-    
-    Query: "{query}"
-    
-    Extract these fields:
-    - "is_find_all": true if the user is asking to find/list/get *every* mention, instance, or occurrence of a specific word or phrase. False if it is a general question or conceptual RAG prompt.
-    - "original_query": the original query.
-    - "term": your determination of the exact keyword or phrase they want to find (null if none) based on the query.
-    - "title": the book or source title mentioned in the query, if any (null if none).
-    - "author": the author mentioned in the query, if any (null if none).
-    - "specifiers": an array of 4-7 specifying keywords NOT IN the query but related to the query (e.g. a query like 'Did Derrida like The Beach Boys?' might have specifying topics like ["music" "surf music","rock and roll","brian wilson","pet sounds"])
-
-    Note:
-    - If the user only provides part of the book or author's name, complete it for the JSON value.
-    - If the user mispells or makes a mistake with any term, fix it for them.
-    - Valid authors are: Jacques Derrida, Martin Heidegger
-    - Valid books by Jacques Derrida are:
-        * Of Grammatology
-        * Spectres of Marx
-        * Monolingualism of the Other; or, The Prosthesis of Origin
-        * Writing and Difference
-        * Limited, Inc.
-        * Glas
-        * Margins of Philosophy
-        * Dissemination
-        * The Ear of the Other
-        * The Animal That Therefore I Am
-        * The Postcard
-        * Of Spirit: Heidegger and the Question
-        * Acts of Literature
-        * Hospitality, Vol. 1
-        * The Truth in Painting
-        * Speech and Phenomena
-        * "Structure, Sign, and Play in the Discourse of the Human Sciences"
-    - Valid books by Martin Heidegger are:
-        * Being and Time
-        * Nietzsche, Vols. 1 and 2
-        * Nietzsche, Vols. 3 and 4
-
-
-    Return ONLY valid JSON with no markdown formatting or extra text.
-    Example format: {{"is_find_all": true, "term": "What is democracy?", "title": "Spectres of Marx", "author": null, "specifiers": ["politics","marxism"]}}
-    """
-    try:
-        response = llm_client.invoke(prompt)
-        # Clean up response content in case the model wraps it in markdown blocks
-        content = response.content.strip()
-        if content.startswith("```json"):
-            content = content[7:-3].strip()
-        elif content.startswith("```"):
-            content = content[3:-3].strip()
-        data = json.loads(content)
-        LOG.info(f"LLM improved query: {data}")
-        return data
-    except Exception as e:
-        LOG.warning("Failed to parse query via LLM helper: %s. Falling back to standard RAG.", e)
-        return {"is_find_all": False, "term": None, "title": None, "author": None}
-
-EMBEDDING_MODEL = "nomic-embed-text"
-CHAT_MODEL = "gpt-oss:20b"
-CHAT_TEMPERATURE = 0.2
-OLLAMA_SERVER_URL = "http://localhost:11434"
-DB_PATH = "./chroma_db_local-tuned"
-SOURCE_TEXT = "./data/derrida3.jsonl"
-BATCH_SIZE = 2250  # Prevents Ollama tokenizer OOM crashes
-K_VALUE = 10
-FETCH_K_VALUE = 60
-LAMBDA_MULT_VALUE = 0.1 # Higher is more random
-
-# Basic log configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s: %(message)s",
+from config import (
+    CHAT_MODEL,
+    CHAT_TEMPERATURE,
+    OLLAMA_SERVER_URL,
+    DB_PATH,
+    SOURCE_TEXT,
+    BATCH_SIZE,
+    K_VALUE,
+    FETCH_K_VALUE,
+    LAMBDA_MULT_VALUE,
+    args
 )
-LOG = logging.getLogger("rag")
+
+from helpers import (
+    get_logger,
+    parse_natural_language_find_query
+)
+
+from models import (
+    get_embeddings
+)
+
+from store import (
+    database_exists,
+    delete_vector_store,
+    get_store
+)
+
+LOG = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Main Routine
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
-    parser.add_argument(
-        "--query",
-        "-q",
-        type=str,
-        default="What does Derrida say about presence?",
-        help="Question to ask the RAG pipeline.",
-    )
-    parser.add_argument(
-        "--find-all",
-        type=str,
-        help="Find and list every exact mention of this term across the corpus.",
-    )
-    parser.add_argument(
-        "--author",
-        type=str,
-        help="Filter search by author (e.g. 'Jacques Derrida').",
-    )
-    parser.add_argument(
-        "--title",
-        type=str,
-        help="Filter search by source title (e.g. 'Of Grammatology').",
-    )
-    parser.add_argument(
-        "--record-type",
-        type=str,
-        default="primary_source",
-        help="Filter search by record_type (default: 'primary_source'). Pass 'all' to disable filter.",
-    )
-    parser.add_argument(
-        "--force-rebuild",
-        action="store_true",
-        help="Force rebuild the Chroma vector store from JSONL source data.",
-    )
-    parser.add_argument(
-        "--cheat",
-        default=False,
-        type=bool,
-        help="Whether or not to cite sources."
-    )
-    parser.add_argument(
-        "--keyword",
-        default=False,
-        type=bool,
-        help="Whether or not certain keywords give weight to certain texts."
-    )
-    parser.add_argument(
-        "--thorough",
-        default=False,
-        type=bool,
-        help="Whether or not to do a once-over."
-    )
-    parser.add_argument(
-        "--min",
-        default=5,
-        type=int,
-        help="Minimum number of sentences in response."
-    )
-    parser.add_argument(
-        "--max",
-        default=5,
-        type=int,
-        help="Maximum number of sentences in response."
-    )
-    parser.add_argument(
-        "--also",
-        default="- You must double-check your work at the end.",
-        type=str,
-        help="Any additional wording to add to the prompt."
-    )
-    parser.add_argument(
-        "--bibliography",
-        default=False,
-        type=bool,
-        help="Whether or not to include a bibliography."
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=CHAT_MODEL,
-        help="Which chat model to use.",
-    )
-    args = parser.parse_args()
-
-    # ---------------------------------------------------------------------------
-    # Embedding model
-    # ---------------------------------------------------------------------------
-    LOG.info(f"Loading embedding model {EMBEDDING_MODEL}.")
-    embeddings = OllamaEmbeddings(
-        model=EMBEDDING_MODEL,
-        base_url=OLLAMA_SERVER_URL,
-        keep_alive="-1",  # Keep in memory to eliminate cold-start latency
-    )
-
+    
     # ---------------------------------------------------------------------------
     # Vector store setup / rebuild logic (Batched & Streamed)
     # ---------------------------------------------------------------------------
-    if args.force_rebuild and os.path.exists(DB_PATH):
-        LOG.info("Force rebuild requested. Removing existing database at '%s'...", DB_PATH)
-        shutil.rmtree(DB_PATH)
+    if args.force_rebuild:
+        delete_vector_store(DB_PATH)
 
-    if os.path.exists(DB_PATH) and os.listdir(DB_PATH):
+    vector_store = get_store()
+    if database_exists(DB_PATH):
         LOG.info("Loading existing vector store from '%s'...", DB_PATH)
-        vector_store = Chroma(
-            persist_directory=DB_PATH,
-            embedding_function=embeddings
-        )
         LOG.info("Vector store loaded.")
     else:
         LOG.info("Initializing new Chroma database at '%s'...", DB_PATH)
-        vector_store = Chroma(
-            persist_directory=DB_PATH,
-            embedding_function=embeddings
-        )
         
         doc_batch = []
         id_batch = []
@@ -280,7 +123,7 @@ def main():
                 LOG.info("Detected author reference '%s'. Automatically filtering search to author: '%s'", keyword, canonical_author)
                 break
 
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Dynamic filter configuration
     # ---------------------------------------------------------------------------
     raw_filters = {}
@@ -755,6 +598,7 @@ REQUIREMENTS:
     - Fix typos and other artifacts.
     - Structure it like an article/essay.
     - DO NOT add subheadings.
+    - DO NOT remove page number/citations
 
 GOAL:
     - Improve the response as needed, then respond with ONLY the improved response.
@@ -775,10 +619,11 @@ You are an academic scholar of Derrida and post-structuralism.
 You are an editor for academic papers.
 
 REQUIREMENTS:
-    - Identify every unique source in this text and add a corresponding Works Cited section at the bottom
-    - Follow MLA standards or citation format, e.g. when citing directly or indirectly use the inline (Work, Page #) format.
-    - Add inline footnotes to the text that correspond to works cited.
+    - DO identify every unique source in this text and add a corresponding Works Cited section at the bottom
+    - DO follow MLA standards or citation format, e.g. when citing directly or indirectly use the inline (Work, Page #) format.
+    - DO inline footnotes to the text that correspond to works cited.
         * e.g., "Derrida called Cheetos 'tasty' (Of Grammatology, 20)[1]."
+    - DO NOT remove page numbers unless they are incorrect.
 
 EXAMPLE:
 
