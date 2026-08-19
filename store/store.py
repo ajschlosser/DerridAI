@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""store.py – Vector store utilities for the Derrida RAG project.
+"""store.py – Vector store utilities for the DerridAI RAG project.
 
 This module provides a thin wrapper around a :class:`langchain_chroma.Chroma`
 instance that is shared throughout the code base.  The module is intentionally

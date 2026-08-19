@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""helpers.py -- Utility helpers used across the Derrida RAG project.
+
+The module is intentionally small -- it primarily contains the natural-language
+query parsing logic used by :mod:`rag` and a helper that builds a dictionary
+of search filters for the Chroma vector store. All logging is performed via
+the shared logger defined in :mod:`src.derrida.logging`.
+"""
+
 import json
 from .logging import get_logger
 from config import args
@@ -70,14 +78,14 @@ def parse_natural_language_find_query(query: str, llm_client) -> dict:
     """
     try:
         response = llm_client.invoke(prompt)
-        # Clean up response content in case the model wraps it in markdown blocks
+        # The LLM might wrap the JSON in markdown fences; strip those.
         content = response.content.strip()
         if content.startswith("```json"):
             content = content[7:-3].strip()
         elif content.startswith("```"):
             content = content[3:-3].strip()
         data = json.loads(content)
-        LOG.info(f"LLM improved query: {data}")
+        LOG.info("LLM improved query: %s", data)
         return data
     except Exception as e:
         LOG.warning("Failed to parse query via LLM helper: %s. Falling back to standard RAG.", e)
@@ -98,17 +106,15 @@ def get_search_filters():
     # Clean out any keys with None values
     filter_dict = {k: v for k, v in raw_filters.items() if v is not None}
 
-    parsed_filters = {}
+    parsed_filters: dict = {}
     
     if filter_dict:
         if len(filter_dict) == 1:
             # Single condition can be passed directly
             parsed_filters = filter_dict
         else:
-            # Multiple conditions REQUIRE Chroma's explicit $and operator wrapper
-           parsed_filters = {
-                "$and": [{k: v} for k, v in filter_dict.items()]
-            }
+            # Multiple conditions require Chroma's explicit $and operator wrapper
+            parsed_filters = {"$and": [{k: v} for k, v in filter_dict.items()]}
         LOG.info("Applied search filters: %s", parsed_filters)
     return parsed_filters
 

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Centralised logging configuration for the DerridAI RAG project.
+Centralized logging configuration for the DerridAI RAG project.
 All other modules import `get_logger` from here.
 """
 
