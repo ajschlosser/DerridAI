@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from langchain_ollama import ChatOllama
+from config import CHAT_TEMPERATURE, OLLAMA_SERVER_URL, EMBEDDING_MODEL, CHAT_MODEL
 from langchain_ollama import OllamaEmbeddings
 from config import EMBEDDING_MODEL, OLLAMA_SERVER_URL
 from helpers import get_logger
@@ -30,3 +32,13 @@ def get_embeddings():
         keep_alive="-1",  # Keep in memory to eliminate cold-start latency
     )
     return embeddings
+
+def get_llm_chat():
+    LOG.info(f"Initializing local LLM '{CHAT_MODEL}'.")
+    llm = ChatOllama(
+        model=CHAT_MODEL,
+        base_url=OLLAMA_SERVER_URL,
+        temperature=CHAT_TEMPERATURE,
+    )
+    return llm
+    

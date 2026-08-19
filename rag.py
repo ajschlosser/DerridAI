@@ -40,16 +40,19 @@ from config import (
 
 from helpers import (
     get_logger,
+    get_search_filters,
+    keyword_map,
     parse_natural_language_find_query
 )
 
 from models import (
-    get_embeddings
+    get_llm_chat
 )
 
 from store import (
     database_exists,
     delete_vector_store,
+    get_retriever,
     get_store
 )
 
@@ -70,7 +73,6 @@ def main():
     vector_store = get_store()
     if database_exists(DB_PATH):
         LOG.info("Loading existing vector store from '%s'...", DB_PATH)
-        LOG.info("Vector store loaded.")
     else:
         LOG.info("Initializing new Chroma database at '%s'...", DB_PATH)
         
@@ -110,66 +112,26 @@ def main():
 
         LOG.info("Vector store creation complete.")
 
-    author_map = {
-        "derrida": "Jacques Derrida",
-        "heidegger": "Martin Heidegger"
-    }
-
-    detected_author = None
-    if not args.author:  # Only auto-detect if user didn't explicitly pass --author via CLI
-        for keyword, canonical_author in author_map.items():
-            if keyword in args.query.lower():
-                detected_author = canonical_author
-                LOG.info("Detected author reference '%s'. Automatically filtering search to author: '%s'", keyword, canonical_author)
-                break
-
     # ---------------------------------------------------------------------------
     # Dynamic filter configuration
     # ---------------------------------------------------------------------------
-    raw_filters = {}
-    if args.record_type and args.record_type.lower() != "all":
-        raw_filters["record_type"] = args.record_type
-    if args.author:
-        raw_filters["author"] = args.author
-    # elif detected_author:
-    #     raw_filters["author"] = detected_author
-    if args.title:
-        raw_filters["source_title"] = args.title
-
-    # Clean out any keys with None values
-    filter_dict = {k: v for k, v in raw_filters.items() if v is not None}
 
     search_kwargs = {"k": K_VALUE, "fetch_k": FETCH_K_VALUE, "lambda_mult": LAMBDA_MULT_VALUE}
-    
-    if filter_dict:
-        if len(filter_dict) == 1:
-            # Single condition can be passed directly
-            search_kwargs["filter"] = filter_dict
-        else:
-            # Multiple conditions REQUIRE Chroma's explicit $and operator wrapper
-            search_kwargs["filter"] = {
-                "$and": [{k: v} for k, v in filter_dict.items()]
-            }
+    filters = get_search_filters()
+    if filters:
+        search_kwargs["filter"] = filters
         LOG.info("Applied search filters: %s", search_kwargs["filter"])
+    LOG.info("Search kwargs configured: %s", search_kwargs)
 
     # ---------------------------------------------------------------------------
     # LLM setup
     # ---------------------------------------------------------------------------
-    LOG.info(f"Initializing local LLM '{args.model}'.")
-    llm = ChatOllama(
-        model=args.model,
-        base_url=OLLAMA_SERVER_URL,
-        temperature=CHAT_TEMPERATURE,
-    )
+    llm = get_llm_chat()
 
     # ---------------------------------------------------------------------------
     # Retriever configuration
     # ---------------------------------------------------------------------------
-    LOG.info("Configuring retriever with k=%d", K_VALUE)
-    retriever = vector_store.as_retriever(
-        search_type="mmr",
-        search_kwargs=search_kwargs,
-    )
+    retriever = get_retriever(search_kwargs=search_kwargs, search_type="mmr")
 
     # ---------------------------------------------------------------------------
     # RAG prompt template
@@ -312,155 +274,6 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
                 
             return  # Clean exit
 
-    keyword_map = {
-        # Your original entries
-        "death": "Gift of Death",
-        "presence": "Of Grammatology",
-        "Rousseau": "Of Grammatology",
-        "differance": "Of Grammatology",
-        "différance": "Of Grammatology",
-        "'play'": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-
-        # Spectres of Marx
-        "Marx": "Spectres of Marx",
-        "Marx,": "Spectres of Marx",
-        "specter": "Spectres of Marx",
-        "spectres": "Spectres of Marx",
-        "ghost": "Spectres of Marx",
-        "haunt": "Spectres of Marx",
-        "haunting": "Spectres of Marx",
-        "hauntology": "Spectres of Marx",
-        "messianism": "Spectres of Marx",
-        "messianic": "Spectres of Marx",
-        "inheritance": "Spectres of Marx",
-        "democracy": "Spectres of Marx",
-        "democrat": "Spectres of Marx",
-        "globalization": "Spectres of Marx",
-        "capital": "Spectres of Marx",
-        "capitalism": "Spectres of Marx",
-        "spirit": "Spectres of Marx",
-
-        # Monolingualism of the Other; or, The Prosthesis of Origin
-        "language": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "linguistic": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "monolingualism": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "monolingual": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "other": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "translation": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "translating": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "foreign": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "mother tongue": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "mother-tongue": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "tongue": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "writing": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "bilingual": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "bilingualism": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "idiom": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "accent": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "colonial": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "colonialism": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "algeria": "Monolingualism of the Other; or, The Prosthesis of Origin",
-        "france": "",
-
-        # Writing and Difference
-        "difference": "Writing and Difference",
-        "trace": "Writing and Difference",
-        "grammatology": "Writing and Difference",
-        "structure": "Writing and Difference",
-        "sign": "Writing and Difference",
-        "signification": "Writing and Difference",
-        "text": "Writing and Difference",
-        "textual": "Writing and Difference",
-        "iterability": "Writing and Difference",
-        "supplement": "Writing and Difference",
-        "archive": "Writing and Difference",
-        "mimesis": "Writing and Difference",
-        "iterable": "Writing and Difference",
-
-        # (kept from your earlier map additions)
-        "différance": "Writing and Difference",
-        "differance": "Writing and Difference",
-
-        # Dissemination
-        "dissemination": "Dissemination",
-        "disseminate": "Dissemination",
-        "dispersal": "Dissemination",
-        "sprouting": "Dissemination",
-        "polysemy": "Dissemination",
-        "ambiguity": "Dissemination",
-        "equivocation": "Dissemination",
-        "equivocal": "Dissemination",
-        "multiplicity": "Dissemination",
-        "plurality": "Dissemination",
-        "refraction": "Dissemination",
-        "scatter": "Dissemination",
-        "spreading": "Dissemination",
-        "propagation": "Dissemination",
-        "relay": "Dissemination",
-        "absence": "Dissemination",
-        "permutation": "Dissemination",
-
-        # Signature phrase labels you started with
-        "play": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "structure, sign, and play in the discourse of the human sciences": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "center": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "decentering": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "event": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "bricolage": "Structure, Sign, and Play in the Discourse of the Human Sciences",
-        "structure": "Writing and Difference",  # note: overwrites above if you kept both
-        "sign": "Writing and Difference",       # note: overwrites above if you kept both
-        "text": "Writing and Difference",
-
-        # Glas
-        "glas": "Glas",
-        "glasses": "Glas",
-        "margins": "Glas",
-        "margin": "Glas",
-        "page": "Glas",
-        "colophon": "Glas",
-        "column": "Glas",
-        "columns": "Glas",
-        "name": "Glas",
-        "names": "Glas",
-        "proper name": "Glas",
-        "monument": "Glas",
-        "epitaph": "Glas",
-        "eulogy": "Glas",
-        "father": "Glas",
-        "son": "Glas",
-        "Hegel": "Glas",
-        "Genet": "Glas",
-        "blanchot": "Glas",
-        "mourning": "Glas",
-        "death": "Glas",  # if you want “death” to hit Glas too; otherwise remove
-
-        # Margins of Philosophy
-        "margins of philosophy": "Margins of Philosophy",
-        "margins": "Margins of Philosophy",
-        "margin": "Margins of Philosophy",
-        "philosophy": "Margins of Philosophy",
-        "outside": "Margins of Philosophy",
-        "outside the text": "Margins of Philosophy",
-        "edge": "Margins of Philosophy",
-        "border": "Margins of Philosophy",
-        "threshold": "Margins of Philosophy",
-        "limit": "Margins of Philosophy",
-        "supplement": "Margins of Philosophy",
-        "writing": "Margins of Philosophy",
-        "text": "Margins of Philosophy",
-        "commentary": "Margins of Philosophy",
-        "comment": "Margins of Philosophy",
-        "gloss": "Margins of Philosophy",
-        "translation": "Margins of Philosophy",
-        "method": "Margins of Philosophy",
-        "metaphysics": "Margins of Philosophy",
-        "deconstruction": "Margins of Philosophy",
-        "deconstruct": "Margins of Philosophy",
-        "interruption": "Margins of Philosophy",
-        "rupture": "Margins of Philosophy",
-        "rhetoric": "Margins of Philosophy",
-        "style": "Margins of Philosophy"
-    }
     preferred_source = None
 
     if args.keyword:

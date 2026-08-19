@@ -70,3 +70,10 @@ def get_store() -> Chroma:
     management and avoids unnecessary disk I/O.
     """
     return store
+
+def get_retriever(search_kwargs: dict[str, any], search_type: str = "mmr") -> Chroma:
+    LOG.info("Configuring retriever with search_type='%s' and search_kwargs=%s", search_type, search_kwargs)
+    return store.as_retriever(
+        search_type=search_type,
+        search_kwargs=search_kwargs,
+    )
