@@ -37,7 +37,7 @@ store = Chroma(
     persist_directory=DB_PATH,
     embedding_function=get_embeddings()
 )
-LOG.info(f"Vector store loaded from '{DB_PATH}'.")
+LOG.info(f"Vector store pointed to '{DB_PATH}'.")
 
 def delete_vector_store(db_path: str = DB_PATH) -> None:
     """Delete the directory that holds the Chroma vector store.

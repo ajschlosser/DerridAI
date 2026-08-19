@@ -67,13 +67,13 @@ def main():
     # ---------------------------------------------------------------------------
     # Vector store setup / rebuild logic (Batched & Streamed)
     # ---------------------------------------------------------------------------
-    if args.force_rebuild:
-        delete_vector_store(DB_PATH)
 
     vector_store = get_store()
-    if database_exists(DB_PATH):
+    if database_exists(DB_PATH) and not args.force_rebuild:
         LOG.info("Loading existing vector store from '%s'...", DB_PATH)
-    else:
+    elif args.force_rebuild or not database_exists(DB_PATH):
+        # if args.force_rebuild:
+        #     delete_vector_store(DB_PATH)
         LOG.info("Initializing new Chroma database at '%s'...", DB_PATH)
         
         doc_batch = []
