@@ -187,6 +187,12 @@ def main():
         help="Any additional wording to add to the prompt."
     )
     parser.add_argument(
+        "--bibliography",
+        default=False,
+        type=bool,
+        help="Whether or not to include a bibliography."
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default=CHAT_MODEL,
@@ -761,6 +767,35 @@ Prompt: {prompt}
 Response: {response}
 """.format(prompt=args.query, response=response)
         response = llm.invoke(thorough_prompt)
+
+    if (args.bibliography):
+        LOG.info("Adding bibliography...")
+        bibliography_prompt = """
+You are an academic scholar of Derrida and post-structuralism.
+You are an editor for academic papers.
+
+REQUIREMENTS:
+    - Identify every unique source in this text and add a corresponding Works Cited section at the bottom
+    - Follow MLA standards or citation format, e.g. when citing directly or indirectly use the inline (Work, Page #) format.
+    - Add inline footnotes to the text that correspond to works cited.
+        * e.g., "Derrida called Cheetos 'tasty' (Of Grammatology, 20)[1]."
+
+EXAMPLE:
+
+    Derrida felt that the Beach Boys were "too good to be true" (Dissemination 54).[3]
+
+    WORKS CITED
+
+    1. ...
+    2. ...
+    3. Derrida, Jacques. Dissemination. University of Bucko Press, 1995.
+
+TEXT:
+
+{response}
+""".format(response=response)
+    LOG.info(f"Final prompt after bibliography added: {response}")
+    response = llm.invoke(bibliography_prompt)
 
 
     print(f"\n--- Answer from {CHAT_MODEL} ---")
