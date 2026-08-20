@@ -311,14 +311,74 @@ points to the correct page.
 
     search_kwargs = {"k": K_VALUE, "fetch_k": FETCH_K_VALUE, "lambda_mult": LAMBDA_MULT_VALUE}
     retriever = get_retriever(search_kwargs=search_kwargs, search_type="mmr")
-    
-    retrieved_docs = retriever.invoke(f"""
+
+    ROLE_PRIORITY = {
+        "main_text": 0,
+        "author_footnote": 1,
+        "interview": 2,
+        "translator_introduction": 3,
+        "translator_note": 4,
+        "editor_introduction": 5,
+        "review": 6,
+    }
+
+    # retrieved_docs = retriever.invoke(f"""
+    #     [PROMPT]
+    #     {user_query}
+    #     [/PROMPT]
+
+    #     KEYWORDS: {json.dumps(keywords)}
+    # """)
+
+    def source_priority(doc):
+        m = doc.metadata
+
+        speaker = (m.get("speaker") or "").lower()
+        region_type = (m.get("region_type") or "").lower()
+        discourse_role = (m.get("discourse_role") or "").lower()
+
+        # Primary Derrida evidence
+        if "derrida" in speaker and region_type == "main_text":
+            return 0
+
+        if "derrida" in speaker and "footnote" in region_type:
+            return 1
+
+        if "derrida" in speaker:
+            return 2
+
+        # Secondary scholarly framing
+        if "translator" in region_type:
+            return 4
+
+        if "introduction" in region_type:
+            return 5
+
+        # Tertiary material
+        if "review" in discourse_role or "review" in region_type:
+            return 8
+
+        return 6
+
+
+    retrieved_docs = sorted(
+        retriever.invoke(f"""
         [PROMPT]
         {user_query}
         [/PROMPT]
 
         KEYWORDS: {json.dumps(keywords)}
-    """)
+    """),
+        key=source_priority
+    )
+
+    retrieved_docs = sorted(
+        retrieved_docs,
+        key=lambda d: ROLE_PRIORITY.get(
+            d.metadata.get("region_type", ""),
+            99
+        )
+    )
 
     LOG.info("Retrieved %d documents.", len(retrieved_docs))
 
@@ -337,67 +397,20 @@ points to the correct page.
         return
 
     # ---------------------------------------------------------------------------
-    # Neighbor Expansion (Group & preserve internal sequence)
-    # ---------------------------------------------------------------------------
-    LOG.info("Fetching adjacent records for context expansion...")
-    
-    # We will build list of "grouped" Documents, where each group is merged into one Document
-    grouped_documents = []
-    collection = vector_store._collection
-    total_records = 0
-
-    for doc in unique_docs:
-        rec_id = str(doc.metadata.get("record_id", ""))
-        
-        target_ids = []
-        if "-" in rec_id:
-            prefix, num_str = rec_id.rsplit("-", 1)
-            if num_str.isdigit():
-                numeric_id = int(num_str)
-                # Build target IDs for 1 before, target, and 1 after
-                target_ids = [f"{prefix}-{n:05d}" for n in (numeric_id - 2, numeric_id - 1, numeric_id, numeric_id + 1, numeric_id + 2)]
-            else:
-                target_ids = [rec_id]
-        else:
-            target_ids = [rec_id]
-
-        # Query Chroma for these specific adjacent IDs
-        result = collection.get(where={"record_id": {"$in": target_ids}})
-
-        if result and result["documents"]:
-            # Zip and sort internal records strictly by numeric suffix
-            group_records = []
-            for r_text, r_meta in zip(result["documents"], result["metadatas"]):
-                r_id = str(r_meta.get("record_id", ""))
-                try:
-                    num = int(r_id.rsplit("-", 1)[1]) if "-" in r_id else 0
-                except (ValueError, IndexError):
-                    num = 0
-                group_records.append((num, r_text, r_meta))
-
-            # SORT WITHIN GROUP: Keep contiguous reading order
-            group_records.sort(key=lambda x: x[0])
-
-            # Merge the ordered group records into a single cohesive string
-            combined_text = "".join([r[1] for r in group_records])
-            
-            # Preserve primary document metadata for citations
-            primary_meta = doc.metadata.copy()
-
-            total_records = total_records + len(group_records)
-            
-            grouped_documents.append(
-                Document(page_content=combined_text, metadata=primary_meta)
-            )
-
-    LOG.info("Created %d contiguous group blocks of %d records.", len(grouped_documents), total_records)
-
-    # ---------------------------------------------------------------------------
     # Reorder GROUPS to optimize LLM attention
     # ---------------------------------------------------------------------------
     LOG.info("Reordering context groups with LongContextReorder...")
     reordering = LongContextReorder()
-    reordered_groups = reordering.transform_documents(grouped_documents)
+    reordered_groups = reordering.transform_documents(unique_docs)
+
+    def evidence_class(doc):
+        speaker = (doc.metadata.get("speaker") or "").lower()
+        position_holder = (doc.metadata.get("position_holder") or "").lower()
+
+        if "derrida" in speaker and "derrida" in position_holder:
+            return f"PRIMARY — MAY BE ATTRIBUTED DIRECTLY TO DERRIDA"
+
+        return f"SECONDARY — DO NOT ATTRIBUTE THIS SPEAKER'S WORDS DIRECTLY TO DERRIDA"
 
     # Format retrieved context with source citations
     context_str = "\n\n---\n\n".join(
@@ -419,6 +432,9 @@ stance: {doc.metadata.get('stance') or 'Unknown'}
 claim_scope: {doc.metadata.get('claim_scope') or 'Unknown'}
 attribution_confidence: {doc.metadata.get('attribution_confidence', 'Unknown')}
 extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
+source_url: {doc.metadata.get('source_url') or 'Unknown'}
+
+EVIDENCE CLASS: {evidence_class(doc)}
 
 [TEXT]
 {doc.page_content}
@@ -438,37 +454,126 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
 
     if (args.thorough):
         LOG.info("Double-checking in thorough mode...")
-        thorough_prompt = """
-            You are an academic scholar of Derrida and post-structuralism.
-            You are an editor for academic papers.
+        draft = response.content
+        thorough_prompt = f"""
+        You are a strict claim-evidence auditor.
 
-            REQUIREMENTS:
-                - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
-                - Fix typos and other artifacts.
-                - Structure it like an article/essay.
-                - DO NOT add subheadings.
-                - DO NOT remove page number/citations
-                - DO NOT alter citations (unless to clean up typos/artifacts)
+        You are given:
+        1. A generated answer.
+        2. Retrieved source chunks with metadata.
 
-            GOAL:
-                - Improve the response as needed, then respond with ONLY the improved response.
-                - Ensure that the response remains faithful to the original sources.
-                - Maintain the original meaning and intent of the response.
-                - Avoid introducing new information not present in the original response.
-                - Do not fabricate citations or sources.
-                - Ensure that all improvements adhere to academic standards and maintain the integrity of the original text.
-                - A high-quality academic essay should be produced, adhering to the above requirements.
-                - Ensure that all changes are clearly documented in the DEBUG section.
-                - Below the response append a brief DEBUG section with any changes you made during generation to improve the result
-                    * For each change, provide the a/b diff
-                    * At very end, add your CONFIDENCE SCORE (out of 100%) signaling your confidence in your accuracy as a Derridean scholar
+        Your task is NOT to improve style.
+        Your task is to evaluate every substantive claim against its cited evidence.
 
-            Prompt: {prompt}
+        For each claim:
 
-            Response: {response}
-        """.format(prompt=args.query, response=response)
-        response = llm.invoke(thorough_prompt)
-    
+        1. Split compound sentences into ATOMIC propositions.
+        2. Identify the cited source chunk(s).
+        3. Determine attribution class:
+
+        A0 = primary author speaking directly
+        A1 = primary author quoting another person
+        A2 = primary author discussing/paraphrasing another person
+        A3 = translator/editor/introduction author
+        A4 = secondary commentator
+        A5 = attribution uncertain
+
+        4. Determine entailment class:
+
+        E0 = explicit statement
+        E1 = close paraphrase
+        E2 = one-step local inference
+        E3 = synthesis across supported ideas
+        E4 = unsupported/speculative
+
+        5. Compare the generated claim to the source proposition on:
+
+        - speaker
+        - subject
+        - predicate
+        - object
+        - modality
+        - causality
+        - scope
+        - quantifiers
+        - temporal scope
+        - endorsement status
+
+        6. A claim is NOT directly supported if any of those relationships are materially changed.
+
+        7. Detect missing premises.
+        If the claim requires information not present in the supplied evidence, classify E4.
+
+        8. Detect subject expansion.
+        Examples:
+        Marx -> Marxism
+        one passage -> Derrida's entire philosophy
+        schooling in Algeria -> later theory of logocentrism
+        discussion of phallus -> theory of sexuality
+
+        9. Detect causal expansion.
+        Words such as:
+        shaped, caused, informed, led to, resulted in, explains, produced
+        require explicit causal evidence.
+
+        10. Detect quotation errors.
+        Anything in quotation marks must match the cited source closely.
+
+        11. Decide action:
+
+        KEEP
+        REWRITE_AS_PARAPHRASE
+        MARK_AS_INFERENCE
+        MARK_AS_SYNTHESIS
+        MARK_AS_APPLICATION
+        FIX_ATTRIBUTION
+        REMOVE
+
+        Return JSON only.
+
+        ANSWER TO AUDIT:
+        {draft}
+
+        SOURCES:
+        {context_str}
+        """.format(prompt=args.query, response=response.content)
+        audit_response = llm.invoke(thorough_prompt)
+
+        try:
+            audit_json = json.loads(audit_response.content)
+        except json.JSONDecodeError:
+            LOG.error(
+                "Audit model did not return valid JSON:\n%s",
+                audit_response.content
+            )
+            audit_json = {
+                "claims": [],
+                "audit_error": "invalid_json"
+            }
+
+        repair_prompt = f"""
+        You are revising an academic answer using a completed evidence audit.
+
+        Rules:
+        - KEEP claims marked KEEP.
+        - E0/E1 may be stated directly.
+        - E2 must be qualified.
+        - E3 must be explicitly identified as synthesis.
+        - E4 must be removed.
+        - Correct attribution exactly as instructed.
+        - Do not introduce new claims.
+        - Prefer deletion over speculative repair.
+
+        ORIGINAL ANSWER:
+        {draft}
+
+        AUDIT:
+        {json.dumps(audit_json, ensure_ascii=False, indent=2)}
+
+        SOURCES:
+        {context_str}
+        """
+        response = llm.invoke(repair_prompt)
     if (args.bibliography):
         LOG.info("Adding bibliography...")
         bibliography_prompt = """
@@ -514,6 +619,36 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
         Your job is to revise the response so that every substantive claim is
         accurately supported, accurately attributed, and does not exceed the
         evidence without explicit qualification.
+
+        ANSWERABILITY GATE
+
+        Before drafting, determine whether the supplied evidence directly
+        addresses the user's requested subject.
+
+        Choose exactly one:
+
+        1. DIRECTLY_ANSWERABLE
+        Primary or appropriately attributed secondary sources explicitly
+        discuss the requested subject.
+
+        2. PARTIALLY_ANSWERABLE
+        Sources explicitly discuss a sufficiently close concept, but some
+        interpretation is required.
+
+        3. OUT_OF_CORPUS
+        Sources do not discuss the requested subject.
+
+        If OUT_OF_CORPUS:
+
+        - State that the supplied evidence does not answer the question.
+        - Identify, briefly, the closest relevant material if useful.
+        - Do not infer why the author failed to discuss the subject.
+        - Do not transform adjacent concepts into an answer.
+        - Do not construct a general theoretical framework merely because
+        semantically related material was retrieved.
+        - Do not speculate about the author's likely position.
+        - Prefer a short answer.
+        - Write the answer in the STYLE of Jacques Derrida.
 
         ============================================================
         1. CITATION ACCURACY
@@ -589,6 +724,15 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
 
         Correct all attribution errors.
 
+        For every proposed claim assign exactly one ATTRIBUTION CLASS:
+
+        A0 = Derrida speaking directly
+        A1 = Derrida quoting another person
+        A2 = Derrida paraphrasing/discussing another person
+        A3 = Translator/editor speaking
+        A4 = Secondary commentator speaking
+        A5 = Attribution uncertain
+        
         ============================================================
         3. INFERENTIAL DISTANCE
         ============================================================
@@ -616,6 +760,18 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
         "A Derridean reading could extend this critique to questions of
         colonial epistemology."
 
+        A close paraphrase may move no more than ONE semantic step beyond
+        the explicit proposition in its supporting source.
+
+        If reaching the claim requires:
+        - combining multiple concepts,
+        - supplying an unstated causal relationship,
+        - converting a metaphor into a general doctrine,
+        - generalizing from one passage to Derrida's entire philosophy,
+        - inferring an implication not explicitly stated,
+
+        the claim is SYNTHESIS and must be marked and handled accordingly.
+        
         ============================================================
         4. SCOPE CONTROL
         ============================================================
@@ -750,12 +906,116 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
         Instead use explicit markers such as:
         - "A reading of this passage could suggest..."
         - "Applied to X, this concept could..."
-        - "Taken together, these passages may support..."
         - "This is a synthesis rather than an explicit claim in the source."
-        
+
+        For every proposed claim assign exactly one:
+
+        E0 — EXPLICIT
+        The source directly states the proposition.
+
+        E1 — CLOSE PARAPHRASE
+        Same proposition, wording generalized.
+
+        E2 — LOCAL INFERENCE
+        One inferential step from explicit evidence.
+
+        E3 — SYNTHESIS
+        Requires combining propositions/chunks.
+
+        E4 — SPECULATION
+        Requires assumptions not supplied by evidence.
+
+        Generation policy:
+
+        E0 → may write "Derrida states/argues/writes..."
+        E1 → may write "Derrida argues/describes..."
+        E2 → use "The passage suggests/indicates..."
+        E3 → MUST use "Considered together, these passages could suggest..." / "A reading of these passages
+            could suggest..." / similar phrasing
+        E4 → omit unless user explicitly requests speculation.        
+
         ============================================================
         FINAL CHECK
         ============================================================
+
+        ATTRIBUTION CLASS MATRIX
+
+        E0/A0 = EXPLICIT + PRIMARY AUTHOR
+        Directly stated by Derrida.
+        → Safe for direct attribution:
+        "Derrida states..."
+        "Derrida argues..."
+        "Derrida writes..."
+
+        E0/A1 = EXPLICIT + QUOTED OTHER
+        Explicitly stated by someone Derrida is quoting.
+        → Attribute to quoted speaker:
+        "Marx states, as quoted by Derrida..."
+        → Never automatically attribute to Derrida.
+
+        E0/A2 = EXPLICIT + DISCUSSED OTHER
+        Explicit proposition belonging to someone Derrida is discussing/paraphrasing.
+        → "Derrida describes Fukuyama as arguing..."
+        → Not: "Derrida argues..."
+
+        E0/A3 = EXPLICIT + TRANSLATOR/EDITOR
+        Direct statement by Johnson, Bass, editor, etc.
+        → "Johnson explains..."
+        → Not: "Derrida states..."
+
+        E0/A4 = EXPLICIT + SECONDARY COMMENTATOR
+        Direct statement by reviewer/scholar/commentator.
+        → "The commentator argues..."
+        → Never convert into Derrida's own claim.
+
+        E0/A5 = EXPLICIT + UNCERTAIN SPEAKER
+        Statement is explicit, but speaker cannot be established.
+        → "The passage states..."
+        → Avoid personal attribution.
+
+
+        E1/A0 = CLOSE PARAPHRASE + PRIMARY AUTHOR
+        Close semantic restatement of Derrida's explicit proposition.
+        → Safe:
+        "Derrida argues..."
+        "Derrida maintains..."
+
+        E1/A1 = CLOSE PARAPHRASE + QUOTED OTHER
+        Close paraphrase of someone Derrida quotes.
+        → Attribute to quoted person.
+        → "Marx argues, in the passage quoted by Derrida..."
+
+        E1/A2 = CLOSE PARAPHRASE + DISCUSSED OTHER
+        Close paraphrase of a position Derrida attributes to another person.
+        → "Derrida presents Fukuyama as maintaining..."
+
+        E1/A3 = CLOSE PARAPHRASE + TRANSLATOR/EDITOR
+        Close paraphrase of Johnson/Bass/editor.
+        → "Johnson characterizes Derrida's position as..."
+
+        E1/A4 = CLOSE PARAPHRASE + SECONDARY COMMENTATOR
+        Close paraphrase of secondary interpretation.
+        → "The commentator interprets Derrida as..."
+
+        E1/A5 = CLOSE PARAPHRASE + UNCERTAIN SPEAKER
+        Meaning is clear but speaker isn't.
+        → "The passage suggests/states..."
+        → Do not assign to Derrida.
+
+
+        E2/A0 = LOCAL INFERENCE + PRIMARY AUTHOR
+        One inferential step from Derrida's explicit statement.
+        → Qualify:
+        "Derrida's discussion suggests..."
+        "The passage indicates..."
+        → Avoid presenting inference as direct statement.
+
+        E2/A1 = LOCAL INFERENCE + QUOTED OTHER
+        Inference from words Derrida quotes from another person.
+        → "The quoted passage suggests..."
+        → Do not attribute inference directly to Derrida or quoted author.
+
+        E2/A2 = LOCAL INFERENCE + DISCUSSED OTHER
 
         Before returning the response, internally check every substantive
         sentence:
@@ -777,9 +1037,124 @@ extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
 
         {context_str}
         """.format(response=response, context_str=context_str)
+        
         for i in range(args.recursions):
             LOG.info(f"Recursion {i+1}/{args.recursions}...")
+            current_text = response.content
+            recursion_prompt = f"""
+            ... your editing rules ...
+
+            TEXT TO EDIT:
+
+            {current_text}
+
+            SOURCES FOR THE TEXT:
+
+            {context_str}
+            """
             response = llm.invoke(recursion_prompt)
+
+    final_prompt = f"""
+    You are the final prose renderer for an evidence-grounded academic system.
+
+    The text below has already undergone evidence and attribution auditing.
+
+    Rewrite it as polished academic prose.
+
+    CRITICAL:
+    Do not expose source-analysis or reasoning procedures.
+    Do not discuss retrieved evidence, chunks, metadata, audits, evidence classes,
+    attribution rules, or why a claim was accepted or rejected.
+
+    State supported propositions directly.
+
+    Preserve:
+    - factual content
+    - necessary qualifications
+    - explicit synthesis markers where required
+    - citations
+    - correct attribution
+
+    Remove:
+    - meta-commentary about evidence
+    - explanations of citation decisions
+    - explanations of attribution decisions
+    - explanations of epistemic decisions
+    - redundant source descriptions
+
+    Do not introduce any new substantive claims.
+    Do not strengthen qualified claims.
+    Do not remove necessary synthesis markers.
+    Do not alter citations except to fix formatting.
+
+    CITATION ENTAILMENT
+
+    A citation must support the entire factual or interpretive proposition
+    immediately preceding it.
+
+    Do not use a citation to support an inference merely because the citation
+    supports the premises from which that inference was constructed.
+
+    Example:
+
+    SOURCE:
+    "Derrida was born in French Algeria."
+
+    ALLOWED:
+    "Derrida was born in French Algeria (Source)."
+
+    NOT ALLOWED:
+    "Derrida's Algerian birth shaped his critique of Western metaphysics
+    (Source)."
+
+    The source establishes the birthplace. It does not establish the causal
+    relationship.
+
+    If a source establishes A, you may state A.
+    Do not state A → B unless the source also establishes that relationship.
+
+    BIOGRAPHY → THOUGHT RULE
+
+    Never infer that a biographical fact caused, shaped, influenced,
+    anticipated, informed, reinforced, explains, illuminates, or gave rise
+    to a philosophical position unless a supplied source explicitly makes
+    that connection.
+
+    This prohibition applies even when the connection seems plausible,
+    widely accepted, or interpretively useful.
+
+    INFERENTIAL TRIGGERS
+
+    Before producing any sentence containing language such as:
+
+    - shaped
+    - influenced
+    - informed
+    - led to
+    - gave rise to
+    - reinforced
+    - reflects his experience
+    - can be traced to
+    - provides the basis for
+    - explains his later
+    - resonates with his experience
+    - likely
+    - suggests that his experience
+    - offers a backdrop for
+    - can be understood through
+
+    verify that the SOURCE ITSELF asserts the relationship.
+
+    If not, remove the inference.
+
+    TEXT:
+    {response.content}
+
+    SOURCES:
+    {context_str}
+    """
+
+    response = llm.invoke(final_prompt)
 
     print(f"\n--- Answer from {CHAT_MODEL} ---")
     print(response.content)
