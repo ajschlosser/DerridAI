@@ -163,16 +163,39 @@ determining WHO IS SPEAKING.
        speaker = Jacques Derrida
    OR the excerpt explicitly quotes/attributes that proposition to Derrida.
 
-4. SECONDARY EXPOSITION MUST BE IDENTIFIED AS SECONDARY EXPOSITION.
-   If:
-       speaker = Barbara Johnson
-       position_holder = Jacques Derrida
-   write:
-       "Johnson explains that Derrida..."
-       "According to Johnson's account of Derrida..."
-       "Johnson characterizes Derrida's position as..."
-   NOT:
-       "Derrida argues..."
+4. SECONDARY EXPOSITION AND POSITION HOLDER
+
+    The speaker identifies who wrote the evidence.
+    The position_holder identifies whose philosophical position the evidence
+    is reporting.
+
+    Do NOT confuse citation provenance with intellectual attribution.
+
+    If:
+        speaker = Barbara Johnson
+        position_holder = Jacques Derrida
+        proposition_status = exposition / paraphrase / description
+
+    then the final answer MAY keep Derrida as the intellectual subject.
+
+    PERMITTED:
+        "Derrida's critique of logocentrism privileges neither speech nor
+        writing as a simple center, Barbara Johnson writes (Derrida 4)."
+
+        "As Barbara Johnson writes,Derrida treats logocentrism as a system organized around the
+        self-presence of meaning (Derrida 4)."
+
+        "According to Johnson, Derrida treats logocentrism as... (Derrida 4)"
+
+    All are acceptable.
+
+    DO NOT write:
+        "Johnson argues that logocentrism..."
+    unless the proposition is Johnson's own interpretation.
+
+    Citation provenance and position ownership are separate:
+        citation source = Johnson
+        philosophical position = Derrida
 
 5. QUOTATION ATTRIBUTION:
    Quotation marks do NOT establish that the document author said the words.
@@ -181,6 +204,34 @@ determining WHO IS SPEAKING.
 6. NEVER infer authorship from the title of the work.
    An excerpt from a book by Derrida may be written by a translator,
    editor, introducer, commentator, or quoted author.
+
+INTELLECTUAL-SUBJECT RULE
+
+When the user's question asks what Derrida thinks, argues, means, or does:
+
+Prefer prose centered on Derrida's philosophical position.
+
+If a secondary source faithfully explicates Derrida
+(position_holder = Derrida), the secondary source may provide citation
+provenance without becoming the main grammatical subject.
+
+Prefer:
+    "Derrida's account of logocentrism privileges..."
+    (Johnson 4)
+
+over repetitive constructions such as:
+    "Johnson says that Derrida..."
+    "Bass explains that Derrida..."
+    "Johnson further notes..."
+
+Use the secondary author's name in the prose when:
+- their interpretation itself matters;
+- their wording is quoted;
+- position_holder is the secondary author;
+- attribution would otherwise be ambiguous.
+
+Do not let attribution correctness turn an essay about Derrida
+into an essay about Derrida's translators.   
 
 REQUIREMENTS:
 - Your response MUST have a MINIMUM of {min} sentences.
@@ -360,25 +411,96 @@ points to the correct page.
 
         return 6
 
-
-    retrieved_docs = sorted(
-        retriever.invoke(f"""
+    retrieval_query = f"""
         [PROMPT]
         {user_query}
         [/PROMPT]
 
         KEYWORDS: {json.dumps(keywords)}
-    """),
+    """
+
+    retrieved_docs = sorted(
+        retriever.invoke(retrieval_query),
         key=source_priority
     )
 
-    retrieved_docs = sorted(
-        retrieved_docs,
-        key=lambda d: ROLE_PRIORITY.get(
-            d.metadata.get("region_type", ""),
-            99
-        )
+    FINAL_K = 25
+    PRIMARY_K = 12
+    SECONDARY_K = 8
+    OTHER_K = 5
+
+    search_kwargs = {
+        "k": 40,
+        "fetch_k": FETCH_K_VALUE,
+        "lambda_mult": LAMBDA_MULT_VALUE,
+    }
+
+    retriever = get_retriever(
+        search_kwargs=search_kwargs,
+        search_type="mmr",
     )
+
+    candidates = retriever.invoke(retrieval_query)
+
+    def is_derrida_primary(doc):
+        speaker = (doc.metadata.get("speaker") or "").lower()
+        holder = (doc.metadata.get("position_holder") or "").lower()
+
+        return (
+            "derrida" in speaker
+            and "derrida" in holder
+        )
+
+
+    def is_derrida_secondary(doc):
+        speaker = (doc.metadata.get("speaker") or "").lower()
+        holder = (doc.metadata.get("position_holder") or "").lower()
+
+        return (
+            "derrida" not in speaker
+            and "derrida" in holder
+        )
+
+
+    primary_docs = []
+    secondary_docs = []
+    other_docs = []
+
+    for doc in candidates:
+        if is_derrida_primary(doc):
+            primary_docs.append(doc)
+        elif is_derrida_secondary(doc):
+            secondary_docs.append(doc)
+        else:
+            other_docs.append(doc)
+
+    selected = (
+        primary_docs[:PRIMARY_K]
+        + secondary_docs[:SECONDARY_K]
+        + other_docs[:OTHER_K]
+    )
+
+    # Backfill unused capacity with remaining candidates,
+    # preserving original MMR order.
+    selected_ids = {id(d) for d in selected}
+
+    for doc in candidates:
+        if len(selected) >= FINAL_K:
+            break
+
+        if id(doc) not in selected_ids:
+            selected.append(doc)
+            selected_ids.add(id(doc))
+
+    retrieved_docs = selected
+
+    # retrieved_docs = sorted(
+    #     retrieved_docs,
+    #     key=lambda d: ROLE_PRIORITY.get(
+    #         d.metadata.get("region_type", ""),
+    #         99
+    #     )
+    # )
 
     LOG.info("Retrieved %d documents.", len(retrieved_docs))
 
@@ -404,13 +526,44 @@ points to the correct page.
     reordered_groups = reordering.transform_documents(unique_docs)
 
     def evidence_class(doc):
-        speaker = (doc.metadata.get("speaker") or "").lower()
-        position_holder = (doc.metadata.get("position_holder") or "").lower()
+        m = doc.metadata
 
-        if "derrida" in speaker and "derrida" in position_holder:
-            return f"PRIMARY — MAY BE ATTRIBUTED DIRECTLY TO DERRIDA"
+        speaker = (m.get("speaker") or "").lower()
+        holder = (m.get("position_holder") or "").lower()
+        status = (m.get("proposition_status") or "").lower()
+        discourse = (
+            m.get("discourse_mode")
+            or m.get("discourse_role")
+            or ""
+        ).lower()
 
-        return f"SECONDARY — DO NOT ATTRIBUTE THIS SPEAKER'S WORDS DIRECTLY TO DERRIDA"
+        # Derrida stating his own position
+        if "derrida" in speaker and "derrida" in holder:
+            return (
+                "PRIMARY_DERRIDA — Derrida is both textual speaker and "
+                "position holder. Direct Derrida attribution permitted."
+            )
+
+        # Secondary author accurately explaining Derrida
+        if "derrida" not in speaker and "derrida" in holder:
+            return (
+                "SECONDARY_EXPOSITION_OF_DERRIDA — citation provenance belongs "
+                f"to {m.get('speaker') or 'the secondary source'}, but Derrida "
+                "may remain the intellectual subject if the proposition is "
+                "faithful exposition rather than the secondary author's own interpretation."
+            )
+
+        # Derrida talking about somebody else
+        if "derrida" in speaker and holder and "derrida" not in holder:
+            return (
+                "DERRIDA_DISCUSSING_OTHER — Derrida is the textual speaker, "
+                f"but the represented position belongs to {m.get('position_holder')}."
+            )
+
+        return (
+            "OTHER_OR_UNCERTAIN — preserve the actual position holder and "
+            "do not infer Derrida ownership."
+        )
 
     # Format retrieved context with source citations
     context_str = "\n\n---\n\n".join(
@@ -434,7 +587,8 @@ attribution_confidence: {doc.metadata.get('attribution_confidence', 'Unknown')}
 extraction_quality: {doc.metadata.get('extraction_quality', 'Unknown')}
 source_url: {doc.metadata.get('source_url') or 'Unknown'}
 
-EVIDENCE CLASS: {evidence_class(doc)}
+EVIDENCE CLASS:
+{evidence_class(doc)}
 
 [TEXT]
 {doc.page_content}
@@ -472,7 +626,7 @@ EVIDENCE CLASS: {evidence_class(doc)}
         3. Determine attribution class:
 
         A0 = primary author speaking directly
-        A1 = primary author quoting another person
+        A1 = primary author quoting another position holder
         A2 = primary author discussing/paraphrasing another person
         A3 = translator/editor/introduction author
         A4 = secondary commentator

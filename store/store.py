@@ -135,20 +135,27 @@ def _load_new_records(source_file: Path) -> list[Document]:
     LOG.info("Found %d new records to index", len(new_documents))
     return new_documents
 
-def add_new_records() -> None:
-    """Load only the records that are not yet indexed and append them."""
+def add_new_records(batch_size: int = 2250) -> None:
+    """Load only the records that are not yet indexed and append them in batches."""
     LOG.info("Loading existing records for comparison...")
     new_docs = _load_new_records(Path(SOURCE_TEXT))
     if not new_docs:
         LOG.info("No new records found: vector store already up-to-date.")
         return
 
-    LOG.info("Adding %d new documents to the vector store... be patient...", len(new_docs))
-    #vector_store = Chroma(persist_directory=DB_PATH, embedding_function=None)
-    store.add_documents(
-        documents=new_docs,
-        ids=[doc.metadata["record_id"] for doc in new_docs],
-    )
+    total_docs = len(new_docs)
+    LOG.info("Adding %d new documents to the vector store in batches of %d...", total_docs, batch_size)
+
+    for i in range(0, total_docs, batch_size):
+        batch_docs = new_docs[i:i + batch_size]
+        batch_ids = [doc.metadata["record_id"] for doc in batch_docs]
+        
+        LOG.info(f"Indexing batch {i // batch_size + 1}/{(total_docs + batch_size - 1) // batch_size} ({len(batch_docs)} records)...")
+        store.add_documents(
+            documents=batch_docs,
+            ids=batch_ids,
+        )
+
     LOG.info("Vector store update complete.")
 
 def delete_vector_store(db_path: str = DB_PATH) -> None:

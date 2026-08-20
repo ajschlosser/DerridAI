@@ -115,6 +115,43 @@ python run_critic.py
 | `--max-new-tokens` | `300` | Maximum response length in tokens |
 | `--temperature` | `0.6` | Sampling temperature |
 
+## Current Benchmarks
+
+| Dimension | gpt-oss:20b alone | DerridAI RAG |
+|---|---|---|
+| Main knowledge source | Model weights | Retrieved corpus + model |
+| Retrieval | None | MMR + large candidate pool |
+| Evidence diversity | N/A | Explicitly managed |
+| Primary/secondary distinction | Weak/implicit | Explicit |
+| Speaker attribution | Generated from context | Metadata-informed |
+| Derrida prioritization | Parametric | Retrieval/ranking controlled |
+| Secondary-source recovery | Accidental | Separate retrieval lane |
+| Citation generation | Model improvisation | Corpus-grounded |
+| Bibliographic hallucination | High-risk | Much lower |
+| Unsupported synthesis | High-risk | Reduced, still present |
+| Inferential overreach | High | Moderate |
+| Prose quality | Strong | Strong, sometimes constrained |
+| Novel interpretation | High | Moderate/high |
+| Auditability | Poor | Potentially very good |
+| Research usefulness | Low/moderate | High with verification |
+
+| Dimension | gpt-oss:20b | DerridAI |
+|---|---:|---:|
+| Retrieval grounding | 0/10 | 9/10 |
+| Source existence reliability | 4/10 | 9/10 |
+| Correct speaker attribution | 5/10 | 8.5/10 |
+| Citation validity | 3/10 | 8/10 |
+| Citation entailment | 3/10 | 7/10 |
+| Inferential discipline | 4/10 | 7/10 |
+| Factual restraint | 3/10 | 8/10 |
+| Philosophical synthesis | 8/10 | 7.5/10 |
+| Writing quality | 8/10 | 8/10 |
+| Creative interpretation | 9/10 | 7.5/10 |
+| Research auditability | 1/10 | 9/10 |
+| Research usefulness | 4/10 | 8/10 |
+
+
+
 ## Contributing
 
 Feel free to submit pull requests or open issues. Ensure the style guidelines are followed and tests pass before merging.
