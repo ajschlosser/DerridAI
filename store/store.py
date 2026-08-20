@@ -24,6 +24,7 @@ to aid debugging.  All loggers are acquired from the project‑wide logging
 facility defined in :mod:`src.derrida.logging`.
 """
 
+from importlib.metadata import metadata
 import os
 import shutil
 import json
@@ -80,20 +81,56 @@ def _load_new_records(source_file: Path) -> list[Document]:
                 continue
 
             record = json.loads(line)
-            record_id = record["id"]
-
-            if record_id in db_ids:
-                continue
-
-            new_documents.append(
-                Document(
-                    page_content=record["text"],
-                    metadata={
-                        "record_id": record_id,
-                        **record["metadata"],
-                    },
+            if record.get("record_id") is not None:
+                record_id = record["record_id"]
+                if record_id in db_ids:
+                    continue
+                metadata = {
+                    "text_length": len(record["text"]),
+                    "record_id": record_id,
+                    "work": record["work"],
+                    "document_author": record["document_author"],
+                    "edition": record["edition"],
+                    "year": record["year"],
+                    "page_start": record["page_start"],
+                    "page_end": record["page_end"],
+                    "region_type": record["region_type"],
+                    "region_author": record["region_author"],
+                    "primary_text": record["primary_text"],
+                    "speaker": record["speaker"],
+                    "position_holder": record["position_holder"],
+                    "target": record["target"],
+                    "discourse_role": record["discourse_role"],
+                    "text": record["text"],
+                    "concepts": record["concepts"],
+                    "persons": record["persons"],
+                    "works_referenced": record["works_referenced"],
+                    "is_direct_quote": record["is_direct_quote"],
+                    "quoted_speaker": record["quoted_speaker"],
+                    "attribution_confidence": record["attribution_confidence"],
+                    "extraction_quality": record["extraction_quality"]                    
+                }
+                # Removes [], "", and None
+                metadata = {k: v for k, v in metadata.items() if v}
+                new_documents.append(
+                    Document(
+                        page_content=record["text"],
+                        metadata=metadata,
+                    )
                 )
-            )
+            else:
+                record_id = record["id"]
+                if record_id in db_ids:
+                    continue
+                new_documents.append(
+                    Document(
+                        page_content=record["text"],
+                        metadata={
+                            "record_id": record_id,
+                            **record["metadata"],
+                        },
+                    )
+                )
 
     LOG.info("Found %d new records to index", len(new_documents))
     return new_documents

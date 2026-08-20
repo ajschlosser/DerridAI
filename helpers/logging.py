@@ -34,10 +34,15 @@ _LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter(_LOG_FORMAT, _LOG_DATEFMT))
 
+file_handler = logging.FileHandler(Path("derridai.log"), mode="w")
+file_handler.setFormatter(logging.Formatter(_LOG_FORMAT, _LOG_DATEFMT))
+#root_logger.addHandler(file_handler)  # Moved below after root_logger is defined
+
 # The root logger gets the handler; sub‑loggers inherit it.
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)   # default, can be overridden by env var
 root_logger.addHandler(handler)
+root_logger.addHandler(file_handler)  # Add file handler after root_logger is defined
 
 # --------------------------------------------------------------------------- #
 # 2. Helper to obtain a module‑specific logger

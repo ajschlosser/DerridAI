@@ -16,16 +16,16 @@ import argparse
 
 EMBEDDING_MODEL   = "nomic-embed-text"
 CHAT_MODEL        = "gpt-oss:20b"
-CHAT_TEMPERATURE  = 0.2
+CHAT_TEMPERATURE  = 0.5
 OLLAMA_SERVER_URL = "http://localhost:11434"
 
-DB_PATH          = "./chroma_db_local-tuned4"
-SOURCE_TEXT      = "./data/derrida4.jsonl"
+DB_PATH          = "./chroma_db_local-tuned6"
+SOURCE_TEXT      = "./data/derrida6_inc.jsonl"
 
 BATCH_SIZE       = 2250          # Prevents Ollama tokenizer OOM crashes
-K_VALUE          = 20
-FETCH_K_VALUE    = 100
-LAMBDA_MULT_VALUE = 0.5          # Higher makes DerridAI get rAnDoM
+K_VALUE          = 25
+FETCH_K_VALUE    = 250
+LAMBDA_MULT_VALUE= 0.7          # Lower makes DerridAI get rAnDoM
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
@@ -109,6 +109,12 @@ def parse_arguments():
         type=str,
         default=CHAT_MODEL,
         help="Which chat model to use.",
+    )
+    parser.add_argument(
+        "--recursions",
+        default=0,
+        type=int,
+        help="Number of times to recursively review and update the response.",
     )
     args = parser.parse_args()
     return args

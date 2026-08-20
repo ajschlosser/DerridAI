@@ -47,7 +47,7 @@ def get_embeddings() -> OllamaEmbeddings:
     return OllamaEmbeddings(
         model=EMBEDDING_MODEL,
         base_url=OLLAMA_SERVER_URL,
-        keep_alive="-1",
+        keep_alive="-1"
     )
 
 
@@ -62,5 +62,6 @@ def get_llm_chat() -> ChatOllama:
         model=CHAT_MODEL,
         base_url=OLLAMA_SERVER_URL,
         temperature=CHAT_TEMPERATURE,
+        timeout=45.0,  # e.g., 45 s
     )
     

@@ -188,10 +188,8 @@ Question: {question}
     if not (args.cheat):
         prompt_template += """
 - DO back up every claim you make with a citation from the provided texts
-- Use MLA-like citation format where possible (Author, Title, Page #)
+- Use MLA citation format for inline citations (Title, Page #)
 - DO clean up typos/artifacts in cited text
-- DO NOT repeatedly cite the same source in MLA format
-    * If an entire paragraph is mostly one source, just cite it once at the end
 - DO NOT say "Based on the provided text" or anything similar in response
 - DO NOT misattribute others' thoughts and writing to Derrida
     * e.g., if Derrida is talking about Rousseau, DO NOT misattribute Rousseau's thinking to Derrida
@@ -415,11 +413,10 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
                 for record_type in record_types:
                     LOG.info("Invoking record type: %s", adjacent_type)
                     retriever = get_retriever(search_kwargs={
-                        #"score_threshold": 0.1,
                         "k": math.ceil(K_VALUE / 2),
-                        "filter": {"record_type": record_type}
-                        # "k_fetch": K_FETCH_VALUE,
-                        # "lambda_mult": LAMBDA_MULT_VALUE
+                        "filter": {"record_type": record_type},
+                        "fetch_k": FETCH_K_VALUE,
+                        "lambda_mult": LAMBDA_MULT_VALUE
                     }, search_type="mmr")
                     retrieved_docs = retrieved_docs + retriever.invoke(user_query)
         else:
@@ -511,13 +508,19 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
             =====================================================================
             | **{doc.metadata.get('source_title')}** (published {doc.metadata.get('publication_year')}) by {doc.metadata.get('author')}, p. {doc.metadata.get('page_number')}
             =====================================================================
-            | SPEAKER IN TEXT: {doc.metadata.get('speaker', 'Most Likely the Author')}.
-            | TARGET OF SPEAKER IN TEXT: {doc.metadata.get('speaker_target', 'Unknown')}
-            | LANGUAGE OF TEXT: {doc.metadata.get('lang', 'Most Likely English')}
-            | ROLE OF TEXT: {doc.metadata.get('textual_role', 'Most Likely General Prose')}
-            
+            | ATTENTION: In analyzing this text, pay close attention to the following details so you don't misattribute ideas:
+            | * SPEAKER IN TEXT: {doc.metadata.get('speaker', 'Most Likely the Author of the Text')} <-- the voice of the text
+            | * TARGET OF SPEAKER IN TEXT: {doc.metadata.get('speaker_target', 'Most Likely the General Public')} <-- the intended audience of the text
+            | * LANGUAGE OF TEXT: {doc.metadata.get('lang', 'Most Likely English')} <-- the language in which the text is written
+            | * ROLE(S) OF TEXT: {doc.metadata.get('textual_role', 'Most Likely General Prose')} <-- the function or purpose of the text within its context
+            | * WHAT THIS TEXT IS ABOUT: {doc.metadata.get('short_description', 'Not Available')} <-- a brief summary of the text's content
+            | * CONFIDENCE IN THIS TEXT'S COHERENCE: {doc.metadata.get('coherence_score', 'Unknown')} <-- the estimated reliability of the text's coherence
+            |
+
             [...] {doc.page_content} [...]
 
+            REQUIREMENTS:
+                - Consider the details in the ATTENTION section above when evaluating this excerpt
             _____________________________________________________________________
             """
             for doc in reordered_groups
@@ -528,6 +531,7 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
     LOG.info("Generating response with LLM.")
     final_prompt = prompt.format(context=context_str, question=user_query, also=args.also, min=args.min, max=args.max)
     LOG.info(f"Final prompt built: \n{final_prompt}")
+    LOG.info(f"Final prompt built.")
     response = llm.invoke(final_prompt)
     LOG.info("LLM finished generating response.")
 
@@ -539,14 +543,22 @@ KEY WORDS TO INCLUDE IN SEARCH: {", ".join(specifiers)}
 
             REQUIREMENTS:
                 - Examine, below, the response to the prompt for clarity, accuracy, and thoroughness.
-                - Make sure there are no misattributed ideas or fake citations.
                 - Fix typos and other artifacts.
                 - Structure it like an article/essay.
                 - DO NOT add subheadings.
                 - DO NOT remove page number/citations
+                - DO NOT alter citations (unless to clean up typos/artifacts)
+                - DO REMOVE REDUNDANT, IRRELEVANT, OR OFF-TOPIC CONTENT (e.g. "The source does not contribute to the argument")
 
             GOAL:
                 - Improve the response as needed, then respond with ONLY the improved response.
+                - Ensure that the response remains faithful to the original sources.
+                - Maintain the original meaning and intent of the response.
+                - Avoid introducing new information not present in the original response.
+                - Do not fabricate citations or sources.
+                - Ensure that all improvements adhere to academic standards and maintain the integrity of the original text.
+                - A high-quality academic essay should be produced, adhering to the above requirements.
+                - Ensure that all changes are clearly documented in the DEBUG section.
                 - Below the response append a brief DEBUG section with any changes you made during generation to improve the result
                     * For each change, provide the a/b diff
                     * At very end, add your CONFIDENCE SCORE (out of 100%) signaling your confidence in your accuracy as a Derridean scholar
