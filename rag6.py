@@ -80,7 +80,7 @@ def main():
         id_batch = []
         total_indexed = 0
 
-        LOG.info("Streaming and indexing documents in batches of %d...", BATCH_SIZE)
+        LOG.info("!!! Streaming and indexing documents in batches of %d...", 1750)
         
         with open(SOURCE_TEXT, "r", encoding="utf-8") as f:
             for line in f:
@@ -97,7 +97,7 @@ def main():
                 id_batch.append(record["id"])
 
                 # Whenever we hit the batch limit, send to Chroma & clear buffer
-                if len(doc_batch) >= BATCH_SIZE:
+                if len(doc_batch) >= 1750:
                     vector_store.add_documents(documents=doc_batch, ids=id_batch)
                     total_indexed += len(doc_batch)
                     LOG.info("Indexed %d documents so far...", total_indexed)
@@ -573,8 +573,14 @@ points to the correct page.
 work: {doc.metadata.get('work')}
 pages: {doc.metadata.get('page_start', '??')}-{doc.metadata.get('page_end', '??')}
 document_author: {doc.metadata.get('document_author') or 'Unknown'}
+document_language: {", ".join(doc.metadata.get('document_language', [])) or 'Unknown'}
+original_language: {", ".join(doc.metadata.get('original_language', [])) or 'Unknown'}
+document_is_translation: {doc.metadata.get('document_is_translation', 'Unknown')}
 region_type: {doc.metadata.get('region_type') or 'Unknown'}
 region_author: {doc.metadata.get('region_author') or 'Unknown'}
+region_language: {", ".join(doc.metadata.get('region_language', [])) or 'Unknown'}
+translator: {doc.metadata.get('translator') or 'Unknown'}
+
 speaker: {doc.metadata.get('speaker') or 'Unknown'}
 position_holder: {doc.metadata.get('position_holder') or 'Unknown'}
 target: {doc.metadata.get('target') or 'Unknown'}
@@ -589,6 +595,9 @@ source_url: {doc.metadata.get('source_url') or 'Unknown'}
 
 EVIDENCE CLASS:
 {evidence_class(doc)}
+
+SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
+{doc.metadata.get('review_reason') or 'None'}
 
 [TEXT]
 {doc.page_content}

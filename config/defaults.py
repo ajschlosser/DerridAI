@@ -22,9 +22,9 @@ OLLAMA_SERVER_URL = "http://localhost:11434"
 DB_PATH          = "./chroma_db_local-tuned6"
 SOURCE_TEXT      = "./data/derrida6_inc.jsonl"
 
-BATCH_SIZE       = 2250          # Prevents Ollama tokenizer OOM crashes
-K_VALUE          = 50
-FETCH_K_VALUE    = 500
+BATCH_SIZE       = 1750          # Prevents Ollama tokenizer OOM crashes
+K_VALUE          = 30
+FETCH_K_VALUE    = 1000
 LAMBDA_MULT_VALUE= 0.7          # Lower makes DerridAI get rAnDoM
 
 def parse_arguments():

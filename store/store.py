@@ -135,7 +135,7 @@ def _load_new_records(source_file: Path) -> list[Document]:
     LOG.info("Found %d new records to index", len(new_documents))
     return new_documents
 
-def add_new_records(batch_size: int = 2250) -> None:
+def add_new_records(batch_size: int = 1750) -> None:
     """Load only the records that are not yet indexed and append them in batches."""
     LOG.info("Loading existing records for comparison...")
     new_docs = _load_new_records(Path(SOURCE_TEXT))
