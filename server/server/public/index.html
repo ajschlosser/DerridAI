@@ -1,3 +1,18 @@
+<!--
+    Copyright 2026 Aaron John Schlosser, PhD
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+       http://apache.org
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+    
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -95,7 +110,7 @@
 		<button id="sendBtn">Send</button> <div id="spinner" class="spinner hidden"></div><span id="spinner-warning" class="hidden">Be patient... GPUs are expensive!</span>
 		<textarea autocomplete="off" id="result" class="response" readonly placeholder="Response will appear here…"></textarea>
 	</div>
-    <div class="container" style="margin-top: 20px;">
+    <div class="container hidden" style="margin-top: 20px;">
         <h4>PAST QUERIES</h4>
         <div><ul id="past-queries"></ul></div>
     </div>
@@ -108,84 +123,92 @@
     const pastQueriesContainer = document.getElementById('past-queries');
     // Load past queries from localStorage on page load
     const history = JSON.parse(localStorage.getItem('history')) || {};
+    if (Object.keys(history).length > 0) {
+        document.querySelector('.container.hidden').classList.remove('hidden');
+    }
     Object.entries(history).forEach(([timestamp, entry]) => {
         const li = document.createElement('li');
-        li.innerHTML = `<p><strong>${entry.query}</strong></p><p>${entry.response || ''}</p>`;
+        li.innerHTML = `<p>Prompt: <strong>${entry.query}</strong></p><p>Response: ${entry.response || ''}</p>`;
         pastQueriesContainer.appendChild(li);
     });
 
 	sendBtn.addEventListener('click', async () => {
-	const prompt = queryInput.value.trim();
-	if (!prompt) return;
+        resultArea.style.height = 'auto';
+        const prompt = queryInput.value.trim();
+        if (!prompt) return;
 
-	// Disable the Send button and show spinner while awaiting response
-	sendBtn.disabled = true;
-	resultArea.value = 'Thinking...';
-	spinner.classList.remove('hidden');
-    spinnerWarning.classList.remove('hidden');
+        // Disable the Send button and show spinner while awaiting response
+        sendBtn.disabled = true;
+        resultArea.value = 'Thinking...';
+        spinner.classList.remove('hidden');
+        spinnerWarning.classList.remove('hidden');
 
-	try {
-		const response = await fetch('http://localhost:8000/api/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			query: prompt + ' Respond in the form of an academic essay. Use inline MLA citation format. Respond with at least 3 full paragraphs. USE FRENCH SOURCES ONLY. UTILISEZ SEULEMENT DES SOURCES FRANÇAISES.',
-			// The server will internally set the script and options.
-			// It will stream the stdout/stderr lines as text/plain.
-			// No additional fields are needed.
-		})
-        });
+        try {
+            const response = await fetch('http://localhost:8000/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: prompt + ' Respond in the form of an academic essay. Use inline MLA citation format. Respond with at least 3 full paragraphs. USE FRENCH SOURCES ONLY. UTILISEZ SEULEMENT DES SOURCES FRANÇAISES.',
+                // The server will internally set the script and options.
+                // It will stream the stdout/stderr lines as text/plain.
+                // No additional fields are needed.
+            })
+            });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-		const reader   = response.body.getReader();
-		const decoder  = new TextDecoder();
-		let accumulated = '';
+            const reader   = response.body.getReader();
+            const decoder  = new TextDecoder();
+            let accumulated = '';
+            let ready = false;
+            while (true) {
+                if (ready) {
+                    resultArea.value = '';
+                    accumulated = '';
+                }
+                const { value, done } = await reader.read();
+                if (done) break;
 
-		while (true) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			// value is a Uint8Array chunk; decode it and append
-			const text = decoder.decode(value, { stream: true });
-            console.log('text: ', text);
-            if (text.toLowerCase().includes('received answer')) {
-                alert('wait!');
+                // value is a Uint8Array chunk; decode it and append
+                const text = decoder.decode(value, { stream: true });
+                console.log('text: ', text);
+                if (text.toLowerCase().includes('received answer')) {
+                    ready = true;
+                }
+                accumulated += text;
+                resultArea.value = accumulated;
+                // Auto‑resize textarea to fit content
+                resultArea.style.height = 'auto';
+                resultArea.style.height = resultArea.scrollHeight + 'px';
             }
-			accumulated += text;
-			resultArea.value = accumulated;
-			// Auto‑resize textarea to fit content
-			resultArea.style.height = 'auto';
-			resultArea.style.height = resultArea.scrollHeight + 'px';
-		}
+            // Flush remaining decoder buffer
+            accumulated += decoder.decode();
+            resultArea.value = accumulated;
+            const data = JSON.parse(localStorage.getItem('history')) || {};
 
-        resultArea.value = '';
-        accumulated = '';
-		// Flush remaining decoder buffer
-		accumulated += decoder.decode();
-		resultArea.value = accumulated;
-        const data = JSON.parse(localStorage.getItem('history')) || {};
+            data[new Date().toISOString()] = {
+                query: prompt,
+                response: accumulated
+            };
+            localStorage.setItem('history', JSON.stringify(data));
+            // Update the past queries container
+            localStorage.setItem('history', JSON.stringify(data));
+            const history = JSON.parse(localStorage.getItem('history')) || {};
+            Object.entries(history).forEach(([timestamp, entry]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<p>Prompt: <strong>${entry.query}</strong></p><p>Response: ${entry.response || ''}</p>`;
+                pastQueriesContainer.appendChild(li);
+            });
 
-        data[new Date().toISOString()] = {
-            query: prompt,
-            response: accumulated
-        };
-        localStorage.setItem('history', JSON.stringify(data));
-        // Update the past queries container
-        pastQueriesContainer.innerHTML = '';
-        Object.entries(data).forEach(([timestamp, entry]) => {
-            const div = document.createElement('div');
-            div.textContent = `${timestamp}: ${entry.query}`;
-            pastQueriesContainer.appendChild(div);
-        });
-
-        localStorage.setItem('history', JSON.stringify(data));
-
-		spinner.classList.add('hidden');
-        spinnerWarning.classList.add('hidden');
-		sendBtn.disabled = false;
-    } catch (err) {
-        resultArea.value = 'Error: ' + err.message;
-	}
+            spinner.classList.add('hidden');
+            spinnerWarning.classList.add('hidden');
+            sendBtn.disabled = false;
+        } catch (err) {
+            resultArea.value = 'Error: ' + err.message;
+            spinner.classList.add('hidden');
+            spinnerWarning.classList.add('hidden');
+            sendBtn.disabled = false;
+        }
     });
 </script>
 </body>

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""rag.py – Retrieval‑augmented generation demo with CLI controls and progress logs."""
+"""rag.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
 
 import math
 import json
@@ -203,35 +203,7 @@ determining WHO IS SPEAKING.
 
 6. NEVER infer authorship from the title of the work.
    An excerpt from a book by Derrida may be written by a translator,
-   editor, introducer, commentator, or quoted author.
-
-INTELLECTUAL-SUBJECT RULE
-
-When the user's question asks what Derrida thinks, argues, means, or does:
-
-Prefer prose centered on Derrida's philosophical position.
-
-If a secondary source faithfully explicates Derrida
-(position_holder = Derrida), the secondary source may provide citation
-provenance without becoming the main grammatical subject.
-
-Prefer:
-    "Derrida's account of logocentrism privileges..."
-    (Johnson 4)
-
-over repetitive constructions such as:
-    "Johnson says that Derrida..."
-    "Bass explains that Derrida..."
-    "Johnson further notes..."
-
-Use the secondary author's name in the prose when:
-- their interpretation itself matters;
-- their wording is quoted;
-- position_holder is the secondary author;
-- attribution would otherwise be ambiguous.
-
-Do not let attribution correctness turn an essay about Derrida
-into an essay about Derrida's translators.   
+   editor, introducer, commentator, or quoted author. 
 
 REQUIREMENTS:
 - Your response MUST have a MINIMUM of {min} sentences.
@@ -245,50 +217,6 @@ ALL CLAIMS IN YOUR RESPONSE MUST BE SUPPORTED BY FOLLOWING CITATIONS:
 """
     if not (args.cheat):
         prompt_template += """
-
-STRICT GUIDELINES:
-
-- Use MLA citation format for inline citations (Title, Page #)
-- Add a Works Cited section at the end in MLA format
-    * Ensure all cited works in the text are included in the Works Cited section MLA style
-- IF POSSIBLE cite more than 1 work and at least 3 different pages/passages
-
-EVIDENCE INTERPRETATION RULES:
-
-For every evidence block, distinguish:
-- document_author: author of the containing work
-- region_author: author of this section
-- speaker: person currently speaking
-- position_holder: person whose proposition/position is represented
-- proposition_status: whether that proposition is asserted, attributed,
-  quoted, questioned, rejected, hypothetical, etc.
-- claim_scope: how broadly the evidence supports generalization
-
-Never assume document_author = speaker = position_holder.
-
-Do not convert:
-- quotation into endorsement
-- attribution into authorial assertion
-- exposition into endorsement
-- questioning into assertion
-- rejected claims into authorial positions
-- local/textual claims into universal claims
-
-Metadata constrains interpretation but is not infallible. When metadata
-confidence is low or metadata conflicts with the source text, use cautious
-attribution and preserve uncertainty.
-
-A generated claim may move at most ONE reasonable inferential step beyond
-its supporting evidence while being presented as a direct claim.
-
-Claims requiring additional inference, application, generalization, or
-combination of multiple passages must be explicitly marked as synthesis,
-for example:
-- "A Derridean reading could suggest..."
-- "Taken together, these passages suggest..."
-- "This can be read as..."
-
-Never invent citations or page numbers.
 
 FOR EVERY CLAIM WITH A CITATION:
 
@@ -344,28 +272,48 @@ points to the correct page.
 
     user_query = args.query
 
-    keywords = llm.invoke(f"""
+    query_improved = llm.invoke(f"""
         Identify 5-10 key words to go along with this prompt:
         
         [PROMPT]
         {user_query}
         [/PROMPT]
 
-        OUTPUT FORMAT: JSON array of keywords, e.g. ["keyword1", "keyword2", ...]
+        Also identify the language of the prompt,
+        the language of the materials being sought,
+        the expected language of the response,
+        and put them in the JSON object.
 
-        ONLY OUTPUT VALID JSON ARRAY. NO COMMENTS. NO ``` MARKDOWN
+        OUTPUT FORMAT: valid JSON object
+        {{
+            "keywords": ["keyword1", "keyword2", ...],
+            "prompt_language": "en_us", <-- query is in English
+            "materials_language": "fr_fr", <-- query is asking you to look only at French materials
+            "response_language": "fr_fr" <-- query is asking you to respond in French
+        }}
+
+        ONLY OUTPUT VALID JSON OBJECT. NO COMMENTS. NO ``` MARKDOWN
     """)
 
-    LOG.info("Raw keywords response: %s", keywords)
-    keywords = json.loads(keywords.content)
-    LOG.info("Identified keywords: %s", keywords)
+    LOG.info("Raw query improved response: %s", query_improved)
+    q_details = json.loads(query_improved.content)
+    LOG.info("Identified keywords: %s", q_details["keywords"])
 
     search_kwargs = {
         "k": K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
-        "filter": {"text_length": {"$gt": 300}}
+        "filter": { "$and": [{"text_length": {"$gt": 500}}] }
     }
+
+    if q_details["materials_language"]:
+        LOG.info("Filtering by materials language: %s", q_details["materials_language"])
+        search_kwargs["filter"]["$and"].append({
+            "document_language": {
+                "$in": [q_details["materials_language"]]
+            }
+        })
+
     LOG.info("Search kwargs: %s", search_kwargs)
     retriever = get_retriever(search_kwargs=search_kwargs, search_type="mmr")
 
@@ -418,11 +366,17 @@ points to the correct page.
         return 6
 
     retrieval_query = f"""
+
+        prompt_lang: {q_details["prompt_language"]}
+        sources_lang: {q_details["materials_language"]}
+        response_lang: {q_details["response_language"]}
+
+
         [PROMPT]
         {user_query}
         [/PROMPT]
 
-        KEYWORDS: {json.dumps(keywords)}
+        KEYWORDS: {json.dumps(q_details["keywords"])}
     """
 
     retrieved_docs = sorted(
@@ -619,7 +573,6 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
     LOG.info("Generating response with LLM.")
     final_prompt = prompt.format(context=context_str, question=user_query, also=args.also, min=args.min, max=args.max)
     LOG.info(f"Final prompt built: \n{final_prompt}")
-    LOG.info(f"Final prompt built.")
     response = llm.invoke(final_prompt)
     LOG.info("LLM finished generating response.")
 
@@ -1327,8 +1280,8 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
 
     response = llm.invoke(final_prompt)
 
-    print(f"\n--- Answer from {CHAT_MODEL} ---")
-    print(response.content)
+    LOG.info(f"\n--- Answer from {CHAT_MODEL} ---")
+    LOG.info(response.content)
 
 if __name__ == "__main__":
     main()
