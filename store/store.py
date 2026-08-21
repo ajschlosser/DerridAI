@@ -30,7 +30,7 @@ import shutil
 import json
 from pathlib import Path
 from helpers import get_logger
-from config import DB_PATH, SOURCE_TEXT
+from config import BATCH_SIZE, DB_PATH, SOURCE_TEXT
 from models import get_embeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -87,28 +87,7 @@ def _load_new_records(source_file: Path) -> list[Document]:
                     continue
                 metadata = {
                     "text_length": len(record["text"]),
-                    "record_id": record_id,
-                    "work": record["work"],
-                    "document_author": record["document_author"],
-                    "edition": record["edition"],
-                    "year": record["year"],
-                    "page_start": record["page_start"],
-                    "page_end": record["page_end"],
-                    "region_type": record["region_type"],
-                    "region_author": record["region_author"],
-                    "primary_text": record["primary_text"],
-                    "speaker": record["speaker"],
-                    "position_holder": record["position_holder"],
-                    "target": record["target"],
-                    "discourse_role": record["discourse_role"],
-                    "text": record["text"],
-                    "concepts": record["concepts"],
-                    "persons": record["persons"],
-                    "works_referenced": record["works_referenced"],
-                    "is_direct_quote": record["is_direct_quote"],
-                    "quoted_speaker": record["quoted_speaker"],
-                    "attribution_confidence": record["attribution_confidence"],
-                    "extraction_quality": record["extraction_quality"]                    
+                    **record
                 }
                 # Removes [], "", and None
                 metadata = {k: v for k, v in metadata.items() if v}
@@ -135,7 +114,7 @@ def _load_new_records(source_file: Path) -> list[Document]:
     LOG.info("Found %d new records to index", len(new_documents))
     return new_documents
 
-def add_new_records(batch_size: int = 1750) -> None:
+def add_new_records(batch_size: int = BATCH_SIZE) -> None:
     """Load only the records that are not yet indexed and append them in batches."""
     LOG.info("Loading existing records for comparison...")
     new_docs = _load_new_records(Path(SOURCE_TEXT))

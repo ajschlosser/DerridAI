@@ -14,15 +14,15 @@
 
 import argparse
 
-EMBEDDING_MODEL   = "nomic-embed-text"
+EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
 CHAT_MODEL        = "gpt-oss:20b"
 CHAT_TEMPERATURE  = 0.5
 OLLAMA_SERVER_URL = "http://localhost:11434"
 
-DB_PATH          = "./chroma_db_local-tuned6"
-SOURCE_TEXT      = "./data/derrida6_inc.jsonl"
+DB_PATH          = "./chroma_db_local-tuned6_multilang"
+SOURCE_TEXT      = "./data/derrida6_multi.jsonl"
 
-BATCH_SIZE       = 1750          # Prevents Ollama tokenizer OOM crashes
+BATCH_SIZE       = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE          = 30
 FETCH_K_VALUE    = 1000
 LAMBDA_MULT_VALUE= 0.7          # Lower makes DerridAI get rAnDoM

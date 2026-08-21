@@ -360,7 +360,13 @@ points to the correct page.
     keywords = json.loads(keywords.content)
     LOG.info("Identified keywords: %s", keywords)
 
-    search_kwargs = {"k": K_VALUE, "fetch_k": FETCH_K_VALUE, "lambda_mult": LAMBDA_MULT_VALUE}
+    search_kwargs = {
+        "k": K_VALUE,
+        "fetch_k": FETCH_K_VALUE,
+        "lambda_mult": LAMBDA_MULT_VALUE,
+        "filter": {"text_length": {"$gt": 300}}
+    }
+    LOG.info("Search kwargs: %s", search_kwargs)
     retriever = get_retriever(search_kwargs=search_kwargs, search_type="mmr")
 
     ROLE_PRIORITY = {
@@ -424,13 +430,14 @@ points to the correct page.
         key=source_priority
     )
 
-    FINAL_K = 25
-    PRIMARY_K = 12
-    SECONDARY_K = 8
-    OTHER_K = 5
+    FINAL_K = K_VALUE
+    PRIMARY_K = math.floor(K_VALUE / 2)
+    SECONDARY_K = math.floor(K_VALUE / 5)
+    OTHER_K = math.floor(K_VALUE / 8)
 
+    LOG.info("Final K values: FINAL_K=%d, PRIMARY_K=%d, SECONDARY_K=%d, OTHER_K=%d", FINAL_K, PRIMARY_K, SECONDARY_K, OTHER_K)
     search_kwargs = {
-        "k": 40,
+        "k": K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
     }
@@ -571,15 +578,16 @@ points to the correct page.
         f"""
 [EVIDENCE #{i + 1}]
 work: {doc.metadata.get('work')}
-pages: {doc.metadata.get('page_start', '??')}-{doc.metadata.get('page_end', '??')}
-document_author: {doc.metadata.get('document_author') or 'Unknown'}
-document_language: {", ".join(doc.metadata.get('document_language', [])) or 'Unknown'}
-original_language: {", ".join(doc.metadata.get('original_language', [])) or 'Unknown'}
-document_is_translation: {doc.metadata.get('document_is_translation', 'Unknown')}
-region_type: {doc.metadata.get('region_type') or 'Unknown'}
-region_author: {doc.metadata.get('region_author') or 'Unknown'}
+page_start: {doc.metadata.get('page_start', 'Unknown')}
+page_end: {doc.metadata.get('page_end', 'Unknown')}
+document_author: {doc.metadata.get('document_author', 'Unknown')}
+document_language: {doc.metadata.get('document_language', 'Unknown')}
+original_language: {doc.metadata.get('original_language', 'Unknown')}
+document_is_translation: {doc.metadata.get('document_is_translation')}
+region_type: {doc.metadata.get('region_type', 'Unknown')}
+region_author: {doc.metadata.get('region_author', 'Unknown')}
 region_language: {", ".join(doc.metadata.get('region_language', [])) or 'Unknown'}
-translator: {doc.metadata.get('translator') or 'Unknown'}
+translator: {doc.metadata.get('translator', 'Unknown')}
 
 speaker: {doc.metadata.get('speaker') or 'Unknown'}
 position_holder: {doc.metadata.get('position_holder') or 'Unknown'}
