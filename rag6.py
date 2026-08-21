@@ -284,12 +284,18 @@ points to the correct page.
         the expected language of the response,
         and put them in the JSON object.
 
+        Finally, add some details about the query itself:
+            - tone of the query
+            - quality of the query (0.0 to 1.0, with 0.0 being idiotic and 1.0 being expert-level)
+
         OUTPUT FORMAT: valid JSON object
         {{
             "keywords": ["keyword1", "keyword2", ...],
             "prompt_language": "en_us", <-- query is in English
             "materials_language": "fr_fr", <-- query is asking you to look only at French materials
-            "response_language": "fr_fr" <-- query is asking you to respond in French
+            "response_language": "fr_fr", <-- query is asking you to respond in French
+            "tone": "neutral | casual | academic | offensive | creative | hostile | vulgar"
+            "query_quality": 0.8
         }}
 
         ONLY OUTPUT VALID JSON OBJECT. NO COMMENTS. NO ``` MARKDOWN
@@ -310,7 +316,7 @@ points to the correct page.
         LOG.info("Filtering by materials language: %s", q_details["materials_language"])
         search_kwargs["filter"]["$and"].append({
             "document_language": {
-                "$in": [q_details["materials_language"]]
+                "$contains": q_details["materials_language"]
             }
         })
 
@@ -379,10 +385,10 @@ points to the correct page.
         KEYWORDS: {json.dumps(q_details["keywords"])}
     """
 
-    retrieved_docs = sorted(
-        retriever.invoke(retrieval_query),
-        key=source_priority
-    )
+    # retrieved_docs = sorted(
+    #     retriever.invoke(retrieval_query),
+    #     key=source_priority
+    # )
 
     FINAL_K = K_VALUE
     PRIMARY_K = math.floor(K_VALUE / 2)
@@ -390,11 +396,11 @@ points to the correct page.
     OTHER_K = math.floor(K_VALUE / 8)
 
     LOG.info("Final K values: FINAL_K=%d, PRIMARY_K=%d, SECONDARY_K=%d, OTHER_K=%d", FINAL_K, PRIMARY_K, SECONDARY_K, OTHER_K)
-    search_kwargs = {
-        "k": K_VALUE,
-        "fetch_k": FETCH_K_VALUE,
-        "lambda_mult": LAMBDA_MULT_VALUE,
-    }
+    # search_kwargs = {
+    #     "k": K_VALUE,
+    #     "fetch_k": FETCH_K_VALUE,
+    #     "lambda_mult": LAMBDA_MULT_VALUE,
+    # }
 
     retriever = get_retriever(
         search_kwargs=search_kwargs,
@@ -531,6 +537,7 @@ points to the correct page.
     [
         f"""
 [EVIDENCE #{i + 1}]
+length: {doc.metadata.get('text_length', 'Unknown')}
 work: {doc.metadata.get('work')}
 page_start: {doc.metadata.get('page_start', 'Unknown')}
 page_end: {doc.metadata.get('page_end', 'Unknown')}

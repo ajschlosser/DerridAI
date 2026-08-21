@@ -12,7 +12,7 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 -->
-    
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -148,7 +148,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: prompt + ' Respond in the form of an academic essay. Use inline MLA citation format. Respond with at least 3 full paragraphs. USE FRENCH SOURCES ONLY. UTILISEZ SEULEMENT DES SOURCES FRANÇAISES.',
+                query: prompt + ' Respond in the form of an academic essay. Use MLA format for citations. Inline: (Book Title, Page #). Add Works Cited at end. RESPOND IN THE LANGUAGE OF THE QUERY OR WHATEVER LANGUAGE USER REQUESTS.',
                 // The server will internally set the script and options.
                 // It will stream the stdout/stderr lines as text/plain.
                 // No additional fields are needed.
