@@ -74,7 +74,7 @@ python rag.py --query "What is iterability?" --model "llama3"
 | `--title` | `None` | Filter by source title |
 | `--record-type` | `primary_source` | Filter by record type (`all` disables) |
 | `--force-rebuild` | `False` | Rebuild vector store from source JSONL |
-| `--cheat` | `False` | Disable inline citations and use bibliography mode |
+| `--cheat` | `False` | Skip inline citation requirements in the main generation prompt |
 | `--keyword` | `False` | Enable keyword-to-text weighting |
 | `--thorough` | `False` | Run a second editorial improvement pass |
 | `--min` | `5` | Minimum sentence count target |
@@ -82,7 +82,7 @@ python rag.py --query "What is iterability?" --model "llama3"
 | `--also` | `- You must double-check your work at the end.` | Extra prompt instruction |
 | `--bibliography` | `False` | Append works cited processing |
 | `--model` | `gpt-oss:20b` | Chat model override |
-| `--recursions` | `0` | Recursive review count (parsed; currently not consumed in `rag.py`) |
+| `--recursions` | `0` | Parsed by CLI config but currently ignored by `rag.py` |
 
 ## Configuration defaults
 
@@ -130,8 +130,8 @@ Key options:
 ### 3) Export merged model for Ollama
 
 ```bash
-python export_for_ollama.py
-ollama create derrida-critic -f Modelfile
+python export_for_ollama.py  # first: create derrida-qwen-merged/
+ollama create derrida-critic -f Modelfile  # second: register merged model in Ollama
 ```
 
 ## Optional local HTTP server
