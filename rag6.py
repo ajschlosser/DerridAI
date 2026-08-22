@@ -1199,7 +1199,7 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
 
     USE THESE IN CITATIONS:
 
-    Works by Derrida (original French):
+    Works by Derrida (original French) (Derrida is PRIMARY author):
 
     Adieu à Emmanuel Levinas. Paris: Galilée, 1997. English translation by Michael Naas and Pascalle-Anne Brault as Adieu to Emmanuel Levinas, Stanford: Stanford University Press, 1999.
     L’animal que donc je suis, Paris: Galilée, 2006.
@@ -1266,7 +1266,7 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
     Voyous, Paris: Galilée, 2003.
     Ulysse Gramophone, Paris: Galilée, 1987.
 
-    Works by Derrida (English translations):
+    Works by Derrida (English translations) (attribute Derrida as PRIMARY author):
 
     Acts of Religion, ed., Gil Anidjar, London: Routledge, 2002.
     Adieu to Emmanuel Levinas, trans., Michael Naas and Pascalle-Anne Brault, Stanford: Stanford University Press, 1999.
