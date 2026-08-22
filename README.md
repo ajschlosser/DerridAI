@@ -78,7 +78,7 @@ python rag.py --query "What is iterability?" --model "llama3"
 | `--keyword` | `False` | Enable keyword-to-text weighting |
 | `--thorough` | `False` | Run a second editorial improvement pass |
 | `--min` | `5` | Minimum sentence count target |
-| `--max` | `5` | Maximum sentence count target; set higher than `--min` for a range |
+| `--max` | `5` | Maximum sentence count target (default equals `--min`; raise `--max` to create a range) |
 | `--also` | `- You must double-check your work at the end.` | Extra prompt instruction |
 | `--bibliography` | `False` | Append works cited processing |
 | `--model` | `gpt-oss:20b` | Chat model override |
