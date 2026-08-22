@@ -1,27 +1,36 @@
 ![Jacques Derrida](https://www.philomag.com/sites/default/files/styles/sidebar_full_image/public/images/derrida_leemage.prt385js_042-copie.jpg)
 
-# DerridAI RAG Project
+# DerridAI
 
-DerridAI is a minimal Python implementation of a Retrieval‑Augmented Generation (RAG) pipeline for philosophical texts, centred on the works of Jacques **Derrida**. The code is organised into the following key components:
+DerridAI is a local-first Python project for:
 
-* **Vector store** – Documents are embedded with the *nomic‑embed‑text* model and stored in a local [Chroma](https://www.trychroma.com/) database.
-* **RAG driver** – `rag.py` queries the vector store using an Ollama‑served chat model.
-* **Utility helpers** – `store/store.py` exposes a global :class:`Chroma` instance and helper functions.
-* **Configuration** – Default settings live in `config/defaults.py` and are re‑exported from `config/__init__.py`.
-* **Logging** – All modules import :func:`logging.get_logger` so logs are consistent.
-* **Data** – Source JSONL documents are expected in `data/derrida3.jsonl`.
-* **Tests** – A test suite in `tests/` validates behaviour.
+1. Retrieval-augmented generation (RAG) over a Derrida-focused corpus (`rag.py`)
+2. LoRA fine-tuning for literary criticism (`finetune_pretrained.py`)
+3. Running the fine-tuned critic directly (`run_critic.py`)
+4. Exporting a merged model for Ollama (`export_for_ollama.py` + `Modelfile`)
 
-The project is intentionally minimal – it can be run from a single command line without any framework scaffolding.
+## Repository layout
 
-## Prerequisites
+- `/home/runner/work/DerridAI/DerridAI/rag.py` — main RAG CLI
+- `/home/runner/work/DerridAI/DerridAI/config/` — defaults + CLI argument parsing + env/arg overrides
+- `/home/runner/work/DerridAI/DerridAI/store/store.py` — Chroma initialization and incremental indexing
+- `/home/runner/work/DerridAI/DerridAI/models/models.py` — Ollama embedding/chat model factories
+- `/home/runner/work/DerridAI/DerridAI/helpers/` — logging, query parsing, retrieval helpers
+- `/home/runner/work/DerridAI/DerridAI/finetune_pretrained.py` — LoRA supervised fine-tuning
+- `/home/runner/work/DerridAI/DerridAI/run_critic.py` — inference with base model + LoRA adapter
+- `/home/runner/work/DerridAI/DerridAI/export_for_ollama.py` — merge adapter into standalone model
+- `/home/runner/work/DerridAI/DerridAI/server/server/server.py` — simple HTTP wrapper that streams `rag6.py` output
 
-* **Python 3.10+** – the project is tested against CPython 3.11.
-* **Ollama** – running locally at `http://localhost:11434`. The default embedding model is `nomic-embed-text`; the default chat model is `gpt‑oss:20b` (you can override via CLI).
-* **Source data** – a JSONL file at `data/derrida3.jsonl` containing at least the fields `text`, `author`, `source_title`, and `record_type`.
-* **Strongly recommended** – a GPU with sufficient VRAM if you plan to fine‑tune a LoRA adapter.
+## Requirements
 
-## Setup
+- Python 3.10+
+- Local Ollama server at `http://localhost:11434`
+- Models available in Ollama for RAG:
+  - Embeddings: `bge-m3:latest` (default)
+  - Chat: `gpt-oss:20b` (default)
+- A JSONL corpus file at the configured source path (default: `./data/derrida6_multi.jsonl`)
+
+Install dependencies:
 
 ```bash
 python -m venv .venv
@@ -29,129 +38,120 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## RAG Pipeline (`rag.py`)
+## RAG usage (`rag.py`)
 
-Query a local Chroma vector store built from the source JSONL corpus. On first run (or with `--force-rebuild`) the store is created automatically.
+Run:
 
 ```bash
-# Ask a question (builds the vector store on first run)
-python rag.py --query "Explain Derrida's concept of différance"
+python rag.py --query "What does Derrida say about presence?"
+```
 
-# Filter results to a specific author or text
+Examples:
+
+```bash
+# Filter by author/title
 python rag.py --query "What is trace?" --author "Jacques Derrida"
 python rag.py --query "What is trace?" --title "Of Grammatology"
 
-# Force a full rebuild of the vector store
-python rag.py --query "What is presence?" --force-rebuild
+# Exhaustive mention search
+python rag.py --find-all "différance" --title "Of Grammatology"
 
-# Use a different Ollama chat model
+# Rebuild vector store
+python rag.py --query "What is pharmakon?" --force-rebuild
+
+# Switch model
 python rag.py --query "What is iterability?" --model "llama3"
 ```
 
-### `rag.py` options
+### `rag.py` CLI options
 
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--query`, `-q` | `"What does Derrida say about presence?"` | Question to ask the pipeline |
-| `--author` | — | Filter vector search by author |
-| `--title` | — | Filter vector search by source title |
-| `--record-type` | `primary_source` | Filter by record type; pass `all` to disable |
-| `--force-rebuild` | `false` | Rebuild the Chroma store from source JSONL |
-| `--cheat` | `false` | Whether to cite sources in the response |
-| `--keyword` | `false` | Weight retrieval toward keyword‑matched texts |
-| `--min` | `5` | Minimum number of sentences in the response |
-| `--max` | `5` | Maximum number of sentences in the response |
-| `--also` | `"- You must double-check your work at the end."` | Extra instructions appended to the prompt |
-| `--model` | `gpt-oss:20b` | Ollama chat model to use |
+|---|---|---|
+| `--query`, `-q` | `What does Derrida say about presence?` | Prompt/question to run |
+| `--find-all` | `None` | Return all exact mentions of a term |
+| `--author` | `None` | Filter by author |
+| `--title` | `None` | Filter by source title |
+| `--record-type` | `primary_source` | Filter by record type (`all` disables) |
+| `--force-rebuild` | `False` | Rebuild vector store from source JSONL |
+| `--cheat` | `False` | Disable inline citations and use bibliography mode |
+| `--keyword` | `False` | Enable keyword-to-text weighting |
+| `--thorough` | `False` | Run a second editorial improvement pass |
+| `--min` | `5` | Minimum sentence count target |
+| `--max` | `5` | Maximum sentence count target |
+| `--also` | `- You must double-check your work at the end.` | Extra prompt instruction |
+| `--bibliography` | `False` | Append works cited processing |
+| `--model` | `gpt-oss:20b` | Chat model override |
+| `--recursions` | `0` | Recursive review count (parsed; currently not consumed in `rag.py`) |
 
-## Example output
+## Configuration defaults
 
-In response to a query like "What would Derrida say about **Flamin' Hot Cheetos**?" a typical response might be:
+Current defaults in `/home/runner/work/DerridAI/DerridAI/config/defaults.py`:
 
->In sum, Derrida would likely read a Flamin’ Hot Cheeto not as a mere snack but as a performative text that exemplifies différance, the trace, and the destabilisation of binary oppositions. The heat of the chip defers meaning, the brand and packaging create a network of differences, and the act of consumption becomes a covert crossing that challenges the eater’s expectations. Through these lenses, the snack becomes a site for philosophical interrogation, illustrating how everyday objects can reveal the structures of meaning that Derrida sought to expose.
+- `EMBEDDING_MODEL = "bge-m3:latest"`
+- `CHAT_MODEL = "gpt-oss:20b"`
+- `CHAT_TEMPERATURE = 0.5`
+- `OLLAMA_SERVER_URL = "http://localhost:11434"`
+- `DB_PATH = "./chroma_db_local-tuned6_multilang"`
+- `SOURCE_TEXT = "./data/derrida6_multi.jsonl"`
+- `BATCH_SIZE = 1000`
+- `K_VALUE = 30`
+- `FETCH_K_VALUE = 1000`
+- `LAMBDA_MULT_VALUE = 0.7`
 
-## LoRA Fine‑Tuning (`finetune_pretrained.py`)
+You can override these via matching environment variables and/or CLI flags where available.
 
-Fine‑tune `Qwen/Qwen2.5-0.5B-Instruct` (or another base model) on your JSONL corpus using supervised fine‑tuning with LoRA via the `trl` / `peft` libraries. The adapter is saved to `derrida-qwen-lora/`.
+## Fine-tuning workflow
+
+### 1) Train LoRA adapter
 
 ```bash
 python finetune_pretrained.py
 ```
 
-Update the `RECORDS_FILE`, `MODEL_NAME`, and `OUTPUT_DIRECTORY` constants at the top of the file to change the data source, base model, or output path.
+Important: update constants in `finetune_pretrained.py` before running (notably `RECORDS_FILE`, which currently points to a machine-specific absolute path).
 
-## Export for Ollama (`export_for_ollama.py`)
-
-Merge the trained LoRA adapter back into the base model weights and save a standalone Hugging Face model to `derrida-qwen-merged/`. This directory is what the `Modelfile` references.
+### 2) Run the critic directly
 
 ```bash
-python export_for_ollama.py
-```
-
-Once merged, register the model with Ollama:
-
-```bash
-ollama create derrida-critic -f Modelfile
-```
-
-## Running the Critic (`run_critic.py`)
-
-Generate a close reading of a passage using the fine‑tuned LoRA adapter directly (without Ollama).
-
-```bash
-# Pass a text file
+# From a file
 python run_critic.py passage.txt
 
-# Paste a passage interactively (type END on its own line to finish)
+# Interactive paste mode (type END on its own line to finish)
 python run_critic.py
 ```
 
-### `run_critic.py` options
+Key options:
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `passage_file` (positional) | — | Optional path to a UTF-8 text file |
-| `--instruction` | Deconstructionist system prompt | Override the critical instruction |
-| `--max-new-tokens` | `300` | Maximum response length in tokens |
-| `--temperature` | `0.6` | Sampling temperature |
+- `--instruction`
+- `--max-new-tokens` (default `300`)
+- `--temperature` (default `0.6`)
 
-## Current Benchmarks
+### 3) Export merged model for Ollama
 
-| Dimension | gpt-oss:20b alone | DerridAI RAG |
-|---|---|---|
-| Main knowledge source | Model weights | Retrieved corpus + model |
-| Retrieval | None | MMR + large candidate pool |
-| Evidence diversity | N/A | Explicitly managed |
-| Primary/secondary distinction | Weak/implicit | Explicit |
-| Speaker attribution | Generated from context | Metadata-informed |
-| Derrida prioritization | Parametric | Retrieval/ranking controlled |
-| Secondary-source recovery | Accidental | Separate retrieval lane |
-| Citation generation | Model improvisation | Corpus-grounded |
-| Bibliographic hallucination | High-risk | Much lower |
-| Unsupported synthesis | High-risk | Reduced, still present |
-| Inferential overreach | High | Moderate |
-| Prose quality | Strong | Strong, sometimes constrained |
-| Novel interpretation | High | Moderate/high |
-| Auditability | Poor | Potentially very good |
-| Research usefulness | Low/moderate | High with verification |
+```bash
+python export_for_ollama.py
+ollama create derrida-critic -f Modelfile
+```
 
-| Dimension | gpt-oss:20b | DerridAI |
-|---|---:|---:|
-| Retrieval grounding | 0/10 | 9/10 |
-| Source existence reliability | 4/10 | 9/10 |
-| Correct speaker attribution | 5/10 | 8.5/10 |
-| Citation validity | 3/10 | 8/10 |
-| Citation entailment | 3/10 | 7/10 |
-| Inferential discipline | 4/10 | 7/10 |
-| Factual restraint | 3/10 | 8/10 |
-| Philosophical synthesis | 8/10 | 7.5/10 |
-| Writing quality | 8/10 | 8/10 |
-| Creative interpretation | 9/10 | 7.5/10 |
-| Research auditability | 1/10 | 9/10 |
-| Research usefulness | 4/10 | 8/10 |
+## Optional local HTTP server
 
+A simple streaming server is available at:
 
+- `/home/runner/work/DerridAI/DerridAI/server/server/server.py`
+
+Run:
+
+```bash
+python server/server/server.py
+```
+
+By default it serves on `http://localhost:8000/` and streams output from `rag6.py` via `/api/execute`.
+
+## Project status notes
+
+- There is currently no `tests/` directory in this repository.
+- The primary maintained RAG entrypoint appears to be `rag.py`; `rag6.py` is still present and used by the lightweight server wrapper.
 
 ## Contributing
 
-Feel free to submit pull requests or open issues. Ensure the style guidelines are followed and tests pass before merging.
+Issues and pull requests are welcome.
