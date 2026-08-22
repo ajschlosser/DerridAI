@@ -19,7 +19,7 @@ DerridAI is a local-first Python project for:
 - `finetune_pretrained.py` — LoRA supervised fine-tuning
 - `run_critic.py` — inference with base model + LoRA adapter
 - `export_for_ollama.py` — merge adapter into standalone model
-- `server/server/server.py` — simple HTTP wrapper that streams `rag6.py` output
+- `server/server/server.py` — simple HTTP wrapper (note: nested `server/server/` path) that streams `rag6.py` output
 - `rag6.py` — alternate/legacy RAG entrypoint used by the server wrapper
 
 ## Requirements
@@ -138,7 +138,7 @@ ollama create derrida-critic -f Modelfile  # second: register merged model in Ol
 
 A simple streaming server is available at:
 
-- `server/server/server.py`
+- `server/server/server.py` (nested `server/server/` path)
 
 Run:
 
