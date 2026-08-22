@@ -1192,6 +1192,138 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
 
     Rewrite it as polished academic prose.
 
+    CITATION FORMAT AND WORKS CITED
+    Follow MLA style for both in-text citations and the Works Cited section.
+
+    The following is a bibliography of original French and English-translated works by Derrida:
+
+    USE THESE IN CITATIONS:
+
+    Works by Derrida (original French):
+
+    Adieu à Emmanuel Levinas. Paris: Galilée, 1997. English translation by Michael Naas and Pascalle-Anne Brault as Adieu to Emmanuel Levinas, Stanford: Stanford University Press, 1999.
+    L’animal que donc je suis, Paris: Galilée, 2006.
+    Anne Dufourmantelle invite Jacques Derrida à répondre. De l’hospitalité, Paris: Calmann-Lévy, 1997.
+    Apories, Paris: Galilée, 1996.
+    L’Archéologie du frivole: Lire Condillac, Paris: Denoël/Gontheier, 1973.
+    Béliers, Paris: Galilée, 2003.
+    Le Calcul des langues, Paris: Seuil, 2020.
+    La Carte Postale de Socrate à Freud et au-dela, Paris: Flammarion, 1980.
+    Chaque fois unique, la fin du monde, Paris: Galilée, 2003.
+    Le “concept” du 11 septembre, Dialogues à New York (octobre-décembre 2001) avec Giovanna Borradori, with Jürgen Habermas, Paris: Galilée, 2004.
+    Demeure, Paris: Galilée, 1998.
+    Demeure, Athènes. Photographies de Jean-François Bonhomme, Paris: Galilée, 2009.
+    La Dissemination, Paris: Seuil, 1972.
+    Donner le temps: 1. La fausse monnaie, Paris: Galilée, 1991.
+    Donne le temps II. Paris: Seul, 2021.
+    Du droit à la philosophie, Paris: Galilée, 1990.
+    L’Ecriture et la différence, Paris: Seuil, 1967.
+    “Et cetera… (and so on, und so weiter, and so forth, et ainsi de suite, und so überall, etc.),” in Jacques Derrida, edited by Marie-Louise Mallet et Ginette Michaud, Paris: Editions de l’Herne, 2004, pp. 21–34.
+    États d’âme de la psychanalyse, Paris: Galilée, 2000.
+    Foi et savoir suivi de Le siècle et le pardon, Paris: Seuil, 2001.
+    Force de loi, Paris: Galilée, 1994.
+    Glas, Paris: Denoël/Gontheier, 1981 [1974], two volumes.
+    De la grammatologie, Paris: Minuit, 1967.
+    De l’esprit, Paris: Galilée, 1987.
+    Heidegger: la question de l’Être et l’Histoire, Cours de l’ENS-Ulm 1964–1965, Paris: , 2013.
+    Histoire du mensonge. Prolégomènes, Paris: Galilée, 2012.
+    Hospotalité. Volume 1. Séminaire (1995–1996). Paris: Seul, 2021.
+    “Je suis en guerre contre moi-même,” interview in Le Monde, August 19, 2004.
+    Khôra, Paris: Galilée, 1993.
+    Limited Inc, Paris: Galilée, 1990.
+    Marges de la philosophie, Paris: Minuit, 1972.
+    Du même à l’autre, Deux course sur Husserl 1963, Paris: Seuil, 2024.
+    Memoires for Paul de Man, Paris: Galilée, 1988.
+    Le monolinguisme de l’autre, Paris: Galilée, 1996.
+    L’Oreille de l’autre: otobiographies, transferts, traductions, Textes et débats avec Jacques Derrida, Montreal: VLB, 1982.
+    Edmund Husserl, L’Origine de la géométrie, traduction et introduction par Jacques Derrida, Paris: Presses Universitaires de France, 1974 [1962].
+    Papier Machine, Paris: Galilée, 2001.
+    Pardonner. L’impardonnable et l’imprescriptible, Paris: Galilée, 2012.
+    Le Parjure et le pardon: Volume I, Séminaire (1997–1998), Paris: Seuil, 2019.
+    Le Parjure et le pardon: Volume II, Séminaire (1998–1999), Paris: Seuil, 2020.
+    Points de suspension, Entretiens, Paris: Galilée, 1992.
+    Politiques de l’amitié, Paris: Galilée, 1994.
+    Positions, Paris: Minuit, 1972.
+    Le Problème de la genèse dans la philosophie de Husserl, Paris: Presses Universitaires de France, 1990.
+    Psychanalyse et critique littéraire (1969–1970), Paris: Seuil, 2025.
+    Psyche: Inventions de l’autre, Paris: Galilée, 1987.
+    Psyche: Inventions de l’autre, II, Paris: Galilée, 2003.
+    De quoi demain… Dialogue, Paris: Fayard/Galilée, 2001.
+    La Religion (edited with Gianni Vattimo), Paris: Seuil, 1996.
+    Sauf le nom, Paris: Galilée, 1993.
+    Schibboleth pour Paul Celan, Paris: Galilée, 1986.
+    Séminaire. Le bête et le souverain. Volume I (2001–2002), Paris: Galilée, 2008.
+    Séminaire. Le bête et le souverain. Volume II (2002–2003), Paris: Galilée, 2010.
+    Séminaire. La peine de mort. Volume 1 (1999–2000), Paris: Galilée, 2012.
+    Séminaire. La peine de mort, Volume II (2000–2001), Paris: Galilée, 2015.
+    Spectres de Marx, Paris: Galilée, 1993.
+    Sur la parole: Instantanés philosophiques, Paris: Editions de l’Aube, 2003.
+    Théorie et pratique. Cours de l’ENS-Ulm 1975–1976, Paris: Galilée, 2017.
+    Le Toucher, Jean-Luc Nancy, Paris: Galilée, 2000.
+    La Vérité en peinture, Paris: Flammarion, 1978.
+    La Vie la mort. Séminaire (1975–1976), Paris: Seuil, 2019.
+    La Voix et le phénomène, Paris: Presses Universitaires de France, 1983 [1967].
+    Voyous, Paris: Galilée, 2003.
+    Ulysse Gramophone, Paris: Galilée, 1987.
+
+    Works by Derrida (English translations):
+
+    Acts of Religion, ed., Gil Anidjar, London: Routledge, 2002.
+    Adieu to Emmanuel Levinas, trans., Michael Naas and Pascalle-Anne Brault, Stanford: Stanford University Press, 1999.
+    Advances, trans. Philippe Lynes. Minneapolis: University of Minnesota Press, 2017.
+    The Animal that Therefore I am, ed., Marie-Loiuse Mallet, trans., David Wills, New York: Fordham University Press, 2008.
+    Aporias, trans., Thomas Dutoit, Stanford: Stanford University Press, 1993.
+    The Archeology of the Frivolous: Reading Condillac, trans., John P. Leavey, Jr., Pittsburgh: Duquesne University Press, 1980.
+    Athens, Still Remains: The Photographs of Jean-Francois Bonhomme, trans., Pascale-Anne Brault and Michael Naas, New York: Fordham University Press, 2010.
+    The Beast and the Sovereign (Volume 1), trans. Geoffrey Bennigton, Chicago: University of Chicago Press, 2009.
+    The Beast and the Sovereign (Volume 2), trans. Geoffrey Bennington, Chicago: University of Chicago, 2011.
+    Clang: Glas, trans. David Wills and Geoffrey Bennington. Minneapolis: University of Minnesota Press, 2021.
+    The Death Penalty (Volume 1), trans. Peggy Kamuf, Chicago: University of Chicago Press, 2014.
+    The Death Penalty (Volume 2), trans. Elizabeth Rottenberg, Chicago: University of Chicago Press, 2017.
+    Dissemination, trans., Barbara Johnson, Chicago: University of Chicago Press, 1981.
+    The Ear of the Other: Otobiography, Transference, Translation, trans., Peggy Kamuf, New York: Schocken, 1985.
+    Edmund Husserl’s Origin of Geometry: An Introduction, trans., John P. Leavey, Jr., Lincoln, NE: University of Nebraska Press, 1989 [1978].
+    “Et Cetera,” translated by Geoff Bennington, in Deconstructions: A User’s Guide, edited by Nicolas Royle, London: Palgrave Macmillan, 2000, pp. 282–305.
+    Eyes of the University: Right to Philosophy 2, Stanford: Stanford University Press, 2004.
+    For What Tomorrow … A Dialogue, trans., Jeff Fort Stanford: Stanford University Press, 2004.
+    “Force of Law,” trans., Mary Quaintance, in Deconstruction and the Possibility of Justice, eds., Drucilla Cornell, Michael Rosenfeld, and David Gray Carlson, New York: Routledge, 1992, pp. 3–67.
+    The Gift of Death and Literature in Secret. Second Edition, trans., David Wills, Chicago: University of Chicago Press, 2008.
+    Given Time: 1. Counterfeit Money, trans., Peggy Kamuf, Chicago: University of Chicago, 1992.
+    Glas, trans., John P. Leavey, Jr. and Richard Rand, Lincoln: University of Nebraska Press, 1986.
+    Heidegger: The Question of Being and History, trans., Geoffrey Bennington, Chicago: University of Chicago Press, 2013.
+    “How to Avoid Speaking: Denials,” translated by Ken Frieden, in Languages of the Unsayable, eds., Sanford Budick and Wolfgang Iser, New York: Columbia University Press, 1989, 3–70.
+    Learning to Live Finally: The Last Interview, trans., Pacalle-Ann Brault and Michael Naas, Hoboken, NJ: Meilville House Publishing, 2007.
+    Limited Inc, trans., Samuel Weber, Evanston: Northwestern University Press, 1988 [1977].
+    “Limited Inc,” in Glyph 2: Johns Hopkins Textual Studies, 1977, 162–254.
+    Margins of Philosophy, trans., Alan Bass, Chicago: University of Chicago Press, 1982.
+    Memoirs for Paul de Man, trans., Cecile Lindsay, Jonathan Culler, and Eduardo Cadava, New York: Columbia University Press, 1986.
+    Monolinguism of the Other, trans., Patrick Mensah, Stanford: Stanford University Press, 1998.
+    Of Grammatology, trans., Gayatri Spivak, Baltimore: The Johns Hopkins University Press, 1974.
+    Of Hospitality: Anne Dufourmantelle Invites Jacques Derrida to Respond, trans., Rachel Bowlby, Stanford: Stanford University Press, 2000.
+    On the Name, ed., Thomas Dutoit, Stanford: Stanford University Press, 1995.
+    Of Spirit, trans., Rachel Bowlby, Chicago: University of Chicago, 1989.
+    On Touching – Jean-Luc Nancy, trans., Christine Irizarry, Stanford: Stanford University Press, 2005.
+    Paper Machine, trans., Rachel Bowlby, Stanford: Stanford University Press, 2005.
+    Philosophy in the Time of Terror: Dialogues with Jürgen Habermas and Jacques Derrida, ed., Giovanna Borradori, Chicago: University of Chicago Press, 2003.
+    Points … Interviews, 1974–1994, trans., Peggy Kamuf and others, Stanford: Stanford University Press, 1995.
+    Politics of Friendship, trans., George Collins, London: Verso, 1997.
+    Positions, trans., Alan Bass, Chicago: University of Chicago Press, 1981.
+    The Postcard from Socrates to Freud and Beyond, trans., Alan Bass, Chicago: University of Chicago Press, 1987.
+    The Problem of Genesis in Husserl’s Philosophy, trans., Marion Hobson, Chicago: University of Chicago Press, 2003.
+    Religion, trans., Samuel Weber,. Stanford: Stanford University Press, 1998.
+    Rogues, trans., Pascale-Anne Brault and Michael Naas, Stanford: Stanford University Press, 2005.
+    “Signature Event Context,” in Glyph: Johns Hopkins Textual Studies, 1977, 172–197.
+    Sovereignties in Question: The Poetics of Paul Celan, eds., Thomas Dutoit and Outi Pasanen, New York: Fordham University Press, 2005.
+    Specters of Marx, trans., Peggy Kamuf, New York: Routledge, 1994.
+    Theory and Practice, trans. David Wills, Chicago: University of Chicago Press, 2019.
+    The Truth in Painting, trans., Geoff Bennington and Ian McLeod, Chicago: University of Chicago Press, 1987.
+    Speech and Phenomena, trans., David B. Allison, Evanston, IL: Northwestern University Press, 1973.
+    Voice and Phenomenon, trans., Leonard Lawlor, Evanston, IL: Northwestern University Press, 2011.
+    Without Alibi, edited, translated, and with an introduction by Peggy Kamuf, Stanford: Stanford University Press, 2002. (The French versions of many of these essays can be found in Jacques Derrida, edited by Marie-Louise Mallet et Ginette Michaud. Paris: Editions de l’Herne, 2004.)
+    The Work of Mourning, eds., Pascale-Anne Brault and Michael Naas, Chicago: University of Chicago Press, 2001.
+    Writing and Difference, trans., Alan Bass, Chicago: University of Chicago, 1978.
+
+
     CRITICAL:
     Do not expose source-analysis or reasoning procedures.
     Do not discuss retrieved evidence, chunks, metadata, audits, evidence classes,
@@ -1285,6 +1417,7 @@ SPECIAL WARNING WHEN CONSIDERING THIS TEXT:
     {context_str}
     """
 
+    LOG.info("Invoking final prompt...")
     response = llm.invoke(final_prompt)
 
     LOG.info(f"\n--- Answer from {CHAT_MODEL} ---")
