@@ -11,15 +11,16 @@ DerridAI is a local-first Python project for:
 
 ## Repository layout
 
-- `/home/runner/work/DerridAI/DerridAI/rag.py` — main RAG CLI
-- `/home/runner/work/DerridAI/DerridAI/config/` — defaults + CLI argument parsing + env/arg overrides
-- `/home/runner/work/DerridAI/DerridAI/store/store.py` — Chroma initialization and incremental indexing
-- `/home/runner/work/DerridAI/DerridAI/models/models.py` — Ollama embedding/chat model factories
-- `/home/runner/work/DerridAI/DerridAI/helpers/` — logging, query parsing, retrieval helpers
-- `/home/runner/work/DerridAI/DerridAI/finetune_pretrained.py` — LoRA supervised fine-tuning
-- `/home/runner/work/DerridAI/DerridAI/run_critic.py` — inference with base model + LoRA adapter
-- `/home/runner/work/DerridAI/DerridAI/export_for_ollama.py` — merge adapter into standalone model
-- `/home/runner/work/DerridAI/DerridAI/server/server/server.py` — simple HTTP wrapper that streams `rag6.py` output
+- `rag.py` — main RAG CLI
+- `config/` — defaults + CLI argument parsing + env/arg overrides
+- `store/store.py` — Chroma initialization and incremental indexing
+- `models/models.py` — Ollama embedding/chat model factories
+- `helpers/` — logging, query parsing, retrieval helpers
+- `finetune_pretrained.py` — LoRA supervised fine-tuning
+- `run_critic.py` — inference with base model + LoRA adapter
+- `export_for_ollama.py` — merge adapter into standalone model
+- `server/server/server.py` — simple HTTP wrapper that streams `rag6.py` output
+- `rag6.py` — alternate/legacy RAG entrypoint used by the server wrapper
 
 ## Requirements
 
@@ -85,7 +86,7 @@ python rag.py --query "What is iterability?" --model "llama3"
 
 ## Configuration defaults
 
-Current defaults in `/home/runner/work/DerridAI/DerridAI/config/defaults.py`:
+Current defaults in `config/defaults.py`:
 
 - `EMBEDDING_MODEL = "bge-m3:latest"`
 - `CHAT_MODEL = "gpt-oss:20b"`
@@ -137,7 +138,7 @@ ollama create derrida-critic -f Modelfile
 
 A simple streaming server is available at:
 
-- `/home/runner/work/DerridAI/DerridAI/server/server/server.py`
+- `server/server/server.py`
 
 Run:
 
