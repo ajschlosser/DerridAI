@@ -50,8 +50,8 @@ DB_PATH           = "./chroma_db_local-tuned6_multilang"
 SOURCE_TEXT       = "./data/derrida6_multi.jsonl"
 
 BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
-K_VALUE           = 20
-FETCH_K_VALUE     = 400
+K_VALUE           = 15
+FETCH_K_VALUE     = 500
 LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
 
 # CLI ARGUMENTS
@@ -262,8 +262,6 @@ initial_prompt_template = """
 """
 
 query_improvement_template = """
-    Identify 2-5 key words to go along with this prompt:
-    
     [PROMPT]
         "{prompt}"
     [/PROMPT]
@@ -284,7 +282,11 @@ query_improvement_template = """
     OUTPUT FORMAT: valid JSON object
     {{
         "prompt": "{prompt}",
-        "keywords": ["keyword1", "keyword2", ...], <-- SEARCH keywords, not related to how to style/format/etc. a response
+        "prompt_query": "..." <-- the part of the prompt that contains the actual question or request
+        "prompt_query_fr": "...", <-- the part of the prompt that contains the actual question or request translated into French
+        "prompt_instructions": "..." <-- any additional instructions or context provided in the prompt
+        "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SEARCH keywords, not related to how to style/format/etc. a response
+        "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SEARCH keywords in French, not related to how to style/format/etc. a response
         "prompt_language": ["en_us"], <-- query is in English
         "materials_language": ["fr_fr"], <-- query is asking you to look ONLY at French materials, or null if not specified (all languages)
         "response_language": ["fr_fr"], <-- query is asking you to respond in French
@@ -292,13 +294,15 @@ query_improvement_template = """
         "query_quality": 0.8,
         "is_fetch_query": false, <--- whether or not the user is asking for appearances of "x" in the source materials (true) or just a general answer (false)
         "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
+        "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French)
     }}
 
     OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
 """
 
 initial_retrieval_prompt_template = """
-    "{prompt}"
+    en_us: "{prompt_query}"
+    fr_fr: "{prompt_query_fr}"
     [{keywords}]
 """
 
@@ -368,8 +372,62 @@ def main():
 
 
     if a_prompt_options.get("is_fetch_query"):
-        client.vector_store.get(where_document={"$contains": a_prompt_options["fetch_query_content"]})
-        LOG.info("User is asking for appearances of specific content in the source materials.")
+        LOG.info("User is asking for appearances of specific content in the source materials: '%s'", a_prompt_options["fetch_query_content"])
+        fetched_results = client.vector_store.get(where_document={"$or": [{ "$contains": a_prompt_options["fetch_query_content"]}, { "$contains": a_prompt_options.get("fetch_query_content_fr")}]})
+
+        if len(fetched_results["ids"]) == 0:
+            LOG.info("No results found for the fetch query.")
+            or_conditions = [{"$contains": keyword} for keyword in a_prompt_options["keywords"]]
+            if a_prompt_options.get("keywords_fr"):
+                or_conditions.extend([{"$contains": keyword} for keyword in a_prompt_options["keywords_fr"]])
+            fetched_keword_results = client.vector_store.get(where_document={"$or": or_conditions})
+            LOG.info("Fetched keyword results: %d", len(fetched_keword_results["ids"]))
+            if len(fetched_keword_results["ids"]) == 0:
+                LOG.info("No results found for the keyword fetch query.")
+            fetched_results = fetched_keword_results
+            
+        ids = fetched_results["ids"]
+        metadatas = fetched_results["metadatas"]
+        docs = fetched_results["documents"]
+        LOG.info("Fetched results: %d", len(ids))
+
+        cleaned_results = [
+            {
+                # "author": m.get("document_author"),
+                # "section_author": m.get("section_author"),
+                # "work": m.get("work"),
+                # "edition": m.get("edition"),
+                # "year": m.get("year"),
+                "text": d,
+                "pagination": f"{m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'}",
+                "citation_inline": f"({m.get('section_author', m.get('document_author', m.get('work'))).split(' ')[1]} {m.get('year')}, {m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'})"
+            } for m, d in zip(metadatas, docs)
+        ]
+
+        output = {
+            "prompt": args.prompt,
+            "bibliography": [],
+            "results": cleaned_results,
+            "total": len(cleaned_results)
+        }
+
+        for doc in cleaned_results:
+            # if doc.get('page_start') and doc.get('page_end') and doc.get('page_start') is not doc.get('page_end'):
+            #     page_number = f"{doc.get('page_start', '')}-{doc.get('page_end', '')}"
+            # else:
+            #     page_number = f"{doc.get('page_start', '')}"
+
+            author = doc.get('author', '')
+            if doc.get('section_author') and doc.get('section_author') != author:
+                author = doc.get('section_author')
+            author_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
+            
+            citation = f"{author_reversed}. {doc.get('work', '')}. {doc.get('edition', '')}. {doc.get('year', '')}"
+            if citation not in output["bibliography"]:
+                output["bibliography"].append(citation)
+
+        LOG.info("Fetched results content: %s", output)
+        return output
     else:
         LOG.info("User is asking for a general answer, not specific appearances.")
 
@@ -397,10 +455,7 @@ def main():
     # Initial retrieval using the created retriever
     b_initial_retrieval_prompt = ChatPromptTemplate.from_template(initial_retrieval_prompt_template)
     b_formatted_initial_retrieval_prompt = b_initial_retrieval_prompt.format(
-        prompt_language=a_prompt_options["prompt_language"],
-        materials_language=a_prompt_options["materials_language"],
-        response_language=a_prompt_options["response_language"],
-        prompt=args.prompt,
+        prompt_query=args.prompt,
         keywords=json.dumps(a_prompt_options["keywords"])
     )
     LOG.info("Formatted initial retrieval prompt: %s", b_formatted_initial_retrieval_prompt)
@@ -441,12 +496,16 @@ def main():
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
     prompt = ChatPromptTemplate.from_template(initial_prompt_template)
-    final_prompt = prompt.format(context=context, prompt=json.dumps(a_query_details.content))
+    final_prompt = prompt.format(context=context, prompt=a_prompt_options)
     LOG.info("Final prompt: %s", final_prompt)
 
     # Invoke the final prompt with the chat model
     response = client.invoke(final_prompt)
-    LOG.info("Initial prompt: %s", args.prompt)
+    LOG.info(f"""
+Initial prompt: {a_prompt_options["prompt"]}
+Instructions taken from prompt: {a_prompt_options["prompt_instructions"]}
+Query taken from prompt: {a_prompt_options["prompt_query"]}
+""")
     LOG.info(f"""
 Model response:
 {response.content}
