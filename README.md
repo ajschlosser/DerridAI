@@ -77,8 +77,8 @@ python rag.py --query "What is iterability?" --model "llama3"
 | `--cheat` | `False` | Skip inline citation requirements in the main generation prompt |
 | `--keyword` | `False` | Enable keyword-to-text weighting |
 | `--thorough` | `False` | Run a second editorial improvement pass |
-| `--min` | `5` | Minimum sentence count target |
-| `--max` | `5` | Maximum sentence count target |
+| `--min` | `5` | Minimum sentence count target (default output floor is 5) |
+| `--max` | `5` | Maximum sentence count target (default output ceiling is also 5; override for a range) |
 | `--also` | `- You must double-check your work at the end.` | Extra prompt instruction |
 | `--bibliography` | `False` | Append works cited processing |
 | `--model` | `gpt-oss:20b` | Chat model override |
