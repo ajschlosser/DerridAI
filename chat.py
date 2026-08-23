@@ -26,7 +26,7 @@ llm = ChatOllama(
     timeout=45.0,  # e.g., 45 s
 )
 
-prompt_template = "Give me an intelligent, interesting, innovative, occasionally weird academic question to ask about Jacques Derrida's philosophy. It must be less than 270 characters. ONLY USE SINGLE QUOTES, NO DOUBLE QUOTES. No characters that need to be escaped. AVOID OVERINDEXING ON COMMON DERRIDEAN TOPICS LIKE DECONSTRUCTION, DIFFERANCE, ETC."
+prompt_template = "Give me an intelligent, interesting academic question to ask about Jacques Derrida's philosophy. It must be less than 270 characters. ONLY USE SINGLE QUOTES, NO DOUBLE QUOTES. No characters that need to be escaped. AVOID OVERINDEXING ON COMMON DERRIDEAN TOPICS LIKE DECONSTRUCTION, DIFFERANCE, ETC."
 
 #prompt = ChatPromptTemplate.from_template(prompt_template).format()
 
@@ -41,11 +41,8 @@ print("asking jackie")
 # Build the exact command string (you could also build a list)
 cmd = (
     'python3',
-    'rag.py',
-    '--query',f'{response.content}',
-    '--min','20',
-    '--max','50',
-    '--model','gpt-oss:20b'
+    'rag7.py',
+    '--p',f'{response.content}'
 )
 
 # Run the command and capture the output

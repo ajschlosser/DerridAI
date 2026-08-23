@@ -1,123 +1,106 @@
 #!/usr/bin/env python3
-
-# Copyright 2026 Aaron John Schlosser, PhD
-
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-
-#     http://apache.org
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-import http.server
-import socketserver
-import os
+import asyncio
 import json
-import subprocess
-import http
+import os
+import uuid
+
+from aiohttp import web, WSMsgType
 
 PORT = 8000
 BASE_DIR = os.path.join(os.path.dirname(__file__), "public")
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=BASE_DIR, **kwargs)
+# request_id -> {"lines": [...], "done": bool, "returncode": int|None, "subscribers": set[WebSocketResponse]}
+EXECUTIONS: dict[str, dict] = {}
 
-    def do_POST(self):
-        """Handle POST requests for script execution.
 
-        Expected JSON body format::
-
-            {
-                "script": "rag6.py",
-                "args": ["--model", "gpt-oss:20b", "--query", "..."],
-                "cwd": "/home/aaron/src/derrida"  // optional
-            }
-
-        The server will run the script using ``subprocess.run`` and
-        capture stdout and stderr.  The output is returned as a JSON
-        object containing ``stdout``, ``stderr`` and ``returncode``.
-        """
-        if self.path != "/api/execute":
-            self.send_error(http.HTTPStatus.NOT_FOUND, "Endpoint not found")
-            return
-
-        content_length = int(self.headers.get("Content-Length", 0))
-        if content_length == 0:
-            self.send_error(http.HTTPStatus.BAD_REQUEST, "Empty request body")
-            return
+async def _broadcast(execution: dict, message: str):
+    dead = []
+    for sub in execution["subscribers"]:
         try:
-            body = self.rfile.read(content_length)
-            data = json.loads(body.decode("utf-8"))
-        except Exception as e:
-            self.send_error(http.HTTPStatus.BAD_REQUEST, f"Invalid JSON: {e}")
-            return
-        
-        # Build command
-        cmd = ["python3", "rag6.py", "--model", "gpt-oss:20b", "--query", data.get("query", ""), "--min", "30"]
+            await sub.send_str(message)
+        except ConnectionResetError:
+            dead.append(sub)
+    for sub in dead:
+        execution["subscribers"].discard(sub)
+
+
+async def _run_execution(request_id: str, query: str):
+    execution = EXECUTIONS[request_id]
+    cmd = ["python3", "rag6.py", "--model", "gpt-oss:20b", "--query", query, "--min", "30"]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        cwd=os.path.join(os.path.dirname(__file__), "../../"),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    async for raw_line in proc.stdout:
+        line = raw_line.decode("utf-8", errors="replace")
+        execution["lines"].append(line)
+        await _broadcast(execution, line)
+
+    stderr = await proc.stderr.read()
+    if stderr:
+        print(stderr.decode("utf-8", errors="replace"))
+
+    await proc.wait()
+    execution["done"] = True
+    execution["returncode"] = proc.returncode
+    await _broadcast(execution, json.dumps({"done": True, "returncode": proc.returncode}))
+
+    # Keep finished executions around briefly so late subscribers can still fetch the buffer.
+    async def _expire():
+        await asyncio.sleep(300)
+        EXECUTIONS.pop(request_id, None)
+    asyncio.create_task(_expire())
+
+
+async def websocket_execute(request: web.Request) -> web.WebSocketResponse:
+    ws = web.WebSocketResponse(heartbeat=30)
+    await ws.prepare(request)
+
+    async for msg in ws:
+        if msg.type != WSMsgType.TEXT:
+            continue
         try:
-            # Use Popen to stream output
-            proc = subprocess.Popen(
-                cmd,
-                cwd='../../',
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-            )
+            data = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            await ws.send_json({"error": f"Invalid JSON: {e}"})
+            continue
 
-            # Prepare chunked transfer encoding response
-            self.send_response(http.HTTPStatus.OK)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Transfer-Encoding", "chunked")
-            self.end_headers()
+        if data.get("subscribe"):
+            request_id = data["subscribe"]
+            execution = EXECUTIONS.get(request_id)
+            if execution is None:
+                await ws.send_json({"error": "Unknown or expired request_id", "request_id": request_id})
+                continue
+            for line in execution["lines"]:
+                await ws.send_str(line)
+            if execution["done"]:
+                await ws.send_json({"done": True, "returncode": execution["returncode"]})
+            else:
+                execution["subscribers"].add(ws)
+            continue
 
-            def _write_chunk(data: str):
-                encoded = data.encode("utf-8")
-                chunk = f"{len(encoded):X}\r\n".encode("utf-8") + encoded + b"\r\n"
-                self.wfile.write(chunk)
-                self.wfile.flush()
+        query = data.get("query", "")
+        request_id = uuid.uuid4().hex
+        EXECUTIONS[request_id] = {"lines": [], "done": False, "returncode": None, "subscribers": {ws}}
+        await ws.send_json({"request_id": request_id})
+        asyncio.create_task(_run_execution(request_id, query))
 
-            # Stream stdout
-            output_ready = False
-            for line in proc.stdout:
-                if output_ready:
-                    _write_chunk(line)
-                if "Loading existing vector store" in line:
-                    _write_chunk("Gathering Derridean materials...")
-                if "Raw keywords response" in line:
-                    _write_chunk(" Pondering aporias...")
-                if "Filtering by materials language" in line:
-                    _write_chunk(" Translating (betraying) language...")
-                if "points to the correct page." in line:
-                    _write_chunk(" Asking Jackie for a response...")
-                if "LLM finished generating response" in line:
-                    _write_chunk(" Deferring meaning (this may take a minute)...")
-                if "--- Answer from" in line:
-                    _write_chunk("Received answer...!")
-                    output_ready = True
+    return ws
 
-            # Stream stderr with a prefix
-            for line in proc.stderr:
-                print(line, end='')
-                #_write_chunk(f"[ERR] {line}")
 
-            # Final zero-length chunk to signal end
-            _write_chunk("")
+def main():
+    os.makedirs(BASE_DIR, exist_ok=True)
+    app = web.Application()
+    app.router.add_get("/ws/execute", websocket_execute)
+    app.router.add_static("/", BASE_DIR, show_index=True)
 
-            proc.wait()
-        except subprocess.TimeoutExpired:
-            self.send_error(http.HTTPStatus.REQUEST_TIMEOUT, "Script timed out")
-        except Exception as e:
-            self.send_error(http.HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+    print(f"Serving HTTP + WS on port {PORT} (http://localhost:{PORT}/) ...")
+    web.run_app(app, port=PORT)
+
 
 if __name__ == "__main__":
-    os.makedirs(BASE_DIR, exist_ok=True)
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"Serving HTTP on port {PORT} (http://localhost:{PORT}/) ...")
-        httpd.serve_forever()
+    main()
