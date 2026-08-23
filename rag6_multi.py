@@ -40,19 +40,26 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
-# CONFIGURATION
-EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
-CHAT_MODEL        = "gpt-oss:20b"
-CHAT_TEMPERATURE  = 0.4
-OLLAMA_BASE_URL   = "http://localhost:11434"
+from prompts import (
+    review_prompt_template,
+    initial_prompt_template,
+    query_improvement_template,
+    initial_retrieval_prompt_template,
+)
 
-DB_PATH           = "./chroma_db_local-tuned6_multilang"
-SOURCE_TEXT       = "./data/derrida6_multi.jsonl"
+from typings import (
+    LangChainConfig
+)
 
-BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
-K_VALUE           = 15
-FETCH_K_VALUE     = 500
-LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
+from defaults import (
+    CHAT_TEMPERATURE,
+    LAMBDA_MULT_VALUE,
+    K_VALUE,
+    FETCH_K_VALUE,
+    keys
+)
+
+from logger import Logger
 
 # CLI ARGUMENTS
 parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
@@ -67,244 +74,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# DATA CLASSES
-@dataclass
-class ChatConfig:
-    base_url: str = OLLAMA_BASE_URL
-    model: str = CHAT_MODEL
-    temperature: float = CHAT_TEMPERATURE
-
-@dataclass
-class EmbedConfig:
-    model: str = EMBEDDING_MODEL
-    base_url: str = OLLAMA_BASE_URL
-
-@dataclass
-class StoreConfig:
-    persist_directory: str = DB_PATH
-
-@dataclass
-class LangChainConfig:
-    chat: ChatConfig
-    embedding: EmbedConfig
-    store: StoreConfig
-
-    @classmethod
-    def from_defaults(cls) -> "LangChainConfig":
-        return cls(
-            chat=ChatConfig(),
-            embedding=EmbedConfig(),
-            store=StoreConfig(),
-        )
-
-# LOGGER
-class Logger:
-    @staticmethod
-    def setup(name: str = __name__, level: int = logging.INFO) -> logging.Logger:
-        _format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
-        _datefmt = "%Y-%m-%d %H:%M:%S"
-        logger = logging.getLogger(name)
-        logger.setLevel(level)
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level)
-        file_handler = logging.FileHandler(Path("derridai6_multi.log"), mode="w")
-        file_handler.setFormatter(logging.Formatter(_format, _datefmt))
-        formatter = logging.Formatter(_format, _datefmt)
-        handler.setFormatter(formatter)
-        if not logger.hasHandlers():
-            logger.addHandler(handler)
-            logger.addHandler(file_handler)
-        return logger
 LOG = Logger.setup()
-
-# PROMPT TEMPLATES
-
-review_prompt_template = """
-You are a strict evidence auditor.
-
-Evaluate every SENTENCE in the RESPONSE against the EVIDENCE.
-
-Do not use outside knowledge.
-Do not assume that text appearing inside a Derrida work was written or asserted by Derrida.
-Distinguish carefully among:
-- Derrida speaking in his own voice
-- Derrida quoting or paraphrasing another author
-- an editor
-- a translator
-- a secondary commentator
-- unknown attribution
-
-A sentence may be:
-- directly supported by one evidence block
-- supported by multiple evidence blocks
-- a synthesis derived from multiple sources
-- only partially supported
-- unsupported
-
-Do not force an unsupported sentence to match a source.
-
-Do not infer that Derrida endorses, privileges, or foregrounds a concept
-merely because the source says that the concept serves as a "fil conducteur"
-or appears in Derrida's analytical procedure.
-
-Distinguish the object Derrida analyzes from the method or path of his analysis.
-
-[RESPONSE]
-{response_content}
-[/RESPONSE]
-
-[EVIDENCE]
-{context}
-[/EVIDENCE]
-
-Return one object for every sentence.
-
-Output schema:
-
-[
-  {{
-    "id": "000",
-    "claim": "...",
-    "claim_type": "thesis | argument | observation | synthesis",
-    "claim_source": "source | original",
-    "support_type": "direct | partial | synthesis | unsupported",
-
-    "evidence_block_ids": ["00-0"],
-    "canonical_work_ids": ["margins-of-philosophy-1"],
-
-    "source_speaker": "Jacques Derrida",
-    "source_target": "Martin Heidegger",
-    "source_role": "derrida | derrida_quoting_other | editor | translator | secondary_author | unknown",
-    "source_region_type": "main_text | footnote | introduction | translator_note | editor_note | bibliography | unknown",
-
-    "source_text_supporting_claim": "...",
-
-    "attribution_confidence": 0.95,
-    "claim_confidence": 0.92,
-
-    "revised_claim": {{
-      "text": "...",
-      "evidence_block_ids": ["00-0"],
-      "source_speaker": "Jacques Derrida",
-      "source_target": "Martin Heidegger",
-      "source_role": "derrida"
-    }},
-
-    "revise_claim": false,
-    "drop_claim": false,
-    "reason": "..."
-  }}
-]
-
-Rules:
-
-1. Never invent a source.
-2. Never assign a source merely because it discusses the same topic.
-3. If the evidence does not support the sentence, use:
-   "support_type": "unsupported",
-   "evidence_block_ids": [],
-   "claim_confidence": 0.0,
-   "drop_claim": true
-4. If a sentence overstates the evidence, revise it narrowly.
-5. If a sentence makes a corpus-level claim such as
-   "Across Derrida's works..." or "Derrida consistently...",
-   require evidence from at least two distinct canonical works.
-6. Do not infer présence from présent, différance from différence,
-   or other related Derridean terms solely from lexical similarity.
-7. Preserve source-language wording exactly when quoting evidence.
-8. Do not generate bibliography metadata. Only identify evidence blocks
-   and source roles.
-9. Output valid JSON only. No markdown, comments, or code fences.
-"""
-
-initial_prompt_template = """
-    You are a scholar of the works of Jacques Derrida and poststructuralist philosophy.
-
-    You have been prompted by the user with the following instructions:
-    
-    [MASTER PROMPT AND INSTRUCTIONS]
-        "{prompt}"
-    [/MASTER PROMPT AND INSTRUCTIONS]
-
-    REQUIREMENTS:
-
-        - RESPONSE MUST BE A MINIMUM OF 20 SENTENCES OR TWO PARAGRAPHS, WHICHEVER IS LONGER
-
-    When you cite works, whether inline or in a bibliography, you use the MLA citation format.
-
-    You write in a clear, coherent, accurate style, breaking down complex ideas into understandable explanations.
-
-    Use multiple paragraphs as needed.
-
-    YOU MUST strictly follow the instructions provided by the user.
-
-    Do not make any claim broader than the accepted evidence supports.
-
-    A corpus-level claim such as:
-    "Across Derrida's works..."
-    "Derrida consistently..."
-    "In Derrida's thought..."
-    requires support from at least two distinct canonical works.
-
-    If only one canonical work survives review, explicitly limit the answer
-    to that work.
-
-    Do not infer présence from présent solely because the words are lexically related.
-
-    Do not introduce différance, trace, absence, logocentrism, the Other,
-    or other Derridean concepts unless an accepted claim explicitly supports them.
-
-    Answer the question based ONLY on the following citations:
-
-    [SOURCES, CITATIONS, EVIDENCE]
-    {context}
-    [/SOURCES, CITATIONS, EVIDENCE]
-"""
-
-query_improvement_template = """
-    [PROMPT]
-        "{prompt}"
-    [/PROMPT]
-
-    Also identify the language of the prompt,
-    the language of the materials being sought,
-    the expected language of the response,
-    and put them in the JSON object.
-
-    Assume response_language is the same as prompt_language unless otherwise specified.
-
-    Assume materials_language is null (all languages) unless otherwise specified. (e.g., "you can use only French and English")
-
-    Finally, add some details about the query itself:
-        - tone of the query
-        - quality of the query (0.0 to 1.0, with 0.0 being idiotic and 1.0 being expert-level)
-
-    OUTPUT FORMAT: valid JSON object
-    {{
-        "prompt": "{prompt}",
-        "prompt_query": "..." <-- the part of the prompt that contains the actual question or request
-        "prompt_query_fr": "...", <-- the part of the prompt that contains the actual question or request translated into French
-        "prompt_instructions": "..." <-- any additional instructions or context provided in the prompt
-        "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SEARCH keywords, not related to how to style/format/etc. a response
-        "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SEARCH keywords in French, not related to how to style/format/etc. a response
-        "prompt_language": ["en_us"], <-- query is in English
-        "materials_language": ["fr_fr"], <-- query is asking you to look ONLY at French materials, or null if not specified (all languages)
-        "response_language": ["fr_fr"], <-- query is asking you to respond in French
-        "tone": "neutral | casual | academic | offensive | creative | hostile | vulgar"
-        "query_quality": 0.8,
-        "is_fetch_query": false, <--- whether or not the user is asking for appearances of "x" in the source materials (true) or just a general answer (false)
-        "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
-        "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French)
-    }}
-
-    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
-"""
-
-initial_retrieval_prompt_template = """
-    en_us: "{prompt_query}"
-    fr_fr: "{prompt_query_fr}"
-    [{keywords}]
-"""
 
 # LANGCHAIN CLIENT WRAPPER
 class LangChainClient:
@@ -379,12 +149,21 @@ def main():
             LOG.info("No results found for the fetch query.")
             or_conditions = [{"$contains": keyword} for keyword in a_prompt_options["keywords"]]
             if a_prompt_options.get("keywords_fr"):
-                or_conditions.extend([{"$contains": keyword} for keyword in a_prompt_options["keywords_fr"]])
-            fetched_keword_results = client.vector_store.get(where_document={"$or": or_conditions})
+                or_conditions_fr = [{"$contains": keyword} for keyword in a_prompt_options.get("keywords_fr")]
+                #or_conditions.extend([{"$contains": keyword} for keyword in or_conditions_fr])
+            else:
+                or_conditions_fr = []
+            fetched_keword_results = client.vector_store.get(where_document={"$and": or_conditions})
+            fetched_keword_results_fr = client.vector_store.get(where_document={"$and": or_conditions_fr})
+            combined_results = {
+                "ids": fetched_keword_results["ids"] + fetched_keword_results_fr["ids"],
+                "metadatas": fetched_keword_results["metadatas"] + fetched_keword_results_fr["metadatas"],
+                "documents": fetched_keword_results["documents"] + fetched_keword_results_fr["documents"]
+            }
             LOG.info("Fetched keyword results: %d", len(fetched_keword_results["ids"]))
             if len(fetched_keword_results["ids"]) == 0:
                 LOG.info("No results found for the keyword fetch query.")
-            fetched_results = fetched_keword_results
+            fetched_results = combined_results
             
         ids = fetched_results["ids"]
         metadatas = fetched_results["metadatas"]
@@ -393,11 +172,11 @@ def main():
 
         cleaned_results = [
             {
-                # "author": m.get("document_author"),
-                # "section_author": m.get("section_author"),
-                # "work": m.get("work"),
-                # "edition": m.get("edition"),
-                # "year": m.get("year"),
+                "author": m.get("document_author"),
+                "section_author": m.get("section_author"),
+                "work": m.get("work"),
+                "edition": m.get("edition"),
+                "year": m.get("year"),
                 "text": d,
                 "pagination": f"{m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'}",
                 "citation_inline": f"({m.get('section_author', m.get('document_author', m.get('work'))).split(' ')[1]} {m.get('year')}, {m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'})"
@@ -423,6 +202,7 @@ def main():
             author_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
             
             citation = f"{author_reversed}. {doc.get('work', '')}. {doc.get('edition', '')}. {doc.get('year', '')}"
+            LOG.info("Generated citation: %s", citation)
             if citation not in output["bibliography"]:
                 output["bibliography"].append(citation)
 
@@ -449,29 +229,69 @@ def main():
     else:
         LOG.info("No materials language specified, not adding language filter.")
         initial_search_kwargs["filter"] = { "text_length": {"$gt": 500} }
+
     initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
     secondary_retriever = client.create_retriever(search_kwargs={ "k": K_VALUE, "filter": { "text_length": {"$gt": 500}}}, search_type="similarity")
 
     # Initial retrieval using the created retriever
     b_initial_retrieval_prompt = ChatPromptTemplate.from_template(initial_retrieval_prompt_template)
     b_formatted_initial_retrieval_prompt = b_initial_retrieval_prompt.format(
-        prompt_query=args.prompt,
-        keywords=json.dumps(a_prompt_options["keywords"])
+        prompt_query=a_prompt_options["prompt_query"],
+        prompt_query_fr=a_prompt_options["prompt_query_fr"],
+        keywords=json.dumps(a_prompt_options["keywords"]),
+        keywords_fr=json.dumps(a_prompt_options["keywords_fr"])
     )
     LOG.info("Formatted initial retrieval prompt: %s", b_formatted_initial_retrieval_prompt)
     candidates = initial_retriever.invoke(b_formatted_initial_retrieval_prompt)
     additional_candidates = secondary_retriever.invoke(b_formatted_initial_retrieval_prompt)
-    combined_candidates = candidates + additional_candidates
-    LOG.info("Retrieved %d candidates using MMR and similarity search.", len(combined_candidates))
 
-    if not candidates:
+    canonical_candidates = []
+    if (a_prompt_options["keywords"] or a_prompt_options["keywords_fr"]):
+        LOG.info("Retrieving canonical works by keyword: %s", a_prompt_options["keywords"])
+
+        canonical_work_ids = []
+        canonical_work_ids_fr = []
+
+        for keyword in a_prompt_options["keywords"]:
+            if keyword.lower() in keys.get("en_us", {}):
+                canonical_work_ids.append(keys["en_us"][keyword.lower()])
+        for keyword in a_prompt_options["keywords_fr"]:
+            if keyword.lower() in keys.get("fr_fr", {}):
+                canonical_work_ids_fr.append(keys["fr_fr"][keyword.lower()])
+
+        combined_work_ids = [item for sublist in (canonical_work_ids + canonical_work_ids_fr) for item in sublist]
+        #combined_work_ids = canonical_work_ids + canonical_work_ids_fr
+        LOG.info("Combined canonical work IDs: %s", combined_work_ids)
+
+        canonical_work_retriever = client.create_retriever(
+            search_kwargs={
+                "k": K_VALUE,
+                "filter": {
+                    "canonical_work_id": {
+                        "$in": combined_work_ids
+                    }
+                }
+            }, search_type="similarity")
+        canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
+
+
+    combined_candidates = candidates + additional_candidates + canonical_candidates
+    LOG.info("Retrieved %d candidates using MMR and similarity search.", len(combined_candidates))
+    if not combined_candidates:
         LOG.warning("No context found matching the query and filter criteria.")
         print("\n--- No matching results found ---")
         return
 
+    
+    # Filter out candidates whose document_language is not in materials_language
+    combined_candidates = [
+        doc for doc in combined_candidates if doc.metadata.get("document_language", "fr_fr") in a_prompt_options["materials_language"]
+    ]
+    LOG.info("Filtered candidates based on materials_language: %s", a_prompt_options["materials_language"])
+    LOG.info("Unique candidates after filtering: %d", len(combined_candidates))
+
     seen = set()
     unique_candidates = []
-
     for doc in combined_candidates:
         chunk_id = doc.metadata.get("record_id")
 
