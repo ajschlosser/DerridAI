@@ -12,7 +12,7 @@ class Logger:
         logger.setLevel(level)
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level)
-        file_handler = logging.FileHandler(Path("derridai6_multi.log"), mode="w")
+        file_handler = logging.FileHandler(Path("derridai7.log"), mode="w")
         file_handler.setFormatter(logging.Formatter(_format, _datefmt))
         formatter = logging.Formatter(_format, _datefmt)
         handler.setFormatter(formatter)

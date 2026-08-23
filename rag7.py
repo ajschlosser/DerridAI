@@ -63,7 +63,7 @@ LOG = Logger.setup()
 def main():
     client = LangChainClient()
 
-    client.add_new_records(batch_size=1000)
+    client.add_new_records(batch_size=1150)
     # LOG.info("Formatted prompt: %s", formatted_prompt)
 
     # Initial query processing
@@ -74,9 +74,14 @@ def main():
     LOG.info("Chat model response: %s", a_prompt_options)
 
 
-    if a_prompt_options.get("is_fetch_query"):
+    if a_prompt_options.get("is_fetch_query") and (a_prompt_options.get("fetch_query_content") or a_prompt_options.get("fetch_query_content_fr")):
         LOG.info("User is asking for appearances of specific content in the source materials: '%s'", a_prompt_options["fetch_query_content"])
-        fetched_results = client.vector_store.get(where_document={"$or": [{ "$contains": a_prompt_options["fetch_query_content"]}, { "$contains": a_prompt_options.get("fetch_query_content_fr")}]})
+        if a_prompt_options.get("fetch_query_content_fr"):
+            where_str = {"$or": [{ "$contains": a_prompt_options["fetch_query_content"]}, { "$contains": a_prompt_options.get("fetch_query_content_fr")}]}
+        else:
+            where_str = {"$contains": a_prompt_options.get("fetch_query_content", "")}
+        LOG.info("Fetching results with where_str: %s", where_str)
+        fetched_results = client.vector_store.get(where_document=where_str)
 
         if len(fetched_results["ids"]) == 0:
             LOG.info("No results found for the fetch query.")
@@ -151,6 +156,10 @@ def main():
         "lambda_mult": LAMBDA_MULT_VALUE,
         "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
+    similarity_seach_kwargs = {
+        "k": K_VALUE,
+        "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+    }
     LOG.info("Initial search kwargs: %s", initial_search_kwargs)
     if a_prompt_options["materials_language"]:
         LOG.info("Filtering by materials language: %s", a_prompt_options["materials_language"])
@@ -159,12 +168,18 @@ def main():
                 "$in": a_prompt_options["materials_language"]
             }
         })
+        similarity_seach_kwargs["filter"]["$and"].append({
+            "document_language": {
+                "$in": a_prompt_options["materials_language"]
+            }
+        })
     else:
         LOG.info("No materials language specified, not adding language filter.")
         initial_search_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+        similarity_seach_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
 
     initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
-    secondary_retriever = client.create_retriever(search_kwargs={ "k": K_VALUE, "filter": { "text_length": {"$gt": 500}}}, search_type="similarity")
+    secondary_retriever = client.create_retriever(search_kwargs=similarity_seach_kwargs, search_type="similarity")
 
     # Initial retrieval using the created retriever
     b_initial_retrieval_prompt = ChatPromptTemplate.from_template(initial_retrieval_prompt_template)
@@ -179,6 +194,7 @@ def main():
     additional_candidates = secondary_retriever.invoke(b_formatted_initial_retrieval_prompt)
 
     canonical_candidates = []
+    combined_canonical_candidates = []
     if (a_prompt_options["keywords"] or a_prompt_options["keywords_fr"]):
         LOG.info("Retrieving canonical works by keyword: %s", a_prompt_options["keywords"])
 
@@ -198,24 +214,54 @@ def main():
         #combined_work_ids = canonical_work_ids + canonical_work_ids_fr
         LOG.info("Combined canonical work IDs: %s", combined_work_ids)
         if combined_work_ids:
-            canonical_work_retriever = client.create_retriever(
-                search_kwargs={
-                    "k": K_VALUE,
-                    "filter": {
-                        "canonical_work_id": {
-                            "$in": combined_work_ids
+
+            canonical_search_kwargs = {
+                "k": K_VALUE,
+                "filter": {
+                    "$and": [
+                        {
+                            "canonical_work_id": {
+                                "$in": combined_work_ids
+                            }
+                        },
+                        {
+                            "region_author": "Jacques Derrida"
+                        },
+                        {
+                            "text_length": {
+                                "$gt": 500
+                            }
                         }
+                    ]
+                }
+            }
+            if a_prompt_options["materials_language"]:
+                canonical_search_kwargs["filter"]["$and"].append({
+                    "document_language": {
+                        "$in": a_prompt_options["materials_language"]
                     }
-                }, search_type="similarity")
+                })
+            LOG.info("Canonical search similarity kwargs: %s", canonical_search_kwargs)
+            canonical_work_retriever = client.create_retriever(
+                search_kwargs=canonical_search_kwargs, search_type="similarity")
             canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
+            canonical_search_kwargs["fetch_k"] = math.ceil(K_VALUE / 2)
+            canonical_search_kwargs["lambda_mult"] = LAMBDA_MULT_VALUE
+            LOG.info("Canonical search MMR kwargs: %s", canonical_search_kwargs)
+            canonical_work_retriever_mmr = client.create_retriever(
+                search_kwargs=canonical_search_kwargs, search_type="mmr")
+            canonical_candidates_mmr = canonical_work_retriever_mmr.invoke(b_formatted_initial_retrieval_prompt)
+            combined_canonical_candidates = canonical_candidates + canonical_candidates_mmr
+            LOG.info("Combined canonical candidates: %d", len(combined_canonical_candidates))
 
 
     reordering = LongContextReorder()
     reordered_candidates = reordering.transform_documents(candidates)
     reordered_additional_candidates = reordering.transform_documents(additional_candidates)
-    reordered_canonical_candidates = reordering.transform_documents(canonical_candidates)
+    reordered_canonical_candidates = reordering.transform_documents(combined_canonical_candidates)
 
-    combined_candidates = reordered_candidates[:math.ceil(K_VALUE / 4)] + reordered_additional_candidates[:math.ceil(K_VALUE / 4)] + reordered_canonical_candidates[:math.ceil(K_VALUE / 2)]
+    #combined_candidates = reordered_candidates[:math.ceil(K_VALUE / 4)] + reordered_additional_candidates[:math.ceil(K_VALUE / 4)] + reordered_canonical_candidates[:math.ceil(K_VALUE / 2)]
+    combined_candidates = reordered_candidates + reordered_additional_candidates + reordered_canonical_candidates
     LOG.info("Retrieved %d candidates using MMR and similarity search.", len(combined_candidates))
     if not combined_candidates:
         LOG.warning("No context found matching the query and filter criteria.")
@@ -260,7 +306,11 @@ def main():
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
     prompt = ChatPromptTemplate.from_template(initial_prompt_template)
-    final_prompt = prompt.format(context=context, prompt=a_prompt_options)
+    final_prompt = prompt.format(
+        context=context,
+        prompt_query=a_prompt_options["prompt_query"],
+        prompt_instructions=a_prompt_options["prompt_instructions"]
+    )
     LOG.info("Final prompt: %s", final_prompt)
 
     # Invoke the final prompt with the chat model

@@ -1,5 +1,10 @@
 # PROMPT TEMPLATES
 
+from defaults import (
+    RESPONSE_MIN_SENTENCES,
+    RESPONSE_MAX_SENTENCES
+)
+
 review_prompt_template = """
 You are a strict evidence auditor.
 
@@ -103,44 +108,19 @@ initial_prompt_template = """
 
     You have been prompted by the user with the following instructions:
     
-    [MASTER PROMPT AND INSTRUCTIONS]
-        "{prompt}"
-    [/MASTER PROMPT AND INSTRUCTIONS]
+    [MASTER PROMPT]
+        "{prompt_query}"
+    [/MASTER PROMPT]
 
-    REQUIREMENTS:
-
-        - RESPONSE MUST BE A MINIMUM OF 20 SENTENCES OR TWO PARAGRAPHS, WHICHEVER IS LONGER
-
-    When you cite works, whether inline or in a bibliography, you use the MLA citation format.
-
-    You write in a clear, coherent, accurate style, breaking down complex ideas into understandable explanations.
-
-    Use multiple paragraphs as needed.
-
-    YOU MUST strictly follow the instructions provided by the user.
-
-    Do not make any claim broader than the accepted evidence supports.
-
-    A corpus-level claim such as:
-    "Across Derrida's works..."
-    "Derrida consistently..."
-    "In Derrida's thought..."
-    requires support from at least two distinct canonical works.
-
-    If only one canonical work survives review, explicitly limit the answer
-    to that work.
-
-    Do not infer présence from présent solely because the words are lexically related.
-
-    Do not introduce différance, trace, absence, logocentrism, the Other,
-    or other Derridean concepts unless an accepted claim explicitly supports them.
+    [MASTER INSTRUCTIONS]
+        "{prompt_instructions}"
+    [/MASTER INSTRUCTIONS]
 
     CITATION FORMAT:
     - MLA style
     - Inline: (Author Year, Page)
     - Bibliography: Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
-
-    A WORKS CITED SECTION MUST BE ADDED AT THE END FOLLOWING THE ABOVE FORMAT.
+    - Every response must include a Works Cited section following the above format
 
     [GENERAL RESPONSE FORMAT]
     **Title**
@@ -152,11 +132,34 @@ initial_prompt_template = """
     ... works cited ...
     [/GENERAL RESPONSE FORMAT]
     
-    Answer the question based ONLY on the following citations:
+    REQUIREMENTS:
+        - RESPONSE MUST BE A MINIMUM OF 20 SENTENCES
+        - RESPONSE SHOULD AIM FOR 40-70 SENTENCES AS NEEDED
+        - RESPONSE MUST NOT EXCEED 150 SENTENCES
+        - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED BELOW!
+        - ALL CLAIMS MUST BE CITED FOLLOWING THE FORMAT BELOW!
+
+    CITATION FORMAT:
+    - MLA style
+    - Footnotes link to the corresponding entries in the Works Cited section
+    - Inline: (Author Year, Page)[Footnote Number corresponding to Bibliography entry when first introduced in the text]
+    - Bibliography: [Number]. Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
+    - Every response must include a Works Cited section following the above format
+
+    CLAIM GUIDELINES:
+    - DO NOT ATTRIBUTE A CLAIM TO DERRIDA UNLESS region_author = "Jacques Derrida" and/or speaker = "Jacques Derrida"
+    - ATTRIBUTE CLAIMS TO the speaker, i.e. if speaker = "David B. Allison", attribute the claim to David B. Allison, not Derrida
+    - ALWAYS VERIFY THE SPEAKER BEFORE ATTRIBUTING A CLAIM.
+    - IF THE SPEAKER IS TALKING ABOUT DERRIDA (target = "Jacques Derrida"), MAKE THAT CLEAR.
+
+    EVIDENCE TO CONSIDER FOR CLAIMS -- DO NOT INVENT EVIDENCE OR GENERATE NEW EVIDENCE:
 
     [SOURCES, CITATIONS, EVIDENCE]
     {context}
     [/SOURCES, CITATIONS, EVIDENCE]
+
+    AFTER GENERATING YOUR RESPONSE BUT BEFORE SUBMITTING, REMOVE ANY DUPLICATED TEXT.
+    ENSURE THAT ALL CLAIMS IN YOUR RESPONSE ARE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE.
 """
 
 query_improvement_template = """
@@ -164,18 +167,10 @@ query_improvement_template = """
         "{prompt}"
     [/PROMPT]
 
-    Also identify the language of the prompt,
-    the language of the materials being sought,
-    the expected language of the response,
-    and put them in the JSON object.
-
     Assume response_language is the same as prompt_language unless otherwise specified.
 
     Assume materials_language is null (all languages) unless otherwise specified. (e.g., "you can use only French and English")
 
-    Finally, add some details about the query itself:
-        - tone of the query
-        - quality of the query (0.0 to 1.0, with 0.0 being idiotic and 1.0 being expert-level)
 
     OUTPUT FORMAT: valid JSON object
     {{
@@ -183,13 +178,11 @@ query_improvement_template = """
         "prompt_query": "..." <-- the part of the prompt that contains the actual question or request
         "prompt_query_fr": "...", <-- the part of the prompt that contains the actual question or request translated into French
         "prompt_instructions": "..." <-- any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW)
-        "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SEARCH keywords, not related to how to style/format/etc. a response
-        "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SEARCH keywords in French, not related to how to style/format/etc. a response
+        "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response
+        "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response
         "prompt_language": ["en_us"], <-- query is in English
         "materials_language": ["fr_fr"], <-- query is asking you to look ONLY at French materials, or null if not specified (all languages)
         "response_language": ["fr_fr"], <-- query is asking you to respond in French
-        "tone": "neutral | casual | academic | offensive | creative | hostile | vulgar"
-        "query_quality": 0.8,
         "is_fetch_query": false, <--- whether or not the user is asking for appearances of "x" in the source materials (true) or just a general answer (false)
         "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
         "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French)
@@ -199,7 +192,8 @@ query_improvement_template = """
 """
 
 initial_retrieval_prompt_template = """
-    en_us: "{prompt_query}"
-    fr_fr: "{prompt_query_fr}"
+    "{prompt_query}"
+    "{prompt_query_fr}"
     [{keywords}]
+    [{keywords_fr}]
 """
