@@ -4,8 +4,8 @@ CHAT_MODEL        = "gpt-oss:20b"
 CHAT_TEMPERATURE  = 0.4
 OLLAMA_BASE_URL   = "http://localhost:11434"
 
-DB_PATH           = "./chroma_db_local-tuned6_multilang"
-SOURCE_TEXT       = "./data/derrida6_multi.jsonl"
+DB_PATH           = "./chroma_db_local7"
+SOURCE_TEXT       = "./data/derrida7.jsonl"
 
 BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE           = 15

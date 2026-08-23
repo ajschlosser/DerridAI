@@ -135,6 +135,23 @@ initial_prompt_template = """
     Do not introduce différance, trace, absence, logocentrism, the Other,
     or other Derridean concepts unless an accepted claim explicitly supports them.
 
+    CITATION FORMAT:
+    - MLA style
+    - Inline: (Author Year, Page)
+    - Bibliography: Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
+
+    A WORKS CITED SECTION MUST BE ADDED AT THE END FOLLOWING THE ABOVE FORMAT.
+
+    [GENERAL RESPONSE FORMAT]
+    **Title**
+
+    ... answer ...
+
+    **Works Cited**
+
+    ... works cited ...
+    [/GENERAL RESPONSE FORMAT]
+    
     Answer the question based ONLY on the following citations:
 
     [SOURCES, CITATIONS, EVIDENCE]

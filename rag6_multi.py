@@ -17,28 +17,21 @@
 """rag6_multi.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
 
 # STANDARD LIBRARIES
-import math
 import json
-import difflib
 import argparse
+import math
 
 # LLM
-from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_chroma import Chroma
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_community.document_transformers import LongContextReorder
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
-
-# LOGGING
-import logging
-import sys
+from langchain_chroma import Chroma
 from pathlib import Path
 
 # TYPING
-from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Optional
 
 from prompts import (
     review_prompt_template,
@@ -56,10 +49,14 @@ from defaults import (
     LAMBDA_MULT_VALUE,
     K_VALUE,
     FETCH_K_VALUE,
+    BATCH_SIZE, 
+    SOURCE_TEXT,
     keys
 )
 
 from logger import Logger
+
+from client import LangChainClient
 
 # CLI ARGUMENTS
 parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
@@ -76,61 +73,11 @@ args = parser.parse_args()
 
 LOG = Logger.setup()
 
-# LANGCHAIN CLIENT WRAPPER
-class LangChainClient:
-    """
-    A thin wrapper that builds a LangChain chat model, an embeddings model,
-    and a Chroma vector store based on a user‑supplied configuration.
-
-    Parameters
-    ----------
-    config : Optional[LangChainConfig] = None
-        A typed configuration object.  If omitted, defaults from the module
-        constants are used.
-    """
-    def __init__(self, config: Optional[LangChainConfig] = None):
-        cfg = config or LangChainConfig.from_defaults()
-        LOG.info("Initializing LangChainClient with configuration: %s", cfg)
-        LOG.info(f"""\n
-=================
-| CONFIGURATION |
-=================
-MODEL: {cfg.chat.model}
-TEMPERATURE: {cfg.chat.temperature}
-BASE_URL: {cfg.chat.base_url}
-EMBEDDING_MODEL: {cfg.embedding.model}
-DB_PATH: {cfg.store.persist_directory}
-        """)
-        self.chat_model = ChatOllama(
-            model=cfg.chat.model,
-            temperature=cfg.chat.temperature,
-            base_url=cfg.chat.base_url,
-            timeout=45.0, # 45s
-        )
-        self.embedding_model = OllamaEmbeddings(
-            model=cfg.embedding.model,
-            base_url=cfg.embedding.base_url,
-        )
-        self.vector_store = Chroma(
-            persist_directory=cfg.store.persist_directory,
-            embedding_function=self.embedding_model,
-        )
-        LOG.info("LangChainClient initialized successfully.")
-    def invoke(self, prompt: str):
-        LOG.info(f"Invoking chat model [{self.chat_model.model}] with prompt: {prompt}")
-        return self.chat_model.invoke(prompt)
-    def create_retriever(self, search_kwargs: dict, search_type: str = "mmr"):
-        LOG.info(f"Creating retriever with search_kwargs: {search_kwargs} and search_type: {search_type}")
-        self.retrievers = getattr(self, "retrievers", [])
-        retriever = self.vector_store.as_retriever(search_kwargs=search_kwargs, search_type=search_type)
-        self.retrievers.append(retriever)
-        return retriever
-
 # MAIN FUNCTION
 def main():
     client = LangChainClient()
 
-
+    client.add_new_records(batch_size=1000)
     # LOG.info("Formatted prompt: %s", formatted_prompt)
 
     # Initial query processing
@@ -216,7 +163,7 @@ def main():
         "k": K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
-        "filter": { "$and": [{"text_length": {"$gt": 500}}] }
+        "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
     LOG.info("Initial search kwargs: %s", initial_search_kwargs)
     if a_prompt_options["materials_language"]:
@@ -228,7 +175,7 @@ def main():
         })
     else:
         LOG.info("No materials language specified, not adding language filter.")
-        initial_search_kwargs["filter"] = { "text_length": {"$gt": 500} }
+        initial_search_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
 
     initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
     secondary_retriever = client.create_retriever(search_kwargs={ "k": K_VALUE, "filter": { "text_length": {"$gt": 500}}}, search_type="similarity")
@@ -260,22 +207,29 @@ def main():
                 canonical_work_ids_fr.append(keys["fr_fr"][keyword.lower()])
 
         combined_work_ids = [item for sublist in (canonical_work_ids + canonical_work_ids_fr) for item in sublist]
+        # dedupe
+        combined_work_ids = list(set(combined_work_ids))
         #combined_work_ids = canonical_work_ids + canonical_work_ids_fr
         LOG.info("Combined canonical work IDs: %s", combined_work_ids)
-
-        canonical_work_retriever = client.create_retriever(
-            search_kwargs={
-                "k": K_VALUE,
-                "filter": {
-                    "canonical_work_id": {
-                        "$in": combined_work_ids
+        if combined_work_ids:
+            canonical_work_retriever = client.create_retriever(
+                search_kwargs={
+                    "k": K_VALUE,
+                    "filter": {
+                        "canonical_work_id": {
+                            "$in": combined_work_ids
+                        }
                     }
-                }
-            }, search_type="similarity")
-        canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
+                }, search_type="similarity")
+            canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
 
 
-    combined_candidates = candidates + additional_candidates + canonical_candidates
+    reordering = LongContextReorder()
+    reordered_candidates = reordering.transform_documents(candidates)
+    reordered_additional_candidates = reordering.transform_documents(additional_candidates)
+    reordered_canonical_candidates = reordering.transform_documents(canonical_candidates)
+
+    combined_candidates = reordered_candidates[:math.ceil(K_VALUE / 4)] + reordered_additional_candidates[:math.ceil(K_VALUE / 4)] + reordered_canonical_candidates[:math.ceil(K_VALUE / 2)]
     LOG.info("Retrieved %d candidates using MMR and similarity search.", len(combined_candidates))
     if not combined_candidates:
         LOG.warning("No context found matching the query and filter criteria.")
@@ -284,11 +238,15 @@ def main():
 
     
     # Filter out candidates whose document_language is not in materials_language
-    combined_candidates = [
-        doc for doc in combined_candidates if doc.metadata.get("document_language", "fr_fr") in a_prompt_options["materials_language"]
-    ]
-    LOG.info("Filtered candidates based on materials_language: %s", a_prompt_options["materials_language"])
-    LOG.info("Unique candidates after filtering: %d", len(combined_candidates))
+    if a_prompt_options["materials_language"]:
+        combined_candidates = [
+            doc for doc in combined_candidates
+            if doc.metadata.get("document_language", "fr_fr") in a_prompt_options["materials_language"]
+        ]
+        LOG.info("Filtered candidates based on materials_language: %s", a_prompt_options["materials_language"])
+    else:
+        LOG.info("No materials_language filter specified; keeping all candidates.")
+    LOG.info("Candidates after materials_language filtering: %d", len(combined_candidates))
 
     seen = set()
     unique_candidates = []
