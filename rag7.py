@@ -64,7 +64,6 @@ def main():
     client = LangChainClient()
 
     client.add_new_records(batch_size=1150)
-    # LOG.info("Formatted prompt: %s", formatted_prompt)
 
     # Initial query processing
     a_query_improvement_prompt = ChatPromptTemplate.from_template(query_improvement_template)

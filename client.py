@@ -11,10 +11,11 @@ from langchain_chroma import Chroma
 from pathlib import Path
 
 # TYPING
-from typing import Optional
+from typing import Callable, Optional
 
 from typings import (
-    LangChainConfig
+    LangChainConfig,
+    StoreConfig,
 )
 
 from defaults import (
@@ -23,6 +24,12 @@ from defaults import (
 )
 
 LOG = Logger.setup()
+
+pipeline_id = 0
+
+# class Store:
+#     def __init__(self, config: Options[StoreConfig] ):
+#         self.persist_directory = persist_directory
 
 # LANGCHAIN CLIENT WRAPPER
 class LangChainClient:

@@ -125,10 +125,11 @@ initial_prompt_template = """
     [GENERAL RESPONSE FORMAT]
     **Title**
 
-    ... answer ...
+    ... answer ... Derrida talks about différance in Writing and Difference (Derrida 1993, 2)[1]. ... answer ...
 
     **Works Cited**
-
+    
+    1. Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993.
     ... works cited ...
     [/GENERAL RESPONSE FORMAT]
     
@@ -152,6 +153,7 @@ initial_prompt_template = """
     - ATTRIBUTE CLAIMS TO the speaker, i.e. if speaker = "David B. Allison", attribute the claim to David B. Allison, not Derrida
     - ALWAYS VERIFY THE SPEAKER BEFORE ATTRIBUTING A CLAIM.
     - IF THE SPEAKER IS TALKING ABOUT DERRIDA (target = "Jacques Derrida"), MAKE THAT CLEAR.
+    - PREFER EVIDENCE WHERE THE speaker IS "Jacques Derrida"
 
     DO NOT INVENT EVIDENCE OR GENERATE NEW EVIDENCE.
 
@@ -163,6 +165,7 @@ initial_prompt_template = """
 
     AFTER GENERATING YOUR RESPONSE BUT BEFORE SUBMITTING, REMOVE ANY DUPLICATED TEXT.
     ENSURE THAT ALL CLAIMS IN YOUR RESPONSE ARE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE.
+    CLEAN UP ANY DUPLICATED TEXT AND ENSURE PROPER FORMATTING OF THE RESPONSE.
 """
 
 query_improvement_template = """

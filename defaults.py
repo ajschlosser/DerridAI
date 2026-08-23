@@ -1,7 +1,7 @@
 # CONFIGURATION
 EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
 CHAT_MODEL        = "gpt-oss:20b"
-CHAT_TEMPERATURE  = 0.4
+CHAT_TEMPERATURE  = 0.6
 OLLAMA_BASE_URL   = "http://localhost:11434"
 
 DB_PATH           = "./chroma_db_local7"
@@ -10,7 +10,7 @@ SOURCE_TEXT       = "./data/derrida7_ids.jsonl"
 BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE           = 24
 FETCH_K_VALUE     = 500
-LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
+LAMBDA_MULT_VALUE = 0.5           # Lower = more diversity; higher = more query relevance
 
 RESPONSE_MIN_SENTENCES = 150
 RESPONSE_MAX_SENTENCES = 500
