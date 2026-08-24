@@ -16,10 +16,15 @@
 
 """rag6_multi.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
 
+import os
+
+os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
+
 # STANDARD LIBRARIES
 import json
 import argparse
 import math
+import random
 
 # LLM
 from langchain_core.prompts import ChatPromptTemplate
@@ -44,6 +49,22 @@ from logger import Logger
 
 from client import LangChainClient
 
+#NLP
+import nltk
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lex_rank import LexRankSummarizer
+import re
+import unicodedata
+
+import pyphen
+from dehyphen import FlairScorer
+from symspellpy import SymSpell, Verbosity
+
+# DOWNLOAD NECESSARY NLTK DATA
+nltk.download('punkt_tab')
+nltk.download('punkt')
+
 # CLI ARGUMENTS
 parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
 parser.add_argument(
@@ -58,6 +79,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 LOG = Logger.setup()
+
+summarizer = LexRankSummarizer()
 
 # MAIN FUNCTION
 def main():
@@ -76,11 +99,17 @@ def main():
     if a_prompt_options.get("is_fetch_query") and (a_prompt_options.get("fetch_query_content") or a_prompt_options.get("fetch_query_content_fr")):
         LOG.info("User is asking for appearances of specific content in the source materials: '%s'", a_prompt_options["fetch_query_content"])
         if a_prompt_options.get("fetch_query_content_fr"):
-            where_str = {"$or": [{ "$contains": a_prompt_options["fetch_query_content"]}, { "$contains": a_prompt_options.get("fetch_query_content_fr")}]}
+            wher_doc_filter = {"$or": [{ "$contains": a_prompt_options["fetch_query_content"]}, { "$contains": a_prompt_options.get("fetch_query_content_fr")}]}
         else:
-            where_str = {"$contains": a_prompt_options.get("fetch_query_content", "")}
-        LOG.info("Fetching results with where_str: %s", where_str)
-        fetched_results = client.vector_store.get(where_document=where_str)
+            wher_doc_filter = {"$contains": a_prompt_options.get("fetch_query_content", "")}
+        LOG.info("Fetching results with where_doc_filter: %s", wher_doc_filter)
+        where_filter = {}
+        if len(a_prompt_options.get("materials_language")) > 1:
+            where_filter = { "$or": [{"document_language": {"$contains": lang}} for lang in a_prompt_options.get("materials_language")] }
+        else:
+            where_filter = { "document_language": { "$contains": a_prompt_options.get("materials_language")[0] } }
+        LOG.info("Where filter for fetching results: %s", where_filter)
+        fetched_results = client.vector_store.get(where_document=wher_doc_filter, where=where_filter)
 
         if len(fetched_results["ids"]) == 0:
             LOG.info("No results found for the fetch query.")
@@ -90,8 +119,21 @@ def main():
                 #or_conditions.extend([{"$contains": keyword} for keyword in or_conditions_fr])
             else:
                 or_conditions_fr = []
-            fetched_keword_results = client.vector_store.get(where_document={"$and": or_conditions})
-            fetched_keword_results_fr = client.vector_store.get(where_document={"$and": or_conditions_fr})
+            fetched_keword_results = {
+                "ids": [],
+                "metadatas": [],
+                "documents": []
+            }
+            fetched_keword_results_fr = {
+                "ids": [],
+                "metadatas": [],
+                "documents": []
+            }
+            materials_language = a_prompt_options.get("materials_language")
+            if "en_en" in materials_language:
+                fetched_keword_results = client.vector_store.get(where_document={"$and": or_conditions}, where={ "document_language": { "$contains": "en_en" } })
+            if "fr_fr" in materials_language:
+                fetched_keword_results_fr = client.vector_store.get(where_document={"$and": or_conditions_fr}, where={ "document_language": { "$contains": "fr_fr" } })
             combined_results = {
                 "ids": fetched_keword_results["ids"] + fetched_keword_results_fr["ids"],
                 "metadatas": fetched_keword_results["metadatas"] + fetched_keword_results_fr["metadatas"],
@@ -109,14 +151,14 @@ def main():
 
         cleaned_results = [
             {
-                "author": m.get("document_author"),
-                "section_author": m.get("section_author"),
+                "document_author": m.get("document_author"),
+                "speaker": m.get("speaker"),
                 "work": m.get("work"),
                 "edition": m.get("edition"),
                 "year": m.get("year"),
                 "text": d,
                 "pagination": f"{m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'}",
-                "citation_inline": f"({m.get('section_author', m.get('document_author', m.get('work'))).split(' ')[1]} {m.get('year')}, {m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'})"
+                "citation_inline": f"({m.get('speaker', m.get('document_author', m.get('work'))).split(' ')[1]} {m.get('year')}, {m.get('page_start') if (not m.get('page_end') or m.get('page_end') == m.get('page_start')) else f'{m.get('page_start')}-{m.get('page_end')}'})"
             } for m, d in zip(metadatas, docs)
         ]
 
@@ -128,50 +170,182 @@ def main():
         }
 
         for doc in cleaned_results:
-            # if doc.get('page_start') and doc.get('page_end') and doc.get('page_start') is not doc.get('page_end'):
-            #     page_number = f"{doc.get('page_start', '')}-{doc.get('page_end', '')}"
-            # else:
-            #     page_number = f"{doc.get('page_start', '')}"
-
-            author = doc.get('author', '')
-            if doc.get('section_author') and doc.get('section_author') != author:
-                author = doc.get('section_author')
+            author = doc.get('document_author', '')
+            if doc.get('speaker') and doc.get('speaker') != author:
+                author = doc.get('speaker')
             author_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
-            
             citation = f"{author_reversed}. {doc.get('work', '')}. {doc.get('edition', '')}. {doc.get('year', '')}"
-            LOG.info("Generated citation: %s", citation)
+            #LOG.info("Generated citation: %s", citation)
             if citation not in output["bibliography"]:
                 output["bibliography"].append(citation)
+        LOG.info("Cleaned results: %d", len(cleaned_results))
+        LOG.info("Generated bibliography: %s", output["bibliography"])
+        LOG.info("Cleaned results and generated bibliography completed: %s", cleaned_results)
 
-        LOG.info("Fetched results content: %s", output)
-        return output
+
+        dehyphenator = FlairScorer(lang="multi-v0")
+        hyphenators = {
+            "fr_fr": pyphen.Pyphen(lang="fr_FR"),
+            "en_us": pyphen.Pyphen(lang="en_US"),
+        }
+        symspell = SymSpell(
+            max_dictionary_edit_distance=1,
+            prefix_length=7,
+        )
+        symspell.create_dictionary_entry("logocentrisme", 10000)
+        symspell.create_dictionary_entry("métaphysique", 10000)
+        symspell.create_dictionary_entry("présence", 10000)
+        symspell.create_dictionary_entry("différance", 10000)
+        symspell.create_dictionary_entry("phénoménologie", 10000)
+        symspell.create_dictionary_entry("onto-théologie", 10000)
+        symspell.create_dictionary_entry("heideggerienne", 10000)
+        symspell.create_dictionary_entry("husserlienne", 10000)
+
+        PROTECTED = [
+            "différance",
+            "archi-écriture",
+            "logo-centrisme",
+            "onto-théologie",
+            "phonè",
+            "ousia",
+            "Derrida",
+            "Heidegger",
+            "Husserl",
+            "Lévinas",
+        ]
+
+        WORD = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿœŒæÆ'-]+")
+
+        def correct_token(token):
+            if token in PROTECTED:
+                return token
+
+            # Don't touch very short words.
+            if len(token) < 5:
+                return token
+
+            suggestions = symspell.lookup(
+                token.lower(),
+                Verbosity.TOP,
+                max_edit_distance=1,
+                include_unknown=True,
+            )
+
+            if not suggestions:
+                return token
+
+            best = suggestions[0]
+
+            # No correction found.
+            if best.distance == 0 or best.term == token.lower():
+                return token
+
+            # Only accept a one-character correction.
+            if best.distance != 1:
+                return token
+
+            return best.term
+
+
+        def correct_ocr_words(text):
+            return WORD.sub(lambda m: correct_token(m.group(0)), text)
+
+        response_str = ""
+        for i, doc in enumerate((lambda x: (random.shuffle(x) or x))(cleaned_results), start=1):
+            text = doc.get("text", "")
+            #text = dehyphenator.dehyphen(text)
+            text = correct_ocr_words(text)
+            language = a_prompt_options.get("materials_language", ["en_en"])[0].split("_")[0]
+            if language in hyphenators:
+                text = hyphenators[language].inserted(text)
+            parser = PlaintextParser.from_string(text, Tokenizer(language))
+            summary = summarizer(parser.document, 3)
+            text_summary = " [...] ".join([str(sentence) for sentence in summary])
+            author_name = f"{doc.get('document_author', '').split(' ')[-1]}, {doc.get('document_author', '').split(' ')[0]}"
+            response_str += f"""
+{i}. "{text_summary}"
+        - {doc.get('speaker', '')}
+            in {author_name}. **{doc.get('work', '')}**. {doc.get('edition', '')}, {doc.get('year', '')}: {doc.get('pagination', '')}.
+"""
+        LOG.info("Generated response string: %s", response_str)
+        LOG.info("Original prompt: %s", args.prompt)
+        LOG.info("Interpreted fetch prompt: %s", a_prompt_options.get("fetch_query_content"))
+        LOG.info("Materials language: %s", a_prompt_options.get("materials_language"))
+        return response_str
+
+        fetch_prompt = f"""
+        CREATE A CITATION LIST: "{args.prompt}"
+
+        REQUIREMENTS:
+            - Use this bibliography:
+        {"\n    * ".join(output["bibliography"])}
+            - Provide the citation in this format:
+                1. " ...citation content... ", in Last Name, First Name. Title. Publisher. Year: page number(s).
+            - DO REMOVE any result that seems irrelevant/useless.
+            - DO NOT keep useless results.
+            - DO NOT SYNTHESIZE ARGUMENTS OR DRAW CONCLUSIONS. JUST PRESENT THE DATA
+            - DO CITE EVERY RECORD
+
+        [RECORD TO BE CITED]
+        {"\n".join([json.dumps({
+            "text": doc.get("text", ""),
+            "author": doc.get("author", ""),
+            "work": doc.get("work", ""),
+            "edition": doc.get("edition", ""),
+            "year": doc.get("year"),
+            "pagination": doc.get("pagination")
+        }) for doc in (lambda x: (random.shuffle(x) or x))(cleaned_results)[:math.ceil(K_VALUE / 2)]])}
+        [/RECORD TO BE CITED]
+
+        Final response format examaple:
+            1. " ...first citation content... " in Last Name, First Name. Title. Publisher. Year: page number(s).
+            2. " ...second citation content... " in Last Name, First Name. Title. Publisher. Year: page number(s).
+            3. " ...third citation content... " in Last Name, First Name. Title. Publisher. Year: page number(s).
+            4. " ...fourth citation content... " in Last Name, First Name. Title. Publisher. Year: page number(s).
+            ...
+
+        FINAL REVIEW:
+        - Double-check citations
+        - Remove all duplicates
+"""
+
+        response = client.invoke(fetch_prompt)
+        output["summary"] = response.content
+        LOG.info("Original prompt: %s", args.prompt)
+        LOG.info("Interpreted fetch prompt: %s", fetch_prompt)
+        LOG.info("Fetched results summary: %s", response.content)
+        return response.content
     else:
         LOG.info("User is asking for a general answer, not specific appearances.")
 
     # Initial filtering and retriever creation
     initial_search_kwargs = {
-        "k": K_VALUE,
+        "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
         "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
     similarity_seach_kwargs = {
-        "k": K_VALUE,
+        "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
     LOG.info("Initial search kwargs: %s", initial_search_kwargs)
     if a_prompt_options["materials_language"]:
         LOG.info("Filtering by materials language: %s", a_prompt_options["materials_language"])
-        initial_search_kwargs["filter"]["$and"].append({
+
+        language = a_prompt_options["materials_language"]
+        lang_filter = {
             "document_language": {
-                "$in": a_prompt_options["materials_language"]
+                "$contains": language[0]
             }
-        })
-        similarity_seach_kwargs["filter"]["$and"].append({
-            "document_language": {
-                "$in": a_prompt_options["materials_language"]
+        }
+        if len(language) > 1:
+            lang_filter = {
+                "$or": [{"document_language": {"$contains": lang}} for lang in language]
             }
-        })
+        
+        initial_search_kwargs["filter"]["$and"].append(lang_filter)
+        similarity_seach_kwargs["filter"]["$and"].append(lang_filter)
     else:
         LOG.info("No materials language specified, not adding language filter.")
         initial_search_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
@@ -195,7 +369,7 @@ def main():
     canonical_candidates = []
     combined_canonical_candidates = []
     if (a_prompt_options["keywords"] or a_prompt_options["keywords_fr"]):
-        LOG.info("Retrieving canonical works by keyword: %s", a_prompt_options["keywords"])
+        LOG.info("Retrieving canonical works by keyword: %s", a_prompt_options["keywords_fr"])
 
         canonical_work_ids = []
         canonical_work_ids_fr = []
@@ -215,31 +389,53 @@ def main():
         if combined_work_ids:
 
             canonical_search_kwargs = {
-                "k": K_VALUE,
+                "k": math.ceil(K_VALUE / 2),
                 "filter": {
                     "$and": [
                         {
-                            "canonical_work_id": {
-                                "$in": combined_work_ids
+                            "document_author": {
+                                "$eq": "Jacques Derrida"
                             }
-                        },
-                        {
-                            "region_author": "Jacques Derrida"
                         },
                         {
                             "text_length": {
                                 "$gt": 500
                             }
+                        },
+                        {
+                            "canonical_work_id": {
+                                "$in": combined_work_ids
+                            }
                         }
                     ]
                 }
             }
+
+            # if len(combined_work_ids) > 1:
+            #     canonical_search_kwargs["filter"]["$and"].append({
+            #         "$or": [{"canonical_work_id": {"$in": [work_id]}} for work_id in combined_work_ids]
+            #     })
+            # else:
+            #     canonical_search_kwargs["filter"]["$and"].append({
+            #         "canonical_work_id": {
+            #             "$in": [combined_work_ids[0]]
+            #         }
+            #     })
+            
+            
             if a_prompt_options["materials_language"]:
-                canonical_search_kwargs["filter"]["$and"].append({
-                    "document_language": {
-                        "$in": a_prompt_options["materials_language"]
-                    }
-                })
+
+
+                if len(a_prompt_options["materials_language"]) > 1:
+                    canonical_search_kwargs["filter"]["$and"].append({
+                        "$or": [{"document_language": {"$in": [lang]}} for lang in a_prompt_options["materials_language"]]
+                    })
+                else:
+                    canonical_search_kwargs["filter"]["$and"].append({
+                        "document_language": {
+                            "$in": a_prompt_options["materials_language"][0]
+                        }
+                    })
             LOG.info("Canonical search similarity kwargs: %s", canonical_search_kwargs)
             canonical_work_retriever = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="similarity")
@@ -272,7 +468,7 @@ def main():
     if a_prompt_options["materials_language"]:
         combined_candidates = [
             doc for doc in combined_candidates
-            if doc.metadata.get("document_language", "fr_fr") in a_prompt_options["materials_language"]
+            if doc.metadata.get("document_language", ["fr_fr"])[0] in a_prompt_options["materials_language"]
         ]
         LOG.info("Filtered candidates based on materials_language: %s", a_prompt_options["materials_language"])
     else:
@@ -286,6 +482,12 @@ def main():
 
         if chunk_id not in seen:
             seen.add(chunk_id)
+            text = doc.metadata.get("text", "")
+            language = doc.metadata.get("document_language", ["fr_fr"])[0].split("_")[0]
+            parser = PlaintextParser.from_string(text, Tokenizer(language))
+            summary = summarizer(parser.document, 3)
+            text_summary = " [...] ".join([str(sentence) for sentence in summary])
+            doc.metadata["text"] = text_summary
             unique_candidates.append(doc)
 
     LOG.info("Filtered to %d unique candidates after removing duplicates.", len(unique_candidates))
@@ -295,14 +497,29 @@ def main():
     reordering = LongContextReorder()
     reordered_groups = reordering.transform_documents(unique_candidates)
 
-    context = "\n============================================\n".join(
-        f"""// EVIDENCE_BLOCK_ID: 00-{i} | ID: {doc.metadata.get("canonical_work_id", "N/A")} | Length: {doc.metadata.get("text_length", "N/A")}
-{json.dumps(doc.metadata)}
+    context = "\n[EVIDENCE BLOCK]\n".join(
+        f"""| EVIDENCE_BLOCK_ID: 00-{i} | ID: {doc.metadata.get("canonical_work_id", "N/A")} | Length: {doc.metadata.get("text_length", "N/A")}
+
+| If using the EVIDENCE in this BLOCK, attribute the claim to the position_holder: "{doc.metadata.get("position_holder", doc.metadata.get("speaker", "Unknown Position Holder"))}".
+| The speaker in the EVIDENCE below is "{doc.metadata.get("speaker", "Unknown Speaker")}".
+| This EVIDENCE is playing the role of "{doc.metadata.get("discourse_role", "Unknown Role")}".
+| So, when using EVIDENCE from this BLOCK, use phrasing like:
+| - "According to {doc.metadata.get("speaker", "Unknown Speaker")} in **{doc.metadata.get("work", "N/A")}**, ...".
+| - "In **{doc.metadata.get("work", "N/A")}**, {doc.metadata.get("speaker", "Unknown Speaker")} argues that {doc.metadata.get("position_holder", "he/she")}...".
+| - "{doc.metadata.get("speaker", "Unknown Speaker")} states that {doc.metadata.get("position_holder", "he/she")}...".
+| TO CITE THIS EVIDENCE:
+| - MLA inline: ({doc.metadata.get('speaker', doc.metadata.get('document_author', doc.metadata.get('work'))).split(' ')[1]} {doc.metadata.get('year')}, {doc.metadata.get('page_start') if (not doc.metadata.get('page_end') or doc.metadata.get('page_end') == doc.metadata.get('page_start')) else f'{doc.metadata.get('page_start')}-{doc.metadata.get('page_end')}'})
+| - Works Cited: {doc.metadata.get("document_author").split(' ')[-1]}, {doc.metadata.get("document_author").split(' ')[0]} {doc.metadata.get('work', '')}. {doc.metadata.get('edition', '')}. {doc.metadata.get('year', '')}
+| EVIDENCE BEGINS BELOW:
+|---------------------------------
+| {json.dumps(doc.metadata.get("text"))}
+|---------------------------------
+[/EVIDENCE]
 """
         for i, doc in enumerate(reordered_groups)
     )
 
-    LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
+    #LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
     prompt = ChatPromptTemplate.from_template(initial_prompt_template)
     final_prompt = prompt.format(
@@ -310,7 +527,7 @@ def main():
         prompt_query=a_prompt_options["prompt_query"],
         prompt_instructions=a_prompt_options["prompt_instructions"]
     )
-    LOG.info("Final prompt: %s", final_prompt)
+    #LOG.info("Final prompt: %s", final_prompt)
 
     # Invoke the final prompt with the chat model
     response = client.invoke(final_prompt)

@@ -10,3 +10,8 @@ langchain_community
 langchain_chroma
 langchain_ollama
 chromadb
+nltk
+sumy
+pyphen
+dehyphen
+symspellpy

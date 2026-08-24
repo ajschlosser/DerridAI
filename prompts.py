@@ -164,8 +164,7 @@ initial_prompt_template = """
     [/SOURCES, CITATIONS, EVIDENCE]
 
     AFTER GENERATING YOUR RESPONSE BUT BEFORE SUBMITTING, REMOVE ANY DUPLICATED TEXT.
-    ENSURE THAT ALL CLAIMS IN YOUR RESPONSE ARE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE.
-    CLEAN UP ANY DUPLICATED TEXT AND ENSURE PROPER FORMATTING OF THE RESPONSE.
+    DISTINGUISH BETWEEN CLAIMS ATTRIBUTED TO DIFFERENT SPEAKERS AND EVIDENCE SOURCES.
 """
 
 query_improvement_template = """
@@ -187,9 +186,9 @@ query_improvement_template = """
         "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response
         "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response
         "prompt_language": ["en_us"], <-- query is in English
-        "materials_language": ["fr_fr"], <-- query is asking you to look ONLY at French materials, or null if not specified (all languages)
+        "materials_language": ["en_en","fr_fr"], <-- maybe query is asking you to look ONLY at French materials, default is ["en_en", "fr_fr"]
         "response_language": ["fr_fr"], <-- query is asking you to respond in French
-        "is_fetch_query": false, <--- whether or not the user is asking for appearances of "x" in the source materials (true) or just a general answer (false)
+        "is_fetch_query": false, <--- whether or not the user is asking for appearances, mentions, discussions, etc. of "x" (a particular idea or key concept) in the source materials (true) or just a general answer (false)
         "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
         "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French)
     }}
@@ -203,3 +202,4 @@ initial_retrieval_prompt_template = """
     [{keywords}]
     [{keywords_fr}]
 """
+

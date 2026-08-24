@@ -5,7 +5,7 @@ from pathlib import Path
 # LOGGER
 class Logger:
     @staticmethod
-    def setup(name: str = __name__, level: int = logging.INFO) -> logging.Logger:
+    def setup(name: str = __name__, level: int = logging.DEBUG) -> logging.Logger:
         _format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
         _datefmt = "%Y-%m-%d %H:%M:%S"
         logger = logging.getLogger(name)
