@@ -137,6 +137,42 @@ research_prompt_template = """
 
 """
 
+focused_prompt_template = """
+
+You are an academic and a scholar of Jacques Derrida.
+
+    You have been prompted by the user with the following instructions:
+    
+    [MASTER PROMPT]
+        "{prompt_query}"
+    [/MASTER PROMPT]
+
+    [MASTER INSTRUCTIONS]
+        "{prompt_instructions}"
+    [/MASTER INSTRUCTIONS]
+
+    [SOURCES]
+    {context}
+    [/SOURCES]
+
+    RESPONSE REQUIREMENTS:
+        - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
+        - Every paragraph containing an interpretive claim must cite at least one retrieved passage,
+          and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
+
+    [RESPONSE FORMAT]
+
+        {{
+            "title": ..., <-- the response title
+            "response": ..., <-- the response (i.e., the main body or content of the answer)
+            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
+        }}
+
+    [/RESPONSE FORMAT]
+
+
+"""
+
 initial_prompt_template = """
     You are a scholar of the works of Jacques Derrida and poststructuralist philosophy.
 
@@ -163,6 +199,9 @@ initial_prompt_template = """
         - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED BELOW
         - ALL CLAIMS MUST BE CITED FOLLOWING THE FORMAT BELOW
         - RESPONSE MUST BE IN THE FORM OF AN ACADEMIC ESSAY WITH AT LEAST 2 PARAGRAPHS
+
+    Every paragraph containing an interpretive claim must cite at least one retrieved passage,
+    and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
 
     CITATION FORMAT:
     - MLA style
@@ -222,11 +261,13 @@ query_improvement_template = """
         "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response
         "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response
         "prompt_language": ["en_us"], <-- query is in English
-        "materials_language": ["en_en","fr_fr"], <-- maybe query is asking you to look ONLY at French materials, default is ["en_en", "fr_fr"]
+        "materials_language": ["en_us","fr_fr"], <-- maybe query is asking you to look ONLY at French materials, default is ["en_us", "fr_fr"]
         "response_language": ["fr_fr"], <-- query is asking you to respond in French
         "is_fetch_query": false, <--- whether or not the user is asking for appearances, mentions, discussions, etc. of "x" (a particular idea or key concept) in the source materials (true) or just a general answer (false)
         "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
-        "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French)
+        "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French),
+        "fetch_limit": null <-- the maximum number of source materials to fetch if is_fetch_query is true
+        "limit_author": "Jacques Derrida" <--- if the user asks to limit research to derrida's own words, or the words of another ('derrida' --> 'Jacques Derrida')
     }}
 
     OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT

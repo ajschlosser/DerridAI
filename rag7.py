@@ -34,6 +34,7 @@ from sentence_transformers import CrossEncoder
 
 
 from prompts import (
+    focused_prompt_template,
     review_prompt_template,
     initial_prompt_template,
     research_prompt_template,
@@ -47,6 +48,7 @@ from defaults import (
     K_VALUE,
     FETCH_K_VALUE,
     DB_PATH,
+    RERANK_COUNT,
     keys
 )
 
@@ -87,6 +89,26 @@ LOG = Logger.setup()
 
 summarizer = LexRankSummarizer()
 
+reranker = CrossEncoder(
+    "cross-encoder/ms-marco-MiniLM-L-6-v2"
+)
+
+def rerank_top_n(query, docs, reranker, top_n=RERANK_COUNT):
+    pairs = [
+        [query, doc.page_content]
+        for doc in docs
+    ]
+
+    scores = reranker.predict(pairs)
+
+    ranked_indices = sorted(
+        range(len(docs)),
+        key=lambda i: float(scores[i]),
+        reverse=True
+    )
+
+    return [docs[i] for i in ranked_indices[:top_n]]
+
 def generate_citation_strings(doc) -> tuple[str, str]:
 
     author = doc.metadata.get("document_author", doc.metadata.get("speaker"))
@@ -99,11 +121,11 @@ def generate_citation_strings(doc) -> tuple[str, str]:
     page_end = doc.metadata.get("page_end")
     author_last_name = author.split(' ')[-1]
     inline_author = author_last_name
-    if speaker and speaker != author:
-        inline_author = doc.metadata.get('speaker').split(' ')[-1]
+    # if speaker and speaker != author:
+    #     inline_author = doc.metadata.get('speaker').split(' ')[-1]
     author_name_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
     inline_citation = f"({inline_author} {year}, {page_start if (not page_end or page_end == page_start) else f'{page_start}-{page_end}'})"
-    full_citation = f"{author_name_reversed}.{f' Trans. {translator}.' if translator else ''} {work}. {edition}. {year}"
+    full_citation = f"{author_name_reversed}. {work}.{f' {translator} trans.' if translator else ''} {edition}. {year}"
     return inline_citation, full_citation
 
 # MAIN FUNCTION
@@ -191,6 +213,14 @@ def main():
         metadatas = fetched_results["metadatas"]
         docs = fetched_results["documents"]
         LOG.info("Fetched results: %d", len(ids))
+
+        if a_prompt_options.get("fetch_limit", False):
+
+            prompt_key = "prompt_query"
+            if a_prompt_options.get("materials_language"):
+                prompt_key = "prompt_query_fr" if "fr" in a_prompt_options.get("materials_language")[0] else "prompt_query"
+
+            docs = rerank_top_n(a_prompt_options[prompt_key], docs, reranker, top_n=int(a_prompt_options.get("fetch_limit")))
 
         cleaned_results = [
             {
@@ -386,13 +416,17 @@ def main():
             lang_filter = {
                 "$or": [{"document_language": {"$contains": lang}} for lang in language]
             }
-        
         initial_search_kwargs["filter"]["$and"].append(lang_filter)
         similarity_seach_kwargs["filter"]["$and"].append(lang_filter)
     else:
         LOG.info("No materials language specified, not adding language filter.")
         initial_search_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
         similarity_seach_kwargs["filter"] = { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+
+    if a_prompt_options["limit_author"]:
+        author_filter = {"speaker": {"$eq": a_prompt_options["limit_author"]}}
+        initial_search_kwargs["filter"]["$and"].append(author_filter)
+        similarity_seach_kwargs["filter"]["$and"].append(author_filter)
 
     initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
     secondary_retriever = client.create_retriever(search_kwargs=similarity_seach_kwargs, search_type="similarity")
@@ -446,40 +480,40 @@ def main():
                                 "$gt": 500
                             }
                         },
-                        {
-                            "canonical_work_id": {
-                                "$in": combined_work_ids
-                            }
-                        }
                     ]
                 }
             }
 
-            # if len(combined_work_ids) > 1:
-            #     canonical_search_kwargs["filter"]["$and"].append({
-            #         "$or": [{"canonical_work_id": {"$in": [work_id]}} for work_id in combined_work_ids]
-            #     })
-            # else:
-            #     canonical_search_kwargs["filter"]["$and"].append({
-            #         "canonical_work_id": {
-            #             "$in": [combined_work_ids[0]]
-            #         }
-            #     })
+            if len(combined_work_ids) > 1:
+                canonical_search_kwargs["filter"]["$and"].append({
+                    "$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in combined_work_ids]
+                })
+            else:
+                canonical_search_kwargs["filter"]["$and"].append({
+                    "canonical_work_id": {
+                        "$eq": combined_work_ids[0]
+                    }
+                })
             
             
-            # if a_prompt_options["materials_language"]:
+            if a_prompt_options["materials_language"]:
 
 
-            #     if len(a_prompt_options["materials_language"]) > 1:
-            #         canonical_search_kwargs["filter"]["$and"].append({
-            #             "$or": [{"document_language": {"$in": [lang]}} for lang in a_prompt_options["materials_language"]]
-            #         })
-            #     else:
-            #         canonical_search_kwargs["filter"]["$and"].append({
-            #             "document_language": {
-            #                 "$in": a_prompt_options["materials_language"][0]
-            #             }
-            #         })
+                if len(a_prompt_options["materials_language"]) > 1:
+                    canonical_search_kwargs["filter"]["$and"].append({
+                        "$or": [{"document_language": {"$contains": lang}} for lang in a_prompt_options["materials_language"]]
+                    })
+                else:
+                    canonical_search_kwargs["filter"]["$and"].append({
+                        "document_language": {
+                            "$contains": a_prompt_options["materials_language"][0]
+                        }
+                    })
+
+            if a_prompt_options["limit_author"]:
+                author_filter = {"speaker": {"$eq": a_prompt_options["limit_author"]}}
+                canonical_search_kwargs["filter"]["$and"].append(author_filter)
+
             LOG.info("Canonical search similarity kwargs: %s", canonical_search_kwargs)
             canonical_work_retriever = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="similarity")
@@ -491,7 +525,7 @@ def main():
                 search_kwargs=canonical_search_kwargs, search_type="mmr")
             canonical_candidates_mmr = canonical_work_retriever_mmr.invoke(b_formatted_initial_retrieval_prompt)
             combined_canonical_candidates = canonical_candidates + canonical_candidates_mmr
-            LOG.info("Combined canonical candidates: %d", len(combined_canonical_candidates))
+            LOG.info("Combined canonical candidates after search: %d", len(combined_canonical_candidates))
 
 
     reordering = LongContextReorder()
@@ -539,29 +573,9 @@ def main():
 
     LOG.info("Filtered to %d unique candidates after removing duplicates.", len(unique_candidates))
 
-    reranker = CrossEncoder(
-        "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    )
+    unique_candidates = rerank_top_n(a_prompt_options["prompt_query"], unique_candidates, reranker, top_n=RERANK_COUNT)
 
-    def rerank_top_n(query, docs, reranker, top_n=5):
-        pairs = [
-            [query, doc.page_content]
-            for doc in docs
-        ]
-
-        scores = reranker.predict(pairs)
-
-        ranked_indices = sorted(
-            range(len(docs)),
-            key=lambda i: float(scores[i]),
-            reverse=True
-        )
-
-        return [docs[i] for i in ranked_indices[:top_n]]
-
-    unique_candidates = rerank_top_n(a_prompt_options["prompt_query"], unique_candidates, reranker, top_n=7)
-
-    LOG.info("Top %d candidates after reranking: %d", 7, len(unique_candidates))
+    LOG.info("Top %d candidates after reranking: %d", RERANK_COUNT, len(unique_candidates))
 
     # Reorder the retrieved context groups to prioritize the most relevant and coherent evidence blocks
     LOG.info("Reordering context groups with LongContextReorder...")
@@ -574,10 +588,6 @@ def main():
 | If using the EVIDENCE in this BLOCK, attribute the claim to the position_holder: "{doc.metadata.get("position_holder", doc.metadata.get("speaker", "Unknown Position Holder"))}".
 | The speaker in the EVIDENCE below is "{doc.metadata.get("speaker", "Unknown Speaker")}".
 | This EVIDENCE is playing the role of "{doc.metadata.get("discourse_role", "Unknown Role")}".
-| So, when using EVIDENCE from this BLOCK, use phrasing like:
-| - "According to {doc.metadata.get("speaker", "Unknown Speaker")} in **{doc.metadata.get("work", "N/A")}**, ...".
-| - "In **{doc.metadata.get("work", "N/A")}**, {doc.metadata.get("speaker", "Unknown Speaker")} argues that {doc.metadata.get("position_holder", "he/she")}...".
-| - "{doc.metadata.get("speaker", "Unknown Speaker")} states that {doc.metadata.get("position_holder", "he/she")}...".
 | TO CITE THIS EVIDENCE:
 || - MLA inline: {doc.metadata.get("inline_citation")}
 || - Works Cited: {doc.metadata.get("full_citation")}
@@ -592,7 +602,7 @@ def main():
 
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
-    prompt = ChatPromptTemplate.from_template(research_prompt_template)
+    prompt = ChatPromptTemplate.from_template(focused_prompt_template)
     final_prompt = prompt.format(
         context=context,
         prompt_query=a_prompt_options["prompt_query"],

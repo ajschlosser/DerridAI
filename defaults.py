@@ -1,6 +1,6 @@
 # CONFIGURATION
 EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
-CHAT_MODEL        = "gpt-oss:20b"
+CHAT_MODEL        = "qwen3.5:9b"
 CHAT_TEMPERATURE  = 0.4
 OLLAMA_BASE_URL   = "http://localhost:11434"
 
@@ -11,6 +11,7 @@ BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE           = 64
 FETCH_K_VALUE     = 500
 LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
+RERANK_COUNT      = 10
 
 RESPONSE_MIN_SENTENCES = 150
 RESPONSE_MAX_SENTENCES = 500
