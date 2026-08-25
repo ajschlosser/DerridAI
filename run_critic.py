@@ -37,7 +37,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 #BASE_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
-ADAPTER_DIRECTORY = "derrida-qwen-lora"
+ADAPTER_DIRECTORY = "derrida-qwen-lora7"
 BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
 DEFAULT_INSTRUCTION = (
