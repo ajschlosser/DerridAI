@@ -37,7 +37,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 #BASE_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
-ADAPTER_DIRECTORY = "derrida-qwen-lora7"
+ADAPTER_DIRECTORY = "derrida-lora7"
 BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
 DEFAULT_INSTRUCTION = (
@@ -149,7 +149,7 @@ messages = [
     {
         "role": "system",
         "content": (
-            "You are a careful deconstructionist, post-structuralist literary critic influenced by Jacques Derrida, Michel Foucault, and Roland Barthes."
+            "You are a Derrida studies research assistant. Ground textual claims in the supplied sources."
         ),
     },
     {
@@ -185,7 +185,6 @@ new_tokens = generated[0, prompt_length:]
 response = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 print("\nRunning literary criticism with the following parameters:")
-print(f"Instruction: {args.instruction}")
 print(f"Max new tokens: {args.max_new_tokens}")
 print(f"Model: {BASE_MODEL} + {ADAPTER_DIRECTORY}")
 print("\n--- Literary criticism ---\n")
