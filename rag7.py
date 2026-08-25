@@ -30,6 +30,8 @@ from datetime import date
 # LLM
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_transformers import LongContextReorder
+from sentence_transformers import CrossEncoder
+
 
 from prompts import (
     review_prompt_template,
@@ -113,8 +115,27 @@ def main():
     # Initial query processing
     a_query_improvement_prompt = ChatPromptTemplate.from_template(query_improvement_template)
     a_formatted_query_improvement_prompt = a_query_improvement_prompt.format(prompt=args.prompt)
+
+
+
     a_query_details = client.invoke(a_formatted_query_improvement_prompt)
     a_prompt_options = json.loads(a_query_details.content)
+
+    # a_prompt_options =  {
+    #     'prompt': "Describe Derrida's notion of hospitality",
+    #     'prompt_query': "Describe Derrida's notion of hospitality",
+    #     'prompt_query_fr': "Décrivez la notion d'hospitalité de Derrida",
+    #     'prompt_instructions': '',
+    #     'keywords': ['hospitality', 'Derrida'],
+    #     'keywords_fr': ['hospitalité', 'Derrida'],
+    #     'prompt_language': ['en_us'],
+    #     'materials_language': ['en_en', 'fr_fr'],
+    #     'response_language': ['fr_fr'],
+    #     'is_fetch_query': False,
+    #     'fetch_query_content': None,
+    #     'fetch_query_content_fr': None
+    # }
+
     LOG.info("Chat model response: %s", a_prompt_options)
 
 
@@ -281,7 +302,7 @@ def main():
             if language in hyphenators:
                 text = hyphenators[language].inserted(text)
             parser = PlaintextParser.from_string(text, Tokenizer(language))
-            summary = summarizer(parser.document, 3)
+            summary = summarizer(parser.document, 5)
             text_summary = " [...] ".join([str(sentence) for sentence in summary])
             author_name = f"{doc.get('document_author', '').split(' ')[-1]}, {doc.get('document_author', '').split(' ')[0]}"
             response_str += f"""
@@ -386,6 +407,7 @@ def main():
     )
     LOG.info("Formatted initial retrieval prompt: %s", b_formatted_initial_retrieval_prompt)
     candidates = initial_retriever.invoke(b_formatted_initial_retrieval_prompt)
+    LOG.info("Looking for additional candidates using the secondary retriever...")
     additional_candidates = secondary_retriever.invoke(b_formatted_initial_retrieval_prompt)
 
     canonical_candidates = []
@@ -479,7 +501,7 @@ def main():
 
     #combined_candidates = reordered_candidates[:math.ceil(K_VALUE / 4)] + reordered_additional_candidates[:math.ceil(K_VALUE / 4)] + reordered_canonical_candidates[:math.ceil(K_VALUE / 2)]
     combined_candidates = reordered_candidates + reordered_additional_candidates + reordered_canonical_candidates
-    LOG.info("Retrieved %d candidates using MMR and similarity search.", len(combined_candidates))
+
     if not combined_candidates:
         LOG.warning("No context found matching the query and filter criteria.")
         print("\n--- No matching results found ---")
@@ -507,7 +529,7 @@ def main():
             text = doc.metadata.get("text", "")
             language = doc.metadata.get("document_language", ["fr_fr"])[0].split("_")[0]
             parser = PlaintextParser.from_string(text, Tokenizer(language))
-            summary = summarizer(parser.document, 3)
+            summary = summarizer(parser.document, 5)
             text_summary = " [...] ".join([str(sentence) for sentence in summary])
             doc.metadata["text"] = text_summary
 
@@ -516,6 +538,30 @@ def main():
             unique_candidates.append(doc)
 
     LOG.info("Filtered to %d unique candidates after removing duplicates.", len(unique_candidates))
+
+    reranker = CrossEncoder(
+        "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    )
+
+    def rerank_top_n(query, docs, reranker, top_n=5):
+        pairs = [
+            [query, doc.page_content]
+            for doc in docs
+        ]
+
+        scores = reranker.predict(pairs)
+
+        ranked_indices = sorted(
+            range(len(docs)),
+            key=lambda i: float(scores[i]),
+            reverse=True
+        )
+
+        return [docs[i] for i in ranked_indices[:top_n]]
+
+    unique_candidates = rerank_top_n(a_prompt_options["prompt_query"], unique_candidates, reranker, top_n=7)
+
+    LOG.info("Top %d candidates after reranking: %d", 7, len(unique_candidates))
 
     # Reorder the retrieved context groups to prioritize the most relevant and coherent evidence blocks
     LOG.info("Reordering context groups with LongContextReorder...")
@@ -544,7 +590,7 @@ def main():
         for i, doc in enumerate(reordered_groups)
     )
 
-    #LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
+    LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
     prompt = ChatPromptTemplate.from_template(research_prompt_template)
     final_prompt = prompt.format(

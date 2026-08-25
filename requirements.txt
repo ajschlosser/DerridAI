@@ -15,3 +15,4 @@ sumy
 pyphen
 dehyphen
 symspellpy
+sentence_transformers

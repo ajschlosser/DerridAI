@@ -21,7 +21,7 @@ from logger import Logger
 
 LOG = Logger.setup("finetune_pretrained")
 
-MODEL_NAME = "openai/gpt-oss-20b"
+MODEL_NAME = "Qwen/Qwen3-4B-Instruct-2507"
 
 RECORDS_FILE = (
     "/home/aaron/src/derrida/data/derrida7_ids-training.jsonl"
@@ -32,7 +32,7 @@ TRAINING_DATA_FILE = "training-data.json"
 BENNINGTON_FILE = "./data/bennington-training.jsonl"
 
 OUTPUT_DIRECTORY = Path(
-    "/home/aaron/src/derrida/derrida-gpt-oss-lora7"
+    "/home/aaron/src/derrida/derrida-qwen3-4b-lora7"
 )
 
 

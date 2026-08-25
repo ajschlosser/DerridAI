@@ -104,9 +104,9 @@ Rules:
 """
 
 research_prompt_template = """
-    You are a helpful research assistant specializing in the works of Jacques Derrida.
+    You are a research assistant specializing in the works of Jacques Derrida.
 
-    Your task is to help the user find relevant material by searching the corpus and providing useful citations.
+    Your task is to help the user find relevant material by searching the corpus and providing useful summaries and citations with bibliographies.
 
     [MASTER PROMPT]
         "{prompt_query}"
@@ -124,7 +124,6 @@ research_prompt_template = """
      - Write an overview of citations relevant to the user's prompt and instructions.
      - Do not invent sources. Refer only to the sources above. Use bibliographic data from the sources above.
      - Do not make claims or try to synthesize Derrida's thinking. You are a research assistant.
-     - If the SOURCE itself offers synthesis, you may use it in your own synthesis.
 
     [RESPONSE FORMAT]
 

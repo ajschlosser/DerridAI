@@ -1,193 +1,296 @@
 # Copyright 2026 Aaron John Schlosser, PhD
-
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
 
-#     http://apache.org
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
-Generate literary criticism with the pretrained model plus your LoRA adapter.
-
-After running finetune_pretrained.py, use either:
-
-    python run_critic.py passage.txt
-
-or:
-
-    python run_critic.py
-
-The second form accepts pasted multiline text. Enter a line containing only
-END when the passage is complete.
-"""
-
-import argparse
-import sys
 from pathlib import Path
+import argparse
 
 import torch
-from peft import PeftModel
+from peft import PeftConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-#BASE_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
-ADAPTER_DIRECTORY = "derrida-lora7"
-BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-DEFAULT_INSTRUCTION = (
-    "You are a careful deconstructionist, post-structuralist literary critic influenced by Jacques Derrida, Michel Foucault, and Roland Barthes."
+ADAPTER_DIRECTORY = Path(
+    "/home/aaron/src/derrida/derrida-qwen3-4b-lora7"
+)
+
+FALLBACK_BASE_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
+
+SYSTEM_MESSAGE = (
+    "You are a Derrida studies research assistant. "
+    "Ground textual claims in the supplied sources. "
+    "Distinguish quotation, paraphrase, and interpretation. "
+    "Distinguish Derrida's own claims from claims attributed to other authors. "
+    "Do not invent quotations, citations, page numbers, or bibliographical details."
 )
 
 
-def read_passage(path_argument):
-    """Read a passage from a file, redirected input, or the terminal."""
+# ---------------------------------------------------------------------------
+# Load adapter configuration
+#
+# The LoRA adapter config normally records which base model it was trained on.
+# ---------------------------------------------------------------------------
 
-    if path_argument:
-        passage_path = Path(path_argument)
-
-        if not passage_path.is_file():
-            raise FileNotFoundError(f"Could not find {passage_path}.")
-
-        return passage_path.read_text(encoding="utf-8").strip()
-
-    # This supports commands such as: python run_critic.py < passage.txt
-    if not sys.stdin.isatty():
-        return sys.stdin.read().strip()
-
-    print("Paste the literary or otherwise textual passage below.")
-    print("When finished, enter a line containing only END.\n")
-
-    lines = []
-
-    while True:
-        try:
-            line = input()
-        except EOFError:
-            break
-
-        if line == "END":
-            break
-
-        lines.append(line)
-
-    return "\n".join(lines).strip()
-
-
-parser = argparse.ArgumentParser(
-    description="Generate a close reading using your LoRA literary critic."
-)
-parser.add_argument(
-    "passage_file",
-    nargs="?",
-    help="Optional UTF-8 text file containing the passage.",
-)
-parser.add_argument(
-    "--instruction",
-    default=DEFAULT_INSTRUCTION,
-    help="Override the default critical instruction.",
-)
-parser.add_argument(
-    "--max-new-tokens",
-    type=int,
-    default=300,
-    help="Maximum response length in model tokens.",
-)
-parser.add_argument(
-    "--temperature",
-    type=float,
-    default=0.6,
-    help="Sampling randomness; lower values are more predictable.",
-)
-args = parser.parse_args()
-
-
-passage = read_passage(args.passage_file)
-
-if not passage:
-    raise ValueError("The passage is empty.")
-
-if args.max_new_tokens < 1:
-    raise ValueError("--max-new-tokens must be at least 1.")
-
-if args.temperature <= 0:
-    raise ValueError("--temperature must be greater than zero.")
-
-
-adapter_path = Path(ADAPTER_DIRECTORY)
-if not adapter_path.is_dir():
+if not ADAPTER_DIRECTORY.exists():
     raise FileNotFoundError(
-        f"Could not find {ADAPTER_DIRECTORY}. Run finetune_pretrained.py first."
+        f"Adapter directory does not exist: {ADAPTER_DIRECTORY}"
     )
 
 
-if torch.cuda.is_available():
-    device = "cuda"
-elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-    device = "mps"
-else:
-    device = "cpu"
+peft_config = PeftConfig.from_pretrained(
+    str(ADAPTER_DIRECTORY)
+)
 
-print(f"Loading model on {device}...")
+BASE_MODEL = (
+    peft_config.base_model_name_or_path
+    or FALLBACK_BASE_MODEL
+)
+
+print(f"Base model: {BASE_MODEL}")
+print(f"Adapter:    {ADAPTER_DIRECTORY}")
 
 
-# The adapter directory contains the saved tokenizer and chat template. The
-# original base weights are loaded separately and then combined with LoRA.
-tokenizer = AutoTokenizer.from_pretrained(ADAPTER_DIRECTORY)
-base_model = AutoModelForCausalLM.from_pretrained(BASE_MODEL)
-model = PeftModel.from_pretrained(base_model, ADAPTER_DIRECTORY)
-model = model.to(device)
+# ---------------------------------------------------------------------------
+# Tokenizer
+#
+# IMPORTANT:
+# Load the tokenizer from the BASE MODEL, not from the LoRA adapter directory.
+# ---------------------------------------------------------------------------
+
+tokenizer = AutoTokenizer.from_pretrained(
+    BASE_MODEL
+)
+
+if tokenizer.pad_token_id is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+
+# ---------------------------------------------------------------------------
+# Load base model
+#
+# Do NOT use Mxfp4Config(dequantize=True).
+#
+# Keeping the native GPT-OSS MXFP4 weights is important on a 16 GB GPU.
+# ---------------------------------------------------------------------------
+
+if not torch.cuda.is_available():
+    raise RuntimeError(
+        "CUDA is required for this GPT-OSS configuration."
+    )
+
+print(
+    "GPU:",
+    torch.cuda.get_device_name(0)
+)
+
+print(
+    "VRAM:",
+    round(
+        torch.cuda.get_device_properties(0).total_memory
+        / (1024 ** 3),
+        2,
+    ),
+    "GiB",
+)
+
+
+base_model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+
+    # Preserve the model's native quantized representation.
+    torch_dtype="auto",
+
+    # For inference, allow Transformers to place the model appropriately.
+    device_map="auto",
+
+    use_cache=True,
+)
+
+
+# ---------------------------------------------------------------------------
+# Attach LoRA adapter
+# ---------------------------------------------------------------------------
+
+model = PeftModel.from_pretrained(
+    base_model,
+    str(ADAPTER_DIRECTORY),
+    is_trainable=False,
+)
+
 model.eval()
 
 
-messages = [
-    {
-        "role": "system",
-        "content": (
-            "You are a Derrida studies research assistant. Ground textual claims in the supplied sources."
-        ),
-    },
-    {
-        "role": "user",
-        #"content": f"{args.instruction}\n\nPassage:\n{passage}",
-        "content": passage,
-    },
-]
+# ---------------------------------------------------------------------------
+# Generation
+# ---------------------------------------------------------------------------
 
+def generate(
+    prompt: str,
+    max_new_tokens: int = 768,
+    temperature: float = 0.3,
+    top_p: float = 0.9,
+) -> str:
 
-model_inputs = tokenizer.apply_chat_template(
-    messages,
-    add_generation_prompt=True,
-    tokenize=True,
-    return_dict=True,
-    return_tensors="pt",
-).to(device)
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_MESSAGE,
+        },
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
 
-
-with torch.no_grad():
-    generated = model.generate(
-        **model_inputs,
-        max_new_tokens=args.max_new_tokens,
-        do_sample=False,
-        repetition_penalty=1.05,
-        pad_token_id=tokenizer.eos_token_id,
+    # apply_chat_template produces the exact input format expected by the
+    # GPT-OSS tokenizer.
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        return_dict=True,
     )
 
+    # Put the token tensors on the same device as the model's input embeddings.
+    input_device = model.get_input_embeddings().weight.device
 
-# Decode only newly generated tokens, excluding the prompt.
-prompt_length = model_inputs["input_ids"].shape[1]
-new_tokens = generated[0, prompt_length:]
-response = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    inputs = {
+        key: value.to(input_device)
+        for key, value in inputs.items()
+    }
 
-print("\nRunning literary criticism with the following parameters:")
-print(f"Max new tokens: {args.max_new_tokens}")
-print(f"Model: {BASE_MODEL} + {ADAPTER_DIRECTORY}")
-print("\n--- Literary criticism ---\n")
-print(response)
+    generation_kwargs = {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": temperature > 0,
+        "pad_token_id": tokenizer.pad_token_id,
+        "eos_token_id": tokenizer.eos_token_id,
+    }
+
+    if temperature > 0:
+        generation_kwargs.update(
+            {
+                "temperature": temperature,
+                "top_p": top_p,
+            }
+        )
+
+    with torch.inference_mode():
+        output = model.generate(
+            **inputs,
+            **generation_kwargs,
+        )
+
+    # Remove the prompt tokens and decode only the generated continuation.
+    prompt_length = inputs["input_ids"].shape[-1]
+
+    generated_tokens = output[0][prompt_length:]
+
+    response = tokenizer.decode(
+        generated_tokens,
+        skip_special_tokens=True,
+    )
+
+    return response.strip()
 
 
+# ---------------------------------------------------------------------------
+# CLI / interactive mode
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "prompt",
+        nargs="*",
+        help="Prompt to send to the Derrida model",
+    )
+
+    parser.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=768,
+    )
+
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.3,
+    )
+
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=0.9,
+    )
+
+    args = parser.parse_args()
+
+    if args.prompt:
+        prompt = " ".join(args.prompt)
+
+        response = generate(
+            prompt,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+            top_p=args.top_p,
+        )
+
+        print(response)
+        return
+
+    # Interactive mode.
+    print()
+    print("Derrida research assistant")
+    print("Type 'quit' or 'exit' to stop.")
+    print()
+
+    while True:
+        try:
+            prompt = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not prompt:
+            continue
+
+        if prompt.lower() in {
+            "quit",
+            "exit",
+        }:
+            break
+
+        try:
+            response = generate(
+                prompt,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                top_p=args.top_p,
+            )
+
+            print()
+            print(response)
+            print()
+
+        except torch.cuda.OutOfMemoryError:
+            print()
+            print("CUDA out of memory.")
+            print(
+                "Try lowering --max-new-tokens or close other GPU applications."
+            )
+            print()
+
+            torch.cuda.empty_cache()
+
+
+if __name__ == "__main__":
+    main()

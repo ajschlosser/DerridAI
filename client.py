@@ -76,7 +76,7 @@ DB_PATH: {cfg.store.persist_directory}
         )
         LOG.info("LangChainClient initialized successfully.")
     def invoke(self, prompt: str):
-        LOG.info(f"Invoking chat model [{self.chat_model.model}] with prompt: {prompt}")
+        LOG.info(f"Invoking chat model [{self.chat_model.model}] with prompt")
         return self.chat_model.invoke(prompt)
     def create_retriever(self, search_kwargs: dict, search_type: str = "mmr"):
         LOG.info(f"Creating retriever with search_kwargs: {search_kwargs} and search_type: {search_type}")
