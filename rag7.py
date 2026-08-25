@@ -25,6 +25,7 @@ import json
 import argparse
 import math
 import random
+from datetime import date
 
 # LLM
 from langchain_core.prompts import ChatPromptTemplate
@@ -33,6 +34,7 @@ from langchain_community.document_transformers import LongContextReorder
 from prompts import (
     review_prompt_template,
     initial_prompt_template,
+    research_prompt_template,
     query_improvement_template,
     initial_retrieval_prompt_template,
 )
@@ -42,6 +44,7 @@ from defaults import (
     LAMBDA_MULT_VALUE,
     K_VALUE,
     FETCH_K_VALUE,
+    DB_PATH,
     keys
 )
 
@@ -82,11 +85,30 @@ LOG = Logger.setup()
 
 summarizer = LexRankSummarizer()
 
+def generate_citation_strings(doc) -> tuple[str, str]:
+
+    author = doc.metadata.get("document_author", doc.metadata.get("speaker"))
+    speaker = doc.metadata.get("speaker", "")
+    work = doc.metadata.get("work", "")
+    edition = doc.metadata.get("edition", "")
+    year = doc.metadata.get("year", "")
+    page_start = doc.metadata.get("page_start")
+    translator = doc.metadata.get("translator", None)
+    page_end = doc.metadata.get("page_end")
+    author_last_name = author.split(' ')[-1]
+    inline_author = author_last_name
+    if speaker and speaker != author:
+        inline_author = doc.metadata.get('speaker').split(' ')[-1]
+    author_name_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
+    inline_citation = f"({inline_author} {year}, {page_start if (not page_end or page_end == page_start) else f'{page_start}-{page_end}'})"
+    full_citation = f"{author_name_reversed}.{f' Trans. {translator}.' if translator else ''} {work}. {edition}. {year}"
+    return inline_citation, full_citation
+
 # MAIN FUNCTION
 def main():
     client = LangChainClient()
 
-    client.add_new_records(batch_size=1150)
+    client.add_new_records(batch_size=1000)
 
     # Initial query processing
     a_query_improvement_prompt = ChatPromptTemplate.from_template(query_improvement_template)
@@ -130,8 +152,8 @@ def main():
                 "documents": []
             }
             materials_language = a_prompt_options.get("materials_language")
-            if "en_en" in materials_language:
-                fetched_keword_results = client.vector_store.get(where_document={"$and": or_conditions}, where={ "document_language": { "$contains": "en_en" } })
+            if "en_us" in materials_language:
+                fetched_keword_results = client.vector_store.get(where_document={"$and": or_conditions}, where={ "document_language": { "$contains": "en_us" } })
             if "fr_fr" in materials_language:
                 fetched_keword_results_fr = client.vector_store.get(where_document={"$and": or_conditions_fr}, where={ "document_language": { "$contains": "fr_fr" } })
             combined_results = {
@@ -255,7 +277,7 @@ def main():
             text = doc.get("text", "")
             #text = dehyphenator.dehyphen(text)
             text = correct_ocr_words(text)
-            language = a_prompt_options.get("materials_language", ["en_en"])[0].split("_")[0]
+            language = a_prompt_options.get("materials_language", ["en_us"])[0].split("_")[0]
             if language in hyphenators:
                 text = hyphenators[language].inserted(text)
             parser = PlaintextParser.from_string(text, Tokenizer(language))
@@ -392,11 +414,11 @@ def main():
                 "k": math.ceil(K_VALUE / 2),
                 "filter": {
                     "$and": [
-                        {
-                            "document_author": {
-                                "$eq": "Jacques Derrida"
-                            }
-                        },
+                        # {
+                        #     "document_author": {
+                        #         "$eq": "Jacques Derrida"
+                        #     }
+                        # },
                         {
                             "text_length": {
                                 "$gt": 500
@@ -423,19 +445,19 @@ def main():
             #     })
             
             
-            if a_prompt_options["materials_language"]:
+            # if a_prompt_options["materials_language"]:
 
 
-                if len(a_prompt_options["materials_language"]) > 1:
-                    canonical_search_kwargs["filter"]["$and"].append({
-                        "$or": [{"document_language": {"$in": [lang]}} for lang in a_prompt_options["materials_language"]]
-                    })
-                else:
-                    canonical_search_kwargs["filter"]["$and"].append({
-                        "document_language": {
-                            "$in": a_prompt_options["materials_language"][0]
-                        }
-                    })
+            #     if len(a_prompt_options["materials_language"]) > 1:
+            #         canonical_search_kwargs["filter"]["$and"].append({
+            #             "$or": [{"document_language": {"$in": [lang]}} for lang in a_prompt_options["materials_language"]]
+            #         })
+            #     else:
+            #         canonical_search_kwargs["filter"]["$and"].append({
+            #             "document_language": {
+            #                 "$in": a_prompt_options["materials_language"][0]
+            #             }
+            #         })
             LOG.info("Canonical search similarity kwargs: %s", canonical_search_kwargs)
             canonical_work_retriever = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="similarity")
@@ -488,6 +510,9 @@ def main():
             summary = summarizer(parser.document, 3)
             text_summary = " [...] ".join([str(sentence) for sentence in summary])
             doc.metadata["text"] = text_summary
+
+            doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
+
             unique_candidates.append(doc)
 
     LOG.info("Filtered to %d unique candidates after removing duplicates.", len(unique_candidates))
@@ -508,8 +533,8 @@ def main():
 | - "In **{doc.metadata.get("work", "N/A")}**, {doc.metadata.get("speaker", "Unknown Speaker")} argues that {doc.metadata.get("position_holder", "he/she")}...".
 | - "{doc.metadata.get("speaker", "Unknown Speaker")} states that {doc.metadata.get("position_holder", "he/she")}...".
 | TO CITE THIS EVIDENCE:
-| - MLA inline: ({doc.metadata.get('speaker', doc.metadata.get('document_author', doc.metadata.get('work'))).split(' ')[1]} {doc.metadata.get('year')}, {doc.metadata.get('page_start') if (not doc.metadata.get('page_end') or doc.metadata.get('page_end') == doc.metadata.get('page_start')) else f'{doc.metadata.get('page_start')}-{doc.metadata.get('page_end')}'})
-| - Works Cited: {doc.metadata.get("document_author").split(' ')[-1]}, {doc.metadata.get("document_author").split(' ')[0]} {doc.metadata.get('work', '')}. {doc.metadata.get('edition', '')}. {doc.metadata.get('year', '')}
+|| - MLA inline: {doc.metadata.get("inline_citation")}
+|| - Works Cited: {doc.metadata.get("full_citation")}
 | EVIDENCE BEGINS BELOW:
 |---------------------------------
 | {json.dumps(doc.metadata.get("text"))}
@@ -521,7 +546,7 @@ def main():
 
     #LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
-    prompt = ChatPromptTemplate.from_template(initial_prompt_template)
+    prompt = ChatPromptTemplate.from_template(research_prompt_template)
     final_prompt = prompt.format(
         context=context,
         prompt_query=a_prompt_options["prompt_query"],
@@ -543,6 +568,62 @@ k: {K_VALUE} | retrieved_candidates: {len(combined_candidates)}
 unique_candidates: {len(unique_candidates)} | lambda_mult: {LAMBDA_MULT_VALUE}
 chat_temperature: {CHAT_TEMPERATURE}
 """)
+    doc = json.loads(response.content)
+    client.add_record_to_response_store({
+        "text": doc["response"],
+        "metadata": {
+            "title": doc["title"],
+            "works_cited": doc["works_cited"],
+            "timestamp": date.today().isoformat(),
+            "original_query": args.prompt,
+            #"query_details": a_prompt_options,
+            "prompt_query": a_prompt_options["prompt_query"],
+            "prompt_instructions": a_prompt_options["prompt_instructions"],
+            "materials_language": a_prompt_options.get("materials_language"),
+            "response_language": a_prompt_options.get("response_language"),
+            "k": K_VALUE,
+            "fetch_k": FETCH_K_VALUE,
+            "db_path": DB_PATH,
+            "retrieved_candidates": len(combined_candidates),
+            "unique_candidates": len(unique_candidates),
+            "combined_canonical_candidates": len(combined_canonical_candidates),
+            "lambda_mult": LAMBDA_MULT_VALUE,
+            "chat_temperature": CHAT_TEMPERATURE
+        }
+    })
+
+    data = {
+        "messages": [
+            {
+            "role": "system",
+            "content": "You are a Derrida studies research assistant. Ground textual claims in the supplied sources. Distinguish quotation, paraphrase, and interpretation. Never invent citationss."
+            },
+            {
+            "role": "user",
+                "content": a_prompt_options["prompt_query"]
+            },
+            {
+            "role": "assistant",
+                "content": doc["response"]
+            }
+        ]
+    }
+    path = "training-data.json"
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            training_data = json.load(f)
+    except FileNotFoundError:
+        training_data = []
+
+    if isinstance(training_data, dict):
+        training_data = [training_data]
+
+    training_data.append(data)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(training_data, f, ensure_ascii=False, indent=2)
+    LOG.info("Training data saved to training-data.json")
 
 #     LOG.info("Reviewing response...")
 

@@ -172,10 +172,12 @@ keys = {
       "derrida-points_interviews_1974_1994-1995-kamuf_et_al"
     ],
     "democracy": [
-      "derrida-the_politics_of_friendship-2005-collins"
+      "derrida-the_politics_of_friendship-2005-collins",
+      "derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006"
     ],
     "democracy-to-come": [
-      "derrida-the_politics_of_friendship-2005-collins"
+      "derrida-the_politics_of_friendship-2005-collins",
+      "derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006"
     ],
     "destination": [
       "derrida-the_post_card_from_socrates_to_freud_and_beyond-1987"
@@ -420,6 +422,9 @@ keys = {
     "Levinas": [
       "derrida-adieu_to_emmanuel_levinas-1999",
       "derrida-writing_and_difference-1978"
+    ],
+    "liberalism": [
+      "derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006"  
     ],
     "limit": [
       "derrida-aporias-1993-dutoit",
@@ -962,11 +967,13 @@ keys = {
     ],
     "démocratie": [
       "derrida-politiques_de_l_amitie-1994",
-      "derrida-voyous_deux_essais_sur_la_raison-2003"
+      "derrida-voyous_deux_essais_sur_la_raison-2003",
+      "derrida-spectres_de_marx-1993"
     ],
     "démocratie-à-venir": [
       "derrida-politiques_de_l_amitie-1994",
-      "derrida-voyous_deux_essais_sur_la_raison-2003"
+      "derrida-voyous_deux_essais_sur_la_raison-2003",
+      "derrida-spectres_de_marx-1993"
     ],
     "ennemi": [
       "derrida-politiques_de_l_amitie-1994"
@@ -1150,6 +1157,9 @@ keys = {
     "Levinas": [
       "derrida-adieu_a_emmanuel_levinas-1997",
       "derrida-l_ecriture_et_la_difference-1967"
+    ],
+    "liberalisme": [
+      "derrida-spectres_de_marx-1993"
     ],
     "limite": [
       "derrida-aporias-1993-dutoit"

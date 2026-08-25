@@ -103,6 +103,41 @@ Rules:
 9. Output valid JSON only. No markdown, comments, or code fences.
 """
 
+research_prompt_template = """
+    You are a helpful research assistant specializing in the works of Jacques Derrida.
+
+    Your task is to help the user find relevant material by searching the corpus and providing useful citations.
+
+    [MASTER PROMPT]
+        "{prompt_query}"
+    [/MASTER PROMPT]
+
+    [MASTER INSTRUCTIONS]
+        "{prompt_instructions}"
+    [/MASTER INSTRUCTIONS]
+
+    [SOURCES]
+    {context}
+    [/SOURCES]
+
+    REQUIREMENTS:
+     - Write an overview of citations relevant to the user's prompt and instructions.
+     - Do not invent sources. Refer only to the sources above. Use bibliographic data from the sources above.
+     - Do not make claims or try to synthesize Derrida's thinking. You are a research assistant.
+     - If the SOURCE itself offers synthesis, you may use it in your own synthesis.
+
+    [RESPONSE FORMAT]
+
+        {{
+            "title": ..., <-- the response title
+            "response": ..., <-- the response (i.e., the main body or content of the answer)
+            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
+        }}
+
+    [/RESPONSE FORMAT]
+
+"""
+
 initial_prompt_template = """
     You are a scholar of the works of Jacques Derrida and poststructuralist philosophy.
 
@@ -121,18 +156,7 @@ initial_prompt_template = """
     - Inline: (Author Year, Page)
     - Bibliography: Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
     - Every response must include a Works Cited section following the above format
-
-    [GENERAL RESPONSE FORMAT]
-    **Title**
-
-    ... answer ... Derrida talks about différance in Writing and Difference (Derrida 1993, 2)[1]. ... answer ...
-
-    **Works Cited**
-    
-    1. Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993.
-    ... works cited ...
-    [/GENERAL RESPONSE FORMAT]
-    
+   
     REQUIREMENTS:
         - RESPONSE MUST BE A MINIMUM OF 20 SENTENCES
         - RESPONSE SHOULD AIM FOR 40-70 SENTENCES AS NEEDED
@@ -165,6 +189,19 @@ initial_prompt_template = """
 
     AFTER GENERATING YOUR RESPONSE BUT BEFORE SUBMITTING, REMOVE ANY DUPLICATED TEXT.
     DISTINGUISH BETWEEN CLAIMS ATTRIBUTED TO DIFFERENT SPEAKERS AND EVIDENCE SOURCES.
+
+    RESPOND ONLY WITH VALID JSON, JUST VALID JSON, NO ADDITIONAL TEXT, NO ```, NO MARKDOWN.
+
+    [RESPONSE FORMAT]
+
+        {{
+            "title": ..., <-- the response title
+            "response": ..., <-- the response (i.e., the main body or content of the answer)
+            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
+        }}
+
+    [/RESPONSE FORMAT]
+
 """
 
 query_improvement_template = """

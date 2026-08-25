@@ -70,6 +70,10 @@ DB_PATH: {cfg.store.persist_directory}
             persist_directory=cfg.store.persist_directory,
             embedding_function=self.embedding_model,
         )
+        self.response_vector_store = Chroma(
+            persist_directory=cfg.store.persist_directory + '_responses',
+            embedding_function=self.embedding_model,
+        )
         LOG.info("LangChainClient initialized successfully.")
     def invoke(self, prompt: str):
         LOG.info(f"Invoking chat model [{self.chat_model.model}] with prompt: {prompt}")
@@ -149,6 +153,19 @@ DB_PATH: {cfg.store.persist_directory}
 
         LOG.info("Found %d new records to index", len(new_documents))
         return new_documents
+
+    def add_record_to_response_store(self, record: dict) -> None:
+        """Add a single record to the response vector store."""
+        LOG.info("Adding record to response store: %s", record)
+        collection_length = len(self.response_vector_store._collection.get()["ids"])
+        record["metadata"]["record_id"] = str(collection_length + 1)
+        self.response_vector_store.add_documents(
+            documents=[Document(
+                page_content=record["text"],
+                metadata=record["metadata"],
+            )],
+            ids=[str(collection_length + 1)],
+        )
 
     def add_new_records(self, batch_size: int = BATCH_SIZE) -> None:
         """Load only the records that are not yet indexed and append them in batches."""
