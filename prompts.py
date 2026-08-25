@@ -159,6 +159,8 @@ You are an academic and a scholar of Jacques Derrida.
         - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
         - Every paragraph containing an interpretive claim must cite at least one retrieved passage,
           and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
+        - DO NOT SYNTHESIZE NEW CLAIMS OR CONCEPTS NOT SUPPORTED BY THE PROVIDED SOURCES. CITE AVAILABLE SYNTHESIS.
+        - RESPONSE MUST CONTAIN A MINIMUM OF 50 SENTENCES.
 
     [RESPONSE FORMAT]
 
@@ -169,7 +171,6 @@ You are an academic and a scholar of Jacques Derrida.
         }}
 
     [/RESPONSE FORMAT]
-
 
 """
 
@@ -252,7 +253,8 @@ query_improvement_template = """
     Assume materials_language is null (all languages) unless otherwise specified. (e.g., "you can use only French and English")
 
 
-    OUTPUT FORMAT: valid JSON object
+    OUTPUT FORMAT: valid JSON object ONLY
+
     {{
         "prompt": "{prompt}",
         "prompt_query": "..." <-- the part of the prompt that contains the actual question or request
@@ -271,6 +273,9 @@ query_improvement_template = """
     }}
 
     OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
+    REMOVE ```
+    REMOVE ```json
+    DOUBLE-CHECK FOR QUOTATION MARKS AND ESCAPING IN JSON OBJECT
 """
 
 initial_retrieval_prompt_template = """

@@ -61,6 +61,8 @@ import nltk
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lex_rank import LexRankSummarizer
+from sumy.summarizers.edmundson import EdmundsonSummarizer
+from sumy.nlp.stemmers import Stemmer
 import re
 import unicodedata
 
@@ -88,14 +90,115 @@ args = parser.parse_args()
 LOG = Logger.setup()
 
 summarizer = LexRankSummarizer()
+edmundson_summarizer = EdmundsonSummarizer()
 
 reranker = CrossEncoder(
     "cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
 
+stigma_words = {
+    "Derrida", 
+    "Jacques Derrida",
+    "©",
+    "ISBN",
+    # English apparatus/navigation
+    "footnote",
+    "appendix",
+    "bibliography",
+    "translator",
+    "editor",
+    "previously",
+    "elsewhere",
+
+    # French apparatus/navigation
+    "note",
+    "appendice",
+    "bibliographie",
+    "traducteur",
+    "traductrice",
+    "éditeur",
+    "éditrice",
+    "précédemment",
+    "ailleurs",
+}
+
+KEEP_THESE = {
+    # English
+    "not", "no", "without",
+    "neither", "nor",
+    "if", "only", "but",
+    "other", "same",
+    "before", "after",
+    "between", "beyond",
+    "within", "outside",
+    "against",
+
+    # French negation
+    "ne", "pas", "non",
+    "sans", "ni",
+    "jamais",
+    "rien",
+
+    # French qualification / contrast
+    "si",
+    "seulement",
+    "mais",
+    "pourtant",
+    "cependant",
+    "toutefois",
+    "plutôt",
+
+    # French relational terms
+    "autre",
+    "même",
+    "entre",
+    "contre",
+    "avant",
+    "après",
+    "hors",
+    "dedans",
+    "dehors",
+
+    # especially useful in Derrida
+    "au-delà",
+    "en-deçà",
+    "à travers",
+}
+
+cue_words = {
+    # English
+    "therefore",
+    "thus",
+    "hence",
+    "however",
+    "rather",
+    "nevertheless",
+    "means",
+    "signifies",
+    "implies",
+    "requires",
+    "supposes",
+    "presupposes",
+
+    # French
+    "donc",
+    "ainsi",
+    "par conséquent",
+    "cependant",
+    "pourtant",
+    "toutefois",
+    "plutôt",
+    "signifie",
+    "désigne",
+    "implique",
+    "suppose",
+    "présuppose",
+    "exige",
+}
+
 def rerank_top_n(query, docs, reranker, top_n=RERANK_COUNT):
     pairs = [
-        [query, doc.page_content]
+        [query, doc.page_content if (hasattr(doc, "page_content")) else doc]
         for doc in docs
     ]
 
@@ -106,8 +209,8 @@ def rerank_top_n(query, docs, reranker, top_n=RERANK_COUNT):
         key=lambda i: float(scores[i]),
         reverse=True
     )
-
-    return [docs[i] for i in ranked_indices[:top_n]]
+    idx = min(top_n, len(docs) - 1)
+    return [docs[i] for i in ranked_indices[:idx]]
 
 def generate_citation_strings(doc) -> tuple[str, str]:
 
@@ -128,6 +231,13 @@ def generate_citation_strings(doc) -> tuple[str, str]:
     full_citation = f"{author_name_reversed}. {work}.{f' {translator} trans.' if translator else ''} {edition}. {year}"
     return inline_citation, full_citation
 
+def strip_code_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
 # MAIN FUNCTION
 def main():
     client = LangChainClient()
@@ -141,7 +251,10 @@ def main():
 
 
     a_query_details = client.invoke(a_formatted_query_improvement_prompt)
-    a_prompt_options = json.loads(a_query_details.content)
+
+    LOG.info("Query details received from chat model: %s", a_query_details.content)
+
+    a_prompt_options = json.loads(strip_code_fence(a_query_details.content))
 
     # a_prompt_options =  {
     #     'prompt': "Describe Derrida's notion of hospitality",
@@ -173,6 +286,8 @@ def main():
             where_filter = { "$or": [{"document_language": {"$contains": lang}} for lang in a_prompt_options.get("materials_language")] }
         else:
             where_filter = { "document_language": { "$contains": a_prompt_options.get("materials_language")[0] } }
+        if a_prompt_options.get("limit_author"):
+            where_filter = { "$and": [where_filter, {"document_author": {"$eq": a_prompt_options.get("limit_author")}}] }
         LOG.info("Where filter for fetching results: %s", where_filter)
         fetched_results = client.vector_store.get(where_document=wher_doc_filter, where=where_filter)
 
@@ -215,7 +330,7 @@ def main():
         LOG.info("Fetched results: %d", len(ids))
 
         if a_prompt_options.get("fetch_limit", False):
-
+            LOG.info("Reranking -- fetch limit is set to: %s", a_prompt_options.get("fetch_limit"))
             prompt_key = "prompt_query"
             if a_prompt_options.get("materials_language"):
                 prompt_key = "prompt_query_fr" if "fr" in a_prompt_options.get("materials_language")[0] else "prompt_query"
@@ -324,6 +439,7 @@ def main():
             return WORD.sub(lambda m: correct_token(m.group(0)), text)
 
         response_str = ""
+        bonus_words = a_prompt_options.get("keywords", []) + a_prompt_options.get("keywords_fr", [])
         for i, doc in enumerate((lambda x: (random.shuffle(x) or x))(cleaned_results), start=1):
             text = doc.get("text", "")
             #text = dehyphenator.dehyphen(text)
@@ -332,7 +448,14 @@ def main():
             if language in hyphenators:
                 text = hyphenators[language].inserted(text)
             parser = PlaintextParser.from_string(text, Tokenizer(language))
-            summary = summarizer(parser.document, 5)
+            stemmer = Stemmer(language)
+            ed_summarizer = EdmundsonSummarizer(stemmer)
+            LOG.info("Bonus words: %s", bonus_words)
+            ed_summarizer.bonus_words = bonus_words
+            ed_summarizer.stigma_words = stigma_words
+            ed_summarizer.cue_words = cue_words
+            ed_summarizer.null_words = KEEP_THESE
+            summary = ed_summarizer(parser.document, 5)
             text_summary = " [...] ".join([str(sentence) for sentence in summary])
             author_name = f"{doc.get('document_author', '').split(' ')[-1]}, {doc.get('document_author', '').split(' ')[0]}"
             response_str += f"""
@@ -555,17 +678,30 @@ def main():
 
     seen = set()
     unique_candidates = []
+    bonus_words = a_prompt_options.get("keywords", []) + a_prompt_options.get("keywords_fr", [])
     for doc in combined_candidates:
         chunk_id = doc.metadata.get("record_id")
 
         if chunk_id not in seen:
             seen.add(chunk_id)
-            text = doc.metadata.get("text", "")
-            language = doc.metadata.get("document_language", ["fr_fr"])[0].split("_")[0]
-            parser = PlaintextParser.from_string(text, Tokenizer(language))
-            summary = summarizer(parser.document, 5)
-            text_summary = " [...] ".join([str(sentence) for sentence in summary])
-            doc.metadata["text"] = text_summary
+
+            # SUMMARIZATION STEP (COMMENTED OUT)
+
+            # text = doc.metadata.get("text", "")
+            # language = doc.metadata.get("document_language", ["fr_fr"])[0].split("_")[0]
+            # parser = PlaintextParser.from_string(text, Tokenizer(language))
+            # # summarizer = LexRankSummarizer(Stemmer(language))
+            # # summary = summarizer(parser.document, 5)
+            # stemmer = Stemmer(language)
+            # ed_summarizer = EdmundsonSummarizer(stemmer)
+            # LOG.info("Bonus words: %s", bonus_words)
+            # ed_summarizer.bonus_words = bonus_words
+            # ed_summarizer.stigma_words = stigma_words
+            # ed_summarizer.cue_words = cue_words
+            # ed_summarizer.null_words = KEEP_THESE
+            # summary = ed_summarizer(parser.document, 5)
+            # text_summary = " [...] ".join([str(sentence) for sentence in summary])
+            # doc.metadata["text"] = text_summary
 
             doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
 
@@ -624,7 +760,7 @@ k: {K_VALUE} | retrieved_candidates: {len(combined_candidates)}
 unique_candidates: {len(unique_candidates)} | lambda_mult: {LAMBDA_MULT_VALUE}
 chat_temperature: {CHAT_TEMPERATURE}
 """)
-    doc = json.loads(response.content)
+    doc = json.loads(strip_code_fence(response.content))
     client.add_record_to_response_store({
         "text": doc["response"],
         "metadata": {
