@@ -32,7 +32,7 @@ TRAINING_DATA_FILE = "training-data.json"
 BENNINGTON_FILE = "./data/bennington-training.jsonl"
 
 OUTPUT_DIRECTORY = Path(
-    "/home/aaron/src/derrida/derrida-qwen3-4b-lora7"
+    "/home/aaron/src/derrida/derrida-friend"
 )
 
 
@@ -137,19 +137,19 @@ examples = []
 
 
 # Primary Derrida corpus records.
-with open(RECORDS_FILE, encoding="utf-8") as file:
-    for line in file:
-        line = line.strip()
+# with open(RECORDS_FILE, encoding="utf-8") as file:
+#     for line in file:
+#         line = line.strip()
 
-        if not line:
-            continue
+#         if not line:
+#             continue
 
-        record = json.loads(line)
+#         record = json.loads(line)
 
-        example = derrida_record_to_example(record)
+#         example = derrida_record_to_example(record)
 
-        if example["completion"][0]["content"].strip():
-            examples.append(example)
+#         if example["completion"][0]["content"].strip():
+#             examples.append(example)
 
 
 # Other supervised training examples.
@@ -169,24 +169,24 @@ if training_data_path.exists():
 
 
 # Bennington training examples.
-bennington_path = Path(BENNINGTON_FILE)
+# bennington_path = Path(BENNINGTON_FILE)
 
-if bennington_path.exists():
-    with bennington_path.open(encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
+# if bennington_path.exists():
+#     with bennington_path.open(encoding="utf-8") as file:
+#         for line in file:
+#             line = line.strip()
 
-            if not line:
-                continue
+#             if not line:
+#                 continue
 
-            record = json.loads(line)
+#             record = json.loads(line)
 
-            messages = record.get("messages")
+#             messages = record.get("messages")
 
-            if messages:
-                examples.append(
-                    messages_to_example(messages)
-                )
+#             if messages:
+#                 examples.append(
+#                     messages_to_example(messages)
+#                 )
 
 
 LOG.info(

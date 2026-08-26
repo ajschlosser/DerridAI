@@ -19,7 +19,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ---------------------------------------------------------------------------
 
 ADAPTER_DIRECTORY = Path(
-    "/home/aaron/src/derrida/derrida-qwen3-4b-lora7"
+    "/home/aaron/src/derrida/derrida-friend"
 )
 
 FALLBACK_BASE_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
@@ -134,7 +134,7 @@ model.eval()
 
 def generate(
     prompt: str,
-    max_new_tokens: int = 768,
+    max_new_tokens: int = 768 * 8,
     temperature: float = 0.3,
     top_p: float = 0.9,
 ) -> str:

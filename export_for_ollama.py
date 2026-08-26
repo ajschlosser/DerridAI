@@ -33,8 +33,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 #BASE_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
 BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
-ADAPTER_DIRECTORY = Path("derrida-qwen-lora")
-OUTPUT_DIRECTORY = Path("derrida-qwen-merged")
+ADAPTER_DIRECTORY = Path("derrida-friend")
+OUTPUT_DIRECTORY = Path("derrida-friend-merged")
 
 
 def main():

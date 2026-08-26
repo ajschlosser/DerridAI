@@ -570,16 +570,19 @@ def main():
 
     canonical_candidates = []
     combined_canonical_candidates = []
-    if (a_prompt_options["keywords"] or a_prompt_options["keywords_fr"]):
-        LOG.info("Retrieving canonical works by keyword: %s", a_prompt_options["keywords_fr"])
+
+    keywords = a_prompt_options["keywords"]
+    keywords_fr = a_prompt_options["keywords_fr"]
+    if (keywords or keywords_fr):
+        LOG.info("Retrieving canonical works by keyword: %s", keywords_fr)
 
         canonical_work_ids = []
         canonical_work_ids_fr = []
 
-        for keyword in a_prompt_options["keywords"]:
+        for keyword in keywords:
             if keyword.lower() in keys.get("en_us", {}):
                 canonical_work_ids.append(keys["en_us"][keyword.lower()])
-        for keyword in a_prompt_options["keywords_fr"]:
+        for keyword in keywords_fr:
             if keyword.lower() in keys.get("fr_fr", {}):
                 canonical_work_ids_fr.append(keys["fr_fr"][keyword.lower()])
 
@@ -589,7 +592,6 @@ def main():
         #combined_work_ids = canonical_work_ids + canonical_work_ids_fr
         LOG.info("Combined canonical work IDs: %s", combined_work_ids)
         if combined_work_ids:
-
             canonical_search_kwargs = {
                 "k": math.ceil(K_VALUE / 2),
                 "filter": {
@@ -618,11 +620,8 @@ def main():
                         "$eq": combined_work_ids[0]
                     }
                 })
-            
-            
+              
             if a_prompt_options["materials_language"]:
-
-
                 if len(a_prompt_options["materials_language"]) > 1:
                     canonical_search_kwargs["filter"]["$and"].append({
                         "$or": [{"document_language": {"$contains": lang}} for lang in a_prompt_options["materials_language"]]
@@ -648,17 +647,30 @@ def main():
             canonical_work_retriever_mmr = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="mmr")
             canonical_candidates_mmr = canonical_work_retriever_mmr.invoke(b_formatted_initial_retrieval_prompt)
+            del canonical_search_kwargs["fetch_k"]
+            del canonical_search_kwargs["lambda_mult"]
+            targets = keywords + keywords_fr
+            canonical_search_kwargs["filter"]["$and"].append({
+                "$or": [{"target": {"$eq": target}} for target in targets]
+            })
+            targeted_work_retriever = client.create_retriever(
+                search_kwargs=canonical_search_kwargs, search_type="similarity")
+            targeted_candidates = targeted_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
+
             combined_canonical_candidates = canonical_candidates + canonical_candidates_mmr
             LOG.info("Combined canonical candidates after search: %d", len(combined_canonical_candidates))
+            LOG.info("Targeted candidates after search: %d", len(targeted_candidates))
 
 
     reordering = LongContextReorder()
     reordered_candidates = reordering.transform_documents(candidates)
     reordered_additional_candidates = reordering.transform_documents(additional_candidates)
     reordered_canonical_candidates = reordering.transform_documents(combined_canonical_candidates)
+    reordered_targeted_candidates = reordering.transform_documents(targeted_candidates)
 
     #combined_candidates = reordered_candidates[:math.ceil(K_VALUE / 4)] + reordered_additional_candidates[:math.ceil(K_VALUE / 4)] + reordered_canonical_candidates[:math.ceil(K_VALUE / 2)]
-    combined_candidates = reordered_candidates + reordered_additional_candidates + reordered_canonical_candidates
+    combined_candidates = reordered_candidates + reordered_additional_candidates + reordered_canonical_candidates + reordered_targeted_candidates
+    LOG.info("Combined candidates after reordering: %d", len(combined_candidates))
 
     if not combined_candidates:
         LOG.warning("No context found matching the query and filter criteria.")
@@ -720,20 +732,59 @@ def main():
     reordering = LongContextReorder()
     reordered_groups = reordering.transform_documents(unique_candidates)
 
-    context = "\n[EVIDENCE BLOCK]\n".join(
-        f"""| EVIDENCE_BLOCK_ID: 00-{i} | ID: {doc.metadata.get("canonical_work_id", "N/A")} | Length: {doc.metadata.get("text_length", "N/A")}
+    d = doc.metadata
+    chat_str = "Say things like: "
+    attr_str = f"In this evidence block, which is functioning as {d.get('discourse_role', 'general text')}, "
 
-| If using the EVIDENCE in this BLOCK, attribute the claim to the position_holder: "{doc.metadata.get("position_holder", doc.metadata.get("speaker", "Unknown Position Holder"))}".
-| The speaker in the EVIDENCE below is "{doc.metadata.get("speaker", "Unknown Speaker")}".
-| This EVIDENCE is playing the role of "{doc.metadata.get("discourse_role", "Unknown Role")}".
-| TO CITE THIS EVIDENCE:
-|| - MLA inline: {doc.metadata.get("inline_citation")}
-|| - Works Cited: {doc.metadata.get("full_citation")}
-| EVIDENCE BEGINS BELOW:
-|---------------------------------
-| {json.dumps(doc.metadata.get("text"))}
-|---------------------------------
+    author = d.get("document_author")
+    region_author = d.get("region_author", "")
+    quoted_speaker = d.get("quoted_speaker", "")
+    holder = d.get("position_holder", "")
+    speaker = d.get("speaker", "")
+    target = d.get("target", "")
+
+    if region_author:
+        attr_str += f'the writer of this particular section of the work is "{region_author}", '
+        chat_str += f"\n- In {author}'s **{d.get('work')}**, {region_author} writes that {holder if holder not in author else 'he'} believes {target} ..."
+    if quoted_speaker:
+        attr_str += f'the quoted speaker is "{quoted_speaker}", '
+        chat_str += f"\n- {quoted_speaker} is quoted in this passage as saying that {target}..."
+    if holder:
+        attr_str += f"it is {holder}'s position being expressed, " 
+        chat_str += f"\n- In the passage, {holder} claims that {target}..."
+    if speaker:
+        attr_str += f"{speaker} is the one doing the speaking/writing, " 
+        chat_str += f"\n- In the cited text, {speaker} says clearly that {target}..."
+    if target:
+        attr_str += f"the target of {holder}'s claim is {target}, "
+        chat_str += f"\n- In this excerpt, {holder} takes aim at {target}, writing that ..."
+    attr_str += f"and the passage is from **{d.get('work')}** ({d.get('year')}) by {author}. "
+    chat_str += f"\n - As far back as {d.get('year')}, {author} wrote in **{d.get('work')}** that {target} ..."
+    if d.get("translator"):
+        attr_str += f" The work is translated by: {d.get('translator')}. "
+    if d.get("editor"):
+        attr_str += f" The editor of the work is: {d.get('editor')}. "
+
+    if holder not in speaker:
+        chat_str += f"\n\nWARNING: {holder} is NOT the speaker in this passage."
+        chat_str += f"\n- DO NOT attribute {holder}'s words to {speaker}."
+        chat_str += f"\n- DO NOT attribute {target}'s words to {holder}."
+
+    context = "\n==============================================================================================================================================\n".join(
+        f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} Length: {doc.metadata.get("text_length", "N/A")}
+==============================================================================================================================================
+{attr_str}
+TO CITE THIS EVIDENCE:
+ - MLA inline: {doc.metadata.get("inline_citation")}
+ - Works Cited: {doc.metadata.get("full_citation")}
+{chat_str}
+
+[EVIDENCE]
+---------------------------------
+{json.dumps(doc.metadata.get("text"))}
+---------------------------------
 [/EVIDENCE]
+_______________________________________________________________________\n
 """
         for i, doc in enumerate(reordered_groups)
     )
@@ -760,9 +811,9 @@ Query taken from prompt: {a_prompt_options["prompt_query"]}
     LOG.info(f"""
 Model response:
 {response.content}
-k: {K_VALUE} | retrieved_candidates: {len(combined_candidates)}
+k: {K_VALUE} | retrieved_candidates: {len(combined_candidates)} | targeted_candidates: {len(targeted_candidates)}
 unique_candidates: {len(unique_candidates)} | lambda_mult: {LAMBDA_MULT_VALUE}
-chat_temperature: {CHAT_TEMPERATURE}
+chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_options.get("is_research_query") else "chatbot" if a_prompt_options.get("is_chatbot_query") else "general/generative"}
 """)
     doc = json.loads(strip_code_fence(response.content))
     client.add_record_to_response_store({
