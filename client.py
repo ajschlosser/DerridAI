@@ -75,15 +75,18 @@ DB_PATH: {cfg.store.persist_directory}
             embedding_function=self.embedding_model,
         )
         LOG.info("LangChainClient initialized successfully.")
+
     def invoke(self, prompt: str):
         LOG.info(f"Invoking chat model [{self.chat_model.model}] with prompt")
         return self.chat_model.invoke(prompt)
+    
     def create_retriever(self, search_kwargs: dict, search_type: str = "mmr"):
         LOG.info(f"Creating retriever with search_kwargs: {search_kwargs} and search_type: {search_type}")
         self.retrievers = getattr(self, "retrievers", [])
         retriever = self.vector_store.as_retriever(search_kwargs=search_kwargs, search_type=search_type)
         self.retrievers.append(retriever)
         return retriever
+    
     def _load_new_records(self, source_file: Path) -> list[Document]:
         """Return documents from source_file whose IDs are not in Chroma."""
         collection = self.vector_store._collection

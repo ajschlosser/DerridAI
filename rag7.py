@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""rag6_multi.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
+"""rag7.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
 
 import os
 
@@ -37,6 +37,7 @@ from prompts import (
     focused_prompt_template,
     review_prompt_template,
     initial_prompt_template,
+    respond_as_derrida_template,
     research_prompt_template,
     query_improvement_template,
     initial_retrieval_prompt_template,
@@ -709,7 +710,8 @@ def main():
 
     LOG.info("Filtered to %d unique candidates after removing duplicates.", len(unique_candidates))
 
-    unique_candidates = rerank_top_n(a_prompt_options["prompt_query"], unique_candidates, reranker, top_n=RERANK_COUNT)
+    if not a_prompt_options.get("is_research_query"):
+        unique_candidates = rerank_top_n(a_prompt_options["prompt_query"], unique_candidates, reranker, top_n=RERANK_COUNT)
 
     LOG.info("Top %d candidates after reranking: %d", RERANK_COUNT, len(unique_candidates))
 
@@ -738,7 +740,9 @@ def main():
 
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
-    prompt = ChatPromptTemplate.from_template(focused_prompt_template)
+    ultimate_prompt = research_prompt_template if a_prompt_options.get("is_research_query") else respond_as_derrida_template if a_prompt_options.get("is_chatbot_query") else focused_prompt_template
+
+    prompt = ChatPromptTemplate.from_template(ultimate_prompt)
     final_prompt = prompt.format(
         context=context,
         prompt_query=a_prompt_options["prompt_query"],

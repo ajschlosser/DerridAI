@@ -1204,7 +1204,7 @@ keys = {
     "don": [
       "derrida-donner_le_temps_1_la_fausse_monnaie-1991",
       "derrida-given_time_i_counterfeit_money",
-      "derrida-the_gift_of_death-1995"
+      "derrida-donner_la_mort-1999"
     ],
     "droit": [
       "derrida-du_droit_a_la_philosophie-1990",
@@ -1406,7 +1406,7 @@ keys = {
     "indécidabilité": [
       "derrida-la_dissemination-1972",
       "derrida-aporias-1993-dutoit",
-      "derrida-the_gift_of_death-1995",
+      "derrida-donner_la_mort-1999",
       "derrida-of_hospitality-2000"
     ],
     "indécidable": [
@@ -1733,11 +1733,11 @@ keys = {
     "religion": [
       "derrida-foi_et_savoir-2000",
       "derrida-acts_of_religion-2002",
-      "derrida-the_gift_of_death-1995"
+      "derrida-donner_la_mort-1999"
     ],
     "responsabilité": [
       "derrida-adieu_a_emmanuel_levinas-1997",
-      "derrida-the_gift_of_death-1995",
+      "derrida-donner_la_mort-1999",
       "derrida-acts_of_religion-2002",
       "derrida-of_hospitality-2000"
     ],
@@ -1753,7 +1753,7 @@ keys = {
     ],
     "sacrifice": [
       "derrida-foi_et_savoir-2000",
-      "derrida-the_gift_of_death-1995",
+      "derrida-donner_la_mort-1999",
       "derrida-the_animal_that_therefore_i_am-2008"
     ],
     "Saussure": [
@@ -1767,7 +1767,7 @@ keys = {
       "derrida-limited_inc-1988"
     ],
     "secret": [
-      "derrida-the_gift_of_death-1995"
+      "derrida-donner_la_mort-1999"
     ],
     "sexualité": [
       "derrida-eperons_les_styles_de_nietzsche-1979",
