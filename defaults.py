@@ -1,11 +1,11 @@
 # CONFIGURATION
 EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
-#CHAT_MODEL        = "phi4:14b" # great
+CHAT_MODEL        = "phi4:14b" # great
 #CHAT_MODEL        = "qwen3:4b-instruct" # not bad
-CHAT_MODEL        = "qwen2.5:7b-instruct" # not bad
+#CHAT_MODEL        = "qwen2.5:7b-instruct" # not great
 #CHAT_MODEL        = "mistral-small3.1:24b" # bad
 #CHAT_MODEL        = "gemma3:12b" # unknown quality
-CHAT_TEMPERATURE  = 0.4
+CHAT_TEMPERATURE  = 0.8
 OLLAMA_BASE_URL   = "http://localhost:11434"
 
 DB_PATH           = "./chroma_db_local7"

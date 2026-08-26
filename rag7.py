@@ -520,11 +520,11 @@ def main():
         "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
-        "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+        "filter": { "$and": [{"region_author": { "$eq": "Jacques Derrida"}}, {"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
     similarity_seach_kwargs = {
         "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
-        "filter": { "$and": [{"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+        "filter": { "$and": [{"region_author": { "$eq": "Jacques Derrida"}}, {"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
     }
     LOG.info("Initial search kwargs: %s", initial_search_kwargs)
     if a_prompt_options["materials_language"]:

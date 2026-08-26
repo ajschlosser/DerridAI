@@ -279,25 +279,18 @@ You are an academic and a scholar of Jacques Derrida.
           and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
         - RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
         - RESPONSE MUST NOT EXCEED 150 SENTENCES
-Use the supplied evidence as the sole basis for substantive claims.
 
-Preserve the distinctions, qualifications, and conceptual relationships present in the evidence.
-
-Do not add a relationship between concepts unless the supplied evidence establishes that relationship.
-
-Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-
-Match the strength of each claim to the strength of its evidence.
-
-When several evidence blocks support distinct points, present those points separately unless the evidence clearly supports synthesizing them.
-
-Do not repeat a point merely to extend the response.
-
-Do not generalize beyond the supplied evidence for the sake of a smoother conclusion.
-
-Use only works that materially contribute to the response.
-
-If the evidence does not support a claim, omit it.
+    FOLLOW THESE GUIDELINES:
+    - Use the supplied evidence as the sole basis for substantive claims.
+    - Preserve the distinctions, qualifications, and conceptual relationships present in the evidence.
+    - Do not add a relationship between concepts unless the supplied evidence establishes that relationship.
+    - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+    - Match the strength of each claim to the strength of its evidence.
+    - When several evidence blocks support distinct points, present those points separately unless the evidence clearly supports synthesizing them.
+    - Do not repeat a point merely to extend the response.
+    - Do not generalize beyond the supplied evidence for the sake of a smoother conclusion.
+    - Use only works that materially contribute to the response.
+    - If the evidence does not support a claim, omit it.
 
     [RESPONSE FORMAT]
 
@@ -402,14 +395,18 @@ query_improvement_template = """
         "prompt_language": ["en_us"], <-- query is in English
         "materials_language": ["en_us","fr_fr"], <-- maybe query is asking you to look ONLY at French materials, default is ["en_us", "fr_fr"]
         "response_language": ["fr_fr"], <-- query is asking you to respond in French
-        "is_fetch_query": false, <--- whether or not the user is asking for appearances, mentions, discussions, etc. of "x" (a particular idea or key concept) in the source materials (true) or just a general answer (false)
+        "is_fetch_query": false, <--- whether or not the prompt is asking for appearances, mentions, discussions, etc. of "x" (a particular idea or key concept) in the source materials (true) or just a general answer (false)
         "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
         "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French),
         "fetch_limit": null <-- the maximum number of source materials to fetch if is_fetch_query is true
-        "limit_author": "Jacques Derrida" <--- if the user asks to limit research to derrida's own words, or the words of another ('derrida' --> 'Jacques Derrida')
-        "is_research_query": false, <-- set to true if the user is asking for research, citations, relevant passages, etc. related to key Derrida words, ideas, concepts
+        "limit_author": "Jacques Derrida" <--- if the prompt asks to limit research to derrida's own words, or the words of another ('derrida' --> 'Jacques Derrida')
+        "is_research_query": false, <-- set to true if the prompt is asking for research, citations, relevant passages, etc. related to key Derrida words, ideas, concepts
         "is_chatbot_query": false, <--- set to true if the prompt asks you questions about yourself ("How are you?" "What do you think about?"), or addressing you as Jacques, Jacques Derrida, Jackie, etc.
         "is_general_query": true <-- this is true if is_research_query and is_chatbot_query are both false
+
+        "query": {{
+            "subject_person": ... <-- the person the prompt is asking about, if any
+        }}
     }}
 
     OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
