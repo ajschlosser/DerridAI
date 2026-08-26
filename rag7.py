@@ -26,6 +26,7 @@ import argparse
 import math
 import random
 from datetime import date
+import time
 
 # LLM
 from langchain_core.prompts import ChatPromptTemplate
@@ -36,6 +37,7 @@ from sentence_transformers import CrossEncoder
 from prompts import (
     focused_prompt_template,
     review_prompt_template,
+    final_review_prompt_template,
     initial_prompt_template,
     respond_as_derrida_template,
     research_prompt_template,
@@ -74,6 +76,8 @@ from symspellpy import SymSpell, Verbosity
 # DOWNLOAD NECESSARY NLTK DATA
 nltk.download('punkt_tab')
 nltk.download('punkt')
+
+start = time.perf_counter()
 
 # CLI ARGUMENTS
 parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
@@ -520,11 +524,31 @@ def main():
         "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
-        "filter": { "$and": [{"region_author": { "$eq": "Jacques Derrida"}}, {"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+        "filter": {
+            "$and": [
+                {"region_author": { "$eq": "Jacques Derrida"}},
+                {"position_holder": {"$eq": "Jacques Derrida"}},
+                {"discourse_role": {"$eq": "citation"}},
+                {"region_type": {"$eq": "main_text"}},
+                {"primary_text": {"$eq": True}},
+                {"text_length": {"$gt": 300}},
+                {"extraction_quality": {"$gt": 0.8}}
+            ]
+        }
     }
     similarity_seach_kwargs = {
         "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
-        "filter": { "$and": [{"region_author": { "$eq": "Jacques Derrida"}}, {"text_length": {"$gt": 500}}, {"extraction_quality": {"$gt": 0.8}}] }
+        "filter": {
+            "$and": [
+                {"region_author": { "$eq": "Jacques Derrida"}},
+                {"position_holder": {"$eq": "Jacques Derrida"}},
+                {"discourse_role": {"$eq": "citation"}},
+                {"region_type": {"$eq": "main_text"}},
+                {"primary_text": {"$eq": True}},
+                {"text_length": {"$gt": 300}},
+                {"extraction_quality": {"$gt": 0.8}}
+            ]
+        }
     }
     LOG.info("Initial search kwargs: %s", initial_search_kwargs)
     if a_prompt_options["materials_language"]:
@@ -596,11 +620,11 @@ def main():
                 "k": math.ceil(K_VALUE / 2),
                 "filter": {
                     "$and": [
-                        # {
-                        #     "document_author": {
-                        #         "$eq": "Jacques Derrida"
-                        #     }
-                        # },
+                        {"region_author": { "$eq": "Jacques Derrida"}},
+                        {"position_holder": {"$eq": "Jacques Derrida"}},
+                        {"discourse_role": {"$eq": "citation"}},
+                        {"region_type": {"$eq": "main_text"}},
+                        {"primary_text": {"$eq": True}},
                         {
                             "text_length": {
                                 "$gt": 500
@@ -732,51 +756,70 @@ def main():
     reordering = LongContextReorder()
     reordered_groups = reordering.transform_documents(unique_candidates)
 
-    d = doc.metadata
-    chat_str = "Say things like: "
-    attr_str = f"In this evidence block, which is functioning as {d.get('discourse_role', 'general text')}, "
+    context = "\n==============================================================================================================================================\n"
 
-    author = d.get("document_author")
-    region_author = d.get("region_author", "")
-    quoted_speaker = d.get("quoted_speaker", "")
-    holder = d.get("position_holder", "")
-    speaker = d.get("speaker", "")
-    target = d.get("target", "")
+    for i, doc in enumerate(reordered_groups):
+        d = doc.metadata
 
-    if region_author:
-        attr_str += f'the writer of this particular section of the work is "{region_author}", '
-        chat_str += f"\n- In {author}'s **{d.get('work')}**, {region_author} writes that {holder if holder not in author else 'he'} believes {target} ..."
-    if quoted_speaker:
-        attr_str += f'the quoted speaker is "{quoted_speaker}", '
-        chat_str += f"\n- {quoted_speaker} is quoted in this passage as saying that {target}..."
-    if holder:
-        attr_str += f"it is {holder}'s position being expressed, " 
-        chat_str += f"\n- In the passage, {holder} claims that {target}..."
-    if speaker:
-        attr_str += f"{speaker} is the one doing the speaking/writing, " 
-        chat_str += f"\n- In the cited text, {speaker} says clearly that {target}..."
-    if target:
-        attr_str += f"the target of {holder}'s claim is {target}, "
-        chat_str += f"\n- In this excerpt, {holder} takes aim at {target}, writing that ..."
-    attr_str += f"and the passage is from **{d.get('work')}** ({d.get('year')}) by {author}. "
-    chat_str += f"\n - As far back as {d.get('year')}, {author} wrote in **{d.get('work')}** that {target} ..."
-    if d.get("translator"):
-        attr_str += f" The work is translated by: {d.get('translator')}. "
-    if d.get("editor"):
-        attr_str += f" The editor of the work is: {d.get('editor')}. "
+        proposition_status = d.get("proposition_status", "")
+        discourse_role = d.get('discourse_role', 'general text')
+        author = d.get("document_author")
+        region_author = d.get("region_author", "")
+        quoted_speaker = d.get("quoted_speaker", "")
+        holder = d.get("position_holder", "")
+        speaker = d.get("speaker", "")
+        target = d.get("target", "")
+        work = d.get("work", "")
+        persons = d.get("persons", [])
+        topics = d.get("topics", [])
+        semantic_function = d.get("semantic_function", "")
 
-    if holder not in speaker:
-        chat_str += f"\n\nWARNING: {holder} is NOT the speaker in this passage."
-        chat_str += f"\n- DO NOT attribute {holder}'s words to {speaker}."
-        chat_str += f"\n- DO NOT attribute {target}'s words to {holder}."
+        chat_str = "Say things like: "
+        attr_str = f"In this evidence block, which is functioning as {discourse_role}, "
 
-    context = "\n==============================================================================================================================================\n".join(
-        f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} Length: {doc.metadata.get("text_length", "N/A")}
+        if region_author:
+            attr_str += f'the writer of this particular section of the work is "{region_author}", '
+            chat_str += f"\n- In {author}'s **{work}**, {region_author} writes that {holder if (holder not in author and holder not in region_author and holder not in speaker) else 'he'} believes that {target} ..."
+        if quoted_speaker:
+            attr_str += f'the quoted speaker is "{quoted_speaker}", '
+            chat_str += f"\n- {quoted_speaker} is quoted in this passage as saying that {target}..."
+        if holder:
+            attr_str += f"it is {holder}'s position being expressed, " 
+            chat_str += f"\n- In the passage, {holder} claims that {target}..."
+        if speaker:
+            attr_str += f"{speaker} is the one doing the speaking/writing, " 
+            chat_str += f"\n- In the cited text, {speaker} says clearly that {target}..."
+        if target:
+            attr_str += f"the target of {holder}'s claim is {target}, "
+            chat_str += f"\n- In this excerpt, {holder} takes aim at {target}, writing that ..."
+        if persons:
+            attr_str += f"the persons mentioned in this passage are {' and '.join(persons)}, "
+            chat_str += f"\n- {speaker} mentions {' and '.join(persons)} when {holder if holder is not speaker else 'he'} says that {target}..."
+        if topics:
+            attr_str += f"the topics discussed in this passage are {' and '.join(topics)}, "
+            chat_str += f"\n- The passage discusses {' and '.join(persons + topics)} in relation to {target}..."
+
+        attr_str += f"and the passage is from **{work}** ({d.get('year')}) by {author}. "
+        chat_str += f"\n- As far back as {d.get('year')}, {author} wrote in **{work}** that {target} ..."
+        if d.get("translator"):
+            attr_str += f" The work is translated by: {d.get('translator')}. "
+        if d.get("editor"):
+            attr_str += f" The editor of the work is: {d.get('editor')}. "
+
+        if holder not in speaker:
+            chat_str += f"\n\nWARNING: {holder} is NOT the speaker in this passage."
+            chat_str += f"\n- DO NOT attribute {holder}'s words to {speaker}."
+            chat_str += f"\n- DO NOT attribute {speaker}'s words to {holder}."
+
+        if region_author and discourse_role and holder and proposition_status and target:
+            chat_str += f"\n\nFRAME OF THIS EVIDENCE IN YOUR RESPONSE:\n'In {region_author}'s writing on {random.choice(topics) if len(topics) else target if target else 'this'} and {random.choice(persons) if len(persons) else 'other matters'}, which is functioning as a kind of {discourse_role}{' or even ' + random.choice(semantic_function) if len(semantic_function) else ''} here, {holder} {proposition_status} that [...] {target} [...]'"
+
+        context += f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} Length: {doc.metadata.get("text_length", "N/A")}
 ==============================================================================================================================================
 {attr_str}
 TO CITE THIS EVIDENCE:
- - MLA inline: {doc.metadata.get("inline_citation")}
- - Works Cited: {doc.metadata.get("full_citation")}
+ - MLA inline: {d.get("inline_citation")}
+ - Works Cited: {d.get("full_citation")}
 {chat_str}
 
 [EVIDENCE]
@@ -784,10 +827,7 @@ TO CITE THIS EVIDENCE:
 {json.dumps(doc.metadata.get("text"))}
 ---------------------------------
 [/EVIDENCE]
-_______________________________________________________________________\n
-"""
-        for i, doc in enumerate(reordered_groups)
-    )
+_______________________________________________________________________\n"""
 
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
 
@@ -799,7 +839,6 @@ _______________________________________________________________________\n
         prompt_query=a_prompt_options["prompt_query"],
         prompt_instructions=a_prompt_options["prompt_instructions"]
     )
-    #LOG.info("Final prompt: %s", final_prompt)
 
     # Invoke the final prompt with the chat model
     response = client.invoke(final_prompt)
@@ -816,6 +855,18 @@ unique_candidates: {len(unique_candidates)} | lambda_mult: {LAMBDA_MULT_VALUE}
 chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_options.get("is_research_query") else "chatbot" if a_prompt_options.get("is_chatbot_query") else "general/generative"}
 """)
     doc = json.loads(strip_code_fence(response.content))
+
+    # LOG.info("Reviewing generated response...")
+
+    # review_prompt = ChatPromptTemplate.from_template(final_review_prompt_template)
+    # review_prompt = review_prompt.format(
+    #     response_content=doc["response"],
+    #     response_claims=doc["claims"],
+    #     response_evidence_blocks=context,
+    # )
+    # reviewed = client.invoke(review_prompt)
+    # LOG.info("Reviewed response: %s", reviewed.content)
+
     client.add_record_to_response_store({
         "text": doc["response"],
         "metadata": {
@@ -871,6 +922,9 @@ chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_op
     with open(path, "w", encoding="utf-8") as f:
         json.dump(training_data, f, ensure_ascii=False, indent=2)
     LOG.info("Training data saved to training-data.json")
+    end = time.perf_counter()
+    LOG.info("Elapsed time: %.2f seconds", end - start)
+    
 
 #     LOG.info("Reviewing response...")
 

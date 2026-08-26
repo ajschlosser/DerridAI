@@ -123,6 +123,31 @@ respond_as_derrida_template = """
     
 """
 
+final_review_prompt_template = """
+You are a strict evidence auditor and final reviewer.
+
+Examine the RESPONSE in light of the CLAIMS and the EVIDENCE BLOCKS.
+
+For each CLAIM, verify its accuracy against its associated EVIDENCE BLOCK.
+
+If a CLAIM is not _directly_ supported by the EVIDENCE BLOCKS, remove it from the RESPONSE.
+
+NO EXCEPTIONS. DO NOT COLLAPSE CLAIMS. DO NOT SYNTHESIZE CLAIMS. NO ORIGINAL SYNTHESIS. ONLY CITED SYNTHESIS.
+
+[RESPONSE]
+{response_content}
+[/RESPONSE]
+
+[CLAIMS]
+{response_claims}
+[/CLAIMS]
+
+[EVIDENCE BLOCKS]
+{response_evidence_blocks}
+[/EVIDENCE BLOCKS]
+
+"""
+
 review_prompt_template = """
 You are a strict evidence auditor.
 
@@ -281,27 +306,40 @@ You are an academic and a scholar of Jacques Derrida.
         - RESPONSE MUST NOT EXCEED 150 SENTENCES
 
     FOLLOW THESE GUIDELINES:
-    - Use the supplied evidence as the sole basis for substantive claims.
+    - Use the supplied EVIDENCE above as the sole basis for substantive claims.
     - Preserve the distinctions, qualifications, and conceptual relationships present in the evidence.
     - Do not add a relationship between concepts unless the supplied evidence establishes that relationship.
     - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
     - Match the strength of each claim to the strength of its evidence.
+    - Use the guides in the EVIDENCE BLOCKS of the EVIDENCE to know how to describe relationships and cite passages
     - When several evidence blocks support distinct points, present those points separately unless the evidence clearly supports synthesizing them.
-    - Do not repeat a point merely to extend the response.
-    - Do not generalize beyond the supplied evidence for the sake of a smoother conclusion.
-    - Use only works that materially contribute to the response.
-    - If the evidence does not support a claim, omit it.
-
+    - Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
+    - Avoid EVIDENCE that is functioning as a footnote, quotation, or otherwise paratextually
+    - STRICTLY AVOID clichés, generalizations, corporate-speak, vagueries, and be specific.
+    - A claim is not "direct" merely because it is compatible with the evidence.
+      It is direct only if the evidence explicitly states the proposition without requiring interpretive reformulation.
+    - Do NOT change words in the cited source; quote it verbatim if needed
+    
+    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
     [RESPONSE FORMAT]
-
         {{
             "title": ..., <-- the response title
             "response": ..., <-- the response (i.e., the main body or content of the answer)
-            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
+            "works_cited": [...], <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
+            "claims": [ <-- Array of every sentence in the response. Each claim should be supported by evidence, and every very substantive proposition in the final answer must reference one or more accepted claim IDs
+                {{
+                    "claim": ..., <-- the specific claim made in the response
+                    "meta": {{
+                        "evidence_block_id": ..., <-- the ID of the evidence block supporting the claim
+                        "evidence_block_text": ..., <-- the VERBATIM, directly-cited, non-paraphrased part of the ORIGINAL SOURCE/EVIDENCE block that directly supports the GENERATED claim (truncate if >300 and note it is truncated with " ... [truncated]")
+                        "record_id": ... <-- the ID of the record supporting the claim in the evidence
+                    }}
+                }},
+                ...
+            ]
         }}
-
     [/RESPONSE FORMAT]
-
+    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
 """
 
 initial_prompt_template = """
@@ -405,7 +443,9 @@ query_improvement_template = """
         "is_general_query": true <-- this is true if is_research_query and is_chatbot_query are both false
 
         "query": {{
-            "subject_person": ... <-- the person the prompt is asking about, if any
+            "subject_persons": [...], <-- the persons the prompt is asking about, if any
+            "subject_topics": [...], <-- the topuics the prompt is asking about, if any
+            "tone": "neutral | negative | positive | hostile | offensive | silly", <-- the tone or sentiment of the query
         }}
     }}
 

@@ -5,7 +5,7 @@ CHAT_MODEL        = "phi4:14b" # great
 #CHAT_MODEL        = "qwen2.5:7b-instruct" # not great
 #CHAT_MODEL        = "mistral-small3.1:24b" # bad
 #CHAT_MODEL        = "gemma3:12b" # unknown quality
-CHAT_TEMPERATURE  = 0.8
+CHAT_TEMPERATURE  = 0.4
 OLLAMA_BASE_URL   = "http://localhost:11434"
 
 DB_PATH           = "./chroma_db_local7"
@@ -15,7 +15,7 @@ BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE           = 64
 FETCH_K_VALUE     = 500
 LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
-RERANK_COUNT      = 7 #int(K_VALUE // 6)
+RERANK_COUNT      = 8 #int(K_VALUE // 6)
 
 RESPONSE_MIN_SENTENCES = 150
 RESPONSE_MAX_SENTENCES = 500
