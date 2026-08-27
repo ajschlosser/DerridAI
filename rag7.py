@@ -73,11 +73,11 @@ import pyphen
 from dehyphen import FlairScorer
 from symspellpy import SymSpell, Verbosity
 
+start = time.perf_counter()
+
 # DOWNLOAD NECESSARY NLTK DATA
 nltk.download('punkt_tab')
 nltk.download('punkt')
-
-start = time.perf_counter()
 
 # CLI ARGUMENTS
 parser = argparse.ArgumentParser(description="RAG Pipeline for Philosophical Texts")
@@ -249,6 +249,9 @@ def main():
 
     client.add_new_records(batch_size=1000)
 
+    elapsed = time.perf_counter() - start
+    LOG.info("Time it took to get things set up: %s seconds", elapsed)
+
     # Initial query processing
     a_query_improvement_prompt = ChatPromptTemplate.from_template(query_improvement_template)
     a_formatted_query_improvement_prompt = a_query_improvement_prompt.format(prompt=args.prompt)
@@ -277,7 +280,6 @@ def main():
     # }
 
     LOG.info("Chat model response: %s", a_prompt_options)
-
 
     if a_prompt_options.get("is_fetch_query") and (a_prompt_options.get("fetch_query_content") or a_prompt_options.get("fetch_query_content_fr")):
         LOG.info("User is asking for appearances of specific content in the source materials: '%s'", a_prompt_options["fetch_query_content"])
@@ -521,14 +523,14 @@ def main():
 
     # Initial filtering and retriever creation
     initial_search_kwargs = {
-        "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
+        "k": K_VALUE // 4 if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "fetch_k": FETCH_K_VALUE,
         "lambda_mult": LAMBDA_MULT_VALUE,
         "filter": {
             "$and": [
                 {"region_author": { "$eq": "Jacques Derrida"}},
                 {"position_holder": {"$eq": "Jacques Derrida"}},
-                {"discourse_role": {"$eq": "citation"}},
+                {"discourse_role": {"$nin": ["citation", "footnote", "endnote", "commentary", "bibliography"]}},
                 {"region_type": {"$eq": "main_text"}},
                 {"primary_text": {"$eq": True}},
                 {"text_length": {"$gt": 300}},
@@ -537,12 +539,12 @@ def main():
         }
     }
     similarity_seach_kwargs = {
-        "k": math.ceil(K_VALUE / 4) if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
+        "k": K_VALUE // 4 if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
         "filter": {
             "$and": [
                 {"region_author": { "$eq": "Jacques Derrida"}},
                 {"position_holder": {"$eq": "Jacques Derrida"}},
-                {"discourse_role": {"$eq": "citation"}},
+                {"discourse_role": {"$nin": ["citation", "footnote", "endnote", "commentary", "bibliography"]}},
                 {"region_type": {"$eq": "main_text"}},
                 {"primary_text": {"$eq": True}},
                 {"text_length": {"$gt": 300}},
@@ -589,8 +591,10 @@ def main():
     )
     LOG.info("Formatted initial retrieval prompt: %s", b_formatted_initial_retrieval_prompt)
     candidates = initial_retriever.invoke(b_formatted_initial_retrieval_prompt)
+    LOG.info("Initial retrieval candidates: %s", len(candidates))
     LOG.info("Looking for additional candidates using the secondary retriever...")
     additional_candidates = secondary_retriever.invoke(b_formatted_initial_retrieval_prompt)
+    LOG.info("Additional retrieval candidates: %s", len(additional_candidates))
 
     canonical_candidates = []
     combined_canonical_candidates = []
@@ -617,12 +621,12 @@ def main():
         LOG.info("Combined canonical work IDs: %s", combined_work_ids)
         if combined_work_ids:
             canonical_search_kwargs = {
-                "k": math.ceil(K_VALUE / 2),
+                "k": K_VALUE // 2,
                 "filter": {
                     "$and": [
                         {"region_author": { "$eq": "Jacques Derrida"}},
                         {"position_holder": {"$eq": "Jacques Derrida"}},
-                        {"discourse_role": {"$eq": "citation"}},
+                        {"discourse_role": {"$nin": ["citation", "footnote", "endnote", "commentary", "bibliography"]}},
                         {"region_type": {"$eq": "main_text"}},
                         {"primary_text": {"$eq": True}},
                         {
@@ -665,20 +669,51 @@ def main():
             canonical_work_retriever = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="similarity")
             canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
-            canonical_search_kwargs["fetch_k"] = math.ceil(K_VALUE / 2)
+            canonical_search_kwargs["fetch_k"] = math.ceil(FETCH_K_VALUE // 2)
             canonical_search_kwargs["lambda_mult"] = LAMBDA_MULT_VALUE
             LOG.info("Canonical search MMR kwargs: %s", canonical_search_kwargs)
             canonical_work_retriever_mmr = client.create_retriever(
                 search_kwargs=canonical_search_kwargs, search_type="mmr")
             canonical_candidates_mmr = canonical_work_retriever_mmr.invoke(b_formatted_initial_retrieval_prompt)
-            del canonical_search_kwargs["fetch_k"]
-            del canonical_search_kwargs["lambda_mult"]
+
+            targeted_search_kwargs = {
+                "k": K_VALUE // 2,
+                "filter": {
+                    "$and": [
+                        {"region_author": { "$eq": "Jacques Derrida"}},
+                        {"position_holder": {"$eq": "Jacques Derrida"}},
+                        {"discourse_role": {"$nin": ["citation", "footnote", "endnote", "commentary", "bibliography"]}},
+                        {"region_type": {"$eq": "main_text"}},
+                        {"primary_text": {"$eq": True}},
+                        {
+                            "text_length": {
+                                "$gt": 500
+                            }
+                        },
+                    ]
+                }
+            }
             targets = keywords + keywords_fr
-            canonical_search_kwargs["filter"]["$and"].append({
+            targeted_search_kwargs["filter"]["$and"].append({
                 "$or": [{"target": {"$eq": target}} for target in targets]
             })
+
+
+            if a_prompt_options["materials_language"]:
+                if len(a_prompt_options["materials_language"]) > 1:
+                    targeted_search_kwargs["filter"]["$and"].append({
+                        "$or": [{"document_language": {"$contains": lang}} for lang in a_prompt_options["materials_language"]]
+                    })
+                else:
+                    targeted_search_kwargs["filter"]["$and"].append({
+                        "document_language": {
+                            "$contains": a_prompt_options["materials_language"][0]
+                        }
+                    })
+
+
             targeted_work_retriever = client.create_retriever(
-                search_kwargs=canonical_search_kwargs, search_type="similarity")
+                search_kwargs=targeted_search_kwargs, search_type="similarity")
             targeted_candidates = targeted_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
 
             combined_canonical_candidates = canonical_candidates + canonical_candidates_mmr
@@ -757,7 +792,7 @@ def main():
     reordered_groups = reordering.transform_documents(unique_candidates)
 
     context = "\n==============================================================================================================================================\n"
-
+    blocks = []
     for i, doc in enumerate(reordered_groups):
         d = doc.metadata
 
@@ -814,6 +849,17 @@ def main():
         if region_author and discourse_role and holder and proposition_status and target:
             chat_str += f"\n\nFRAME OF THIS EVIDENCE IN YOUR RESPONSE:\n'In {region_author}'s writing on {random.choice(topics) if len(topics) else target if target else 'this'} and {random.choice(persons) if len(persons) else 'other matters'}, which is functioning as a kind of {discourse_role}{' or even ' + random.choice(semantic_function) if len(semantic_function) else ''} here, {holder} {proposition_status} that [...] {target} [...]'"
 
+        block = {
+            "evidence_block_id": f"{doc.metadata.get('record_id')}-e{i}",
+            "record_id": doc.metadata.get("record_id"),
+            "cited_text": doc.metadata.get("text"),
+            "inline_citation": d.get("inline_citation"),
+            "full_citation": d.get("full_citation"),
+            "attribution": attr_str,
+            # "description": chat_str
+        }
+        blocks.append(block)
+
         context += f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} Length: {doc.metadata.get("text_length", "N/A")}
 ==============================================================================================================================================
 {attr_str}
@@ -829,13 +875,14 @@ TO CITE THIS EVIDENCE:
 [/EVIDENCE]
 _______________________________________________________________________\n"""
 
-    LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
+    #LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
+    LOG.info("Constructed evidence, source, and citation context blocks: %s", blocks)
 
     ultimate_prompt = research_prompt_template if a_prompt_options.get("is_research_query") else respond_as_derrida_template if a_prompt_options.get("is_chatbot_query") else focused_prompt_template
 
     prompt = ChatPromptTemplate.from_template(ultimate_prompt)
     final_prompt = prompt.format(
-        context=context,
+        context=json.dumps(blocks),
         prompt_query=a_prompt_options["prompt_query"],
         prompt_instructions=a_prompt_options["prompt_instructions"]
     )
@@ -867,61 +914,61 @@ chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_op
     # reviewed = client.invoke(review_prompt)
     # LOG.info("Reviewed response: %s", reviewed.content)
 
-    client.add_record_to_response_store({
-        "text": doc["response"],
-        "metadata": {
-            "title": doc["title"],
-            "works_cited": doc["works_cited"],
-            "timestamp": date.today().isoformat(),
-            "original_query": args.prompt,
-            #"query_details": a_prompt_options,
-            "prompt_query": a_prompt_options["prompt_query"],
-            "prompt_instructions": a_prompt_options["prompt_instructions"],
-            "materials_language": a_prompt_options.get("materials_language"),
-            "response_language": a_prompt_options.get("response_language"),
-            "k": K_VALUE,
-            "fetch_k": FETCH_K_VALUE,
-            "db_path": DB_PATH,
-            "retrieved_candidates": len(combined_candidates),
-            "unique_candidates": len(unique_candidates),
-            "combined_canonical_candidates": len(combined_canonical_candidates),
-            "lambda_mult": LAMBDA_MULT_VALUE,
-            "chat_temperature": CHAT_TEMPERATURE
-        }
-    })
+    # client.add_record_to_response_store({
+    #     "text": doc["response"],
+    #     "metadata": {
+    #         "title": doc["title"],
+    #         "works_cited": doc["works_cited"],
+    #         "timestamp": date.today().isoformat(),
+    #         "original_query": args.prompt,
+    #         #"query_details": a_prompt_options,
+    #         "prompt_query": a_prompt_options["prompt_query"],
+    #         "prompt_instructions": a_prompt_options["prompt_instructions"],
+    #         "materials_language": a_prompt_options.get("materials_language"),
+    #         "response_language": a_prompt_options.get("response_language"),
+    #         "k": K_VALUE,
+    #         "fetch_k": FETCH_K_VALUE,
+    #         "db_path": DB_PATH,
+    #         "retrieved_candidates": len(combined_candidates),
+    #         "unique_candidates": len(unique_candidates),
+    #         "combined_canonical_candidates": len(combined_canonical_candidates),
+    #         "lambda_mult": LAMBDA_MULT_VALUE,
+    #         "chat_temperature": CHAT_TEMPERATURE
+    #     }
+    # })
 
-    data = {
-        "messages": [
-            {
-            "role": "system",
-            "content": "You are a Derrida studies research assistant. Ground textual claims in the supplied sources. Distinguish quotation, paraphrase, and interpretation. Never invent citationss."
-            },
-            {
-            "role": "user",
-                "content": a_prompt_options["prompt_query"]
-            },
-            {
-            "role": "assistant",
-                "content": doc["response"]
-            }
-        ]
-    }
-    path = "training-data.json"
+    # data = {
+    #     "messages": [
+    #         {
+    #         "role": "system",
+    #         "content": "You are a Derrida studies research assistant. Ground textual claims in the supplied sources. Distinguish quotation, paraphrase, and interpretation. Never invent citationss."
+    #         },
+    #         {
+    #         "role": "user",
+    #             "content": a_prompt_options["prompt_query"]
+    #         },
+    #         {
+    #         "role": "assistant",
+    #             "content": doc["response"]
+    #         }
+    #     ]
+    # }
+    # path = "training-data.json"
 
-    try:
-        with open(path, encoding="utf-8") as f:
-            training_data = json.load(f)
-    except FileNotFoundError:
-        training_data = []
+    # try:
+    #     with open(path, encoding="utf-8") as f:
+    #         training_data = json.load(f)
+    # except FileNotFoundError:
+    #     training_data = []
 
-    if isinstance(training_data, dict):
-        training_data = [training_data]
+    # if isinstance(training_data, dict):
+    #     training_data = [training_data]
 
-    training_data.append(data)
+    # training_data.append(data)
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(training_data, f, ensure_ascii=False, indent=2)
-    LOG.info("Training data saved to training-data.json")
+    # with open(path, "w", encoding="utf-8") as f:
+    #     json.dump(training_data, f, ensure_ascii=False, indent=2)
+    # LOG.info("Training data saved to training-data.json")
     end = time.perf_counter()
     LOG.info("Elapsed time: %.2f seconds", end - start)
     

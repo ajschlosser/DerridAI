@@ -1,6 +1,7 @@
 # CONFIGURATION
 EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
-CHAT_MODEL        = "phi4:14b" # great
+CHAT_MODEL         = "qwen3.5:4b"
+#CHAT_MODEL        = "phi4:14b" # great
 #CHAT_MODEL        = "qwen3:4b-instruct" # not bad
 #CHAT_MODEL        = "qwen2.5:7b-instruct" # not great
 #CHAT_MODEL        = "mistral-small3.1:24b" # bad
@@ -15,7 +16,7 @@ BATCH_SIZE        = 1000          # Prevents Ollama tokenizer OOM crashes
 K_VALUE           = 64
 FETCH_K_VALUE     = 500
 LAMBDA_MULT_VALUE = 0.7           # Lower = more diversity; higher = more query relevance
-RERANK_COUNT      = 8 #int(K_VALUE // 6)
+RERANK_COUNT      = 10 #int(K_VALUE // 6)
 
 RESPONSE_MIN_SENTENCES = 150
 RESPONSE_MAX_SENTENCES = 500
@@ -1579,7 +1580,9 @@ keys = {
       "derrida-the_ear_of_the_other_otobiography_transference_translation-1985"
     ],
     "pardon": [
-      "derrida-on_cosmopolitanism_and_forgiveness-2005-dooley_hughes"
+      "derrida-seminaire_la_peine_de_mort_volume_i-2012",
+      "derrida-seminaire_la_peine_de_mort_volume_ii_2000_2001-2015",
+      "derrida-donner_la_mort-1999"
     ],
     "parergon": [
       "derrida-the_truth_in_painting-1987"

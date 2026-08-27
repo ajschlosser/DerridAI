@@ -326,17 +326,6 @@ You are an academic and a scholar of Jacques Derrida.
             "title": ..., <-- the response title
             "response": ..., <-- the response (i.e., the main body or content of the answer)
             "works_cited": [...], <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
-            "claims": [ <-- Array of every sentence in the response. Each claim should be supported by evidence, and every very substantive proposition in the final answer must reference one or more accepted claim IDs
-                {{
-                    "claim": ..., <-- the specific claim made in the response
-                    "meta": {{
-                        "evidence_block_id": ..., <-- the ID of the evidence block supporting the claim
-                        "evidence_block_text": ..., <-- the VERBATIM, directly-cited, non-paraphrased part of the ORIGINAL SOURCE/EVIDENCE block that directly supports the GENERATED claim (truncate if >300 and note it is truncated with " ... [truncated]")
-                        "record_id": ... <-- the ID of the record supporting the claim in the evidence
-                    }}
-                }},
-                ...
-            ]
         }}
     [/RESPONSE FORMAT]
     OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
