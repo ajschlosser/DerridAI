@@ -16,3 +16,4 @@ pyphen
 dehyphen
 symspellpy
 sentence_transformers
+toons

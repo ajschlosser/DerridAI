@@ -849,18 +849,18 @@ def main():
         if region_author and discourse_role and holder and proposition_status and target:
             chat_str += f"\n\nFRAME OF THIS EVIDENCE IN YOUR RESPONSE:\n'In {region_author}'s writing on {random.choice(topics) if len(topics) else target if target else 'this'} and {random.choice(persons) if len(persons) else 'other matters'}, which is functioning as a kind of {discourse_role}{' or even ' + random.choice(semantic_function) if len(semantic_function) else ''} here, {holder} {proposition_status} that [...] {target} [...]'"
 
-        block = {
-            "evidence_block_id": f"{doc.metadata.get('record_id')}-e{i}",
-            "record_id": doc.metadata.get("record_id"),
-            "cited_text": doc.metadata.get("text"),
-            "inline_citation": d.get("inline_citation"),
-            "full_citation": d.get("full_citation"),
-            "attribution": attr_str,
-            # "description": chat_str
-        }
-        blocks.append(block)
+        # block = {
+        #     "evidence_block_id": f"{doc.metadata.get('record_id')}-e{i}",
+        #     "record_id": doc.metadata.get("record_id"),
+        #     "cited_text": doc.metadata.get("text"),
+        #     "inline_citation": d.get("inline_citation"),
+        #     "full_citation": d.get("full_citation"),
+        #     "attribution": attr_str,
+        #     # "description": chat_str
+        # }
+        # blocks.append(block)
 
-        context += f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} Length: {doc.metadata.get("text_length", "N/A")}
+        context += f"""| EVIDENCE_BLOCK_ID: 00-{i} | Record ID: {doc.metadata.get("record_id")} |
 ==============================================================================================================================================
 {attr_str}
 TO CITE THIS EVIDENCE:
@@ -873,16 +873,18 @@ TO CITE THIS EVIDENCE:
 {json.dumps(doc.metadata.get("text"))}
 ---------------------------------
 [/EVIDENCE]
-_______________________________________________________________________\n"""
+==============================================================================================================================================\n
+"""
 
-    #LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
-    LOG.info("Constructed evidence, source, and citation context blocks: %s", blocks)
+    LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
+    #LOG.info("Constructed evidence, source, and citation context blocks: %s", blocks)
 
     ultimate_prompt = research_prompt_template if a_prompt_options.get("is_research_query") else respond_as_derrida_template if a_prompt_options.get("is_chatbot_query") else focused_prompt_template
 
     prompt = ChatPromptTemplate.from_template(ultimate_prompt)
     final_prompt = prompt.format(
-        context=json.dumps(blocks),
+        #context=json.dumps(blocks),
+        context=context,
         prompt_query=a_prompt_options["prompt_query"],
         prompt_instructions=a_prompt_options["prompt_instructions"]
     )

@@ -1,7 +1,7 @@
 # CONFIGURATION
 EMBEDDING_MODEL   = "bge-m3:latest" #"nomic-embed-text"
-CHAT_MODEL         = "qwen3.5:4b"
-#CHAT_MODEL        = "phi4:14b" # great
+#CHAT_MODEL         = "qwen3.5:4b" # ok
+CHAT_MODEL        = "phi4:14b" # great
 #CHAT_MODEL        = "qwen3:4b-instruct" # not bad
 #CHAT_MODEL        = "qwen2.5:7b-instruct" # not great
 #CHAT_MODEL        = "mistral-small3.1:24b" # bad

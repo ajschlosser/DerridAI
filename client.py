@@ -192,3 +192,44 @@ DB_PATH: {cfg.store.persist_directory}
             )
 
         LOG.info("Vector store update complete.")
+
+DEFAULT_CHAT_MODEL = "phi4:14b"
+DEFAULT_CHAT_TEMPERATURE = 0.4
+DEFAULT_CHAT_BASE_URL = "http://localhost:11434"
+DEFAULT_CHAT_TIMEOUT = 45.0
+DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
+DEFAULT_STORE_PERSIST_DIRECTORY = "./chroma_db_local7"
+
+embeddings = OllamaEmbeddings(
+    model=DEFAULT_EMBEDDING_MODEL,
+    base_url=DEFAULT_CHAT_BASE_URL,
+)
+
+class RAG_LLM:
+    chats = {}
+    embeddings = {}
+    stores = {}
+    key = "defaults"
+    def __init__(self):
+        self.chats["defaults"] = ChatOllama(
+            model=DEFAULT_CHAT_MODEL,
+            temperature=DEFAULT_CHAT_TEMPERATURE,
+            base_url=DEFAULT_CHAT_BASE_URL,
+            timeout=DEFAULT_CHAT_TIMEOUT,
+        )
+        self.stores["defaults"] = Chroma(
+            persist_directory=DEFAULT_STORE_PERSIST_DIRECTORY,
+            embedding_function=embeddings,
+        )
+
+    def switch(self, key: str):
+        self.key = key
+
+    def chat(self, key: str = None):
+        return self.chats[key if key else self.key]
+
+    def store(self, key: str = None):
+        return self.stores[key if key else self.key]
+
+    def embeddings(self, key: str = None):
+        return embeddings

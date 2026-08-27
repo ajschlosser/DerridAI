@@ -270,11 +270,14 @@ research_prompt_template = """
 
     [RESPONSE FORMAT]
 
-        {{
-            "title": ..., <-- the response title
-            "response": ..., <-- the response (i.e., the main body or content of the answer)
-            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
-        }}
+    **Title**
+
+    ... response ...
+
+    **Works Cited**
+
+    1. enumerated bibliography
+    2. ...
 
     [/RESPONSE FORMAT]
 
@@ -284,51 +287,42 @@ focused_prompt_template = """
 
 You are an academic and a scholar of Jacques Derrida.
 
-    You have been prompted by the user with the following instructions:
-    
-    [MASTER PROMPT]
-        "{prompt_query}"
-    [/MASTER PROMPT]
+You have been prompted by the user with the following instructions:
 
-    [MASTER INSTRUCTIONS]
-        "{prompt_instructions}"
-    [/MASTER INSTRUCTIONS]
+<MASTER PROMPT>
+    "{prompt_query}"
+</MASTER PROMPT>
 
-    [EVIDENCE]
-    {context}
-    [/EVIDENCE]
+<MASTER INSTRUCTIONS>
+    "{prompt_instructions}"
+</MASTER INSTRUCTIONS>
 
-    RESPONSE REQUIREMENTS:
-        - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
-        - Every paragraph containing an interpretive claim must cite at least one retrieved passage,
-          and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
-        - RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
-        - RESPONSE MUST NOT EXCEED 150 SENTENCES
+<EVIDENCE>
+{context}
+</EVIDENCE>
 
-    FOLLOW THESE GUIDELINES:
-    - Use the supplied EVIDENCE above as the sole basis for substantive claims.
-    - Preserve the distinctions, qualifications, and conceptual relationships present in the evidence.
-    - Do not add a relationship between concepts unless the supplied evidence establishes that relationship.
-    - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-    - Match the strength of each claim to the strength of its evidence.
-    - Use the guides in the EVIDENCE BLOCKS of the EVIDENCE to know how to describe relationships and cite passages
-    - When several evidence blocks support distinct points, present those points separately unless the evidence clearly supports synthesizing them.
-    - Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
-    - Avoid EVIDENCE that is functioning as a footnote, quotation, or otherwise paratextually
-    - STRICTLY AVOID clichés, generalizations, corporate-speak, vagueries, and be specific.
-    - A claim is not "direct" merely because it is compatible with the evidence.
-      It is direct only if the evidence explicitly states the proposition without requiring interpretive reformulation.
-    - Do NOT change words in the cited source; quote it verbatim if needed
-    
-    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
-    [RESPONSE FORMAT]
-        {{
-            "title": ..., <-- the response title
-            "response": ..., <-- the response (i.e., the main body or content of the answer)
-            "works_cited": [...], <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
-        }}
-    [/RESPONSE FORMAT]
-    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
+RESPONSE REQUIREMENTS:
+- ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
+- RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
+
+FOLLOW THESE GUIDELINES:
+- Use the supplied EVIDENCE above as the sole basis for substantive claims.
+- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+- Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
+- Do NOT translate long French passages; quote them verbatim
+
+<RESPONSE FORMAT>
+
+**Title**
+
+... response ...
+
+**Works Cited**
+
+1. enumerated bibliography
+2. ...
+
+</RESPONSE FORMAT>
 """
 
 initial_prompt_template = """
@@ -401,47 +395,73 @@ initial_prompt_template = """
 """
 
 query_improvement_template = """
-    [PROMPT]
+    <PROMPT>
         "{prompt}"
-    [/PROMPT]
+    </PROMPT>
 
-    Assume response_language is the same as prompt_language unless otherwise specified.
+    Your response must be in TOON (Token-Oriented Object Notation) format.
+    
+    ## Schema Definition for TOON response object
+    - `prompt`: String. The full prompt text.
+    - `prompt_query`: String. The part of the prompt that contains the actual question or request.
+    - `prompt_query_fr`: String. The part of the prompt that contains the actual question or request translated into French.
+    - `prompt_instructions`: String. Any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW).
+    - `keywords`: Array[String]. 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response, PLUS related multi-word keywords.
+    - `keywords_fr`: Array[String]. 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response, PLUS related multi-word keywords.
+    - `prompt_language`: Array[String]. The language(s) of the prompt.
+    - `materials_language`: Array[String]. The language(s) of the source materials.
+    - `response_language`: Array[String]. The language(s) in which the response should be provided.
+    - `is_fetch_query`: Boolean. Whether or not the prompt is asking for appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
+    - `fetch_query_content`: String. The specific content to look for in the source materials if `is_fetch_query` is true.
+    - `fetch_query_content_fr`: String. The specific content to look for in the source materials if `is_fetch_query` is true (in French).
+    - `fetch_limit`: Integer. The maximum number of fetch results to return.
+    - `limit_authors`: Array[String] | null. This is `null` unless the prompt specifically, explicitly, and directly requests limiting query to particular author(s), i.e. "in the works of Derrida" or "limited to Levinas' writings"
+    - `prompt_authors`: Array[String]. Array of authors explicitly mentioned in the prompt, if any. More inclusive than `limit_author`
+    - `is_chatbot_query`: Boolean. Whether the prompt is a chatbot query, addressing the LLM in the second person, conversationally, not academically, and seeking a conversational first-person response, e.g. "How are you?"
+    - `is_general_query`: Boolean. Whether the prompt is a general academic query
+    - `prompt_tone`: Enum [neutral | hostile | friendly | offensive | silly]
 
-    Assume materials_language is null (all languages) unless otherwise specified. (e.g., "you can use only French and English")
+    ## Field default values
+    - is_fetch_query: false
+    - fetch_query_content: null
+    - fetch_query_content_fr: null
+    - fetch_limit: 10
+    - limit_authors: null
+    - is_chatbot_query: false
+    - is_general_query: true
+    - prompt_tone: neutral
+    - materials_language[2]: en,fr
+    - response_language[1]: en
+    - prompt_language[1]: en
+    - prompt_authors: null
+    
+    ## Example TOON response object:
 
+    ```toon
+    prompt: What did Derrida say about logocentrism? Only cite Derrida's French works.
+    prompt_query: What did Derrida say about logocentrism?
+    prompt_query_fr: Qu'est-ce que Derrida dit du logocentrisme?
+    prompt_instructions: Only cite Derrida's French works.
+    keywords[2]: logocentrism,language
+    keywords_fr[2]: logocentrisme,langue
+    materials_language[1]: fr
+    response_language[1]: en
+    prompt_language[1]: en
+    is_fetch_query: false
+    fetch_query_content: null
+    fetch_query_content_fr: null
+    fetch_limit: 10
+    limit_authors[1]: Jacques Derrida
+    prompt_authors[2]: Jacques Derrida,Martin Heidegger
+    is_research_query: false
+    prompt_tone: neutral
+    is_chatbot_query: false
+    is_general_query: true
+    prompt_tone: neutral
+    ```
 
-    OUTPUT FORMAT: valid JSON object ONLY
+    Output only the TOON response object, no additional text, markdown, or ```
 
-    {{
-        "prompt": "{prompt}",
-        "prompt_query": "..." <-- the part of the prompt that contains the actual question or request
-        "prompt_query_fr": "...", <-- the part of the prompt that contains the actual question or request translated into French
-        "prompt_instructions": "..." <-- any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW)
-        "keywords": ["keyword1", "keyword2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response, PLUS related multi-word keywords (e.g. ["other", "the Other"])
-        "keywords_fr": ["motclé1", "motclé2", ...], <-- 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response, PLUS related multi-word keywords (e.g. ["autre", "l'Autre"])
-        "prompt_language": ["en_us"], <-- query is in English
-        "materials_language": ["en_us","fr_fr"], <-- maybe query is asking you to look ONLY at French materials, default is ["en_us", "fr_fr"]
-        "response_language": ["fr_fr"], <-- query is asking you to respond in French
-        "is_fetch_query": false, <--- whether or not the prompt is asking for appearances, mentions, discussions, etc. of "x" (a particular idea or key concept) in the source materials (true) or just a general answer (false)
-        "fetch_query_content": null <--- the specific content to look for in the source materials if is_fetch_query is true
-        "fetch_query_content_fr": null <--- the specific content to look for in the source materials if is_fetch_query is true (in French),
-        "fetch_limit": null <-- the maximum number of source materials to fetch if is_fetch_query is true
-        "limit_author": "Jacques Derrida" <--- if the prompt asks to limit research to derrida's own words, or the words of another ('derrida' --> 'Jacques Derrida')
-        "is_research_query": false, <-- set to true if the prompt is asking for research, citations, relevant passages, etc. related to key Derrida words, ideas, concepts
-        "is_chatbot_query": false, <--- set to true if the prompt asks you questions about yourself ("How are you?" "What do you think about?"), or addressing you as Jacques, Jacques Derrida, Jackie, etc.
-        "is_general_query": true <-- this is true if is_research_query and is_chatbot_query are both false
-
-        "query": {{
-            "subject_persons": [...], <-- the persons the prompt is asking about, if any
-            "subject_topics": [...], <-- the topuics the prompt is asking about, if any
-            "tone": "neutral | negative | positive | hostile | offensive | silly", <-- the tone or sentiment of the query
-        }}
-    }}
-
-    OUTPUT ONLY VALID JSON OBJECT. NO COMMENTS. NO ``` NO MARKDOWN OR EXTRA TEXT
-    REMOVE ```
-    REMOVE ```json
-    DOUBLE-CHECK FOR QUOTATION MARKS AND ESCAPING IN JSON OBJECT
 """
 
 initial_retrieval_prompt_template = """
