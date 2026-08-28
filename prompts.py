@@ -284,8 +284,6 @@ research_prompt_template = """
 """
 
 focused_prompt_template = """
-You are an academic and a scholar of Jacques Derrida.
-
 You have been prompted by the user with the following instructions:
 
 <MASTER PROMPT>
@@ -295,6 +293,8 @@ You have been prompted by the user with the following instructions:
 <MASTER INSTRUCTIONS>
     "{prompt_instructions}"
 </MASTER INSTRUCTIONS>
+
+You have been provided the following evidence for your response:
 
 <EVIDENCE>
 {context}
@@ -307,18 +307,10 @@ RESPONSE REQUIREMENTS:
 FOLLOW THESE GUIDELINES:
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
 - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-- Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
-- Do NOT translate long French passages; quote them verbatim
 
 CITATION RULES:
 - Use MLA style for all citations.
 - Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
-- Use a numbered bibliography for the Works Cited section.
-- Refer to the EVIDENCE section for all citations.
-- Cite full sentences or large chunks of sentences from the evidence.
-- Do not translate French sources into English unless directed.
-
- Output only the TOON response object, no additional text, markdown, or ``` fences.
 
 <RESPONSE FORMAT>
 
@@ -329,8 +321,6 @@ CITATION RULES:
 }}
 
 </RESPONSE FORMAT>
-
-Every claim in the response must be documented and tied to a citation.
 
 RESPOND WITH VALID JSON ONLY. NO MARKDOWN, NO ``` FENCE
 """
@@ -499,13 +489,11 @@ initial_prompt_template = """
 
 query_improvement_template = """
 
-    Your job is to analyze this user prompt and break it down into Token Oriented Object Notation.
-
     <PROMPT>
         "{prompt}"
     </PROMPT>
 
-    Your response must be in valid JSON format. Use the schema below:
+    Decompose the above prompt. Your response must be in valid JSON format. Use the schema below:
 
     <RESPONSE SCHEMA>
     {{

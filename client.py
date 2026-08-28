@@ -224,6 +224,7 @@ class RAG_LLM:
             temperature=DEFAULT_CHAT_TEMPERATURE,
             base_url=DEFAULT_CHAT_BASE_URL,
             timeout=DEFAULT_CHAT_TIMEOUT,
+            num_ctx=114688
         )
         self.stores["defaults"] = Chroma(
             persist_directory=DEFAULT_STORE_PERSIST_DIRECTORY,

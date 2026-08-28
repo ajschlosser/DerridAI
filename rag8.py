@@ -30,8 +30,10 @@ import argparse
 from prompts import (
     query_improvement_template,
     focused_prompt_template,
+    #focused_prompt_template_claims,
 )
-from defaults import keys
+
+from defaults import CHAT_TEMPERATURE, keys
 from logger import Logger
 
 start = time.perf_counter()
@@ -99,7 +101,7 @@ def prompt(params: dict, store: str = "defaults", toon: bool = False) -> tuple:
     LOG.info("Prompt generation and response completed in %.2f seconds", time.perf_counter() - start)
     return cleaned_response, response
 
-def rerank_top_n(query, docs, reranker, top_n=10):
+def rerank_top_n(query, docs, reranker, top_n=7):
     start = time.perf_counter()
     pairs = [
         [query, doc.page_content if (hasattr(doc, "page_content")) else doc]
@@ -196,7 +198,7 @@ def generate_context_string(docs: list) -> str:
 
         context_str += f"""<EVIDENCE>
 Evidence ID: {i} | Record ID: {record_id}
-Text: [[[ {d.get("text")} ]]]
+Text: {d.get("text")}
 To cite the evidence in this block, use MLA format:
  - MLA inline: {d.get("inline_citation")}
  - MLA full works cited: {d.get("full_citation")}
@@ -204,9 +206,10 @@ To cite the evidence in this block, use MLA format:
 """
     return context_str
 
-K_VALUE = 48
+K_VALUE = 98
 FETCH_K_VALUE = 500
 LAMBDA_MULT_VALUE = 0.7
+CHAT_TEMPERATURE = 0.4
 
 # Fetch queries
 def handle_fetch_query(keywords: list[str]):
@@ -362,6 +365,7 @@ def main():
     LOG.info("Original query: %s", q)
     total_elapsed = time.perf_counter() - start
     LOG.info("Total time elapsed: %.4f seconds", total_elapsed)
+    LOG.info(f"k: {K_VALUE} | fetch_k: {FETCH_K_VALUE} | lambda_mult: {LAMBDA_MULT_VALUE} | chat_temperature: {CHAT_TEMPERATURE}")
     LOG.info(f"initial mmr and similarity results: {len(basic_results)} | combined canonical results: {len(combined_canonical_results)} | keyword results: {len(keyword_results)} | total combined retrieved: {total_retrieved_count} | total after deduplication: {len(deduplicated_results)} | total after reranking: {len(reranked_results)}")
     return
 
