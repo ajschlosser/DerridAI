@@ -79,7 +79,7 @@ def prompt(params: dict, toon: bool = True) -> tuple:
             cleaned_response = toons.loads(cleaned_response)
         except Exception as e:
             LOG.warning("Prompt response is not in TOON format: %s", e)
-    return cleaned_response, response
+    return (cleaned_response, response)
 
 def handle_fetch_query():
     print("ok")
@@ -99,6 +99,7 @@ K_VALUE = 64
 FETCH_K_VALUE = 500
 LAMBDA_MULT_VALUE = 0.7
 
+start = time.perf_counter()
 # MAIN FUNCTION
 def main():
     elapsed = time.perf_counter() - start
@@ -120,6 +121,7 @@ def main():
 
     # BASIC LOOKUP
     # Set up default filters
+    # TODO: Have separate collections for common
     default_mmr_search_kwargs = {
         "k": K_VALUE // 4 if q["keywords"] or q["keywords_fr"] else K_VALUE,
         "fetch_k": FETCH_K_VALUE,
@@ -138,7 +140,7 @@ def main():
                         {"discourse_role": {"$nin": ["citation", "footnote", "endnote", "commentary", "bibliography"]}},
                         {"region_type": {"$eq": "main_text"}},
                         {"primary_text": {"$eq": True}},
-                        {"text_length": {"$gt": 300}},
+                        # {"text_length": {"$gt": 300}},
                         {"extraction_quality": {"$gt": 0.8}}
                     ]   
                 }
@@ -152,10 +154,12 @@ def main():
     )
     results = retriever.invoke(f"'{q['prompt_query']}'\n'{q['prompt_query_fr']}'\n{q['keywords'] + q['keywords_fr']}")
 
-    total_elapsed = time.perf_counter() - start
-    LOG.info("Total time elapsed: %.4f seconds", total_elapsed)
+    lookup_elapsed = time.perf_counter() - total_elapsed
 
     LOG.info("Results: %d", len(results))
+    total_elapsed = time.perf_counter() - start
+    LOG.info("Time it took for lookup: %.4f seconds", lookup_elapsed)
+    LOG.info("Total time elapsed: %.4f seconds", lookup_elapsed - total_elapsed)
 
     return
 

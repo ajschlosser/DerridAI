@@ -70,6 +70,14 @@ DB_PATH: {cfg.store.persist_directory}
             persist_directory=cfg.store.persist_directory,
             embedding_function=self.embedding_model,
         )
+        self.vector_store_primary_en = Chroma(
+            persist_directory=cfg.store.persist_directory + '_derrida8_primary_en',
+            embedding_function=self.embedding_model,
+        )
+        self.vector_store_primary_fr = Chroma(
+            persist_directory=cfg.store.persist_directory + '_derrida8_primary_fr',
+            embedding_function=self.embedding_model,
+        )
         self.response_vector_store = Chroma(
             persist_directory=cfg.store.persist_directory + '_responses',
             embedding_function=self.embedding_model,
@@ -229,7 +237,15 @@ class RAG_LLM:
         return self.chats[key if key else self.key]
 
     def store(self, key: str = None):
-        return self.stores[key if key else self.key]
-
+        key = key if key else self.key
+        store = self.stores.get(key, None)
+        if store:
+            return store
+        elif key:
+            self.stores[key] = Chroma(
+                persist_directory=f"{DEFAULT_STORE_PERSIST_DIRECTORY}_{key}",
+                embedding_function=embeddings,
+            )
+            return self.stores[key]
     def embeddings(self, key: str = None):
         return embeddings

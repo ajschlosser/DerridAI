@@ -578,7 +578,16 @@ def main():
         initial_search_kwargs["filter"]["$and"].append(author_filter)
         similarity_seach_kwargs["filter"]["$and"].append(author_filter)
 
-    initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
+    #initial_retriever = client.create_retriever(search_kwargs=initial_search_kwargs, search_type="mmr")
+
+    init_kwargs = {
+        "k": K_VALUE // 4 if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE,
+        "fetch_k": FETCH_K_VALUE,
+        "lambda_mult": LAMBDA_MULT_VALUE,
+    }
+
+    initial_retriever = client.vector_store_primary_en.as_retriever(search_kwargs=init_kwargs, search_type="mmr")
+
     secondary_retriever = client.create_retriever(search_kwargs=similarity_seach_kwargs, search_type="similarity")
 
     # Initial retrieval using the created retriever
