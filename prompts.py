@@ -284,6 +284,58 @@ research_prompt_template = """
 """
 
 focused_prompt_template = """
+You are an academic and a scholar of Jacques Derrida.
+
+You have been prompted by the user with the following instructions:
+
+<MASTER PROMPT>
+    "{prompt_query}"
+</MASTER PROMPT>
+
+<MASTER INSTRUCTIONS>
+    "{prompt_instructions}"
+</MASTER INSTRUCTIONS>
+
+<EVIDENCE>
+{context}
+</EVIDENCE>
+
+RESPONSE REQUIREMENTS:
+- ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
+- TEXT OF RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
+
+FOLLOW THESE GUIDELINES:
+- Use the supplied EVIDENCE above as the sole basis for substantive claims.
+- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+- Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
+- Do NOT translate long French passages; quote them verbatim
+
+CITATION RULES:
+- Use MLA style for all citations.
+- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
+- Use a numbered bibliography for the Works Cited section.
+- Refer to the EVIDENCE section for all citations.
+- Cite full sentences or large chunks of sentences from the evidence.
+- Do not translate French sources into English unless directed.
+
+ Output only the TOON response object, no additional text, markdown, or ``` fences.
+
+<RESPONSE FORMAT>
+
+{{
+    "title": String,
+    "response": String,
+    "works_cited": Array[String],
+}}
+
+</RESPONSE FORMAT>
+
+Every claim in the response must be documented and tied to a citation.
+
+RESPOND WITH VALID JSON ONLY. NO MARKDOWN, NO ``` FENCE
+"""
+
+focused_prompt_template_claims = """
 
 You are an academic and a scholar of Jacques Derrida.
 
@@ -303,7 +355,7 @@ You have been prompted by the user with the following instructions:
 
 RESPONSE REQUIREMENTS:
 - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
-- RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
+- TEXT OF RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
 
 FOLLOW THESE GUIDELINES:
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
@@ -311,16 +363,67 @@ FOLLOW THESE GUIDELINES:
 - Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
 - Do NOT translate long French passages; quote them verbatim
 
+CITATION RULES:
+- Use MLA style for all citations.
+- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
+- Use a numbered bibliography for the Works Cited section.
+- Refer to the EVIDENCE section for all citations.
+- Cite full sentences or large chunks of sentences from the evidence.
+- Do not translate French sources into English unless directed.
+
+ Output only the TOON response object, no additional text, markdown, or ``` fences.
+
 <RESPONSE FORMAT>
 
-**Title**
+{{
+    "title": String,
+    "response": String,
+    "works_cited": Array[String],
+    "claims": Array[Claim]
+}}
 
-... response ...
+Every claim in the response must be documented and tied to a citation.
 
-**Works Cited**
+# Claim Schema:
 
-1. enumerated bibliography
-2. ...
+{{
+    "claim_id": String,
+    "claim": String,
+    "evidence_id": String,
+    "record_id": String,
+    "potential_review_reason": String,
+    "full_evidence_text": String,
+}}
+
+Example:
+
+{{
+    "title": "Some Title",
+    "response": "...the \"gundle\" (Baggins 2015, 10)[1] looks \"almost 'ticklish'\" (Grundleman 1984, 15)[2]...",
+    "works_cited": [
+        "Baggins, Bilbo. \"There And Back Again.\" The University of Bag End Press, 2015.",
+        "Grundleman, James. \"Grundles and Bipples: How to Fickle.\" Fibly Yitz, trans. Some Publishing House, 1984.",
+        "and so on as an enumerated MLA-format bibliography"
+    ],
+    "claims": [
+        {{
+            "claim_id": "claim_1",
+            "claim": "Grundleman argues that the gundle looks almost ticklish.",
+            "evidence_id": "0",
+            "record_id": "baggins_there_and_back_again-001324",
+            "potential_review_reason": "Double-check that it's actually Grundleman making the comment about the gundle, and not Baggins.",
+            "full_evidence_text": "I saw Mr. Grundleman there. He told me that he saw a tickled gundle."
+        }},
+        {{
+            "claim_id": "claim_2",
+            "claim": "Grundleman argues that the gundle looks almost ticklish.",
+            "evidence_id": "1",
+            "record_id": "grundleman_grundles_and_bipples-000673",
+            "potential_review_reason": "Double-check that it's actually Grundleman making the comment about the gundle, and not Baggins.",
+            "full_evidence_text": "The many things I, Mr. Grundleman, saw there amongst the gundles, were shocking. Some were almost ticklish."
+        }},
+    ]
+}}
 
 </RESPONSE FORMAT>
 """
@@ -395,72 +498,32 @@ initial_prompt_template = """
 """
 
 query_improvement_template = """
+
+    Your job is to analyze this user prompt and break it down into Token Oriented Object Notation.
+
     <PROMPT>
         "{prompt}"
     </PROMPT>
 
-    Your response must be in TOON (Token-Oriented Object Notation) format.
-    
-    ## Schema Definition for TOON response object
-    - `prompt`: String. The full prompt text.
-    - `prompt_query`: String. The part of the prompt that contains the actual question or request.
-    - `prompt_query_fr`: String. The part of the prompt that contains the actual question or request translated into French.
-    - `prompt_instructions`: String. Any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW).
-    - `keywords`: Array[String]. 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response, PLUS related multi-word keywords.
-    - `keywords_fr`: Array[String]. 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response, PLUS related multi-word keywords.
-    - `prompt_language`: Array[String]. The language(s) of the prompt.
-    - `materials_language`: Array[String]. The language(s) of the source materials.
-    - `response_language`: Array[String]. The language(s) in which the response should be provided.
-    - `is_fetch_query`: Boolean. Whether or not the prompt is asking for appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
-    - `fetch_query_content`: String. The specific content to look for in the source materials if `is_fetch_query` is true.
-    - `fetch_query_content_fr`: String. The specific content to look for in the source materials if `is_fetch_query` is true (in French).
-    - `fetch_limit`: Integer. The maximum number of fetch results to return.
-    - `limit_authors`: Array[String] | null. This is `null` unless the prompt specifically, explicitly, and directly requests limiting query to particular author(s), i.e. "in the works of Derrida" or "limited to Levinas' writings"
-    - `prompt_authors`: Array[String]. Array of authors explicitly mentioned in the prompt, if any. More inclusive than `limit_author`
-    - `is_chatbot_query`: Boolean. Whether the prompt is a chatbot query, addressing the LLM in the second person, conversationally, not academically, and seeking a conversational first-person response, e.g. "How are you?"
-    - `is_general_query`: Boolean. Whether the prompt is a general academic query
-    - `prompt_tone`: Enum [neutral | hostile | friendly | offensive | silly]
+    Your response must be in valid JSON format. Use the schema below:
 
-    ## Field default values
-    - is_fetch_query: false
-    - fetch_query_content: null
-    - fetch_query_content_fr: null
-    - fetch_limit: 10
-    - limit_authors: null
-    - is_chatbot_query: false
-    - is_general_query: true
-    - prompt_tone: neutral
-    - materials_language[2]: en,fr
-    - response_language[1]: en
-    - prompt_language[1]: en
-    - prompt_authors: null
-    
-    ## Example TOON response object:
+    <RESPONSE SCHEMA>
+    {{
+        "prompt": String. Required. The full prompt text.
+        "prompt_query": String. Required. The part of the prompt that contains the actual question or request.
+        "prompt_query_fr": String. Required. The part of the prompt that contains the actual question or request translated into French.
+        "prompt_instructions": String. Any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW).
+        "keywords": Array[String]. Required. 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response, PLUS related multi-word keywords
+        "keywords_fr": Array[String]. Required. 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response, PLUS related multi-word keywords
+        "prompt_languages": Array[String]. The language(s) of the prompt. ISO short codes: en | fr
+        "materials_languages": Array[String]. REquired. The language(s) of the requested materials. ISO short codes: en | fr
+        "is_fetch_query": Boolean. Whether or not the prompt is asking for appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
+        "is_chatbot_query": Boolean. Only set to `true` if the user is addressing you in the second-person by name or with the pronoun "you" in obvious chatbot interaction style. Hint: if user is talking about "Derrida" in the 3rd person, set this to `false`
+        "prompt_type": Enum. Required. "academic | chatbot"
+    }}
+    </RESPONSE SCHEMA>
 
-    ```toon
-    prompt: What did Derrida say about logocentrism? Only cite Derrida's French works.
-    prompt_query: What did Derrida say about logocentrism?
-    prompt_query_fr: Qu'est-ce que Derrida dit du logocentrisme?
-    prompt_instructions: Only cite Derrida's French works.
-    keywords[2]: logocentrism,language
-    keywords_fr[2]: logocentrisme,langue
-    materials_language[1]: fr
-    response_language[1]: en
-    prompt_language[1]: en
-    is_fetch_query: false
-    fetch_query_content: null
-    fetch_query_content_fr: null
-    fetch_limit: 10
-    limit_authors[1]: Jacques Derrida
-    prompt_authors[2]: Jacques Derrida,Martin Heidegger
-    is_research_query: false
-    prompt_tone: neutral
-    is_chatbot_query: false
-    is_general_query: true
-    prompt_tone: neutral
-    ```
-
-    Output only the TOON response object, no additional text, markdown, or ```
+    Output only the JSON response object, no additional text, markdown, or ```
 
 """
 

@@ -588,7 +588,8 @@ def main():
 
     initial_retriever = client.vector_store_primary_en.as_retriever(search_kwargs=init_kwargs, search_type="mmr")
 
-    secondary_retriever = client.create_retriever(search_kwargs=similarity_seach_kwargs, search_type="similarity")
+    #secondary_retriever = client.create_retriever(search_kwargs=similarity_seach_kwargs, search_type="similarity")
+    secondary_retriever = client.vector_store_primary_en.as_retriever(search_kwargs={ "k": K_VALUE // 4 if a_prompt_options["keywords"] or a_prompt_options["keywords_fr"] else K_VALUE}, search_type="similarity")
 
     # Initial retrieval using the created retriever
     b_initial_retrieval_prompt = ChatPromptTemplate.from_template(initial_retrieval_prompt_template)
@@ -675,14 +676,24 @@ def main():
                 canonical_search_kwargs["filter"]["$and"].append(author_filter)
 
             LOG.info("Canonical search similarity kwargs: %s", canonical_search_kwargs)
-            canonical_work_retriever = client.create_retriever(
-                search_kwargs=canonical_search_kwargs, search_type="similarity")
+            # canonical_work_retriever = client.create_retriever(
+            #     search_kwargs=canonical_search_kwargs, search_type="similarity")
+
+            can_kwargs = {
+                "k": K_VALUE // 2,
+                "filter": {
+                    "$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in combined_work_ids]
+                }
+            }
+
+            canonical_work_retriever = client.vector_store_primary_en.as_retriever(search_kwargs=can_kwargs, search_type="similarity")
             canonical_candidates = canonical_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
             canonical_search_kwargs["fetch_k"] = math.ceil(FETCH_K_VALUE // 2)
             canonical_search_kwargs["lambda_mult"] = LAMBDA_MULT_VALUE
             LOG.info("Canonical search MMR kwargs: %s", canonical_search_kwargs)
-            canonical_work_retriever_mmr = client.create_retriever(
-                search_kwargs=canonical_search_kwargs, search_type="mmr")
+            canonical_work_retriever_mmr = client.vector_store_primary_en.as_retriever(search_kwargs={ "fetch_k": FETCH_K_VALUE, "lambda_mult": LAMBDA_MULT_VALUE, "k": K_VALUE // 2, "filter": {"$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in combined_work_ids]}}, search_type="mmr")
+            # canonical_work_retriever_mmr = client.create_retriever(
+            #     search_kwargs=canonical_search_kwargs, search_type="mmr")
             canonical_candidates_mmr = canonical_work_retriever_mmr.invoke(b_formatted_initial_retrieval_prompt)
 
             targeted_search_kwargs = {
@@ -703,6 +714,12 @@ def main():
                 }
             }
             targets = keywords + keywords_fr
+            targ_kwargs = {
+                "k": K_VALUE // 2,
+                "filter": {
+                    "$or": [{"target": {"$eq": target}} for target in targets]
+                }
+            }
             targeted_search_kwargs["filter"]["$and"].append({
                 "$or": [{"target": {"$eq": target}} for target in targets]
             })
@@ -721,8 +738,9 @@ def main():
                     })
 
 
-            targeted_work_retriever = client.create_retriever(
-                search_kwargs=targeted_search_kwargs, search_type="similarity")
+            # targeted_work_retriever = client.create_retriever(
+            #     search_kwargs=targeted_search_kwargs, search_type="similarity")
+            targeted_work_retriever = client.vector_store_primary_en.as_retriever(search_kwargs=targ_kwargs, search_type="similarity")   
             targeted_candidates = targeted_work_retriever.invoke(b_formatted_initial_retrieval_prompt)
 
             combined_canonical_candidates = canonical_candidates + canonical_candidates_mmr
@@ -888,7 +906,7 @@ TO CITE THIS EVIDENCE:
     LOG.info("Constructed evidence, source, and citation context blocks: %s", context)
     #LOG.info("Constructed evidence, source, and citation context blocks: %s", blocks)
 
-    ultimate_prompt = research_prompt_template if a_prompt_options.get("is_research_query") else respond_as_derrida_template if a_prompt_options.get("is_chatbot_query") else focused_prompt_template
+    ultimate_prompt = research_prompt_template if a_prompt_options.get("is_research_query") else respond_as_derrida_template if a_prompt_options.get("is_chatbot_query") else initial_prompt_template
 
     prompt = ChatPromptTemplate.from_template(ultimate_prompt)
     final_prompt = prompt.format(
@@ -914,16 +932,16 @@ chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_op
 """)
     doc = json.loads(strip_code_fence(response.content))
 
-    # LOG.info("Reviewing generated response...")
+    LOG.info("Reviewing generated response...")
 
-    # review_prompt = ChatPromptTemplate.from_template(final_review_prompt_template)
-    # review_prompt = review_prompt.format(
-    #     response_content=doc["response"],
-    #     response_claims=doc["claims"],
-    #     response_evidence_blocks=context,
-    # )
-    # reviewed = client.invoke(review_prompt)
-    # LOG.info("Reviewed response: %s", reviewed.content)
+    review_prompt = ChatPromptTemplate.from_template(final_review_prompt_template)
+    review_prompt = review_prompt.format(
+        response_content=doc["response"],
+        response_claims=doc["claims"],
+        response_evidence_blocks=context,
+    )
+    reviewed = client.invoke(review_prompt)
+    LOG.info("Reviewed response: %s", reviewed.content)
 
     # client.add_record_to_response_store({
     #     "text": doc["response"],
@@ -984,13 +1002,13 @@ chat_temperature: {CHAT_TEMPERATURE} | response type: {"research" if a_prompt_op
     LOG.info("Elapsed time: %.2f seconds", end - start)
     
 
-#     LOG.info("Reviewing response...")
+    # LOG.info("Reviewing response...")
 
-#     review_prompt = ChatPromptTemplate.from_template(review_prompt_template)
-#     review_prompt = review_prompt.format(response_content=response.content, context=context)
-#     reviewed = client.invoke(review_prompt)
-#     LOG.info("Initial prompt: %s", args.prompt)
-#     LOG.info("Reviewed response: %s", reviewed.content)
+    # review_prompt = ChatPromptTemplate.from_template(review_prompt_template)
+    # review_prompt = review_prompt.format(response_content=response.content, context=context)
+    # reviewed = client.invoke(review_prompt)
+    # LOG.info("Initial prompt: %s", args.prompt)
+    # LOG.info("Reviewed response: %s", reviewed.content)
 
 #     final_prompt = f"""
 #         Please provide a final, polished response based on the reviewed content.

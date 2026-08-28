@@ -22,7 +22,7 @@ RESPONSE_MIN_SENTENCES = 150
 RESPONSE_MAX_SENTENCES = 500
 
 keys = {
-  "en_us": {
+  "en": {
     "abolition": [
       "derrida-the_death_penalty_volume_i-2014-kamuf",
       "derrida-the_death_penalty_volume_ii-2017-rottenberg"
@@ -1021,7 +1021,7 @@ keys = {
       "derrida-edmund_husserls_origin_of_geometry_an_introduction"
     ]
   },
-  "fr_fr": {
+  "fr": {
     "abolition": [
       "derrida-seminaire_la_peine_de_mort_volume_i-2012",
       "derrida-seminaire_la_peine_de_mort_volume_ii_2000_2001-2015"

@@ -246,6 +246,7 @@ class RAG_LLM:
                 persist_directory=f"{DEFAULT_STORE_PERSIST_DIRECTORY}_{key}",
                 embedding_function=embeddings,
             )
+            self.key = key
             return self.stores[key]
     def embeddings(self, key: str = None):
         return embeddings
