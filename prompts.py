@@ -300,29 +300,28 @@ You have been provided the following evidence for your response:
 {context}
 </EVIDENCE>
 
-RESPONSE REQUIREMENTS:
-- ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
-- TEXT OF RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
-
 FOLLOW THESE GUIDELINES:
+- Aim for 20-60 sentences depending on needs.
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
 - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
 
 CITATION RULES:
-- Use MLA style for all citations.
-- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
+- Use MLA style for all citations. ALWAYS INCLUDE PAGE NUMBERS.
+- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10) <-- INCLUDE PAGE NUMBERS.
 
 <RESPONSE FORMAT>
 
-{{
-    "title": String,
-    "response": String,
-    "works_cited": Array[String],
-}}
+** Title **
+
+[...] Bungledoop argues that ethics is "ticklish" (Bungledoop 1984, 12-13) [...and so on. Note the inline MLA citation format.]
+
+** Works Cited **
+
+1. <MLA full citation from the evidence above>
+2. ...
+3. ...
 
 </RESPONSE FORMAT>
-
-RESPOND WITH VALID JSON ONLY. NO MARKDOWN, NO ``` FENCE
 """
 
 focused_prompt_template_claims = """
@@ -345,7 +344,7 @@ You have been prompted by the user with the following instructions:
 
 RESPONSE REQUIREMENTS:
 - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
-- TEXT OF RESPONSE SHOULD AIM FOR 20-40 SENTENCES AS NEEDED
+- TEXT OF RESPONSE SHOULD AIM FOR MINIMUM OF 20-40 SENTENCES AS NEEDED
 
 FOLLOW THESE GUIDELINES:
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
@@ -357,63 +356,32 @@ CITATION RULES:
 - Use MLA style for all citations.
 - Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
 - Use a numbered bibliography for the Works Cited section.
-- Refer to the EVIDENCE section for all citations.
-- Cite full sentences or large chunks of sentences from the evidence.
-- Do not translate French sources into English unless directed.
-
- Output only the TOON response object, no additional text, markdown, or ``` fences.
+- DO NOT TRANSLATE. Prefer to cite original sources verbatim. Do not paragraphse French into English.
 
 <RESPONSE FORMAT>
 
-{{
-    "title": String,
-    "response": String,
-    "works_cited": Array[String],
-    "claims": Array[Claim]
-}}
+** Response Title Goes Here **
 
-Every claim in the response must be documented and tied to a citation.
+Main content of response goes here...
 
-# Claim Schema:
+** Works Cited **
 
-{{
-    "claim_id": String,
-    "claim": String,
-    "evidence_id": String,
-    "record_id": String,
-    "potential_review_reason": String,
-    "full_evidence_text": String,
-}}
+1. ...
+2. ...
 
-Example:
+** Notes **
 
-{{
-    "title": "Some Title",
-    "response": "...the \"gundle\" (Baggins 2015, 10)[1] looks \"almost 'ticklish'\" (Grundleman 1984, 15)[2]...",
-    "works_cited": [
-        "Baggins, Bilbo. \"There And Back Again.\" The University of Bag End Press, 2015.",
-        "Grundleman, James. \"Grundles and Bipples: How to Fickle.\" Fibly Yitz, trans. Some Publishing House, 1984.",
-        "and so on as an enumerated MLA-format bibliography"
-    ],
-    "claims": [
-        {{
-            "claim_id": "claim_1",
-            "claim": "Grundleman argues that the gundle looks almost ticklish.",
-            "evidence_id": "0",
-            "record_id": "baggins_there_and_back_again-001324",
-            "potential_review_reason": "Double-check that it's actually Grundleman making the comment about the gundle, and not Baggins.",
-            "full_evidence_text": "I saw Mr. Grundleman there. He told me that he saw a tickled gundle."
-        }},
-        {{
-            "claim_id": "claim_2",
-            "claim": "Grundleman argues that the gundle looks almost ticklish.",
-            "evidence_id": "1",
-            "record_id": "grundleman_grundles_and_bipples-000673",
-            "potential_review_reason": "Double-check that it's actually Grundleman making the comment about the gundle, and not Baggins.",
-            "full_evidence_text": "The many things I, Mr. Grundleman, saw there amongst the gundles, were shocking. Some were almost ticklish."
-        }},
-    ]
-}}
+Every claim made in the main content of the response above is documented below:
+
+[claim format]
+--claim
+claim_id: Int. Required. Start at 0 and increment.
+claim: String. Required. E.g.: "Derrida posits that hospitality..."
+evidence_id: String. Required. The ID of the evidence above supporting the claim.
+record_id: String. Required. The ID of the record containing the evidence.
+full_evidence_text: String. Required. The full text of the evidence supporting the claim.
+--/claim
+[/claim format]
 
 </RESPONSE FORMAT>
 """
@@ -489,29 +457,25 @@ initial_prompt_template = """
 
 query_improvement_template = """
 
-    <PROMPT>
-        "{prompt}"
-    </PROMPT>
+    Your job is to extract metadata from the below prompt.
+    
+    Prompt (en): "{prompt}"
 
-    Decompose the above prompt. Your response must be in valid JSON format. Use the schema below:
+    Prompt (fr): "{prompt_fr}"
+    
+    Your response must be in valid JSON format. Use the schema below. Do not forget to escape characters properly. Double-check your JSON before responding.
 
-    <RESPONSE SCHEMA>
     {{
-        "prompt": String. Required. The full prompt text.
-        "prompt_query": String. Required. The part of the prompt that contains the actual question or request.
-        "prompt_query_fr": String. Required. The part of the prompt that contains the actual question or request translated into French.
-        "prompt_instructions": String. Any additional instructions or context provided in the prompt (DO NOT INVENT OR ADD ANYTHING NEW).
-        "keywords": Array[String]. Required. 1-2 relevant SINGLE-WORD SEARCH keywords, not related to how to style/format/etc. a response, PLUS related multi-word keywords
-        "keywords_fr": Array[String]. Required. 1-2 relevant SINGLE-WORD SEARCH keywords in French, not related to how to style/format/etc. a response, PLUS related multi-word keywords
-        "prompt_languages": Array[String]. The language(s) of the prompt. ISO short codes: en | fr
-        "materials_languages": Array[String]. REquired. The language(s) of the requested materials. ISO short codes: en | fr
-        "is_fetch_query": Boolean. Whether or not the prompt is asking for appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
+        "prompt_query": String. Required. The part of the prompt that contains the actual question or request. Translated into English if French, otherwise untranslated.
+        "prompt_query_fr": String. REQUIRED. Default: The part of the prompt in French that contains the actual question or request, or prompt_query translated into French.
+        "prompt_instructions": String. Any additional instructions or context provided in the prompt by the user (DO NOT INVENT OR ADD ANYTHING NEW).
+        "requested_languages": Array[String]. REQUIRED. The language(s) requested by the user to use when researching the response. Strings are ISO short codes: en | fr
+        "materials_languages": Array[String]. REQUIRED. Always ["en", "fr"] unless more restrictive usage is specified by the user (e.g. "cite only French" would result in ["fr"])
+        "is_fetch_query": Boolean. REQUIRED. Whether or not the prompt is asking for ALL appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
         "is_chatbot_query": Boolean. Only set to `true` if the user is addressing you in the second-person by name or with the pronoun "you" in obvious chatbot interaction style. Hint: if user is talking about "Derrida" in the 3rd person, set this to `false`
-        "prompt_type": Enum. Required. "academic | chatbot"
     }}
-    </RESPONSE SCHEMA>
 
-    Output only the JSON response object, no additional text, markdown, or ```
+    Output only the JSON response object, no additional text, markdown, or ```, only JSON
 
 """
 

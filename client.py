@@ -201,12 +201,29 @@ DB_PATH: {cfg.store.persist_directory}
 
         LOG.info("Vector store update complete.")
 
-DEFAULT_CHAT_MODEL = "phi4:14b"
+# Models to test
+#   - phi4-mini:3.8b   <-- bigger input context, VERY fast, promising when tuned properly (low entropy)
+#   - phi4-mini-reasoning:3.8b
+#   - phi4:14b <-- usually best
+#   - gemma4:12b <-- very promising, can do 262144 context on 100% GPU even with embeddings model alongside
+#   - gemma4:e4b <-- also very promising
+#   - gemma4:e2b <-- very fast and promising
+#   - phi4-reasoning:latest (14b) <-- very slow, not viable
+#   - qwen3.5:9b
+#   - qwen3.5:4b
+#   - deepseek-r1:8b
+#   - mistral-nemo:12b <-- interesting, but doesn't fit on GPU
+#   - deepseek <-- do not bother
+#   - llama3.1:8b <-- good balance of context and performance, fits on GPU
+#   - llama3.2:3b <-- not good enough
+
+DEFAULT_CHAT_MODEL = "phi4-mini-reasoning:3.8b"
 DEFAULT_CHAT_TEMPERATURE = 0.4
 DEFAULT_CHAT_BASE_URL = "http://localhost:11434"
-DEFAULT_CHAT_TIMEOUT = 45.0
+DEFAULT_CHAT_TIMEOUT = 120.0
 DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
 DEFAULT_STORE_PERSIST_DIRECTORY = "./chroma_db_local7"
+DEFAULT_REASONING_FLAG = False
 
 embeddings = OllamaEmbeddings(
     model=DEFAULT_EMBEDDING_MODEL,
@@ -224,7 +241,17 @@ class RAG_LLM:
             temperature=DEFAULT_CHAT_TEMPERATURE,
             base_url=DEFAULT_CHAT_BASE_URL,
             timeout=DEFAULT_CHAT_TIMEOUT,
-            num_ctx=114688
+            reasoning=DEFAULT_REASONING_FLAG,
+            num_ctx=262144,
+            num_predict=-2,     # Default 128, -1 = infinite, -2 = fill context. Prefer -2
+            mirostat=2,  # Default 0, 0 = off, 1 = basic, 2 = advanced. Prefer 2 for better control of output randomness.
+            mirostat_eta=0.9,  # Default 0.1, higher = more responsive to feedback from generated text. Prefer 0.2
+            mirostat_tau=1.0,  # Default 5.0, lower = more stable responses. Prefer 5.0
+            repeat_last_n=64,   # Default 64, sets how far back to look to prevent token repetition. Prefer 64
+            repeat_penalty=1.1, # Default 1.1, higher penalizes repetition more strongly. Prefer 1.1
+            top_k=40,           # Default 40, higher gives more diverse answers. Prefer 40
+            top_p=0.9,          # Default 0.9, higher will lead to more diverse text. Prefer 0.9
+            keep_alive=-1
         )
         self.stores["defaults"] = Chroma(
             persist_directory=DEFAULT_STORE_PERSIST_DIRECTORY,

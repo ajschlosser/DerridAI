@@ -17,3 +17,10 @@ dehyphen
 symspellpy
 sentence_transformers
 toons
+spacy
+textblob
+polyglot
+pyicu
+pycld2
+argostranslate
+multi_rake
