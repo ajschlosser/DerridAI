@@ -15,20 +15,32 @@
 # limitations under the License.
 
 """rag8.py -- Retrieval-augmented generation demo with CLI controls and progress logs."""
-print("cold start")
+print("Starting DerridAI...")
 
 import os
 
 import nltk
 
-from text import detect_languages, extract_keywords, correct_spelling, extract_likeness, get_language_status, remove_stopwords, summarize_text, translate, extract_query_and_flters, detect_phrasing
+from text import (
+    detect_languages,
+    extract_keywords,
+    correct_spelling,
+    extract_likeness,
+    get_language_status,
+    remove_stopwords,
+    summarize_text,
+    translate,
+    extract_query_and_flters,
+    detect_phrasing,
+    extract_json_objects,
+    strip_code_fence
+)
 os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
 import time
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_transformers import LongContextReorder
 from sentence_transformers import CrossEncoder
-import re
 import argparse
 from prompts import (
     query_improvement_template,
@@ -41,7 +53,7 @@ if not nltk.download('punkt', quiet=True):
     nltk.download('punkt_tab')
     nltk.download('stopwords')
 
-from defaults import CHAT_TEMPERATURE, keys
+from defaults import keys
 from logger import Logger
 
 start = time.perf_counter()
@@ -56,41 +68,17 @@ if args.claims:
 
 LOG = Logger.setup("rag8.py")
 
-def extract_json_objects(text):
-    """Finds and yields valid JSON objects from a text string."""
-    # Find all starting positions of potential JSON objects
-    for match in re.finditer(r"\{", text):
-        start_index = match.start()
-
-        # Attempt to decode the string from this starting position onward
-        try:
-            # raw_decode reads until it finds a complete, valid JSON structure
-            obj, end_index = json.JSONDecoder().raw_decode(text[start_index:])
-            yield obj
-        except json.JSONDecodeError:
-            # If it fails, it wasn't a valid JSON start point; keep looking
-            continue
-        except Exception as e:
-            LOG.warning("Unexpected error while extracting JSON object: %s", e)
-            continue
-
-def strip_code_fence(text: str, extract_json: bool = False) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:toon|json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    if extract_json:
-        LOG.info("Extracting JSON...")
-        extracted_text = list(extract_json_objects(text))
-        text = extracted_text[0] if extracted_text else text  # Get the first JSON object found, or empty string if none
-    return text
-
+LOG.info("Initializing RAG client...")
 from client import RAG_LLM
 
 client = RAG_LLM()
+LOG.info("RAG client initialized.")
+
+LOG.info("Initializing reranker...")
 reranker = CrossEncoder(
     "cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
+LOG.info("Reranker initialized.")
 
 def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
     start = time.perf_counter()
@@ -98,7 +86,8 @@ def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
         "Your name is DerridAI.",
         "You are a helpful AI research assistant specializing in the works of Jacques Derrida.",
         "Users can give you prompts like 'Explain Derrida's concept of deconstruction.' or 'What does Derrida say about hospitality?'",
-        "You respond in academic essay format using MLA citation rules. You prefer to write in paragraphs. You do not use subheadings. You do not invent sources and only use the evidence provided."
+        "You respond in academic essay format using MLA citation rules. You prefer to write in paragraphs. You do not use subheadings. You do not invent sources and only use the evidence provided.",
+        "If you do not have enough information to answer the user's question in a restrained and conservative manner, you always warn the user you are going out on a limb"
     ]
     system_messages = params["system"] if "system" in params else [("system", message) for message in default_system_prompts]
     user_messages = [("user", params["user"])] if "user" in params else [("user", "{prompt}")]
@@ -158,7 +147,7 @@ def generate_citation_strings(doc) -> tuple[str, str]:
     author_last_name = author.split(' ')[-1]
     inline_author = author_last_name
     author_name_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
-    inline_citation = f"({inline_author} {year}, {page_start if (not page_end or page_end == page_start) else f'{page_start}-{page_end}'})"
+    inline_citation = f"({inline_author} {year}: {page_start if (not page_end or page_end == page_start) else f'{page_start}-{page_end}'})"
     full_citation = f"{author_name_reversed}. {work}.{f' {translator} trans.' if translator else ''} {edition}. {year}"
     return inline_citation, full_citation
 
@@ -262,7 +251,7 @@ def main():
     extracted_filters["prompt"] = p
     extracted_filters["prompt_fr"] = p_fr
     k = extract_keywords(p)
-    k_fr = [remove_stopwords(key) for key in translate(", ".join(k), from_lang="en", to_lang="fr").split(", ")]
+    k_fr = [key.replace("l’", "").replace("L’", "").replace("d’", "").replace("D’", "") for key in translate(", ".join(k), from_lang="en", to_lang="fr").split(", ")]
     extracted_filters["keywords"] = k
     extracted_filters["keywords_fr"] = k_fr
     LOG.info("keywords: %s", k + k_fr)
@@ -350,24 +339,25 @@ def main():
     # Canonical MMR and similarity lookup
     keywords = q['keywords'] if "en" in q["document_languages"] else []
     keywords += q['keywords_fr'] if "fr" in q["document_languages"] else []
+    keywords = list(dict.fromkeys(keywords))
     LOG.info("Retrieving canonical works by keyword: %s", keywords)
-    canonical_work_ids = []
+    canonical_work_ids = q["canonical_work_ids"]
     for keyword in keywords:
         for lang in q["document_languages"]:
             if keyword.lower() in keys.get(lang, {}):
                 canonical_work_ids.append(keys[lang][keyword.lower()])
             if keyword in keys.get(lang, {}):
                 canonical_work_ids.append(keys[lang][keyword])
-
-    combined_work_ids = [item for sublist in (canonical_work_ids) for item in sublist]
-    LOG.info("Canonical work IDs to retrieve documents from: %s", canonical_work_ids)
-    if len(combined_work_ids) > 1:
+    flattened_canonical_work_ids = [item for sublist in canonical_work_ids for item in (sublist if isinstance(sublist, list) else [sublist])]
+    deduped_work_ids = list(dict.fromkeys(flattened_canonical_work_ids))
+    LOG.info("Canonical work IDs to retrieve documents from: %s", deduped_work_ids)
+    if len(deduped_work_ids) > 1:
         canonical_filter = {
-            "$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in combined_work_ids]
+            "$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in deduped_work_ids]
         }
-    elif len(combined_work_ids) == 1:
-        canonical_filter = {"canonical_work_id": {"$eq": combined_work_ids[0]}}
-    if (len(combined_work_ids) > 0):
+    elif len(deduped_work_ids) == 1:
+        canonical_filter = {"canonical_work_id": {"$eq": deduped_work_ids[0]}}
+    if (len(deduped_work_ids) > 0):
         LOG.info("Canonical filter: %s", canonical_filter)
         combined_canonical_results = basic_lookup(
             mmr_filter={

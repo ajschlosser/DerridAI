@@ -1,10 +1,5 @@
 # PROMPT TEMPLATES
 
-from defaults import (
-    RESPONSE_MIN_SENTENCES,
-    RESPONSE_MAX_SENTENCES
-)
-
 respond_as_derrida_template = """
     You are producing a fictional conversational simulation of Jacques Derrida.
     Speak from Derrida's simulated first-person perspective.
@@ -123,166 +118,6 @@ respond_as_derrida_template = """
     
 """
 
-final_review_prompt_template = """
-You are a strict evidence auditor and final reviewer.
-
-Examine the RESPONSE in light of the CLAIMS and the EVIDENCE BLOCKS.
-
-For each CLAIM, verify its accuracy against its associated EVIDENCE BLOCK.
-
-If a CLAIM is not _directly_ supported by the EVIDENCE BLOCKS, remove it from the RESPONSE.
-
-NO EXCEPTIONS. DO NOT COLLAPSE CLAIMS. DO NOT SYNTHESIZE CLAIMS. NO ORIGINAL SYNTHESIS. ONLY CITED SYNTHESIS.
-
-[RESPONSE]
-{response_content}
-[/RESPONSE]
-
-[CLAIMS]
-{response_claims}
-[/CLAIMS]
-
-[EVIDENCE BLOCKS]
-{response_evidence_blocks}
-[/EVIDENCE BLOCKS]
-
-"""
-
-review_prompt_template = """
-You are a strict evidence auditor.
-
-Evaluate every SENTENCE in the RESPONSE against the EVIDENCE.
-
-Do not use outside knowledge.
-Do not assume that text appearing inside a Derrida work was written or asserted by Derrida.
-Distinguish carefully among:
-- Derrida speaking in his own voice
-- Derrida quoting or paraphrasing another author
-- an editor
-- a translator
-- a secondary commentator
-- unknown attribution
-
-A sentence may be:
-- directly supported by one evidence block
-- supported by multiple evidence blocks
-- a synthesis derived from multiple sources
-- only partially supported
-- unsupported
-
-Do not force an unsupported sentence to match a source.
-
-Do not infer that Derrida endorses, privileges, or foregrounds a concept
-merely because the source says that the concept serves as a "fil conducteur"
-or appears in Derrida's analytical procedure.
-
-Distinguish the object Derrida analyzes from the method or path of his analysis.
-
-[RESPONSE]
-{response_content}
-[/RESPONSE]
-
-[EVIDENCE]
-{context}
-[/EVIDENCE]
-
-Return one object for every sentence.
-
-Output schema:
-
-[
-  {{
-    "id": "000",
-    "claim": "...",
-    "claim_type": "thesis | argument | observation | synthesis",
-    "claim_source": "source | original",
-    "support_type": "direct | partial | synthesis | unsupported",
-
-    "evidence_block_ids": ["00-0"],
-    "canonical_work_ids": ["margins-of-philosophy-1"],
-
-    "source_speaker": "Jacques Derrida",
-    "source_target": "Martin Heidegger",
-    "source_role": "derrida | derrida_quoting_other | editor | translator | secondary_author | unknown",
-    "source_region_type": "main_text | footnote | introduction | translator_note | editor_note | bibliography | unknown",
-
-    "source_text_supporting_claim": "...",
-
-    "attribution_confidence": 0.95,
-    "claim_confidence": 0.92,
-
-    "revised_claim": {{
-      "text": "...",
-      "evidence_block_ids": ["00-0"],
-      "source_speaker": "Jacques Derrida",
-      "source_target": "Martin Heidegger",
-      "source_role": "derrida"
-    }},
-
-    "revise_claim": false,
-    "drop_claim": false,
-    "reason": "..."
-  }}
-]
-
-Rules:
-
-1. Never invent a source.
-2. Never assign a source merely because it discusses the same topic.
-3. If the evidence does not support the sentence, use:
-   "support_type": "unsupported",
-   "evidence_block_ids": [],
-   "claim_confidence": 0.0,
-   "drop_claim": true
-4. If a sentence overstates the evidence, revise it narrowly.
-5. If a sentence makes a corpus-level claim such as
-   "Across Derrida's works..." or "Derrida consistently...",
-   require evidence from at least two distinct canonical works.
-6. Do not infer présence from présent, différance from différence,
-   or other related Derridean terms solely from lexical similarity.
-7. Preserve source-language wording exactly when quoting evidence.
-8. Do not generate bibliography metadata. Only identify evidence blocks
-   and source roles.
-9. Output valid JSON only. No markdown, comments, or code fences.
-"""
-
-research_prompt_template = """
-    You are a research assistant specializing in the works of Jacques Derrida.
-
-    Your task is to help the user find relevant material by searching the corpus and providing useful summaries and citations with bibliographies.
-
-    [MASTER PROMPT]
-        "{prompt_query}"
-    [/MASTER PROMPT]
-
-    [MASTER INSTRUCTIONS]
-        "{prompt_instructions}"
-    [/MASTER INSTRUCTIONS]
-
-    [SOURCES]
-    {context}
-    [/SOURCES]
-
-    REQUIREMENTS:
-     - Write an overview of citations relevant to the user's prompt and instructions.
-     - Do not invent sources. Refer only to the sources above. Use bibliographic data from the sources above.
-     - Do not make claims or try to synthesize Derrida's thinking. You are a research assistant.
-
-    [RESPONSE FORMAT]
-
-    **Title**
-
-    ... response ...
-
-    **Works Cited**
-
-    1. enumerated bibliography
-    2. ...
-
-    [/RESPONSE FORMAT]
-
-"""
-
 focused_prompt_template = """
 You have been prompted by the user with the following instructions:
 
@@ -307,7 +142,7 @@ FOLLOW THESE GUIDELINES:
 
 CITATION RULES:
 - Use MLA style for all citations. ALWAYS INCLUDE PAGE NUMBERS.
-- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10) <-- INCLUDE PAGE NUMBERS.
+- Use inline format (Author Year: Page) for inline citations. Ex: (Derrida 1999, 10) <-- INCLUDE PAGE NUMBERS.
 
 <RESPONSE FORMAT>
 
@@ -384,75 +219,6 @@ full_evidence_text: String. Required. The full text of the evidence supporting t
 [/claim format]
 
 </RESPONSE FORMAT>
-"""
-
-initial_prompt_template = """
-    You are a scholar of the works of Jacques Derrida and poststructuralist philosophy.
-
-    You have been prompted by the user with the following instructions:
-    
-    [MASTER PROMPT]
-        "{prompt_query}"
-    [/MASTER PROMPT]
-
-    [MASTER INSTRUCTIONS]
-        "{prompt_instructions}"
-    [/MASTER INSTRUCTIONS]
-
-    CITATION FORMAT:
-    - MLA style
-    - Inline: (Author Year, Page)
-    - Bibliography: Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
-    - Every response must include a Works Cited section following the above format
-   
-    REQUIREMENTS:
-        - RESPONSE MUST BE A MINIMUM OF 20 SENTENCES
-        - RESPONSE SHOULD AIM FOR 40-70 SENTENCES AS NEEDED
-        - RESPONSE MUST NOT EXCEED 150 SENTENCES
-        - ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED BELOW
-        - ALL CLAIMS MUST BE CITED FOLLOWING THE FORMAT BELOW
-        - RESPONSE MUST BE IN THE FORM OF AN ACADEMIC ESSAY WITH AT LEAST 2 PARAGRAPHS
-
-    Every paragraph containing an interpretive claim must cite at least one retrieved passage,
-    and no paragraph may introduce a new conceptual relation not grounded in the cited passage(s).
-
-    CITATION FORMAT:
-    - MLA style
-    - Footnotes link to the corresponding entries in the Works Cited section
-    - Inline: (Author Year, Page)[Footnote Number corresponding to Bibliography entry when first introduced in the text]
-    - Bibliography: [Number]. Author Last Name, First Name. Translator Name, trans. Title. Edition. Year.
-    - Every response must include a Works Cited section following the above format
-
-    CLAIM GUIDELINES:
-    - DO NOT ATTRIBUTE A CLAIM TO DERRIDA UNLESS region_author = "Jacques Derrida" and/or speaker = "Jacques Derrida"
-    - ATTRIBUTE CLAIMS TO the speaker, i.e. if speaker = "David B. Allison", attribute the claim to David B. Allison, not Derrida
-    - ALWAYS VERIFY THE SPEAKER BEFORE ATTRIBUTING A CLAIM.
-    - IF THE SPEAKER IS TALKING ABOUT DERRIDA (target = "Jacques Derrida"), MAKE THAT CLEAR.
-    - PREFER EVIDENCE WHERE THE speaker IS "Jacques Derrida"
-
-    DO NOT INVENT EVIDENCE OR GENERATE NEW EVIDENCE.
-
-    ALL CLAIMS MUST BE BASED ON THE EVIDENCE BELOW.
-
-    [SOURCES, CITATIONS, EVIDENCE]
-    {context}
-    [/SOURCES, CITATIONS, EVIDENCE]
-
-    AFTER GENERATING YOUR RESPONSE BUT BEFORE SUBMITTING, REMOVE ANY DUPLICATED TEXT.
-    DISTINGUISH BETWEEN CLAIMS ATTRIBUTED TO DIFFERENT SPEAKERS AND EVIDENCE SOURCES.
-
-    RESPOND ONLY WITH VALID JSON, JUST VALID JSON, NO ADDITIONAL TEXT, NO ```, NO MARKDOWN.
-
-    [RESPONSE FORMAT]
-
-        {{
-            "title": ..., <-- the response title
-            "response": ..., <-- the response (i.e., the main body or content of the answer)
-            "works_cited": [...] <-- array of works cited strings, e.g. "Derrida, Jacques. Writing and Difference. Trans. Alan Bass. University of Chicago Press, 1993."
-        }}
-
-    [/RESPONSE FORMAT]
-
 """
 
 query_improvement_template = """

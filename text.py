@@ -1,30 +1,23 @@
-from warnings import filters
-
 from textblob import TextBlob
+import json
+import re
 from defaults import PHILOSOPHY_STOPWORD_EXCEPTIONS_EN, PHILOSOPHY_STOPWORD_EXCEPTIONS_FR
 from logger import Logger
-import argostranslate.package
-import argostranslate.translate
 from multi_rake import Rake
 from keybert import KeyBERT
 from langdetect import detect
-import pycld2 as cld2
 from fast_langdetect import detect
 
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
-from sumy.summarizers.edmundson import EdmundsonSummarizer
 from sumy.nlp.stemmers import Stemmer
-from sumy.utils import get_stop_words
-from sumy.utils import get_stop_words
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
 from sentence_transformers import SentenceTransformer, util
 import spacy
-from spacy.matcher import Matcher
 import dl_translate as dlt
 
 nlps = {
@@ -33,17 +26,6 @@ nlps = {
 }
 
 LOG = Logger.setup("text")
-
-# Download and install language models
-argostranslate.package.update_package_index()
-available_packages = argostranslate.package.get_available_packages()
-package_to_install = next(
-    filter(
-        lambda x: ((x.from_code == "en" and x.to_code == "fr") or (x.from_code == "fr" and x.to_code == "en")),
-        available_packages
-    )
-)
-argostranslate.package.install_from_path(package_to_install.download())
 
 rake = Rake()
 km_model = KeyBERT()
@@ -79,7 +61,7 @@ def extract_query_and_flters(text: str, lang: str):
         if detect_phrasing(work, "Monolingualism of the Other; or The Prosthesis of Origin"):
             filters["canonical_work_ids"].append("derrida-le_monolinguisme_de_l_autre_ou_la_prothese_d_origine-1996")
             filters["canonical_work_ids"].append("derrida-monolingualism_of_the_other_or_the_prosthesis_of_origin-1998")
-        if detect_phrasing(work, ["Specters", "Spectres", "Marx", "Marxism", "end of history", "Fukuyama", "liberalism", "democracy"]):
+        if detect_phrasing(work, ["Specters", "Spectres", "Marx", "Marxism"]):
             filters["canonical_work_ids"].append("derrida-spectres_de_marx-1993")
             filters["canonical_work_ids"].append("derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006")
         if detect_phrasing(work, "Of Grammatology"):
@@ -100,16 +82,17 @@ def extract_query_and_flters(text: str, lang: str):
             filters["canonical_work_ids"].append("derrida-monolingualism_of_the_other_or_the_prosthesis_of_origin-1998")
 
     def handle_person(person: str):
-        if detect_phrasing(person, "Heidegger"):
+        if detect_phrasing(person, "Martin Heidegger"):
             filters["canonical_work_ids"].append("derrida-l_oreille_de_heidegger-1994")
             filters["canonical_work_ids"].append("derrida-of_spirit_heidegger_and_the_question-1989")
             filters["canonical_work_ids"].append("derrida-de_l_esprit_heidegger_et_la_question-1987")
             filters["canonical_work_ids"].append("derrida-l_oreille_de_heidegger-1994")
-        if detect_phrasing(person, "Levinas"):
-            filters["canonical_work_ids"].append("derrida-adieu_a_emmanuel_levinas-1997")
-            filters["canonical_work_ids"].append("derrida-adieu_to_emmanuel_levinas-1999")
+        if detect_phrasing(person, ["Francis Fukuyama", "Emmanuel Levinas"]):
             filters["canonical_work_ids"].append("derrida-spectres_de_marx-1993")
             filters["canonical_work_ids"].append("derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006")
+        if detect_phrasing(person, "Emmanuel Levinas"):
+            filters["canonical_work_ids"].append("derrida-adieu_a_emmanuel_levinas-1997")
+            filters["canonical_work_ids"].append("derrida-adieu_to_emmanuel_levinas-1999")
 
     def handle_event(event: str):
         if detect_phrasing(event, ["World War II", "Second World War", "WWII", "WW2", "World War 2", "Vichy", "German occupation", "under the occupation", "Nazi"]):
@@ -226,19 +209,34 @@ def detect_languages(text: str, threshold: float = 0.4) -> list[str]:
             languages.append(result["lang"])
     return languages
 
-# def translate(text: str, from_code: str, to_code: str) -> str:
-#     """Translates the given text from the source language to the target language using Argos Translate."""
-#     try:
-#         installed_languages = argostranslate.translate.get_installed_languages()
-#         from_lang = next(filter(lambda x: x.code == from_code, installed_languages))
-#         to_lang = next(filter(lambda x: x.code == to_code, installed_languages))
-#         translation = from_lang.get_translation(to_lang)
-#         t = translation.translate(text)
-#         LOG.info("Translating text from %s to %s: %s --> %s", from_code, to_code, text, t)
-#         return t
-#     except Exception as e:
-#         LOG.error("Could not translate text!", e)
-#         return text
+def extract_json_objects(text):
+    """Finds and yields valid JSON objects from a text string."""
+    # Find all starting positions of potential JSON objects
+    for match in re.finditer(r"\{", text):
+        start_index = match.start()
+
+        # Attempt to decode the string from this starting position onward
+        try:
+            # raw_decode reads until it finds a complete, valid JSON structure
+            obj, end_index = json.JSONDecoder().raw_decode(text[start_index:])
+            yield obj
+        except json.JSONDecodeError:
+            # If it fails, it wasn't a valid JSON start point; keep looking
+            continue
+        except Exception as e:
+            LOG.warning("Unexpected error while extracting JSON object: %s", e)
+            continue
+
+def strip_code_fence(text: str, extract_json: bool = False) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:toon|json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    if extract_json:
+        LOG.info("Extracting JSON...")
+        extracted_text = list(extract_json_objects(text))
+        text = extracted_text[0] if extracted_text else text  # Get the first JSON object found, or empty string if none
+    return text
 
 mt = dlt.TranslationModel() 
 def translate(text: str, from_lang:str = "en", to_lang: str = "fr") -> str:
