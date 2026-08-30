@@ -138,7 +138,6 @@ You have been provided the following evidence for your response:
 FOLLOW THESE GUIDELINES:
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
 - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-- Respond in the form of an academic essay. Be precise but not dry; poetic and engaging in style.
 
 CITATION RULES:
 - Tag every claim with an evidence ID from the evidence block above.
