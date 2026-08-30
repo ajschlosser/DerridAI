@@ -85,9 +85,6 @@ def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
     default_system_prompts = [
         "Your name is DerridAI.",
         "You are a helpful AI research assistant specializing in the works of Jacques Derrida.",
-        "Users can give you prompts like 'Explain Derrida's concept of deconstruction.' or 'What does Derrida say about hospitality?'",
-        "You respond in academic essay format using MLA citation rules. You prefer to write in paragraphs. You do not use subheadings. You do not invent sources and only use the evidence provided.",
-        "If you do not have enough information to answer the user's question in a restrained and conservative manner, you always warn the user you are going out on a limb"
     ]
     system_messages = params["system"] if "system" in params else [("system", message) for message in default_system_prompts]
     user_messages = [("user", params["user"])] if "user" in params else [("user", "{prompt}")]
@@ -96,7 +93,7 @@ def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
         *user_messages,
     ])
     prompt_value = template.invoke(params["template"])
-    LOG.info("Invoking prompt...")
+    LOG.info("Invoking prompt... %s", prompt_value)
     response = client.chat(store if store else client.key).invoke(prompt_value)
     cleaned_response = strip_code_fence(response.content, extract_json=extract_json)
     if extract_json:
@@ -156,66 +153,19 @@ def generate_context_string(docs: list) -> str:
     for i, doc in enumerate(docs):
         doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
         d = doc.metadata
-        record_id = d.get("record_id", "")
         discourse_role = d.get('discourse_role', 'general text')
-        author = d.get("document_author")
-        editor = d.get("editor")
-        translator = d.get("translator")
-        region_author = d.get("region_author", "")
-        quoted_speaker = d.get("quoted_speaker", "")
         holder = d.get("position_holder", "")
         speaker = d.get("speaker", "")
-        target = d.get("target", "")
         work = d.get("work", "")
-        persons = d.get("persons", [])
-        topics = d.get("topics", [])
-
-        chat_str = "Say things like: "
-        attr_str = f"In this evidence block, which is functioning as {discourse_role}, "
-
-        if region_author:
-            attr_str += f'the writer of this particular section of the work is "{region_author}", '
-            chat_str += f"\n- In {author}'s **{work}**, {region_author} writes that {holder if (holder not in author and holder not in region_author and holder not in speaker) else 'he'} believes that {target} ..."
-        if quoted_speaker:
-            attr_str += f'the quoted speaker is "{quoted_speaker}", '
-            chat_str += f"\n- {quoted_speaker} is quoted in this passage as saying that {target}..."
-        if holder:
-            attr_str += f"it is {holder}'s position being expressed, " 
-            chat_str += f"\n- In the passage, {holder} claims that {target}..."
-        if speaker:
-            attr_str += f"{speaker} is the one doing the speaking/writing, " 
-            chat_str += f"\n- In the cited text, {speaker} says clearly that {target}..."
-        if target:
-            attr_str += f"the target of {holder}'s claim is {target}, "
-            chat_str += f"\n- In this excerpt, {holder} takes aim at {target}, writing that ..."
-        if persons:
-            attr_str += f"the persons mentioned in this passage are {' and '.join(persons)}, "
-            chat_str += f"\n- {speaker} mentions {' and '.join(persons)} when {holder if holder is not speaker else 'he'} says that {target}..."
-        if topics:
-            attr_str += f"the topics discussed in this passage are {' and '.join(topics)}, "
-            chat_str += f"\n- The passage discusses {' and '.join(persons + topics)} in relation to {target}..."
-
-        attr_str += f"and the passage is from **{work}** ({d.get('year')}) by {author}. "
-        chat_str += f"\n- As far back as {d.get('year')}, {author} wrote in **{work}** that {target} ..."
-        if translator:
-            attr_str += f" The work is translated by: {translator}. "
-        if editor:
-            attr_str += f" The editor of the work is: {editor}. "
 
         text = " ".join(d.get("text").split())
-        context_str += f"""<EVIDENCE {i}>
-work={work}
-year={d.get("year")}
-page_start={d.get("page_start")}
-page_end={d.get("page_end")}
-inline_mla_citation={d.get("inline_citation")}
-full_mla_citation_for_works_Cited={d.get("full_citation")}
-speaker={speaker}
+        context_str += f"""[E{i}]
+record_id={d.get("record_id")}
+speaker={"Derrida" if speaker == "Jacques Derria" else speaker}
 position_holder={holder}
-speaker_target={target}
-discourse_role={discourse_role}
+target={d.get("target", "")}
+role={discourse_role}
 text={text}
-</EVIDENCE>
 """
     cleaned_context_str = " ".join(context_str.split())
     return cleaned_context_str

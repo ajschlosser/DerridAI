@@ -136,27 +136,12 @@ You have been provided the following evidence for your response:
 </EVIDENCE>
 
 FOLLOW THESE GUIDELINES:
-- Aim for 20-60 sentences depending on needs.
 - Use the supplied EVIDENCE above as the sole basis for substantive claims.
 - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+- Respond in the form of an academic essay. Be precise but not dry; poetic and engaging in style.
 
 CITATION RULES:
-- Use MLA style for all citations. ALWAYS INCLUDE PAGE NUMBERS.
-- Use inline format (Author Year: Page) for inline citations. Ex: (Derrida 1999, 10) <-- INCLUDE PAGE NUMBERS.
-
-<RESPONSE FORMAT>
-
-** Title **
-
-[...] Bungledoop argues that ethics is "ticklish" (Bungledoop 1984, 12-13) [...and so on. Note the inline MLA citation format.]
-
-** Works Cited **
-
-1. <MLA full citation from the evidence above>
-2. ...
-3. ...
-
-</RESPONSE FORMAT>
+- Tag every claim with an evidence ID from the evidence block above.
 """
 
 focused_prompt_template_claims = """

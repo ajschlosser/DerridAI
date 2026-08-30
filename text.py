@@ -159,16 +159,18 @@ def remove_stopwords(text: str, language: str = "en"):
 
 def summarize_text(text: str, language: str = "en", num_sentences: int = 3) -> str:
     """Summarizes the given text using the Edmundson summarizer."""
-    stemmer = Stemmer(language)
+    lang = "english" if language[0] in ["en", "en_us"] else "french" if language[0] in ["fr", "fr_fr"] else language
+    LOG.info("Summarizing text in language: %s", language)
+    stemmer = Stemmer(lang)
     summarizer = LsaSummarizer(stemmer)
     try:
-        parser = PlaintextParser.from_string(text, Tokenizer(language))
+        parser = PlaintextParser.from_string(text, Tokenizer(lang))
         summary = summarizer(parser.document, num_sentences)
-        return " ".join(str(sentence) for sentence in summary)
+        return " [...] ".join(str(sentence) for sentence in summary)
     except Exception as e:
         LOG.error("Could not summarize text!", e)
         return text
-
+ 
 def extract_keywords(
         text: str,
         threshold: float = 0.425,
