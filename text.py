@@ -122,13 +122,15 @@ def extract_query_and_flters(text: str, lang: str):
         if ent.label_ == "LANGUAGE":
             filters["materials_languages"].append(ent.text)
         if ent.label_ == "CARDINAL":
-            filters["limit"] = int(ent.text)
+            limit_n = detect_phrasing(text, ["return top N results", "only the top N", "limit to top N", "fetch the top N", "limit sources to N", "only consider N results"])
+            if limit_n:
+                filters["limit"] = int(ent.text)
     
     return filters
 
 def extract_likeness(target: str, text: str, threshold: float = 0.55):
     sentences = TextBlob(text).sentences
-    LOG.info("sentences extracted: %d", len(sentences))
+    LOG.debug("sentences extracted: %d", len(sentences))
     target_embedding = sentence_model.encode(target, convert_to_tensor=True)
     likeness_scores = []
     for sentence in sentences:
@@ -160,7 +162,7 @@ def remove_stopwords(text: str, language: str = "en"):
 def summarize_text(text: str, language: str = "en", num_sentences: int = 3) -> str:
     """Summarizes the given text using the Edmundson summarizer."""
     lang = "english" if language[0] in ["en", "en_us"] else "french" if language[0] in ["fr", "fr_fr"] else language
-    LOG.info("Summarizing text in language: %s", language)
+    LOG.debug("Summarizing text in language: %s", language)
     stemmer = Stemmer(lang)
     summarizer = LsaSummarizer(stemmer)
     try:
@@ -235,7 +237,7 @@ def strip_code_fence(text: str, extract_json: bool = False) -> str:
         text = re.sub(r"^```(?:toon|json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
     if extract_json:
-        LOG.info("Extracting JSON...")
+        LOG.debug("Extracting JSON...")
         extracted_text = list(extract_json_objects(text))
         text = extracted_text[0] if extracted_text else text  # Get the first JSON object found, or empty string if none
     return text
@@ -245,7 +247,7 @@ def translate(text: str, from_lang:str = "en", to_lang: str = "fr") -> str:
     """Translates the given text to the target language using DeepL Translate."""
     try:
         t = mt.translate(text, source=from_lang, target=to_lang)
-        LOG.info("Translating text from %s to %s: %s --> %s", from_lang, to_lang, text, t)
+        LOG.debug("Translating text from %s to %s: %s --> %s", from_lang, to_lang, text, t)
         return t
     except Exception as e:
         LOG.error("Could not translate text!", e)

@@ -40,6 +40,7 @@ import time
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_transformers import LongContextReorder
+from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
 import argparse
 from prompts import (
@@ -47,6 +48,8 @@ from prompts import (
     focused_prompt_template,
     focused_prompt_template_claims,
 )
+
+start = time.perf_counter()
 
 if not nltk.download('punkt', quiet=True):
     nltk.download('punkt')
@@ -56,29 +59,50 @@ if not nltk.download('punkt', quiet=True):
 from defaults import keys
 from logger import Logger
 
-start = time.perf_counter()
-
 args = argparse.ArgumentParser()
 args.add_argument("-p", "--prompt", type=str, default="defaults", help="The prompt for DerriDAI to use")
-args.add_argument("-n", "--top_n", type=int, default=10, help="The number of top documents to rerank")
+args.add_argument("-n", "--top_n", type=int, default=None, help="The number of top documents to rerank")
 args.add_argument("-c", "--claims", type=bool, default=False, help="Use the claims-focused prompt template")
+args.add_argument("-r", "--repeat", type=int, default=1, help="The number of times to repeat the prompt")
+args.add_argument("--cache", type=bool, default=False, help="Enable or disable caching of prompt responses")
+args.add_argument("--auto", type=bool, default=False, help="Enable or disable automatic mode-- it will generate its own queries on every iteration")
+args.add_argument("--log-level", type=int, default=20)
 args = args.parse_args()
 if args.claims:
     focused_prompt_template = focused_prompt_template_claims
 
-LOG = Logger.setup("rag8.py")
+LOG = Logger.setup(name="MAIN", level=args.log_level)
 
-LOG.info("Initializing RAG client...")
+LOG.debug("Initializing RAG client...")
 from client import RAG_LLM
 
 client = RAG_LLM()
-LOG.info("RAG client initialized.")
+LOG.debug("RAG client initialized.")
 
-LOG.info("Initializing reranker...")
+
+if args.cache:
+    cache_lookup_start = time.perf_counter()
+    cache_store = client.store("response_cache").as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": 1,
+            "fetch_k": 5,
+        }
+    )
+    cached_results = cache_store.invoke(args.prompt)
+    #best_result = rerank_top_n(query=args.prompt, docs=cached_results, reranker=reranker, top_n=1)
+    best_result = cached_results[0] if cached_results else None
+    cached_time_elapsed = time.perf_counter() - cache_lookup_start
+    LOG.debug("Returning cached result: %s", best_result.metadata.get("response"))
+    LOG.debug("Time it took to get cached response: %.4f seconds", cached_time_elapsed)
+    exit(0)
+
+
+LOG.debug("Initializing reranker...")
 reranker = CrossEncoder(
     "cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
-LOG.info("Reranker initialized.")
+LOG.debug("Reranker initialized.")
 
 def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
     start = time.perf_counter()
@@ -93,7 +117,6 @@ def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
         *user_messages,
     ])
     prompt_value = template.invoke(params["template"])
-    LOG.info("Invoking prompt... %s", prompt_value)
     response = client.chat(store if store else client.key).invoke(prompt_value)
     cleaned_response = strip_code_fence(response.content, extract_json=extract_json)
     if extract_json:
@@ -101,10 +124,10 @@ def prompt(params: dict, store: str = "defaults", extract_json=False) -> tuple:
             cleaned_response = json.loads(cleaned_response)
         except Exception as e:
             LOG.warning("Prompt response is not in JSON format: %s", e)
-    LOG.info("Prompt generation and response completed in %.2f seconds", time.perf_counter() - start)
+    LOG.debug("Prompt generation and response completed in %.2f seconds", time.perf_counter() - start)
     return cleaned_response, response
 
-def rerank_top_n(query, docs, reranker, top_n=args.top_n):
+def rerank_top_n(query, docs, reranker, top_n=10):
     start = time.perf_counter()
     pairs = [
         [query, doc.page_content if (hasattr(doc, "page_content")) else doc]
@@ -118,8 +141,8 @@ def rerank_top_n(query, docs, reranker, top_n=args.top_n):
         key=lambda i: float(scores[i]),
         reverse=True
     )
-    idx = min(top_n, len(docs) - 1)
-    LOG.info("Reranking completed in %.2f seconds", time.perf_counter() - start)
+    idx = min(top_n, len(docs))
+    LOG.debug("Reranking completed in %.2f seconds", time.perf_counter() - start)
     return [docs[i] for i in ranked_indices[:idx]]
 
 def generate_language_filters(materials_languages: list) -> dict:
@@ -133,7 +156,6 @@ def generate_language_filters(materials_languages: list) -> dict:
     return {"$or": filters} if filters else {}
 
 def generate_citation_strings(doc) -> tuple[str, str]:
-
     author = doc.metadata.get("document_author", doc.metadata.get("speaker"))
     work = doc.metadata.get("work", "")
     edition = doc.metadata.get("edition", "")
@@ -144,7 +166,6 @@ def generate_citation_strings(doc) -> tuple[str, str]:
     author_last_name = author.split(' ')[-1]
     inline_author = author_last_name
     author_name_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
-
     if page_start is None:
         pages_cited = ""
     elif page_end is None or page_end == page_start:
@@ -193,14 +214,30 @@ def handle_fetch_query(keywords: list[str]):
 # MAIN FUNCTION
 def main():
     elapsed = time.perf_counter() - start
-    LOG.info("Cold start time: %.4f seconds", elapsed)
+    LOG.debug("Cold start time: %.4f seconds", elapsed)
 
     # 0. PREPROCESSING
     #===========================================
     preprocessing_start = time.perf_counter()
     p = args.prompt
+
+    if args.auto:
+        auto_prompt = client.chat("defaults").invoke("""
+Generate a single academic prompt inquiring into the works and ideas of Jacques Derrida.
+
+Examples:
+* 'Discuss Derrida and hospitality' and such.
+* 'Analyze the concept of *différance* in relation to Derrida’s critique of presence across his major philosophical works.'
+
+Your response must only be one line, the prompt.
+Do not include any commentary, reasoning, or metadata.
+Just respond with the prompt by itself.
+""")
+        LOG.debug("auto prompt: %s", auto_prompt.content)
+        p = auto_prompt.content
+
     extracted_filters = extract_query_and_flters(p, "en")
-    LOG.info("Extracted filters: %s", extracted_filters)
+    LOG.debug("Extracted filters: %s", extracted_filters)
     languages = detect_languages(p)
     extracted_filters["document_languages"] = ["en", "fr"]
     en, fr = get_language_status(languages)
@@ -215,7 +252,7 @@ def main():
     k_fr = [key.replace("l’", "").replace("L’", "").replace("d’", "").replace("D’", "") for key in translate(", ".join(k), from_lang="en", to_lang="fr").split(", ")]
     extracted_filters["keywords"] = k
     extracted_filters["keywords_fr"] = k_fr
-    LOG.info("keywords: %s", k + k_fr)
+    LOG.debug("keywords: %s", k + k_fr)
     limit_fr = detect_phrasing(
         text=p,
         instructions=["only check French sources", "consult only French", "only look at French texts", "use French resources only"]
@@ -239,7 +276,7 @@ def main():
     )
 
     preprocessing_elapsed = time.perf_counter() - preprocessing_start
-    LOG.info("Preprocessing completed in %.4f seconds", preprocessing_elapsed)
+    LOG.debug("Preprocessing completed in %.4f seconds", preprocessing_elapsed)
 
     # 1. QUERY DETAILS
     #===========================================
@@ -248,19 +285,19 @@ def main():
         "user": query_improvement_template,
         "template": { "prompt": p, "prompt_fr": p_fr }
     }, extract_json=True)
-    LOG.info("Response: %s", q)
+    LOG.debug("Response: %s", q)
 
     q["is_fetch_query"] = extracted_filters["is_fetch_query"]
     q["is_chatbot_query"] = extracted_filters["is_chatbot_query"]
     q = {**q, **extracted_filters}
 
-    LOG.info("Response merged with preprocessing: %s", q)
+    LOG.debug("Response merged with preprocessing: %s", q)
 
     if q["is_fetch_query"]:
         handle_fetch_query(q['keywords'])
     document_languages = q["document_languages"]
     query_elapsed = time.perf_counter() - query_start
-    LOG.info("Query processing completed in %.4f seconds", query_elapsed)
+    LOG.debug("Query processing completed in %.4f seconds", query_elapsed)
 
     # 2. LOOKUP
     #===========================================
@@ -280,18 +317,18 @@ def main():
 
         for search_type in search_types:
             for lang in languages:
-                LOG.info(f"Starting search for type: {search_type} in language: {lang}")
+                LOG.debug(f"Starting search for type: {search_type} in language: {lang}")
                 retriever = client.store(f"derrida8_primary_{lang}").as_retriever(
                     search_kwargs=mmr_filter if search_type == "mmr" else similarity_filter,
                     search_type=search_type,
                 )
                 invocation_str = f"'{q['prompt_query' if lang == 'en' else 'prompt_query_fr']}'"
-                LOG.info(f"Invoking {search_type} retriever with query: {invocation_str}")
+                LOG.debug(f"Invoking {search_type} retriever with query: {invocation_str}")
                 results = retriever.invoke(invocation_str)
-                LOG.info(f"Total {search_type} results: {len(results)}")
+                LOG.debug(f"Total {search_type} results: {len(results)}")
                 all_results += results
         elapsed = time.perf_counter() - start
-        LOG.info("Basic lookup completed in %.4f seconds", elapsed)
+        LOG.debug("Basic lookup completed in %.4f seconds", elapsed)
         return all_results
 
     # Basic MMR and similarity lookup
@@ -301,7 +338,7 @@ def main():
     keywords = q['keywords'] if "en" in q["document_languages"] else []
     keywords += q['keywords_fr'] if "fr" in q["document_languages"] else []
     keywords = list(dict.fromkeys(keywords))
-    LOG.info("Retrieving canonical works by keyword: %s", keywords)
+    LOG.debug("Retrieving canonical works by keyword: %s", keywords)
     canonical_work_ids = q["canonical_work_ids"]
     for keyword in keywords:
         for lang in q["document_languages"]:
@@ -311,7 +348,7 @@ def main():
                 canonical_work_ids.append(keys[lang][keyword])
     flattened_canonical_work_ids = [item for sublist in canonical_work_ids for item in (sublist if isinstance(sublist, list) else [sublist])]
     deduped_work_ids = list(dict.fromkeys(flattened_canonical_work_ids))
-    LOG.info("Canonical work IDs to retrieve documents from: %s", deduped_work_ids)
+    LOG.debug("Canonical work IDs to retrieve documents from: %s", deduped_work_ids)
     if len(deduped_work_ids) > 1:
         canonical_filter = {
             "$or": [{"canonical_work_id": {"$eq": work_id}} for work_id in deduped_work_ids]
@@ -319,7 +356,7 @@ def main():
     elif len(deduped_work_ids) == 1:
         canonical_filter = {"canonical_work_id": {"$eq": deduped_work_ids[0]}}
     if (len(deduped_work_ids) > 0):
-        LOG.info("Canonical filter: %s", canonical_filter)
+        LOG.debug("Canonical filter: %s", canonical_filter)
         combined_canonical_results = basic_lookup(
             mmr_filter={
                 "k": K_VALUE // 2,
@@ -333,7 +370,7 @@ def main():
             },
             languages=document_languages,
         )
-        LOG.info("Canonical results retrieved: %d", len(combined_canonical_results))
+        LOG.debug("Canonical results retrieved: %d", len(combined_canonical_results))
     else:
         combined_canonical_results = []
 
@@ -349,7 +386,7 @@ def main():
               + [{"concepts": {"$contains": keyword}} for keyword in q['keywords_fr'] if "fr" in document_languages]
               
     }
-    LOG.info("Keyword filter: %s", keyword_filter)
+    LOG.debug("Keyword filter: %s", keyword_filter)
     keyword_results = basic_lookup(
         mmr_filter={
             "k": K_VALUE // 4,
@@ -363,9 +400,9 @@ def main():
         },
         languages=document_languages,
     )
-    LOG.info("Keyword results retrieved: %d", len(keyword_results))
+    LOG.debug("Keyword results retrieved: %d", len(keyword_results))
     total_retrieved_count = len(basic_results) + len(combined_canonical_results) + len(keyword_results)
-    LOG.info("Total results retrieved: %d", total_retrieved_count)
+    LOG.debug("Total results retrieved: %d", total_retrieved_count)
     combined_initial_results = basic_results + combined_canonical_results + keyword_results
 
     # Deduplication
@@ -385,12 +422,14 @@ def main():
     # ====================================================
     # Reordering and reranking
     post_processing_start = time.perf_counter()
-    LOG.info("Reordering context groups with LongContextReorder...")
+    LOG.debug("Reordering context groups with LongContextReorder...")
     reordering = LongContextReorder()
     reordered_results = reordering.transform_documents(deduplicated_results)
-    LOG.info("Reranking top_n results with the reranker...")
+    LOG.debug("Reranking top_n results with the reranker...")
     rerank_prompt = q["prompt_query"] + "\n" + q["prompt_query_fr"]
-    reranked_results = rerank_top_n(rerank_prompt, reordered_results, reranker)
+
+    top_n_limit = args.top_n if args.top_n is not None else q["limit"]
+    reranked_results = rerank_top_n(rerank_prompt, reordered_results, reranker, top_n=top_n_limit)
     LOG.info("Total results after top_n reranking: %d", len(reranked_results))
     if (len(reranked_results) == 0):
         LOG.warning("No results retrieved after reranking.")
@@ -403,46 +442,62 @@ def main():
     works = {}
     for i, doc in enumerate(reranked_results):
         works[f"E{i}"] = doc.metadata["inline_citation"]
-    LOG.info("Works in reranking: %s", works)
+    LOG.debug("Works in reranking: %s", works)
     context = generate_context_string(reranked_results)
     LOG.info(f"Context:\n{context}")
     post_processing_elapsed = time.perf_counter() - post_processing_start
-    LOG.info("Post-processing completed in %.4f seconds", post_processing_elapsed)
+    LOG.debug("Post-processing completed in %.4f seconds", post_processing_elapsed)
 
     # 4. PROMPTING
     # ====================================================
     # Focused prompt
-    LOG.info("Invoking focused prompt...")
-    r, _ = prompt({
-        "user": focused_prompt_template,
-        "store": "derrida8_primary_en",
-        "template": {
-            "prompt_query": q["prompt_query"],
-            "prompt_instructions": q["prompt_instructions"],
-            "context": context,
-        }
-    })
-    LOG.info("Focused prompt response prior to source binding: %s", r)
+    for _ in range(args.repeat):
+        LOG.debug("Invoking focused prompt...")
+        r, _ = prompt({
+            "user": focused_prompt_template,
+            "store": "derrida8_primary_en",
+            "template": {
+                "prompt_query": q["prompt_query"],
+                "prompt_instructions": q["prompt_instructions"],
+                "context": context,
+            }
+        })
 
-    # Citation attribution and source binding
-    works_cited_str = ""
-    works_cited_seen = []
-    for i, doc in enumerate(reranked_results):
-        r = re.sub(
-            r"\(([^()]*)\)|\[([^\[\]]*)\]",
-            lambda group: "(" + re.sub(
-                r"\bE\d+\b",
-                lambda reference: works.get(reference.group(), reference.group()),
-                group.group(1) if group.group(1) is not None else group.group(2),
-            ) + ")",
-            r,
-        )
-        if doc.metadata["canonical_work_id"] not in works_cited_seen:
-            works_cited_str += f"{len(works_cited_seen) + 1}. {doc.metadata['full_citation']}\n"
-            works_cited_seen.append(doc.metadata["canonical_work_id"])
-    r += "\n\nWorks Cited:\n" + works_cited_str
+        # Citation attribution and source binding
+        LOG.debug("Attributing citations and binding sources...")
+        works_cited_str = ""
+        works_cited_seen = []
+        for i, doc in enumerate(reranked_results):
+            r = re.sub(
+                r"\(([^()]*)\)|\[([^\[\]]*)\]",
+                lambda group: "(" + re.sub(
+                    r"\bE\d+\b",
+                    lambda reference: works.get(reference.group(), reference.group()),
+                    group.group(1) if group.group(1) is not None else group.group(2),
+                ) + ")",
+                r,
+            )
+            if doc.metadata["canonical_work_id"] not in works_cited_seen:
+                works_cited_str += f"{len(works_cited_seen) + 1}. {doc.metadata['full_citation']}.\n"
+                works_cited_seen.append(doc.metadata["canonical_work_id"])
+        r += "\n\n**Works Cited**\n\n" + works_cited_str
 
-    LOG.info("Focused prompt response with sources bound: %s", r)
+        LOG.info("Focused prompt response with sources bound: %s", r)
+
+        LOG.debug("Caching focused prompt response...")
+        cache = RAG_LLM().store("response_cache")
+        cached_response = Document(page_content=q["prompt"], metadata={
+            "p": q["prompt_query"],
+            "response": r,
+            "k": K_VALUE,
+            "top_n": args.top_n if args.top_n else q["limit"],
+            "fetch_k": FETCH_K_VALUE,
+            "lambda_mult": LAMBDA_MULT_VALUE,
+            "chat_temperature": CHAT_TEMPERATURE,
+            "total_results_after_reranking": len(reranked_results)
+        })
+        cache.add_documents(documents=[cached_response], ids=[f"response_{time.time()}"])
+        LOG.debug("Focused prompt response cached successfully.")
 
     # 4. WRAP-UP
     # ====================================================
@@ -458,4 +513,8 @@ begin = time.perf_counter() - start
 LOG.info("Time elapsed since start: %.4f seconds", begin)
 
 if __name__ == "__main__":
-    main()
+    if args.auto:
+        while True:
+            main()
+    else:
+        main()

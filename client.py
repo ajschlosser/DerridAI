@@ -6,6 +6,7 @@ from logger import Logger
 from langchain_chroma import Chroma
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 
 LOG = Logger.setup("RAG_client")
 
@@ -63,6 +64,10 @@ class RAG_LLM:
         )
         self.stores["defaults"] = Chroma(
             persist_directory=DEFAULT_STORE_PERSIST_DIRECTORY,
+            embedding_function=embeddings,
+        )
+        self.stores["response_cache"] = Chroma(
+            persist_directory=f"{DEFAULT_STORE_PERSIST_DIRECTORY}_response_cache",
             embedding_function=embeddings,
         )
 

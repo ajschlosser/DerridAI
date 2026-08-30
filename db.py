@@ -28,13 +28,19 @@ Then use the helpers below, e.g.:
 """
 
 import json
-
+import argparse
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 
-from defaults import DB_PATH, EMBEDDING_MODEL, OLLAMA_BASE_URL
+from defaults import EMBEDDING_MODEL, OLLAMA_BASE_URL
+
+parser = argparse.ArgumentParser(description="DB")
+parser.add_argument("-d", "--db", type=str, default="db")
 
 embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
+args = parser.parse_args()
+DB_PATH = args.db
+
 vector_store = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
 collection = vector_store._collection
 
@@ -48,9 +54,10 @@ def search(query: str, k: int = 10, filter: dict | None = None):
 
 def mmr(query: str, k: int = 10, fetch_k: int = 50, lambda_mult: float = 0.5, filter: dict | None = None):
     """Maximal marginal relevance search; returns a list of Documents."""
-    return vector_store.max_marginal_relevance_search(
+    results = vector_store.max_marginal_relevance_search(
         query, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, filter=filter
     )
+    return results
 
 
 def get(where: dict | None = None, where_document: dict | None = None, limit: int | None = None):
