@@ -19,7 +19,9 @@ print("cold start")
 
 import os
 
-from text import detect_languages, extract_keywords, correct_spelling, get_language_status, translate
+import nltk
+
+from text import detect_languages, extract_keywords, correct_spelling, extract_likeness, get_language_status, remove_stopwords, summarize_text, translate, extract_query_and_flters, detect_phrasing
 os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
 import time
 import json
@@ -33,6 +35,11 @@ from prompts import (
     focused_prompt_template,
     focused_prompt_template_claims,
 )
+
+if not nltk.download('punkt', quiet=True):
+    nltk.download('punkt')
+    nltk.download('punkt_tab')
+    nltk.download('stopwords')
 
 from defaults import CHAT_TEMPERATURE, keys
 from logger import Logger
@@ -208,11 +215,18 @@ def generate_context_string(docs: list) -> str:
 
         text = " ".join(d.get("text").split())
         context_str += f"""<EVIDENCE {i}>
-Evidence ID: {i} | Record ID: {record_id} |
-Text: {text} | Description of evidence: {attr_str} | Response suggestions: {chat_str} |
-MLA inline: {d.get("inline_citation")} |
-MLA full works cited: {d.get("full_citation")}
-</EVIDENCE {i}>
+work={work}
+year={d.get("year")}
+page_start={d.get("page_start")}
+page_end={d.get("page_end")}
+inline_mla_citation={d.get("inline_citation")}
+full_mla_citation_for_works_Cited={d.get("full_citation")}
+speaker={speaker}
+position_holder={holder}
+speaker_target={target}
+discourse_role={discourse_role}
+text={text}
+</EVIDENCE>
 """
     cleaned_context_str = " ".join(context_str.split())
     return cleaned_context_str
@@ -235,16 +249,45 @@ def main():
     #===========================================
     preprocessing_start = time.perf_counter()
     p = args.prompt
+    extracted_filters = extract_query_and_flters(p, "en")
+    LOG.info("Extracted filters: %s", extracted_filters)
     languages = detect_languages(p)
+    extracted_filters["document_languages"] = ["en", "fr"]
     en, fr = get_language_status(languages)
     if en:
-        p_fr = translate(p, from_code="en", to_code="fr")
+        p_fr = translate(p, from_lang="en", to_lang="fr")
     elif fr:
         p_fr = p
-        p = translate(p, from_code="fr", to_code="en")
-
+        p = translate(p, from_lang="fr", to_lang="en")
+    extracted_filters["prompt"] = p
+    extracted_filters["prompt_fr"] = p_fr
     k = extract_keywords(p)
-    k_fr = extract_keywords(p_fr)
+    k_fr = [remove_stopwords(key) for key in translate(", ".join(k), from_lang="en", to_lang="fr").split(", ")]
+    extracted_filters["keywords"] = k
+    extracted_filters["keywords_fr"] = k_fr
+    LOG.info("keywords: %s", k + k_fr)
+    limit_fr = detect_phrasing(
+        text=p,
+        instructions=["only check French sources", "consult only French", "only look at French texts", "use French resources only"]
+    )
+    if limit_fr:
+        extracted_filters["document_languages"] = ["fr"]
+    else:
+        limit_en = detect_phrasing(
+            text=p,
+            instructions=["only check English sources", "consult only English", "only look at English texts", "use English resources only"]
+        )
+        if limit_en:
+            extracted_filters["document_languages"] = ["en"]
+    extracted_filters["is_fetch_query"] = detect_phrasing(
+        text=p,
+        instructions=["get me every mention", "fetch all occurrences", "retrieve all instances", "look up all references", "search for all mentions"]
+    )
+    extracted_filters["is_chatbot_query"] = detect_phrasing(
+        text=p,
+        instructions=["who are you", "whom do you", "what do you", "respond in the first-person","respond as yourself","tell me about you","talk to me about your","what do you think about","what do you have to say about"]
+    )
+
     preprocessing_elapsed = time.perf_counter() - preprocessing_start
     LOG.info("Preprocessing completed in %.4f seconds", preprocessing_elapsed)
 
@@ -257,14 +300,15 @@ def main():
     }, extract_json=True)
     LOG.info("Response: %s", q)
 
-    q["prompt"] = p
-    q["prompt_fr"] = p_fr
-    q["keywords"] = k
-    q["keywords_fr"] = k_fr
+    q["is_fetch_query"] = extracted_filters["is_fetch_query"]
+    q["is_chatbot_query"] = extracted_filters["is_chatbot_query"]
+    q = {**q, **extracted_filters}
+
+    LOG.info("Response merged with preprocessing: %s", q)
 
     if q["is_fetch_query"]:
         handle_fetch_query(q['keywords'])
-    document_languages = q.get("materials_languages", ["en", "fr"])
+    document_languages = q["document_languages"]
     query_elapsed = time.perf_counter() - query_start
     LOG.info("Query processing completed in %.4f seconds", query_elapsed)
 
@@ -304,12 +348,12 @@ def main():
     basic_results = basic_lookup(languages=document_languages)
 
     # Canonical MMR and similarity lookup
-    keywords = q['keywords'] if "en" in document_languages else []
-    keywords += q['keywords_fr'] if "fr" in document_languages else []
+    keywords = q['keywords'] if "en" in q["document_languages"] else []
+    keywords += q['keywords_fr'] if "fr" in q["document_languages"] else []
     LOG.info("Retrieving canonical works by keyword: %s", keywords)
     canonical_work_ids = []
     for keyword in keywords:
-        for lang in document_languages:
+        for lang in q["document_languages"]:
             if keyword.lower() in keys.get(lang, {}):
                 canonical_work_ids.append(keys[lang][keyword.lower()])
             if keyword in keys.get(lang, {}):

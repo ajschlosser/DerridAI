@@ -469,10 +469,6 @@ query_improvement_template = """
         "prompt_query": String. Required. The part of the prompt that contains the actual question or request. Translated into English if French, otherwise untranslated.
         "prompt_query_fr": String. REQUIRED. Default: The part of the prompt in French that contains the actual question or request, or prompt_query translated into French.
         "prompt_instructions": String. Any additional instructions or context provided in the prompt by the user (DO NOT INVENT OR ADD ANYTHING NEW).
-        "requested_languages": Array[String]. REQUIRED. The language(s) requested by the user to use when researching the response. Strings are ISO short codes: en | fr
-        "materials_languages": Array[String]. REQUIRED. Always ["en", "fr"] unless more restrictive usage is specified by the user (e.g. "cite only French" would result in ["fr"])
-        "is_fetch_query": Boolean. REQUIRED. Whether or not the prompt is asking for ALL appearances, mentions, discussions, etc. of a particular idea or key concept in the source materials.
-        "is_chatbot_query": Boolean. Only set to `true` if the user is addressing you in the second-person by name or with the pronoun "you" in obvious chatbot interaction style. Hint: if user is talking about "Derrida" in the 3rd person, set this to `false`
     }}
 
     Output only the JSON response object, no additional text, markdown, or ```, only JSON

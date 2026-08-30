@@ -217,7 +217,7 @@ DB_PATH: {cfg.store.persist_directory}
 #   - llama3.1:8b <-- good balance of context and performance, fits on GPU
 #   - llama3.2:3b <-- not good enough
 
-DEFAULT_CHAT_MODEL = "phi4-mini-reasoning:3.8b"
+DEFAULT_CHAT_MODEL = "gemma4:e4b"
 DEFAULT_CHAT_TEMPERATURE = 0.4
 DEFAULT_CHAT_BASE_URL = "http://localhost:11434"
 DEFAULT_CHAT_TIMEOUT = 120.0

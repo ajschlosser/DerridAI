@@ -1918,3 +1918,104 @@ keys = {
     ]
   }
 }
+PHILOSOPHY_STOPWORD_EXCEPTIONS_EN = {
+    # Negation / logical polarity
+    "no",
+    "nor",
+    "not",
+    "neither",
+    "either",
+
+    # Modality
+    "can",
+    "should",
+    "will",
+
+    # Identity / ontology
+    "being",
+    "is",
+    "was",
+    "are",
+    "were",
+
+    # Difference / identity / alterity
+    "other",
+    "same",
+    "own",
+
+    # Restriction / emphasis
+    "only",
+
+    # Logical relations
+    "of",
+    "if",
+    "but",
+    "because",
+    "while",
+    "than",
+    "so",
+    "or",
+
+    # Spatial / conceptual relations
+    "against",
+    "between",
+    "through",
+    "before",
+    "after",
+    "over",
+    "under",
+
+    # Quantification
+    "all",
+    "any",
+    "both",
+    "each",
+    "few",
+    "more",
+    "most",
+    "some",
+}
+
+
+PHILOSOPHY_STOPWORD_EXCEPTIONS_FR = {
+    # Negation
+    "ni",
+    "ne",
+    "pas",
+    "sans",
+    "point",
+    "aucun",
+    "aucune",
+
+    # Identity / ontology
+    "étant",
+    "étante",
+    "étants",
+    "étantes",
+    "soit",
+
+    # Identity / reflexivity
+    "même",
+    "soi",
+    "est",
+    "étais",
+    "était",
+    "étions",
+    "étaient",
+
+    # Logical relations
+    "de",
+    "mais",
+    "ou",
+    "que",
+    "qui",
+    "si",
+    "ou",
+
+    # Relational / conceptual positioning
+    "dans",
+    "sur",
+    "avec",
+    "par",
+    "pour",
+}
