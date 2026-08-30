@@ -72,7 +72,7 @@ class RAG_LLM:
     def chat(self, key: str = None):
         return self.chats[key if key else self.key]
 
-    def store(self, key: str = None):
+    def store(self, key: str = ""):
         key = key if key else self.key
         store = self.stores.get(key, None)
         if store:

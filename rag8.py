@@ -18,7 +18,7 @@
 print("Starting DerridAI...")
 
 import os
-
+import re
 import nltk
 
 from text import (
@@ -139,12 +139,19 @@ def generate_citation_strings(doc) -> tuple[str, str]:
     edition = doc.metadata.get("edition", "")
     year = doc.metadata.get("year", "")
     page_start = doc.metadata.get("page_start")
-    translator = doc.metadata.get("translator", None)
-    page_end = doc.metadata.get("page_end")
+    translator = doc.metadata.get("translator")
+    page_end = doc.metadata.get("page_end", "")
     author_last_name = author.split(' ')[-1]
     inline_author = author_last_name
     author_name_reversed = f"{author.split(' ')[-1]}, {author.split(' ')[0]}"
-    inline_citation = f"({inline_author} {year}: {page_start if (not page_end or page_end == page_start) else f'{page_start}-{page_end}'})"
+
+    if page_start is None:
+        pages_cited = ""
+    elif page_end is None or page_end == page_start:
+        pages_cited = str(page_start)
+    else:
+        pages_cited = f"{page_start}-{page_end}"
+    inline_citation = f"{inline_author} {year}{': ' + pages_cited if pages_cited else ''}"
     full_citation = f"{author_name_reversed}. {work}.{f' {translator} trans.' if translator else ''} {edition}. {year}"
     return inline_citation, full_citation
 
@@ -161,15 +168,16 @@ def generate_context_string(docs: list) -> str:
         topics = d.get("topics")
         concepts = d.get("concepts")
         text = " ".join(d.get("text").split())
-        context_str += f"""[E{i}]
+        context_str += f"""\n<BEGIN EVIDENCE_TAG E{i}>
+evidence_tag=[E{i}]
 record_id={d.get("record_id")}
-speaker={"Derrida" if speaker == "Jacques Derria" else speaker}
+speaker={"Derrida" if speaker == "Jacques Derrida" else speaker}
 position_holder={holder}{f"\nstance={stance}" if stance else ""}
 position_status={d.get("proposition_status", "")}
 target={d.get("target", "")}
 role={discourse_role}{f"\ntopics={', '.join(topics)}" if topics else ""}{f"\nconcepts={', '.join(concepts)}" if concepts else ""}
 text={text}
-"""
+<END EVIDENCE_TAG E{i}>\n"""
     cleaned_context_str = " ".join(context_str.split())
     return cleaned_context_str
 
@@ -373,7 +381,7 @@ def main():
     lookup_elapsed = time.perf_counter() - lookup_start
     LOG.info("Lookup completed in %.4f seconds", lookup_elapsed)
 
-    # 3. POST-PROCESSING RETRIEVAL
+    # 3. RETRIEVAL POST-PROCESSING
     # ====================================================
     # Reordering and reranking
     post_processing_start = time.perf_counter()
@@ -387,8 +395,15 @@ def main():
     if (len(reranked_results) == 0):
         LOG.warning("No results retrieved after reranking.")
         exit(0)
+    # Generate and store citation strings for each document
+    for doc in reranked_results:
+        doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
 
     # Build context string
+    works = {}
+    for i, doc in enumerate(reranked_results):
+        works[f"E{i}"] = doc.metadata["inline_citation"]
+    LOG.info("Works in reranking: %s", works)
     context = generate_context_string(reranked_results)
     LOG.info(f"Context:\n{context}")
     post_processing_elapsed = time.perf_counter() - post_processing_start
@@ -407,9 +422,31 @@ def main():
             "context": context,
         }
     })
-    LOG.info("Focused prompt response: %s", r)
+    LOG.info("Focused prompt response prior to source binding: %s", r)
+
+    # Citation attribution and source binding
+    works_cited_str = ""
+    works_cited_seen = []
+    for i, doc in enumerate(reranked_results):
+        r = re.sub(
+            r"\(([^()]*)\)|\[([^\[\]]*)\]",
+            lambda group: "(" + re.sub(
+                r"\bE\d+\b",
+                lambda reference: works.get(reference.group(), reference.group()),
+                group.group(1) if group.group(1) is not None else group.group(2),
+            ) + ")",
+            r,
+        )
+        if doc.metadata["canonical_work_id"] not in works_cited_seen:
+            works_cited_str += f"{len(works_cited_seen) + 1}. {doc.metadata['full_citation']}\n"
+            works_cited_seen.append(doc.metadata["canonical_work_id"])
+    r += "\n\nWorks Cited:\n" + works_cited_str
+
+    LOG.info("Focused prompt response with sources bound: %s", r)
 
     # 4. WRAP-UP
+    # ====================================================
+    # Report results
     LOG.info("Original query: %s", q)
     total_elapsed = time.perf_counter() - start
     LOG.info("Total time elapsed: %.4f seconds", total_elapsed)

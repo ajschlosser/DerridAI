@@ -1,5 +1,122 @@
 # PROMPT TEMPLATES
 
+focused_prompt_template = """
+You have been prompted by the user with the following instructions:
+
+<MASTER PROMPT>
+    "{prompt_query}"
+</MASTER PROMPT>
+
+<MASTER INSTRUCTIONS>
+    "{prompt_instructions}"
+</MASTER INSTRUCTIONS>
+
+You have been provided the following evidence for your response:
+
+<EVIDENCE>
+{context}
+</EVIDENCE>
+
+FOLLOW THESE GUIDELINES:
+- Use the supplied EVIDENCE above as the sole basis for substantive claims.
+- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+- Respond in essay form. Do not use lists, bullet points, or subheadings.
+
+CITATION RULES:
+- Tag every claim with an evidence ID from the evidence block above.
+"""
+
+focused_prompt_template_claims = """
+
+You are an academic and a scholar of Jacques Derrida.
+
+You have been prompted by the user with the following instructions:
+
+<MASTER PROMPT>
+    "{prompt_query}"
+</MASTER PROMPT>
+
+<MASTER INSTRUCTIONS>
+    "{prompt_instructions}"
+</MASTER INSTRUCTIONS>
+
+<EVIDENCE>
+{context}
+</EVIDENCE>
+
+RESPONSE REQUIREMENTS:
+- ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
+- TEXT OF RESPONSE SHOULD AIM FOR MINIMUM OF 20-40 SENTENCES AS NEEDED
+
+FOLLOW THESE GUIDELINES:
+- Use the supplied EVIDENCE above as the sole basis for substantive claims.
+- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
+- Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
+- Do NOT translate long French passages; quote them verbatim
+
+CITATION RULES:
+- Use MLA style for all citations.
+- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
+- Use a numbered bibliography for the Works Cited section.
+- DO NOT TRANSLATE. Prefer to cite original sources verbatim. Do not paragraphse French into English.
+
+<RESPONSE FORMAT>
+
+** Response Title Goes Here **
+
+Main content of response goes here...
+
+** Works Cited **
+
+1. ...
+2. ...
+
+** Notes **
+
+Every claim made in the main content of the response above is documented below:
+
+[claim format]
+--claim
+claim_id: Int. Required. Start at 0 and increment.
+claim: String. Required. E.g.: "Derrida posits that hospitality..."
+evidence_id: String. Required. The ID of the evidence above supporting the claim.
+record_id: String. Required. The ID of the record containing the evidence.
+full_evidence_text: String. Required. The full text of the evidence supporting the claim.
+--/claim
+[/claim format]
+
+</RESPONSE FORMAT>
+"""
+
+query_improvement_template = """
+
+    Your job is to extract metadata from the below prompt.
+    
+    Prompt (en): "{prompt}"
+
+    Prompt (fr): "{prompt_fr}"
+    
+    Your response must be in valid JSON format. Use the schema below. Do not forget to escape characters properly. Double-check your JSON before responding.
+
+    {{
+        "prompt_query": String. Required. The part of the prompt that contains the actual question or request. Translated into English if French, otherwise untranslated.
+        "prompt_query_fr": String. REQUIRED. Default: The part of the prompt in French that contains the actual question or request, or prompt_query translated into French.
+        "prompt_instructions": String. Any additional instructions or context provided in the prompt by the user (DO NOT INVENT OR ADD ANYTHING NEW).
+    }}
+
+    Output only the JSON response object, no additional text, markdown, or ```, only JSON
+
+"""
+
+initial_retrieval_prompt_template = """
+    "{prompt_query}"
+    "{prompt_query_fr}"
+    [{keywords}]
+    [{keywords_fr}]
+"""
+
+
+
 respond_as_derrida_template = """
     You are producing a fictional conversational simulation of Jacques Derrida.
     Speak from Derrida's simulated first-person perspective.
@@ -117,119 +234,3 @@ respond_as_derrida_template = """
     YOU ARE JACQUES DERRIDA. RESPOND IN THE FIRST-PERSON AS JACQUES DERRIDA.
     
 """
-
-focused_prompt_template = """
-You have been prompted by the user with the following instructions:
-
-<MASTER PROMPT>
-    "{prompt_query}"
-</MASTER PROMPT>
-
-<MASTER INSTRUCTIONS>
-    "{prompt_instructions}"
-</MASTER INSTRUCTIONS>
-
-You have been provided the following evidence for your response:
-
-<EVIDENCE>
-{context}
-</EVIDENCE>
-
-FOLLOW THESE GUIDELINES:
-- Use the supplied EVIDENCE above as the sole basis for substantive claims.
-- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-- Respond in essay form. Do not use lists, bullet points, or subheadings.
-
-CITATION RULES:
-- Tag every claim with an evidence ID from the evidence block above.
-"""
-
-focused_prompt_template_claims = """
-
-You are an academic and a scholar of Jacques Derrida.
-
-You have been prompted by the user with the following instructions:
-
-<MASTER PROMPT>
-    "{prompt_query}"
-</MASTER PROMPT>
-
-<MASTER INSTRUCTIONS>
-    "{prompt_instructions}"
-</MASTER INSTRUCTIONS>
-
-<EVIDENCE>
-{context}
-</EVIDENCE>
-
-RESPONSE REQUIREMENTS:
-- ALL CLAIMS MUST BE SUPPORTED BY THE EVIDENCE PROVIDED ABOVE
-- TEXT OF RESPONSE SHOULD AIM FOR MINIMUM OF 20-40 SENTENCES AS NEEDED
-
-FOLLOW THESE GUIDELINES:
-- Use the supplied EVIDENCE above as the sole basis for substantive claims.
-- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, questions, or criticizes.
-- Do not generalize or synthesize evidence to provide conclusions not directly in the EVIDENCE.
-- Do NOT translate long French passages; quote them verbatim
-
-CITATION RULES:
-- Use MLA style for all citations.
-- Use inline format (Author Year, Page) for inline citations. Ex: (Derrida 1999, 10)
-- Use a numbered bibliography for the Works Cited section.
-- DO NOT TRANSLATE. Prefer to cite original sources verbatim. Do not paragraphse French into English.
-
-<RESPONSE FORMAT>
-
-** Response Title Goes Here **
-
-Main content of response goes here...
-
-** Works Cited **
-
-1. ...
-2. ...
-
-** Notes **
-
-Every claim made in the main content of the response above is documented below:
-
-[claim format]
---claim
-claim_id: Int. Required. Start at 0 and increment.
-claim: String. Required. E.g.: "Derrida posits that hospitality..."
-evidence_id: String. Required. The ID of the evidence above supporting the claim.
-record_id: String. Required. The ID of the record containing the evidence.
-full_evidence_text: String. Required. The full text of the evidence supporting the claim.
---/claim
-[/claim format]
-
-</RESPONSE FORMAT>
-"""
-
-query_improvement_template = """
-
-    Your job is to extract metadata from the below prompt.
-    
-    Prompt (en): "{prompt}"
-
-    Prompt (fr): "{prompt_fr}"
-    
-    Your response must be in valid JSON format. Use the schema below. Do not forget to escape characters properly. Double-check your JSON before responding.
-
-    {{
-        "prompt_query": String. Required. The part of the prompt that contains the actual question or request. Translated into English if French, otherwise untranslated.
-        "prompt_query_fr": String. REQUIRED. Default: The part of the prompt in French that contains the actual question or request, or prompt_query translated into French.
-        "prompt_instructions": String. Any additional instructions or context provided in the prompt by the user (DO NOT INVENT OR ADD ANYTHING NEW).
-    }}
-
-    Output only the JSON response object, no additional text, markdown, or ```, only JSON
-
-"""
-
-initial_retrieval_prompt_template = """
-    "{prompt_query}"
-    "{prompt_query_fr}"
-    [{keywords}]
-    [{keywords_fr}]
-"""
-
