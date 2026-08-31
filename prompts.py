@@ -115,7 +115,24 @@ initial_retrieval_prompt_template = """
     [{keywords_fr}]
 """
 
+auto_prompt_template = """
+Generate a single, concise (less than 20 words) academic prompt inquiring into the works and ideas of Jacques Derrida.
 
+Examples:
+* 'Discuss Derrida and hospitality.'
+* 'Analyze the concept of *différance* in relation to Derrida’s critique of presence.'
+
+Your response must only be one line, the prompt.
+Do not include any commentary, reasoning, or metadata.
+Just respond with the prompt by itself.
+Avoid clichés about deconstruction in your prompt.
+
+DO NOT BE REPETITIVE. We want as much coverage as possible.
+
+DO NOT USE PROMPTS SIMILAR TO THE EXAMPLES BELOW:
+{auto_prompts}
+DO NOT USE PROMPTS SIMILAR TO THE EXAMPLES ABOVE!
+"""
 
 respond_as_derrida_template = """
     You are producing a fictional conversational simulation of Jacques Derrida.

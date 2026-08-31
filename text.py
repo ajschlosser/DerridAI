@@ -11,6 +11,7 @@ from fast_langdetect import detect
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
+from sumy.summarizers.edmundson import EdmundsonSummarizer
 from sumy.nlp.stemmers import Stemmer
 
 from nltk.corpus import stopwords
@@ -41,12 +42,13 @@ def detect_phrasing(text: str, instructions):
         return True
     return False
 
-def extract_query_and_flters(text: str, lang: str):
+def extract_query_and_filters(text: str, lang: str):
     doc = nlps[lang](text)
 
     filters = {
         "canonical_work_ids": [],
         "works_referenced": [],
+        "canonical_work_ids_works_referenced": [],
         "materials_languages": [],
         "institutions_referenced": [],
         "locations_referenced": [],
@@ -61,20 +63,31 @@ def extract_query_and_flters(text: str, lang: str):
         if detect_phrasing(work, "Monolingualism of the Other; or The Prosthesis of Origin"):
             filters["canonical_work_ids"].append("derrida-le_monolinguisme_de_l_autre_ou_la_prothese_d_origine-1996")
             filters["canonical_work_ids"].append("derrida-monolingualism_of_the_other_or_the_prosthesis_of_origin-1998")
+            filters["canonical_work_ids_works_referenced"].append("derrida-le_monolinguisme_de_l_autre_ou_la_prothese_d_origine-1996")
+            filters["canonical_work_ids_works_referenced"].append("derrida-monolingualism_of_the_other_or_the_prosthesis_of_origin-1998")
         if detect_phrasing(work, ["Specters", "Spectres", "Marx", "Marxism"]):
             filters["canonical_work_ids"].append("derrida-spectres_de_marx-1993")
             filters["canonical_work_ids"].append("derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006")
+            filters["canonical_work_ids_works_referenced"].append("derrida-spectres_de_marx-1993")
+            filters["canonical_work_ids_works_referenced"].append("derrida-specters_of_marx_the_state_of_the_debt_the_work_of_mourning_and_the_new_international-2006")
         if detect_phrasing(work, "Of Grammatology"):
             filters["canonical_work_ids"].append("derrida-de_la_grammatologie-1967")
+            filters["canonical_work_ids_works_referenced"].append("derrida-de_la_grammatologie-1967")
         if detect_phrasing(work, "Writing and Difference"):
             filters["canonical_work_ids"].append("derrida-l_ecriture_et_la_difference-1967")
             filters["canonical_work_ids"].append("derrida-writing_and_difference-1978")
+            filters["canonical_work_ids_works_referenced"].append("derrida-l_ecriture_et_la_difference-1967")
+            filters["canonical_work_ids_works_referenced"].append("derrida-writing_and_difference-1978")
         if detect_phrasing(work, "Dissemination"):
             filters["canonical_work_ids"].append("derrida-dissemination-1981")
             filters["canonical_work_ids"].append("derrida-dissemination-1972")
+            filters["canonical_work_ids_works_referenced"].append("derrida-dissemination-1981")
+            filters["canonical_work_ids_works_referenced"].append("derrida-dissemination-1972")
         if detect_phrasing(work, "Gift of Death"):
             filters["canonical_work_ids"].append("derrida-the_gift_of_death-1995")
             filters["canonical_work_ids"].append("derrida-donner_la_mort-1999")
+            filters["canonical_work_ids_works_referenced"].append("derrida-the_gift_of_death-1995")
+            filters["canonical_work_ids_works_referenced"].append("derrida-donner_la_mort-1999")
 
     def handle_location(location: str):
         if detect_phrasing(location, ["Algeria", "North Africa", "Maghreb", "Algiers"]):
@@ -128,9 +141,8 @@ def extract_query_and_flters(text: str, lang: str):
     
     return filters
 
-def extract_likeness(target: str, text: str, threshold: float = 0.55):
+def extract_likeness(target: str | list[str], text: str, threshold: float = 0.55):
     sentences = TextBlob(text).sentences
-    LOG.debug("sentences extracted: %d", len(sentences))
     target_embedding = sentence_model.encode(target, convert_to_tensor=True)
     likeness_scores = []
     for sentence in sentences:
@@ -159,16 +171,23 @@ def remove_stopwords(text: str, language: str = "en"):
     return " ".join(filtered_words)
 
 
-def summarize_text(text: str, language: str = "en", num_sentences: int = 3) -> str:
+def summarize_text(text: str, language: str = "en", num_sentences: int = 3, delimiter: str = " [...] ", bonus_words: list = [], summarizer: str = "edmundson") -> str:
     """Summarizes the given text using the Edmundson summarizer."""
-    lang = "english" if language[0] in ["en", "en_us"] else "french" if language[0] in ["fr", "fr_fr"] else language
-    LOG.debug("Summarizing text in language: %s", language)
+    lang = "english" if language in ["en", "en_us", "en_gb"] else "french" if language in ["fr", "fr_fr"] else language
+    #LOG.debug("Summarizing text in language: %s", lang)
     stemmer = Stemmer(lang)
-    summarizer = LsaSummarizer(stemmer)
+    if summarizer == "edmundson":
+        summarizer = EdmundsonSummarizer(stemmer)
+        summarizer.bonus_words = set(bonus_words)
+        summarizer.stigma_words = ["copyright"]
+        summarizer.stop_words = ["copyright"]
+        summarizer.null_words = ["copyright"]
+    elif summarizer == "lsa":
+        summarizer = LsaSummarizer(stemmer)
     try:
         parser = PlaintextParser.from_string(text, Tokenizer(lang))
         summary = summarizer(parser.document, num_sentences)
-        return " [...] ".join(str(sentence) for sentence in summary)
+        return delimiter.join(str(sentence) for sentence in summary)
     except Exception as e:
         LOG.error("Could not summarize text!", e)
         return text

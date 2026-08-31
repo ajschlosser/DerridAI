@@ -30,7 +30,7 @@ from text import (
     remove_stopwords,
     summarize_text,
     translate,
-    extract_query_and_flters,
+    extract_query_and_filters,
     detect_phrasing,
     extract_json_objects,
     strip_code_fence
@@ -47,6 +47,7 @@ from prompts import (
     query_improvement_template,
     focused_prompt_template,
     focused_prompt_template_claims,
+    auto_prompt_template,
 )
 
 start = time.perf_counter()
@@ -208,9 +209,47 @@ LAMBDA_MULT_VALUE = 0.7
 CHAT_TEMPERATURE = 0.4
 
 # Fetch queries
-def handle_fetch_query(keywords: list[str]):
-    print("ok fetch", keywords)
-    
+def handle_fetch_query(q: dict):
+    print("\nok fetch\n", q["persons_referenced"][0])
+
+    or_filter = [{ "$contains": person } for person in q["persons_referenced"]] + [{ "canonical_work_id": { "$eq": work_id } } for work_id in q["canonical_work_ids_works_referenced"]]
+
+    if len(or_filter) == 1:
+        filter = or_filter[0]
+    else:
+        filter = {
+            "$and": or_filter
+        }
+
+    fetched_results = client.store("defaults").get(
+        where_document={
+            **filter
+        },
+        limit=25
+    )
+
+    result_str = ""
+    for i, r in enumerate(fetched_results["metadatas"]):
+        t = r.get("text")
+        if len(t) > 300:
+            text = summarize_text(
+                text=r.get("text"), language=r.get("document_language")[0], num_sentences=2, delimiter=" [...] ", bonus_words=q["persons_referenced"]
+            )
+        else:
+            text = t
+        work = r.get("work")
+        author = r.get("document_author")
+        page_start = r.get("page_start")
+        page_end = r.get("page_end")
+        result_str += f"\n{i+1}. {text}\n(Work: {work}, Author: {author}, Pages: {page_start}-{page_end})\n"
+
+    LOG.debug("Fetched results: %s", result_str)
+    LOG.debug("Total resultS: %d", len(fetched_results["ids"]))
+    LOG.debug("Original query: %s", q)
+    exit(0)
+
+auto_prompts = []
+
 # MAIN FUNCTION
 def main():
     elapsed = time.perf_counter() - start
@@ -222,21 +261,13 @@ def main():
     p = args.prompt
 
     if args.auto:
-        auto_prompt = client.chat("defaults").invoke("""
-Generate a single academic prompt inquiring into the works and ideas of Jacques Derrida.
-
-Examples:
-* 'Discuss Derrida and hospitality' and such.
-* 'Analyze the concept of *différance* in relation to Derrida’s critique of presence across his major philosophical works.'
-
-Your response must only be one line, the prompt.
-Do not include any commentary, reasoning, or metadata.
-Just respond with the prompt by itself.
-""")
+        formatted_auto_prompt_template = auto_prompt_template.format(auto_prompts="\n - ".join(auto_prompts) if auto_prompts else "")
+        auto_prompt = client.chat("defaults").invoke(formatted_auto_prompt_template)
         LOG.debug("auto prompt: %s", auto_prompt.content)
         p = auto_prompt.content
+        auto_prompts.append(p)
 
-    extracted_filters = extract_query_and_flters(p, "en")
+    extracted_filters = extract_query_and_filters(p, "en")
     LOG.debug("Extracted filters: %s", extracted_filters)
     languages = detect_languages(p)
     extracted_filters["document_languages"] = ["en", "fr"]
@@ -266,10 +297,23 @@ Just respond with the prompt by itself.
         )
         if limit_en:
             extracted_filters["document_languages"] = ["en"]
-    extracted_filters["is_fetch_query"] = detect_phrasing(
-        text=p,
-        instructions=["get me every mention", "fetch all occurrences", "retrieve all instances", "look up all references", "search for all mentions"]
+
+    is_fetch = re.search(
+        r"\b(?:get|fetch|retrieve|look\s+up|search\s+for)\s+(?:me\s+)?(?:all|every)\b",
+        p,
+        flags=re.IGNORECASE,
     )
+    if is_fetch:
+        LOG.debug("Fetch query detected in prompt.")
+        extracted_filters["is_fetch_query"] = True
+    else:
+        extracted_filters["is_fetch_query"] = detect_phrasing(
+            text=p,
+            instructions=[
+                "get me every", "fetch all", "fetch every", "get all", "retrieve all", "look up all", "search for all",
+                "retrieve every"
+            ]
+        )
     extracted_filters["is_chatbot_query"] = detect_phrasing(
         text=p,
         instructions=["who are you", "whom do you", "what do you", "respond in the first-person","respond as yourself","tell me about you","talk to me about your","what do you think about","what do you have to say about"]
@@ -290,11 +334,11 @@ Just respond with the prompt by itself.
     q["is_fetch_query"] = extracted_filters["is_fetch_query"]
     q["is_chatbot_query"] = extracted_filters["is_chatbot_query"]
     q = {**q, **extracted_filters}
-
     LOG.debug("Response merged with preprocessing: %s", q)
 
     if q["is_fetch_query"]:
-        handle_fetch_query(q['keywords'])
+        handle_fetch_query(q)
+
     document_languages = q["document_languages"]
     query_elapsed = time.perf_counter() - query_start
     LOG.debug("Query processing completed in %.4f seconds", query_elapsed)
@@ -453,9 +497,17 @@ Just respond with the prompt by itself.
     # Focused prompt
     for _ in range(args.repeat):
         LOG.debug("Invoking focused prompt...")
+
+
+        store_key = "derrida8_primary"
+        if "fr" in q["document_languages"] and "en" not in q["document_languages"]:
+            store_key = "derrida8_primary_fr"
+        elif "en" in q["document_languages"] and "fr" not in q["document_languages"]:
+            store_key = "derrida8_primary_en"
+
         r, _ = prompt({
             "user": focused_prompt_template,
-            "store": "derrida8_primary_en",
+            "store": store_key,
             "template": {
                 "prompt_query": q["prompt_query"],
                 "prompt_instructions": q["prompt_instructions"],
