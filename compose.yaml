@@ -11,12 +11,12 @@ services:
       HF_HOME: /data/huggingface
       NLTK_DATA: /data/nltk_data
       TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD: "1"
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./api:/app/src
       - fasttext-cache:/data/fasttext-langdetect
-      - huggingface-cache:/data/huggingface
+      - huggingface-cache:/data/huggingface         # Embedding and translation models
       - nltk-cache:/data/nltk_data
     gpus: all
     restart: unless-stopped
@@ -29,10 +29,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
   web:
     image: nginx:alpine
     ports:
@@ -58,6 +54,7 @@ services:
     restart: unless-stopped
   ollama:
     image: ollama/ollama:latest
+    profiles: ["deploy"]
     ports:
       - "11434:11434"
     volumes:
@@ -74,6 +71,7 @@ services:
   # Fetch models if not present
   ollama-pull:
     image: ollama/ollama:latest
+    profiles: ["deploy"]
     entrypoint: ["sh", "-c", "ollama pull gemma4:e2b && ollama pull gemma4:e4b"]
     environment:
       OLLAMA_HOST: http://ollama:11434

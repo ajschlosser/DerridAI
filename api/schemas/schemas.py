@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional, TypedDict, NotRequired
+from typing import Any, Callable, List, Optional, TypedDict, NotRequired
 
 class QueryRequest(BaseModel):
     """

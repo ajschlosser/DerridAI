@@ -3,8 +3,6 @@ import asyncio
 import re
 import time
 from typing import TYPE_CHECKING
-
-import json
 from clients.llm import LLMClient
 from clients.rag import RAGClient
 from clients.db import RedisClient
@@ -18,6 +16,13 @@ from templates.query_template import query_template
 from templates.focused_prompt_template import focused_prompt_template as prompt_template
 import logging
 from utils.request_id import request_id
+from services.pipeline_steps.get_query_metadata import get_query_metadata
+from services.pipeline_steps.get_query_details_via_llm import get_query_details_via_llm
+from services.pipeline_steps.basic_rag_lookup import basic_rag_lookup
+from services.pipeline_steps.get_retrieval_context import get_retrieval_context
+from services.pipeline_steps.invoke_llm_with_prompt import invoke_llm_with_prompt
+from services.pipeline_steps.bind_sources import bind_sources
+from services.pipeline import PipelineStep, PipelineStepContext, PipelineStepResult
 
 if TYPE_CHECKING:
     from services.jobs import JobService
@@ -35,131 +40,90 @@ async def handle_query(
         job_id: str,
 ) -> GenericResponse:
     LOG.debug("Decomposing prompt: %s", request.prompt)
-
-    # 0. PREPROCESSING
-    #===========================================
-    # Get query metadata
     start = time.perf_counter()
-    p = request.prompt
-    p_fr = p
-    q = await asyncio.to_thread(metadata_extractor.extract, p, "en")
-    en, fr = get_language_status(q["prompt_languages"])
-    if en:
-        p_fr = nlp_service.translate(p, from_lang="en", to_lang="fr")
-        q["prompt_fr"] = p_fr
-        q["keywords_fr"] = nlp_service.extract_keywords(p_fr)
-    elif fr:
-        p_fr = p
-        p = nlp_service.translate(p, from_lang="fr", to_lang="en")
-        q["prompt"] = p
-        q["keywords"] = nlp_service.extract_keywords(p)
-    LOG.debug("Extracted filters: %s", q)
-    LOG.debug("Preprocessing time: %.4f seconds", time.perf_counter() - start)
-    r_id = request_id.get()
-    await job_service.update_job_status(r_id, "[preprocessing]: Deconstructing binary oppositions...")
 
-    # 1. QUERY DETAILS
-    #===========================================
-    t_s = time.perf_counter()
-    r, _ = await llm_client.prompt(params={
-        "user": query_template,
-        "template": { "prompt": p, "prompt_fr": p_fr }
-    }, extract_json=True)
-    if not isinstance(r, dict):
-        raise ValueError("The query-details model response was not valid JSON.")
-    q["prompt_query"] = r.get("prompt_query", "")
-    q["prompt_query_fr"] = r.get("prompt_query_fr", "")
-    q["prompt_instructions"] = r.get("prompt_instructions", "")
-    LOG.debug("Query details time: %.4f seconds", time.perf_counter() - t_s)
-    await job_service.update_job_status(r_id, "[query details]: Exploring aporias...")
+    steps = [
+        PipelineStep(
+            fn=get_query_metadata,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "get_language_status": get_language_status,
+                    "nlp_service": nlp_service,
+                    "job_service": job_service,
+                    "metadata_extractor": metadata_extractor,
+                }
+            ),
+            name="Get query metadata via NLP service",
+        ),
+        PipelineStep(
+            fn=get_query_details_via_llm,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "prompt": request.prompt,
+                    "llm_client": llm_client,
+                    "job_service": job_service,
+                }
+            ),
+            name="Get query details via LLM",
+        ),
+        PipelineStep(
+            fn=basic_rag_lookup,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "rag_client": rag_client,
+                    "job_service": job_service,
+                }
+            ),
+            name="Basic RAG lookup",
+        ),
+        PipelineStep(
+            fn=get_retrieval_context,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "job_service": job_service,
+                }
+            ),
+            name="Get retrieval context",
+        ),
+        PipelineStep(
+            fn=invoke_llm_with_prompt,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "llm_client": llm_client,
+                    "job_service": job_service,
+                }
+            ),
+            name="Invoke LLM with prompt",
+        ),
+        PipelineStep(
+            fn=bind_sources,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "job_service": job_service,
+                }
+            ),
+            name="Bind sources",
+        ),
+    ]
 
-    # 2. LOOKUP
-    #===========================================
-    # Basic lookup
-    # TODO: Implement other lookup strategies if needed
-    t_s = time.perf_counter()
+    step_results = PipelineStepResult(result={}, execution_time=0.0)
+    for step in steps:
+        LOG.info("Executing pipeline step #%d '%s' with ID '%s'...", step.position, step.name, step.id)
+        step_results = await step.execute(step_results)
+        LOG.info("Finished in %.4f seconds execution of pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, step.position, step.name, step.id)
 
-    async with rag_client.lookup_semaphore:
-        b_results = await asyncio.to_thread(
-            rag_client.basic_lookup,
-            invocation_str={"en": p, "fr": p_fr},
-            search_types=["mmr", "similarity"],
-            languages=["en", "fr"],
-            split=True,
-        )
+    p_results = step_results.result["p_results"]
+    b_results = step_results.result["b_results"]
+    d_results = step_results.result["d_results"]
+    q = step_results.result["query_metadata"]
+    r = step_results.result["p_response"]
 
-    # Deduplication
-    s_ids = []
-    d_results = []
-    for doc in b_results:
-        id = doc.metadata.get("record_id")
-        if id not in s_ids:
-            s_ids.append(id)
-            d_results.append(doc)
-    LOG.debug("Total results after deduplication: %d", len(d_results))
-    p_results = d_results
-
-    LOG.debug("Lookup time: %.4f seconds", time.perf_counter() - t_s)
-    await job_service.update_job_status(r_id, "[lookup]: Challenging the privileging of presence...")
-
-    # 3. RETRIEVAL POST-PROCESSING
-    # ====================================================
-    # Reordering and reranking
-    # TODO: Implement reranking logic for the retrieved documents
-    t_s = time.perf_counter()
-
-    # Generate and store citation strings for each document
-    for doc in p_results:
-        doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
-
-    # Build context string
-    works = {}
-    for i, doc in enumerate(p_results):
-        works[f"E{i}"] = doc.metadata["inline_citation"]
-    LOG.debug("Reranked works: %s", works)
-    context = generate_context_string(p_results)
-    LOG.info(f"Context:\n{context}")
-    LOG.debug("Post-processing completed in %.4f seconds", time.perf_counter() - t_s)
-    await job_service.update_job_status(r_id, "[retrieval post-processing]: Always already post-processing...")
-
-    # 4. PROMPTING
-    # ====================================================
-    # Focused prompt
-    t_s = time.perf_counter()
-
-    await job_service.update_job_status(r_id, "[prompting]: Asking Jackie, at last...")
-    r, _ = await llm_client.prompt(params={
-        "user": prompt_template,
-        "template": {
-            "prompt_query": q.get("prompt_query", ""),
-            "prompt_instructions": q.get("prompt_instructions", ""),
-            "context": context,
-        }
-    })
-
-    # Citation attribution and source binding
-    LOG.debug("Attributing citations and binding sources...")
-    works_cited_str = ""
-    works_cited_seen = []
-    for i, doc in enumerate(p_results):
-        r = re.sub(
-            r"\(([^()]*)\)|\[([^\[\]]*)\]",
-            lambda group: "(" + re.sub(
-                r"\bE\d+\b",
-                lambda reference: works.get(reference.group(), reference.group()),
-                group.group(1) if group.group(1) is not None else group.group(2),
-            ) + ")",
-            r,
-        )
-        if doc.metadata["canonical_work_id"] not in works_cited_seen:
-            works_cited_str += f"{len(works_cited_seen) + 1}. {doc.metadata['full_citation']}.\n"
-            works_cited_seen.append(doc.metadata["canonical_work_id"])
-    r += "\n\n**Works Cited**\n\n" + works_cited_str
-    LOG.debug("Prompt response with sources bound: %s", r)
-    LOG.debug("Prompt processing completed in %.4f seconds", time.perf_counter() - t_s)
-
-    # 5. WRAP-UP
-    # ====================================================
     # Report results
     LOG.info("Original query: %s", q)
     total_elapsed = time.perf_counter() - start

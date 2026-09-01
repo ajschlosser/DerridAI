@@ -201,7 +201,7 @@ function renderSavedResults(focusLatest = false) {
     `${result.prompt}\n${result.response}`.toLocaleLowerCase().includes(filter)
   ));
 
-  resultCards.replaceChildren();
+  resultCards.innerHTML = ""; // Clear all existing children for clean redraw\n  for (const result of [...filteredResults].reverse()) {\n    renderResponse(result.response, result.prompt, result.metadata);\n  }
   for (const result of filteredResults.reverse()) {
     renderResponse(result.response, result.prompt, result.metadata);
   }
@@ -274,15 +274,14 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-resultsFilterInput.addEventListener("input", () => renderSavedResults());
 
-clearHistoryButton.addEventListener("click", () => {
-  localStorage.removeItem(RESULTS_STORAGE_KEY);
-  resultsFilterInput.value = "";
-  renderSavedResults();
-  statusMessage.textContent = "Saved results cleared.";
+resultsFilterInput.addEventListener("input", () => {
+  // Debounce the update by clearing any existing timer and setting a new one.
+  clearTimeout(resultsFilterInput.debounceTimer);
+  resultsFilterInput.debounceTimer = setTimeout(() => renderSavedResults(), 200);
 });
 
+// Initial call to render the results
 renderSavedResults();
 
 activeJobs = load(JOBS_STORAGE_KEY, []).filter(
