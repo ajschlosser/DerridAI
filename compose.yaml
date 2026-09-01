@@ -14,7 +14,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       REDIS_URL: redis://redis:6379/0
     volumes:
-      - ./src:/app/src
+      - ./api:/app/src
       - fasttext-cache:/data/fasttext-langdetect
       - huggingface-cache:/data/huggingface
       - nltk-cache:/data/nltk_data
@@ -27,6 +27,17 @@ services:
         condition: service_healthy
       ollama-pull:
         condition: service_completed_successfully
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./web/index.html:/usr/share/nginx/html/index.html:ro
+      - ./web/scripts:/usr/share/nginx/html/scripts:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
@@ -52,6 +63,8 @@ services:
       retries: 10
       start_period: 30s
     restart: unless-stopped
+  
+  # Fetch models if not present
   ollama-pull:
     image: ollama/ollama:latest
     entrypoint: ["sh", "-c", "ollama pull gemma4:e2b && ollama pull gemma4:e4b"]

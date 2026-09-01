@@ -4,7 +4,7 @@ __pycache__/
 *chroma*
 build/
 *.egg-info
-src/data
-src/templates
+api/data
+api/templates
 *.git*
 .env

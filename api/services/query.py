@@ -15,7 +15,13 @@ import logging
 from utils.request_id import request_id
 LOG = logging.getLogger(__name__)
 
-async def handle_query(request: QueryRequest, rag_client: RAGClient, llm_client: LLMClient, nlp_service: NLPService, metadata_extractor: QueryMetadataExtractor) -> GenericResponse:
+async def handle_query(
+        request: QueryRequest,
+        rag_client: RAGClient,
+        llm_client: LLMClient,
+        nlp_service: NLPService,
+        metadata_extractor: QueryMetadataExtractor
+) -> GenericResponse:
     LOG.debug("Decomposing prompt: %s", request.prompt)
 
     # 0. PREPROCESSING
@@ -129,7 +135,7 @@ async def handle_query(request: QueryRequest, rag_client: RAGClient, llm_client:
     LOG.debug("Prompt response with sources bound: %s", r)
     LOG.debug("Prompt processing completed in %.4f seconds", time.perf_counter() - t_s)
 
-    # 4. WRAP-UP
+    # 5. WRAP-UP
     # ====================================================
     # Report results
     LOG.info("Original query: %s", q)

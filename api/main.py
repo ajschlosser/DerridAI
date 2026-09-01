@@ -9,7 +9,7 @@ from clients.llm import LLMClient
 from services.nlp import NLPService
 from clients.rag import RAGClient
 from schemas.schemas import QueryRequest, JobStatusResponse, JobStartResponse
-from services.jobs import redis_client, create_job, get_job, run_query_job
+from services.jobs import redis_client, create_job, get_job, run_query_job, update_job_status
 from utils.extract_query_metadata import QueryMetadataExtractor
 from logging_config import configure_logging
 configure_logging()
@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
     app.state.llm_client = LLMClient()
     app.state.nlp_service = NLPService()
     app.state.metadata_extractor = QueryMetadataExtractor(app.state.nlp_service)
+    app.state.update_job_status = update_job_status
     LOG.info("Initialized application state with RAG client, LLM client, and NLP service.")
     yield
     await redis_client.aclose()
