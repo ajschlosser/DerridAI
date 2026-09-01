@@ -3,6 +3,7 @@ import os
 import time
 import json
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langchain_ollama import ChatOllama
 import logging
 
@@ -61,7 +62,12 @@ class LLMClient:
     def get_config_string(self) -> str:
         return f"model: {self.model} | temperature: {self.temperature} | server_url: {self.server_url} | reasoning: {'disabled' if not self.reasoning else 'enabled'} | mirostat: {self.mirostat} | mirostat_eta: {self.mirostat_eta} | mirostat_tau: {self.mirostat_tau} | num_ctx: {self.num_ctx}"
 
-    async def prompt(self, params: dict, model: str = "defaults", extract_json=False) -> tuple:
+    async def prompt(
+            self,
+            params: dict,
+            model: str = "defaults",
+            extract_json=False
+    ) -> tuple[str, AIMessage]:
         start = time.perf_counter()
         default_system_prompts = [
             "Your name is DerridAI.",

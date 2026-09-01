@@ -7,4 +7,4 @@ build/
 src/data
 src/templates
 *.git*
-
+.env

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -11,7 +12,10 @@ LOG = logging.getLogger(__name__)
 
 DEFAULT_CHAT_MODEL = "phi4:14b"
 DEFAULT_CHAT_TEMPERATURE = 0.4
-DEFAULT_CHAT_BASE_URL = "http://localhost:11434"
+DEFAULT_CHAT_BASE_URL = os.getenv(
+    "OLLAMA_BASE_URL",
+    "http://host.docker.internal:11434",
+)
 DEFAULT_CHAT_TIMEOUT = 120.0
 DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
 DEFAULT_CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"

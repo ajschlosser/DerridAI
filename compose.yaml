@@ -1,5 +1,5 @@
 services:
-  derridai:
+  api:
     build:
       context: .
     ports:
@@ -7,12 +7,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      FTLANG_CACHE: /data/fasttext-langdetect
       HF_HOME: /data/huggingface
       NLTK_DATA: /data/nltk_data
       TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD: "1"
+      OLLAMA_BASE_URL: http://ollama:11434
+      REDIS_URL: redis://redis:6379/0
     volumes:
-      - ./src/data:/app/src/data
-      - ./logs:/app/src/logs
+      - ./src:/app/src
+      - fasttext-cache:/data/fasttext-langdetect
       - huggingface-cache:/data/huggingface
       - nltk-cache:/data/nltk_data
     gpus: all
@@ -20,6 +23,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
@@ -31,9 +38,34 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ${OLLAMA_MODELS_DIR}:/root/.ollama
+    gpus: all
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+  ollama-pull:
+    image: ollama/ollama:latest
+    entrypoint: ["sh", "-c", "ollama pull gemma4:e2b && ollama pull gemma4:e4b"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
 
 volumes:
+  fasttext-cache:
   huggingface-cache:
   nltk-cache:
   redis-data:
+  ollama-data:

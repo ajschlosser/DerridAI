@@ -45,7 +45,6 @@ async def handle_query(request: QueryRequest, rag_client: RAGClient, llm_client:
         "user": query_template,
         "template": { "prompt": p, "prompt_fr": p_fr }
     }, extract_json=True)
-    q: DerridAIQueryMetadata = q | r
     LOG.debug("Query details time: %.4f seconds", time.perf_counter() - t_s)
 
     # 2. LOOKUP
