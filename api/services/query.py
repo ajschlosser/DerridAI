@@ -1,8 +1,11 @@
+from __future__ import annotations
 import asyncio
 import re
 import time
+from typing import TYPE_CHECKING
 from clients.llm import LLMClient
 from clients.rag import RAGClient
+from clients.db import RedisClient
 from services.nlp import NLPService
 from schemas.schemas import DerridAIQueryMetadata, QueryRequest, GenericResponse
 from utils.get_language_status import get_language_status
@@ -13,14 +16,21 @@ from templates.query_template import query_template
 from templates.focused_prompt_template import focused_prompt_template as prompt_template
 import logging
 from utils.request_id import request_id
+
+if TYPE_CHECKING:
+    from services.jobs import JobService
+
 LOG = logging.getLogger(__name__)
 
 async def handle_query(
         request: QueryRequest,
         rag_client: RAGClient,
         llm_client: LLMClient,
+        redis_client: RedisClient,
         nlp_service: NLPService,
-        metadata_extractor: QueryMetadataExtractor
+        job_service: JobService,
+        metadata_extractor: QueryMetadataExtractor,
+        job_id: str,
 ) -> GenericResponse:
     LOG.debug("Decomposing prompt: %s", request.prompt)
 
@@ -43,6 +53,8 @@ async def handle_query(
         q["keywords"] = nlp_service.extract_keywords(p)
     LOG.debug("Extracted filters: %s", q)
     LOG.debug("Preprocessing time: %.4f seconds", time.perf_counter() - start)
+    r_id = request_id.get()
+    await job_service.update_job_status(r_id, "[preprocessing]: Deconstructing binary oppositions...")
 
     # 1. QUERY DETAILS
     #===========================================
@@ -52,6 +64,7 @@ async def handle_query(
         "template": { "prompt": p, "prompt_fr": p_fr }
     }, extract_json=True)
     LOG.debug("Query details time: %.4f seconds", time.perf_counter() - t_s)
+    await job_service.update_job_status(r_id, "[query details]: Exploring aporias...")
 
     # 2. LOOKUP
     #===========================================
@@ -80,6 +93,7 @@ async def handle_query(
     p_results = d_results
 
     LOG.debug("Lookup time: %.4f seconds", time.perf_counter() - t_s)
+    await job_service.update_job_status(r_id, "[lookup]: Challenging the privileging of presence...")
 
     # 3. RETRIEVAL POST-PROCESSING
     # ====================================================
@@ -99,12 +113,14 @@ async def handle_query(
     context = generate_context_string(p_results)
     LOG.info(f"Context:\n{context}")
     LOG.debug("Post-processing completed in %.4f seconds", time.perf_counter() - t_s)
+    await job_service.update_job_status(r_id, "[retrieval post-processing]: Always already post-processing...")
 
     # 4. PROMPTING
     # ====================================================
     # Focused prompt
     t_s = time.perf_counter()
 
+    await job_service.update_job_status(r_id, "[prompting]: Asking Jackie, at last...")
     r, _ = await llm_client.prompt(params={
         "user": prompt_template,
         "template": {

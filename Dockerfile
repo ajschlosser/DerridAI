@@ -46,4 +46,4 @@ WORKDIR /app/src
 
 EXPOSE 8081
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081", "--reload"]
+CMD ["python", "main.py"]

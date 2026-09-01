@@ -37,7 +37,7 @@ async function pollJobStatus(jobId) {
     const job = await response.json();
     statusMessage.textContent = `Status: ${job.status}`;
 
-    if (job.status === "prompting_done") {
+    if (job.status === "compeleted") {
       stopPolling();
       setBusy(false);
       resultOutput.textContent = JSON.stringify(job.result, null, 2);
