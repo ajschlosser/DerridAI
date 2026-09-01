@@ -86,9 +86,10 @@ class RAGClient:
     ) -> list[Document]:
         start_time = time.perf_counter()
         all_results = []
-        if split:
-            mmr_filter["k"] = mmr_filter["k"] // 2
-            similarity_filter["k"] = similarity_filter["k"] // 2
+        # TODO: Implement any preprocessing or adjustments to the filters based on the split flag
+        # if split:
+        #     mmr_filter["k"] = mmr_filter["k"] // 2
+        #     similarity_filter["k"] = similarity_filter["k"] // 2
         for search_type in search_types:
             for lang in languages:
                 LOG.debug(f"Starting search for type: {search_type} in language: {lang}")                

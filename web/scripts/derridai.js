@@ -37,10 +37,11 @@ async function pollJobStatus(jobId) {
     const job = await response.json();
     statusMessage.textContent = `Status: ${job.status}`;
 
-    if (job.status === "compeleted") {
+    if (job.status === "completed") {
       stopPolling();
       setBusy(false);
-      resultOutput.textContent = JSON.stringify(job.result, null, 2);
+      resultOutput.textContent = JSON.stringify(job.result.content.response, null, 2);
+      resultOutput.style.whiteSpace = "pre-wrap";
       // Move focus to the result so screen reader and keyboard users land on the new content.
       resultOutput.focus();
     }
@@ -73,7 +74,7 @@ form.addEventListener("submit", async (event) => {
       throw new Error(`Submit failed: ${response.status}`);
     }
     const { job_id } = await response.json();
-    statusMessage.textContent = "Status: pending";
+    statusMessage.textContent = "Status: [pending] Contacting DerridAI...";
     pollTimer = setInterval(() => pollJobStatus(job_id), POLL_INTERVAL_MS);
   } catch (err) {
     setBusy(false);
