@@ -7,7 +7,7 @@ const submitButton = document.getElementById("submit-button");
 const loadingSpinner = document.getElementById("loading-spinner");
 const statusMessage = document.getElementById("status-message");
 const errorMessage = document.getElementById("error-message");
-const resultOutput = document.getElementById("result-output");
+const resultCards = document.getElementById("result-cards");
 
 let pollTimer = null;
 
@@ -28,6 +28,71 @@ function showError(message) {
   errorMessage.textContent = message;
 }
 
+function appendFormattedText(container, text) {
+  const fragments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+
+  for (const fragment of fragments) {
+    if (fragment.startsWith("**") && fragment.endsWith("**")) {
+      const strong = document.createElement("strong");
+      strong.textContent = fragment.slice(2, -2);
+      container.append(strong);
+    } else if (fragment.startsWith("*") && fragment.endsWith("*")) {
+      const emphasis = document.createElement("em");
+      emphasis.textContent = fragment.slice(1, -1);
+      container.append(emphasis);
+    } else {
+      container.append(document.createTextNode(fragment));
+    }
+  }
+}
+
+function renderResponse(response, prompt) {
+  const card = document.createElement("article");
+  card.className = "result-card";
+  card.tabIndex = -1;
+
+  const question = document.createElement("p");
+  question.className = "result-card__question";
+  question.textContent = `Question: ${prompt}`;
+
+  const content = document.createElement("div");
+  content.className = "result-card__content";
+  const lines = String(response).trim().split(/\n{2,}/);
+  let list = null;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const heading = trimmedLine.match(/^#{1,3}\s+(.+)$/);
+    const orderedItem = trimmedLine.match(/^\d+\.\s+(.+)$/);
+    const unorderedItem = trimmedLine.match(/^[-*]\s+(.+)$/);
+
+    if (heading) {
+      list = null;
+      const title = document.createElement("h3");
+      appendFormattedText(title, heading[1]);
+      content.append(title);
+    } else if (orderedItem || unorderedItem) {
+      const tagName = orderedItem ? "ol" : "ul";
+      if (!list || list.tagName.toLowerCase() !== tagName) {
+        list = document.createElement(tagName);
+        content.append(list);
+      }
+      const item = document.createElement("li");
+      appendFormattedText(item, (orderedItem || unorderedItem)[1]);
+      list.append(item);
+    } else {
+      list = null;
+      const paragraph = document.createElement("p");
+      appendFormattedText(paragraph, trimmedLine.replace(/\n/g, " "));
+      content.append(paragraph);
+    }
+  }
+
+  card.append(question, content);
+  resultCards.prepend(card);
+  card.focus();
+}
+
 async function pollJobStatus(jobId) {
   try {
     const response = await fetch(`${API_BASE}/query/${jobId}`);
@@ -40,10 +105,8 @@ async function pollJobStatus(jobId) {
     if (job.status === "completed") {
       stopPolling();
       setBusy(false);
-      resultOutput.textContent = JSON.stringify(job.result.content.response, null, 2);
-      resultOutput.style.whiteSpace = "pre-wrap";
-      // Move focus to the result so screen reader and keyboard users land on the new content.
-      resultOutput.focus();
+      renderResponse(job.result.content.response, promptInput.value.trim());
+      statusMessage.textContent = "Status: completed";
     }
   } catch (err) {
     stopPolling();
@@ -60,7 +123,6 @@ form.addEventListener("submit", async (event) => {
   if (!prompt) return;
 
   setBusy(true);
-  resultOutput.textContent = "";
   showError("");
   statusMessage.textContent = "Submitting...";
 

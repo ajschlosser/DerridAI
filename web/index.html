@@ -197,16 +197,70 @@
       margin-bottom: 0.5rem;
     }
 
-    #result-output {
+    #result-cards {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .result-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1rem;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: "SF Mono", Consolas, Menlo, monospace;
+      border-left: 4px solid var(--accent);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      box-shadow: 0 4px 14px rgba(28, 26, 23, 0.05);
+      animation: result-appear 220ms ease-out;
+    }
+
+    .result-card__question {
+      margin: 0 0 1rem;
+      color: var(--muted);
       font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .result-card__content > :first-child {
+      margin-top: 0;
+    }
+
+    .result-card__content > :last-child {
+      margin-bottom: 0;
+    }
+
+    .result-card__content h3 {
+      margin: 1.5rem 0 0.6rem;
+      color: var(--accent);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.25rem;
+    }
+
+    .result-card__content p {
+      margin: 0 0 0.9rem;
+    }
+
+    .result-card__content ol,
+    .result-card__content ul {
+      margin: 0.75rem 0;
+      padding-left: 1.4rem;
+    }
+
+    .result-card__content li + li {
+      margin-top: 0.45rem;
+    }
+
+    .result-card__content em {
+      color: var(--muted);
+    }
+
+    @keyframes result-appear {
+      from {
+        opacity: 0;
+        transform: translateY(0.5rem);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
   </style>
 </head>
@@ -235,8 +289,8 @@
     <p id="status-message" role="status" aria-live="polite"></p>
     <div id="error-message" role="alert" aria-live="assertive"></div>
     <section aria-labelledby="result-heading">
-      <h2 id="result-heading">Result</h2>
-      <pre id="result-output" tabindex="-1"></pre>
+      <h2 id="result-heading">Results</h2>
+      <div id="result-cards" aria-live="polite"></div>
     </section>
   </main>
   <script src="/scripts/derridai.js"></script>
