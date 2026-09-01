@@ -6,17 +6,20 @@
   <title>DerridAI - Ask Jackie Anything</title>
   <style>
     :root {
-      --bg: #f4f1ea;
-      --surface: #ffffff;
-      --text: #1c1a17;
-      --muted: #55524c;
-      --border: #ddd6c7;
-      --accent: #453a73;
-      --accent-hover: #322a55;
+      --bg: #e9f0ed;
+      --surface: #fffefa;
+      --surface-muted: #f4f7f2;
+      --text: #17241f;
+      --muted: #52625a;
+      --border: #cbd8d0;
+      --accent: #006b5b;
+      --accent-hover: #005246;
+      --accent-soft: #d5ede5;
       --focus-ring: #005fcc;
-      --error: #8a1f2b;
-      --error-bg: #fbe9eb;
-      --radius: 0.75rem;
+      --error: #9a2436;
+      --error-bg: #fdebee;
+      --shadow: 0 16px 38px rgba(24, 47, 37, 0.1);
+      --radius: 0.5rem;
     }
 
     * {
@@ -26,10 +29,14 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        linear-gradient(90deg, rgba(23, 36, 31, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(23, 36, 31, 0.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
       color: var(--text);
-      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      line-height: 1.5;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      line-height: 1.6;
     }
 
     h1,
@@ -63,34 +70,37 @@
     }
 
     header {
-      padding: 2.5rem 1.5rem 1.5rem;
-      text-align: center;
+      max-width: 68rem;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem 2.25rem;
     }
 
     header h1 {
       margin: 0;
-      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-size: 2.75rem;
+      letter-spacing: 0;
       color: var(--accent);
     }
 
     header p {
-      margin: 0.5rem 0 0;
+      max-width: 34rem;
+      margin: 0.25rem 0 0;
       color: var(--muted);
-      font-size: 1.05rem;
+      font-size: 1rem;
     }
 
     main {
-      max-width: 42rem;
+      max-width: 68rem;
       margin: 0 auto;
-      padding: 0 1.5rem 3rem;
+      padding: 0 1.5rem 4rem;
     }
 
     #query-form {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 1.75rem;
-      box-shadow: 0 6px 20px rgba(28, 26, 23, 0.06);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
     }
 
     label {
@@ -109,12 +119,21 @@
     textarea {
       font: inherit;
       width: 100%;
-      padding: 0.75em;
+      min-height: 9rem;
+      padding: 0.9em 1em;
       border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      background: var(--bg);
+      border-radius: 0.35rem;
+      background: var(--surface-muted);
       color: var(--text);
       resize: vertical;
+    }
+
+    textarea:hover {
+      border-color: #8ba99a;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
     }
 
     .submit-row {
@@ -128,7 +147,7 @@
       font-weight: 600;
       cursor: pointer;
       border: none;
-      border-radius: 0.5rem;
+      border-radius: 0.35rem;
       padding: 0.7em 1.5em;
       background: var(--accent);
       color: #ffffff;
@@ -184,7 +203,7 @@
     #error-message:not(:empty) {
       background: var(--error-bg);
       border: 1px solid var(--error);
-      border-radius: 0.5rem;
+      border-radius: 0.35rem;
       padding: 0.75em 1em;
     }
 
@@ -193,8 +212,55 @@
     }
 
     #result-heading {
-      font-size: 1.25rem;
-      margin-bottom: 0.5rem;
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .results-toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .results-filter {
+      flex: 1 1 16rem;
+      max-width: 28rem;
+    }
+
+    .results-filter label {
+      margin-bottom: 0.2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .results-filter input {
+      width: 100%;
+      min-height: 2.75rem;
+      padding: 0.5rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 0.35rem;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .results-filter input:focus {
+      border-color: var(--accent);
+    }
+
+    .clear-history-button {
+      min-height: 2.75rem;
+      padding: 0.5rem 0.9rem;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+    }
+
+    .clear-history-button:hover {
+      background: var(--accent-soft);
+      color: var(--accent-hover);
     }
 
     #result-cards {
@@ -206,17 +272,52 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 4px solid var(--accent);
-      border-radius: 0.5rem;
-      padding: 1.25rem;
-      box-shadow: 0 4px 14px rgba(28, 26, 23, 0.05);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: 0 6px 18px rgba(24, 47, 37, 0.07);
       animation: result-appear 220ms ease-out;
     }
 
+    .result-card__summary {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .result-card__summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .result-card__summary::before {
+      content: "+";
+      display: grid;
+      line-height: 1;
+      width: 1.4rem;
+      height: 1.4rem;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    details[open] > .result-card__summary::before {
+      content: "-";
+    }
+
     .result-card__question {
-      margin: 0 0 1rem;
+      margin: 0;
       color: var(--muted);
       font-size: 0.9rem;
       font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .result-card__body {
+      margin-top: 1.25rem;
     }
 
     .result-card__content > :first-child {
@@ -236,6 +337,7 @@
 
     .result-card__content p {
       margin: 0 0 0.9rem;
+      max-width: 78ch;
     }
 
     .result-card__content ol,
@@ -252,6 +354,103 @@
       color: var(--muted);
     }
 
+    .result-card__content strong {
+      color: var(--text);
+    }
+
+    .result-card__details {
+      margin-top: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .result-card__details > summary {
+      padding: 0.75rem 0;
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .result-card__details > summary:focus-visible,
+    .result-card__summary:focus-visible {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 3px;
+    }
+
+    .works-cited {
+      margin-top: 1.5rem;
+      max-width: 52rem;
+    }
+
+    .works-cited__list {
+      display: grid;
+      gap: 0.75rem;
+      margin: 0 0 0.75rem;
+      padding: 1rem 1.25rem 1rem 2.25rem;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 0.25rem;
+      background: #fbfcf8;
+      color: var(--muted);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    .works-cited__list li {
+      padding-left: 0.25rem;
+    }
+
+    .works-cited__list li + li {
+      margin: 0;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .metadata-list {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.45rem 1rem;
+      margin: 0;
+      padding: 1rem;
+      background: var(--surface-muted);
+      font-size: 0.9rem;
+    }
+
+    .metadata-list dt {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .metadata-list dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 40rem) {
+      .results-toolbar {
+        display: grid;
+        align-items: stretch;
+      }
+
+      .results-filter {
+        max-width: none;
+      }
+
+      .clear-history-button {
+        width: 100%;
+      }
+
+      .metadata-list {
+        grid-template-columns: 1fr;
+        gap: 0.2rem;
+      }
+
+      .metadata-list dd {
+        margin-bottom: 0.6rem;
+      }
+    }
+
     @keyframes result-appear {
       from {
         opacity: 0;
@@ -262,17 +461,38 @@
         transform: translateY(0);
       }
     }
+
+    @media (max-width: 40rem) {
+      header {
+        padding-top: 2.25rem;
+      }
+
+      header h1 {
+        font-size: 2.2rem;
+      }
+
+      main,
+      header {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+
+      #query-form,
+      .result-card {
+        padding: 1rem;
+      }
+    }
   </style>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header>
     <h1>DerridAI</h1>
-    <p>Ask Jackie anything about his work.</p>
+    <p>Research notes and responses on the work of Jacques Derrida.</p>
   </header>
   <main id="main-content">
     <form id="query-form">
-      <label for="prompt-input">Ask Jackie a question...</label>
+      <label for="prompt-input">Your question</label>
       <textarea
         id="prompt-input"
         rows="4"
@@ -280,16 +500,23 @@
         required
         aria-describedby="prompt-hint"
       ></textarea>
-      <p id="prompt-hint" class="hint">Describe your question, then select Submit query.</p>
+      <p id="prompt-hint" class="hint">Ask about a concept, text, or question in Derrida's work.</p>
       <div class="submit-row">
-        <button type="submit" id="submit-button">Submit query</button>
+        <button type="submit" id="submit-button">Ask DerridAI</button>
         <span class="spinner" id="loading-spinner" hidden aria-hidden="true"></span>
       </div>
     </form>
     <p id="status-message" role="status" aria-live="polite"></p>
     <div id="error-message" role="alert" aria-live="assertive"></div>
-    <section aria-labelledby="result-heading">
-      <h2 id="result-heading">Results</h2>
+    <section id="results-section" aria-labelledby="result-heading" hidden>
+      <div class="results-toolbar">
+        <h2 id="result-heading">Results</h2>
+        <div class="results-filter">
+          <label for="results-filter-input">Filter saved results</label>
+          <input id="results-filter-input" type="search" placeholder="Search questions and responses" autocomplete="off" />
+        </div>
+        <button type="button" id="clear-history-button" class="clear-history-button">Clear history</button>
+      </div>
       <div id="result-cards" aria-live="polite"></div>
     </section>
   </main>
