@@ -1,0 +1,11 @@
+.venv/
+.git/
+__pycache__/
+*.py[cod]
+*.log
+build/
+dist/
+*.egg-info/
+logs/
+src/data/stores/
+src/data/models/

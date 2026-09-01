@@ -1,0 +1,42 @@
+[project]
+name = "derridai"
+version = "0.1.0"
+description = "DerridAI"
+requires-python = ">=3.10"
+dependencies = [
+    "dl_translate",
+    "cupy-cuda12x>=12.0.0",
+    "fastapi",
+    "nltk",
+    "pydantic",
+    "uvicorn",
+    "fast_langdetect",
+    "langchain_chroma",
+    "langchain_ollama",
+    "langchain_core",
+    "keybert",
+    "redis[hiredis]>=5.0.0",
+    "sentence_transformers",
+    "spacy[cuda12x]",
+    "textblob",
+    "en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
+    "fr_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_lg-3.8.0/fr_core_news_lg-3.8.0-py3-none-any.whl"
+]
+
+[tool.poetry]
+# If you are using Poetry explicitly as your package manager
+package-mode = true
+
+[tool.poetry.dependencies]
+python = "^3.12"
+spacy = "^3.7.5"
+cupy-cuda12x = "^12.3.0"
+
+[tool.poetry.group.dev.dependencies]
+# Keeps your environment clean from type check issues in Pylance
+pytest = "^8.0.0"
+black = "^24.2.0"
+
+[tool.spacy]
+# Automates the downloading of your English and French large models on environment sync
+languages = ["en_core_web_lg", "fr_core_news_lg"]
