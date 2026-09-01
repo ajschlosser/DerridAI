@@ -3,6 +3,8 @@ import asyncio
 import re
 import time
 from typing import TYPE_CHECKING
+
+import json
 from clients.llm import LLMClient
 from clients.rag import RAGClient
 from clients.db import RedisClient
@@ -63,6 +65,11 @@ async def handle_query(
         "user": query_template,
         "template": { "prompt": p, "prompt_fr": p_fr }
     }, extract_json=True)
+    if not isinstance(r, dict):
+        raise ValueError("The query-details model response was not valid JSON.")
+    q["prompt_query"] = r.get("prompt_query", "")
+    q["prompt_query_fr"] = r.get("prompt_query_fr", "")
+    q["prompt_instructions"] = r.get("prompt_instructions", "")
     LOG.debug("Query details time: %.4f seconds", time.perf_counter() - t_s)
     await job_service.update_job_status(r_id, "[query details]: Exploring aporias...")
 

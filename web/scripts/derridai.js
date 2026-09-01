@@ -63,7 +63,7 @@ function renderResponse(response, prompt) {
   for (const line of lines) {
     const trimmedLine = line.trim();
     const heading = trimmedLine.match(/^#{1,3}\s+(.+)$/);
-    const orderedItem = trimmedLine.match(/^\d+\.\s+(.+)$/);
+    const orderedItems = trimmedLine.matchAll(/^(\d+)\.\s+(.+)$/gm);
     const unorderedItem = trimmedLine.match(/^[-*]\s+(.+)$/);
 
     if (heading) {
@@ -71,15 +71,19 @@ function renderResponse(response, prompt) {
       const title = document.createElement("h3");
       appendFormattedText(title, heading[1]);
       content.append(title);
-    } else if (orderedItem || unorderedItem) {
-      const tagName = orderedItem ? "ol" : "ul";
+    } else if ([...orderedItems].length || unorderedItem) {
+      const orderedItems = [...trimmedLine.matchAll(/^(\d+)\.\s+(.+)$/gm)];
+      const tagName = orderedItems.length ? "ol" : "ul";
       if (!list || list.tagName.toLowerCase() !== tagName) {
         list = document.createElement(tagName);
         content.append(list);
       }
-      const item = document.createElement("li");
-      appendFormattedText(item, (orderedItem || unorderedItem)[1]);
-      list.append(item);
+      const items = orderedItems.length ? orderedItems : [[, unorderedItem[1]]];
+      for (const itemMatch of items) {
+        const item = document.createElement("li");
+        appendFormattedText(item, itemMatch[itemMatch.length - 1]);
+        list.append(item);
+      }
     } else {
       list = null;
       const paragraph = document.createElement("p");
