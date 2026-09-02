@@ -8,7 +8,7 @@ class RequestIdFilter(logging.Filter):
         record.request_id = request_id.get()
         return True
 
-def configure_logging(level: int = logging.DEBUG) -> None:
+def configure_logging(level: int = logging.DEBUG, file_name: str = "derridai.log") -> None:
     """Idempotent: safe to call multiple times (e.g. across reload workers) without duplicating handlers."""
     root = logging.getLogger()
     if root.hasHandlers():
@@ -25,7 +25,7 @@ def configure_logging(level: int = logging.DEBUG) -> None:
     stream_handler.addFilter(r_id_filter)
     stream_handler.setFormatter(formatter)
 
-    file_handler = logging.FileHandler(Path("derridai.log"), mode="w")
+    file_handler = logging.FileHandler(Path(file_name), mode="w")
     file_handler.addFilter(r_id_filter)
     file_handler.setFormatter(formatter)
 

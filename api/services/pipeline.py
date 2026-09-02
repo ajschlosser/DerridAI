@@ -33,6 +33,7 @@ PipelineStepCallable: TypeAlias = Callable[
 
 pipeline_count = 0
 class PipelineStep(BaseModel):
+    iterations: int = Field(1, description="Number of times to execute this pipeline step.")
     context: PipelineStepContext = Field(..., description="The context in which this pipeline step operates.")
     fn: PipelineStepCallable = Field(..., description="The function to be executed for this pipeline step.")
     name: str = Field(..., description="A human-readable name for the pipeline step.")
@@ -45,11 +46,12 @@ class PipelineStep(BaseModel):
             context: PipelineStepContext,
             name: str = f"pipeline-{pipeline_count}",
             id: str = str(uuid.uuid4()),
-            position: int = pipeline_count,
+            position: int = -1,
     ):
         super().__init__(id=id, name=name, fn=fn, context=context, position=position)
         global pipeline_count
         pipeline_count += 1
+        self.position = int(pipeline_count)
     async def execute(self,
             last_result: PipelineStepResult = PipelineStepResult(result={}, execution_time=0.0)
     ) -> PipelineStepResult:
@@ -58,10 +60,12 @@ class PipelineStep(BaseModel):
         """
         start = time.perf_counter()
         LOG.info("Beginning execution of pipeline step #%d '%s' with ID '%s'...", self.position, self.name, self.id)
-        result_obj = await self.fn(self.context, last_result)
+        for iteration in range(self.iterations):
+            LOG.info("Executing iteration %d of %d for pipeline step #%d '%s' with ID '%s'...", iteration + 1, self.iterations, self.position, self.name, self.id)
+            last_result = await self.fn(self.context, last_result)
         self.completed = True
         LOG.info("Finished in %.4f seconds execution of pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, self.position, self.name, self.id)
-        return result_obj
+        return last_result
 
 
 class PipelineService():

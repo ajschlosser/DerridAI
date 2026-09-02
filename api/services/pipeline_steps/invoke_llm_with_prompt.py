@@ -1,5 +1,5 @@
 import time
-from templates import focused_prompt_template as prompt_template
+from templates.focused_prompt_template import focused_prompt_template as prompt_template
 from services.pipeline import PipelineStepContext, PipelineStepResult
 
 async def invoke_llm_with_prompt(
@@ -20,6 +20,7 @@ async def invoke_llm_with_prompt(
         result={
             **last_result.result,
             "p_response": r,
+            #"responses": last_result.result.get("responses", []) + [r], # allows recursion
         },
         execution_time=time.perf_counter() - t_s
     )
