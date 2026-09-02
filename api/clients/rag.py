@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from sentence_transformers import CrossEncoder
-from services import nlp
+from typing import Optional
 import logging
 LOG = logging.getLogger(__name__)
 
@@ -15,10 +15,19 @@ DEFAULT_CHAT_BASE_URL = os.getenv(
     "OLLAMA_BASE_URL",
     "http://host.docker.internal:11434",
 )
-DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
-DEFAULT_CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-DEFAULT_STORE_PERSIST_DIRECTORY = "./data/stores/chroma_db_local-derrida9"
+DEFAULT_EMBEDDING_MODEL = os.getenv(
+    "DERRIDAI_DEFAULT_EMBEDDING_MODEL",
+    "bge-m3:latest",
+)
+DEFAULT_CROSS_ENCODER = os.getenv(
+    "DERRIDAI_DEFAULT_CROSS_ENCODER",
+    "cross-encoder/ms-marco-MiniLM-L-6-v2",
+)
 
+DEFAULT_STORE_PERSIST_DIRECTORY = os.getenv(
+    "DERRIDAI_DEFAULT_STORE_PERSIST_DIRECTORY",
+    "./data/stores/chroma_db_local-derrida9"
+)
 DEFAULT_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_K_VALUE", 64))
 DEFAULT_FETCH_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_FETCH_K_VALUE", 500))
 DEFAULT_LAMBDA_MULT_VALUE = float(os.getenv("DERRIDAI_DEFAULT_LAMBDA_MULT_VALUE", 0.7))
@@ -33,7 +42,15 @@ class RAGClient:
     server_url: str = DEFAULT_CHAT_BASE_URL
     cross_encoder: str = DEFAULT_CROSS_ENCODER
     reranker: CrossEncoder = CrossEncoder(DEFAULT_CROSS_ENCODER)
-    def __init__(self):
+    default_mmr_filter: dict
+    def __init__(self,
+        default_k_value: int = DEFAULT_K_VALUE,
+        default_fetch_k_value: int = DEFAULT_FETCH_K_VALUE,
+        default_lambda_mult_value: float = DEFAULT_LAMBDA_MULT_VALUE,
+    ):
+        self.default_k_value = default_k_value
+        self.default_fetch_k_value = default_fetch_k_value
+        self.default_lambda_mult_value = default_lambda_mult_value
         LOG.debug(f"Initializing RAGClient... embedding model: {self.embedding_model} | persist directory: {self.persist_directory} | server url: {self.server_url} | cross encoder: {self.cross_encoder}")
         self.lookup_semaphore = asyncio.Semaphore(
             MAX_CONCURRENT_GENERATIONS
@@ -50,6 +67,16 @@ class RAGClient:
             persist_directory=f"{self.persist_directory}_response_cache",
             embedding_function=self.embeddings,
         )
+
+        self.default_mmr_filter = {
+            "k": self.default_k_value,
+            "fetch_k": self.default_fetch_k_value,
+            "lambda_mult": self.default_lambda_mult_value,
+        }
+        self.default_similarity_filter = {
+            "k": self.default_k_value,
+            "fetch_k": self.default_fetch_k_value,
+        }
 
     def get_config_string(self) -> str:
         return f"embedding_model: {self.embedding_model} | persist_directory: {self.persist_directory} | server_url: {self.server_url} | cross_encoder: {self.cross_encoder}"
@@ -74,8 +101,8 @@ class RAGClient:
     def basic_lookup(
         self,
         invocation_str: str | dict[str, str],
-        mmr_filter: dict = { "k": DEFAULT_K_VALUE, "fetch_k": DEFAULT_FETCH_K_VALUE, "lambda_mult": DEFAULT_LAMBDA_MULT_VALUE },
-        similarity_filter: dict = { "k": DEFAULT_K_VALUE },
+        mmr_filter: dict | None,
+        similarity_filter: dict | None,
         search_types: list[str] = ["mmr", "similarity"],
         languages: list[str] = ["en", "fr"],
         split: bool = True,

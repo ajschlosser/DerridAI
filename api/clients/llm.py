@@ -12,8 +12,11 @@ LOG = logging.getLogger(__name__)
 
 MAX_CONCURRENT_GENERATIONS = 1
 
-DEFAULT_CHAT_MODEL = "gemma4:e4b"
-DEFAULT_CHAT_TEMPERATURE = 0.6
+DEFAULT_CHAT_MODEL = os.getenv(
+    "DERRIDAI_DEFAULT_CHAT_MODEL",
+    "gemma4:e4b",
+)
+DEFAULT_CHAT_TEMPERATURE = float(os.getenv("DERRIDAI_DEFAULT_CHAT_TEMPERATURE",0.6))
 DEFAULT_CHAT_BASE_URL = os.getenv(
     "OLLAMA_BASE_URL",
     "http://host.docker.internal:11434",
@@ -99,7 +102,7 @@ class LLMClient:
         prompt_value = template.invoke(params["template"])
         async with self.generation_semaphore:
             response = await self.chats[model].ainvoke(prompt_value)
-        LOG.info("aiinvoke response: %s", response.content)
+        LOG.info("Raw LLM [%s] response: %s", model,response.content)
         cleaned_response = strip_code_fence(str(response.content), extract_json=extract_json)
         if extract_json:
             try:

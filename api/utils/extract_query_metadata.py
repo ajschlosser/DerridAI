@@ -36,6 +36,7 @@ class QueryMetadataExtractor:
             "document_languages": ["en", "fr"],
             "prompt_languages": self.nlp_service.detect_languages(text)
         }
+        return DerridAIQueryMetadata(**metadata)
 
         def append_canonical_work_ids(ids: list[str], references: bool = False):
             for id in ids:

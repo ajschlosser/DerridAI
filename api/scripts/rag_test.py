@@ -37,15 +37,128 @@ class DummyJobService:
 job_service = DummyJobService()
 
 async def handle_query(
-        request: QueryRequest = QueryRequest(prompt="Talk to me about the controversy between Jacques Derrida and John R. Searle"),
-        rag_client: RAGClient = RAGClient(),
-        llm_client: LLMClient = LLMClient(model="gemma4:e2b"),
+        request: QueryRequest = QueryRequest(prompt="Talk to me about Derrida and hospitality. What does hospitality mean to Derrida and what is its place in the constellation of his thought? Do not be repetitious in your response. Vary your prose and avoid clichés."),
+        rag_client: RAGClient = RAGClient(
+            default_k_value = 24,
+            default_fetch_k_value = 500,
+            default_lambda_mult_value= 0.5
+
+        ),
+        llm_client: LLMClient = LLMClient(
+            model="gemma4:e2b",
+            mirostat_eta=0.5,
+            mirostat_tau=0.005,
+            temperature=0.005,
+        ),
         nlp_service: NLPService = nlp_service,
         metadata_extractor: QueryMetadataExtractor = QueryMetadataExtractor(nlp_service),
         job_id: str = "test_job_id",
 ) -> None:
     LOG.debug("Decomposing prompt: %s", request.prompt)
     start = time.perf_counter()
+
+    async def tidy(
+            context: PipelineStepContext,
+            last_result: PipelineStepResult,
+    ) -> PipelineStepResult:
+        start = time.perf_counter()
+        r, _ = await context.state["llm_client"].prompt(params={
+            "user": """
+            You are a meticulous editor.
+            You have been given a draft of an academic paper.
+            Your task is to edit the paper for clarity, conciseness, and coherence.
+            You should also ensure that the paper adheres to academic standards and conventions
+            Please provide a revised version of the paper that is polished and ready for submission.  
+
+            The paper in question:
+
+            {paper}
+
+            Requirements:
+            - Do not delete or remove any content from the paper.
+            - Do not add any new content to the paper.
+            - Do not change the meaning of any content in the paper.
+            - Do not change the structure of the paper.
+            - Remove repetitious phrases.
+            - Add coherent phrasing.
+
+            Return value:
+            - Return only the edited paper, nothing else, no notes, no commentary.
+            
+            """,
+            "template": {
+                "paper": last_result.result.get("p_results", ""),
+            }
+        })
+        LOG.info("Paper so far: %s", r)
+        return PipelineStepResult(
+            result={
+                **last_result.result,
+                "paper": r,
+                "final_paper": r
+            },
+            execution_time=time.perf_counter() - start
+        )
+
+    async def build_monograph(
+            context: PipelineStepContext,
+            last_result: PipelineStepResult,
+    ) -> PipelineStepResult:
+        start = time.perf_counter()
+        r, _ = await context.state["llm_client"].prompt(params={
+            "user": """
+                You are writing a long academic paper (20-30 pages).
+                
+                You started writing in response to this prompt: {prompt_query}.
+
+                You were given instructions, if any: {prompt_instructions}
+                
+                Your first response was: {p_response}
+
+                So far, in total, you have written the following for your paper:
+
+                {paper}
+
+                In the above, please remove any false summaries ("In conclusion...")
+
+                Continue with the next full section.
+
+                You must continue to draw from these sources:
+
+                {sources}
+
+                Guidelines:
+                - Respond only with the intended output, no paratext or commentary or reasoning.
+                - Do not create subheadings or subsections.
+                - Do not create numbered sections.
+                - Do not attempt to create chapters.
+                - Just focus on the prose and analysis.
+                - Do not repeat yourself. Every section must introduce a concept, idea, or thesis not yet in the paper.
+
+                Citation rules:
+                - Tag every claim with an evidence ID from the evidence block above. i.e. [E0], [E1], etc.
+
+                Requirements:
+                - Respond with the next section of your paper
+            """,
+            "template": {
+                "prompt_query": last_result.result["query_metadata"].get("prompt_query", ""),
+                "prompt_instructions": last_result.result["query_metadata"].get("prompt_instructions", ""),
+                "paper": last_result.result.get("paper", ""),
+                "p_response": last_result.result.get("p_response", ""),
+                "sources": last_result.result.get("retrieval_context", ""),
+            }
+        })
+        new_paper = last_result.result.get("paper", "") + "\n" + last_result.result.get("p_response", "")
+        LOG.info("Paper so far: %s", new_paper)
+        return PipelineStepResult(
+            result={
+                **last_result.result,
+                "paper": new_paper,
+                "p_response": r
+            },
+            execution_time=time.perf_counter() - start
+        )
 
     steps = [
         PipelineStep(
@@ -94,8 +207,30 @@ async def handle_query(
             ),
             name="Get retrieval context",
         ),
+        # PipelineStep(
+        #     fn=invoke_llm_with_prompt,
+        #     context=PipelineStepContext(
+        #         request=request,
+        #         state={
+        #             "llm_client": llm_client,
+        #             "job_service": job_service,
+        #         }
+        #     ),
+        #     name="Invoke LLM with prompt",
+        # ),
+        # PipelineStep(
+        #     fn=bind_sources,
+        #     context=PipelineStepContext(
+        #         request=request,
+        #         state={
+        #             "exclude_works_cited": True,
+        #             "job_service": job_service,
+        #         }
+        #     ),
+        #     name="Bind sources",
+        # ),
         {
-            "iterations": 40,
+            "iterations": 25,
             "steps": [
                 PipelineStep(
                     fn=invoke_llm_with_prompt,
@@ -113,6 +248,7 @@ async def handle_query(
                     context=PipelineStepContext(
                         request=request,
                         state={
+                            "exclude_works_cited": True,
                             "job_service": job_service,
                         }
                     ),

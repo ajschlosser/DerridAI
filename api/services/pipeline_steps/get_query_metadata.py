@@ -14,7 +14,7 @@ async def get_query_metadata(
     start = time.perf_counter()
     p = context.request.prompt
     p_fr = p
-    q = await asyncio.to_thread(context.state["metadata_extractor"].extract, p, "en")
+    q = await asyncio.to_thread(context.state["metadata_extractor"].extract, p, "en") #needs refactoring
     en, fr = context.state["get_language_status"](q["prompt_languages"])
     if en:
         p_fr = context.state["nlp_service"].translate(p, from_lang="en", to_lang="fr")

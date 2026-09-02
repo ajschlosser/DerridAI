@@ -31,7 +31,8 @@ async def bind_sources(
             if doc.metadata["canonical_work_id"] not in works_cited_seen:
                 works_cited_str += f"{len(works_cited_seen) + 1}. {doc.metadata['full_citation']}.\n"
                 works_cited_seen.append(doc.metadata["canonical_work_id"])
-    r += "\n\n**Works Cited**\n\n" + works_cited_str
+    if not context.state.get("exclude_works_cited", False):
+        r += "\n\n**Works Cited**\n\n" + works_cited_str
     LOG.debug("Prompt response with sources bound: %s", r)
     LOG.debug("Prompt processing completed in %.4f seconds", time.perf_counter() - t_s)
     return PipelineStepResult(
