@@ -21,7 +21,7 @@ test_embedding = embeddings.embed_query("test")
 print(f"DEBUG: Current embedding dimension: {len(test_embedding)}")
 
 client = Chroma(
-    persist_directory="../data/stores/chroma_db_local-derrida9_new_primary_en",
+    persist_directory="../data/stores/chroma_db_local-derrida9_primary_fr",
     embedding_function=embeddings,
 )
 collection = client._collection
@@ -57,7 +57,8 @@ def sync_jsonl_to_db(jsonl_path):
                 collection.upsert(
                     ids=batch_ids,
                     metadatas=batch_metadatas,
-                    documents=batch_docs
+                    documents=batch_docs,
+                    embeddings=embeddings.embed_documents(batch_docs)
                 )
                 batch_ids = []
                 batch_metadatas = []
@@ -67,13 +68,14 @@ def sync_jsonl_to_db(jsonl_path):
         collection.upsert(
             ids=batch_ids,
             metadatas=batch_metadatas,
-            documents=batch_docs
+            documents=batch_docs,
+            embeddings=embeddings.embed_documents(batch_docs)
         )
         print(f"Uploaded final batch of {len(batch_ids)} records.")
     print("Sync complete.")
     exit(0)
 
-#sync_jsonl_to_db("../data/base/derrida9_new_primary_fr.jsonl")
+sync_jsonl_to_db("../data/base/derrida9_primary_fr.jsonl")
 
 def sync_single_record_to_db(jsonl_path, target_record_id):
     with open(jsonl_path, 'r', encoding='utf-8') as f:
@@ -94,10 +96,11 @@ def sync_single_record_to_db(jsonl_path, target_record_id):
                 collection.upsert(
                     ids=[record_id],
                     metadatas=[metadata],
-                    documents=[data.get("text", "")]
+                    documents=[data.get("text", "")],
+                    embeddings=embeddings.embed_documents([data.get("text", "")])
                 )
                 print(f"Record {record_id} synced successfully.")
                 return
         print(f"Record {target_record_id} not found in the JSONL file.")
 
-sync_single_record_to_db("../data/base/derrida7_ids.jsonl", "derrida-signature-derrida-01446")
+#sync_single_record_to_db("../data/base/derrida7_ids.jsonl", "derrida-signature-derrida-01446")

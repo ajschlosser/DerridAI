@@ -37,9 +37,9 @@ class DummyJobService:
 job_service = DummyJobService()
 
 async def handle_query(
-        request: QueryRequest = QueryRequest(prompt=args.prompt),
+        request: QueryRequest = QueryRequest(prompt="Talk to me about the controversy between Jacques Derrida and John R. Searle"),
         rag_client: RAGClient = RAGClient(),
-        llm_client: LLMClient = LLMClient(),
+        llm_client: LLMClient = LLMClient(model="gemma4:e2b"),
         nlp_service: NLPService = nlp_service,
         metadata_extractor: QueryMetadataExtractor = QueryMetadataExtractor(nlp_service),
         job_id: str = "test_job_id",
@@ -94,34 +94,48 @@ async def handle_query(
             ),
             name="Get retrieval context",
         ),
-        PipelineStep(
-            fn=invoke_llm_with_prompt,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "llm_client": llm_client,
-                    "job_service": job_service,
-                }
-            ),
-            name="Invoke LLM with prompt",
-        ),
-        PipelineStep(
-            fn=bind_sources,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "job_service": job_service,
-                }
-            ),
-            name="Bind sources",
-        ),
+        {
+            "iterations": 40,
+            "steps": [
+                PipelineStep(
+                    fn=invoke_llm_with_prompt,
+                    context=PipelineStepContext(
+                        request=request,
+                        state={
+                            "llm_client": llm_client,
+                            "job_service": job_service,
+                        }
+                    ),
+                    name="Invoke LLM with prompt",
+                ),
+                PipelineStep(
+                    fn=bind_sources,
+                    context=PipelineStepContext(
+                        request=request,
+                        state={
+                            "job_service": job_service,
+                        }
+                    ),
+                    name="Bind sources",
+                ),
+            ]
+        },
     ]
 
     step_results = PipelineStepResult(result={}, execution_time=0.0)
     for step in steps:
-        LOG.info("Executing pipeline step #%d '%s' with ID '%s'...", step.position, step.name, step.id)
-        step_results = await step.execute(step_results)
-        LOG.info("Finished in %.4f seconds execution of pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, step.position, step.name, step.id)
+        if isinstance(step, dict) and "steps" in step:
+            iterations = step.get("iterations", 1)
+            for iteration in range(iterations):
+                LOG.info("Starting iteration %d of %d for nested pipeline steps...", iteration + 1, iterations)
+                for nested_step in step["steps"]:
+                    LOG.info("Executing nested pipeline step #%d '%s' with ID '%s'...", nested_step.position, nested_step.name, nested_step.id)
+                    step_results = await nested_step.execute(step_results)
+                    LOG.info("Finished in %.4f seconds execution of nested pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, nested_step.position, nested_step.name, nested_step.id)
+        elif isinstance(step, PipelineStep):
+            LOG.info("Executing pipeline step #%d '%s' with ID '%s'...", step.position, step.name, step.id)
+            step_results = await step.execute(step_results)
+            LOG.info("Finished in %.4f seconds execution of pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, step.position, step.name, step.id)
 
     p_results = step_results.result["p_results"]
     b_results = step_results.result["b_results"]

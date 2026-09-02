@@ -10,21 +10,18 @@ from services import nlp
 import logging
 LOG = logging.getLogger(__name__)
 
-DEFAULT_CHAT_MODEL = "phi4:14b"
-DEFAULT_CHAT_TEMPERATURE = 0.4
+
 DEFAULT_CHAT_BASE_URL = os.getenv(
     "OLLAMA_BASE_URL",
     "http://host.docker.internal:11434",
 )
-DEFAULT_CHAT_TIMEOUT = 120.0
 DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
 DEFAULT_CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 DEFAULT_STORE_PERSIST_DIRECTORY = "./data/stores/chroma_db_local-derrida9"
-DEFAULT_REASONING_FLAG = False
 
-DEFAULT_K_VALUE = 64
-DEFAULT_FETCH_K_VALUE = 500
-DEFAULT_LAMBDA_MULT_VALUE = 0.7
+DEFAULT_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_K_VALUE", 64))
+DEFAULT_FETCH_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_FETCH_K_VALUE", 500))
+DEFAULT_LAMBDA_MULT_VALUE = float(os.getenv("DERRIDAI_DEFAULT_LAMBDA_MULT_VALUE", 0.7))
 
 MAX_CONCURRENT_GENERATIONS = 2
 
@@ -71,7 +68,6 @@ class RAGClient:
                 persist_directory=f"{self.persist_directory}_{key}",
                 embedding_function=self.embeddings,
             )
-            self.key = key
             return self.stores[key]
         return self.store("defaults")
 

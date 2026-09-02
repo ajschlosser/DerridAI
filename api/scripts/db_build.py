@@ -26,7 +26,7 @@ def generate_citation_strings(doc) -> tuple[str, str]:
 print("Starting...")
 found = 0
 not_found = 0
-with open("../data/base/derrida7_ids.jsonl") as f, open("../data/base/derrida9_new_primary_en.jsonl", "w") as out:
+with open("../data/base/derrida7_ids.jsonl") as f, open("../data/base/derrida9_primary_fr.jsonl", "w") as out:
     for i, line in enumerate(f):
 
         #r = re.sub(r"\s+", "", line.strip())
@@ -39,7 +39,7 @@ with open("../data/base/derrida7_ids.jsonl") as f, open("../data/base/derrida9_n
         d["text_length"] = len(d.get("text", ""))
 
         # Skip the record
-        if len(d.get("text", "")) < 300 or d.get("extraction_quality", 0.0) < 0.8 or (d.get("speaker") != "Jacques Derrida" and d.get("region_author") != "Jacques Derrida" and d.get("position_holder") != "Jacques Derrida") or d.get("region_type") != "main_text" or d.get("primary_text") != True or d.get("discourse_role") in ["citation", "footnote", "endnote", "commentary", "bibliography"] or d.get("document_language") not in [["en_us"], ["en_gb"]]:
+        if len(d.get("text", "")) < 300 or d.get("extraction_quality", 0.0) < 0.8 or (d.get("speaker") != "Jacques Derrida" and d.get("region_author") != "Jacques Derrida" and d.get("position_holder") != "Jacques Derrida") or d.get("region_type") != "main_text" or d.get("primary_text") != True or d.get("discourse_role") in ["citation", "footnote", "endnote", "commentary", "bibliography"] or d.get("document_language") not in [["fr_fr"]]:
             print(d.get("region_type"), d["record_id"])
             not_found += 1
             continue

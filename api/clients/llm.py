@@ -36,10 +36,27 @@ class LLMClient:
     mirostat: int = DEFAULT_MIROSTAT
     mirostat_eta: float = DEFAULT_MIROSTAT_ETA
     mirostat_tau: float = DEFAULT_MIROSTAT_TAU
-    def __init__(self):
+    def __init__(self,
+            model=DEFAULT_CHAT_MODEL,
+            temperature=DEFAULT_CHAT_TEMPERATURE,
+            server_url=DEFAULT_CHAT_BASE_URL,
+            reasoning=DEFAULT_REASONING_FLAG,
+            num_ctx=DEFAULT_NUM_CTX,
+            mirostat=DEFAULT_MIROSTAT,
+            mirostat_eta=DEFAULT_MIROSTAT_ETA,
+            mirostat_tau=DEFAULT_MIROSTAT_TAU
+    ):
         self.generation_semaphore = asyncio.Semaphore(
             MAX_CONCURRENT_GENERATIONS
         )
+        self.model = model
+        self.temperature = temperature
+        self.server_url = server_url
+        self.reasoning = reasoning
+        self.num_ctx = num_ctx
+        self.mirostat = mirostat
+        self.mirostat_eta = mirostat_eta
+        self.mirostat_tau = mirostat_tau
 
         LOG.debug(f"Initializing LLMClient... chat model: {self.model} | temperature: {self.temperature} | server url: {self.server_url} | reasoning: {'disabled' if not self.reasoning else 'enabled'}")
         self.chats["defaults"] = ChatOllama(
