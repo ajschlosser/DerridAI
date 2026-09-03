@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from sentence_transformers import CrossEncoder
-from typing import TypedDict
+from typing import TypedDict, Any
 from schemas.schemas import RAGSearchTypes, Languages
 import logging
 LOG = logging.getLogger(__name__)
@@ -144,10 +144,11 @@ class RAGClient:
             docs: list[dict] = [],
             reranker: CrossEncoder | None = None,
             top_n: int | None = None
-    ) -> list[dict]:
+    ) -> list[Any]:
         start = time.perf_counter()
         reranker = reranker if reranker else self.reranker
-
+        if top_n:
+            LOG.debug("Reranking and limiting to top_n: %d", top_n)
         def str_cast(doc):
             if hasattr(doc, "page_content"):
                 return doc.page_content

@@ -21,7 +21,7 @@ args = argparse.ArgumentParser()
 args.add_argument("-p", "--prompt", type=str, default="defaults", help="The prompt for DerriDAI to use")
 args = args.parse_args()
 
-configure_logging(logging.DEBUG, "derridai-test.api.e2b.0.log")
+configure_logging(logging.DEBUG, "derridai-test.api.e4b.1.log")
 
 LOG = logging.getLogger(__name__)
 
@@ -37,19 +37,20 @@ class DummyJobService:
 
 job_service = DummyJobService()
 
+# TODO: FOR FINAL RERANKED RECORDS, GET N SURROUNDING NEIGHBORS FOR CONTEXT
+
 async def handle_query(
         request: QueryRequest = QueryRequest(prompt="Talk to me about Derrida and hospitality. What does hospitality mean to Derrida and what is its place in the constellation of his thought? Do not be repetitious in your response. Vary your prose and avoid clichés."),
         rag_client: RAGClient = RAGClient(
             default_k_value = 24,
             default_fetch_k_value = 500,
-            default_lambda_mult_value= 0.5
-
+            default_lambda_mult_value= 0.5  # 0.5 = balanced; 0.7 = favor similarity, 0.4 = favor diversity
         ),
         llm_client: LLMClient = LLMClient(
-            model=LLMModels.GEMMA4_E2B,
+            model=LLMModels.GEMMA4_E4B,
             mirostat_eta=0.5,   # 0.5 = balanced
             mirostat_tau=0.5,   # 5.0 = balance between predictibility/surprise
-            temperature=1.0,    # 2.0 = high
+            temperature=0.5,    # 2.0 = high
         ),
         nlp_service: NLPService = nlp_service,
         metadata_extractor: QueryMetadataExtractor = QueryMetadataExtractor(nlp_service),
@@ -57,6 +58,40 @@ async def handle_query(
 ) -> None:
     LOG.debug("Decomposing prompt: %s", request.prompt)
     start = time.perf_counter()
+
+    async def examine_evidence(
+            context: PipelineStepContext,
+            last_result: PipelineStepResult,
+    ):
+        start = time.perf_counter()
+        evidence = last_result.result.get("p_results", [])
+
+        r, _ = await context.state["llm_client"].prompt(params={
+            "user": """
+Examine all of these records very closely and see if their metadata is accurate.
+
+For each record, look at the text. Does the text support the metadata?
+
+If not, make note of the discrepancy.
+
+Here are the records:
+
+{records}
+
+Output all discrepencies.
+""",
+            "template": {
+                "records": evidence,
+            }
+        })
+        LOG.info("Examined evidence: %s", r)
+        return PipelineStepResult(
+            result={
+                **last_result.result,
+                "examined_evidence": r,
+            },
+            execution_time=time.perf_counter() - start
+        )
 
     async def tidy(
             context: PipelineStepContext,
@@ -198,6 +233,17 @@ async def handle_query(
             ),
             name="Basic RAG lookup",
         ),
+        # PipelineStep(
+        #     fn=examine_evidence,
+        #     context=PipelineStepContext(
+        #         request=request,
+        #         state={
+        #             "llm_client": llm_client,
+        #             "job_service": job_service,
+        #         }
+        #     ),
+        #     name="Examine evidence from RAG lookup",
+        # ),
         PipelineStep(
             fn=rerank_documents,
             context=PipelineStepContext(
@@ -242,7 +288,7 @@ async def handle_query(
         #     name="Bind sources",
         # ),
         {
-            "iterations": 25,
+            "iterations": 50,
             "steps": [
                 PipelineStep(
                     fn=invoke_llm_with_prompt,

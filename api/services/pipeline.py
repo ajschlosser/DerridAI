@@ -1,8 +1,6 @@
-from types import CoroutineType
 from pydantic import BaseModel, Field
-from typing import Any, Callable, Optional, TypeAlias, NotRequired
+from typing import Any, Callable, TypeAlias
 from schemas.schemas import QueryRequest
-import asyncio
 import uuid
 import time
 from logging_config import logging
