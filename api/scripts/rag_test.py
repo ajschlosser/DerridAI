@@ -2,7 +2,7 @@ from utils.generate_citation_strings import generate_citation_strings
 from clients.rag import RAGClient
 from clients.llm import LLMClient
 from services.nlp import NLPService
-from schemas.schemas import QueryRequest
+from schemas.schemas import QueryRequest, LLMModels
 from utils.extract_query_metadata import QueryMetadataExtractor
 from utils.get_language_status import get_language_status
 from services.pipeline import PipelineStep, PipelineStepContext, PipelineStepResult
@@ -10,6 +10,7 @@ import time
 from services.pipeline_steps.get_query_metadata import get_query_metadata
 from services.pipeline_steps.get_query_details_via_llm import get_query_details_via_llm
 from services.pipeline_steps.basic_rag_lookup import basic_rag_lookup
+from services.pipeline_steps.rerank_documents import rerank_documents
 from services.pipeline_steps.get_retrieval_context import get_retrieval_context
 from services.pipeline_steps.invoke_llm_with_prompt import invoke_llm_with_prompt
 from services.pipeline_steps.bind_sources import bind_sources
@@ -20,7 +21,7 @@ args = argparse.ArgumentParser()
 args.add_argument("-p", "--prompt", type=str, default="defaults", help="The prompt for DerriDAI to use")
 args = args.parse_args()
 
-configure_logging(logging.DEBUG, "derridai-test.api.log")
+configure_logging(logging.DEBUG, "derridai-test.api.e2b.0.log")
 
 LOG = logging.getLogger(__name__)
 
@@ -45,10 +46,10 @@ async def handle_query(
 
         ),
         llm_client: LLMClient = LLMClient(
-            model="gemma4:e2b",
-            mirostat_eta=0.5,
-            mirostat_tau=0.005,
-            temperature=0.005,
+            model=LLMModels.GEMMA4_E2B,
+            mirostat_eta=0.5,   # 0.5 = balanced
+            mirostat_tau=0.5,   # 5.0 = balance between predictibility/surprise
+            temperature=1.0,    # 2.0 = high
         ),
         nlp_service: NLPService = nlp_service,
         metadata_extractor: QueryMetadataExtractor = QueryMetadataExtractor(nlp_service),
@@ -196,6 +197,17 @@ async def handle_query(
                 }
             ),
             name="Basic RAG lookup",
+        ),
+        PipelineStep(
+            fn=rerank_documents,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "rag_client": rag_client,
+                    "job_service": job_service,
+                }
+            ),
+            name="Rerank documents",
         ),
         PipelineStep(
             fn=get_retrieval_context,

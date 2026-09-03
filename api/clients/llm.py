@@ -6,6 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage
 from langchain_ollama import ChatOllama
 import logging
+from schemas.schemas import LLMModels
 
 from utils.strip_code_fence import strip_code_fence
 LOG = logging.getLogger(__name__)
@@ -26,21 +27,21 @@ DEFAULT_STORE_PERSIST_DIRECTORY = "./chroma_db_local7"
 DEFAULT_REASONING_FLAG = False
 DEFAULT_NUM_CTX = 262144
 DEFAULT_MIROSTAT = 2
-DEFAULT_MIROSTAT_ETA = 0.9
-DEFAULT_MIROSTAT_TAU = 5.0
+DEFAULT_MIROSTAT_ETA = 0.9  # Learning rate; how quickly it adapts. 1.0 = aggressive
+DEFAULT_MIROSTAT_TAU = 5.0  # Surprise/perplexity. 10.0 = very surprising
 
 class LLMClient:
     chats: dict[str, ChatOllama] = {}
     server_url: str = DEFAULT_CHAT_BASE_URL
     reasoning: bool = DEFAULT_REASONING_FLAG
     temperature: float = DEFAULT_CHAT_TEMPERATURE
-    model: str = DEFAULT_CHAT_MODEL
+    model: LLMModels = LLMModels(DEFAULT_CHAT_MODEL)
     num_ctx: int = DEFAULT_NUM_CTX
     mirostat: int = DEFAULT_MIROSTAT
     mirostat_eta: float = DEFAULT_MIROSTAT_ETA
     mirostat_tau: float = DEFAULT_MIROSTAT_TAU
     def __init__(self,
-            model=DEFAULT_CHAT_MODEL,
+            model=LLMModels(DEFAULT_CHAT_MODEL),
             temperature=DEFAULT_CHAT_TEMPERATURE,
             server_url=DEFAULT_CHAT_BASE_URL,
             reasoning=DEFAULT_REASONING_FLAG,
@@ -63,7 +64,7 @@ class LLMClient:
 
         LOG.debug(f"Initializing LLMClient... chat model: {self.model} | temperature: {self.temperature} | server url: {self.server_url} | reasoning: {'disabled' if not self.reasoning else 'enabled'}")
         self.chats["defaults"] = ChatOllama(
-            model=self.model,
+            model=str(self.model),
             temperature=self.temperature,
             base_url=self.server_url,
             reasoning=self.reasoning,

@@ -20,6 +20,7 @@ from services.pipeline_steps.get_query_metadata import get_query_metadata
 from services.pipeline_steps.get_query_details_via_llm import get_query_details_via_llm
 from services.pipeline_steps.basic_rag_lookup import basic_rag_lookup
 from services.pipeline_steps.get_retrieval_context import get_retrieval_context
+from services.pipeline_steps.rerank_documents import rerank_documents
 from services.pipeline_steps.invoke_llm_with_prompt import invoke_llm_with_prompt
 from services.pipeline_steps.bind_sources import bind_sources
 from services.pipeline import PipelineStep, PipelineStepContext, PipelineStepResult
@@ -70,6 +71,17 @@ async def handle_query(
         ),
         PipelineStep(
             fn=basic_rag_lookup,
+            context=PipelineStepContext(
+                request=request,
+                state={
+                    "rag_client": rag_client,
+                    "job_service": job_service,
+                }
+            ),
+            name="Basic RAG lookup",
+        ),
+        PipelineStep(
+            fn=rerank_documents,
             context=PipelineStepContext(
                 request=request,
                 state={

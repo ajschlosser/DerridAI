@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Any, Callable, List, Optional, TypedDict, NotRequired
+from typing import Any, List, Optional, TypedDict, NotRequired
+from enum import StrEnum
 
 class QueryRequest(BaseModel):
     """
@@ -71,3 +72,22 @@ class DerridAIQueryMetadata(TypedDict):
     prompt_query: NotRequired[str | None]
     prompt_query_fr: NotRequired[str | None]
     prompt_instructions: NotRequired[str | None]
+
+class LLMModels(StrEnum):
+    GEMMA4_E2B = "gemma4:e2b"
+    GEMMA4_E4B = "gemma4:e4b"
+    GEMMA4_12B = "gemma4:12b"
+    PHI4 = "phi4:14b"
+    PHI4_MINI = "phi4-mini:3.8b"
+    PHI4_MINI_REASONING = "phi4-mini-reasoning:3.8b"
+    QWEN_0B = "qwen3.5:0.8b"
+    QWEN_2B = "qwen3.5:2b"
+    QWEN_9B = "qwen3.5:9b"
+
+class Languages(StrEnum):
+    ENGLISH = "en"
+    FRENCH = "fr"
+
+class RAGSearchTypes(StrEnum):
+    MMR = "mmr"
+    SIMILARITY = "similarity"
