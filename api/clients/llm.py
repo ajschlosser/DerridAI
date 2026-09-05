@@ -15,7 +15,7 @@ MAX_CONCURRENT_GENERATIONS = 1
 
 DEFAULT_CHAT_MODEL = os.getenv(
     "DERRIDAI_DEFAULT_CHAT_MODEL",
-    "gemma4:e4b",
+    "gemma4:e2b",
 )
 DEFAULT_CHAT_TEMPERATURE = float(os.getenv("DERRIDAI_DEFAULT_CHAT_TEMPERATURE",0.6))
 DEFAULT_CHAT_BASE_URL = os.getenv(
@@ -26,9 +26,11 @@ DEFAULT_EMBEDDING_MODEL = "bge-m3:latest"
 DEFAULT_STORE_PERSIST_DIRECTORY = "./chroma_db_local7"
 DEFAULT_REASONING_FLAG = False
 DEFAULT_NUM_CTX = 262144
-DEFAULT_MIROSTAT = 2
+DEFAULT_MIROSTAT = 2 # If enabled, temperature is ignored
 DEFAULT_MIROSTAT_ETA = 0.9  # Learning rate; how quickly it adapts. 1.0 = aggressive
 DEFAULT_MIROSTAT_TAU = 5.0  # Surprise/perplexity. 10.0 = very surprising
+DEFAULT_TOP_K = 40 # Higher = more diverse answers
+DEFAULT_TOP_P = 0.9 # Higher = more diverse text
 
 class LLMClient:
     chats: dict[str, ChatOllama] = {}
@@ -40,6 +42,8 @@ class LLMClient:
     mirostat: int = DEFAULT_MIROSTAT
     mirostat_eta: float = DEFAULT_MIROSTAT_ETA
     mirostat_tau: float = DEFAULT_MIROSTAT_TAU
+    top_p: float = DEFAULT_TOP_P
+    top_k: int = DEFAULT_TOP_K
     def __init__(self,
             model=LLMModels(DEFAULT_CHAT_MODEL),
             temperature=DEFAULT_CHAT_TEMPERATURE,
@@ -48,7 +52,9 @@ class LLMClient:
             num_ctx=DEFAULT_NUM_CTX,
             mirostat=DEFAULT_MIROSTAT,
             mirostat_eta=DEFAULT_MIROSTAT_ETA,
-            mirostat_tau=DEFAULT_MIROSTAT_TAU
+            mirostat_tau=DEFAULT_MIROSTAT_TAU,
+            top_k=DEFAULT_TOP_K,
+            top_p=DEFAULT_TOP_P
     ):
         self.generation_semaphore = asyncio.Semaphore(
             MAX_CONCURRENT_GENERATIONS
@@ -61,7 +67,8 @@ class LLMClient:
         self.mirostat = mirostat
         self.mirostat_eta = mirostat_eta
         self.mirostat_tau = mirostat_tau
-
+        self.top_k = top_k
+        self.top_p = top_p
         LOG.debug(f"Initializing LLMClient... chat model: {self.model} | temperature: {self.temperature} | server url: {self.server_url} | reasoning: {'disabled' if not self.reasoning else 'enabled'}")
         self.chats["defaults"] = ChatOllama(
             model=str(self.model),
@@ -75,8 +82,8 @@ class LLMClient:
             mirostat_tau=self.mirostat_tau,     # Default 5.0, lower = more stable responses. Prefer 5.0
             repeat_last_n=64,                   # Default 64, sets how far back to look to prevent token repetition. Prefer 64
             repeat_penalty=1.1,                 # Default 1.1, higher penalizes repetition more strongly. Prefer 1.1
-            top_k=40,                           # Default 40, higher gives more diverse answers. Prefer 40
-            top_p=0.9,                          # Default 0.9, higher will lead to more diverse text. Prefer 0.9
+            top_k=self.top_k,                           # Default 40, higher gives more diverse answers. Prefer 40
+            top_p=self.top_p,                          # Default 0.9, higher will lead to more diverse text. Prefer 0.9
             keep_alive=-1
         )
 
@@ -90,25 +97,39 @@ class LLMClient:
             extract_json=False
     ) -> tuple[str, AIMessage]:
         start = time.perf_counter()
-        default_system_prompts = [
-            "Your name is DerridAI.",
-            "You are a helpful AI research assistant specializing in the works of Jacques Derrida.",
-        ]
-        system_messages = params["system"] if "system" in params else [("system", message) for message in default_system_prompts]
+        #default_system_prompts = [
+        #    "Your name is DerridAI.",
+        #    "You are a helpful AI research assistant specializing in the works of Jacques Derrida.",
+        #]
+        #system_messages = params["system"] if "system" in params else [("system", message) for message in default_system_prompts]
         user_messages = [("user", params["user"])] if "user" in params else [("user", "{prompt}")]
         template = ChatPromptTemplate([
-            *system_messages,
+        #    *system_messages,
             *user_messages,
         ])
         prompt_value = template.invoke(params["template"])
         async with self.generation_semaphore:
             response = await self.chats[model].ainvoke(prompt_value)
-        LOG.info("Raw LLM [%s] response: %s", model,response.content)
+        #LOG.info("Raw LLM [%s] response: %s", model,response.content)
         cleaned_response = strip_code_fence(str(response.content), extract_json=extract_json)
+
+        metadata = response.response_metadata
+
+        # Calculate Tokens Per Second
+        eval_count = metadata.get("eval_count")      # Number of tokens generated
+        eval_duration = metadata.get("eval_duration") # Time spent generating (in nanoseconds)
+        tokens_per_second = None
+        if eval_count and eval_duration:
+            # Convert nanoseconds to seconds
+            duration_seconds = eval_duration / 1e9  
+            tokens_per_second = eval_count / duration_seconds
+
         if extract_json:
             try:
                 cleaned_response = json.loads(cleaned_response)
             except Exception as e:
                 LOG.warning("Prompt response is not in JSON format: %s", e)
+        if tokens_per_second is not None:
+            LOG.debug("Prompt generated %d tokens at %d/tokens per second", eval_count, tokens_per_second)
         LOG.debug("Prompt generation and response completed in %.2f seconds", time.perf_counter() - start)
         return cleaned_response, response

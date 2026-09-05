@@ -1,22 +1,56 @@
+import os
 import time
+from datetime import datetime, timezone
 import json
 from clients.llm import LLMClient
 from utils.strip_code_fence import strip_code_fence
+from utils.extract_json_objects import extract_json_objects
 from schemas.schemas import LLMModels
 from logging_config import logging, configure_logging
 
-configure_logging(logging.DEBUG, "derridai-scan_records.log")
-LOG = logging.getLogger(__name__)
+DEFAULTS = {
+    "BATCH_SIZE": 2,
+    "REASONING": False,
+    "TEMPERATURE": 0.0,
+    "ETA": 0.12,
+    "TAU": 2.5,
+    "TOP_K": 0,
+    "TOP_P": 1.0,
+    "MODEL": LLMModels.PHI4_14B,
+    "MIROSTAT": 0,
+    "NUM_CTX": 262114 // 32,
+    "START_LINE": None,
+    "START_ID": None, 
+}
 
 BATCH_SIZE = 1
+REASONING = False
+TEMPERATURE = 0.0 # disabled
+ETA = 0.12  # 0.07 smooth and steady
+TAU = 2.5   # 5.0 = matches natural language; 2.0 = code generation; 7.0 = creative
+TOP_K = 0 # Low = conservative; 0 = disabled
+TOP_P = 1.0 # Low = conservative; 1.0 = disabled
+MODEL = LLMModels.GEMMA4_E2B
+MIROSTAT = 0
+NUM_CTX = 262144 // 32 # 262144 // 32 = 8K, 40 = 6K, 56 = 4
+START_LINE = None
+#START_ID = "derrida-monolingualism-other-1998-00059"
+START_ID = ""
+FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
+configure_logging(logging.DEBUG, f"./logs/derridai-scan_records.4-{FILE_STR}.log")
+LOG = logging.getLogger(__name__)
 
 #GEMMA4_12B no reasoning works well
 llm = LLMClient(
-    model=LLMModels.GEMMA4_12B,
-    reasoning=False,
-    temperature=0.4,
-    mirostat_eta=0.5,
-    mirostat_tau=0.5,
+    model=MODEL,
+    reasoning=REASONING,
+    temperature=TEMPERATURE,
+    mirostat=MIROSTAT,
+    top_k=TOP_K,
+    top_p=TOP_P,
+    num_ctx=NUM_CTX,
+    #mirostat_eta=ETA, #2.0
+    #mirostat_tau=TAU, #0.1
 )
 
 old_prompt =  """
@@ -72,18 +106,210 @@ old_prompt =  """
     
 """
 
+AUDIT_PROMPT = r"""
+You are a conservative metadata auditor for a scholarly RAG corpus. Resolve
+exactly one field: `quoted_speaker`. Treat its current value as an
+untrusted hypothesis. Accuracy is more important than finding a correction.
+
+DEFINITION
+A quoted speaker is a specifically identified real human person whose words are
+reproduced as a direct quotation in current_record.text. The quotation may be
+inline, block-formatted, translated, or imperfectly punctuated by OCR, but the
+text must present the words as that person's words.
+
+The document author, current narrator, speaker, position holder, target, or
+cited author is NOT a quoted speaker merely because that person owns, states,
+discusses, or is associated with the surrounding prose. A document author can
+count only when the current text explicitly reproduces that author's earlier
+words as a quotation.
+
+NOT DIRECT QUOTATION
+- paraphrase, summary, indirect speech, or reported belief;
+- a name or citation without reproduced words;
+- scare quotes, use/mention, a technical term, a title, a slogan with no human
+  attribution, or words mentioned as words;
+- the current document's ordinary prose or an unattributed dramatic voice;
+- words attributed only by guessing from topic, work, target, or metadata.
+
+A fictional or dramatic character such as Hamlet, Horatio, or Marcellus is not
+a human source for this field. When the current record reproduces lines from a
+literary work, name its author only if the supplied text explicitly attributes
+those quoted words to that person. Do not supply an author from outside
+knowledge merely because you recognize the work.
+
+BOUNDARY CONTEXT
+Decide what belongs to the CURRENT record only. BEFORE and AFTER excerpts may
+be used solely to resolve an attribution or quotation whose syntax crosses the
+current record boundary. Never copy a neighbor's quoted_speaker or other
+metadata, and never count quoted words that occur only in a neighbor.
+
+RESOLUTION PROCEDURE
+1. Locate every candidate quotation whose words occur in `text` field of CURRENT_RECORD.
+2. Exclude every candidate covered by NOT DIRECT QUOTATION.
+3. For each remaining quotation, identify the human source from explicit local
+   attribution. A boundary excerpt may resolve a pronoun or continued block only
+   when the connection is unambiguous.
+4. Return the complete resolved value, whether or not it differs from the
+   current value.
+5. If a qualifying quotation is plausible but its human source cannot be
+   resolved from the supplied text, do not guess.
+
+VALUE RULES
+- Use `null` when no specifically identified human is directly quoted.
+- Use the full canonical name already established by the supplied evidence.
+  Otherwise use the name exactly as printed. Do not invent an expansion,
+  nickname, spelling change, identity, or merged name.
+- One person is normally a string; multiple people are an array of unique
+  strings ordered by first quoted appearance.
+- Container formatting is handled by the program. Concentrate on correct name
+  membership, not whether a one-person value is a string or one-item array.
+
+EVIDENCE RULES
+- Evidence must be a short, contiguous, verbatim excerpt from
+  `text` ield of CURRENT_RECORD containing the quoted words. Do not use ellipses
+  unless they occur in the source.
+- Evidence must be a short, contiguous, verbatim excerpt from the
+  current text or boundary excerpts that identifies or unambiguously links the
+  person to those words.
+- If you propose a non-null value that differs from the current membership,
+  evidence is required. Do not invent evidence.
+
+Use these contrasts as rules, not as facts about the input:
+- `Arendt argues that judgment is political.` is paraphrase: no quoted speaker.
+- `Arendt writes, "judgment is political".` directly quotes Arendt.
+- `the word "judgment"` is use/mention: no quoted speaker.
+- `(Arendt, p. 20)` alone is a citation: no quoted speaker.
+
+OUTPUT
+Return exactly one JSON object and nothing else.
+    Return ONLY JSON in your response, following the example schema below:
+
+    {{
+        "record_id": <record_id>,
+        "update_fields": {{
+            quoted_speaker: <new_value>, <-- only if new! otherwise update_fields = {{}},
+        }},
+        "adjudication_result": <short description (20-30 words) describing reasoning for choice>
+    }}
+
+Only add a field to "update_fields" if it requires updating.
+
+<CURRENT_RECORD>
+{current_record_metadata_str}
+</CURRENT_RECORD>
+<EVIDENCE>
+{full_context}
+</EVIDENCE>
+""".strip()
+
+REVIEW_PROMPT = """
+    You are a record auditor verifying the `quoted_speaker` field of certain records.
+
+    Your job is to audit current proposed changes.
+
+    For the following CURRENT_RECORD, a PROPOSED_CHANGE was made.
+
+    Review both the CURRENT_RECORD and the PROPOSED_CHANGE, and determine if the change is GOOD, NEUTRAL or HARMFUL/DESTRUCTIVE.
+        - A change is GOOD if it improves the record's accuracy
+        - A change is NEUTRAL if it's a no-op or neither improves or worsens the record's accuracy
+        - A change is HARMFUL if it makes the record less accurate
+        - A change is DESTRUCTIVE if it takes a record that was already good and makes it less accurate
+
+    Keep an eye out for the following:
+        - Ensure that plasusible existing speakers aren't being deleted unless clearly contradicted
+        - `quoted_speaker` must be a human being. Works, publications, groups, roles, and generic descriptors of types of people fail this test.
+        - Watch for nearby-name errors: make sure the person being quoted is distinguished from the person being discussed.
+        - Don't just turn strings into arrays or arrays back into strings. Leave data types as they are. Prefer arrays of strings when creating new data.
+
+    <CURRENT_RECORD>
+    {current_record_metadata_str}
+    </CURRENT_RECORD>
+
+    <PROPOSED_CHANGE>
+    {update_fields}
+    </PROPOSEC_CHANGE>
+
+    Return exactly one JSON object and nothing else.
+    Return ONLY JSON in your response, following the example schema below:
+
+    {{
+        "record_id": <record_id>,
+        "adjudication_result" <GOOD | NEUTRAL | HARMFUL | DESTRUCTIVE>,
+        "adjudication_reason": <short description (20-30 words) describing reasoning for choice>,
+        "update_fields": {{
+            quoted_speaker: <new_value>, <-- only if new and adjudicated as GOOD or NEUTRAK! otherwise update_fields = {{}},
+        }},
+    }}
+
+    Remember, if a record is adjudicated as GOOD or NEUTRAL, `update_fields` needs to include the field with its new value.
+    If a record is adjudicated as HARMFUL or DESTRUCTIVE, leave `update_fields` empty like {{}}. This prevents the harmful change from being applied.
+
+"""
+
+SOURCE="data/base/derrida9_primary_en.jsonl"
+DEST=f"data/base/out/notes_{os.path.split(SOURCE)[-1]}_{FILE_STR}.jsonl"
+
+class DerridAIRecord():
+
+    processor_notes: str
+    year: int
+    
+    def __init__(self):
+        pass
+
+def remove_noise(doc: dict) -> dict:
+    doc = doc.copy()
+    if hasattr(doc, "processor_notes"):
+        del doc["processor_notes"]
+    del doc["year"]
+    del doc["translator"]
+    del doc["edition"]
+    if hasattr(doc, "editor"):
+        del doc["editor"]
+    del doc["text_length"]
+    del doc["needs_review"]
+    del doc["review_reason"]
+    del doc["document_language"]
+    del doc["concepts"]
+    del doc["original_language"]
+    if hasattr(doc, "location"):
+        del doc["location"]
+    if hasattr(doc, "original_year"):
+        del doc["original_year"]
+    del doc["primary_text"]
+    del doc["region_author"]
+    del doc["region_type"]
+    del doc["topics"]
+    del doc["works_referenced"]
+    del doc["document_is_translation"]
+    if hasattr(doc, "semantic_function"):
+        del doc["semantic_function"]
+    del doc["full_citation"]
+    del doc["attribution_confidence"]
+    del doc["canonical_work_id"]
+    del doc["extraction_quality"]
+    if hasattr(doc, "semantic_classification_confidence"):
+        del doc["semantic_classification_confidence"]
+    return doc
+
 async def scan_records():
     # --- STEP 1: Load All Records (Keep this part) ---
     # We use the 'records' list to hold all loaded data.
     records = []
     try:
-        with open("data/base/derrida9_primary_en.jsonl") as f:
+        started = False if START_ID != "" else True
+        #started = True
+        with open(SOURCE) as f:
             for line in f:
-                try:
-                    d = json.loads(line.strip())
-                    records.append(d)
-                except json.JSONDecodeError as e:
-                    LOG.debug(f"Skipping line due to JSON error: {e}")
+                if started:
+                    try:
+                        d = json.loads(line.strip())
+                        records.append(d)
+                    except json.JSONDecodeError as e:
+                        LOG.debug(f"Skipping line due to JSON error: {e}")
+                d = json.loads(line.strip())
+                if START_ID != "" and d.get("record_id") == START_ID:
+                    started = True
     except FileNotFoundError as e:
         LOG.debug(f"Error loading files: {e}")
         records = [] # Ensure records is empty if files fail to load
@@ -116,11 +342,11 @@ async def scan_records():
         next_context = records[start_index_next:end_index_next]
 
         previous_text = "\n".join([f"""
-{"\n".join([f"{k}={v}" for k, v in d.items()])}
+{"\n".join([f"{k}={v}" for k, v in remove_noise(d).items()])}
 """ for d in previous_context])
 
         next_text = "\n".join([f"""
-{"\n".join([f"{k}={v}" for k, v in d.items()])}
+{"\n".join([f"{k}={v}" for k, v in remove_noise(d).items()])}
 """ for d in next_context])
 
         
@@ -142,6 +368,47 @@ async def scan_records():
 
     responses= []
 
+    old_useR_prompt = """
+
+    <INSTRUCTIONS>
+
+    You are auditing the `quoted_speaker` field of records in a RAG pipeline database.
+    Look at the `text` field for the CURRENT RECORD below ('{record_id}') to see if the `quoted_speaker` field is correct.
+
+    </INSTRUCTIONS>
+
+    <CURRENT RECORD>
+    {current_record_metadata_str}
+    </CURRENT RECORD>
+
+    <REQUIREMENTS>
+
+    A `quoted_speaker` MUST be a named human being.
+    The `quoted_speaker` is the person or persons who is being DIRECTLY quoted in a passage.
+    The `quoted_speaker` must be DIRECTLY quoted, not paraphrased or summarized.
+    If there is more than one `quoted_speaker`, you may use an array of strings, e.g. ["Jacques Derrida", "Hamlet"]
+    Do not flatten `quoted_speaker` fields.
+    Do not return no-ops.
+
+    Return ONLY JSON in your response, following the example schema below:
+
+    {{
+        "record_id": c.get("record_id"),
+        "update_fields": {{
+            quoted_speaker: <new_value>, <-- only if new! otherwise update_fields = {{}},
+        }}
+    }}
+
+    Only add a field to "update_fields" if it requires updating.
+    Do not add no-ops.
+    Do not collapse or change existing names or use short names or nicknames.
+    A `quoted_speaker` must be a named human being, not a thing or an idea.
+
+    </REQUIREMENTS>
+    
+    """
+
+    elapsed = 0.0
     for i, c in enumerate(context_windows):
         start = time.perf_counter()
         full_context = c.get("full_context", "")
@@ -149,46 +416,19 @@ async def scan_records():
         current_text = c.get("current_record").get("text", "")
         #current_metadata = extract(text=current_text, lang="en")
         #LOG.debug("current_metadata: %s", json.dumps(current_metadata))
-        current_record_metadata_str = "\n".join([f"{k}={v}" for k, v in c.get("current_record", {}).items() if k != "current_record_metadata_str"])
-        LOG.info("Processing record %s", c.get("current_record", {}).get("record_id", ""))
+        current_record = c.get("current_record")
+        if hasattr(current_record, "processor_notes"):
+            del current_record["processor_notes"]
+        current_record_metadata_str = "\n".join([f"{k}={v}" for k, v in remove_noise(current_record).items() if k != "current_record_metadata_str"])
         LOG.info("Record metadata: %s", current_record_metadata_str)
-        LOG.debug("Record context: %s", full_context)
+        #LOG.debug("Record context: %s", full_context)
+        if elapsed > 0.0:
+            LOG.info("Processing the last record took %.2f seconds", elapsed)
+        LOG.info("Processing record %s (%s)", current_record.get("record_id", ""), current_record.get("inline_citation"))
+        LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
+
         r, _ = await llm.prompt(params={
-            "user": """
-
-    <INSTRUCTIONS>
-    You are auditing records in a RAG pipeline database. You are focused only on the `position_holder` field and its correct values.
-    Now, look at the `text` field for the record '{record_id}' to see if the `position_holder` field for record '{record_id}' is correct.
-    If it is, move on to the next record.
-    If not, make the appropriate change.
-    Audit them extremely carefully.
-    </INSTRUCTIONS>
-    <CURRENT RECORD>
-    Now look at this record metadata for [record_id {record_id}]:
-
-    {current_record_metadata_str}
-
-    </CURRENT RECORD>
-    <REQUIREMENTS>    
-    You are required to follow convention. For example, to know what to use as `position_holder`, look at what other records have done.
-    Do not assume that the `document_author`, `speaker`, `target`, etc. is the same as the `discourse_role`. Read the text to see who is.
-    The `position_holder` is the person whose position is being described. Sometimes, there is more than one `discourse_role`.
-    If there is more than one `position_holder`, you may use an array of strings, e.g. ["Jacques Derrida", "Hamlet"]
-    If you make a change to `position_holder`, confirm that `is_direct_quote`, `quoted_speaker`, `speaker`, and related fields don't also need adjustments.
-    Return ONLY JSON in your response, following the example schema below:
-
-    {{
-        "record_id": c.get("record_id")
-        "update_fields": {{
-            position_holder: <new_value> <-- only if new! otherwise update_fields = {{}}
-        }}
-    }}
-
-    ONLY add a field to "update_fields" if it requires updating. Do not add repeat values. Do not add no-ops.
-
-    </REQUIREMENTS>
-    
-    """,
+            "user": AUDIT_PROMPT,
             "template": {
                 "record_str": record_str,
                 "full_context": full_context,
@@ -197,22 +437,105 @@ async def scan_records():
             }
         })
         r = strip_code_fence(r)
+        elapsed = time.perf_counter() - start
+        LOG.info("r result: %s", r)
+        r2_dict = json.loads(r)
+        r2, _ = await llm.prompt(params={
+            "user": REVIEW_PROMPT,
+            "template": {
+                "current_record_metadata_str": current_record_metadata_str,
+                "update_fields": r2_dict.get("update_fields", None)
+            }
+        })
+        LOG.info("r2 result: %s", r2)
+        r3_dict = json.loads(strip_code_fence(r2))
+        r3, _ = await llm.prompt(params={
+            "user": REVIEW_PROMPT,
+            "template": {
+                "current_record_metadata_str": current_record_metadata_str,
+                "update_fields": r3_dict.get("update_fields", None)
+            }
+        })
+        LOG.info("r3 result: %s", r3)
 
 
         #LOG.debug("LLM response: %s", r)
         try:
-            r_dict = json.loads(r)
-            if (len(r_dict.get("update_fields")) > 0): # rule out nitpicks/processor notes
+            r_dict = json.loads(r3)
+            if (len(r_dict.get("update_fields", [])) > 0): # rule out nitpicks/processor notes
                 LOG.info("Need to update fields: %s", json.dumps(r_dict.get("update_fields")))
-                with open("data/base/notes.jsonl", "a") as out:
+                update_fields = r_dict.get("update_fields")
+                current_record = c.get("current_record", {})
+                with open(DEST, "a") as out:
                     new_record = {
-                        **c.get("current_record", {}),
-                        **r_dict.get("update_fields")
+                        **current_record,
+                        **update_fields
                     }
-                    LOG.info(f"Record [{r_dict.get("record_id")}] is invalid, saving reasoning")
-                    out.write(json.dumps(new_record) + "\n")
+                    previous_updates = new_record.get("updates", [])
+                    for field_name in list(update_fields.keys()):
+                        old_value = current_record.get(field_name, "Unknown/Error")
+                        new_value =  update_fields.get(field_name, "Unknown/Error")
+
+                        if field_name == "is_direct_quote" and new_value == True and not current_record.get("quoted_speaker", False):
+                            LOG.warning("cannot have direct quote w/o speaker, skipping")
+                            continue
+
+                        if json.dumps(old_value) == json.dumps(new_value):
+                            LOG.warning("values are the same, skipping: %s", old_value)
+                            continue
+
+                        fs = update_fields
+                        cs = current_record
+
+                        updated_qs = fs.get("quoted_speaker", "")
+                        if updated_qs is not None and len(list(updated_qs)):
+                            updated_qs = updated_qs if isinstance(updated_qs, str) else list(updated_qs)[0] #can be sting or list
+
+                        if field_name == "quoted_speaker" and updated_qs == cs.get("document_author"):
+                            LOG.warning("quoted_speaker is document_author, skipping: %s", cs.get("document_author"))
+                            continue
+                        if field_name == "quoted_speaker":
+                            if updated_qs == cs.get("target"):
+                                LOG.warning("quoted_speaker is target, skipping: %s", cs.get("target"))
+                                continue
+                            if updated_qs == cs.get("speaker"):
+                                LOG.warning("quoted_speaker != speaker, skipping")
+                                continue
+                            
+                        
+                        previous_updates.append({
+                            "field": field_name,
+                            "old_value": old_value,
+                            "new_value": new_value,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        })
+                        if field_name == "quoted_speaker" and fs.get(field_name, None) and cs.get("is_direct_quote", False) == False:
+                            LOG.info("Adjusting is_direct_quote: %s", fs)
+                            previous_updates.append({
+                                "field": "is_direct_quote",
+                                "old_value": False,
+                                "new_value": True,
+                                "timestamp": datetime.now(timezone.utc).isoformat()
+                            })
+                        if field_name == "quoted_speaker" and not fs.get(field_name, None) and cs.get("is_direct_quote", False) == True:
+                            previous_updates.append({
+                                "field": "is_direct_quote",
+                                "old_value": True,
+                                "new_value": False,
+                                "timestamp": datetime.now(timezone.utc).isoformat()
+                            })
+
+                    updates = {}
+                    if len(previous_updates) > 0:
+                        updates["updates"] = previous_updates
+                        record = {
+                            **new_record,
+                            **updates
+                        }
+                        LOG.info(f"Record [{r_dict.get("record_id")}] is invalid, saving reasoning")
+                        out.write(json.dumps(record) + "\n")
         except json.JSONDecodeError as e:
-            LOG.error(e)
+            LOG.error("trouble decoding the llm response: %s", e)
             continue
         LOG.info("Step time: %d", time.perf_counter() - start)
         responses.append(r)
@@ -221,7 +544,7 @@ async def scan_records():
 async def main():
     LOG.info("Starting record scanner script...")
     result = await scan_records()
-    LOG.info("Result: %s", result)
+    LOG.info("Result: %s", json.dumps(result))
 
 if __name__ == "__main__":
     import asyncio

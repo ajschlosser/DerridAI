@@ -74,15 +74,27 @@ class DerridAIQueryMetadata(TypedDict):
     prompt_instructions: NotRequired[str | None]
 
 class LLMModels(StrEnum):
+    DEEPSEEK_14B = "deepseek-r1:14b" # Rather slow
     GEMMA4_E2B = "gemma4:e2b"
     GEMMA4_E4B = "gemma4:e4b"
+    GEMMA4_E4B_MTB = "hf.co/unsloth/gemma-4-E4B-it-GGUF:Q8_0"
     GEMMA4_12B = "gemma4:12b"
-    PHI4 = "phi4:14b"
-    PHI4_MINI = "phi4-mini:3.8b"
-    PHI4_MINI_REASONING = "phi4-mini-reasoning:3.8b"
-    QWEN_0B = "qwen3.5:0.8b"
+    GEMMA4_12B_MTB = "4skl/gemma4-12b-mtp:latest"
+    GEMMA4_26B = "hf.co/unsloth/gemma-4-26B-A4B-it-GGUF:UD-IQ4_XS" # Strong candidate for parsing text, but 5%/95% CPU/GPU even with small context
+    GPT_OSS_20B = "gpt-oss:20b"
+    GRANITE_3B = "granite4.2:3b"    # Very fast, but not smart when it comes to text
+    GRANITE_8B = "granite4.2:8b"    # Same as above
+    LLAMA_3B = "llama3.2:3b"    # Includes reasoning in output; useless
+    ORNITH_9B = "ornith-1.5:9b" # Seemingly the best by far
+    ORNITH_35B = "hf.co/AtomicChat/Ornith-1.5-35B-A3B-GGUF:IQ3_XXS" # 15 GB    8%/92% CPU/GPU, ~50t/s
+    PHI4_14B = "phi4:14b" # Too slow
+    PHI4_MINI_4B = "phi4-mini:3.8b"
+    PHI4_MINI_REASONING_4B = "phi4-mini-reasoning:3.8b"
+    QWEN_0B = "qwen3.5:0.8b"    # For experimentation only
     QWEN_2B = "qwen3.5:2b"
-    QWEN_9B = "qwen3.5:9b"
+    QWEN_4B = "qwen3.5:4b"
+    QWEN_9B = "qwen3.5:9b"  # Very high precision, low recall for record auditing. Very fast
+    QWEN_27B = "hf.co/unsloth/Qwen3.5-27B-GGUF:IQ4_XS"  # Too big-- 13%/87% CPU/GPU 
 
 class Languages(StrEnum):
     ENGLISH = "en"
