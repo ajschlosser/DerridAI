@@ -7,6 +7,7 @@ from utils.strip_code_fence import strip_code_fence
 from utils.extract_json_objects import extract_json_objects
 from schemas.schemas import LLMModels
 from logging_config import logging, configure_logging
+from json_repair import repair_json
 
 DEFAULTS = {
     "BATCH_SIZE": 2,
@@ -386,11 +387,11 @@ async def scan_records():
         LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
         start = time.perf_counter()
         r, _ = await llm.prompt(params={
-            "user": AUDIT_PROMPT,
+            "user": REVIEW_PROMPT,
             "template": {
-                "record_str": record_str,
-                "full_context": full_context,
-                "record_id": c.get("record_id"),
+                "context": full_context,
+                "update_fields": current_record.get("update_fields"),
+                #"record_id": c.get("record_id"),
                 "current_record_metadata_str": current_record_metadata_str,
             }
         })
@@ -404,7 +405,7 @@ async def scan_records():
             "template": {
                 "context": full_context,
                 "current_record_metadata_str": current_record_metadata_str,
-                "update_fields": json.loads(r2_dict).get("update_fields", None)
+                "update_fields": json.loads(repair_json(r2_dict)).get("update_fields", None)
             }
         })
 
@@ -414,7 +415,7 @@ async def scan_records():
 
         r3_dict = r2
         if type(r3_dict) is str:
-            r3_dict = json.loads(r3_dict)
+            r3_dict = json.loads(repair_json(r3_dict))
         # if r3_dict.get("update_fields"):
         r3, _ = await llm.prompt(params={
             "user": REVIEW_PROMPT,
@@ -432,7 +433,7 @@ async def scan_records():
         #     r3 = r2
         r4_dict = r3
         if type(r4_dict) is str:
-            r4_dict = json.loads(r4_dict)
+            r4_dict = json.loads(repair_json(r4_dict))
         r4, _ = await llm.prompt(params={
             "user": REVIEW_PROMPT,
             "template": {
@@ -448,7 +449,7 @@ async def scan_records():
         try:
             r_dict = r3
             if (type(r_dict) is str):
-                r_dict = json.loads(r_dict)
+                r_dict = json.loads(repair_json(r_dict))
             if (len(r_dict.get("update_fields", [])) > 0): # rule out nitpicks/processor notes
                 LOG.info("Need to update fields: %s", json.dumps(r_dict.get("update_fields")))
                 update_fields = r_dict.get("update_fields")
@@ -524,7 +525,6 @@ async def scan_records():
         except json.JSONDecodeError as e:
             LOG.error("trouble decoding the llm response: %s", e)
             LOG.error("oof: %s", str(r3))
-            exit(-1)
             continue
         responses.append(r)
     return responses

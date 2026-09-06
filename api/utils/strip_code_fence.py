@@ -6,6 +6,8 @@ import logging
 LOG = logging.getLogger(__name__)
 
 def strip_code_fence(text: str, extract_json: bool = False) -> str:
+    if type(text) is not str:
+        text = str(text)
     text = text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:toon|json)?\s*", "", text)
