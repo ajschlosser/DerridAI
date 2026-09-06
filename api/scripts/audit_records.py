@@ -10,18 +10,18 @@ from logging_config import logging, configure_logging
 from json_repair import repair_json
 
 BATCH_SIZE = 1
-REVIEW_PASSES = 3
+REVIEW_PASSES = 2
 REASONING = False
 TEMPERATURE = 0.0 # disabled
 ETA = 0.12  # 0.07 smooth and steady
 TAU = 2.5   # 5.0 = matches natural language; 2.0 = code generation; 7.0 = creative
 TOP_K = 0 # Low = conservative; 0 = disabled
 TOP_P = 1.0 # Low = conservative; 1.0 = disabled
-MODEL = LLMModels.GEMMA4_26B
+MODEL = LLMModels.GEMMA4_E2B
 MIROSTAT = 0
-NUM_CTX = 262144 // 32 # 262144 // 32 = 8K, 40 = 6K, 56 = 4
+NUM_CTX = 262144 // 24 # 262144 // 32 = 8K, 40 = 6K, 56 = 4
 START_LINE = None
-START_ID = "som-2b238d2ddadca7-00033"
+#START_ID = "som-627e04a8022507-00055"
 START_ID = ""
 FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
 configure_logging(logging.DEBUG, f"./logs/derridai-audit-{FILE_STR}.log")
@@ -78,6 +78,14 @@ def remove_noise(doc: dict) -> dict:
         del doc["semantic_classification_confidence"]
     return doc
 
+def neighbor_context(d):
+    return {
+        "record_id": d["record_id"],
+        "page_start": d.get("page_start"),
+        "page_end": d.get("page_end"),
+        "text": d["text"],
+    }
+
 async def audit_records():
 
     #============================#
@@ -131,11 +139,15 @@ async def audit_records():
         next_context = records[start_index_next:end_index_next]
 
         previous_text = "\n".join([f"""
-{"\n".join([f"{k}={v}" for k, v in remove_noise(d).items()])}
+{"\n".join([f"{k}={v}" for k, v in neighbor_context(d).items()])}
 """ for d in previous_context])
 
+        current_text = "\n".join([f"""
+{"\n".join([f"{k}={v}" for k, v in remove_noise(current_record).items()])}
+"""])
+
         next_text = "\n".join([f"""
-{"\n".join([f"{k}={v}" for k, v in remove_noise(d).items()])}
+{"\n".join([f"{k}={v}" for k, v in neighbor_context(d).items()])}
 """ for d in next_context])
 
         # 3. Assemble the full context window for the current record
@@ -143,9 +155,9 @@ async def audit_records():
             "current_record": current_record,
             "previous_context": previous_context,
             "next_context": next_context,
-            "full_context": "<BEGIN PREVIOUS CONTEXT>" + previous_text + "<END PREVIOUS CONTEXT><CURRENT RECORD> [...content...] </CURRENT RECORD><BEGIN NEXT CONTEXT>" + next_text + "</END NEXT CONTEXT>"
+            "full_context": "<BEGIN PREVIOUS_RECORD_CONTEXT>" + previous_text + "<END PREVIOUS_RECORD_CONTEXT><CURRENT_RECORD>" + current_text + "</CURRENT_RECORD><BEGIN NEXT_RECORD_CONTEXT>" + next_text + "</END NEXT_RECORD_CONTEXT>"
         }
-
+        #LOG.debug("Context window for record #%d [%s]: %s", i, current_record.get("record_id"), context_window["full_context"])
         #LOG.debug("Creating context window #%d", len(context_windows) + 1)
         context_windows.append(context_window)
 
@@ -173,18 +185,23 @@ Just because a word is capitalized, do not assume it is a proper noun, e.g. "Som
 
 Beware of attributing nearby names to the `quoted_speaker`.
 
-If the CURRENT_RECORD is not clear enough, use the surrounding CONTEXT to help you make a decision.
+If the CURRENT_RECORD is not clear enough, use the surrounding CURRENT_RECORD_IN_CONTEXT to help you make a decision.
 
 The `quoted_speaker` must come from the CURRENT_RECORD, but the CONTEXT can help you identify the `quoted_speaker`,
 especially if the quoted text bleeds between records.
+
+DO NOT let speakers from PREVIOUS_RECORD_CONTEXT or NEXT_RECORD_CONTEXT to bleed into CURRENT_RECORD.
+DO NOT guess a CURRENT_RECORD `quoted_speaker` by extrapolating from PREVIOUS_RECORD_CONTEXT or NEXT_RECORD_CONTEXT.
+However, if a quotation begins in the PREVIOUS_RECORD_CONTEXT and ends in the CURRENT_RECORD, use the `quoted_speaker` from
+the PREVIOUS_RECORD_CONTEXT.
 
 <CURRENT_RECORD>
 {current_record}
 </CURRENT_RECORD>
 
-<CONTEXT>
+<CURRENT_RECORD_IN_CONTEXT>
 {context}
-</CONTEXT>
+</CURRENT_RECORD_IN_CONTEXT>
 
 OUTPUT
 Return exactly one JSON object and nothing else.
@@ -198,7 +215,7 @@ Example JSON that adds a new speaker:
             quoted_speaker: "Bilbo Baggins", <-- only if new! otherwise update_fields = {{}},
             is_direct_quote: true
         }},
-        "adjudication_reason": "Speaker Bilbo Baggins quoted saying 'I'm not a dog'.", <-- no more than 20 words MAX; use concise, sparing language
+        "adjudication_reason": "Speaker Bilbo Baggins quoted saying 'I'm not a dog'.", <-- no more than 20 words MAX; use concise, sparing language, cite supporting quotation directly
     }}
 
 Example JSON that deletes an existing speaker:
@@ -219,6 +236,18 @@ You are a careful second-pass reviewer of audited records of the works of Jacque
 
 Your job is to audit the `quoted_speaker` field of the CURRENT_RECORD.
 
+Assume that the PROPOSED_CHANGES are incorrect and that you must justify them again.
+Do not tblindlyt rust the PROPOSED_CHANGES. Assume a less-stringent auditor carelessly made them.
+Your job is to make sure they are correct and, most important, PREVENT HARMFUL CHANGES.
+If there is no direct evidence for the change, revert the PROPOSED_CHANGES.
+The exception is deleting data-- in that case, ensure that the deletion is justified. For example,
+removing "Someone" from the `quoted_speaker` field makes sense since "Someone" isn't a named being
+
+You must decide if the PROPOSED_CHANGES are:
+    - GOOD: corrects incorrect metadata, adds correct metadata, removes incorrect metadata, improves metadata quality
+    - NEUTRAL: no-ops, normalizations, changes to records that do not make them substantively worse
+    - HARMFUL: makes metadata less correct, removes correct metadata, adds incorrect metadata, generally worsens record quality
+
 A `quoted_speaker` must be:
     - A named being (real human being, fictional character, mythological being, but some named being of a kind)
     - Directly quoted in the `text` field of the CURRENT_RECORD, and speaking in that quote
@@ -228,18 +257,13 @@ Example valid values: ["George Washington", "Medusa", "Hamlet", "Bilbo Baggins",
 Example invalid values: ["somebody", "the teacher", "a ghost", "a person", "Someone", "a Person", "Somebody"]
 
 Just because a word is capitalized, do not assume it is a proper noun, e.g. "Someone" is not a valid name, even with a capital 'S'.
-
 Beware of attributing nearby names to the `quoted_speaker`.
-
+If the `quoted_speaker` has a generic name like "Ghost", then citing the work in parentheses afterwards is encouraged: "Ghost (Hamlet)"
 If the CURRENT_RECORD is not clear enough, use the surrounding CONTEXT to help you make a decision.
-
 The `quoted_speaker` must come from the CURRENT_RECORD, but the CONTEXT can help you identify the `quoted_speaker`,
 especially if the quoted text bleeds between records.
-
-Based on these, your job is to decide if the PROPOSED_CHANGES are:
-    - GOOD: corrects incorrect metadata, adds correct metadata, removes incorrect metadata, improves metadata quality
-    - NEUTRAL: no-ops, normalizations, changes to records that do not make them substantively worse
-    - HARMFUL: makes metadata less correct, removes correct metadata, adds incorrect metadata, generally worsens record quality
+Be aware of context bleeds. If the preceding context cites Hamlet but the CURRENT_RECORD does not, do not let the preceding record's
+metadata bleed into this records.
 
 Be strict, precise, and conservative in your judgments. Err on the side of making fewer changes when not certain.
 
@@ -307,6 +331,7 @@ Example response for an ACCEPTANCE of the proposed change:
         if type(prompt_result_dict) is list:
             prompt_result_dict = prompt_result_dict[0]
         LOG.info("Prompt result: %s", prompt_result_dict)
+        LOG.info("Update fields: %s", prompt_result_dict.get("update_fields"))
 
         review_result_dict = dict()
         count = int(REVIEW_PASSES if REVIEW_PASSES else 0)
