@@ -34,7 +34,7 @@ MODEL = LLMModels.GEMMA4_E2B
 MIROSTAT = 0
 NUM_CTX = 262144 // 32 # 262144 // 32 = 8K, 40 = 6K, 56 = 4
 START_LINE = None
-#START_ID = "derrida-monolingualism-other-1998-00059"
+#START_ID = "som-2b238d2ddadca7-00101"
 START_ID = ""
 FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
 configure_logging(logging.DEBUG, f"./logs/derridai-scan_records.4-{FILE_STR}.log")
@@ -52,59 +52,6 @@ llm = LLMClient(
     #mirostat_eta=ETA, #2.0
     #mirostat_tau=TAU, #0.1
 )
-
-old_prompt =  """
-
-    <INSTRUCTIONS>
-    You are auditing records in a RAG pipeline database.
-    These records are chunks of the English and French works of the French philosopher Jacques Derrida.
-    Look at the `text` field for each record to see if the other fields, especially the metadata fields, are correct.
-    Fields like `position_holder`, `speaker`, `stance`, `discourse_role`, `quoted_speaker`, etc. are especially important.
-    Audit them extremely carefully.
-    </INSTRUCTIONS>
-    <CURRENT RECORD>
-    Now look at this record metadata for [record_id {record_id}]:
-
-    {current_record_metadata_str}
-
-    Note also the following metadata about the above record (perhaps consider adding any new references): {current_metadata}
-    </CURRENT RECORD>
-    <CONTEXT>
-    That record has the following surround context:
-
-    {full_context}
-
-    Note that the context shows which records come before and which records come after this record.
-    </CONTEXT>
-    <REQUIREMENTS>
-    Given the above context and this record's text, is this record's metadata correct? Or does it need to be fixed?
-
-    DO NOT assume a record is incorrect just because fields are `null`.
-
-    DO NOT fix a record's metadata using data or metadata from surrounding records. That is strictly forbidden.
-
-    DO NOT make small changes. DO NOT add new categories or types of values.
-    
-    DO NOT turn arrays or objects into strings. Arrays remain arrays, even arrays of one.
-    
-    You are required to follow convention. For example, to know what to use as `discourse_role`, look at what other records have done.
-
-    Return ONLY JSON in your response, following the example schema below:
-
-    {{
-        "record_id": c.get("record_id")
-        "update_fields": {{
-            ... <-- pick ONE field, if any, in the record that requires updating/fixing, and provide the new value, e.g.:
-            position_holder: <new_value>
-        }}
-    }}
-
-    ONLY add fields to "update_fields" if they require updating. Do not add repeat values.
-
-    If "update_fields" has fields that require updating, also add a "processor_notes" field to "update_fields" with a value of 20-30 words to help an LLM correctly read the record
-    </REQUIREMENTS>
-    
-"""
 
 AUDIT_PROMPT = r"""
 You are a conservative metadata auditor for a scholarly RAG corpus. Resolve
@@ -131,8 +78,8 @@ NOT DIRECT QUOTATION
 - the current document's ordinary prose or an unattributed dramatic voice;
 - words attributed only by guessing from topic, work, target, or metadata.
 
-A fictional or dramatic character such as Hamlet, Horatio, or Marcellus is not
-a human source for this field. When the current record reproduces lines from a
+A fictional or dramatic character such as Hamlet, Horatio, or Marcellus can be
+a "human" source for this field. When the current record reproduces lines from a
 literary work, name its author only if the supplied text explicitly attributes
 those quoted words to that person. Do not supply an author from outside
 knowledge merely because you recognize the work.
@@ -180,19 +127,37 @@ Use these contrasts as rules, not as facts about the input:
 - `the word "judgment"` is use/mention: no quoted speaker.
 - `(Arendt, p. 20)` alone is a citation: no quoted speaker.
 
+WARNING:
+    - There will often be many names to choose from, and you will be tempted
+    to mistake a nearby name for the actual `quoted_speaker`. In cases where
+    you cannot resolve the name, err on NO CHANGE.
+    - More often than not, if the original value is `null`, it's meant to be `null`.
+    - Be EXTRA wary when you are reviewing potentially destructive changes to existing metadata
+    - Watch for ontology leakage in moments of ambiguity!
+    
 OUTPUT
 Return exactly one JSON object and nothing else.
-    Return ONLY JSON in your response, following the example schema below:
+
+Example JSON that adds a new speaker:   
 
     {{
-        "record_id": <record_id>,
         "update_fields": {{
-            quoted_speaker: <new_value>, <-- only if new! otherwise update_fields = {{}},
+            quoted_speaker: "Bilbo Baggins" <-- only if new! otherwise update_fields = {{}},
         }},
-        "adjudication_result": <short description (20-30 words) describing reasoning for choice>
+        "adjudication_reason": "The proposed quoted speaker is quoted in the passage saying 'I'm not a dog'.", <-- do NOT use nested quotation marks in this value! Paraphrase the speaker's quoted remarks
+    }}
+
+Example JSON that deletes an existing speaker:
+
+    {{
+        "update_fields": {{
+            quoted_speaker: null <-- explicitly null out the existing speaker
+        }},
+        "adjudication_reason": "The proposed quoted speaker is not actually quoted in the passage. It's a dog saying 'bark'.", <-- do NOT use nested quotation marks in this value! Paraphrase the speaker's quoted remarks
     }}
 
 Only add a field to "update_fields" if it requires updating.
+Do not use quotation marks of any kind in your field values. Quotation marks are used for the JSON schema and must not be in field values.
 
 <CURRENT_RECORD>
 {current_record_metadata_str}
@@ -200,14 +165,20 @@ Only add a field to "update_fields" if it requires updating.
 <EVIDENCE>
 {full_context}
 </EVIDENCE>
+
+IMPORTANT: VALIDATE YOUR JSON BEFORE RESPONDING. FIX IT IF IT FAILS.
+Do not use quotation marks of any kind in your field values. Quotation marks are used for the JSON schema and must not be in field values.
+
+Make sure your JSON encloses field/property names and string values with double-quotes and uses proper JSON types.
+
 """.strip()
 
 REVIEW_PROMPT = """
-    You are a record auditor verifying the `quoted_speaker` field of certain records.
+    You are a conservative record auditor verifying the `quoted_speaker` field of certain records.
 
     Your job is to audit current proposed changes.
 
-    For the following CURRENT_RECORD, a PROPOSED_CHANGE was made.
+    For the following CURRENT_RECORD, a PROPOSED_CHANGE was made. Scrutinize it carefully.
 
     Review both the CURRENT_RECORD and the PROPOSED_CHANGE, and determine if the change is GOOD, NEUTRAL or HARMFUL/DESTRUCTIVE.
         - A change is GOOD if it improves the record's accuracy
@@ -217,9 +188,18 @@ REVIEW_PROMPT = """
 
     Keep an eye out for the following:
         - Ensure that plasusible existing speakers aren't being deleted unless clearly contradicted
-        - `quoted_speaker` must be a human being. Works, publications, groups, roles, and generic descriptors of types of people fail this test.
+        - `quoted_speaker` must be a human being (including important fictional characters). Works, publications, groups, roles, and generic descriptors of types of people fail this test.
         - Watch for nearby-name errors: make sure the person being quoted is distinguished from the person being discussed.
-        - Don't just turn strings into arrays or arrays back into strings. Leave data types as they are. Prefer arrays of strings when creating new data.
+        - Don't just turn strings into arrays or arrays back into strings. Prefer Array[String] when adjudicating multiple values for `quoted_speaker`.
+
+    Ask yourself:
+        - Did they mistake a nearby speaker for the `quoted_speaker`?
+        - Did they assume a nearby name was a `quoted_speaker` without enough evidence?
+        - Did they add a nearby name to a list of `quoted_speaker` values just because it happened to be close to the `quoted_speaker`?
+        - Did they add a descriptive term like "The sailor" or "A ghost" instead of a named being like "Bilbo Baggins", "Medusa", or "Benjamin Franklin"?
+    If so, that's probably HARMFUL or DESTRUCTIVE. Flag it!
+
+    IMPORTANT: Use the surroudning CONTEXT if there is record spillover.
 
     <CURRENT_RECORD>
     {current_record_metadata_str}
@@ -227,27 +207,56 @@ REVIEW_PROMPT = """
 
     <PROPOSED_CHANGE>
     {update_fields}
-    </PROPOSEC_CHANGE>
+    </PROPOSED_CHANGE>
+
+    <CONTEXT>
+    {context}
+    </CONTEXT>
 
     Return exactly one JSON object and nothing else.
-    Return ONLY JSON in your response, following the example schema below:
+    Return ONLY JSON in your response.
+
+    Example response for a REJECTION of the proposed change):
 
     {{
-        "record_id": <record_id>,
-        "adjudication_result" <GOOD | NEUTRAL | HARMFUL | DESTRUCTIVE>,
-        "adjudication_reason": <short description (20-30 words) describing reasoning for choice>,
+        "adjudication_result" "HARMFUL", <-- can be HARMFUL | DESTRUCTIVE
+        "adjudication_reason": "The proposed quoted speaker is not actually quoted in the passage. It's a dog saying 'bark'.", <-- do NOT use nested quotation marks in this value! Paraphrase the speaker's quoted remarks
+        "update_fields": {{}}
+    }}
+
+    Example response for an ACCEPTANCE of the proposed change:
+    
+    {{
+        "adjudication_result": "GOOD", <-- can be GOOD | NEUTRAL
+        "adjudication_reason": "The proposed quoted speaker is quoted in the passage saying 'I'm not a dog'.", <-- do NOT use nested quotation marks in this value! Paraphrase the speaker's quoted remarks
         "update_fields": {{
-            quoted_speaker: <new_value>, <-- only if new and adjudicated as GOOD or NEUTRAK! otherwise update_fields = {{}},
+            quoted_speaker: "Bilbo Baggins" <-- only if new and adjudicated as GOOD or NEUTRAK! otherwise update_fields = {{}},
         }},
     }}
 
+    Do not use quotation marks of any kind in your field values. Quotation marks are used for the JSON schema and must not be in field values.
+    Do not use `None` to mean `null`. This is JSON, not Python.
     Remember, if a record is adjudicated as GOOD or NEUTRAL, `update_fields` needs to include the field with its new value.
     If a record is adjudicated as HARMFUL or DESTRUCTIVE, leave `update_fields` empty like {{}}. This prevents the harmful change from being applied.
+    Finally: if the proposed change is an empty object, ensure that it was correct NOT to change anything
+
+    IMPORTANT: VALIDATE YOUR JSON BEFORE RESPONDING. FIX IT IF IT FAILS.
+    Do not use quotation marks of any kind in your field values. Quotation marks are used for the JSON schema and must not be in field values.
+
+    WARNING:
+    - There will often be many names to choose from, and you will be tempted
+    to mistake a nearby name for the actual `quoted_speaker`. In cases where
+    you cannot resolve the name, err on NO CHANGE.
+    - More often than not, if the original value is `null`, it's meant to be `null`.
+    - Be EXTRA wary when you are reviewing potentially destructive changes to existing metadata
+    - Watch for ontology leakage in moments of ambiguity!
+
+    Make sure your JSON encloses field/property names and string values with double-quotes and uses proper JSON types.
 
 """
 
-SOURCE="data/base/derrida9_primary_en.jsonl"
-DEST=f"data/base/out/notes_{os.path.split(SOURCE)[-1]}_{FILE_STR}.jsonl"
+SOURCE="data/base/out/notes_derrida9_primary_en.jsonl_hf.co_unsloth_gemma-4-E4B-it-GGUF:Q8_0-8192-temp_0.0-batch_1-standard.jsonl"
+DEST=f"data/base/out/notes2_{os.path.split(SOURCE)[-1]}_{FILE_STR}.jsonl"
 
 class DerridAIRecord():
 
@@ -363,70 +372,19 @@ async def scan_records():
 
     # The 'context_windows' list now contains a fully processed context for every record.
     LOG.info(f"\nSuccessfully generated {len(context_windows)} context windows.")
-    # LOG.debug("Example context for the first record:")
-    # LOG.debug(json.dumps(context_windows[BATCH_SIZE]))
 
     responses= []
 
-    old_useR_prompt = """
-
-    <INSTRUCTIONS>
-
-    You are auditing the `quoted_speaker` field of records in a RAG pipeline database.
-    Look at the `text` field for the CURRENT RECORD below ('{record_id}') to see if the `quoted_speaker` field is correct.
-
-    </INSTRUCTIONS>
-
-    <CURRENT RECORD>
-    {current_record_metadata_str}
-    </CURRENT RECORD>
-
-    <REQUIREMENTS>
-
-    A `quoted_speaker` MUST be a named human being.
-    The `quoted_speaker` is the person or persons who is being DIRECTLY quoted in a passage.
-    The `quoted_speaker` must be DIRECTLY quoted, not paraphrased or summarized.
-    If there is more than one `quoted_speaker`, you may use an array of strings, e.g. ["Jacques Derrida", "Hamlet"]
-    Do not flatten `quoted_speaker` fields.
-    Do not return no-ops.
-
-    Return ONLY JSON in your response, following the example schema below:
-
-    {{
-        "record_id": c.get("record_id"),
-        "update_fields": {{
-            quoted_speaker: <new_value>, <-- only if new! otherwise update_fields = {{}},
-        }}
-    }}
-
-    Only add a field to "update_fields" if it requires updating.
-    Do not add no-ops.
-    Do not collapse or change existing names or use short names or nicknames.
-    A `quoted_speaker` must be a named human being, not a thing or an idea.
-
-    </REQUIREMENTS>
-    
-    """
-
-    elapsed = 0.0
     for i, c in enumerate(context_windows):
-        start = time.perf_counter()
         full_context = c.get("full_context", "")
         record_str = json.dumps(c)
-        current_text = c.get("current_record").get("text", "")
-        #current_metadata = extract(text=current_text, lang="en")
-        #LOG.debug("current_metadata: %s", json.dumps(current_metadata))
         current_record = c.get("current_record")
         if hasattr(current_record, "processor_notes"):
             del current_record["processor_notes"]
-        current_record_metadata_str = "\n".join([f"{k}={v}" for k, v in remove_noise(current_record).items() if k != "current_record_metadata_str"])
-        LOG.info("Record metadata: %s", current_record_metadata_str)
-        #LOG.debug("Record context: %s", full_context)
-        if elapsed > 0.0:
-            LOG.info("Processing the last record took %.2f seconds", elapsed)
-        LOG.info("Processing record %s (%s)", current_record.get("record_id", ""), current_record.get("inline_citation"))
-        LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
 
+        current_record_metadata_str = "\n".join([f"{k}={v}" for k, v in remove_noise(current_record).items() if k != "current_record_metadata_str"])
+        LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
+        start = time.perf_counter()
         r, _ = await llm.prompt(params={
             "user": AUDIT_PROMPT,
             "template": {
@@ -436,32 +394,61 @@ async def scan_records():
                 "current_record_metadata_str": current_record_metadata_str,
             }
         })
-        r = strip_code_fence(r)
-        elapsed = time.perf_counter() - start
-        LOG.info("r result: %s", r)
-        r2_dict = json.loads(r)
+
+        r = strip_code_fence(text=r, extract_json=True)
+
+        LOG.info("Initial audit (r) result: %s", r)
+        r2_dict = json.dumps(r)
         r2, _ = await llm.prompt(params={
             "user": REVIEW_PROMPT,
             "template": {
+                "context": full_context,
                 "current_record_metadata_str": current_record_metadata_str,
-                "update_fields": r2_dict.get("update_fields", None)
+                "update_fields": json.loads(r2_dict).get("update_fields", None)
             }
         })
-        LOG.info("r2 result: %s", r2)
-        r3_dict = json.loads(strip_code_fence(r2))
+
+        r2 = strip_code_fence(text=r2, extract_json=True)
+
+        LOG.info("First review (r2) result: %s", r2)
+
+        r3_dict = r2
+        if type(r3_dict) is str:
+            r3_dict = json.loads(r3_dict)
+        # if r3_dict.get("update_fields"):
         r3, _ = await llm.prompt(params={
             "user": REVIEW_PROMPT,
             "template": {
+                "context": full_context,
                 "current_record_metadata_str": current_record_metadata_str,
                 "update_fields": r3_dict.get("update_fields", None)
             }
         })
-        LOG.info("r3 result: %s", r3)
 
+        r3 = strip_code_fence(text=r3, extract_json=True)
+        LOG.info("Second review (r3) result: %s", r3)
+        # else:
+        #     LOG.info("Skipping second review since no change has been suggested.")
+        #     r3 = r2
+        r4_dict = r3
+        if type(r4_dict) is str:
+            r4_dict = json.loads(r4_dict)
+        r4, _ = await llm.prompt(params={
+            "user": REVIEW_PROMPT,
+            "template": {
+                "context": full_context,
+                "current_record_metadata_str": current_record_metadata_str,
+                "update_fields": r4_dict.get("update_fields", None)
+            }
+        })
 
-        #LOG.debug("LLM response: %s", r)
+        r4 = strip_code_fence(text=r3, extract_json=True)
+        LOG.info("Third review (r4) result: %s", r4)
+        LOG.debug("Prompting too %.2f seconds for record %s", time.perf_counter() - start, current_record.get("record_id"))
         try:
-            r_dict = json.loads(r3)
+            r_dict = r3
+            if (type(r_dict) is str):
+                r_dict = json.loads(r_dict)
             if (len(r_dict.get("update_fields", [])) > 0): # rule out nitpicks/processor notes
                 LOG.info("Need to update fields: %s", json.dumps(r_dict.get("update_fields")))
                 update_fields = r_dict.get("update_fields")
@@ -536,8 +523,9 @@ async def scan_records():
                         out.write(json.dumps(record) + "\n")
         except json.JSONDecodeError as e:
             LOG.error("trouble decoding the llm response: %s", e)
+            LOG.error("oof: %s", str(r3))
+            exit(-1)
             continue
-        LOG.info("Step time: %d", time.perf_counter() - start)
         responses.append(r)
     return responses
 
