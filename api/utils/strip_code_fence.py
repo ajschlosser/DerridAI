@@ -18,5 +18,5 @@ def strip_code_fence(text: str, extract_json: bool = False) -> str:
             text = extracted_text[0] if extracted_text else text  # Get the first JSON object found, or empty string if none
         except json.JSONDecodeError as e:
             LOG.warning("JSON: %s", e)
-    LOG.debug("Extracted text: %s", text)
+    #LOG.debug("Extracted text: %s", text)
     return text

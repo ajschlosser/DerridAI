@@ -9,8 +9,8 @@ from schemas.schemas import LLMModels
 from logging_config import logging, configure_logging
 from json_repair import repair_json
 
-BATCH_SIZE = 1
-REVIEW_PASSES = 2
+BATCH_SIZE = 0
+REVIEW_PASSES = 1
 REASONING = False
 TEMPERATURE = 0.0 # disabled
 ETA = 0.12  # 0.07 smooth and steady
@@ -44,39 +44,15 @@ SOURCE="data/base/derrida9_primary_en.jsonl"
 DEST=f"data/base/out/audit_notes_{os.path.split(SOURCE[:10])[-1]}_{FILE_STR}.jsonl"
 
 def remove_noise(doc: dict) -> dict:
-    doc = doc.copy()
-    if hasattr(doc, "processor_notes"):
-        del doc["processor_notes"]
-    del doc["year"]
-    del doc["translator"]
-    del doc["edition"]
-    if hasattr(doc, "editor"):
-        del doc["editor"]
-    del doc["text_length"]
-    del doc["needs_review"]
-    del doc["review_reason"]
-    del doc["document_language"]
-    del doc["concepts"]
-    del doc["original_language"]
-    if hasattr(doc, "location"):
-        del doc["location"]
-    if hasattr(doc, "original_year"):
-        del doc["original_year"]
-    del doc["primary_text"]
-    del doc["region_author"]
-    del doc["region_type"]
-    del doc["topics"]
-    del doc["works_referenced"]
-    del doc["document_is_translation"]
-    if hasattr(doc, "semantic_function"):
-        del doc["semantic_function"]
-    del doc["full_citation"]
-    del doc["attribution_confidence"]
-    del doc["canonical_work_id"]
-    del doc["extraction_quality"]
-    if hasattr(doc, "semantic_classification_confidence"):
-        del doc["semantic_classification_confidence"]
-    return doc
+    keep = {
+        "record_id",
+        "work",
+        "page_start",
+        "page_end",
+        "text",
+        "quoted_speaker",
+    }
+    return {k: v for k, v in doc.items() if k in keep}
 
 def neighbor_context(d):
     return {
@@ -97,15 +73,16 @@ async def audit_records():
         #started = True
         with open(SOURCE) as f:
             for line in f:
-                if started:
-                    try:
-                        d = json.loads(line.strip())
-                        records.append(d)
-                    except json.JSONDecodeError as e:
-                        LOG.debug(f"Skipping line due to JSON error: {e}")
-                d = json.loads(line.strip())
-                if START_ID != "" and d.get("record_id") == START_ID:
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError as e:
+                    LOG.debug("Skipping line: %s", e)
+                    continue
+                if not started:
+                    if d.get("record_id") != START_ID:
+                        continue
                     started = True
+                records.append(d)
     except FileNotFoundError as e:
         LOG.debug(f"Error loading files: {e}")
         records = [] # Ensure records is empty if files fail to load
@@ -171,29 +148,48 @@ async def audit_records():
     AUDIT_PROMPT = """
 You are a conservative auditor of records pertaining to the works of Jacques Derrida.
 
-Your job is to audit the `quoted_speaker` field of the CURRENT_RECORD.
+Audit only CURRENT_RECORD. Change quoted_speaker only with clear textual evidence.
 
-A `quoted_speaker` must be:
-    - A named being (real human being, fictional character, mythological being, but some named being of a kind)
-    - Directly quoted in the `text` field of the CURRENT_RECORD, and speaking in that quote
-    - A being with a name, NOT a description of a person or being, or a role, or a category (e.g., NOT "someone" or "the ghost")
+VALID:
+1. "Hamlet: ..." → Hamlet
+2. '"..." says Hamlet' → Hamlet
+3. "Kant calls this Marktpreis" → Kant
+4. A quotation explicitly introduced as someone's words.
 
-Example valid values: ["George Washington", "Medusa", "Hamlet", "Bilbo Baggins", "Thomas Jefferson", "God"]
-Example invalid values: ["somebody", "the teacher", "a ghost", "a person", "Someone", "a Person", "Somebody"]
+INVALID:
+1. A person is merely discussed.
+2. Their theory, legacy, philosophy, or influence is discussed.
+3. Their name is near somebody else's quotation.
+4. A work title such as "(Hamlet)" appears after a stage direction.
+5. Neighboring records quote them.
 
-Just because a word is capitalized, do not assume it is a proper noun, e.g. "Someone" is not a valid name, even with a capital 'S'.
+For every new speaker, provide an exact evidence_span from CURRENT_RECORD.
+If you cannot quote the evidence, make no change.
 
-Beware of attributing nearby names to the `quoted_speaker`.
+Existing non-null values get extra protection:
+do not delete or replace them unless clearly wrong.
 
-If the CURRENT_RECORD is not clear enough, use the surrounding CURRENT_RECORD_IN_CONTEXT to help you make a decision.
+Named/searchable fictional identities are valid.
 
-The `quoted_speaker` must come from the CURRENT_RECORD, but the CONTEXT can help you identify the `quoted_speaker`,
-especially if the quoted text bleeds between records.
+Valid:
+- Hamlet
+- Horatio
+- Ghost (Hamlet)
+- Hamlet's Ghost
+- Timon of Athens
 
-DO NOT let speakers from PREVIOUS_RECORD_CONTEXT or NEXT_RECORD_CONTEXT to bleed into CURRENT_RECORD.
-DO NOT guess a CURRENT_RECORD `quoted_speaker` by extrapolating from PREVIOUS_RECORD_CONTEXT or NEXT_RECORD_CONTEXT.
-However, if a quotation begins in the PREVIOUS_RECORD_CONTEXT and ends in the CURRENT_RECORD, use the `quoted_speaker` from
-the PREVIOUS_RECORD_CONTEXT.
+Usually invalid because too generic:
+- Painter
+- Stranger
+- King
+- Guard
+- Someone
+- a ghost
+
+A generic role becomes valid only when the work/context makes it a
+specific searchable identity, e.g. Ghost (Hamlet).
+
+Return JSON only.
 
 <CURRENT_RECORD>
 {current_record}
@@ -205,67 +201,109 @@ the PREVIOUS_RECORD_CONTEXT.
 
 OUTPUT
 Return exactly one JSON object and nothing else.
-You may use Array[String] for passages with multiple speakers, e.g.: ["Bilbo Baggins", "Frodo Baggins"].
-`is_direct_quote` is always Boolean, and refers to whether or not the `text` _contains_ a `quoted_speaker`.
 
 Example JSON that adds a new speaker:
 
     {{
         "update_fields": {{
-            quoted_speaker: "Bilbo Baggins", <-- only if new! otherwise update_fields = {{}},
-            is_direct_quote: true
+            "quoted_speaker": "Bilbo Baggins", <-- only if new! otherwise update_fields = {{}},
+            "is_direct_quote": true
         }},
-        "adjudication_reason": "Speaker Bilbo Baggins quoted saying 'I'm not a dog'.", <-- no more than 20 words MAX; use concise, sparing language, cite supporting quotation directly
+        "evidence_type": "explicit_attribution",
+        "evidence_span": "Says Hamlet",
+        "adjudication_reason": "Explicit attribution."
     }}
 
 Example JSON that deletes an existing speaker:
 
     {{
         "update_fields": {{
-            quoted_speaker: null, <-- explicitly null out the existing speaker
-            is_direct_quote: null
+            "quoted_speaker": null, <-- explicitly null out the existing speaker
+            "is_direct_quote": null
         }},
-        "adjudication_reason": "Bilbo Baggins is in the passage, but is is not the one who says 'I'm not a dog'." <-- no more than 20 words MAX; use concise, sparing language
+        "evidence_type": null,
+        "evidence_span": null,
+        "adjudication_reason": "No speaker present."
     }}
 
-Be strict, precise, and conservative in your judgments. Err on the side of making fewer changes when not certain.
+Example JSON that indicates NO CHANGE or NO OP to the record:
+
+    {{
+        "update_fields": {{}},
+        "evidence_type": null,
+        "evidence_span": null,
+        "adjudication_reason": "Current record is fine."
+    }}
+
+VALID_EVIDENCE_TYPES = {{
+    "dialogue_label",
+    "explicit_attribution",
+    "explicit_source",
+    "quotation_continuation"
+}}
 """
 
     REVIEW_PROMPT = """
-You are a careful second-pass reviewer of audited records of the works of Jacques Derrida.
+You are a veto reviewer.
 
-Your job is to audit the `quoted_speaker` field of the CURRENT_RECORD.
+Your ONLY task is to decide whether the proposed quoted_speaker change
+is sufficiently supported by the CURRENT_RECORD.
 
-Assume that the PROPOSED_CHANGES are incorrect and that you must justify them again.
-Do not tblindlyt rust the PROPOSED_CHANGES. Assume a less-stringent auditor carelessly made them.
-Your job is to make sure they are correct and, most important, PREVENT HARMFUL CHANGES.
-If there is no direct evidence for the change, revert the PROPOSED_CHANGES.
-The exception is deleting data-- in that case, ensure that the deletion is justified. For example,
-removing "Someone" from the `quoted_speaker` field makes sense since "Someone" isn't a named being
+Do not propose a different speaker.
+Do not repair the proposal.
+Do not infer missing metadata.
 
-You must decide if the PROPOSED_CHANGES are:
-    - GOOD: corrects incorrect metadata, adds correct metadata, removes incorrect metadata, improves metadata quality
-    - NEUTRAL: no-ops, normalizations, changes to records that do not make them substantively worse
-    - HARMFUL: makes metadata less correct, removes correct metadata, adds incorrect metadata, generally worsens record quality
+ACCEPT only if the CURRENT_RECORD itself contains clear textual evidence
+for every proposed speaker.
 
-A `quoted_speaker` must be:
-    - A named being (real human being, fictional character, mythological being, but some named being of a kind)
-    - Directly quoted in the `text` field of the CURRENT_RECORD, and speaking in that quote
-    - A being with a name, NOT a description of a person or being, or a role, or a category (e.g., "someone" or "the ghost")
+VALID FOR ACCEPTANCE:
+1. "Hamlet: ..." → Hamlet
+2. '"..." says Hamlet' → Hamlet
+3. "Kant calls this Marktpreis" → Kant
+4. A quotation explicitly introduced as someone's words.
 
-Example valid values: ["George Washington", "Medusa", "Hamlet", "Bilbo Baggins", "Thomas Jefferson", "God"]
-Example invalid values: ["somebody", "the teacher", "a ghost", "a person", "Someone", "a Person", "Somebody"]
+INVALID FOR ACCEPTANCE:
+1. A person is merely discussed.
+2. Their theory, legacy, philosophy, or influence is discussed.
+3. Their name is near somebody else's quotation.
+4. A work title such as "(Hamlet)" appears after a stage direction.
+5. Neighboring records quote them.
+When more than 50 percent uncertain, REJECT.
 
-Just because a word is capitalized, do not assume it is a proper noun, e.g. "Someone" is not a valid name, even with a capital 'S'.
-Beware of attributing nearby names to the `quoted_speaker`.
-If the `quoted_speaker` has a generic name like "Ghost", then citing the work in parentheses afterwards is encouraged: "Ghost (Hamlet)"
-If the CURRENT_RECORD is not clear enough, use the surrounding CONTEXT to help you make a decision.
-The `quoted_speaker` must come from the CURRENT_RECORD, but the CONTEXT can help you identify the `quoted_speaker`,
-especially if the quoted text bleeds between records.
-Be aware of context bleeds. If the preceding context cites Hamlet but the CURRENT_RECORD does not, do not let the preceding record's
-metadata bleed into this records.
+IMPORTANT NEGATIVE EXAMPLES
 
-Be strict, precise, and conservative in your judgments. Err on the side of making fewer changes when not certain.
+1. "Marx's legacy remains..." 
+   → Do NOT assign Marx. Marx is being discussed.
+
+2. "Enter the ghost, exit the ghost (Hamlet)"
+   → Do NOT assign Hamlet. "Hamlet" identifies the work, not the speaker.
+
+3. "Hamlet's tragedy concerns..."
+   → Do NOT assign Hamlet unless actual words are attributed to Hamlet.
+
+4. "Kant placed dignity above Marktpreis"
+   → Kant MAY be valid because a distinctive Kantian formulation is
+     explicitly sourced to Kant.
+
+Named/searchable fictional identities are valid.
+
+Valid:
+- Hamlet
+- Horatio
+- Ghost (Hamlet)
+- Hamlet's Ghost
+- Timon of Athens
+
+Usually invalid because too generic:
+- Painter
+- Stranger
+- King
+- Guard
+- Someone
+- a ghost
+
+A generic role becomes valid only when the work/context makes it a
+specific searchable identity, e.g. Ghost (Hamlet).
 
 <CURRENT_RECORD>
 {current_record}
@@ -287,22 +325,23 @@ OUTPUT:
 Return exactly one JSON object and nothing else.
 Return ONLY JSON in your response.
 
-Example response for a REJECTION of the proposed change):
+Example response for a ACCEPTANCE of the proposed change):
 
 {{
-    "adjudication_result" "HARMFUL", <-- can be HARMFUL | DESTRUCTIVE
-    "adjudication_reason": "The proposed quoted speaker is not actually quoted in the passage. It's a dog saying 'bark'.", <-- no more than 20 words MAX; use concise, sparing language
-    "update_fields": {{}}
+  "decision": "ACCEPT",
+  "reason": "Marx is directly quoted by the author."
+  "update_fields": {{
+    "quoted_speaker": ["Karl Marx"],
+    "is_direct_quote": true
+  }}
 }}
 
-Example response for an ACCEPTANCE of the proposed change:
+Example response for an REJECTION of the proposed change:
 
 {{
-    "adjudication_result": "GOOD", <-- can be GOOD | NEUTRAL
-    "adjudication_reason": "The proposed quoted speaker is quoted in the passage saying 'I'm not a dog'.", <-- no more than 20 words MAX; use concise, sparing language
-    "update_fields": {{
-        quoted_speaker: "Bilbo Baggins" <-- only if new and adjudicated as GOOD or NEUTRAL! otherwise update_fields = {{}},
-    }},
+  "decision": "REJECT",
+  "update_fields": {{}}
+  "reason": "Marx is discussed but no words are directly attributed to him."
 }}
 
 """
@@ -328,52 +367,137 @@ Example response for an ACCEPTANCE of the proposed change:
 
         prompt_result_str = repair_json(strip_code_fence(prompt_result_str))
         prompt_result_dict = json.loads(prompt_result_str)
+
         if type(prompt_result_dict) is list:
             prompt_result_dict = prompt_result_dict[0]
+
         LOG.info("Prompt result: %s", prompt_result_dict)
         LOG.info("Update fields: %s", prompt_result_dict.get("update_fields"))
 
-        review_result_dict = dict()
-        count = int(REVIEW_PASSES if REVIEW_PASSES else 0)
+        # ============================================================
+        # SAFETY GATES BEFORE REVIEW
+        # ============================================================
+
+        update_fields = prompt_result_dict.get("update_fields", {})
+
+        # 1. Only care about quoted_speaker changes here.
+        has_speaker_change = "quoted_speaker" in update_fields
+
+        # 2. Hard evidence validation for additions/replacements.
+        if has_speaker_change and update_fields.get("quoted_speaker") is not None:
+            valid_evidence_types = {
+                "dialogue_label",
+                "explicit_attribution",
+                "explicit_source",
+                "quotation_continuation",
+            }
+
+            evidence_type = prompt_result_dict.get("evidence_type")
+            evidence_span = prompt_result_dict.get("evidence_span")
+
+            def normalize_text(s):
+                if not s:
+                    return ""
+                return " ".join(str(s).replace("\n", " ").split()).lower()
+
+            current_text_normalized = normalize_text(current_record.get("text", ""))
+            evidence_normalized = normalize_text(evidence_span)
+
+            if evidence_type not in valid_evidence_types:
+                LOG.warning(
+                    "Rejecting quoted_speaker update: invalid evidence_type=%s",
+                    evidence_type,
+                )
+                update_fields.pop("quoted_speaker", None)
+                has_speaker_change = False
+
+            elif not evidence_span:
+                LOG.warning(
+                    "Rejecting quoted_speaker update: missing evidence_span"
+                )
+                update_fields.pop("quoted_speaker", None)
+                has_speaker_change = False
+
+            elif evidence_normalized not in current_text_normalized:
+                LOG.warning(
+                    "Rejecting quoted_speaker update: evidence_span not found in current text: %s",
+                    evidence_span,
+                )
+                update_fields.pop("quoted_speaker", None)
+                has_speaker_change = False
+
+        # 3. Protect existing non-null speaker values.
+        old_speaker = current_record.get("quoted_speaker")
+        new_speaker = update_fields.get("quoted_speaker")
+
+        if (
+            has_speaker_change
+            and old_speaker is not None
+            and new_speaker != old_speaker
+        ):
+            LOG.warning(
+                "Rejecting destructive quoted_speaker replacement: %s -> %s",
+                old_speaker,
+                new_speaker,
+            )
+            update_fields.pop("quoted_speaker", None)
+            has_speaker_change = False
+
+        # Put sanitized updates back into the result.
+        prompt_result_dict["update_fields"] = update_fields
+
+        # ============================================================
+        # REVIEW
+        # ============================================================
+
+        review_result_dict = {}
+
+        # Do not review records that have no quoted_speaker proposal.
+        count = REVIEW_PASSES if has_speaker_change else 0
+
         while count > 0:
             LOG.info("Beginning review pass #%d", count)
+            update_fields = prompt_result_dict.get("update_fields", dict())
             review_result_str, _ = await llm.prompt(params={
                 "user": REVIEW_PROMPT,
                 "template": {
-                    "update_fields": json.dumps(prompt_result_dict.get("update_fields")),
-                    "previous_adjudication_reason": prompt_result_dict.get("adjudication_reason"),
+                    "update_fields": json.dumps(update_fields),
+                    "previous_adjudication_reason": json.dumps({
+                        "quoted_speaker": update_fields.get("quoted_speaker"),
+                        "evidence_span": prompt_result_dict.get("evidence_span"),
+                    }),
                     "context": full_context_str,
                     "current_record": current_record_medadata_str
                 }
             })
             review_result_str = repair_json(strip_code_fence(review_result_str))
             review_result_dict = json.loads(review_result_str)
+
             if type(review_result_dict) is list:
                 review_result_dict = review_result_dict[0]
+
+            decision = review_result_dict.get("decision")
+
+            if decision == "ACCEPT":
+                # Reviewer may only preserve the original proposal.
+                review_result_dict["update_fields"] = update_fields
+
+            else:
+                # REJECT, malformed output, uncertainty, etc. = veto.
+                review_result_dict["update_fields"] = {}
+
             prompt_result_dict = review_result_dict
+
             LOG.info("Review result: %s", review_result_dict)
             count -= 1
 
-        # final_audit_str, _ = await llm.prompt(params={
-        #     "user": REVIEW_PROMPT,
-        #     "template": {
-        #         "update_fields": json.dumps(review_result_dict.get("update_fields")),
-        #         "previous_adjudication_reason": review_result_dict.get("adjudication_reason"),
-        #         "context": full_context_str,
-        #         "current_record": current_record_medadata_str
-        #     }
-        # })
-
-        # final_audit_str = repair_json(strip_code_fence(final_audit_str))
-        # final_audit_dict = json.loads(final_audit_str)
-
         final_audit_dict = review_result_dict if len(review_result_dict.items()) else prompt_result_dict
 
-        LOG.info("Final audit result for record [%s]: %s", current_record.get("record_id"), prompt_result_dict)
+        LOG.info("Final audit result for record [%s]: %s", current_record.get("record_id"), final_audit_dict)
         LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
         LOG.info("Total time elapsed: %.2f", time.perf_counter() - start)
 
-        update_fields = review_result_dict.get("update_fields", dict())
+        update_fields = final_audit_dict.get("update_fields", dict())
 
         if len(update_fields.keys()) > 0:
 
