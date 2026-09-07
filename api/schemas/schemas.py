@@ -75,6 +75,7 @@ class DerridAIQueryMetadata(TypedDict):
 
 class LLMModels(StrEnum):
     DEEPSEEK_14B = "deepseek-r1:14b" # Rather slow
+    DEEPSEEK_DISTILL_QWEN_14B = "hf.co/unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF:Q4_K_M" # Slow but somewhat accurate
     GEMMA4_E2B = "gemma4:e2b"
     GEMMA4_E4B = "gemma4:e4b"
     GEMMA4_E4B_MTB = "hf.co/unsloth/gemma-4-E4B-it-GGUF:Q8_0"
@@ -85,8 +86,10 @@ class LLMModels(StrEnum):
     GRANITE_3B = "granite4.2:3b"    # Very fast, but not smart when it comes to text
     GRANITE_8B = "granite4.2:8b"    # Same as above
     LLAMA_3B = "llama3.2:3b"    # Includes reasoning in output; useless
+    MISTRAL_24B = "hf.co/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_0" # 100% GPU, conservative but accurate
     ORNITH_9B = "ornith-1.5:9b" # Seemingly the best by far
     ORNITH_35B = "hf.co/AtomicChat/Ornith-1.5-35B-A3B-GGUF:IQ3_XXS" # 15 GB    8%/92% CPU/GPU, ~50t/s
+    ORNITH_35B_A3B = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS"
     PHI4_14B = "phi4:14b" # Too slow
     PHI4_MINI_4B = "phi4-mini:3.8b"
     PHI4_MINI_REASONING_4B = "phi4-mini-reasoning:3.8b"
@@ -94,7 +97,11 @@ class LLMModels(StrEnum):
     QWEN_2B = "qwen3.5:2b"
     QWEN_4B = "qwen3.5:4b"
     QWEN_9B = "qwen3.5:9b"  # Very high precision, low recall for record auditing. Very fast
-    QWEN_27B = "hf.co/unsloth/Qwen3.5-27B-GGUF:IQ4_XS"  # Too big-- 13%/87% CPU/GPU 
+    QWEN_14B = "qwen3:14b"
+    QWEN_3_5_27B = "hf.co/unsloth/Qwen3.5-27B-GGUF:IQ4_XS"  # Too big-- 13%/87% CPU/GPU 
+    QWEN_3_8_27B = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS" # Not bad but quite slow
+    QWEN_3_8_27B_3BIT = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ3_XXS" # Faster but less accurate than IQ4
+    TIEL_CODER_35B_3BIT = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS"
 
 class Languages(StrEnum):
     ENGLISH = "en"

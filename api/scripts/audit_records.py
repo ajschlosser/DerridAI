@@ -10,16 +10,16 @@ from logging_config import logging, configure_logging
 from json_repair import repair_json
 
 BATCH_SIZE = 0
-REVIEW_PASSES = 1
+REVIEW_PASSES = 0
 REASONING = False
 TEMPERATURE = 0.0 # disabled
 ETA = 0.12  # 0.07 smooth and steady
 TAU = 2.5   # 5.0 = matches natural language; 2.0 = code generation; 7.0 = creative
 TOP_K = 0 # Low = conservative; 0 = disabled
 TOP_P = 1.0 # Low = conservative; 1.0 = disabled
-MODEL = LLMModels.GEMMA4_E2B
+MODEL = LLMModels.ORNITH_9B
 MIROSTAT = 0
-NUM_CTX = 262144 // 24 # 262144 // 32 = 8K, 40 = 6K, 56 = 4
+NUM_CTX = 262144 // 16 #// 32 = 8K, 40 = 6K, 56 = 4
 START_LINE = None
 #START_ID = "som-627e04a8022507-00055"
 START_ID = ""
@@ -217,14 +217,12 @@ specific searchable identity, e.g. Ghost (Hamlet).
 OUTPUT
 Return exactly one JSON object and nothing else.
 You may use Array[String] for passages with multiple speakers, e.g.: ["Bilbo Baggins", "Frodo Baggins"].
-`is_direct_quote` is always Boolean, and refers to whether or not the `text` _contains_ a `quoted_speaker`.
 
 Example JSON that adds a new speaker:
 
     {{
         "update_fields": {{
             "quoted_speaker": "Bilbo Baggins", <-- only if new! otherwise update_fields = {{}},
-            "is_direct_quote": true
         }},
         "evidence_type": "explicit_attribution",
         "evidence_span": "Says Hamlet",
@@ -236,7 +234,6 @@ Example JSON that deletes an existing speaker:
     {{
         "update_fields": {{
             "quoted_speaker": null, <-- explicitly null out the existing speaker
-            "is_direct_quote": null
         }},
         "evidence_type": null,
         "evidence_span": null,
@@ -344,8 +341,7 @@ Example response for a ACCEPTANCE of the proposed change):
   "decision": "ACCEPT",
   "reason": "Marx is directly quoted by the author."
   "update_fields": {{
-    "quoted_speaker": ["Karl Marx"],
-    "is_direct_quote": true
+    "quoted_speaker": ["Karl Marx"]
   }}
 }}
 
@@ -380,13 +376,98 @@ Example response for an REJECTION of the proposed change:
 
         prompt_result_str = repair_json(strip_code_fence(prompt_result_str))
         prompt_result_dict = json.loads(prompt_result_str)
+
         if type(prompt_result_dict) is list:
-            prompt_result_dict = prompt_result_dict[0]
+            prompt_result_dict = { **prompt_result_dict[0] }
+
         LOG.info("Prompt result: %s", prompt_result_dict)
         LOG.info("Update fields: %s", prompt_result_dict.get("update_fields"))
 
-        review_result_dict = dict()
-        count = int(REVIEW_PASSES if REVIEW_PASSES else 0)
+        # ============================================================
+        # SAFETY GATES BEFORE REVIEW
+        # ============================================================
+
+        update_fields = prompt_result_dict.get("update_fields", {})
+
+        # 1. Only care about quoted_speaker changes here.
+        has_speaker_change = "quoted_speaker" in update_fields
+
+        # 2. Hard evidence validation for additions/replacements.
+        if has_speaker_change and update_fields.get("quoted_speaker") is not None:
+            valid_evidence_types = {
+                "dialogue_label",
+                "explicit_attribution",
+                "explicit_source",
+                "quotation_continuation",
+            }
+
+            evidence_type = prompt_result_dict.get("evidence_type")
+            evidence_span = prompt_result_dict.get("evidence_span")
+
+            def normalize_text(s):
+                if not s:
+                    return ""
+                return " ".join(str(s).replace("\n", " ").split()).lower()
+
+            current_text_normalized = normalize_text(current_record.get("text", ""))
+            evidence_normalized = normalize_text(evidence_span)
+
+            if type(evidence_type) is str:
+                evidence_type = [evidence_type]
+            if evidence_type and len(evidence_type) > 0:
+                for e in evidence_type:
+                    if e not in valid_evidence_types:
+                        LOG.warning(
+                            "Rejecting quoted_speaker update: invalid evidence_type=%s",
+                            e,
+                        )
+                        update_fields.pop("quoted_speaker", None)
+                        has_speaker_change = False
+
+            if not evidence_span:
+                LOG.warning(
+                    "Rejecting quoted_speaker update: missing evidence_span"
+                )
+                update_fields.pop("quoted_speaker", None)
+                has_speaker_change = False
+
+            elif evidence_normalized not in current_text_normalized:
+                LOG.warning(
+                    "Rejecting quoted_speaker update: evidence_span not found in current text: '%s'",
+                    evidence_span,
+                )
+                update_fields.pop("quoted_speaker", None)
+                has_speaker_change = False
+
+        # 3. Protect existing non-null speaker values.
+        old_speaker = current_record.get("quoted_speaker")
+        new_speaker = update_fields.get("quoted_speaker")
+
+        if (
+            has_speaker_change
+            and old_speaker is not None
+            and new_speaker != old_speaker
+        ):
+            LOG.warning(
+                "Rejecting destructive quoted_speaker replacement: %s -> %s",
+                old_speaker,
+                new_speaker,
+            )
+            update_fields.pop("quoted_speaker", None)
+            has_speaker_change = False
+
+        # Put sanitized updates back into the result.
+        prompt_result_dict["update_fields"] = update_fields
+
+        # ============================================================
+        # REVIEW
+        # ============================================================
+
+        review_result_dict = {}
+
+        # Do not review records that have no quoted_speaker proposal.
+        count = REVIEW_PASSES if has_speaker_change else 0
+
         while count > 0:
             LOG.info("Beginning review pass #%d", count)
             update_fields = prompt_result_dict.get("update_fields", dict())
@@ -404,24 +485,24 @@ Example response for an REJECTION of the proposed change:
             })
             review_result_str = repair_json(strip_code_fence(review_result_str))
             review_result_dict = json.loads(review_result_str)
+
             if type(review_result_dict) is list:
                 review_result_dict = review_result_dict[0]
+
+            decision = review_result_dict.get("decision")
+
+            if decision == "ACCEPT":
+                # Reviewer may only preserve the original proposal.
+                review_result_dict["update_fields"] = update_fields
+
+            else:
+                # REJECT, malformed output, uncertainty, etc. = veto.
+                review_result_dict["update_fields"] = {}
+
             prompt_result_dict = review_result_dict
+
             LOG.info("Review result: %s", review_result_dict)
             count -= 1
-
-        # final_audit_str, _ = await llm.prompt(params={
-        #     "user": REVIEW_PROMPT,
-        #     "template": {
-        #         "update_fields": json.dumps(review_result_dict.get("update_fields")),
-        #         "previous_adjudication_reason": review_result_dict.get("adjudication_reason"),
-        #         "context": full_context_str,
-        #         "current_record": current_record_medadata_str
-        #     }
-        # })
-
-        # final_audit_str = repair_json(strip_code_fence(final_audit_str))
-        # final_audit_dict = json.loads(final_audit_str)
 
         final_audit_dict = review_result_dict if len(review_result_dict.items()) else prompt_result_dict
 
@@ -430,6 +511,12 @@ Example response for an REJECTION of the proposed change:
         LOG.info("Total time elapsed: %.2f", time.perf_counter() - start)
 
         update_fields = final_audit_dict.get("update_fields", dict())
+
+        old_speaker = current_record.get("quoted_speaker")
+        new_speaker = update_fields.get("quoted_speaker")
+        if old_speaker is not None and new_speaker != old_speaker:
+            LOG.warning("Skipping potential destruction of existing record")
+            continue
 
         if len(update_fields.keys()) > 0:
 
