@@ -83,13 +83,14 @@ class LLMModels(StrEnum):
     GEMMA4_12B_MTB = "4skl/gemma4-12b-mtp:latest"
     GEMMA4_26B = "hf.co/unsloth/gemma-4-26B-A4B-it-GGUF:UD-IQ4_XS" # Strong candidate for parsing text, but 5%/95% CPU/GPU even with small context
     GPT_OSS_20B = "gpt-oss:20b"
+    GPT_OSS_20B_GGUF = "hf.co/unsloth/gpt-oss-20b-GGUF:Q4_0"
     GRANITE_3B = "granite4.2:3b"    # Very fast, but not smart when it comes to text
     GRANITE_8B = "granite4.2:8b"    # Same as above
     LLAMA_3B = "llama3.2:3b"    # Includes reasoning in output; useless
     MISTRAL_24B = "hf.co/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_0" # 100% GPU, conservative but accurate
+    NEMOTRON_30B = "hf.co/tngtech/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-GGUF:NVFP4" # 5%/75% CPU/GPU even at just 4096 context
     ORNITH_9B = "ornith-1.5:9b" # Seemingly the best by far
     ORNITH_35B = "hf.co/AtomicChat/Ornith-1.5-35B-A3B-GGUF:IQ3_XXS" # 15 GB    8%/92% CPU/GPU, ~50t/s
-    ORNITH_35B_A3B = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS"
     PHI4_14B = "phi4:14b" # Too slow
     PHI4_MINI_4B = "phi4-mini:3.8b"
     PHI4_MINI_REASONING_4B = "phi4-mini-reasoning:3.8b"

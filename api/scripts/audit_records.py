@@ -1,5 +1,7 @@
 import os
+import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 import json
 from clients.llm import LLMClient
@@ -9,21 +11,21 @@ from schemas.schemas import LLMModels
 from logging_config import logging, configure_logging
 from json_repair import repair_json
 
-BATCH_SIZE = 0
+BATCH_SIZE = 2
 REVIEW_PASSES = 0
-REASONING = False
+REASONING = False #"low" #False
 TEMPERATURE = 0.0 # disabled
 ETA = 0.12  # 0.07 smooth and steady
 TAU = 2.5   # 5.0 = matches natural language; 2.0 = code generation; 7.0 = creative
 TOP_K = 0 # Low = conservative; 0 = disabled
 TOP_P = 1.0 # Low = conservative; 1.0 = disabled
-MODEL = LLMModels.ORNITH_9B
+MODEL = LLMModels.QWEN_9B   # For GPT_OSS, don't forget to set reasoning to "low"
 MIROSTAT = 0
-NUM_CTX = 262144 // 16 #// 32 = 8K, 40 = 6K, 56 = 4
+NUM_CTX = 262144 // 64 #// 32 = 8K, 40 = 6K, 56 = 4
 START_LINE = None
 #START_ID = "som-627e04a8022507-00055"
 START_ID = ""
-FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
+FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-review_{REVIEW_PASSES}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
 configure_logging(logging.DEBUG, f"./logs/derridai-audit-{FILE_STR}.log")
 LOG = logging.getLogger(__name__)
 
@@ -39,9 +41,13 @@ llm = LLMClient(
     #mirostat_tau=TAU, #0.1
 )
 
-#SOURCE="data/base/out/notes_derrida9_primary_en.jsonl_hf.co_unsloth_gemma-4-E4B-it-GGUF:Q8_0-8192-temp_0.0-batch_1-standard.jsonl"
 SOURCE="data/base/derrida9_primary_en.jsonl"
-DEST=f"data/base/out/audit_notes_{os.path.split(SOURCE[:10])[-1]}_{FILE_STR}.jsonl"
+SOURCE_NAME = os.path.splitext(os.path.basename(SOURCE))[0]
+RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+DEST = (
+    f"data/base/out/"
+    f"audit_notes_{SOURCE_NAME}_{FILE_STR}_{RUN_ID}.jsonl"
+)
 
 def remove_noise(doc: dict) -> dict:
     keep = {
@@ -61,6 +67,83 @@ def neighbor_context(d):
         "page_end": d.get("page_end"),
         "text": d["text"],
     }
+
+def normalize_text(s):
+    if not s:
+        return ""
+
+    text = unicodedata.normalize("NFKC", str(s))
+
+    # Remove only line-break hyphenation and invisible discretionary hyphens.
+    text = re.sub(
+        r"(?<=\w)-[ \t]*\r?\n[ \t]*(?=\w)",
+        "",
+        text,
+    )
+    text = re.sub(r"\u00ad\s*", "", text)
+
+    # Treat visually equivalent quotation marks, dashes, and zero-width
+    # characters identically when checking a verbatim evidence span.
+    text = text.translate(
+        str.maketrans(
+            {
+                "\u2018": "'",
+                "\u2019": "'",
+                "\u201a": "'",
+                "\u201b": "'",
+                "\u201c": '"',
+                "\u201d": '"',
+                "\u201e": '"',
+                "\u201f": '"',
+                "\u2010": "-",
+                "\u2011": "-",
+                "\u2012": "-",
+                "\u2013": "-",
+                "\u2014": "-",
+                "\u2015": "-",
+                "\u200b": "",
+                "\u200c": "",
+                "\u200d": "",
+                "\ufeff": "",
+            }
+        )
+    )
+
+    return " ".join(text.split()).casefold()
+
+
+def validate_quoted_speaker(value):
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            raise ValueError("quoted_speaker cannot be an empty string")
+        return value
+
+    if isinstance(value, list):
+        if not value:
+            raise ValueError("quoted_speaker list cannot be empty")
+
+        cleaned = []
+
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(
+                    "quoted_speaker list must contain only non-empty strings"
+                )
+
+            item = item.strip()
+
+            if item not in cleaned:
+                cleaned.append(item)
+
+        return cleaned
+
+    raise ValueError(
+        f"Invalid quoted_speaker type: {type(value).__name__}"
+    )
 
 async def audit_records():
 
@@ -146,6 +229,7 @@ async def audit_records():
     #============================#
 
     AUDIT_PROMPT = """
+/no_think
 You are a conservative auditor of records pertaining to the works of Jacques Derrida.
 
 Your job is to audit the `quoted_speaker` field of the CURRENT_RECORD.
@@ -215,51 +299,65 @@ specific searchable identity, e.g. Ghost (Hamlet).
 </CURRENT_RECORD_IN_CONTEXT>
 
 OUTPUT
+
 Return exactly one JSON object and nothing else.
-You may use Array[String] for passages with multiple speakers, e.g.: ["Bilbo Baggins", "Frodo Baggins"].
 
-Example JSON that adds a new speaker:
+Determine the COMPLETE set of supported quoted speakers in CURRENT_RECORD.
+If multiple valid speakers are directly quoted, include all of them.
 
+For every proposed non-null quoted_speaker, provide one evidence object
+for each proposed speaker.
+
+Addition or replacement example:
+
+{{
+  "update_fields": {{
+    "quoted_speaker": ["Hamlet", "Ghost (Hamlet)"]
+  }},
+  "speaker_evidence": [
     {{
-        "update_fields": {{
-            "quoted_speaker": "Bilbo Baggins", <-- only if new! otherwise update_fields = {{}},
-        }},
-        "evidence_type": "explicit_attribution",
-        "evidence_span": "Says Hamlet",
-        "adjudication_reason": "Explicit attribution."
-    }}
-
-Example JSON that deletes an existing speaker:
-
+      "speaker": "Hamlet",
+      "evidence_type": "dialogue_label",
+      "evidence_span": "Hamlet: . . . Sweare."
+    }},
     {{
-        "update_fields": {{
-            "quoted_speaker": null, <-- explicitly null out the existing speaker
-        }},
-        "evidence_type": null,
-        "evidence_span": null,
-        "adjudication_reason": "No speaker present."
+      "speaker": "Ghost (Hamlet)",
+      "evidence_type": "dialogue_label",
+      "evidence_span": "Ghost [beneath]: Sweare."
     }}
-
-Example JSON that indicates NO CHANGE or NO OP to the record:
-
-    {{
-        "update_fields": {{}},
-        "evidence_type": null,
-        "evidence_span": null,
-        "adjudication_reason": "Current record is fine."
-    }}
-
-VALID_EVIDENCE_TYPES = {{
-    "dialogue_label",
-    "explicit_attribution",
-    "explicit_source",
-    "quotation_continuation"
+  ],
+  "adjudication_reason": "Both speakers are explicitly dialogue-labeled."
 }}
 
-Be strict, precise, and conservative in your judgments. Err on the side of making fewer changes when not certain.
+Deletion example:
+
+{{
+  "update_fields": {{
+    "quoted_speaker": null
+  }},
+  "speaker_evidence": [],
+  "adjudication_reason": "The existing quoted_speaker is unsupported."
+}}
+
+No-change example:
+
+{{
+  "update_fields": {{}},
+  "speaker_evidence": [],
+  "adjudication_reason": "No change required."
+}}
+
+VALID_EVIDENCE_TYPES = [
+  "dialogue_label",
+  "explicit_attribution",
+  "explicit_source",
+  "quotation_continuation"
+]
+/no_think
 """
 
     REVIEW_PROMPT = """
+/no_think
 You are a veto reviewer.
 
 Your ONLY task is to decide whether the proposed quoted_speaker change
@@ -327,32 +425,26 @@ specific searchable identity, e.g. Ghost (Hamlet).
 {update_fields}
 </PROPOSED_CHANGES>
 
-<REASONS>
-{previous_adjudication_reason}
-</REASONS>
+<PROPOSAL_EVIDENCE>
+{proposal_evidence}
+</PROPOSAL_EVIDENCE>
 
 OUTPUT:
-Return exactly one JSON object and nothing else.
-Return ONLY JSON in your response.
 
-Example response for a ACCEPTANCE of the proposed change):
+Accept:
 
 {{
   "decision": "ACCEPT",
-  "reason": "Marx is directly quoted by the author."
-  "update_fields": {{
-    "quoted_speaker": ["Karl Marx"]
-  }}
+  "reason": "Every proposed speaker is directly supported by CURRENT_RECORD."
 }}
 
-Example response for an REJECTION of the proposed change:
+Reject:
 
 {{
   "decision": "REJECT",
-  "update_fields": {{}}
-  "reason": "Marx is discussed but no words are directly attributed to him."
+  "reason": "At least one proposed speaker is not directly supported by CURRENT_RECORD."
 }}
-
+/no_think
 """
 
     for i, c_window in enumerate(context_windows):
@@ -375,10 +467,22 @@ Example response for an REJECTION of the proposed change:
         })
 
         prompt_result_str = repair_json(strip_code_fence(prompt_result_str))
-        prompt_result_dict = json.loads(prompt_result_str)
 
-        if type(prompt_result_dict) is list:
-            prompt_result_dict = { **prompt_result_dict[0] }
+        try:
+            prompt_result_dict = json.loads(prompt_result_str)
+        except (json.JSONDecodeError, TypeError) as e:
+            LOG.warning("Rejecting malformed audit response: %s", e)
+            continue
+
+        if isinstance(prompt_result_dict, list):
+            prompt_result_dict = (
+                prompt_result_dict[0]
+                if prompt_result_dict
+                and isinstance(prompt_result_dict[0], dict)
+                else {}
+            )
+        elif not isinstance(prompt_result_dict, dict):
+            prompt_result_dict = {}
 
         LOG.info("Prompt result: %s", prompt_result_dict)
         LOG.info("Update fields: %s", prompt_result_dict.get("update_fields"))
@@ -387,76 +491,146 @@ Example response for an REJECTION of the proposed change:
         # SAFETY GATES BEFORE REVIEW
         # ============================================================
 
-        update_fields = prompt_result_dict.get("update_fields", {})
+        raw_update_fields = prompt_result_dict.get("update_fields")
 
-        # 1. Only care about quoted_speaker changes here.
-        has_speaker_change = "quoted_speaker" in update_fields
-
-        # 2. Hard evidence validation for additions/replacements.
-        if has_speaker_change and update_fields.get("quoted_speaker") is not None:
-            valid_evidence_types = {
-                "dialogue_label",
-                "explicit_attribution",
-                "explicit_source",
-                "quotation_continuation",
-            }
-
-            evidence_type = prompt_result_dict.get("evidence_type")
-            evidence_span = prompt_result_dict.get("evidence_span")
-
-            def normalize_text(s):
-                if not s:
-                    return ""
-                return " ".join(str(s).replace("\n", " ").split()).lower()
-
-            current_text_normalized = normalize_text(current_record.get("text", ""))
-            evidence_normalized = normalize_text(evidence_span)
-
-            if type(evidence_type) is str:
-                evidence_type = [evidence_type]
-            if evidence_type and len(evidence_type) > 0:
-                for e in evidence_type:
-                    if e not in valid_evidence_types:
-                        LOG.warning(
-                            "Rejecting quoted_speaker update: invalid evidence_type=%s",
-                            e,
-                        )
-                        update_fields.pop("quoted_speaker", None)
-                        has_speaker_change = False
-
-            if not evidence_span:
-                LOG.warning(
-                    "Rejecting quoted_speaker update: missing evidence_span"
-                )
-                update_fields.pop("quoted_speaker", None)
-                has_speaker_change = False
-
-            elif evidence_normalized not in current_text_normalized:
-                LOG.warning(
-                    "Rejecting quoted_speaker update: evidence_span not found in current text: '%s'",
-                    evidence_span,
-                )
-                update_fields.pop("quoted_speaker", None)
-                has_speaker_change = False
-
-        # 3. Protect existing non-null speaker values.
-        old_speaker = current_record.get("quoted_speaker")
-        new_speaker = update_fields.get("quoted_speaker")
-
-        if (
-            has_speaker_change
-            and old_speaker is not None
-            and new_speaker != old_speaker
-        ):
+        if not isinstance(raw_update_fields, dict):
             LOG.warning(
-                "Rejecting destructive quoted_speaker replacement: %s -> %s",
-                old_speaker,
-                new_speaker,
+                "Rejecting malformed update_fields: %r",
+                raw_update_fields,
             )
-            update_fields.pop("quoted_speaker", None)
-            has_speaker_change = False
+            raw_update_fields = {}
 
-        # Put sanitized updates back into the result.
+        # This auditor is allowed to modify quoted_speaker only.
+        unexpected_fields = set(raw_update_fields) - {"quoted_speaker"}
+
+        if unexpected_fields:
+            LOG.warning(
+                "Discarding unauthorized update fields: %s",
+                sorted(unexpected_fields),
+            )
+
+        update_fields = {}
+        has_speaker_change = False
+
+        if "quoted_speaker" in raw_update_fields:
+            try:
+                proposed_speaker = validate_quoted_speaker(
+                    raw_update_fields["quoted_speaker"]
+                )
+            except ValueError as e:
+                LOG.warning(
+                    "Rejecting malformed quoted_speaker proposal: %s",
+                    e,
+                )
+            else:
+                old_speaker = current_record.get("quoted_speaker")
+
+                # Remove literal no-op proposals.
+                if proposed_speaker != old_speaker:
+                    update_fields["quoted_speaker"] = proposed_speaker
+
+            has_speaker_change = "quoted_speaker" in update_fields
+
+            # Additions/replacements require evidence.
+            if (
+                has_speaker_change
+                and update_fields["quoted_speaker"] is not None
+            ):
+                valid_evidence_types = {
+                    "dialogue_label",
+                    "explicit_attribution",
+                    "explicit_source",
+                    "quotation_continuation",
+                }
+
+                proposed = update_fields["quoted_speaker"]
+
+                proposed_speakers = (
+                    proposed
+                    if isinstance(proposed, list)
+                    else [proposed]
+                )
+
+                speaker_evidence = prompt_result_dict.get("speaker_evidence")
+
+                reject_change = False
+
+                if not isinstance(speaker_evidence, list):
+                    LOG.warning(
+                        "Rejecting quoted_speaker update: "
+                        "speaker_evidence must be a list"
+                    )
+                    reject_change = True
+
+                else:
+                    evidence_by_speaker = {}
+
+                    for item in speaker_evidence:
+                        if not isinstance(item, dict):
+                            continue
+
+                        speaker = item.get("speaker")
+
+                        if isinstance(speaker, str) and speaker.strip():
+                            evidence_by_speaker[speaker.strip()] = item
+
+                    current_text_normalized = normalize_text(
+                        current_record.get("text", "")
+                    )
+
+                    for speaker in proposed_speakers:
+                        evidence = evidence_by_speaker.get(speaker)
+
+                        if evidence is None:
+                            LOG.warning(
+                                "Rejecting quoted_speaker update: "
+                                "no evidence object for speaker=%r",
+                                speaker,
+                            )
+                            reject_change = True
+                            break
+
+                        evidence_type = evidence.get("evidence_type")
+                        evidence_span = evidence.get("evidence_span")
+
+                        if evidence_type not in valid_evidence_types:
+                            LOG.warning(
+                                "Rejecting quoted_speaker update: "
+                                "invalid evidence_type=%r for speaker=%r",
+                                evidence_type,
+                                speaker,
+                            )
+                            reject_change = True
+                            break
+
+                        if (
+                            not isinstance(evidence_span, str)
+                            or not evidence_span.strip()
+                        ):
+                            LOG.warning(
+                                "Rejecting quoted_speaker update: "
+                                "missing evidence_span for speaker=%r",
+                                speaker,
+                            )
+                            reject_change = True
+                            break
+
+                        evidence_normalized = normalize_text(evidence_span)
+
+                        if evidence_normalized not in current_text_normalized:
+                            LOG.warning(
+                                "Rejecting quoted_speaker update: "
+                                "evidence_span not found for speaker=%r: %r",
+                                speaker,
+                                evidence_span,
+                            )
+                            reject_change = True
+                            break
+
+                if reject_change:
+                    update_fields.pop("quoted_speaker", None)
+                    has_speaker_change = False
+
         prompt_result_dict["update_fields"] = update_fields
 
         # ============================================================
@@ -464,6 +638,7 @@ Example response for an REJECTION of the proposed change:
         # ============================================================
 
         review_result_dict = {}
+        proposal_evidence = prompt_result_dict.get("speaker_evidence", [])
 
         # Do not review records that have no quoted_speaker proposal.
         count = REVIEW_PASSES if has_speaker_change else 0
@@ -475,19 +650,28 @@ Example response for an REJECTION of the proposed change:
                 "user": REVIEW_PROMPT,
                 "template": {
                     "update_fields": json.dumps(update_fields),
-                    "previous_adjudication_reason": json.dumps({
-                        "quoted_speaker": update_fields.get("quoted_speaker"),
-                        "evidence_span": prompt_result_dict.get("evidence_span"),
-                    }),
+                    "proposal_evidence": json.dumps(proposal_evidence),
                     "context": full_context_str,
                     "current_record": current_record_medadata_str
                 }
             })
             review_result_str = repair_json(strip_code_fence(review_result_str))
-            review_result_dict = json.loads(review_result_str)
 
-            if type(review_result_dict) is list:
-                review_result_dict = review_result_dict[0]
+            try:
+                review_result_dict = json.loads(review_result_str)
+            except (json.JSONDecodeError, TypeError) as e:
+                LOG.warning("Rejecting malformed review response: %s", e)
+                review_result_dict = {}
+
+            if isinstance(review_result_dict, list):
+                review_result_dict = (
+                    review_result_dict[0]
+                    if review_result_dict
+                    and isinstance(review_result_dict[0], dict)
+                    else {}
+                )
+            elif not isinstance(review_result_dict, dict):
+                review_result_dict = {}
 
             decision = review_result_dict.get("decision")
 
@@ -512,12 +696,6 @@ Example response for an REJECTION of the proposed change:
 
         update_fields = final_audit_dict.get("update_fields", dict())
 
-        old_speaker = current_record.get("quoted_speaker")
-        new_speaker = update_fields.get("quoted_speaker")
-        if old_speaker is not None and new_speaker != old_speaker:
-            LOG.warning("Skipping potential destruction of existing record")
-            continue
-
         if len(update_fields.keys()) > 0:
 
             with open(DEST, "a") as out:
@@ -538,6 +716,8 @@ Example response for an REJECTION of the proposed change:
                         "field": field_name,
                         "old_value": old_value,
                         "new_value": new_value,
+                        "evidence": final_audit_dict.get("speaker_evidence", {}),
+                        "adjudication_reason": final_audit_dict.get("adjudication_reason", ""),
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     })
                 updates = {}

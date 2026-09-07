@@ -35,7 +35,7 @@ DEFAULT_TOP_P = 0.9 # Higher = more diverse text
 class LLMClient:
     chats: dict[str, ChatOllama] = {}
     server_url: str = DEFAULT_CHAT_BASE_URL
-    reasoning: bool = DEFAULT_REASONING_FLAG
+    reasoning: bool | str = DEFAULT_REASONING_FLAG
     temperature: float = DEFAULT_CHAT_TEMPERATURE
     model: LLMModels = LLMModels(DEFAULT_CHAT_MODEL)
     num_ctx: int = DEFAULT_NUM_CTX
