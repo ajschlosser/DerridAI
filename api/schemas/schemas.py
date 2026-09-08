@@ -97,12 +97,12 @@ class LLMModels(StrEnum):
     QWEN_0B = "qwen3.5:0.8b"    # For experimentation only
     QWEN_2B = "qwen3.5:2b"
     QWEN_4B = "qwen3.5:4b"
-    QWEN_9B = "qwen3.5:9b"  # Very high precision, low recall for record auditing. Very fast
+    QWEN_9B = "qwen3.5:9b"
     QWEN_14B = "qwen3:14b"
     QWEN_3_5_27B = "hf.co/unsloth/Qwen3.5-27B-GGUF:IQ4_XS"  # Too big-- 13%/87% CPU/GPU 
-    QWEN_3_8_27B = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS" # Not bad but quite slow
-    QWEN_3_8_27B_3BIT = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ3_XXS" # Faster but less accurate than IQ4
-    TIEL_CODER_35B_3BIT = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS"
+    QWEN_3_8_27B = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS" # 7%/93% CPU/GPU at 4096 context; Highly accurate with broad coverage but quite slow
+    QWEN_3_8_27B_3BIT = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ3_XXS" # Faster (roughly x4 at ~40 tokens/s) but less accurate than IQ4, 100% GPU at 4096 context
+    TIEL_CODER_35B_3BIT = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS" # 100% GPU, ~100 tokens/s
 
 class Languages(StrEnum):
     ENGLISH = "en"

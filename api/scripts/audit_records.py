@@ -11,7 +11,7 @@ from schemas.schemas import LLMModels
 from logging_config import logging, configure_logging
 from json_repair import repair_json
 
-BATCH_SIZE = 2
+BATCH_SIZE = 0
 REVIEW_PASSES = 0
 REASONING = False #"low" #False
 TEMPERATURE = 0.0 # disabled
@@ -19,12 +19,12 @@ ETA = 0.12  # 0.07 smooth and steady
 TAU = 2.5   # 5.0 = matches natural language; 2.0 = code generation; 7.0 = creative
 TOP_K = 0 # Low = conservative; 0 = disabled
 TOP_P = 1.0 # Low = conservative; 1.0 = disabled
-MODEL = LLMModels.QWEN_9B   # For GPT_OSS, don't forget to set reasoning to "low"
+MODEL = LLMModels.QWEN_3_8_27B   # For GPT_OSS, don't forget to set reasoning to "low"
 MIROSTAT = 0
-NUM_CTX = 262144 // 64 #// 32 = 8K, 40 = 6K, 56 = 4
-START_LINE = None
-#START_ID = "som-627e04a8022507-00055"
-START_ID = ""
+NUM_CTX = 262144 // 40 #// 32 = 8K, 40 = 6K
+#START_LINE = None
+START_ID = "som-8804f40592f12e-00109"
+#START_ID = ""
 FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-review_{REVIEW_PASSES}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
 configure_logging(logging.DEBUG, f"./logs/derridai-audit-{FILE_STR}.log")
 LOG = logging.getLogger(__name__)
@@ -230,13 +230,9 @@ async def audit_records():
 
     AUDIT_PROMPT = """
 /no_think
-You are a conservative auditor of records pertaining to the works of Jacques Derrida.
+You are a conservative record auditor.
 
 Your job is to audit the `quoted_speaker` field of the CURRENT_RECORD.
-
-A quoted_speaker is valid only when the CURRENT_RECORD provides
-specific textual evidence attributing words, a quotation, or a distinctive
-cited formulation to that speaker.
 
 VALID evidence includes:
 - Explicit dialogue: "Hamlet: ..."
@@ -278,6 +274,7 @@ Valid:
 - Ghost (Hamlet)
 - Hamlet's Ghost
 - Timon of Athens
+- Painter (Hamlet)
 
 Usually invalid because too generic:
 - Painter
@@ -308,50 +305,58 @@ If multiple valid speakers are directly quoted, include all of them.
 For every proposed non-null quoted_speaker, provide one evidence object
 for each proposed speaker.
 
+Your maximum allowable length for a string is 10 words. Do not exceed 10 words.
+
+Field codes:
+
+u_f = update fields
+quoted_speaker = quoted_speaker
+s_e = speaker evidence
+s = speaker
+e_t = evidence type
+
+Valid evidence type codes:
+
+d_l = dialogue_label
+e_a = explicit_attribution
+e_s = explicit_source
+q_c = quotation_continuation
+
 Addition or replacement example:
 
 {{
-  "update_fields": {{
+  "u_f": {{
     "quoted_speaker": ["Hamlet", "Ghost (Hamlet)"]
   }},
-  "speaker_evidence": [
+  "s_e": [
     {{
-      "speaker": "Hamlet",
-      "evidence_type": "dialogue_label",
-      "evidence_span": "Hamlet: . . . Sweare."
+      "s": "Hamlet",
+      "e_t": "d_l",
     }},
     {{
-      "speaker": "Ghost (Hamlet)",
-      "evidence_type": "dialogue_label",
-      "evidence_span": "Ghost [beneath]: Sweare."
+      "s": "Ghost (Hamlet)",
+      "e_t": "d_l",
     }}
-  ],
-  "adjudication_reason": "Both speakers are explicitly dialogue-labeled."
+  ]
 }}
 
 Deletion example:
 
 {{
-  "update_fields": {{
+  "u_f": {{
     "quoted_speaker": null
-  }},
-  "speaker_evidence": [],
-  "adjudication_reason": "The existing quoted_speaker is unsupported."
+  }}
 }}
 
 No-change example:
 
-{{
-  "update_fields": {{}},
-  "speaker_evidence": [],
-  "adjudication_reason": "No change required."
-}}
+{{ "no": true }}
 
-VALID_EVIDENCE_TYPES = [
-  "dialogue_label",
-  "explicit_attribution",
-  "explicit_source",
-  "quotation_continuation"
+VALID_E_T = [
+  "d_l",
+  "e_a",
+  "e_s",
+  "q_c"
 ]
 /no_think
 """
@@ -422,7 +427,7 @@ specific searchable identity, e.g. Ghost (Hamlet).
 </CONTEXT>
 
 <PROPOSED_CHANGES>
-{update_fields}
+{u_f}
 </PROPOSED_CHANGES>
 
 <PROPOSAL_EVIDENCE>
@@ -474,6 +479,10 @@ Reject:
             LOG.warning("Rejecting malformed audit response: %s", e)
             continue
 
+        if "no" in prompt_result_dict and prompt_result_dict.get("no", True):
+            LOG.warning("Returned NO_CHANGE, skipping %s", current_record.get("record_id"))
+            continue
+
         if isinstance(prompt_result_dict, list):
             prompt_result_dict = (
                 prompt_result_dict[0]
@@ -485,23 +494,23 @@ Reject:
             prompt_result_dict = {}
 
         LOG.info("Prompt result: %s", prompt_result_dict)
-        LOG.info("Update fields: %s", prompt_result_dict.get("update_fields"))
+        LOG.info("Update fields: %s", prompt_result_dict.get("u_f"))
 
         # ============================================================
         # SAFETY GATES BEFORE REVIEW
         # ============================================================
 
-        raw_update_fields = prompt_result_dict.get("update_fields")
+        raw_u_f = prompt_result_dict.get("u_f")
 
-        if not isinstance(raw_update_fields, dict):
+        if not isinstance(raw_u_f, dict):
             LOG.warning(
-                "Rejecting malformed update_fields: %r",
-                raw_update_fields,
+                "Rejecting malformed u_f: %r",
+                raw_u_f,
             )
-            raw_update_fields = {}
+            raw_u_f = {}
 
         # This auditor is allowed to modify quoted_speaker only.
-        unexpected_fields = set(raw_update_fields) - {"quoted_speaker"}
+        unexpected_fields = set(raw_u_f) - {"quoted_speaker"}
 
         if unexpected_fields:
             LOG.warning(
@@ -509,13 +518,13 @@ Reject:
                 sorted(unexpected_fields),
             )
 
-        update_fields = {}
+        u_f = {}
         has_speaker_change = False
 
-        if "quoted_speaker" in raw_update_fields:
+        if "quoted_speaker" in raw_u_f:
             try:
                 proposed_speaker = validate_quoted_speaker(
-                    raw_update_fields["quoted_speaker"]
+                    raw_u_f["quoted_speaker"]
                 )
             except ValueError as e:
                 LOG.warning(
@@ -527,23 +536,23 @@ Reject:
 
                 # Remove literal no-op proposals.
                 if proposed_speaker != old_speaker:
-                    update_fields["quoted_speaker"] = proposed_speaker
+                    u_f["quoted_speaker"] = proposed_speaker
 
-            has_speaker_change = "quoted_speaker" in update_fields
+            has_speaker_change = "quoted_speaker" in u_f
 
             # Additions/replacements require evidence.
             if (
                 has_speaker_change
-                and update_fields["quoted_speaker"] is not None
+                and u_f["quoted_speaker"] is not None
             ):
-                valid_evidence_types = {
-                    "dialogue_label",
-                    "explicit_attribution",
-                    "explicit_source",
-                    "quotation_continuation",
+                valid_e_ts = {
+                    "d_l",
+                    "e_a",
+                    "e_s",
+                    "q_c",
                 }
 
-                proposed = update_fields["quoted_speaker"]
+                proposed = u_f["quoted_speaker"]
 
                 proposed_speakers = (
                     proposed
@@ -551,25 +560,25 @@ Reject:
                     else [proposed]
                 )
 
-                speaker_evidence = prompt_result_dict.get("speaker_evidence")
+                s_e = prompt_result_dict.get("s_e")
 
                 reject_change = False
 
-                if not isinstance(speaker_evidence, list):
+                if not isinstance(s_e, list):
                     LOG.warning(
                         "Rejecting quoted_speaker update: "
-                        "speaker_evidence must be a list"
+                        "s_e must be a list"
                     )
                     reject_change = True
 
                 else:
                     evidence_by_speaker = {}
 
-                    for item in speaker_evidence:
+                    for item in s_e:
                         if not isinstance(item, dict):
                             continue
 
-                        speaker = item.get("speaker")
+                        speaker = item.get("s")
 
                         if isinstance(speaker, str) and speaker.strip():
                             evidence_by_speaker[speaker.strip()] = item
@@ -590,66 +599,67 @@ Reject:
                             reject_change = True
                             break
 
-                        evidence_type = evidence.get("evidence_type")
-                        evidence_span = evidence.get("evidence_span")
+                        e_t = evidence.get("e_t")
+                        # evidence_span = evidence.get("evidence_span")
 
-                        if evidence_type not in valid_evidence_types:
+                        if e_t not in valid_e_ts:
                             LOG.warning(
                                 "Rejecting quoted_speaker update: "
-                                "invalid evidence_type=%r for speaker=%r",
-                                evidence_type,
+                                "invalid e_t=%r for speaker=%r",
+                                e_t,
                                 speaker,
                             )
                             reject_change = True
                             break
 
-                        if (
-                            not isinstance(evidence_span, str)
-                            or not evidence_span.strip()
-                        ):
-                            LOG.warning(
-                                "Rejecting quoted_speaker update: "
-                                "missing evidence_span for speaker=%r",
-                                speaker,
-                            )
-                            reject_change = True
-                            break
+                        # if (
+                        #     not isinstance(evidence_span, str)
+                        #     or not evidence_span.strip()
+                        # ):
+                        #     LOG.warning(
+                        #         "Rejecting quoted_speaker update: "
+                        #         "missing evidence_span for speaker=%r",
+                        #         speaker,
+                        #     )
+                        #     reject_change = True
+                        #     break
 
-                        evidence_normalized = normalize_text(evidence_span)
+                        # evidence_normalized = normalize_text(evidence_span)
 
-                        if evidence_normalized not in current_text_normalized:
-                            LOG.warning(
-                                "Rejecting quoted_speaker update: "
-                                "evidence_span not found for speaker=%r: %r",
-                                speaker,
-                                evidence_span,
-                            )
-                            reject_change = True
-                            break
+                        ## Is this catching false positives?
+                        # if evidence_normalized not in current_text_normalized:
+                        #     LOG.warning(
+                        #         "Rejecting quoted_speaker update: "
+                        #         "evidence_span not found for speaker=%r: %r",
+                        #         speaker,
+                        #         evidence_span,
+                        #     )
+                        #     reject_change = True
+                        #     break
 
                 if reject_change:
-                    update_fields.pop("quoted_speaker", None)
+                    u_f.pop("quoted_speaker", None)
                     has_speaker_change = False
 
-        prompt_result_dict["update_fields"] = update_fields
+        prompt_result_dict["u_f"] = u_f
 
         # ============================================================
         # REVIEW
         # ============================================================
 
         review_result_dict = {}
-        proposal_evidence = prompt_result_dict.get("speaker_evidence", [])
+        proposal_evidence = prompt_result_dict.get("s_e", [])
 
         # Do not review records that have no quoted_speaker proposal.
         count = REVIEW_PASSES if has_speaker_change else 0
 
         while count > 0:
             LOG.info("Beginning review pass #%d", count)
-            update_fields = prompt_result_dict.get("update_fields", dict())
+            u_f = prompt_result_dict.get("u_f", dict())
             review_result_str, _ = await llm.prompt(params={
                 "user": REVIEW_PROMPT,
                 "template": {
-                    "update_fields": json.dumps(update_fields),
+                    "u_f": json.dumps(u_f),
                     "proposal_evidence": json.dumps(proposal_evidence),
                     "context": full_context_str,
                     "current_record": current_record_medadata_str
@@ -677,11 +687,11 @@ Reject:
 
             if decision == "ACCEPT":
                 # Reviewer may only preserve the original proposal.
-                review_result_dict["update_fields"] = update_fields
+                review_result_dict["u_f"] = u_f
 
             else:
                 # REJECT, malformed output, uncertainty, etc. = veto.
-                review_result_dict["update_fields"] = {}
+                review_result_dict["u_f"] = {}
 
             prompt_result_dict = review_result_dict
 
@@ -694,19 +704,19 @@ Reject:
         LOG.info(f"model: {MODEL} | ctx: {NUM_CTX} | temp: {TEMPERATURE} | top_k: {TOP_K} | top_p: {TOP_P} | mirostat_eta: {ETA if MIROSTAT > 0 else "n/a"} | mirostat_tau: {TAU if MIROSTAT >0 else "n/a"} | mirostat: {"disabled" if MIROSTAT == 0 else "enabled"} | surrounding neighbor batch size: {BATCH_SIZE} | reasoning: {"disabled" if REASONING == False else "enabled"}")
         LOG.info("Total time elapsed: %.2f", time.perf_counter() - start)
 
-        update_fields = final_audit_dict.get("update_fields", dict())
+        u_f = final_audit_dict.get("u_f", dict())
 
-        if len(update_fields.keys()) > 0:
+        if len(u_f.keys()) > 0:
 
             with open(DEST, "a") as out:
                 new_record = {
                     **current_record,
-                    **update_fields
+                    **u_f
                 }
                 updates_to_apply = new_record.get("updates", [])
-                for field_name in list(update_fields.keys()):
+                for field_name in list(u_f.keys()):
                     old_value = current_record.get(field_name, "Error")
-                    new_value =  update_fields.get(field_name, "Error")
+                    new_value =  u_f.get(field_name, "Error")
 
                     if json.dumps(old_value) == json.dumps(new_value):
                         LOG.warning("values are the same, skipping: %s", old_value)
@@ -716,8 +726,7 @@ Reject:
                         "field": field_name,
                         "old_value": old_value,
                         "new_value": new_value,
-                        "evidence": final_audit_dict.get("speaker_evidence", {}),
-                        "adjudication_reason": final_audit_dict.get("adjudication_reason", ""),
+                        "evidence": final_audit_dict.get("s_e", {}),
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     })
                 updates = {}
@@ -727,7 +736,7 @@ Reject:
                         **new_record,
                         **updates
                     }
-                    LOG.info(f"Record [{review_result_dict.get("record_id")}] is invalid, saving reasoning")
+                    LOG.info(f"Record [{current_record.get("record_id")}] is invalid, saving reasoning")
                     out.write(json.dumps(record) + "\n")
 
 async def main():

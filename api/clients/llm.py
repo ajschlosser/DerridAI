@@ -84,7 +84,7 @@ class LLMClient:
             repeat_penalty=1.1,                 # Default 1.1, higher penalizes repetition more strongly. Prefer 1.1
             top_k=self.top_k,                           # Default 40, higher gives more diverse answers. Prefer 40
             top_p=self.top_p,                          # Default 0.9, higher will lead to more diverse text. Prefer 0.9
-            keep_alive=-1
+            keep_alive=-1,
         )
 
     def get_config_string(self) -> str:
