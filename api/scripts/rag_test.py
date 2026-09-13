@@ -40,14 +40,16 @@ job_service = DummyJobService()
 # TODO: FOR FINAL RERANKED RECORDS, GET N SURROUNDING NEIGHBORS FOR CONTEXT
 
 async def handle_query(
-        request: QueryRequest = QueryRequest(prompt="Talk to me about Derrida and hospitality. What does hospitality mean to Derrida and what is its place in the constellation of his thought? Do not be repetitious in your response. Vary your prose and avoid clichés."),
+        request: QueryRequest = QueryRequest(prompt="Talk to me about Derrida and hospitality."),
         rag_client: RAGClient = RAGClient(
-            default_k_value = 24,
+            default_k_value = 12,
             default_fetch_k_value = 500,
             default_lambda_mult_value= 0.5  # 0.5 = balanced; 0.7 = favor similarity, 0.4 = favor diversity
         ),
         llm_client: LLMClient = LLMClient(
-            model=LLMModels.GEMMA4_E4B,
+            num_ctx=4092 * 4,
+            model=LLMModels.GEMMA4_E2B,
+            mirostat=0,
             mirostat_eta=0.5,   # 0.5 = balanced
             mirostat_tau=0.5,   # 5.0 = balance between predictibility/surprise
             temperature=0.5,    # 2.0 = high
@@ -288,7 +290,7 @@ Output all discrepencies.
         #     name="Bind sources",
         # ),
         {
-            "iterations": 50,
+            "iterations": 1,
             "steps": [
                 PipelineStep(
                     fn=invoke_llm_with_prompt,

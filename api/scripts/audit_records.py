@@ -21,9 +21,9 @@ TOP_K = 0 # Low = conservative; 0 = disabled
 TOP_P = 1.0 # Low = conservative; 1.0 = disabled
 MODEL = LLMModels.QWEN_3_8_27B   # For GPT_OSS, don't forget to set reasoning to "low"
 MIROSTAT = 0
-NUM_CTX = 262144 // 40 #// 32 = 8K, 40 = 6K
+NUM_CTX = 262144 // 18 #// 32 = 8K, 40 = 6K
 #START_LINE = None
-START_ID = "som-8804f40592f12e-00109"
+START_ID = "glas-00237"
 #START_ID = ""
 FILE_STR = f"{MODEL.replace("/", "_")}-{NUM_CTX}-review_{REVIEW_PASSES}-eta_{ETA}-tau_{TAU}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}" if MIROSTAT != 0 else f"{MODEL.replace("/", "_")}-{NUM_CTX}-temp_{TEMPERATURE}-batch_{BATCH_SIZE}-{"reasoning" if REASONING else "standard"}"
 configure_logging(logging.DEBUG, f"./logs/derridai-audit-{FILE_STR}.log")
@@ -307,6 +307,10 @@ for each proposed speaker.
 
 Your maximum allowable length for a string is 10 words. Do not exceed 10 words.
 
+You maximum allowable length for a response is 1,000 tokens or 250 words, whichever is less.
+
+If you exceed 1,000 tokens or 250 words, stop immediately and return this response: {{ "full": true }}
+
 Field codes:
 
 u_f = update fields
@@ -482,6 +486,9 @@ Reject:
         if "no" in prompt_result_dict and prompt_result_dict.get("no", True):
             LOG.warning("Returned NO_CHANGE, skipping %s", current_record.get("record_id"))
             continue
+
+        if "full" in prompt_result_dict and prompt_result_dict.get("full", True):
+            LOG.warning("Returned FULL, response would exceed context, skipping %s", current_record.get("record_id"))
 
         if isinstance(prompt_result_dict, list):
             prompt_result_dict = (

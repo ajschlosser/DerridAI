@@ -28,6 +28,10 @@ DEFAULT_STORE_PERSIST_DIRECTORY = os.getenv(
     "DERRIDAI_DEFAULT_STORE_PERSIST_DIRECTORY",
     "./data/stores/chroma_db_local-derrida9"
 )
+DEFAULT_STORE_COLLECTION_NAME = os.getenv(
+    "DERRIDAI_DEFAULT_STORE_COLLECTION_NAME",
+    "langchain"
+)
 DEFAULT_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_K_VALUE", 64))
 DEFAULT_FETCH_K_VALUE = int(os.getenv("DERRIDAI_DEFAULT_FETCH_K_VALUE", 500))
 DEFAULT_LAMBDA_MULT_VALUE = float(os.getenv("DERRIDAI_DEFAULT_LAMBDA_MULT_VALUE", 0.7))
@@ -56,10 +60,14 @@ class RAGClient:
         default_k_value: int = DEFAULT_K_VALUE,
         default_fetch_k_value: int = DEFAULT_FETCH_K_VALUE,
         default_lambda_mult_value: float = DEFAULT_LAMBDA_MULT_VALUE,
+        default_persist_directory: str = DEFAULT_STORE_PERSIST_DIRECTORY,
+        default_collection_name: str = DEFAULT_STORE_COLLECTION_NAME,
     ):
         self.default_k_value = default_k_value
         self.default_fetch_k_value = default_fetch_k_value
         self.default_lambda_mult_value = default_lambda_mult_value
+        self.persist_directory = default_persist_directory
+        self.collection_name = default_collection_name
         LOG.debug(f"Initializing RAGClient... embedding model: {self.embedding_model} | persist directory: {self.persist_directory} | server url: {self.server_url} | cross encoder: {self.cross_encoder}")
         self.lookup_semaphore = asyncio.Semaphore(
             MAX_CONCURRENT_GENERATIONS
@@ -71,6 +79,7 @@ class RAGClient:
         self.stores["defaults"] = Chroma(
             persist_directory=self.persist_directory,
             embedding_function=self.embeddings,
+            collection_name=self.collection_name,
         )
         self.stores["response_cache"] = Chroma(
             persist_directory=f"{self.persist_directory}_response_cache",
@@ -100,6 +109,7 @@ class RAGClient:
         # Otherwise, create it
         elif key:
             self.stores[key] = Chroma(
+                collection_name=self.collection_name,
                 persist_directory=f"{self.persist_directory}_{key}",
                 embedding_function=self.embeddings,
             )
@@ -125,7 +135,7 @@ class RAGClient:
         #     similarity_filter["k"] = similarity_filter["k"] // 2
         for search_type in search_types:
             for lang in languages:
-                LOG.debug(f"Starting search for type: {search_type} in language: {lang}")                
+                LOG.debug(f"Starting search of collection {self.collection_name} in {self.persist_directory} for type: {search_type} in language: {lang}")                
                 retriever = self.store(f"primary_{lang}").as_retriever(
                     search_kwargs=mmr_filter if search_type == "mmr" else similarity_filter,
                     search_type=search_type,

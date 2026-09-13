@@ -100,6 +100,7 @@ class LLMModels(StrEnum):
     QWEN_9B = "qwen3.5:9b"
     QWEN_14B = "qwen3:14b"
     QWEN_3_5_27B = "hf.co/unsloth/Qwen3.5-27B-GGUF:IQ4_XS"  # Too big-- 13%/87% CPU/GPU 
+    QWEN_3_6_14B = "hf.co/tvall43/Qwen3.6-14B-A3B-FableVibes-GGUF:Q6_K"
     QWEN_3_8_27B = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS" # 7%/93% CPU/GPU at 4096 context; Highly accurate with broad coverage but quite slow
     QWEN_3_8_27B_3BIT = "hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ3_XXS" # Faster (roughly x4 at ~40 tokens/s) but less accurate than IQ4, 100% GPU at 4096 context
     TIEL_CODER_35B_3BIT = "hf.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF:UD-IQ3_XXS" # 100% GPU, ~100 tokens/s

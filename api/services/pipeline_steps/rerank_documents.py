@@ -40,6 +40,11 @@ async def rerank_documents(
 
     rerank_prompt = prompt_query + "\n" + prompt_query_fr
 
+    if type(docs) is not list or type(docs) is list and len(docs) == 0:
+        return {
+            "p_results": [],
+        }
+
     LOG.debug("First document before reranking: %s", docs[0].metadata.get("record_id", ""))
     LOG.debug("Last document before reranking: %s", docs[-1].metadata.get("record_id", ""))
     p_results = rag_client.rerank_documents(rerank_prompt, docs, top_n=24)

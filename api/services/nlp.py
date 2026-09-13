@@ -39,9 +39,9 @@ class NLPService:
         self.km_model = KeyBERT(model=self.sentence_transformer_model)
         LOG.debug(f"Initializing sentence transformer model: {self.sentence_transformer_model}")
         local_sentence_transformer_model_path = f"./data/models/{self.sentence_transformer_model.replace('/', '_')}"
+        self.sentence_transformer = SentenceTransformer(local_sentence_transformer_model_path, local_files_only=True)
         if not os.path.exists(local_sentence_transformer_model_path):
             self.sentence_transformer.save(local_sentence_transformer_model_path)
-        self.sentence_transformer = SentenceTransformer(local_sentence_transformer_model_path, local_files_only=True)
         LOG.debug("Initializing translation model...")
         self.mt = dlt.TranslationModel()
     def extract_keywords(
