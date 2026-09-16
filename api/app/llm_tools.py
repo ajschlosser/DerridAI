@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+import copy
 import json
 import re
 import unicodedata
@@ -561,17 +562,24 @@ def run_work_metadata_batch(
 
 
 def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
-    """Coerce common model JSON variations into the stable grade schema."""
+    """Normalize scores while preserving the complete grader response.
+
+    The flattened score fields remain backward-compatible with existing UI and
+    analytics, while ``categories``, free-form analysis, and ``raw_output`` keep
+    the full audit trail produced by the grading model.
+    """
+    original = copy.deepcopy(value)
     if isinstance(value, dict):
         grade = value.get("grade") if isinstance(value.get("grade"), dict) else value
         if isinstance(grade.get("result"), dict) and not any(
-            key in grade for key in ("overall", "query_relevance", "summary")
+            key in grade for key in ("overall", "query_relevance", "summary", "categories")
         ):
             grade = grade["result"]
     else:
         grade = {"summary": "" if value is None else str(value)}
 
     scores = grade.get("scores") if isinstance(grade.get("scores"), dict) else {}
+    supplied_categories = grade.get("categories") if isinstance(grade.get("categories"), dict) else {}
     score_keys = (
         "query_relevance", "source_binding", "claim_traceability",
         "attribution_source_discrimination", "claim_evidence_fidelity",
@@ -579,8 +587,15 @@ def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
         "overall",
     )
 
+    def category_raw(key: str) -> Any:
+        if key in grade:
+            return grade.get(key)
+        if key in supplied_categories:
+            return supplied_categories.get(key)
+        return scores.get(key)
+
     def score_value(key: str):
-        raw = grade.get(key, scores.get(key))
+        raw = category_raw(key)
         if isinstance(raw, dict):
             raw = raw.get("score", raw.get("value", raw.get("rating")))
         if raw is None or raw == "":
@@ -610,6 +625,13 @@ def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
         or grade.get("assessment")
         or ""
     )
+    normalized["analysis"] = str(
+        grade.get("analysis")
+        or grade.get("overall_analysis")
+        or grade.get("reasoning")
+        or grade.get("rationale")
+        or ""
+    )
     normalized["strengths"] = list_value(grade.get("strengths", grade.get("strength")))
     normalized["weaknesses"] = list_value(grade.get("weaknesses", grade.get("weakness")))
     normalized["unsupported_or_risky_claims"] = list_value(
@@ -618,6 +640,23 @@ def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
             grade.get("risky_claims", grade.get("unsupported_claims")),
         )
     )
+
+    categories: dict[str, dict[str, Any]] = {}
+    for key in score_keys:
+        raw = category_raw(key)
+        if isinstance(raw, dict):
+            detail = copy.deepcopy(raw)
+        else:
+            detail = {}
+        detail["score"] = normalized.get(key)
+        if detail.get("analysis") is None:
+            for alias in ("reasoning", "rationale", "explanation", "notes"):
+                if detail.get(alias) not in (None, ""):
+                    detail["analysis"] = detail.get(alias)
+                    break
+        categories[key] = detail
+    normalized["categories"] = categories
+    normalized["raw_output"] = original
     return normalized
 
 
@@ -646,15 +685,19 @@ ANSWER:
 EVIDENCE:
 {evidence_text}
 
-Return JSON only with integer 0-10 scores for query_relevance, source_binding,
-claim_traceability, attribution_source_discrimination, claim_evidence_fidelity,
-conceptual_precision, coverage, interpretive_usefulness, overall; plus strengths,
-weaknesses, unsupported_or_risky_claims, and summary. Distinguish Derrida's
-claims from quoted/attributed/reconstructed/questioned/criticized/endorsed positions."""
+Return JSON only. Include a `categories` object containing query_relevance,
+source_binding, claim_traceability, attribution_source_discrimination,
+claim_evidence_fidelity, conceptual_precision, coverage, and
+interpretive_usefulness. Each category must contain an integer `score` from 0-10
+and a concise `analysis` explaining the score against the supplied evidence. Also
+include `overall` as an object with `score` and `analysis`, plus top-level
+`strengths`, `weaknesses`, `unsupported_or_risky_claims`, `summary`, and
+`analysis`. Preserve source-role distinctions: distinguish Derrida's claims from
+quoted, attributed, reconstructed, questioned, criticized, or endorsed positions."""
     raw = chat_complete(
         provider=body.provider, model=_model_for(body.provider, body.model),
         base_url=body.base_url, api_key=body.api_key, prompt=prompt,
-        options=body.generation, json_mode=True, max_tokens=2048,
+        options=body.generation, json_mode=True, max_tokens=4096,
         cancelled=cancelled,
     )
     grade = _normalize_rag_grade_payload(_extract_json(raw))

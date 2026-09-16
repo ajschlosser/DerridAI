@@ -14,7 +14,46 @@ _PROTECTED_ONLY_RE = re.compile(r"^(?:[A-Z0-9_.:/+\- ]+|DerridAI)$")
 
 
 class LanguageTranslationError(ValueError):
-    """Raised when a provider/model does not produce a usable locale dictionary."""
+    """Raised when a provider/model does not produce a usable locale dictionary.
+
+    ``partial_dictionary`` intentionally contains only translations that passed
+    structural safety checks.  The job manager can retain it and resume a later
+    operation without retranslating completed strings.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        partial_dictionary: Mapping[str, str] | None = None,
+        failed_keys: list[str] | None = None,
+        failures: list[dict[str, str]] | None = None,
+        stats: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.partial_dictionary = dict(partial_dictionary or {})
+        self.failed_keys = list(failed_keys or [])
+        self.failures = list(failures or [])
+        self.stats = dict(stats or {})
+
+
+class LanguageTranslationInterrupted(InterruptedError):
+    """Cancellation carrying the validated work completed before interruption."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        partial_dictionary: Mapping[str, str] | None = None,
+        failed_keys: list[str] | None = None,
+        failures: list[dict[str, str]] | None = None,
+        stats: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.partial_dictionary = dict(partial_dictionary or {})
+        self.failed_keys = list(failed_keys or [])
+        self.failures = list(failures or [])
+        self.stats = dict(stats or {})
 
 
 def _locale_style(code: str) -> str:
@@ -66,43 +105,38 @@ def _translation_prompt(code: str, batch: Mapping[str, str]) -> str:
 
 def _validate_batch(
     *,
-    code: str,
     source: Mapping[str, str],
     translated: Mapping[str, Any],
-    batch_number: int,
-    batch_count: int,
-) -> dict[str, str]:
-    missing = [key for key in source if key not in translated]
-    if missing:
-        sample = ", ".join(missing[:4])
-        raise LanguageTranslationError(
-            f"The selected model/provider could not translate {code}: translation batch "
-            f"{batch_number} of {batch_count} omitted {len(missing)} required key(s)"
-            f" ({sample}). Try a translation-capable model or increase its context/output limit."
-        )
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """Return safe translations and per-key failures instead of failing the batch.
+
+    A single damaged string should not throw away an otherwise useful translation
+    run.  The caller decides whether the aggregate failure ratio is acceptable.
+    """
 
     clean: dict[str, str] = {}
+    failures: list[dict[str, str]] = []
     for key, source_text in source.items():
+        if key not in translated:
+            failures.append({"key": key, "reason": "missing key"})
+            continue
         value = translated.get(key)
         if not isinstance(value, str) or not value.strip():
-            raise LanguageTranslationError(
-                f"The selected model/provider could not translate {code}: key {key!r} returned "
-                "an empty or non-text value. Try another translation-capable model/provider."
-            )
+            failures.append({"key": key, "reason": "empty or non-text value"})
+            continue
         source_slots = sorted(_PLACEHOLDER_RE.findall(source_text))
         target_slots = sorted(_PLACEHOLDER_RE.findall(value))
         if source_slots != target_slots:
-            raise LanguageTranslationError(
-                f"The selected model/provider produced an unsafe translation for {code}: "
-                f"placeholder(s) changed in {key!r}. No language was installed."
-            )
+            failures.append({"key": key, "reason": "placeholder(s) changed"})
+            continue
         clean[key] = value.strip()
-    return clean
+    return clean, failures
 
 
-def _translation_signal(source: Mapping[str, str], translated: Mapping[str, str]) -> tuple[int, int]:
+def _translation_signal(source: Mapping[str, str], translated: Mapping[str, str]) -> tuple[int, int, list[str]]:
     candidates = 0
     changed = 0
+    unchanged_keys: list[str] = []
     for key, source_text in source.items():
         text = source_text.strip()
         if len(text) < 5 or not _WORD_RE.search(text) or _PROTECTED_ONLY_RE.fullmatch(text):
@@ -110,7 +144,23 @@ def _translation_signal(source: Mapping[str, str], translated: Mapping[str, str]
         candidates += 1
         if translated.get(key, "").strip().casefold() != text.casefold():
             changed += 1
-    return changed, candidates
+        else:
+            unchanged_keys.append(key)
+    return changed, candidates, unchanged_keys
+
+
+def _safe_resume_dictionary(
+    source: Mapping[str, str],
+    resume_dictionary: Mapping[str, str] | None,
+) -> dict[str, str]:
+    clean: dict[str, str] = {}
+    for key, value in (resume_dictionary or {}).items():
+        if key not in source or not isinstance(value, str) or not value.strip():
+            continue
+        if sorted(_PLACEHOLDER_RE.findall(source[key])) != sorted(_PLACEHOLDER_RE.findall(value)):
+            continue
+        clean[key] = value.strip()
+    return clean
 
 
 def translate_english_dictionary(
@@ -124,11 +174,18 @@ def translate_english_dictionary(
     generation: OllamaTouchupOptions | None = None,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int, str], None] | None = None,
-) -> tuple[dict[str, str], dict[str, int]]:
-    """Translate the canonical English dictionary in bounded, validated batches.
+    resume_dictionary: Mapping[str, str] | None = None,
+    retry_keys: list[str] | None = None,
+    max_failure_ratio: float = 0.10,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Translate the canonical English dictionary in bounded, resumable batches.
 
-    Nothing is persisted here. Callers save only after every batch validates, so a
-    truncated/refused response can never create a mostly-English installed locale.
+    Valid translations are retained as the run progresses.  Fewer than 10% of
+    keys may fail structural/provider validation; those keys fall back to
+    canonical English and are reported to the caller.  A 10% or larger failure
+    ratio remains a failed run,
+    but the validated partial dictionary is attached to the exception so a later
+    job can resume from it rather than starting over.
     """
 
     source = {str(key): str(value) for key, value in dictionary.items()}
@@ -137,14 +194,44 @@ def translate_english_dictionary(
     if not str(model or "").strip():
         raise LanguageTranslationError("Select a model to translate the language dictionary.")
 
-    batches = _chunk_dictionary(source)
-    translated_all: dict[str, str] = {}
-    completed = 0
+    translated_all = _safe_resume_dictionary(source, resume_dictionary)
+    retry_set = {str(key) for key in (retry_keys or []) if str(key) in source}
+    if retry_set:
+        # A prior run can mark strings as unsafe/effectively untranslated even if
+        # it retained their raw text. Force those keys back through translation.
+        for key in retry_set:
+            translated_all.pop(key, None)
+
+    pending = {key: value for key, value in source.items() if key not in translated_all}
+    batches = _chunk_dictionary(pending)
     total = len(source)
+    completed = len(translated_all)
+    failures: list[dict[str, str]] = []
+
+    def stats_payload(*, changed: int = 0, candidates: int = 0) -> dict[str, Any]:
+        failed_keys = sorted({item["key"] for item in failures if item.get("key")})
+        return {
+            "key_count": total,
+            "translated_count": len(translated_all),
+            "failed_count": len(failed_keys),
+            "failed_keys": failed_keys,
+            "failures": failures[:250],
+            "changed_count": changed,
+            "candidate_count": candidates,
+            "batch_count": len(batches),
+            "resumed_count": max(0, total - len(pending)),
+        }
 
     for index, batch in enumerate(batches, start=1):
         if cancelled and cancelled():
-            raise InterruptedError("Language translation cancelled.")
+            current_stats = stats_payload()
+            raise LanguageTranslationInterrupted(
+                "Language translation cancelled. The completed portion can be resumed.",
+                partial_dictionary=translated_all,
+                failed_keys=current_stats["failed_keys"],
+                failures=failures,
+                stats=current_stats,
+            )
         if progress:
             progress(
                 completed,
@@ -166,45 +253,91 @@ def translate_english_dictionary(
                 cancelled=cancelled,
             )
             parsed = _extract_json(raw)
-            clean = _validate_batch(
-                code=code,
-                source=batch,
-                translated=parsed,
-                batch_number=index,
-                batch_count=len(batches),
-            )
+            if not isinstance(parsed, Mapping):
+                raise ValueError("provider returned a non-object JSON payload")
+            clean, batch_failures = _validate_batch(source=batch, translated=parsed)
+            translated_all.update(clean)
+            failures.extend(batch_failures)
         except InterruptedError:
-            raise
-        except LanguageTranslationError:
-            raise
+            current_stats = stats_payload()
+            raise LanguageTranslationInterrupted(
+                "Language translation cancelled. The completed portion can be resumed.",
+                partial_dictionary=translated_all,
+                failed_keys=current_stats["failed_keys"],
+                failures=failures,
+                stats=current_stats,
+            )
         except Exception as exc:
-            raise LanguageTranslationError(
-                f"The selected model/provider was unable to translate {code}: {exc}"
-            ) from exc
+            reason = str(exc) or exc.__class__.__name__
+            failures.extend({"key": key, "reason": f"batch failed: {reason}"} for key in batch)
 
-        translated_all.update(clean)
-        completed += len(batch)
+        completed = len(translated_all) + len({item["key"] for item in failures if item.get("key")})
         if progress:
             progress(
-                completed,
+                min(total, completed),
                 total,
-                f"Translated {completed:,} of {total:,} English interface strings",
+                f"Processed {min(total, completed):,} of {total:,} English interface strings",
             )
 
-    changed, candidates = _translation_signal(source, translated_all)
+    # Detect providers that returned structurally valid English instead of a
+    # translation. Mark those strings for retry so a resumed run does not skip
+    # them merely because JSON validation succeeded.
+    changed, candidates, unchanged_keys = _translation_signal(source, translated_all)
     primary_language = code.split("-", 1)[0].lower()
+    effectively_untranslated = False
     if primary_language != "en" and candidates >= 20:
         unchanged_ratio = 1.0 - (changed / candidates)
         if unchanged_ratio >= 0.82:
-            raise LanguageTranslationError(
-                f"The selected model/provider did not produce a usable {code} translation: "
-                f"{round(unchanged_ratio * 100)}% of translatable English strings were returned "
-                "unchanged. No language was installed. Try another translation-capable model/provider."
-            )
+            effectively_untranslated = True
+            existing_failed = {item["key"] for item in failures if item.get("key")}
+            for key in unchanged_keys:
+                if key not in existing_failed:
+                    failures.append({"key": key, "reason": "returned unchanged English"})
+                    translated_all.pop(key, None)
 
-    return translated_all, {
-        "key_count": total,
-        "changed_count": changed,
-        "candidate_count": candidates,
-        "batch_count": len(batches),
-    }
+    failed_keys = sorted({item["key"] for item in failures if item.get("key")})
+    failure_ratio = len(failed_keys) / total if total else 0.0
+    stats = stats_payload(changed=changed, candidates=candidates)
+    stats["failure_ratio"] = failure_ratio
+    stats["fallback_count"] = len(failed_keys)
+
+    if failure_ratio >= max_failure_ratio or effectively_untranslated:
+        reason_counts: dict[str, int] = {}
+        for item in failures:
+            reason = item.get("reason") or "translation failure"
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        leading_reason = max(reason_counts, key=reason_counts.get) if reason_counts else "translation failure"
+        if effectively_untranslated:
+            message = (
+                f"The selected model/provider did not produce a usable {code} translation: "
+                f"{len(failed_keys)} of {total} keys need retry because the model returned mostly unchanged English. "
+                "The completed portion was retained; retry with a stronger translation-capable model/provider."
+            )
+        else:
+            message = (
+                f"The selected model/provider could not safely translate {code}: {len(failed_keys)} of {total} keys "
+                f"failed ({round(failure_ratio * 100)}%; most common issue: {leading_reason}). "
+                "10% or more failed, so the locale was not installed. The completed portion was retained and can be resumed."
+            )
+        raise LanguageTranslationError(
+            message,
+            partial_dictionary=translated_all,
+            failed_keys=failed_keys,
+            failures=failures,
+            stats=stats,
+        )
+
+    # A small number of failed keys should not block installation. Canonical
+    # English is a deliberate, visible fallback and the failure list is returned
+    # so the UI can tell the administrator exactly what remains to localize.
+    final_dictionary = dict(translated_all)
+    for key in failed_keys:
+        final_dictionary[key] = source[key]
+    stats["translated_count"] = len(translated_all)
+    stats["installed_count"] = len(final_dictionary)
+    stats["warning"] = (
+        f"Installed with {len(failed_keys)} English fallback string(s) that could not be translated safely."
+        if failed_keys
+        else ""
+    )
+    return final_dictionary, stats

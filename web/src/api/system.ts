@@ -12,7 +12,20 @@ export interface ProviderProfile {
 }
 
 export interface LanguageInfo { code: string; name: string; flag: string }
-export interface LanguageDictionary extends LanguageInfo { dictionary: Record<string, string> }
+export interface LanguageTranslationReport {
+  status?: string;
+  source_locale?: string;
+  provider?: string;
+  model?: string;
+  completed_at?: string;
+  failed_count?: number;
+  fallback_count?: number;
+  failed_keys?: string[];
+  failures?: Array<{key?:string;reason?:string}>;
+  translated_count?: number;
+  key_count?: number;
+}
+export interface LanguageDictionary extends LanguageInfo { dictionary: Record<string, string>; translation_report?: LanguageTranslationReport }
 
 export const systemApi = {
   researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),

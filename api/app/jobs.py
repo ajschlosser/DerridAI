@@ -16,7 +16,7 @@ from .models import LLMJobCreate, LLMToolJobCreate, RAGGradeRequest, RAGRunReque
 from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
 from .system_store import system_store, normalize_locale_code
-from .i18n_translation import translate_english_dictionary
+from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
 
 
 def iso_now() -> str:
@@ -1474,22 +1474,79 @@ class LLMToolJobManager:
                         "detail": detail,
                     })
 
-        clean, stats = translate_english_dictionary(
-            code=code,
-            dictionary=dictionary,
-            provider=provider,
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
-            generation=config.generation,
-            cancelled=cancelled,
-            progress=translation_progress,
-        )
+        resume_dictionary: dict[str, str] | None = None
+        retry_keys: list[str] | None = None
+        if config.resume_job_id:
+            with self._lock:
+                prior = copy.deepcopy(self._jobs.get(config.resume_job_id))
+            if not prior:
+                raise ValueError("The translation job selected for resume no longer exists.")
+            if prior.get("mode") != "language_dictionary":
+                raise ValueError("Only language dictionary jobs can be resumed here.")
+            prior_result = prior.get("result") if isinstance(prior.get("result"), dict) else {}
+            prior_request = prior.get("request") if isinstance(prior.get("request"), dict) else {}
+            prior_code = normalize_locale_code(str(prior_result.get("code") or prior_request.get("code") or ""))
+            if prior_code != code:
+                raise ValueError(f"The incomplete translation belongs to {prior_code or 'another locale'}, not {code}.")
+            resume_dictionary = dict(prior.get("_resume_dictionary") or prior_result.get("partial_dictionary") or {})
+            retry_keys = [str(key) for key in (prior.get("_resume_failed_keys") or prior_result.get("failed_keys") or [])]
+
+        try:
+            clean, stats = translate_english_dictionary(
+                code=code,
+                dictionary=dictionary,
+                provider=provider,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                generation=config.generation,
+                cancelled=cancelled,
+                progress=translation_progress,
+                resume_dictionary=resume_dictionary,
+                retry_keys=retry_keys,
+            )
+        except (LanguageTranslationError, LanguageTranslationInterrupted) as exc:
+            public_stats = {
+                key: value
+                for key, value in exc.stats.items()
+                if key not in {"failed_keys", "failures"}
+            }
+            partial_result = {
+                "code": code,
+                "name": config.name or code,
+                "flag": config.flag or "🌐",
+                "partial_key_count": len(exc.partial_dictionary),
+                "failed_count": len(exc.failed_keys),
+                "failure_samples": exc.failures[:20],
+                "resumable": bool(exc.partial_dictionary or exc.failed_keys),
+                **public_stats,
+            }
+            with self._lock:
+                current = self._jobs[job_id]
+                current["_resume_dictionary"] = dict(exc.partial_dictionary)
+                current["_resume_failed_keys"] = list(exc.failed_keys)
+                current["result"] = partial_result
+            raise
+
+        translation_report = {
+            "status": "completed_with_fallbacks" if int(stats.get("fallback_count") or 0) else "complete",
+            "source_locale": "en-US",
+            "provider": provider,
+            "model": model,
+            "completed_at": iso_now(),
+            "failed_count": int(stats.get("failed_count") or 0),
+            "fallback_count": int(stats.get("fallback_count") or 0),
+            "failed_keys": list(stats.get("failed_keys") or []),
+            "failures": list(stats.get("failures") or [])[:250],
+            "translated_count": int(stats.get("translated_count") or 0),
+            "key_count": int(stats.get("key_count") or len(dictionary)),
+        }
         saved = system_store.put_language(
             code,
             name=config.name or code,
             flag=config.flag or "🌐",
             dictionary=clean,
+            translation_report=translation_report,
         )
         return {
             "code": str(saved.get("code") or code),
@@ -1659,7 +1716,7 @@ class LLMToolJobManager:
         out = {
             key: copy.deepcopy(value)
             for key, value in job.items()
-            if key != "result"
+            if key != "result" and not str(key).startswith("_")
         }
         if include_result:
             out["result"] = copy.deepcopy(job["result"])

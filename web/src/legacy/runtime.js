@@ -50,6 +50,7 @@ const state = {
   comparePasteB: "",
   stores: [],
   storesLastFetchedAt: 0,
+  vectorAutoCreateRequested: false,
   activeStore: "",
   storeSearchResults: [],
   storeSearchLoading: false,
@@ -7330,6 +7331,11 @@ async function renderResearcherVector(main){
   decorateDisabledControls(main);
 }
 
+function openDatabaseCreationFromResearch(){
+  state.vectorAutoCreateRequested=true;
+  window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/databases",legacyView:"vector"}}));
+}
+
 function collectionSyncableWorks(){
   return [...workIndex().values()].sort((a,b)=>String(a.work).localeCompare(String(b.work))).map(item=>({work:item.work,count:item.rows.length,rows:item.rows}));
 }
@@ -7479,6 +7485,12 @@ async function renderVector(main){
   const openCreateWizard=()=>openCollectionCreationWizard({defaultProvider,defaultModel:embedDefault,installedModels});
   document.querySelector("#createCollectionWizard")?.addEventListener("click",openCreateWizard);
   document.querySelector("#createFirstCollection")?.addEventListener("click",openCreateWizard);
+  if(noCollections&&state.vectorAutoCreateRequested){
+    state.vectorAutoCreateRequested=false;
+    window.setTimeout(openCreateWizard,0);
+  }else if(!noCollections){
+    state.vectorAutoCreateRequested=false;
+  }
   document.querySelector("#openChromaPathDialog")?.addEventListener("click",()=>{
     const dialog=document.createElement("dialog");dialog.className="message-dialog storage-location-dialog";dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.change_storage_location","Change data location"))}</h2><div class="dialog-subtitle">${esc(tr("vector.change_storage_location_help","Advanced deployment setting. Existing collections are not moved automatically."))}</div></div><button class="btn icon-only" data-close>×</button></div><div class="db"><div class="storage-location-current"><span>${esc(tr("vector.current_container_path","Current container path"))}</span><code>${esc(currentPath)}</code></div><div class="info warn"><b>${esc(tr("vector.storage_change_caution","Changing storage location does not move existing collections."))}</b><span>${esc(tr("vector.storage_change_caution_help","DerridAI will begin using the new directory. Existing collections remain in the current directory until you switch back or move them outside the app."))}</span></div><label class="field"><span>${esc(tr("vector.new_container_path","New container path"))}</span><input class="control" id="chromaPathInput" value="${esc(currentPath)}" spellcheck="false"><small>${esc(tr("vector.new_container_path_help","Enter the server-side Chroma persistence directory. Only change this when you understand the deployment mapping."))}</small></label></div><div class="da"><button class="btn" data-close>${esc(tr("ui.cancel","Cancel"))}</button><button class="btn primary" id="applyChromaPath">${icon("check")}${esc(tr("vector.apply_storage_path","Apply path"))}</button></div>`;document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(b=>b.onclick=close);dialog.querySelector("#applyChromaPath").onclick=async()=>{const path=dialog.querySelector("#chromaPathInput")?.value.trim();if(!path)return toast(tr("vector.enter_storage_path","Enter a Chroma storage path"));const button=dialog.querySelector("#applyChromaPath");button.disabled=true;button.textContent=tr("vector.checking_path","Checking…");try{await api("/api/chroma/path",{method:"PUT",body:JSON.stringify({path})});state.health=await api("/api/health");state.activeStore="";state.storePage=1;state.storeSearchResults=[];state.storeWork="";await refreshStores();persistPrefs();close();toast(trf("vector.storage_changed","Chroma storage changed to {path}",{path:state.health.chroma.host_path_hint||state.health.chroma.path}),{tone:"success"});renderVector(main)}catch(error){button.disabled=false;button.innerHTML=`${icon("check")}${esc(tr("vector.apply_storage_path","Apply storage path"))}`;toast(trf("vector.storage_change_failed","Could not change Chroma storage: {message}",{message:error.message||String(error)}),{tone:"danger"})}};
   });
@@ -8395,7 +8407,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.35.12",
+      backup_client_version:"0.35.16",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -9776,6 +9788,7 @@ export {
   registerExternalJob,
   dbUnavailableReason,
   hasCorpusDb,
+  openDatabaseCreationFromResearch,
   decorateDisabledControls,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,

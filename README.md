@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.35.12
+# DerridAI Corpus Viewer 0.35.16
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -65,6 +65,13 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
+
+## 0.35.16 — Tongue Tied Again
+
+- Languages & internationalization now keeps table headers in the table flow, aligns locale identity fields from the top, warns about higher-risk translation model families, tolerates fewer than 10% unsafe translation keys with explicit English fallbacks, and preserves partial dictionaries so failed or cancelled jobs can be resumed without retranslating validated strings.
+- Research now routes an empty installation directly into the corpus-database creation workflow while preserving Back navigation.
+- LLM grading retains the complete structured evaluation — category scores, category analyses, overall analysis, lists, and the raw model output — in response-cache grade history and exposes the saved output in Response FAQ.
+- Built-in English and Québec French dictionaries were revised together for the new recovery, warning, and provenance UI.
 
 ## 0.35.12 — Tongue Twister
 

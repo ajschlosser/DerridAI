@@ -39,10 +39,10 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
 
 def test_0350_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.12"
-    assert 'version="0.35.12"' in MAIN
-    assert "Corpus Viewer 0.35.12" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.12" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.16"
+    assert 'version="0.35.16"' in MAIN
+    assert "Corpus Viewer 0.35.16" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.16" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -150,7 +150,7 @@ def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edit
 
     store_module.SystemStore()
     migrated = json.loads(system_path.read_text(encoding="utf-8"))
-    assert migrated["language_dictionary_revision"] == "0.35.10.2"
+    assert migrated["language_dictionary_revision"] == "0.35.16.1"
     assert migrated["languages"]["fr-CA"]["name"] == "Français (Québec)"
     assert migrated["languages"]["en-US"]["dictionary"]["app.name"] == "DerridAI"
     assert migrated["languages"]["fr-CA"]["dictionary"]["nav.rag"] == "Recherche"

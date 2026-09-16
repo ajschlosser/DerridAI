@@ -417,6 +417,7 @@ class LanguageInstallRequest(BaseModel):
     code: str = Field(min_length=2, max_length=35)
     name: str | None = Field(default=None, max_length=160)
     flag: str | None = Field(default=None, max_length=32)
+    resume_job_id: str | None = Field(default=None, max_length=100)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None

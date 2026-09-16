@@ -1362,7 +1362,7 @@ class SystemStore:
         return {
             "researcher_provider_profiles": [],
             "annotations": [],
-            "language_dictionary_revision": "0.35.10.2",
+            "language_dictionary_revision": "0.35.16.1",
             "languages": {
                 "en-US": {"name": "U.S. English", "flag": "🇺🇸", "dictionary": DEFAULT_EN_US},
                 "fr-CA": {"name": "Français (Québec)", "flag": "🇨🇦", "dictionary": DEFAULT_FR_CA},
@@ -1379,7 +1379,7 @@ class SystemStore:
             data.setdefault("researcher_provider_profiles", [])
             data.setdefault("annotations", [])
             languages = data.setdefault("languages", {})
-            dictionary_revision = "0.35.10.2"
+            dictionary_revision = "0.35.16.1"
             refresh_builtins = str(data.get("language_dictionary_revision") or "") != dictionary_revision
             for code, value in self._default()["languages"].items():
                 if code not in languages:
@@ -1562,13 +1562,40 @@ class SystemStore:
             return None
         return {"code": code, **value}
 
-    def put_language(self, code: str, *, name: str, flag: str, dictionary: dict[str, str]) -> dict[str, Any]:
+    def put_language(
+        self,
+        code: str,
+        *,
+        name: str,
+        flag: str,
+        dictionary: dict[str, str],
+        translation_report: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         code = normalize_locale_code(code)
         clean = {str(key): str(value) for key, value in dictionary.items() if str(key).strip()}
         with self._lock:
             data = self._read()
             languages = data.setdefault("languages", {})
-            languages[code] = {"name": name.strip() or code, "flag": flag.strip() or "🌐", "dictionary": clean}
+            previous = languages.get(code) if isinstance(languages.get(code), dict) else {}
+            report = copy.deepcopy(translation_report if translation_report is not None else previous.get("translation_report"))
+            # Keep the durable report useful after an administrator manually fixes
+            # fallback strings. A tracked key is resolved once its target no longer
+            # equals the canonical English value.
+            if isinstance(report, dict) and code != "en-US":
+                canonical = (languages.get("en-US") or {}).get("dictionary") or DEFAULT_EN_US
+                tracked = [str(key) for key in (report.get("failed_keys") or []) if str(key)]
+                unresolved = [key for key in tracked if clean.get(key, "").strip() == str(canonical.get(key, "")).strip()]
+                report["failed_keys"] = unresolved
+                report["failed_count"] = len(unresolved)
+                report["fallback_count"] = len(unresolved)
+                if isinstance(report.get("failures"), list):
+                    report["failures"] = [item for item in report["failures"] if isinstance(item, dict) and str(item.get("key") or "") in unresolved]
+                if not unresolved and report.get("status") == "completed_with_fallbacks":
+                    report["status"] = "complete"
+            language_value: dict[str, Any] = {"name": name.strip() or code, "flag": flag.strip() or "🌐", "dictionary": clean}
+            if isinstance(report, dict):
+                language_value["translation_report"] = report
+            languages[code] = language_value
             # en-US is the canonical key set. When an administrator introduces a
             # new English key, make it immediately editable in every installed
             # locale as an English fallback instead of waiting for a restart.
@@ -5001,6 +5028,65 @@ DEFAULT_FR_CA.update({
     "language.no_flag_matches": "Aucun pays ne correspond à cette recherche.",
     "ui.all": "Tout",
     "ui.stay": "Rester ici",
+})
+
+
+# 0.35.16 — Tongue Tied Again: resumable translations, model cautions, and research recovery.
+DEFAULT_EN_US.update({
+    "language.install_help_modern": "DerridAI translates from the canonical English interface, validates every key and placeholder, and reports any strings that require an English fallback or retry.",
+    "language.atomic_install_help": "Unsafe strings are tracked individually. Fewer than 10% may fall back to canonical English; larger failures remain resumable instead of discarding completed work.",
+    "language.background_translation_help_modern": "Progress remains visible here and in Operations. If the job stops, validated translations are retained for a later resume.",
+    "language.translation_started_modern": "Translation started. DerridAI is translating the English interface set before installing the locale.",
+    "language.translation_incomplete_title": "Translation incomplete",
+    "language.translation_incomplete_help": "{done} safe translations were retained. Retry resumes this partial dictionary instead of starting over; {failed} string(s) still need translation or review.",
+    "language.resume_translation": "Resume translation",
+    "language.resuming_partial": "Resuming retained work",
+    "language.resuming_partial_help": "DerridAI will keep the {count} validated strings from the previous attempt and translate only unfinished or unsafe entries.",
+    "language.translation_resumed": "Translation resumed from the retained partial dictionary.",
+    "language.partial_translation_restored": "The incomplete translation was retained and can be resumed.",
+    "language.resume_no_longer_needed": "This incomplete translation cannot be resumed because the locale is already installed or its locale code is unavailable.",
+    "language.installed_with_fallbacks": "Language installed with {count} English fallback string(s). Review them under Needs review.",
+    "language.model_translation_risk_title": "Translation quality warning",
+    "language.model_translation_risk_embedding": "{model} appears to be an embedding or reranking model rather than a text-generation model. It is unlikely to be able to translate an interface dictionary.",
+    "language.model_translation_risk_code": "{model} appears to be code-specialized. DerridAI treats code-focused families as higher-risk for natural-language interface translation.",
+    "language.model_translation_risk_small": "{model} appears to be a very small model. Small models are higher-risk for complete dictionary translation, placeholder fidelity, and non-English fluency.",
+    "language.model_translation_risk_ack": "I understand the risk and want to use this model anyway.",
+    "language.model_translation_risk_ack_required": "Review and acknowledge the translation-quality warning before continuing with this model.",
+    "language.tracked_fallbacks_title": "{count} translation fallback(s) need review",
+    "language.tracked_fallbacks_help": "These exact keys were not translated safely during installation and are currently using canonical English. They remain tracked until you edit and save a localized value.",
+    "language.review_fallbacks": "Review tracked fallbacks",
+    "language.failure_details": "Failure details",
+    "language.needs_review": "Needs review",
+    "research.redirect_database": "Research needs a corpus database. Opening database creation now.",
+    "faq.full_grade_output": "Full evaluation output",
+})
+DEFAULT_FR_CA.update({
+    "language.install_help_modern": "DerridAI traduit depuis l’interface anglaise canonique, valide chaque clé et chaque variable, puis signale les chaînes qui nécessitent un repli en anglais ou une nouvelle tentative.",
+    "language.atomic_install_help": "Les chaînes non sûres sont suivies individuellement. Si moins de 10 % échouent, elles peuvent utiliser l’anglais canonique comme valeur de repli; un échec plus important demeure reprenable sans perdre le travail terminé.",
+    "language.background_translation_help_modern": "La progression reste visible ici et dans Opérations. Si la tâche s’arrête, les traductions validées sont conservées pour une reprise ultérieure.",
+    "language.translation_started_modern": "La traduction a démarré. DerridAI traduit l’interface anglaise avant d’installer le paramètre régional.",
+    "language.translation_incomplete_title": "Traduction incomplète",
+    "language.translation_incomplete_help": "{done} traductions sûres ont été conservées. Une nouvelle tentative reprend ce dictionnaire partiel au lieu de recommencer; {failed} chaîne(s) doivent encore être traduites ou révisées.",
+    "language.resume_translation": "Reprendre la traduction",
+    "language.resuming_partial": "Reprise du travail conservé",
+    "language.resuming_partial_help": "DerridAI conservera les {count} chaînes validées de la tentative précédente et ne traduira que les entrées inachevées ou non sûres.",
+    "language.translation_resumed": "La traduction a repris à partir du dictionnaire partiel conservé.",
+    "language.partial_translation_restored": "La traduction incomplète a été conservée et peut être reprise.",
+    "language.resume_no_longer_needed": "Cette traduction incomplète ne peut pas être reprise parce que le paramètre régional est déjà installé ou que son code n’est plus disponible.",
+    "language.installed_with_fallbacks": "Langue installée avec {count} chaîne(s) de repli en anglais. Révisez-les sous À réviser.",
+    "language.model_translation_risk_title": "Avertissement sur la qualité de la traduction",
+    "language.model_translation_risk_embedding": "{model} semble être un modèle de plongements vectoriels ou de reclassement plutôt qu’un modèle de génération de texte. Il est peu probable qu’il puisse traduire un dictionnaire d’interface.",
+    "language.model_translation_risk_code": "{model} semble être spécialisé en programmation. DerridAI considère les familles axées sur le code comme plus risquées pour la traduction d’une interface en langage naturel.",
+    "language.model_translation_risk_small": "{model} semble être un très petit modèle. Les petits modèles présentent un risque plus élevé pour la traduction complète du dictionnaire, la fidélité des variables et la qualité dans les langues autres que l’anglais.",
+    "language.model_translation_risk_ack": "Je comprends le risque et je souhaite quand même utiliser ce modèle.",
+    "language.model_translation_risk_ack_required": "Consultez et acceptez l’avertissement sur la qualité de la traduction avant de poursuivre avec ce modèle.",
+    "language.tracked_fallbacks_title": "{count} valeur(s) de repli à réviser",
+    "language.tracked_fallbacks_help": "Ces clés précises n’ont pas pu être traduites de façon sûre pendant l’installation et utilisent actuellement l’anglais canonique. Elles demeurent suivies jusqu’à ce que vous saisissiez et enregistriez une valeur localisée.",
+    "language.review_fallbacks": "Réviser les valeurs de repli suivies",
+    "language.failure_details": "Détails des échecs",
+    "language.needs_review": "À réviser",
+    "research.redirect_database": "L’espace Recherche nécessite une base de données du corpus. Ouverture de la création d’une base de données.",
+    "faq.full_grade_output": "Sortie complète de l’évaluation",
 })
 
 system_store = SystemStore()

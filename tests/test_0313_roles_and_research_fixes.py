@@ -17,9 +17,9 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_release_version_is_0313():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.12"
-    assert 'version="0.35.12"' in MAIN
-    assert "Corpus Viewer 0.35.12" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.16"
+    assert 'version="0.35.16"' in MAIN
+    assert "Corpus Viewer 0.35.16" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_tooltips_escape_sidebar_and_stack_above_workspace():
@@ -37,7 +37,9 @@ def test_research_no_database_redirects_instead_of_disabling_navigation():
     # authoritative collection list and redirects only when that refreshed list is empty.
     assert 'if(view==="rag"&&!s.value.hasCorpusDb)' not in APP
     assert 'getResearchWorkspaceSnapshot({refresh})' in RESEARCH
-    assert 'await router.replace(canOpenDatabase?"/databases":"/")' in RESEARCH
+    assert 'runtime.openDatabaseCreationFromResearch?.()' in RESEARCH
+    assert 'vectorAutoCreateRequested' in RUNTIME
+    assert 'openCollectionCreationWizard' in RUNTIME
 
 
 def test_research_request_normalizes_numeric_fields_before_post():

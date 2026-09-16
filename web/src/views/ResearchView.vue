@@ -119,15 +119,16 @@ async function loadWorkspace(refresh=true){
   try{
     const snapshot=await runtime.getResearchWorkspaceSnapshot({refresh}) as ResearchWorkspaceSnapshot;
     const requestedJobId=String(route.query.job||"").trim();
-    if(!(snapshot.stores||[]).length&&!requestedJobId){
+    if(!(snapshot.stores||[]).length){
       const canOpenDatabase=auth.can("page.vector");
       runtime.notifyToast(i18n.t(
         canOpenDatabase?"research.redirect_database":"research.redirect_database_denied",
         canOpenDatabase
-          ?"Research needs a corpus database. Opening Corpus database so you can create, restore, or select one."
+          ?"Research needs a corpus database. Opening database creation now."
           :"Research needs a corpus database, but your role cannot open Corpus database. Ask an administrator to configure one or grant access."
       ),{tone:"info"});
-      await router.replace(canOpenDatabase?"/databases":"/");
+      if(canOpenDatabase)runtime.openDatabaseCreationFromResearch?.();
+      else await router.replace("/");
       return;
     }
     hydrate(snapshot,{preserveDraft:Boolean(workspace.value),preserveActive:true});

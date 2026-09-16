@@ -5,7 +5,12 @@ export interface JobSummary {
   kind?:string;
   type?:string;
   mode?:string;
+  tool?:string;
   label?:string;
+  provider?:string;
+  model?:string|null;
+  provider_profile_id?:string|null;
+  request?:Record<string, unknown>|null;
   stage?:string;
   stage_detail?:string;
   total?:number;

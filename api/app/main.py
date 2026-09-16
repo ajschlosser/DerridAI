@@ -66,7 +66,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.35.12")
+app = FastAPI(title="DerridAI Corpus API", version="0.35.16")
 
 app.add_middleware(
     CORSMiddleware,
@@ -488,7 +488,7 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
     if not model:
         raise HTTPException(status_code=400, detail="Select a model to translate the language dictionary.")
     try:
-        translated, _stats = translate_english_dictionary(
+        translated, translation_stats = translate_english_dictionary(
             code=code,
             dictionary=dictionary,
             provider=body.provider,
@@ -504,6 +504,19 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
         name=body.name or code,
         flag=body.flag or "🌐",
         dictionary=translated,
+        translation_report={
+            "status": "completed_with_fallbacks" if int(translation_stats.get("fallback_count") or 0) else "complete",
+            "source_locale": "en-US",
+            "provider": body.provider,
+            "model": model,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "failed_count": int(translation_stats.get("failed_count") or 0),
+            "fallback_count": int(translation_stats.get("fallback_count") or 0),
+            "failed_keys": list(translation_stats.get("failed_keys") or []),
+            "failures": list(translation_stats.get("failures") or [])[:250],
+            "translated_count": int(translation_stats.get("translated_count") or 0),
+            "key_count": int(translation_stats.get("key_count") or len(dictionary)),
+        },
     )
 
 
@@ -1101,7 +1114,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.35.12",
+            "app_version": "0.35.16",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
