@@ -1,12 +1,12 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.36.10
+# DerridAI Corpus Viewer 0.36.11
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
 The UI footer displays:
 
 ```text
-© 2026 The New England Transcendentalist Club of California
+© 2026 The New England Transcendental Club of California
 ```
 
 Source files carry:
@@ -64,6 +64,12 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+## 0.36.11 — Peekaboo
+
+Version 0.36.11 stabilizes the native Search workspace and applies several small UI consistency fixes. Loaded-record Search now uses one fixed table contract — DB status, Work, Page Start, Needs Review, Extracted Text, and Actions — rather than inheriting stale column configuration from other Search scopes or saved browser state. Column configuration and manual resizing remain available only for database-search tables. Citation menus now render as overlay popovers above following content instead of expanding the table row or card.
+
+Works gains a final **Add a JSONL file** card that opens the existing corpus-file picker. Response FAQ is renamed **Response Library** throughout the user-facing interface while retaining the existing `/faq` route and internal cache identifiers for compatibility. The application copyright name is corrected to **The New England Transcendental Club of California**.
+
 ## 0.36.10 — In Search of Lost Time
 
 - Rebuilt Search as a native Vue scholarly-exploration workspace rather than a legacy configuration surface. The page now centers a persistent query composer, corpus scope, facets, results, and evidence-oriented record actions in one coherent workflow.
@@ -92,7 +98,7 @@ The default LLM review preset remains **OCR / text cleanup**. The default review
 - File export can use the browser's system file/folder picker to save directly to disk and, after the browser/OS confirmation, overwrite an existing same-name JSONL file. Browsers without the File System Access API keep the non-destructive download behavior.
 - Reviewed bounded scrolling across inspectors and dialogs: the record inspector now permits natural wheel chaining at its boundaries, metadata-variant dialogs own their scroll region, and open dialogs prevent the page behind them from moving.
 - Records/Search makes Extracted Text another 15% narrower, hides Columns configuration in card layout, and routes DB-backed workspace records into the canonical database-evidence selection path.
-- Record Inspector now displays the source page/page range in its context overview. Response FAQ uses a neutral empty-state icon treatment rather than the green accent tile.
+- Record Inspector now displays the source page/page range in its context overview. Response Library uses a neutral empty-state icon treatment rather than the green accent tile.
 - Create JSONL subset condition values now expose per-file autocomplete suggestions derived from unique field values, while intentionally excluding large text-like fields.
 - Installed-language changes propagate through a shared UI event so navigation and language selectors update without a page refresh, including completion of background translation jobs.
 - The Annotations page now supports deletion: administrators/edit-capable users can remove local JSONL annotations (with audit history), while shared-annotation deletion remains restricted to the annotation owner or an administrator and is enforced by the API.
@@ -101,7 +107,7 @@ The default LLM review preset remains **OCR / text cleanup**. The default review
 
 ## 0.36.2 — Bugs in the Machine
 
-- URL state is now the authoritative share contract for view configuration: record-table search/filter/sort/page/columns, global search modes and database search settings, Works search/selection, Annotations search/view, Dashboard metric selection, Record find state, and Response FAQ search/page are encoded into the URL. Breadcrumb history snapshots preserve the same state. JSONL file identities are content-derived so the same file can resolve the same shared Records URL on another browser after that file is loaded.
+- URL state is now the authoritative share contract for view configuration: record-table search/filter/sort/page/columns, global search modes and database search settings, Works search/selection, Annotations search/view, Dashboard metric selection, Record find state, and Response Library search/page are encoded into the URL. Breadcrumb history snapshots preserve the same state. JSONL file identities are content-derived so the same file can resolve the same shared Records URL on another browser after that file is loaded.
 - Shared local-JSONL links no longer silently substitute a different locally cached file. If the linked JSONL is not present, the Records page explicitly asks the recipient to load the same file and then restores the encoded filters/view state. The JSONL contents themselves are intentionally not embedded in the URL.
 - The Records table now scrolls horizontally when needed, uses a compact Page Start column and narrower Extracted Text column, and defaults to DB status, Work, Page Start, Needs Review, Extracted Text, plus the dedicated Record Actions column.
 - Fixed the empty-workspace **Choose JSONL files** call to action.
@@ -144,14 +150,14 @@ This is the deliberately low-risk intermediate storage architecture: local/singl
 - Improved language installation resilience with smaller translation batches, conservative JSON repair, recursive retry/bisection, resumable partial dictionaries, and a plain-text single-string fallback for models that translate competently but emit unreliable JSON.
 - Built-in languages are displayed as **English** 🇺🇸 and **Français** 🇨🇦. The country/symbol picker is teleported outside dialogs so it cannot be clipped. Unicode does not define a standardized Québec flag emoji; DerridAI offers the Unicode fleur-de-lis (⚜️) as an explicit symbol alternative without mislabeling it as a flag.
 - Annotation selection actions close with Escape. Highlighted annotation text now exposes an accessible hover/focus tooltip with note, tags, author, and date.
-- Response FAQ now renders saved LLM grades as a structured evaluation report with category scores and analyses, strengths, weaknesses, risky claims, and a secondary raw-output disclosure for auditability.
+- Response Library now renders saved LLM grades as a structured evaluation report with category scores and analyses, strengths, weaknesses, risky claims, and a secondary raw-output disclosure for auditability.
 - Expanded Storybook coverage for the floating flag picker and structured evaluation report, with additional WCAG/i18n copy in English and professional Canadian French.
 
 ## 0.35.16 — Tongue Tied Again
 
 - Languages & internationalization now keeps table headers in the table flow, aligns locale identity fields from the top, warns about higher-risk translation model families, tolerates fewer than 10% unsafe translation keys with explicit English fallbacks, and preserves partial dictionaries so failed or cancelled jobs can be resumed without retranslating validated strings.
 - Research now routes an empty installation directly into the corpus-database creation workflow while preserving Back navigation.
-- LLM grading retains the complete structured evaluation — category scores, category analyses, overall analysis, lists, and the raw model output — in response-cache grade history and exposes the saved output in Response FAQ.
+- LLM grading retains the complete structured evaluation — category scores, category analyses, overall analysis, lists, and the raw model output — in response-cache grade history and exposes the saved output in Response Library.
 - Built-in English and Québec French dictionaries were revised together for the new recovery, warning, and provenance UI.
 
 ## 0.35.12 — Tongue Twister
@@ -159,9 +165,9 @@ This is the deliberately low-risk intermediate storage architecture: local/singl
 Languages & internationalization is now a native localization studio with a bilingual English-source/target editor, locale search and status filters, translation coverage metrics, a searchable country-flag library, BCP 47 locale support, RTL document direction, and expanded Storybook coverage. New language installation now translates the complete canonical English interface dictionary in bounded LLM batches, validates key and placeholder fidelity, rejects effectively untranslated output, and installs atomically only after the complete translation succeeds. Provider navigation warns before discarding the install form and preserves a working back breadcrumb. Dialog focus handling and localized accessible labels were also strengthened for WCAG 2.2.
 
 ## 0.35.10 — Record Player
-### 0.35.10 maintenance — Response FAQ polish
+### 0.35.10 maintenance — Response Library polish
 
-This maintenance patch fixes the Record Provenance Vue/TypeScript prop declaration that prevented `vue-tsc` from completing. It also redesigns Response FAQ as a research library rather than an administrative cache browser: saved questions include answer previews and evidence/model context, selected results retain the full Research answer/evidence presentation, run metadata is summarized in readable cards and definition grids, and raw technical metadata is kept behind progressive disclosure. The archive remains responsive, keyboard accessible, reduced-motion aware, and fully localized in English and professional Québec French.
+This maintenance patch fixes the Record Provenance Vue/TypeScript prop declaration that prevented `vue-tsc` from completing. It also redesigns Response Library as a research library rather than an administrative cache browser: saved questions include answer previews and evidence/model context, selected results retain the full Research answer/evidence presentation, run metadata is summarized in readable cards and definition grids, and raw technical metadata is kept behind progressive disclosure. The archive remains responsive, keyboard accessible, reduced-motion aware, and fully localized in English and professional Québec French.
 
 
 Version 0.35.10 replaces the legacy Record View renderer with a Vue-native scholarly record workspace. The record identity and reading surface now dominate the page, while a resizable inspector organizes Overview, Provenance, Indexing, PDFs, Annotations, and History. Text selection exposes contextual annotation actions; annotation quotations are visibly anchored in the reading surface; the structured speaker → position holder → stance → target relation is presented as a first-class provenance component; and metadata editing now uses a side sheet that sends only changed fields into the existing audit trail.
@@ -170,9 +176,9 @@ The release also reduces toolbar overload through primary actions plus an overfl
 
 ## 0.35.5 — RAGety Anne
 
-Version 0.35.5 unifies RAG-result presentation across Research, background Operations, and Response FAQ. Opening a completed RAG operation now routes the result into the same Vue-native Research result workspace instead of a separate legacy modal, so answer typography, clickable citation bindings, evidence inspection, provenance metadata, grading actions, reruns, accessibility, and localization remain consistent everywhere.
+Version 0.35.5 unifies RAG-result presentation across Research, background Operations, and Response Library. Opening a completed RAG operation now routes the result into the same Vue-native Research result workspace instead of a separate legacy modal, so answer typography, clickable citation bindings, evidence inspection, provenance metadata, grading actions, reruns, accessibility, and localization remain consistent everywhere.
 
-Response FAQ is rebuilt as a native research archive with searchable saved responses, a persistent response browser, the shared Research answer/evidence presentation, source-bound citation inspection, retained run provenance, and saved-grade history. Overlay stacking is also corrected so ordinary notifications and background-operation notifications render above the sidebar. Storybook gains reusable unified-result and cached-response browser components, and the new interface strings are added to both built-in English and Québec French dictionaries without overwriting existing administrator customizations.
+Response Library is rebuilt as a native research archive with searchable saved responses, a persistent response browser, the shared Research answer/evidence presentation, source-bound citation inspection, retained run provenance, and saved-grade history. Overlay stacking is also corrected so ordinary notifications and background-operation notifications render above the sidebar. Storybook gains reusable unified-result and cached-response browser components, and the new interface strings are added to both built-in English and Québec French dictionaries without overwriting existing administrator customizations.
 
 
 ## 0.35.0
@@ -264,7 +270,7 @@ Version 0.23.0 adds multi-record evidence selection and selected-evidence-only R
 ## 0.22.0 — RAG grading, FAQ workflow, UI, and frontend development
 
 Version 0.22.0 is a minor release focused on RAG grading flexibility, safer
-vector-store synchronization, source-binding robustness, Response FAQ batch
+vector-store synchronization, source-binding robustness, Response Library batch
 workflows, comparison/PDF usability, and a documented Storybook development
 environment.
 
@@ -283,7 +289,7 @@ environment.
 - Evidence binding defaults to `[[E0]]` and accepts `(E0)`, `((E0))`, `[E0]`,
   `[[E0]]`, `{E0}`, `{{E0}}`, including multi-ID groups.
 - RAG grading launch/result dialogs show the original research question.
-- Response FAQ entries are collapsed by default, remember per-response expanded
+- Response Library entries are collapsed by default, remember per-response expanded
   state, provide Expand all / Collapse all controls, and can grade/re-grade the
   complete response cache as one background job with a chosen provider/model/
   generation configuration.
@@ -307,7 +313,7 @@ Version 0.21.1 fixes three post-0.21.0 regressions: background RAG grade result 
 
 - RAG grade rendering now normalizes common model JSON variations (including scalar/object list fields and nested score objects), so a non-canonical but usable grader response cannot crash the result modal. New grades are normalized server-side before being cached, while the frontend remains tolerant of older cached shapes.
 - Progressive card rendering isolates item-level render errors instead of allowing one malformed cached record/grade to blank an entire view.
-- Response FAQ and Response Cache now use a dedicated logical cache reader that merges legacy `_response_cache` and current `derridai_response_cache` physical collections, deduplicates by logical response ID, sorts deterministically, supports question filtering, and exposes total/matched counts.
+- Response Library and Response Cache now use a dedicated logical cache reader that merges legacy `_response_cache` and current `derridai_response_cache` physical collections, deduplicates by logical response ID, sorts deterministically, supports question filtering, and exposes total/matched counts.
 - Record Comparison autocomplete now anchors its result popover inside the picker, scopes DOM lookups to the active view, supports pointer selection plus keyboard navigation, and avoids the misplaced/unclickable dropdown behavior caused by the result list being outside its positioned container.
 
 ## 0.21.0 — performance and regression fixes
@@ -317,10 +323,10 @@ Version 0.21.0 focuses on frontend responsiveness and fixes regressions found af
 - Vector Stores remains selectable for administrators even when no corpus collection exists yet, so the first collection/storage location can always be created or repaired; only actions that truly require an existing collection stay disabled.
 - PDF Explorer restores the known-good PDF.js legacy worker integration and uses the cached record autocomplete index instead of the removed `recordOptions()` helper.
 - Works action menus overlay surrounding cards instead of being clipped by the card boundary.
-- Works and Response FAQ cards render progressively in small batches with loading skeletons; dashboard KPIs render first while charts/rankings/recent activity fill during idle frames, and asynchronous Vector Stores/corpus search views show explicit loading states.
+- Works and Response Library cards render progressively in small batches with loading skeletons; dashboard KPIs render first while charts/rankings/recent activity fill during idle frames, and asynchronous Vector Stores/corpus search views show explicit loading states.
 - Record fingerprints are cached, preference/file persistence is less eager, pending-upsert derivation is short-lived cached, and dense card lists are excluded from the generic layout-measurement pass.
 - Background **Analyze & grade RAG response** results use a delegated result opener with explicit render/fetch error handling.
-- Response FAQ queries the response cache directly, recovers from stale persisted page numbers, clearly identifies saved searches with zero matches, and resolves both legacy `_response_cache` and current `derridai_response_cache` physical collections so retained responses remain visible across upgrades.
+- Response Library queries the response cache directly, recovers from stale persisted page numbers, clearly identifies saved searches with zero matches, and resolves both legacy `_response_cache` and current `derridai_response_cache` physical collections so retained responses remain visible across upgrades.
 
 ## 0.20.0 — Vue 3 frontend migration
 
@@ -354,7 +360,7 @@ Version 0.10.1 refines the 0.10.0 architecture and adds:
 - RAG grading is treated as normal LLM functionality: provider/model/parameters are selectable and grading can run interactively or as a cancellable background operation.
 - RAG grade results are persisted on the same response-cache entry as the original query, instructions, run parameters, answer, evidence, and retrieval diagnostics. Multiple grades are retained as history with grader provider/model and timestamp.
 - The grading launcher explicitly warns when the selected grader is the same provider/model that generated the answer, because self-grading is not an independent evaluation.
-- The logical `_response_cache` is now a system cache rather than a corpus vector store. It is excluded from Vector Stores, corpus DB counts, collection pickers, language mirroring, and RAG source selection. A dedicated **Response Cache** page manages cache status/history separately, while **Response FAQ** remains the answer/evidence browsing interface.
+- The logical `_response_cache` is now a system cache rather than a corpus vector store. It is excluded from Vector Stores, corpus DB counts, collection pickers, language mirroring, and RAG source selection. A dedicated **Response Cache** page manages cache status/history separately, while **Response Library** remains the answer/evidence browsing interface.
 - JSONL files can be subsetted deterministically with multiple arbitrary field rules (`equals`, `contains`, array membership, missing/existing, truthy/falsy, regex, and others), using ALL/ANY matching. Subsets become new editable JSONL tabs and can also be downloaded.
 - Bulk-field editing pre-populates the new-value input when the selected records already share exactly one value.
 - LLM proposed-change selection no longer rerenders the whole result dialog, preventing checkbox selection from jumping the scroll position to the top. Live updates preserve the current review scroll position.
@@ -380,8 +386,8 @@ Version 0.10.0 adds the following:
 - Chroma record-table columns are configurable, sortable, and independently filterable.
 - The Chroma collections rail is compact and collapsible.
 - Primary-collection background upserts continue to mirror corresponding `en` / `fr` language collections.
-- Completed RAG responses are automatically cached in the logical `_response_cache` collection and browsable from **Response FAQ**. Because Chroma collection names must begin with a lowercase letter or digit, the physical collection is stored as `derridai_response_cache`; DerridAI exposes it consistently as `_response_cache` through its API/UI.
-- Response FAQ provides question/answer browsing, retained evidence and retrieval details, rerun-with-parameters, and LLM response grading.
+- Completed RAG responses are automatically cached in the logical `_response_cache` collection and browsable from **Response Library**. Because Chroma collection names must begin with a lowercase letter or digit, the physical collection is stored as `derridai_response_cache`; DerridAI exposes it consistently as `_response_cache` through its API/UI.
+- Response Library provides question/answer browsing, retained evidence and retrieval details, rerun-with-parameters, and LLM response grading.
 - RAG result grading reports query relevance, source binding, claim traceability, attribution/source discrimination, claim/evidence fidelity, conceptual precision, coverage, interpretive usefulness, and an overall score.
 - URL query parameters now carry primary application location/state (view, loaded file/record, Chroma collection/work/page, browse mode, and PDF page), and breadcrumbs support both Back and Forward.
 - Compare supports either two loaded workspace records or two pasted JSON/JSONL records with the same red/green field diff used in review.
@@ -896,11 +902,11 @@ FreeLLM/OpenAI-compatible includes model routing, model-kind filtering, output t
 - **Re-run with parameters**, which repopulates RAG Research with the original run configuration so it can be modified before launch
 - **Analyze & grade**, which asks the selected LLM provider to evaluate query relevance, source binding, claim traceability, attribution/source discrimination, claim/evidence fidelity, conceptual precision, coverage, interpretive usefulness, and overall quality
 
-### Response FAQ
+### Response Library
 
 Every successfully completed RAG answer is written to the logical `_response_cache` Chroma collection as an eighth pipeline stage. The cache uses deterministic local vectors so writing a completed answer does not depend on Ollama or another embedding service being online.
 
-The **Response FAQ** page provides:
+The **Response Library** page provides:
 
 - question/answer browsing
 - search over cached questions

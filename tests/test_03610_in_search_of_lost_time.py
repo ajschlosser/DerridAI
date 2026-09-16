@@ -13,10 +13,10 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_03610_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.36.10"
-    assert 'version="0.36.10"' in MAIN
-    assert '"app_version": "0.36.10"' in MAIN
-    assert "# DerridAI Corpus Viewer 0.36.10" in README
+    assert package["version"] == "0.36.11"
+    assert 'version="0.36.11"' in MAIN
+    assert '"app_version": "0.36.11"' in MAIN
+    assert "# DerridAI Corpus Viewer 0.36.11" in README
     assert "0.36.10 — In Search of Lost Time" in README
 
 
@@ -57,8 +57,8 @@ def test_search_result_workspace_has_contextual_actions_and_explanations():
     assert 'search.why_result' in SEARCH
     assert 'similarityPercent(result)' in SEARCH
     assert 'result.evidence_available' in SEARCH
-    assert 'ui.get_citation' in SEARCH
-    assert 'v-if="snapshot.layout!==\'cards\'"' in SEARCH
+    assert '<CitationMenu' in SEARCH
+    assert "v-if=\"databaseMode&&snapshot.layout!=='cards'\"" in SEARCH
 
 
 def test_search_table_is_scrollable_sticky_resizable_and_readable():

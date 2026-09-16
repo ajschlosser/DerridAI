@@ -330,7 +330,7 @@ const viewConfig = [
   {id:"compare", label:"Compare", icon:"compare", section:"Tools"},
   {id:"vector", label:"Vector Stores", icon:"database", section:"Tools"},
   {id:"rag", label:"Research", icon:"spark", section:"Research"},
-  {id:"faq", label:"Response FAQ", icon:"books", section:"Research"},
+  {id:"faq", label:"Response Library", icon:"books", section:"Research"},
   {id:"responsecache", label:"Response Cache", icon:"database", section:"Research"},
   {id:"providers", label:"LLM Providers", icon:"spark", section:"System"},
   {id:"config", label:"Settings", icon:"gear", section:"System"},
@@ -344,6 +344,7 @@ const TABLE_DEFAULTS={
   global:["__db_status","work","page_start","needs_review","text"],
   vector:["_chroma_id","record_id","work","page_start","speaker","needs_review"],
 };
+const SEARCH_LOADED_COLUMNS=["__db_status","work","page_start","needs_review","text"];
 
 function icon(name){
   const paths={
@@ -407,7 +408,7 @@ function currentContext(){
     compare:["Tools","Record Comparison","Inspect field and text differences"],
     vector:["Storage","Vector Stores","Persistent local ChromaDB collections"],
     rag:["Research","Research","Run the evidence-grounded DerridAI retrieval and synthesis pipeline"],
-    faq:["Research","Response FAQ","Browse cached RAG questions, answers, evidence, reruns, and grades"],
+    faq:["Research","Response Library","Browse saved RAG questions, answers, evidence, reruns, and grades"],
     responsecache:["Research","Response Cache","Manage cached RAG queries, answers, evidence, and LLM grades separately from corpus vector stores"],
     providers:["System","LLM Providers","Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow"],
     config:["System","Settings","Application behavior, retrieval defaults, storage, backup, and reset controls"],
@@ -512,7 +513,7 @@ function setUserContext(user){
 function viewDisabledReason(view){
   if(!canAccessPage(view))return "This workspace is available to administrators only.";
   if(view==="vector"&&isResearcher()&&!hasChromaService())return dbUnavailableReason();
-  if(view==="faq"&&!hasChromaService())return "ChromaDB is unavailable, so the response FAQ cannot be opened.";
+  if(view==="faq"&&!hasChromaService())return "ChromaDB is unavailable, so the Response Library cannot be opened.";
   if(view==="responsecache"&&!hasChromaService())return "ChromaDB is unavailable, so the response cache cannot be opened.";
   return "";
 }
@@ -4209,14 +4210,14 @@ function faqExpansionKey(record){
 function gradeEveryFaqResponse(){
   openLlmTaskLauncher({
     task:"rag_grade_batch",
-    title:"Grade every Response FAQ entry",
+    title:"Grade every Response Library entry",
     description:"Grade or re-grade every cached RAG response sequentially with the selected provider/model/config. Existing grades are retained in grade history.",
     contextText:"All cached RAG responses in the logical response cache",
   });
 }
 async function renderFaq(main){
   const token=nextProgressiveRenderToken();
-  showViewLoading(main,"Loading Response FAQ","Reading cached RAG responses and grades…");
+  showViewLoading(main,"Loading Response Library","Reading saved RAG responses and grades…");
   const pageSize=50;
   const requestedPage=Math.max(1,state.faqPage||1);
   const fetchPage=async page=>{
@@ -4229,7 +4230,7 @@ async function renderFaq(main){
   try{
     payload=await fetchPage(requestedPage);
   }catch(error){
-    main.innerHTML=`<div class="info error"><b>Could not load Response FAQ.</b><span>${esc(error.message||String(error))}</span></div>`;
+    main.innerHTML=`<div class="info error"><b>Could not load Response Library.</b><span>${esc(error.message||String(error))}</span></div>`;
     return;
   }
   let matchedTotal=Number(payload.count||0);
@@ -4250,13 +4251,13 @@ async function renderFaq(main){
   const noMatches=records.length===0&&matchedTotal===0&&cacheTotal>0&&Boolean(state.faqSearch);
   const noCache=cacheTotal===0&&!payload.exists;
   if(noCache){
-    main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("spark")}</div><h1>Response FAQ</h1><p>Completed RAG runs will be cached automatically and appear here.</p><button class="btn primary" id="faqGoRag">${icon("spark")}Run a RAG query</button></div></section>`;
+    main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("spark")}</div><h1>Response Library</h1><p>Completed RAG runs will be cached automatically and appear here.</p><button class="btn primary" id="faqGoRag">${icon("spark")}Run a RAG query</button></div></section>`;
     main.querySelector("#faqGoRag")?.addEventListener("click",e=>{if(!e.currentTarget.disabled)navigateTo("rag")});
     decorateDisabledControls(main);
     return;
   }
   main.innerHTML=`<div class="toolbar faq-toolbar"><div class="search"><input id="faqSearch" value="${esc(state.faqSearch||"")}" placeholder="Search cached questions"></div><div class="tools"><span class="note">${cacheTotal.toLocaleString()} cached response${cacheTotal===1?"":"s"}${state.faqSearch?` · ${matchedTotal.toLocaleString()} match${matchedTotal===1?"":"es"}`:""}</span>${state.faqSearch?'<button class="btn small" id="faqClearSearch">Clear search</button>':""}<button class="btn small" id="faqExpandAll">Expand all</button><button class="btn small" id="faqCollapseAll">Collapse all</button>${isResearcher()?"":`<button class="btn small soft" id="faqGradeAll">${icon("spark")}Grade every response</button>`}<button class="btn" id="faqGoRag">${icon("spark")}New RAG query</button></div></div>
-  ${noMatches?`<div class="info">The response cache contains ${cacheTotal.toLocaleString()} response${cacheTotal===1?"":"s"}, but none match the current FAQ search. Clear the search to show all cached responses.</div>`:""}
+  ${noMatches?`<div class="info">The response cache contains ${cacheTotal.toLocaleString()} response${cacheTotal===1?"":"s"}, but none match the current Response Library search. Clear the search to show all cached responses.</div>`:""}
   <section class="faq-list" id="faqList"></section>
   <div class="pagebar"><span>Page ${state.faqPage||1} of ${pagesTotal}</span><div class="tools"><button class="btn small" id="faqPrev" ${(state.faqPage||1)<=1?"disabled":""}>← Previous</button><button class="btn small" id="faqNext" ${(state.faqPage||1)>=pagesTotal?"disabled":""}>Next →</button></div></div>`;
   const cardHtml=(record,index)=>{
@@ -4370,7 +4371,7 @@ async function openRagResult(job){
   location.assign(href);
 }
 async function getResponseFaqPage({limit=50,offset=0,query=""}={}){
-  if(!canAccessPage("faq"))throw new Error(tr("permissions.faq_denied","Your role cannot open Response FAQ."));
+  if(!canAccessPage("faq"))throw new Error(tr("permissions.faq_denied","Your role cannot open Response Library."));
   const params=new URLSearchParams({limit:String(Math.max(1,Math.min(1000,Number(limit)||50))),offset:String(Math.max(0,Number(offset)||0))});
   const search=String(query||"").trim();
   if(search)params.set("query",search);
@@ -4702,7 +4703,7 @@ async function renderRag(main){
             <label class="check-item"><input type="checkbox" id="ragDecompose" ${cfg.query_decomposition?"checked":""}><span>LLM query decomposition + French query formulation</span></label>
             <label class="check-item"><input type="checkbox" id="ragBind" ${cfg.bind_citations?"checked":""}><span>Bind evidence tags to citations <small>Default: [[E0]]; also accepts (), [], {}, and doubled wrappers.</small></span></label>
             <label class="check-item"><input type="checkbox" id="ragWorksCited" ${cfg.include_works_cited?"checked":""}><span>Append Works Cited</span></label>
-            <label class="check-item"><input type="checkbox" id="ragAutoGrade" ${cfg.auto_grade?"checked":""}><span>Auto-grade final response as the last pipeline step <small>Saved to Response FAQ when caching succeeds.</small></span></label>
+            <label class="check-item"><input type="checkbox" id="ragAutoGrade" ${cfg.auto_grade?"checked":""}><span>Auto-grade final response as the last pipeline step <small>Saved to Response Library when caching succeeds.</small></span></label>
           </div>
           <div class="rag-auto-grade-config ${cfg.auto_grade?"":"disabled-section"}">
             <div class="field"><label>Auto-grade provider profile</label><select class="control" id="ragAutoGradeProvider" ${cfg.auto_grade?"":"disabled"}>${profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===cfg.auto_grade_provider_profile_id?"selected":""}>${esc(providerDisplayName(p))} · ${esc(p.model||"auto")}${p.id===profileId?" · generation provider":""}</option>`).join("")}</select></div>
@@ -6183,6 +6184,8 @@ async function renderWorks(main){
     return `<section class="card work-overview-card"><div class="work-overview-cover">${cover?`<img src="${esc(cover)}" alt="${esc(trf("works.cover_alt","Cover of {work}",{work:selected.work}))}" loading="lazy">`:`<div class="work-cover-placeholder">${icon("books")}</div>`}</div><div class="work-overview-content"><div class="work-overview-heading"><div><span class="section-label">${esc(tr("works.overview","Work overview"))}</span><h1>${esc(selected.work)}</h1><p>${selected.count.toLocaleString()} ${esc(tr("dynamic.records","records"))} · ${selected.files.size.toLocaleString()} ${esc(tr("works.source_files","source files"))}</p></div><span class="db-status ${workDbStatus(selected.rows,selected.work).kind}"><i></i>${esc(workDbStatus(selected.rows,selected.work).label)}</span></div><div class="work-overview-metadata">${coreFields.map(field=>`<div><span>${esc(label(field))}</span><b>${metadataValue(selected.rows,field)}</b></div>`).join("")}</div><div class="work-overview-citation"><span>${esc(label("full_citation"))}</span><p>${esc(citationText)}</p></div>${workInsightsPanelHtml(selected.rows,selected.work)}<div class="work-overview-actions"><button class="btn primary" id="overviewSearchWork">${icon("search")}${esc(tr("works.search_records","Search records"))}</button><button class="btn" id="overviewEditWork">${icon("edit")}${esc(tr("works.edit_metadata","Edit work metadata"))}</button><button class="btn soft" id="overviewPopulateWork">${icon("spark")}${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</button>${annotationCount?`<button class="btn" id="overviewAnnotations">${icon("record")}${esc(trf("works.view_annotations","Annotations ({count})",{count:annotationCount.toLocaleString()}))}</button>`:""}</div></div></section>`;
   })():"";
 
+  const addJsonlCard=()=>`<button type="button" class="work-add-jsonl-card" id="worksAddJsonl" ${canUse("manageCorpus")?"":`disabled data-disabled-reason="${esc(tr("permissions.corpus_manage_denied","Your role cannot load corpus files."))}"`}><span class="work-add-jsonl-icon">${icon("plus")}</span><span><b>${esc(tr("works.add_jsonl","Add a JSONL file"))}</b><small>${esc(tr("works.add_jsonl_help","Open another corpus source and add its works to this workspace."))}</small></span></button>`;
+
   const workCard=x=>{
     const status=workDbStatus(x.rows,x.work),cover=workCoverUrl(x.rows);
     const publisher=commonWorkValue(x.rows,"publisher"),translator=commonWorkValue(x.rows,"translator"),year=commonWorkValue(x.rows,"publication_year");
@@ -6193,7 +6196,13 @@ async function renderWorks(main){
   const dbContext=`<section class="card works-database-context"><div><span class="section-label">${esc(tr("works.database_context","Works synchronization database"))}</span><b>${esc(state.activeStore||tr("research.none_selected","No database selected"))}</b><small>${esc(tr("works.database_context_help","Sync status and Sync actions on this page refer to the selected corpus database. Changing it does not change your loaded JSONL files."))}</small></div><label class="field"><span>${esc(tr("research.corpus_database","Corpus database"))}</span>${collectionPicker("worksStore")}<small>${activeStoreInfo?`${Number(activeStoreInfo.count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}`:esc(noDbReason)}</small></label></section>`;
   main.innerHTML=`${dbContext}${overviewHtml}<div class="toolbar works-toolbar aligned-toolbar"><div class="search"><input id="worksSearch" value="${esc(state.worksSearch)}" placeholder="${esc(tr("works.filter_title","Filter works by title"))}"></div><div class="tools"><button class="btn small soft" id="populateAllWorks" ${profiles.length&&map.size?"":`disabled data-disabled-reason="${esc(profiles.length?tr("works.no_works_to_populate","No works are available to populate."):tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.populate_all_metadata","Populate all metadata with LLM"))}</button><button class="btn small primary" id="syncAllWorks" ${state.activeStore&&totalRecords&&hasCorpusDb()?"":`disabled data-disabled-reason="${esc(noDbReason||tr("works.select_collection","Select a corpus collection first."))}"`}>${icon("database")}${esc(tr("works.sync_all","Sync all works"))}</button><span class="note">${works.length.toLocaleString()} ${esc(tr("works.shown","shown"))} · ${map.size.toLocaleString()} ${esc(tr("dynamic.works","works"))} · ${totalRecords.toLocaleString()} ${esc(tr("dynamic.records","records"))}</span></div></div><section class="works works-library-grid" id="worksGrid"></section>`;
   const grid=main.querySelector("#worksGrid");
-  progressiveRender(grid,works,workCard,{batchSize:12,label:trf("works.loading_cards","Loading {count} work cards",{count:works.length.toLocaleString()}),token,onDone:()=>refreshPresenceForRows(works.slice(0,24).flatMap(item=>item.rows.slice(0,2)))});
+  progressiveRender(grid,works,workCard,{batchSize:12,label:trf("works.loading_cards","Loading {count} work cards",{count:works.length.toLocaleString()}),token,onDone:()=>{
+    if(state.view!=="works"||token!==progressiveRenderToken)return;
+    grid.insertAdjacentHTML("beforeend",addJsonlCard());
+    grid.querySelector("#worksAddJsonl")?.addEventListener("click",()=>document.querySelector("#fileInput")?.click());
+    decorateDisabledControls(grid);
+    refreshPresenceForRows(works.slice(0,24).flatMap(item=>item.rows.slice(0,2)));
+  }});
 
   let searchTimer=null;
   const search=main.querySelector("#worksSearch");
@@ -6381,7 +6390,9 @@ function renderTraditionalGlobal(main){
   const flagged=needsReviewItems(rows).length;
   const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(x.file,x.index)));
   const available=tableAvailableFields(allRows(),["__file","__db_status"]);
-  const columns=getTableColumns("global",available);
+  const columns=scope==="loaded"
+    ? SEARCH_LOADED_COLUMNS.filter(key=>available.includes(key))
+    : getTableColumns("global",available);
   main.innerHTML=`<div class="global-search-v25 unified-search"><section class="card search-mode-card"><div class="cardhead"><div><b>${esc(tr("context.global_search","Global Search"))}</b><div class="note">${esc(tr("research.global_search_admin_help","Search loaded records or switch to semantic search in the selected corpus database."))}</div></div></div><div class="view-tabs"><button class="view-tab active" data-global-mode="traditional">${esc(tr("research.traditional_search","Record search"))}</button><button class="view-tab" data-global-mode="database">${esc(tr("research.semantic_db_search","Semantic DB search"))}</button></div></section><section class="card filterpanel"><div class="filtertop"><div class="search"><input id="globalSearch" value="${esc(state.globalSearch)}" placeholder="${esc(tr("research.loaded_record_search_placeholder","Search record text across all loaded files"))}"></div><div class="tools"><button class="btn small" id="addFilter">+ ${esc(tr("research.add_metadata_filter","Add metadata filter"))}</button><button class="btn small" id="clearFilters">${esc(tr("research.clear_filters","Clear filters"))}</button></div></div><div class="filters">${state.globalFilters.map(f=>filterHtml(f,fields)).join("")}</div></section>
   <div class="toolbar search-results-toolbar"><div class="tools"><span class="note">${rows.length} matching records</span>${reviewCount?`<span class="selection-count">${reviewCount} selected</span>`:""}${searchLayoutControls("traditional")}</div><div class="tools">${reviewCount?`<button class="btn soft" id="reviewSelected">${icon("spark")}Review selected with LLM</button><button class="btn small" id="autoImproveSelected">${icon("spark")}Auto-improve selected</button><button class="btn small" id="bulkEditGlobalSelected">${icon("edit")}Bulk edit selected</button><button class="btn small" id="clearSelected">Clear selection</button>`:""}${flagged?`<button class="btn small soft" id="reviewNeedsReview">${icon("spark")}Review needs-review (${flagged})</button><button class="btn small" id="autoImproveNeedsReview">${icon("spark")}Auto-improve needs-review</button>`:""}<button class="btn small" id="selectResults">Select all results</button>${searchResultLayout("traditional")!=="cards"?`<button class="btn small" id="globalColumns">${esc(tr("records.columns","Columns"))}</button>`:""}<select class="control" id="globalSize">${[25,50,100,250].map(n=>`<option ${state.pageSize===n?"selected":""}>${n}</option>`).join("")}</select></div></div>
   ${workspaceResultsHtml(slice,columns,state.globalSearch,pageSelected)}${pager(pg,rows.length,"global")}</div>`;
@@ -6592,7 +6603,7 @@ async function getSearchWorkspaceSnapshot({refresh=true,autoRun=true}={}){
     const base=localSearchBaseRows();let rows=base.filter(row=>searchRowMatchesFacets(row));rows=sortRows(rows,state.globalSort);
     total=rows.length;const pages=Math.max(1,Math.ceil(total/pageSize));state.globalPage=Math.max(1,Math.min(pages,Number(state.globalPage)||1));const start=(state.globalPage-1)*pageSize;const slice=rows.slice(start,start+pageSize);
     await refreshPresenceForRows(slice).catch(()=>undefined);
-    results=slice.map(buildWorkspaceSearchResult);facets=buildSearchFacets(base);suggestions=searchSuggestions(allRows());available=tableAvailableFields(allRows(),["__file","__db_status"]);filters=state.globalFilters.map(searchFilterDescriptor);
+    results=slice.map(buildWorkspaceSearchResult);facets=buildSearchFacets(base);suggestions=searchSuggestions(allRows());available=tableAvailableFields(allRows(),["__file",...SEARCH_LOADED_COLUMNS]);filters=state.globalFilters.map(searchFilterDescriptor);
   }else{
     let dbItems=(state.storeSearchResults||[]).map(buildDatabaseSearchResult).filter(result=>searchRecordMatchesFacets(result.record));dbItems=sortDatabaseSearchResults(dbItems);total=dbItems.length;const pages=Math.max(1,Math.ceil(total/pageSize));state.globalPage=Math.max(1,Math.min(pages,Number(state.globalPage)||1));const start=(state.globalPage-1)*pageSize;results=dbItems.slice(start,start+pageSize);const records=(state.storeSearchResults||[]).map(item=>item.record||{});facets=buildSearchFacets(records,{database:true});suggestions=searchSuggestions(records,{database:true});available=tableAvailableFields(records.map(record=>({record})),["__db_status"]);filters=dbSearchFilterDescriptors();
   }
@@ -6624,7 +6635,19 @@ function setSearchMmrOptions({fetch_k,lambda_mult}={}){if(fetch_k!=null)state.db
 function setSearchLayout(layout){if(!["compact","roomy","cards"].includes(layout))return;const key=searchScope()==="database"?"database":"traditional";state.searchResultLayouts={...(state.searchResultLayouts||{}),[key]:layout};persistPrefs();syncUrl({replace:true})}
 function setSearchPage(page){state.globalPage=Math.max(1,Number(page)||1);persistPrefs();syncUrl({replace:true})}
 function setSearchPageSize(size){state.pageSize=Math.max(10,Math.min(500,Number(size)||100));state.globalPage=1;persistPrefs();syncUrl({replace:true})}
-function setSearchColumns(columns){const available=searchScope()==="loaded"?tableAvailableFields(allRows(),["__file","__db_status"]):tableAvailableFields((state.storeSearchResults||[]).map(item=>({record:item.record||{}})),["__db_status"]);state.tableColumns.global=[...new Set((columns||[]).map(String))].filter(key=>available.includes(key));if(!state.tableColumns.global.length)state.tableColumns.global=TABLE_DEFAULTS.global.filter(key=>available.includes(key));persistPrefs();syncUrl({replace:true})}
+function setSearchColumns(columns){
+  const scope=searchScope();
+  const available=scope==="loaded"?tableAvailableFields(allRows(),["__file",...SEARCH_LOADED_COLUMNS]):tableAvailableFields((state.storeSearchResults||[]).map(item=>({record:item.record||{}})),["__db_status"]);
+  if(scope==="loaded"){
+    // Loaded-record Search has one stable table contract: DB status, Work,
+    // Page Start, Needs Review, Extracted Text, followed by Actions.
+    state.tableColumns.global=SEARCH_LOADED_COLUMNS.filter(key=>available.includes(key));
+  }else{
+    state.tableColumns.global=[...new Set((columns||[]).map(String))].filter(key=>available.includes(key));
+    if(!state.tableColumns.global.length)state.tableColumns.global=TABLE_DEFAULTS.global.filter(key=>available.includes(key));
+  }
+  persistPrefs();syncUrl({replace:true});
+}
 function setSearchSort(key){
   if(searchScope()==="database"){
     const sort=state.storeSearchSort||{key:"similarity",dir:-1};state.storeSearchSort={key,dir:sort.key===key?-Number(sort.dir||1):(key==="similarity"?-1:1)};
@@ -8967,7 +8990,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.36.10",
+      backup_client_version:"0.36.11",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -9271,12 +9294,12 @@ async function renderResponseCache(main){
   const exists=Boolean(payload.exists||cache);
   main.innerHTML=`<div class="response-cache-page">
     <section class="card response-cache-overview">
-      <div class="cardhead"><div><b>RAG response cache</b><div class="note">System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.</div></div><div class="tools"><button class="btn" id="cacheFaq">${icon("books")}Open FAQ</button>${exists?'<button class="btn danger" id="clearResponseCache">Clear cache</button>':""}</div></div>
+      <div class="cardhead"><div><b>RAG response cache</b><div class="note">System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.</div></div><div class="tools"><button class="btn" id="cacheFaq">${icon("books")}Open Response Library</button>${exists?'<button class="btn danger" id="clearResponseCache">Clear cache</button>':""}</div></div>
       <div class="dashboard-kpis response-cache-kpis"><div class="dash-kpi"><span>Cached responses</span><strong>${count.toLocaleString()}</strong></div><div class="dash-kpi"><span>Collection</span><strong>${exists?"_response_cache":"Not created"}</strong></div><div class="dash-kpi"><span>Embedding</span><strong>${esc(cache?.embedding_model||"system-managed")}</strong></div></div>
       <div class="info">Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs.</div>
     </section>
-    <section class="card"><div class="cardhead"><div><b>Recent cached responses</b><div class="note">Latest 100 response-cache entries. Use Response FAQ for full answer/evidence browsing and re-runs.</div></div></div>
-      <div class="tablewrap"><table><thead><tr><th>Created</th><th>Question</th><th>Generation</th><th>Evidence</th><th>Grades</th><th></th></tr></thead><tbody>${records.map((record,index)=>`<tr><td>${esc(formatTimestamp(record.created_at))}</td><td>${esc(record.question||"")}</td><td>${esc(record.provider||"")} · ${esc(record.model||"")}</td><td>${Number(record.evidence_count||0)}</td><td>${Array.isArray(record.grades)?record.grades.length:0}</td><td><button class="btn tiny" data-cache-faq="${index}">Open in FAQ</button></td></tr>`).join("")||'<tr><td colspan="6" class="note">No cached responses yet.</td></tr>'}</tbody></table></div>
+    <section class="card"><div class="cardhead"><div><b>Recent cached responses</b><div class="note">Latest 100 response-cache entries. Use Response Library for full answer/evidence browsing and re-runs.</div></div></div>
+      <div class="tablewrap"><table><thead><tr><th>Created</th><th>Question</th><th>Generation</th><th>Evidence</th><th>Grades</th><th></th></tr></thead><tbody>${records.map((record,index)=>`<tr><td>${esc(formatTimestamp(record.created_at))}</td><td>${esc(record.question||"")}</td><td>${esc(record.provider||"")} · ${esc(record.model||"")}</td><td>${Number(record.evidence_count||0)}</td><td>${Array.isArray(record.grades)?record.grades.length:0}</td><td><button class="btn tiny" data-cache-faq="${index}">Open in Response Library</button></td></tr>`).join("")||'<tr><td colspan="6" class="note">No cached responses yet.</td></tr>'}</tbody></table></div>
     </section>
   </div>`;
   main.querySelector("#cacheFaq")?.addEventListener("click",()=>navigateTo("faq"));

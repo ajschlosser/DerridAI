@@ -34,7 +34,7 @@ CAPABILITY_CATALOG: dict[str, dict[str, str | bool]] = {
     "page.settings": {"category": "Pages", "label": "Appearance & settings", "description": "Open researcher-safe settings such as appearance.", "researcher_default": True},
     "page.records": {"category": "Pages", "label": "Loaded records", "description": "Open administrator loaded-record management.", "researcher_default": False},
     "page.pdf": {"category": "Pages", "label": "PDF Explorer", "description": "Open PDF extraction and exploration tools.", "researcher_default": False},
-    "page.faq": {"category": "Pages", "label": "Response FAQ", "description": "Open the complete response FAQ workspace.", "researcher_default": False},
+    "page.faq": {"category": "Pages", "label": "Response Library", "description": "Open the complete saved-response library workspace.", "researcher_default": False},
     "page.response_cache": {"category": "Pages", "label": "Response cache", "description": "Browse and manage the RAG response cache.", "researcher_default": False},
     "page.providers": {"category": "Pages", "label": "LLM profiles", "description": "Configure LLM provider profiles.", "researcher_default": False},
     "page.users": {"category": "Pages", "label": "Users", "description": "Manage user accounts.", "researcher_default": False},

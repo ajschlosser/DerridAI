@@ -9,7 +9,7 @@ const record={
   created_at:"2026-09-14T18:30:00Z",
   evidence_count:8,
 };
-const meta={title:"Research/Response FAQ/Current Response",component:ResponseFaqSelectionBar,args:{record,evidenceCount:8,grade:9.2}} satisfies Meta<typeof ResponseFaqSelectionBar>;
+const meta={title:"Research/Response Library/Current Response",component:ResponseFaqSelectionBar,args:{record,evidenceCount:8,grade:9.2}} satisfies Meta<typeof ResponseFaqSelectionBar>;
 export default meta;
 type Story=StoryObj<typeof meta>;
 export const Default:Story={};

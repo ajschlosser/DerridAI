@@ -6,7 +6,7 @@ const records=[
   {record_id:"cache-2",question:"How does hospitality complicate sovereignty?",provider:"OpenAI-compatible",model:"gpt-oss:20b",created_at:"2026-09-14T16:10:00Z",evidence_count:11},
   {record_id:"cache-3",question:"Trace the role of undecidability in decision.",provider:"Ollama",model:"phi4:14b",created_at:"2026-09-13T22:15:00Z",evidence_count:6,grade:{overall:8}},
 ];
-const meta={title:"Research/Response FAQ/Archive Dialog",component:ResponseFaqArchiveDialog,args:{open:true,records,selectedId:"cache-1",search:"",loading:false,count:3,total:42,page:1,pages:2}} satisfies Meta<typeof ResponseFaqArchiveDialog>;
+const meta={title:"Research/Response Library/Archive Dialog",component:ResponseFaqArchiveDialog,args:{open:true,records,selectedId:"cache-1",search:"",loading:false,count:3,total:42,page:1,pages:2}} satisfies Meta<typeof ResponseFaqArchiveDialog>;
 export default meta;
 type Story=StoryObj<typeof meta>;
 export const Default:Story={};

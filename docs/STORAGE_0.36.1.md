@@ -6,7 +6,7 @@
 
 - authentication and roles: `derridai-auth.sqlite3`
 - system metadata and operation ledger: `derridai-system.sqlite3`
-- vector/search collections and Response FAQ cache: Chroma
+- vector/search collections and Response Library cache: Chroma
 - browser-only workspace/preferences: IndexedDB/localStorage
 
 This release is intentionally **fresh-install only**. It does not import, transform, rename, or inspect storage from older DerridAI versions. There are no schema-migration tables, versioned migration steps, JSON-to-SQLite conversion routines, or startup `ALTER TABLE` paths.

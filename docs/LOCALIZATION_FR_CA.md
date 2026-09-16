@@ -12,7 +12,7 @@ The interface localization follows these rules:
 - Every canonical built-in key must exist in both `en-US` and `fr-CA`. Placeholders such as `{count}` and `{title}` must remain identical between locales.
 - New UI strings must be entered through the i18n dictionary rather than hard-coded into a component. Compatibility views may use the exact-label bridge only for application-owned labels.
 
-Version 0.35.5 keeps the built-in localization revision at `0.35.0` and adds the new Response FAQ and unified Research-result strings by key. Existing administrator edits therefore remain intact while missing English and Québec French keys are filled in automatically.
+Version 0.35.5 keeps the built-in localization revision at `0.35.0` and adds the new Response Library and unified Research-result strings by key. Existing administrator edits therefore remain intact while missing English and Québec French keys are filled in automatically.
 
 The translated-dictionary installer also applies the Québec localization brief automatically when `fr-CA` is selected. Other locale codes continue to receive the general locale translation prompt.
 

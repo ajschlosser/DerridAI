@@ -163,7 +163,7 @@ onMounted(()=>void load({chooseFirst:true}));
     <header class="research-page-intro response-faq-intro">
       <div>
         <span class="section-label">{{i18n.t('faq.page_kicker','Research archive')}}</span>
-        <h1 id="response-faq-title">{{i18n.t('nav.faq','Response FAQ')}}</h1>
+        <h1 id="response-faq-title">{{i18n.t('nav.faq','Response Library')}}</h1>
         <p>{{i18n.t('faq.page_subtitle','Revisit cached answers with the same source-bound evidence experience used in Research.')}}</p>
       </div>
       <div class="response-faq-page-actions">

@@ -34,7 +34,7 @@ const records = [
 ];
 
 const meta:Meta<typeof ResponseFaqList>={
-  title:"Research/Response FAQ Library",
+  title:"Research/Response Library",
   component:ResponseFaqList,
   parameters:{layout:"padded"},
   args:{selectedId:"cache-1",records},
