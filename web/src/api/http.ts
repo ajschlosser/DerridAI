@@ -73,9 +73,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const method = String(init.method || "GET").toUpperCase();
   let response: Response;
   try {
+    const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+    const headers = new Headers(init.headers || {});
+    if (!isFormData && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     response = await fetch(path, {
       ...init,
-      headers: {"Content-Type": "application/json", ...(init.headers || {})},
+      headers,
     });
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);

@@ -376,6 +376,47 @@ class PdfLlmRequest(BaseModel):
     api_key: str | None = None
     generation: OllamaTouchupOptions | None = None
 
+
+
+class PdfCorpusBuildCreate(BaseModel):
+    asset_id: str = Field(min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v1", min_length=1, max_length=200)
+    provider: Literal["ollama", "openai"] = "ollama"
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    generation: OllamaTouchupOptions | None = None
+
+
+class PdfCorpusRecordPatch(BaseModel):
+    changes: dict[str, Any] = Field(default_factory=dict)
+
+
+class PdfCorpusRecordAccept(BaseModel):
+    accepted: bool = True
+
+
+class PdfCorpusRecordMerge(BaseModel):
+    direction: Literal["previous", "next"]
+
+
+class PdfCorpusRecordSplit(BaseModel):
+    after_block_id: str = Field(min_length=1, max_length=200)
+
+
+class PdfCorpusRecordRerun(BaseModel):
+    provider: Literal["ollama", "openai"] = "ollama"
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    generation: OllamaTouchupOptions | None = None
+
+
+class PdfCorpusPublishRequest(BaseModel):
+    require_acceptance: bool = True
+
 class RAGGradeRequest(BaseModel):
     question: str = Field(min_length=1)
     answer: str = Field(min_length=1)

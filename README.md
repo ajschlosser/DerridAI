@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.37.1
+# DerridAI Corpus Viewer 0.40.0
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,12 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.40.0 — Pdffffffffft.
+
+Version 0.40.0 turns PDF Explorer into the front end of an auditable corpus-production pipeline. PDFs are now content-addressed, persisted server-side, decomposed into layout-aware source blocks with adaptive OCR fallback, and processed by durable background builds. An LLM proposes semantic record boundaries based on discourse relations — speaker, position holder, stance, target, quotation frame, discourse role, and argumentative move — rather than page or character counts. DerridAI then constructs record text deterministically from immutable source blocks, infers source-supported record metadata, binds metadata fields to block-level evidence, validates source coverage and text fidelity, and routes uncertain records to human review.
+
+A new native Vue Corpus Builder provides source-PDF comparison, review filtering, evidence-bound metadata inspection, merge/split operations, JSON editing, acceptance states, build provenance, validation status, and JSONL publication/download. Builds record source SHA-256, app/schema/profile versions, provider/model, prompt versions, source spans, validation metrics, and publication hashes. Generated record sets can be opened directly in the local DerridAI workspace after publication.
 
 ## 0.37.1 — Disoriented
 

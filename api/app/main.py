@@ -36,6 +36,13 @@ from .models import (
     LLMStatusRequest,
     LLMWarmupRequest,
     PdfLlmRequest,
+    PdfCorpusBuildCreate,
+    PdfCorpusRecordPatch,
+    PdfCorpusRecordAccept,
+    PdfCorpusRecordMerge,
+    PdfCorpusRecordSplit,
+    PdfCorpusRecordRerun,
+    PdfCorpusPublishRequest,
     RAGRunRequest,
     RAGGradeRequest,
     RAGConcurrencyUpdate,
@@ -63,13 +70,14 @@ from .models import (
     LanguageInstallRequest,
 )
 from .pdf_tools import extract_pdf_text
+from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import translate_english_dictionary
 from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.37.1")
+app = FastAPI(title="DerridAI Corpus API", version="0.40.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -961,6 +969,7 @@ def _background_jobs_active() -> bool:
         or llm_tool_jobs.active_count()
         or rag_jobs.active_count()
         or upsert_jobs.active_count()
+        or pdf_corpus_builds.active_count()
     )
 
 
@@ -1072,6 +1081,12 @@ async def create_full_backup(
 
         collections = store.write_logical_backup(snapshot_root)
 
+        pdf_corpus_source = pdf_corpus_repository.root
+        pdf_corpus_backup = snapshot_root / "pdf-corpus"
+        if pdf_corpus_source.exists():
+            shutil.copytree(pdf_corpus_source, pdf_corpus_backup, dirs_exist_ok=True)
+        pdf_corpus_inventory = pdf_corpus_repository.list_builds(offset=0, limit=100000)
+
         operation_snapshot = {
             "llm": llm_jobs.snapshot(),
             "llm_tool": llm_tool_jobs.snapshot(),
@@ -1137,7 +1152,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.37.1",
+            "app_version": "0.40.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1174,6 +1189,10 @@ async def create_full_backup(
                 "language_count": len(system_snapshot.get("languages") or {}),
             },
             "current_pdf": pdf_entry,
+            "pdf_corpus": {
+                "build_count": int(pdf_corpus_inventory.get("total") or 0),
+                "included": pdf_corpus_backup.exists(),
+            },
             "contains_credentials": contains_credentials,
             "contains_auth_credentials": bool(auth_users),
             "notes": [
@@ -1479,6 +1498,23 @@ async def restore_full_backup(backup: UploadFile = File(...)):
                 )
                 pdf_available = True
 
+        corpus_backup_dir = extract_root / "pdf-corpus"
+        restored_pdf_corpus = False
+        if corpus_backup_dir.exists() and corpus_backup_dir.is_dir():
+            live_corpus_dir = pdf_corpus_repository.root
+            corpus_rollback_dir = rollback_root / "pdf-corpus"
+            if live_corpus_dir.exists():
+                shutil.copytree(live_corpus_dir, corpus_rollback_dir, dirs_exist_ok=True)
+            try:
+                shutil.rmtree(live_corpus_dir, ignore_errors=True)
+                shutil.copytree(corpus_backup_dir, live_corpus_dir)
+                restored_pdf_corpus = True
+            except Exception:
+                shutil.rmtree(live_corpus_dir, ignore_errors=True)
+                if corpus_rollback_dir.exists():
+                    shutil.copytree(corpus_rollback_dir, live_corpus_dir)
+                raise
+
         prefs = workspace_payload.get("prefs") or {}
         app_config = (
             prefs.get("appConfig")
@@ -1503,6 +1539,7 @@ async def restore_full_backup(backup: UploadFile = File(...)):
             "users_restored": restored_user_count,
             "pdf_available": pdf_available,
             "pdf": restored_pdf_meta,
+            "pdf_corpus_restored": restored_pdf_corpus,
         }
     except HTTPException:
         raise
@@ -1566,8 +1603,13 @@ def nuke():
         for transient in (
             data_root / ".derridai_restore",
             data_root / ".derridai_tmp",
+            data_root / ".home" / "pdf-corpus",
         ):
             shutil.rmtree(transient, ignore_errors=True)
+        # Recreate the corpus repository directories after a destructive reset so
+        # subsequent PDF uploads do not depend on process restart.
+        for part in ("assets", "builds", "publications"):
+            (pdf_corpus_repository.root / part).mkdir(parents=True, exist_ok=True)
         return {
             "ok": True,
             "cleared_jobs": cleared_jobs,
@@ -1594,6 +1636,186 @@ async def pdf_extract(
             status_code=500,
             detail=f"PDF extraction failed: {exc}",
         ) from exc
+
+
+@app.post("/api/pdf/assets")
+async def create_pdf_asset(
+    file: UploadFile = File(...),
+    ocr_mode: str = Form(default="auto"),
+    ocr_languages: str = Form(default="eng+fra+deu"),
+):
+    if ocr_mode not in {"auto", "never", "always"}:
+        raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
+    try:
+        data = await file.read()
+        return pdf_corpus_repository.save_asset(
+            data,
+            filename=file.filename or "source.pdf",
+            ocr_mode=ocr_mode,
+            ocr_languages=ocr_languages or "eng+fra+deu",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("PDF asset ingestion failed")
+        raise HTTPException(status_code=500, detail=f"PDF asset ingestion failed: {exc}") from exc
+
+
+@app.get("/api/pdf/assets")
+def list_pdf_assets():
+    return {"items": pdf_corpus_repository.list_assets()}
+
+
+@app.get("/api/pdf/assets/{asset_id}")
+def get_pdf_asset(asset_id: str):
+    try:
+        return pdf_corpus_repository.get_asset(asset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@app.get("/api/pdf/assets/{asset_id}/content")
+def get_pdf_asset_content(asset_id: str):
+    try:
+        asset = pdf_corpus_repository.get_asset(asset_id)
+        path = pdf_corpus_repository.asset_pdf_path(asset_id)
+        return FileResponse(path, media_type="application/pdf", filename=asset.get("filename") or "source.pdf")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@app.get("/api/pdf/assets/{asset_id}/blocks")
+def get_pdf_asset_blocks(
+    asset_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=1000),
+    ids: str = Query(default="", max_length=20000),
+):
+    try:
+        blocks = pdf_corpus_repository.load_blocks(asset_id)
+        if ids.strip():
+            requested = {value.strip() for value in ids.split(",") if value.strip()}
+            selected = [block for block in blocks if str(block.get("block_id") or "") in requested]
+            return {"items": selected, "total": len(selected), "offset": 0, "limit": len(selected)}
+        return {"items": blocks[offset:offset + limit], "total": len(blocks), "offset": offset, "limit": limit}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@app.get("/api/pdf/corpus-profiles")
+def list_pdf_corpus_profiles():
+    return {"items": list(CORPUS_PROFILES.values())}
+
+
+@app.post("/api/pdf/corpus-builds")
+def create_pdf_corpus_build(body: PdfCorpusBuildCreate):
+    try:
+        return pdf_corpus_builds.create(body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/corpus-builds")
+def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200), asset_id: str | None = None):
+    return pdf_corpus_repository.list_builds(offset=offset, limit=limit, asset_id=asset_id)
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}")
+def get_pdf_corpus_build(build_id: str):
+    try:
+        return pdf_corpus_repository.get_build(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}/records")
+def list_pdf_corpus_records(
+    build_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    needs_review: bool | None = None,
+    query: str = "",
+):
+    try:
+        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, query=query)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/cancel")
+def cancel_pdf_corpus_build(build_id: str):
+    try:
+        return pdf_corpus_builds.cancel(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata")
+def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch):
+    try:
+        return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept")
+def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordAccept):
+    try:
+        return pdf_corpus_builds.accept_record(build_id, record_id, body.accepted)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge")
+def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordMerge):
+    try:
+        return pdf_corpus_builds.merge(build_id, record_id, body.direction)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/split")
+def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit):
+    try:
+        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/rerun-metadata")
+def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.rerun_metadata(build_id, record_id, body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/publish")
+def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest):
+    try:
+        return pdf_corpus_builds.publish(build_id, require_acceptance=body.require_acceptance)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/publications/{publication_id}/download")
+def download_pdf_corpus_publication(publication_id: str):
+    path = pdf_corpus_repository.publication_path(publication_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Publication not found")
+    return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
 
 
 @app.get("/api/stores")

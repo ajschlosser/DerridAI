@@ -7161,7 +7161,7 @@ function renderPdf(main){
       <div class="pdf-command-divider"></div>
       <button class="btn small" id="extractPage" ${extractReady?"":"disabled"}>Extract page text</button>
       <details class="pdf-toolbar-menu"><summary class="btn small">More text tools</summary><div class="pdf-toolbar-menu-popover"><button class="btn small" id="extractAll" ${extractReady?"":"disabled"}>Extract all text</button></div></details>
-      <details class="pdf-toolbar-menu llm-menu"><summary class="btn small soft">${icon("spark")}LLM tools</summary><div class="pdf-toolbar-menu-popover"><div class="pdf-menu-context"><b>${esc(providerDisplayName(pdfProvider))}</b><span>Each action lets you choose provider, model, parameters, and run mode.</span></div><button class="btn small" id="pdfLlmClean" ${extractReady?"":"disabled"}>Clean current page text</button><button class="btn small" id="pdfLlmDraft" ${extractReady?"":"disabled"}>Create draft record</button><button class="btn small" id="pdfLlmLink" ${state.files.length?"":"disabled"}>Match & link page to record</button><button class="btn small" id="pdfProviders">${icon("gear")}Manage LLM providers</button></div></details>
+      <details class="pdf-toolbar-menu llm-menu"><summary class="btn small soft">${icon("spark")}LLM tools</summary><div class="pdf-toolbar-menu-popover"><div class="pdf-menu-context"><b>${esc(providerDisplayName(pdfProvider))}</b><span>Each action lets you choose provider, model, parameters, and run mode.</span></div><button class="btn small" id="pdfLlmClean" ${extractReady?"":"disabled"}>Clean current page text</button><button class="btn small" id="pdfLlmDraft" ${extractReady?"":"disabled"}>Create draft record</button><button class="btn small" id="pdfLlmLink" ${state.files.length?"":"disabled"}>Match & link page to record</button><button class="btn small" id="pdfProviders">${icon("gear")}Manage LLM providers</button></div></details><button class="btn small primary" id="pdfCorpusBuilder">${icon("spark")}Build record set</button>
     </div>
     <div class="pdf-context-row"><div class="pdf-context-pill"><span>Source</span><b>p. ${state.pdf.page}</b></div><div class="pdf-context-pill"><span>Works</span><b>${esc(relatedWorks.slice(0,2).join(" · ")||"None linked")}${relatedWorks.length>2?` +${relatedWorks.length-2}`:""}</b></div><div class="pdf-context-pill"><span>Current-page records</span><b>${linked.length}</b></div>${selectedRelated?`<button class="btn soft" id="returnToSelectedRecord">${icon("record")}Back to ${esc(selected.record_id||"record")}</button>`:""}</div>`:""}
   </section>
@@ -7265,6 +7265,7 @@ function renderPdf(main){
   document.querySelector("#pdfLlmDraft")?.addEventListener("click",draftPdfPageWithLlm);
   document.querySelector("#pdfLlmLink")?.addEventListener("click",linkPdfPageWithLlm);
   document.querySelector("#pdfProviders")?.addEventListener("click",()=>navigateTo("providers"));
+  document.querySelector("#pdfCorpusBuilder")?.addEventListener("click",()=>window.dispatchEvent(new CustomEvent("derridai:pdf-builder")));
   document.querySelector("#pdfPrev")?.addEventListener("click",()=>setPage(state.pdf.page-1));
   document.querySelector("#pdfNext")?.addEventListener("click",()=>setPage(state.pdf.page+1));
   document.querySelector("#pdfGo")?.addEventListener("click",()=>setPage(document.querySelector("#pdfPageInput").value));
@@ -9054,7 +9055,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.37.1",
+      backup_client_version:"0.40.0",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
