@@ -20,11 +20,11 @@ SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
 
 def test_03512_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.16"
-    assert 'version="0.35.16"' in MAIN
-    assert '"app_version": "0.35.16"' in MAIN
-    assert "Corpus Viewer 0.35.16" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.16" in APP
+    assert package["version"] == "0.35.17"
+    assert 'version="0.35.17"' in MAIN
+    assert '"app_version": "0.35.17"' in MAIN
+    assert "Corpus Viewer 0.35.17" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.17" in APP
     assert "0.35.12 — Tongue Twister" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -57,8 +57,8 @@ def test_country_flag_library_and_storybook_coverage_exist():
 
 def test_install_translation_is_bounded_validated_and_atomic():
     assert "_chunk_dictionary" in TRANSLATION
-    assert "max_items: int = 56" in TRANSLATION
-    assert "max_chars: int = 14_000" in TRANSLATION
+    assert "max_items: int = 24" in TRANSLATION
+    assert "max_chars: int = 6_500" in TRANSLATION
     assert "placeholder(s) changed" in TRANSLATION
     assert "effectively untranslated" in TRANSLATION or "did not produce a usable" in TRANSLATION
     assert "translate_english_dictionary(" in JOBS

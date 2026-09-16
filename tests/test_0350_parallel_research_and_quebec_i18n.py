@@ -39,10 +39,10 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
 
 def test_0350_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.16"
-    assert 'version="0.35.16"' in MAIN
-    assert "Corpus Viewer 0.35.16" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.16" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.17"
+    assert 'version="0.35.17"' in MAIN
+    assert "Corpus Viewer 0.35.17" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.17" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -97,7 +97,7 @@ def test_english_and_quebec_french_dictionaries_are_complete_and_placeholder_saf
     french = dictionaries["DEFAULT_FR_CA"]
     assert len(english) >= 1500
     assert set(english) == set(french)
-    assert french["language.french_ca"] == "Français (Québec)"
+    assert french["language.french_ca"] == "Français"
     assert "500" in french["vector.sync_behavior_help"]
     assert re.findall(r"\d+", english["vector.sync_behavior_help"]) == re.findall(r"\d+", french["vector.sync_behavior_help"])
     for key, source in english.items():
@@ -150,8 +150,8 @@ def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edit
 
     store_module.SystemStore()
     migrated = json.loads(system_path.read_text(encoding="utf-8"))
-    assert migrated["language_dictionary_revision"] == "0.35.16.1"
-    assert migrated["languages"]["fr-CA"]["name"] == "Français (Québec)"
+    assert migrated["language_dictionary_revision"] == "0.35.17.1"
+    assert migrated["languages"]["fr-CA"]["name"] == "Français"
     assert migrated["languages"]["en-US"]["dictionary"]["app.name"] == "DerridAI"
     assert migrated["languages"]["fr-CA"]["dictionary"]["nav.rag"] == "Recherche"
 

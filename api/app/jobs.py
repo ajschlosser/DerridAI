@@ -48,7 +48,7 @@ def _error_details(exc: Exception | dict[str, Any]) -> dict[str, Any]:
         status = int(status) if status is not None else None
     except (TypeError, ValueError):
         status = None
-    return {"message": message[:4000], "http_status": status, "diagnostic": str(diagnostic)[:2000] if diagnostic else None}
+    return {"message": message, "http_status": status, "diagnostic": str(diagnostic)[:12000] if diagnostic else None}
 
 
 def _store_job_error(job: dict[str, Any], exc: Exception) -> dict[str, Any]:

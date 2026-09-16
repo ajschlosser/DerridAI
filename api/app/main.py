@@ -66,7 +66,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.35.16")
+app = FastAPI(title="DerridAI Corpus API", version="0.35.17")
 
 app.add_middleware(
     CORSMiddleware,
@@ -643,8 +643,10 @@ def grade_rag_response(body: RAGGradeRequest):
             if isinstance(record, dict):
                 record.pop("updates", None)
         return run_rag_grade(body, store)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=f"RAG grading failed: {exc}") from exc
 
 
 @app.post("/api/pdf/llm")
@@ -699,7 +701,7 @@ def create_llm_tool_job(body: LLMToolJobCreate, request: Request):
     try:
         return llm_tool_jobs.create(body, owner=_request_user(request).username)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 _PROFILE_GENERATION_INT_KEYS = {"num_ctx", "num_predict", "top_k", "seed", "mirostat"}
@@ -819,8 +821,16 @@ def create_rag_job(body: RAGRunRequest, request: Request):
                 })
             body = RAGRunRequest(**payload)
         return rag_jobs.create(body, owner=user.username)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        # UI payloads are validated client-side as well. A stale profile or
+        # server-owned policy conflict is semantically unprocessable, not a
+        # malformed HTTP request; Research therefore never degrades these into
+        # an opaque 400 Bad Request.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=f"Research could not start: {exc}") from exc
 
 
 @app.post("/api/jobs/upsert")
@@ -1114,7 +1124,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.35.16",
+            "app_version": "0.35.17",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),

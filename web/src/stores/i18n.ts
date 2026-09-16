@@ -29,7 +29,7 @@ export const useI18nStore = defineStore("i18n", () => {
 
   async function loadLanguages() {
     try { languages.value = (await systemApi.languages()).languages; }
-    catch { languages.value = [{code: "en-US", name: "U.S. English", flag: "🇺🇸"}, {code: "fr-CA", name: "Français (Québec)", flag: "🇨🇦"}]; }
+    catch { languages.value = [{code: "en-US", name: "English", flag: "🇺🇸"}, {code: "fr-CA", name: "Français", flag: "🇨🇦"}]; }
   }
 
   async function setLocale(code: string) {

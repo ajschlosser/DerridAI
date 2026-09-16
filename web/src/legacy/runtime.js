@@ -4785,7 +4785,7 @@ async function renderRag(main){
           prompt,
           instructions:instructions||null,
           source_collection:cfg.source_collection,
-          selected_evidence:selectedEvidencePayload(),
+          selected_evidence:selectedPayload,
           skip_retrieval:Boolean(cfg.skip_retrieval),
           locales:cfg.locales,
           search_types:cfg.search_types,
@@ -4955,7 +4955,7 @@ async function renderDashboard(main){
     : recentAuditChanges(4).map(({file,record,index,update})=>({kind:"record",timestamp:update.timestamp||"",file,record,index,update}));
   const works=workItems.sort((a,b)=>a.work.localeCompare(b.work));
   const currentProvider=defaultProviderProfile();
-  const currentLanguage=state.translations?.locale==="fr-CA"?tr("language.french_ca","Français (Québec)"):tr("language.english_us","English (U.S.)");
+  const currentLanguage=state.translations?.locale==="fr-CA"?tr("language.french_ca","Français"):tr("language.english_us","English");
   const currentLanguageFlag=state.translations?.locale==="fr-CA"?"🇨🇦":"🇺🇸";
   const latestAnnotation=(!isResearcher()||hasCapability("annotations.read"))?(recentAnnotations(1)[0]||null):null;
   const preview=await dashboardRecordPreview(),previewRecord=preview.record,previewTarget=preview.target;
@@ -6369,20 +6369,25 @@ function openLlmTaskLauncher({
     dialog.querySelector("#toolProviders")?.addEventListener("click",()=>{close();navigateTo("providers")});
     dialog.querySelector("#toolWarm").onclick=async()=>{const el=dialog.querySelector("#toolStatus");el.textContent="Warming…";await warmupProviderProfile(profileId);el.textContent=state.providerWarmups?.[profileId]?.message||"Warmup requested"};
     dialog.querySelector("#runLlmTask").onclick=async()=>{
-      const active=providerProfile(profileId),config=providerRequestConfig(active,{textReview:true});
+      const active=providerProfile(profileId);
+      if(!active)return toast("Choose an available provider profile before continuing.");
+      if(!["ollama","openai"].includes(String(active.type||"")))return toast("The selected provider profile is not supported by this operation.");
+      const config=providerRequestConfig(active,{textReview:true});
       let extra={};
       try{extra=JSON.parse(dialog.querySelector("#toolExtra").value||"{}");if(!extra||Array.isArray(extra)||typeof extra!=="object")throw new Error("Advanced options must be an object")}
       catch(error){return toast(error.message)}
       const n=id=>{const raw=dialog.querySelector(`#${id}`)?.value;if(raw===""||raw==null)return null;const value=Number(raw);return Number.isFinite(value)?value:null};
       let think=false;
       if(active.type==="ollama"){const raw=dialog.querySelector("#toolThink")?.value||"false";think=raw==="true"?true:["low","medium","high"].includes(raw)?raw:false}
-      const generation={...config.ollama,num_ctx:active.type==="ollama"?n("toolCtx"):null,num_predict:n("toolPredict")??4096,think,temperature:n("toolTemp")??0,top_p:n("toolTopP")??1,seed:n("toolSeed"),extra_options:extra};
-      const model=active.type==="openai"&&active.model_mode==="auto"?"auto":dialog.querySelector("#toolModel").value.trim();
+      const generation=sanitizeResearchGeneration({...config.ollama,num_ctx:active.type==="ollama"?n("toolCtx"):null,num_predict:n("toolPredict")??4096,think,temperature:n("toolTemp")??0,top_p:n("toolTopP")??1,seed:n("toolSeed"),extra_options:extra});
+      const model=active.type==="openai"&&active.model_mode==="auto"?"auto":String(dialog.querySelector("#toolModel")?.value||"").trim();
+      if(!model)return toast("Select a model before continuing.");
+      if(task==="rag_grade"&&(!String(payload.question||"").trim()||!String(payload.answer||"").trim()))return toast("A completed Research question and answer are required before grading.");
       const direct={...payload,provider:active.type,model,base_url:active.base_url||null,api_key:active.type==="openai"?active.api_key||"":null,generation};
       const button=dialog.querySelector("#runLlmTask");button.disabled=true;button.textContent=runMode==="background"?"Starting…":"Running…";
       try{
         if(runMode==="background"){
-          const body={task,label:title,provider_profile_id:active.id,max_concurrent_requests:active.max_concurrent_requests??1,pdf:task.startsWith("pdf_")?direct:null,grade:task==="rag_grade"?direct:null,grade_batch:task==="rag_grade_batch"?{provider:direct.provider,model:direct.model,base_url:direct.base_url,api_key:direct.api_key,generation:direct.generation,provider_profile_id:active.id,max_concurrent_requests:active.max_concurrent_requests??1}:null};
+          const body={task,label:title,provider_profile_id:active.id,max_concurrent_requests:Math.max(1,Math.min(64,Number(active.max_concurrent_requests)||1)),pdf:task.startsWith("pdf_")?direct:null,grade:task==="rag_grade"?direct:null,grade_batch:task==="rag_grade_batch"?{provider:direct.provider,model:direct.model,base_url:direct.base_url,api_key:direct.api_key,generation:direct.generation,provider_profile_id:active.id,max_concurrent_requests:Math.max(1,Math.min(64,Number(active.max_concurrent_requests)||1))}:null};
           const job=await api("/api/jobs/llm-tool",{method:"POST",body:JSON.stringify(body)});
           state.jobs=[job,...state.jobs.filter(item=>item.id!==job.id)];syncJobProgressToasts();startJobPolling();close();toast(`${title} started in background`);
         }else{
@@ -7091,14 +7096,50 @@ function renderCompare(main){
   decorateDisabledControls(main);
 }
 
+const HTTP_ERROR_STORAGE_KEY="derridai.httpErrors.v1";
+function fullHttpErrorDetail(payload,text,statusText=""){
+  const detail=payload?.detail;
+  if(typeof detail==="string"&&detail.trim())return detail.trim();
+  if(Array.isArray(detail)){
+    const value=detail.map(item=>{
+      if(item&&typeof item==="object"){
+        const location=Array.isArray(item.loc)?item.loc.join("."):"";
+        const message=item.msg||item.message||JSON.stringify(item);
+        return location?`${location}: ${message}`:String(message);
+      }
+      return String(item);
+    }).filter(Boolean).join("; ");
+    if(value)return value;
+  }
+  if(detail&&typeof detail==="object"){
+    const message=detail.message||detail.error||detail.detail;
+    if(message)return String(message);
+    try{return JSON.stringify(detail)}catch{}
+  }
+  if(text&&String(text).trim())return String(text).trim();
+  return String(statusText||"Request failed");
+}
+function storeHttpError(entry){
+  try{
+    const current=JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY)||"[]");
+    const rows=Array.isArray(current)?current:[];
+    rows.unshift(entry);
+    localStorage.setItem(HTTP_ERROR_STORAGE_KEY,JSON.stringify(rows.slice(0,50)));
+  }catch{}
+}
 async function api(path,options={}){
+  const method=String(options.method||"GET").toUpperCase();
   let response;
   try{
     response=await fetch(path,{headers:{"Content-Type":"application/json",...(options.headers||{})},...options});
   }catch(error){
-    const wrapped=new Error("The API is unreachable. Check that the api container is running.");
-    wrapped.diagnostic=String(error?.message||error);
+    const diagnostic=String(error?.message||error);
+    const wrapped=new Error(`Network error · ${diagnostic}`);
+    wrapped.diagnostic=diagnostic;
     wrapped.status=0;
+    wrapped.fullMessage=wrapped.message;
+    wrapped.requestPath=String(path);
+    storeHttpError({timestamp:new Date().toISOString(),method,path:String(path),status:0,statusText:"Network error",message:wrapped.message,diagnostic,responseBody:""});
     throw wrapped;
   }
   if(response.status===401&&!String(path).startsWith("/api/auth/"))window.dispatchEvent(new CustomEvent("derridai-auth-expired"));
@@ -7106,21 +7147,19 @@ async function api(path,options={}){
   let payload={};
   try{payload=text?JSON.parse(text):{}}catch{payload={detail:text}}
   if(!response.ok){
-    const detail=payload.detail;
-    let message=`HTTP ${response.status}`;
-    let diagnostic="";
-    if(typeof detail==="string")message=`HTTP ${response.status} · ${detail}`;
-    else if(Array.isArray(detail)){
-      const summary=detail.map(item=>item?.msg||item?.message||String(item)).filter(Boolean).join("; ");
-      if(summary)message=`HTTP ${response.status} · ${summary}`;
-    }
-    else if(detail&&typeof detail==="object"){
-      message=`HTTP ${response.status}${detail.message?` · ${detail.message}`:""}`;
-      diagnostic=detail.diagnostic||"";
-    }
+    const detail=fullHttpErrorDetail(payload,text,response.statusText);
+    const diagnostic=typeof payload?.detail==="object"&&!Array.isArray(payload.detail)?String(payload.detail?.diagnostic||""):"";
+    const message=`HTTP ${response.status}${response.statusText?` ${response.statusText}`:""} · ${detail}`;
     const error=new Error(message);
     error.status=response.status;
+    error.statusText=response.statusText;
     error.diagnostic=diagnostic;
+    error.payload=payload;
+    error.responseBody=text;
+    error.requestPath=String(path);
+    error.requestMethod=method;
+    error.fullMessage=message;
+    storeHttpError({timestamp:new Date().toISOString(),method,path:String(path),status:response.status,statusText:response.statusText||"",message,diagnostic,responseBody:text});
     throw error;
   }
   return payload;
@@ -8407,7 +8446,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.35.16",
+      backup_client_version:"0.35.17",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -9415,6 +9454,10 @@ function sanitizeResearchGeneration(input={}){
   return out;
 }
 function normalizedResearchConfig(cfg={}){
+  const locales=Array.isArray(cfg.locales)?[...new Set(cfg.locales.map(String).filter(value=>["en","fr"].includes(value)))]:["en","fr"];
+  const searchTypes=Array.isArray(cfg.search_types)?[...new Set(cfg.search_types.map(String).filter(value=>["mmr","similarity"].includes(value)))]:["mmr","similarity"];
+  const reranker=["cross_encoder","lexical","none"].includes(String(cfg.reranker||""))?String(cfg.reranker):"cross_encoder";
+  const responseLanguage=["auto","en","fr"].includes(String(cfg.response_language||""))?String(cfg.response_language):"auto";
   return {
     ...cfg,
     k:finiteResearchNumber(cfg.k,64,{integer:true,min:1,max:500}),
@@ -9422,11 +9465,19 @@ function normalizedResearchConfig(cfg={}){
     lambda_mult:finiteResearchNumber(cfg.lambda_mult,.7,{min:0,max:1}),
     rrf_k:finiteResearchNumber(cfg.rrf_k,60,{integer:true,min:1,max:10000}),
     rerank_top_n:finiteResearchNumber(cfg.rerank_top_n,24,{integer:true,min:1,max:500}),
+    reranker,
+    cross_encoder_model:String(cfg.cross_encoder_model||"cross-encoder/ms-marco-MiniLM-L-6-v2").trim()||"cross-encoder/ms-marco-MiniLM-L-6-v2",
+    query_decomposition:Boolean(cfg.query_decomposition),
     query_decomposition_num_predict:finiteResearchNumber(cfg.query_decomposition_num_predict,768,{integer:true,min:64,max:8192}),
+    response_language:responseLanguage,
     evidence_record_char_limit:finiteResearchNumber(cfg.evidence_record_char_limit,12000,{integer:true,min:500,max:100000}),
     evidence_total_char_limit:finiteResearchNumber(cfg.evidence_total_char_limit,120000,{integer:true,min:5000,max:1000000}),
-    locales:Array.isArray(cfg.locales)?cfg.locales.filter(value=>["en","fr"].includes(String(value))):["en","fr"],
-    search_types:Array.isArray(cfg.search_types)?cfg.search_types.filter(value=>["mmr","similarity"].includes(String(value))):["mmr","similarity"],
+    locales,
+    search_types:searchTypes,
+    bind_citations:cfg.bind_citations!==false,
+    include_works_cited:cfg.include_works_cited!==false,
+    auto_grade:Boolean(cfg.auto_grade),
+    skip_retrieval:Boolean(cfg.skip_retrieval),
   };
 }
 async function startResearchRun(input={}){
@@ -9446,11 +9497,20 @@ async function startResearchRun(input={}){
   if(!skipRetrieval&&!cfg.source_collection)throw new Error("Select a corpus database.");
   if(!skipRetrieval&&!(cfg.locales||[]).length)throw new Error("Select at least one document language.");
   if(!skipRetrieval&&!(cfg.search_types||[]).length)throw new Error("Select at least one retrieval route.");
+  if(!skipRetrieval){
+    const store=recordStores().find(item=>item.name===cfg.source_collection);
+    if(!store)throw new Error("The selected corpus database is no longer available. Choose an existing database before running Research.");
+    if(Number(store.count||0)<=0)throw new Error("The selected corpus database is empty. Add records before running Research.");
+  }
+  if(selected.length>500)throw new Error("Research supports at most 500 selected evidence records in one run.");
+  const selectedPayload=selectedEvidencePayload();
+  if(skipRetrieval&&selectedPayload.length!==selected.length)throw new Error("One or more selected evidence records are no longer available. Remove the stale selection and try again.");
 
   const profileId=String(input.provider_profile_id||cfg.provider_profile_id||state.appConfig.default_provider_profile||"");
   const profile=providerProfile(profileId);
   if(!profile)throw new Error("No LLM profile is available for Research.");
-  const provider=profile.type||"ollama";
+  const provider=["ollama","openai"].includes(String(profile.type||""))?String(profile.type):"";
+  if(!provider)throw new Error("The selected LLM profile uses an unsupported provider. Update the profile before running Research.");
   const defaultModel=provider==="openai"&&profile.model_mode==="auto"?"auto":String(profile.model||"");
   const model=String(input.model||defaultModel).trim();
   if(!model)throw new Error("Select a generation model.");
@@ -9459,6 +9519,8 @@ async function startResearchRun(input={}){
   const generation=sanitizeResearchGeneration({...baseGeneration,...(input.generation||{})});
 
   const gradeProfile=cfg.auto_grade?providerProfile(cfg.auto_grade_provider_profile_id||profile.id):null;
+  if(cfg.auto_grade&&!gradeProfile)throw new Error("The selected auto-grade LLM profile is no longer available. Choose another grader or turn off auto-grading.");
+  if(gradeProfile&&!["ollama","openai"].includes(String(gradeProfile.type||"")))throw new Error("The selected auto-grade profile uses an unsupported provider.");
   const gradeConfig=gradeProfile?providerRequestConfig(gradeProfile,{textReview:true}):null;
   state.ragConfig.prompt=prompt;
   state.ragConfig.instructions=instructions;
@@ -9473,7 +9535,7 @@ async function startResearchRun(input={}){
       prompt,
       instructions:instructions||null,
       source_collection:cfg.source_collection||"",
-      selected_evidence:selectedEvidencePayload(),
+      selected_evidence:selectedPayload,
       skip_retrieval:skipRetrieval,
       locales:cfg.locales,
       search_types:cfg.search_types,

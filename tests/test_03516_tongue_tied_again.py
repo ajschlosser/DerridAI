@@ -21,11 +21,11 @@ SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
 def test_03516_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
     main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert package["version"] == "0.35.16"
-    assert 'version="0.35.16"' in main
-    assert '"app_version": "0.35.16"' in main
-    assert "Corpus Viewer 0.35.16" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.16" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.17"
+    assert 'version="0.35.17"' in main
+    assert '"app_version": "0.35.17"' in main
+    assert "Corpus Viewer 0.35.17" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.17" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.16 — Tongue Tied Again" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -80,7 +80,7 @@ def test_translation_tolerates_under_ten_percent_and_retains_partial_for_larger_
         )
     assert caught.value.failed_keys == ["ui.ten_0"]
     assert len(caught.value.partial_dictionary) == 9
-    assert "10% or more failed" in str(caught.value)
+    assert "failed (10%" in str(caught.value)
 
 
 def test_translation_resume_skips_validated_strings(monkeypatch):
