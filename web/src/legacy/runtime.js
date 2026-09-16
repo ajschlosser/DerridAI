@@ -87,6 +87,7 @@ const state = {
   upsertState: {},
   upsertIgnored: {},
   storePresence: {},
+  storePresenceIds: {},
   storePresenceCheckedAt: {},
   operationProgress: {},
   jobs: [],
@@ -909,18 +910,36 @@ function setEvidence(key,item,selected=true){
   persistPrefs();
   shellRefreshHook();
 }
+function workspaceDbEvidenceTarget(file,index,record=file?.records?.[index]){
+  if(!record||!state.activeStore)return null;
+  const status=recordDbStatus(file,index,record);
+  if(!["synced","exists"].includes(status.kind))return null;
+  const receipt=storeReceipt(state.activeStore,file,index);
+  const key=localRecordKey(file,index);
+  const confirmedId=state.storePresenceIds?.[state.activeStore]?.[key];
+  const id=String(receipt?.chroma_id||confirmedId||record.record_id||"").trim();
+  return id?{collection:state.activeStore,id,key:dbEvidenceKey(state.activeStore,id)}:null;
+}
+function workspaceEvidenceSelectionKey(file,index){
+  const local=workspaceEvidenceKey(file,index);
+  if(evidenceIsSelected(local))return local;
+  return workspaceDbEvidenceTarget(file,index)?.key||local;
+}
 function toggleWorkspaceEvidence(file,index){
   if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
   const record=file?.records?.[index];if(!record)return;
-  const key=workspaceEvidenceKey(file,index);
-  setEvidence(key,{
-    key,kind:"workspace",file_id:file.id,index,record_id:record.record_id||"",work:record.work||"",
+  const localKey=workspaceEvidenceKey(file,index);
+  if(evidenceIsSelected(localKey)){setEvidence(localKey,null,false);return}
+  const dbTarget=workspaceDbEvidenceTarget(file,index,record);
+  if(dbTarget){toggleDbEvidence(dbTarget.collection,dbTarget.id,record);return}
+  setEvidence(localKey,{
+    key:localKey,kind:"workspace",file_id:file.id,index,record_id:record.record_id||"",work:record.work||"",
     page_start:record.page_start??record.page??null,page_end:record.page_end??null,
     speaker:record.speaker||null,position_holder:record.position_holder||null,stance:record.stance||null,
     discourse_role:record.discourse_role||null,target:record.target||null,proposition_status:record.proposition_status||null,
     inline_citation:record.inline_citation||null,text_preview:String(record.text||"").replace(/\s+/g," ").trim().slice(0,280),
     label:`${record.record_id||`Record ${index+1}`} · ${record.work||file.name}`
-  },!evidenceIsSelected(key));
+  },true);
 }
 function toggleDbEvidence(collection,id,record={}){
   if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
@@ -1521,6 +1540,7 @@ async function refreshPresenceForRows(rows,{force=false}={}){
   const store=state.activeStore;
   if(!hasCorpusDb()||!store||!rows.length)return;
   if(!state.storePresence[store])state.storePresence[store]={};
+  if(!state.storePresenceIds[store])state.storePresenceIds[store]={};
   if(!state.storePresenceCheckedAt[store])state.storePresenceCheckedAt[store]={};
   const now=Date.now(),ttl=15000;
   const staleRows=force?rows:rows.filter(row=>now-Number(state.storePresenceCheckedAt[store][localRecordKey(row.file,row.index)]||0)>ttl);
@@ -1539,7 +1559,9 @@ async function refreshPresenceForRows(rows,{force=false}={}){
     for(const row of staleRows){
       const key=localRecordKey(row.file,row.index);
       const candidates=candidateChromaIds(row.file,row.index,row.record);
-      state.storePresence[store][key]=candidates.some(id=>found.has(id));
+      const matchedId=candidates.find(id=>found.has(id))||"";
+      state.storePresence[store][key]=Boolean(matchedId);
+      state.storePresenceIds[store][key]=matchedId;
       state.storePresenceCheckedAt[store][key]=now;
     }
     pendingUpsertCache.key="";
@@ -1724,7 +1746,7 @@ function dataCellHtml(row,key,query=""){
 }
 function workspaceRecordActionsHtml(row){
   const rowKey=reviewKey(row.file,row.index);
-  const evidenceKey=workspaceEvidenceKey(row.file,row.index);
+  const evidenceKey=workspaceEvidenceSelectionKey(row.file,row.index);
   const selected=evidenceIsSelected(evidenceKey);
   return `<td class="record-actions-cell"><div class="record-row-actions"><button class="btn tiny" data-cite-row-key="${esc(rowKey)}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">Inline</button><button class="btn tiny" data-cite-row-key="${esc(rowKey)}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">Full</button><button class="btn tiny ${selected?"soft":""}" data-toggle-workspace-evidence="${esc(rowKey)}" title="${esc(selected?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${selected?"✓ Evidence":"+ Evidence"}</button></div></td>`;
 }
@@ -1969,9 +1991,11 @@ function openMergeDialog(){
         if(removedIds.has(String(key).split("::")[0]))delete state.upsertIgnored[store][key];
       }
     }
-    for(const store of Object.keys(state.storePresence||{})){
-      for(const key of Object.keys(state.storePresence[store]||{})){
-        if(removedIds.has(String(key).split("::")[0]))delete state.storePresence[store][key];
+    for(const bucket of [state.storePresence,state.storePresenceIds]){
+      for(const store of Object.keys(bucket||{})){
+        for(const key of Object.keys(bucket[store]||{})){
+          if(removedIds.has(String(key).split("::")[0]))delete bucket[store][key];
+        }
       }
     }
 
@@ -2002,6 +2026,7 @@ function setActiveStore(name){
     // Presence maps can become very large for corpus-scale workspaces. Keep
     // only the selected store's map when switching collections.
     state.storePresence=next&&state.storePresence?.[next]?{[next]:state.storePresence[next]}:{};
+    state.storePresenceIds=next&&state.storePresenceIds?.[next]?{[next]:state.storePresenceIds[next]}:{};
     state.storePresenceCheckedAt=next&&state.storePresenceCheckedAt?.[next]?{[next]:state.storePresenceCheckedAt[next]}:{};
   }
   state.activeStore=next;
@@ -2072,7 +2097,7 @@ async function foregroundUpsertRows(rows,items,store,labelText){
   let controller=null;cancel.onclick=()=>{state.foregroundUpsertCancelRequested=true;cancel.disabled=true;cancel.textContent=tr("operations.cancelling","Cancelling…");status.textContent=tr("operations.cancelling_after_batch","Cancelling after the current request…");controller?.abort()};
   const closeDialog=()=>{try{dialog.close()}catch{}dialog.remove()};
   try{
-    if(!state.upsertState[store])state.upsertState[store]={};if(!state.storePresence[store])state.storePresence[store]={};
+    if(!state.upsertState[store])state.upsertState[store]={};if(!state.storePresence[store])state.storePresence[store]={};if(!state.storePresenceIds[store])state.storePresenceIds[store]={};
     for(let start=0;start<items.length;start+=batchSize){
       if(state.foregroundUpsertCancelRequested)throw Object.assign(new Error(tr("operations.sync_cancelled","Sync cancelled by user.")),{cancelled:true});
       const chunk=items.slice(start,start+batchSize);await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));status.textContent=trf("operations.foreground_sync_batch","Committing records {start}–{end} of {total}",{start:start+1,end:start+chunk.length,total});
@@ -2084,7 +2109,7 @@ async function foregroundUpsertRows(rows,items,store,labelText){
         updates_count:item.updates_count,
       }));controller=new AbortController();
       const result=await api(`/api/stores/${encodeURIComponent(store)}/records/bulk`,{method:"POST",signal:controller.signal,body:JSON.stringify({items:transportItems,document_field:"text",id_field:"_chroma_id",embedding_field:"embedding"})});controller=null;
-      const routes=result?.language_sync?.record_routes||{},now=new Date().toISOString();for(const item of chunk){const stores=[store,...(routes[item.chroma_id]||[])].filter(Boolean);for(const target of stores){if(!state.upsertState[target])state.upsertState[target]={};if(!state.storePresence[target])state.storePresence[target]={};state.upsertState[target][item.key]={fingerprint:item.fingerprint,timestamp:now,chroma_id:item.chroma_id,job_id:null,foreground:true,updates_count:item.updates_count};state.storePresence[target][item.key]=true;if(state.upsertIgnored?.[target])delete state.upsertIgnored[target][item.key]}}
+      const routes=result?.language_sync?.record_routes||{},now=new Date().toISOString();for(const item of chunk){const stores=[store,...(routes[item.chroma_id]||[])].filter(Boolean);for(const target of stores){if(!state.upsertState[target])state.upsertState[target]={};if(!state.storePresence[target])state.storePresence[target]={};if(!state.storePresenceIds[target])state.storePresenceIds[target]={};state.upsertState[target][item.key]={fingerprint:item.fingerprint,timestamp:now,chroma_id:item.chroma_id,job_id:null,foreground:true,updates_count:item.updates_count};state.storePresence[target][item.key]=true;state.storePresenceIds[target][item.key]=item.chroma_id;if(state.upsertIgnored?.[target])delete state.upsertIgnored[target][item.key]}}
       const completed=Math.min(start+chunk.length,total);progress.value=completed;count.textContent=`${completed.toLocaleString()} / ${total.toLocaleString()}`;persistPrefs();updateDbStatusElements();
     }
     status.textContent=tr("operations.refreshing_after_sync","Refreshing collection state…");state.storeWorksStore="";try{await refreshStores();await refreshStoreWorks(true)}catch(error){console.warn("Could not refresh stores after foreground sync",error)}
@@ -2581,6 +2606,7 @@ async function syncUpsertJobReceipts(job){
     for(const store of stores){
       if(!state.upsertState[store])state.upsertState[store]={};
       if(!state.storePresence[store])state.storePresence[store]={};
+      if(!state.storePresenceIds[store])state.storePresenceIds[store]={};
       state.upsertState[store][result.key]={
         fingerprint:result.fingerprint,
         timestamp:result.completed_at||new Date().toISOString(),
@@ -2589,6 +2615,7 @@ async function syncUpsertJobReceipts(job){
         updates_count:result.updates_count,
       };
       state.storePresence[store][result.key]=true;
+      state.storePresenceIds[store][result.key]=result.chroma_id||"";
       if(state.upsertIgnored?.[store])delete state.upsertIgnored[store][result.key];
     }
     // If the local record changed while the background upsert was running, the
@@ -2838,6 +2865,9 @@ function syncJobProgressToasts(previous=new Map()){
     }
     if(transitioned&&!jobCompletionNotified[job.id]){
       jobCompletionNotified[job.id]=true;
+      if(job.status==="completed"&&job.type==="llm_tool"&&(job.tool||job.mode)==="language_dictionary"){
+        window.dispatchEvent(new CustomEvent("derridai:languages-changed",{detail:{source:"translation-job",jobId:job.id}}));
+      }
       {
         const providerSummary=jobProviderSummary(job);
         const unit=job.type==="rag"?" stages":job.type==="llm_tool"&&(job.tool||job.mode)==="work_metadata"?" works":" records";
@@ -3060,8 +3090,14 @@ function annotationItemHtml(item){
   const tags=(annotation.tags||[]).map(tag=>`<span class="chip">${esc(tag)}</span>`).join("");
   const open=item.server?`<button class="annotation-open-record" data-server-annotation-record="${esc(annotation.record_id||"")}" data-server-annotation-store="${esc(annotation.store||"")}" title="${esc(tr("annotations.open_record","Open record"))}">${icon("record")}</button>`:`<button class="annotation-open-record" data-annotation-file="${esc(item.file.id)}" data-annotation-index="${item.index}" title="${esc(tr("annotations.open_record","Open record"))}">${icon("record")}</button>`;
   const source=item.server?(annotation.store||tr("annotations.shared","Shared annotation")):(item.file?.name||"");
-  const canDelete=item.server&&(state.userContext?.role==="admin"||Number(annotation.user_id||0)===Number(state.userContext?.id||-1));
-  return `<article class="annotation-feed-item">${open}<div class="annotation-feed-copy"><div class="annotation-feed-meta"><b>${esc(item.record?.record_id||tr("nav.record","Record"))}</b><span>${esc(annotation.field?label(annotation.field):tr("annotations.record_note","Record note"))}</span><time>${esc(formatTimestamp(annotation.created_at))}</time></div>${annotation.quote?`<blockquote>${esc(annotation.quote)}</blockquote>`:""}${annotation.note?`<p>${esc(annotation.note)}</p>`:""}${tags?`<div class="annotation-tags">${tags}</div>`:""}<small>${esc(annotation.initiated_by||annotation.author||tr("annotations.unknown_author","Unknown author"))} · ${esc(source)}</small></div>${canDelete?`<button class="btn tiny danger" data-delete-server-annotation="${esc(annotation.id)}">${esc(tr("ui.remove","Remove"))}</button>`:""}</article>`;
+  const canDeleteServer=item.server&&(state.userContext?.role==="admin"||Number(annotation.user_id||0)===Number(state.userContext?.id||-1));
+  const canDeleteLocal=!item.server&&canUse("editLocalRecords");
+  const removeButton=canDeleteServer
+    ?`<button class="btn tiny danger" data-delete-server-annotation="${esc(annotation.id)}">${esc(tr("ui.remove","Remove"))}</button>`
+    :canDeleteLocal
+      ?`<button class="btn tiny danger" data-delete-local-annotation="${esc(reviewKey(item.file,item.index))}" data-local-annotation-index="${item.annotationIndex}">${esc(tr("ui.remove","Remove"))}</button>`
+      :"";
+  return `<article class="annotation-feed-item">${open}<div class="annotation-feed-copy"><div class="annotation-feed-meta"><b>${esc(item.record?.record_id||tr("nav.record","Record"))}</b><span>${esc(annotation.field?label(annotation.field):tr("annotations.record_note","Record note"))}</span><time>${esc(formatTimestamp(annotation.created_at))}</time></div>${annotation.quote?`<blockquote>${esc(annotation.quote)}</blockquote>`:""}${annotation.note?`<p>${esc(annotation.note)}</p>`:""}${tags?`<div class="annotation-tags">${tags}</div>`:""}<small>${esc(annotation.initiated_by||annotation.author||tr("annotations.unknown_author","Unknown author"))} · ${esc(source)}</small></div>${removeButton}</article>`;
 }
 async function renderAnnotations(main){
   if(isResearcher()&&!state.activeStore){try{await refreshStores();state.activeStore=recordStores()[0]?.name||""}catch{}}
@@ -3075,7 +3111,30 @@ async function renderAnnotations(main){
   main.querySelectorAll("[data-annotation-view]").forEach(button=>button.onclick=()=>{state.annotationView=button.dataset.annotationView;persistPrefs();syncUrl({replace:true});renderAnnotations(main)});
   main.querySelectorAll("[data-annotation-file]").forEach(button=>button.onclick=()=>navigateTo("record",{fileId:button.dataset.annotationFile,index:Number(button.dataset.annotationIndex)}));
   main.querySelectorAll("[data-server-annotation-record]").forEach(button=>button.onclick=()=>openSharedAnnotationRecord(button.dataset.serverAnnotationStore,button.dataset.serverAnnotationRecord));
-  main.querySelectorAll("[data-delete-server-annotation]").forEach(button=>button.onclick=async()=>{if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_help","This removes the shared annotation. This action cannot be undone."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;try{await api(`/api/annotations/${encodeURIComponent(button.dataset.deleteServerAnnotation)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);renderAnnotations(main)}catch(error){toast(error.message,{tone:"danger"})}});
+  main.querySelectorAll("[data-delete-server-annotation]").forEach(button=>button.onclick=async()=>{if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_help","This removes the shared annotation. This action cannot be undone."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;try{await api(`/api/annotations/${encodeURIComponent(button.dataset.deleteServerAnnotation)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.removed","Annotation removed."));renderAnnotations(main)}catch(error){toast(error.message,{tone:"danger"})}});
+  main.querySelectorAll("[data-delete-local-annotation]").forEach(button=>button.onclick=async()=>{
+    if(!canUse("editLocalRecords"))return;
+    const item=reviewItemFromKey(button.dataset.deleteLocalAnnotation||"");
+    const annotationIndex=Number(button.dataset.localAnnotationIndex);
+    const annotations=Array.isArray(item?.record?.annotations)?item.record.annotations:[];
+    const annotation=Number.isInteger(annotationIndex)?annotations[annotationIndex]:null;
+    if(!item||!annotation)return;
+    if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_local_help","This removes the annotation from the local JSONL record and records the change in its audit history."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;
+    try{
+      const sharedId=String(annotation.shared_annotation_id||"").trim();
+      if(sharedId){
+        try{await api(`/api/annotations/${encodeURIComponent(sharedId)}`,{method:"DELETE"})}
+        catch(error){if(Number(error?.status||0)!==404)throw error}
+      }
+      const next=annotations.filter((_,index)=>index!==annotationIndex);
+      applyRecordChanges(item.file,item.index,{annotations:next},{source:"annotation-delete"});
+      await persistFileNow(item.file);
+      state.annotationsFetchedAt=0;
+      await refreshServerAnnotations(true);
+      toast(tr("annotations.removed","Annotation removed."));
+      renderAnnotations(main);
+    }catch(error){toast(error.message,{tone:"danger"})}
+  });
   main.querySelectorAll("[data-annotation-work]").forEach(button=>button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();state.workOverview=button.dataset.annotationWork||"";persistPrefs();navigateTo("works")}));
   decorateDisabledControls(main);
 }
@@ -5361,7 +5420,7 @@ function renderRecord(main){
       <button class="btn" data-copy-row-key="${esc(reviewKey(f,i))}">${icon("copy")}Copy record</button>
       <button class="btn" data-cite-row-key="${esc(reviewKey(f,i))}" data-cite-kind="inline">${icon("copy")}Inline citation</button>
       <button class="btn" data-cite-row-key="${esc(reviewKey(f,i))}" data-cite-kind="full">${icon("copy")}Full citation</button>
-      <button class="btn ${evidenceIsSelected(workspaceEvidenceKey(f,i))?"soft":""}" data-toggle-workspace-evidence="${esc(reviewKey(f,i))}" title="${esc(tr("record.add_evidence_help","Add this record to the selected evidence set used by Research and evidence-only RAG runs."))}">${evidenceIsSelected(workspaceEvidenceKey(f,i))?icon("check"):icon("plus")}${evidenceIsSelected(workspaceEvidenceKey(f,i))?"Evidence selected":"Add evidence"}</button>
+      <button class="btn ${evidenceIsSelected(workspaceEvidenceSelectionKey(f,i))?"soft":""}" data-toggle-workspace-evidence="${esc(reviewKey(f,i))}" title="${esc(tr("record.add_evidence_help","Add this record to the selected evidence set used by Research and evidence-only RAG runs."))}">${evidenceIsSelected(workspaceEvidenceSelectionKey(f,i))?icon("check"):icon("plus")}${evidenceIsSelected(workspaceEvidenceSelectionKey(f,i))?"Evidence selected":"Add evidence"}</button>
       <button class="btn ${state.reviewSelection.has(reviewKey(f,i))?"soft":""}" id="queueRecord" title="${esc(tr("record.select_help","Select this record for bulk review, editing, or synchronization actions."))}">${state.reviewSelection.has(reviewKey(f,i))?icon("check"):icon("plus")}${state.reviewSelection.has(reviewKey(f,i))?"Selected":"Select"}</button>
       ${loadedPdfRelated?`<button class="btn primary" id="returnToPdf">${icon("pdf")}PDF: ${esc(pdfDisplayTitle())} · p. ${state.pdf.page}</button>`:""}
       ${!loadedPdfRelated&&links.length?`<button class="btn" id="openPdfExplorer">${icon("pdf")}PDF Explorer</button>`:""}
@@ -5813,19 +5872,36 @@ function openSubsetBuilder(){
   let previewTimer=null;
   const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(updatePreview,120)};
 
+  const subsetAutocompleteExcluded=new Set(["text","extracted_text","extractedText","raw_text","ocr_text"]);
   function ruleHtml({field="work",operator="equals",value=""}={}){
-    return `<div class="subset-rule-core"><select class="control subset-field">${fieldOptions}</select><select class="control subset-operator">${operatorOptions}</select><input class="control subset-value" placeholder="Value"><button class="btn icon-only danger subset-remove" type="button" title="Remove condition">${icon("close")}</button></div>`;
+    return `<div class="subset-rule-core"><select class="control subset-field">${fieldOptions}</select><select class="control subset-operator">${operatorOptions}</select><input class="control subset-value" placeholder="${esc(tr("subset.value","Value"))}" autocomplete="off"><datalist class="subset-value-options"></datalist><button class="btn icon-only danger subset-remove" type="button" title="${esc(tr("subset.remove_condition","Remove condition"))}" aria-label="${esc(tr("subset.remove_condition","Remove condition"))}">${icon("close")}</button></div>`;
   }
   function initializeRule(row,{field="work",operator="equals",value=""}={}){
     row.querySelector(".subset-field").value=fields.includes(field)?field:fields[0]||"";
     row.querySelector(".subset-operator").value=operator;
     row.querySelector(".subset-value").value=value;
+    const input=row.querySelector(".subset-value"),datalist=row.querySelector(".subset-value-options");
+    const listId=`subset-values-${uid()}`;datalist.id=listId;
+    const syncSuggestions=()=>{
+      const fieldName=row.querySelector(".subset-field").value;
+      if(subsetAutocompleteExcluded.has(fieldName)){input.removeAttribute("list");datalist.innerHTML="";input.title=tr("subset.autocomplete_large_field","Autocomplete is disabled for large text fields.");return}
+      const values=new Set();
+      for(const {record} of selectedRows()){
+        const raw=record?.[fieldName];
+        const items=Array.isArray(raw)?raw:[raw];
+        for(const item of items){if(item===null||item===undefined||typeof item==="object")continue;const text=String(item).trim();if(text)values.add(text)}
+      }
+      const ordered=[...values].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}));
+      datalist.innerHTML=ordered.map(option=>`<option value="${esc(option)}"></option>`).join("");
+      if(ordered.length){input.setAttribute("list",listId);input.title=trf("subset.autocomplete_count","{count} unique values from the selected JSONL source.",{count:ordered.length.toLocaleString()})}
+      else{input.removeAttribute("list");input.title=""}
+    };
     const syncValue=()=>{
       const noValue=["exists","missing","truthy","falsy"].includes(row.querySelector(".subset-operator").value);
-      const input=row.querySelector(".subset-value");
       input.disabled=noValue;
-      input.placeholder=noValue?"No value required":"Value";
+      input.placeholder=noValue?tr("subset.no_value","No value required"):tr("subset.value","Value");
       if(noValue)input.value="";
+      if(noValue)input.removeAttribute("list");else syncSuggestions();
     };
     row.querySelectorAll("select,input").forEach(control=>control.addEventListener("input",()=>{syncValue();schedulePreview()}));
     row.querySelector(".subset-remove").onclick=()=>{
@@ -5915,9 +5991,11 @@ function openSubsetBuilder(){
     dialog.querySelector("#subsetExpressionPreview").innerHTML=items.length?`<b>Expression</b><code>${esc(expressionText(items))}</code>`:"";
     decorateDisabledControls(dialog);
   }
+  const refreshSubsetSuggestions=()=>expression.querySelectorAll(".subset-rule-row").forEach(row=>row.querySelector(".subset-field")?.dispatchEvent(new Event("input",{bubbles:false})));
   dialog.querySelector("#addSubsetRule").onclick=()=>addTopRule({field:fields.includes("work")?"work":fields[0],operator:"equals",value:""});
   dialog.querySelector("#addSubsetGroup").onclick=()=>addGroup();
-  dialog.querySelectorAll("#subsetSource,#subsetCase").forEach(control=>control.addEventListener("change",schedulePreview));
+  dialog.querySelector("#subsetSource")?.addEventListener("change",()=>{refreshSubsetSuggestions();schedulePreview()});
+  dialog.querySelector("#subsetCase")?.addEventListener("change",schedulePreview);
   const createSubset=async downloadFile=>{
     const items=readExpression();const rows=matchedRows();if(!items.length)return toast("Add at least one subset condition");if(!rows.length)return toast("No records match the subset expression");
     let name=dialog.querySelector("#subsetName").value.trim()||"subset.jsonl";if(!name.toLowerCase().endsWith(".jsonl"))name+=".jsonl";
@@ -5998,7 +6076,7 @@ function openBulkFieldEditor({rows=null,title="Bulk edit one field"}={}){
 function clearFileDerivedState(fileId){
   state.reviewSelection=new Set([...state.reviewSelection].filter(key=>!String(key).startsWith(fileId+"::")));
   delete state.selected[fileId];
-  for(const bucket of [state.upsertState,state.upsertIgnored,state.storePresence,state.storePresenceCheckedAt]){
+  for(const bucket of [state.upsertState,state.upsertIgnored,state.storePresence,state.storePresenceIds,state.storePresenceCheckedAt]){
     for(const store of Object.keys(bucket||{})){
       for(const key of Object.keys(bucket[store]||{}))if(key.startsWith(fileId+"::"))delete bucket[store][key];
     }
@@ -6044,6 +6122,7 @@ async function openRemoveWorkModal(work,rows){
         mirrored=Object.values(result.mirrored_deletes||{}).reduce((sum,value)=>sum+Number(value||0),0);
         state.storeWorksStore="";
         if(state.storePresence[dbStore])state.storePresence[dbStore]={};
+        if(state.storePresenceIds[dbStore])state.storePresenceIds[dbStore]={};
         await refreshStores();
       }
       close();persistPrefs();shell();renderView();
@@ -6263,7 +6342,7 @@ function renderTraditionalGlobal(main){
   const available=tableAvailableFields(allRows(),["__file","__db_status"]);
   const columns=getTableColumns("global",available);
   main.innerHTML=`<div class="global-search-v25 unified-search"><section class="card search-mode-card"><div class="cardhead"><div><b>${esc(tr("context.global_search","Global Search"))}</b><div class="note">${esc(tr("research.global_search_admin_help","Search loaded records or switch to semantic search in the selected corpus database."))}</div></div></div><div class="view-tabs"><button class="view-tab active" data-global-mode="traditional">${esc(tr("research.traditional_search","Record search"))}</button><button class="view-tab" data-global-mode="database">${esc(tr("research.semantic_db_search","Semantic DB search"))}</button></div></section><section class="card filterpanel"><div class="filtertop"><div class="search"><input id="globalSearch" value="${esc(state.globalSearch)}" placeholder="${esc(tr("research.loaded_record_search_placeholder","Search record text across all loaded files"))}"></div><div class="tools"><button class="btn small" id="addFilter">+ ${esc(tr("research.add_metadata_filter","Add metadata filter"))}</button><button class="btn small" id="clearFilters">${esc(tr("research.clear_filters","Clear filters"))}</button></div></div><div class="filters">${state.globalFilters.map(f=>filterHtml(f,fields)).join("")}</div></section>
-  <div class="toolbar search-results-toolbar"><div class="tools"><span class="note">${rows.length} matching records</span>${reviewCount?`<span class="selection-count">${reviewCount} selected</span>`:""}${searchLayoutControls("traditional")}</div><div class="tools">${reviewCount?`<button class="btn soft" id="reviewSelected">${icon("spark")}Review selected with LLM</button><button class="btn small" id="autoImproveSelected">${icon("spark")}Auto-improve selected</button><button class="btn small" id="bulkEditGlobalSelected">${icon("edit")}Bulk edit selected</button><button class="btn small" id="clearSelected">Clear selection</button>`:""}${flagged?`<button class="btn small soft" id="reviewNeedsReview">${icon("spark")}Review needs-review (${flagged})</button><button class="btn small" id="autoImproveNeedsReview">${icon("spark")}Auto-improve needs-review</button>`:""}<button class="btn small" id="selectResults">Select all results</button><button class="btn small" id="globalColumns">Columns</button><select class="control" id="globalSize">${[25,50,100,250].map(n=>`<option ${state.pageSize===n?"selected":""}>${n}</option>`).join("")}</select></div></div>
+  <div class="toolbar search-results-toolbar"><div class="tools"><span class="note">${rows.length} matching records</span>${reviewCount?`<span class="selection-count">${reviewCount} selected</span>`:""}${searchLayoutControls("traditional")}</div><div class="tools">${reviewCount?`<button class="btn soft" id="reviewSelected">${icon("spark")}Review selected with LLM</button><button class="btn small" id="autoImproveSelected">${icon("spark")}Auto-improve selected</button><button class="btn small" id="bulkEditGlobalSelected">${icon("edit")}Bulk edit selected</button><button class="btn small" id="clearSelected">Clear selection</button>`:""}${flagged?`<button class="btn small soft" id="reviewNeedsReview">${icon("spark")}Review needs-review (${flagged})</button><button class="btn small" id="autoImproveNeedsReview">${icon("spark")}Auto-improve needs-review</button>`:""}<button class="btn small" id="selectResults">Select all results</button>${searchResultLayout("traditional")!=="cards"?`<button class="btn small" id="globalColumns">${esc(tr("records.columns","Columns"))}</button>`:""}<select class="control" id="globalSize">${[25,50,100,250].map(n=>`<option ${state.pageSize===n?"selected":""}>${n}</option>`).join("")}</select></div></div>
   ${workspaceResultsHtml(slice,columns,state.globalSearch,pageSelected)}${pager(pg,rows.length,"global")}</div>`;
   main.querySelectorAll("[data-global-mode]").forEach(button=>button.onclick=()=>{state.globalSearchMode=button.dataset.globalMode;state.storeSearchResults=[];persistPrefs();syncUrl({replace:true});renderGlobal(main)});
   wireSearchLayoutControls(main,()=>renderGlobal(main));
@@ -6278,7 +6357,7 @@ function renderTraditionalGlobal(main){
   document.querySelector("#reviewNeedsReview")?.addEventListener("click",()=>openTouchup(needsReviewItems(rows)));
   document.querySelector("#autoImproveNeedsReview")?.addEventListener("click",()=>openTouchup(needsReviewItems(rows),"auto"));
   document.querySelector("#clearSelected")?.addEventListener("click",()=>{clearReviewSelection();renderGlobal(main)});
-  document.querySelector("#globalColumns").onclick=()=>openColumnChooser("global",available,()=>renderGlobal(main));
+  document.querySelector("#globalColumns")?.addEventListener("click",()=>openColumnChooser("global",available,()=>renderGlobal(main)));
   document.querySelector("#selectGlobalPage")?.addEventListener("change",e=>{for(const x of slice)setReviewSelected(x.file,x.index,e.target.checked);renderGlobal(main)});
   document.querySelectorAll("[data-select-key]").forEach(box=>box.onchange=e=>{e.stopPropagation();const item=reviewItemFromKey(box.dataset.selectKey);if(item)setReviewSelected(item.file,item.index,box.checked);renderGlobal(main)});
   document.querySelectorAll("[data-sort]").forEach(b=>b.onclick=()=>{toggleSort(sort,b.dataset.sort);state.globalPage=1;persistPrefs();syncUrl({replace:true});renderGlobal(main)});
@@ -6418,19 +6497,46 @@ function parseEditor(el){if(el.dataset.type==="boolean")return el.checked;if(el.
 
 function exportMenu(){
   const dialog=document.createElement("dialog");
-  dialog.innerHTML=`<div class="dh"><h2 style="margin:0;font-size:16px">Export JSONL</h2><button class="btn" data-close>Close</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">Current file</button><button class="btn" data-export="changed">Changed files</button><button class="btn" data-export="all">All files separately</button><button class="btn" data-export="aggregate">Aggregate JSONL</button><button class="btn" data-export="both">Changed + aggregate</button></div></div>`;
+  const nativeSave=typeof window.showSaveFilePicker==="function"||typeof window.showDirectoryPicker==="function";
+  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("export.title","Export JSONL"))}</h2><div class="dialog-subtitle">${esc(tr("export.help","Download copies, or use the system file picker to save into an existing location and overwrite files when you confirm it."))}</div></div><button class="btn icon-only" data-close aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div><div class="db export-jsonl-body"><label class="check-item export-overwrite-choice"><input type="checkbox" id="exportOverwrite" ${nativeSave?"":"disabled"}><span><b>${esc(tr("export.allow_overwrite","Save to disk / allow overwrite"))}</b><small>${esc(nativeSave?tr("export.allow_overwrite_help","Uses your browser's system file or folder picker. Choosing an existing file with the same name can replace it after the browser confirms."):tr("export.overwrite_unsupported","This browser does not expose the File System Access API; exports will download as copies instead."))}</small></span></label><div class="tools export-jsonl-actions"><button class="btn" data-export="current">${esc(tr("export.current","Current file"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed","Changed files"))}</button><button class="btn" data-export="all">${esc(tr("export.all","All files separately"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate","Aggregate JSONL"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate","Changed + aggregate"))}</button></div></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);dialog.querySelector("[data-close]").onclick=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-export]").forEach(b=>b.onclick=()=>{doExport(b.dataset.export);dialog.close();dialog.remove()});
+  dialog.querySelectorAll("[data-export]").forEach(button=>button.onclick=async()=>{button.disabled=true;try{await doExport(button.dataset.export,{overwrite:Boolean(dialog.querySelector("#exportOverwrite")?.checked)});dialog.close();dialog.remove()}catch(error){button.disabled=false;toast(error?.message||String(error),{tone:"danger"})}});
 }
-function download(name,text){const u=URL.createObjectURL(new Blob([text],{type:"application/x-ndjson"}));const a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),500)}
+function downloadBlob(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),500)}
+function download(name,text){downloadBlob(new Blob([text],{type:"application/x-ndjson"}),name)}
+async function saveJsonlWithPicker(name,text){
+  if(typeof window.showSaveFilePicker!=="function")return false;
+  try{
+    const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:"JSON Lines",accept:{"application/x-ndjson":[".jsonl",".ndjson"]}}]});
+    const writable=await handle.createWritable();await writable.write(text);await writable.close();return true;
+  }catch(error){if(error?.name==="AbortError")return null;throw error}
+}
+async function saveJsonlSetWithDirectory(files){
+  if(typeof window.showDirectoryPicker!=="function")return false;
+  try{
+    const directory=await window.showDirectoryPicker({mode:"readwrite"});
+    for(const file of files){const handle=await directory.getFileHandle(file.name,{create:true});const writable=await handle.createWritable();await writable.write(file.text);await writable.close()}
+    return true;
+  }catch(error){if(error?.name==="AbortError")return null;throw error}
+}
 function fileJsonl(f){return f.records.map(r=>JSON.stringify(r)).join("\n")+"\n"}
-function doExport(kind){
+async function doExport(kind,{overwrite=false}={}){
   const current=activeFile(),changed=state.files.filter(f=>f.dirty.size);
-  if(kind==="current"&&current)download(current.name,fileJsonl(current));
-  if(kind==="changed")changed.forEach((f,i)=>setTimeout(()=>download(f.name,fileJsonl(f)),i*160));
-  if(kind==="all")state.files.forEach((f,i)=>setTimeout(()=>download(f.name,fileJsonl(f)),i*160));
-  if(kind==="aggregate"||kind==="both")download("derridai-aggregate.jsonl",state.files.flatMap(f=>f.records).map(r=>JSON.stringify(r)).join("\n")+"\n");
-  if(kind==="both")changed.forEach((f,i)=>setTimeout(()=>download(f.name,fileJsonl(f)),250+i*160));
+  const aggregate={name:"derridai-aggregate.jsonl",text:state.files.flatMap(f=>f.records).map(r=>JSON.stringify(r)).join("\n")+"\n"};
+  const files=[];
+  if(kind==="current"&&current)files.push({name:current.name,text:fileJsonl(current)});
+  if(kind==="changed")files.push(...changed.map(file=>({name:file.name,text:fileJsonl(file)})));
+  if(kind==="all")files.push(...state.files.map(file=>({name:file.name,text:fileJsonl(file)})));
+  if(kind==="aggregate")files.push(aggregate);
+  if(kind==="both")files.push(...changed.map(file=>({name:file.name,text:fileJsonl(file)})),aggregate);
+  if(!files.length){toast(tr("export.nothing","There are no files to export."),{tone:"info"});return}
+  if(overwrite){
+    const result=files.length===1?await saveJsonlWithPicker(files[0].name,files[0].text):await saveJsonlSetWithDirectory(files);
+    if(result===null)return;
+    if(result===true){toast(trf("export.saved_count","Saved {count} file(s). Existing same-name files in the selected location were replaced.",{count:files.length.toLocaleString()}),{tone:"success"});return}
+    toast(tr("export.overwrite_unsupported","This browser does not expose the File System Access API; exports will download as copies instead."),{tone:"warn"});
+  }
+  files.forEach((file,index)=>setTimeout(()=>download(file.name,file.text),index*160));
 }
 
 async function currentPdfPageText(){
@@ -6797,7 +6903,7 @@ function renderPdf(main){
         </div>
         <div class="pdf-linked-list">${linked.map(({file,record,index})=>`<div class="linked-record-row">
           <button class="linked-record" data-linked-file="${file.id}" data-linked-index="${index}"><b>${esc(record.record_id||`Record ${index+1}`)}</b><span>${esc(record.work||file.name)} · ${esc(record.inline_citation||pages(record))}</span></button>
-          <div class="tools"><button class="btn small" data-copy-row-key="${esc(reviewKey(file,index))}">${icon("copy")}Copy</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">Inline</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">Full</button><button class="btn small ${evidenceIsSelected(workspaceEvidenceKey(file,index))?"soft":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceKey(file,index))?icon("check"):icon("plus")}Evidence</button><button class="btn small" data-linked-open-file="${file.id}" data-linked-open-index="${index}">${icon("record")}Open record</button><button class="btn small danger unlink-pdf-link" data-unlink-file="${file.id}" data-unlink-index="${index}" title="Unlink record from PDF">${icon("close")}Unlink</button></div>
+          <div class="tools"><button class="btn small" data-copy-row-key="${esc(reviewKey(file,index))}">${icon("copy")}Copy</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">Inline</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">Full</button><button class="btn small ${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"soft":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?icon("check"):icon("plus")}Evidence</button><button class="btn small" data-linked-open-file="${file.id}" data-linked-open-index="${index}">${icon("record")}Open record</button><button class="btn small danger unlink-pdf-link" data-unlink-file="${file.id}" data-unlink-index="${index}" title="Unlink record from PDF">${icon("close")}Unlink</button></div>
         </div>`).join("")||'<div class="note">No records linked to this page yet.</div>'}</div>
       </article>
 
@@ -6806,7 +6912,7 @@ function renderPdf(main){
         <div class="search pdf-related-search"><input id="pdfRelatedSearch" value="${esc(state.pdf.relatedSearch||"")}" placeholder="Filter linked records"></div>
         <div class="pdf-related-list">${related.slice(0,80).map(({file,record,index,pages:recordPages})=>`<div class="pdf-related-row">
           <button class="pdf-related-record" data-related-record-file="${file.id}" data-related-record-index="${index}"><b>${esc(record.record_id||`Record ${index+1}`)}</b><span>${esc(record.work||file.name)}</span><small>${esc(fullCitation(record)||file.name)}</small></button>
-          <div class="pdf-related-pages"><button class="copy-record-mini" data-copy-row-key="${esc(reviewKey(file,index))}" title="Copy entire record">${icon("copy")}</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">I</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">F</button><button class="copy-record-mini ${evidenceIsSelected(workspaceEvidenceKey(file,index))?"selected":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceKey(file,index))?"✓":"+"}</button>${recordPages.map(page=>`<button class="pdf-page-chip ${Number(page)===Number(state.pdf.page)?"active":""}" data-related-page="${page}" title="Open PDF page ${page}">p. ${page}</button>`).join("")}</div>
+          <div class="pdf-related-pages"><button class="copy-record-mini" data-copy-row-key="${esc(reviewKey(file,index))}" title="Copy entire record">${icon("copy")}</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">I</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">F</button><button class="copy-record-mini ${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"selected":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"✓":"+"}</button>${recordPages.map(page=>`<button class="pdf-page-chip ${Number(page)===Number(state.pdf.page)?"active":""}" data-related-page="${page}" title="Open PDF page ${page}">p. ${page}</button>`).join("")}</div>
         </div>`).join("")||'<div class="note">No linked records match this filter.</div>'}</div>
         ${related.length>80?`<div class="note" style="padding-top:8px">Showing first 80 of ${related.length} matches. Narrow the filter to see a specific record.</div>`:""}
       </article>
@@ -8568,7 +8674,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.36.2",
+      backup_client_version:"0.36.3",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),

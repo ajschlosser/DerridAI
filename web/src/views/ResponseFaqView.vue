@@ -177,6 +177,7 @@ onMounted(()=>void load({chooseFirst:true}));
     <AccessibleEmptyState
       v-else-if="payload&&!cacheTotal"
       icon="spark"
+      icon-tone="neutral"
       :title="i18n.t('faq.empty_title','No cached research responses yet')"
       :description="i18n.t('faq.empty_help','Completed cached Research runs will appear here with their evidence bindings.')"
     />

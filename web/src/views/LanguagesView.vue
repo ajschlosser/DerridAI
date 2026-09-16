@@ -252,7 +252,7 @@ async function save() {
     if (current.value.code === "en-US") referenceDictionary.value = { ...current.value.dictionary };
     baseline.value = snapshotCurrent();
     await refreshLanguages();
-    if (i18n.locale === current.value.code) await i18n.setLocale(current.value.code);
+    window.dispatchEvent(new CustomEvent("derridai:languages-changed", { detail: { source: "language-save", code: current.value.code } }));
     runtime.notifyToast?.(i18n.t("language.saved", "Language dictionary saved."), { tone: "success" });
     return true;
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); return false; }
@@ -291,7 +291,7 @@ async function monitorInstall(jobId: string) {
     if (["completed", "failed", "cancelled"].includes(job.status)) {
       if (job.status === "completed") {
         await refreshLanguages();
-        await i18n.loadLanguages();
+        window.dispatchEvent(new CustomEvent("derridai:languages-changed", { detail: { source: "language-install", jobId } }));
         const code = String(job.result?.code || job.request?.code || "");
         if (code) await load(code);
         const fallbackCount = Number(job.result?.fallback_count || job.result?.failed_count || 0);
@@ -425,7 +425,7 @@ async function confirmRemoveLanguage() {
     await systemApi.deleteLanguage(item.code);
     pendingDelete.value = null;
     await refreshLanguages();
-    await i18n.loadLanguages();
+    window.dispatchEvent(new CustomEvent("derridai:languages-changed", { detail: { source: "language-delete", code: item.code } }));
     await load(languages.value[0]?.code || "en-US");
     runtime.notifyToast?.(i18n.t("language.removed", "Language removed."), { tone: "success" });
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }

@@ -5153,4 +5153,52 @@ DEFAULT_FR_CA.update({
     "ui.apply": "Appliquer",
 })
 
+
+# 0.36.3 — All The Little Things: export overwrite UX, resilient scrolling,
+# contextual subset autocomplete, live language refresh, and annotation cleanup.
+DEFAULT_EN_US.update({
+    "export.title": "Export JSONL",
+    "export.help": "Download copies, or use the system file picker to save into an existing location and overwrite files when you confirm it.",
+    "export.allow_overwrite": "Save to disk / allow overwrite",
+    "export.allow_overwrite_help": "Uses your browser's system file or folder picker. Choosing an existing file with the same name can replace it after the browser confirms.",
+    "export.overwrite_unsupported": "This browser does not expose the File System Access API; exports will download as copies instead.",
+    "export.current": "Current file",
+    "export.changed": "Changed files",
+    "export.all": "All files separately",
+    "export.aggregate": "Aggregate JSONL",
+    "export.changed_aggregate": "Changed + aggregate",
+    "export.nothing": "There are no files to export.",
+    "export.saved_count": "Saved {count} file(s). Existing same-name files in the selected location were replaced.",
+    "subset.value": "Value",
+    "subset.remove_condition": "Remove condition",
+    "subset.autocomplete_large_field": "Autocomplete is disabled for large text fields.",
+    "subset.autocomplete_count": "{count} unique values from the selected JSONL source.",
+    "subset.no_value": "No value required",
+    "records.columns": "Columns",
+    "record.page": "Page",
+    "annotations.remove_local_help": "This removes the annotation from the local JSONL record and records the change in its audit history.",
+})
+DEFAULT_FR_CA.update({
+    "export.title": "Exporter en JSONL",
+    "export.help": "Téléchargez des copies ou utilisez le sélecteur de fichiers du système pour enregistrer dans un emplacement existant et remplacer les fichiers lorsque vous le confirmez.",
+    "export.allow_overwrite": "Enregistrer sur le disque / autoriser le remplacement",
+    "export.allow_overwrite_help": "Utilise le sélecteur de fichiers ou de dossiers du navigateur. Le choix d'un fichier existant portant le même nom peut le remplacer après confirmation du navigateur.",
+    "export.overwrite_unsupported": "Ce navigateur n'expose pas l'API File System Access; les exportations seront plutôt téléchargées comme des copies.",
+    "export.current": "Fichier actuel",
+    "export.changed": "Fichiers modifiés",
+    "export.all": "Tous les fichiers séparément",
+    "export.aggregate": "JSONL agrégé",
+    "export.changed_aggregate": "Modifiés + agrégé",
+    "export.nothing": "Il n'y a aucun fichier à exporter.",
+    "export.saved_count": "{count} fichier(s) enregistré(s). Les fichiers portant le même nom dans l'emplacement choisi ont été remplacés.",
+    "subset.value": "Valeur",
+    "subset.remove_condition": "Supprimer la condition",
+    "subset.autocomplete_large_field": "La saisie semi-automatique est désactivée pour les grands champs de texte.",
+    "subset.autocomplete_count": "{count} valeurs uniques dans la source JSONL sélectionnée.",
+    "subset.no_value": "Aucune valeur requise",
+    "records.columns": "Colonnes",
+    "record.page": "Page",
+    "annotations.remove_local_help": "Cette action supprime l'annotation de la fiche JSONL locale et consigne la modification dans son historique d'audit.",
+})
+
 system_store = SystemStore()

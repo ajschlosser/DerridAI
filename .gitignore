@@ -1,0 +1,53 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node / frontend build artifacts
+web/node_modules/
+web/dist/
+web/storybook-static/
+web/coverage/
+*.tsbuildinfo
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# SQLite runtime databases and sidecars
+*.sqlite
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Runtime corpus/model/home data; keep directory placeholders
+data/chroma/*
+!data/chroma/.gitkeep
+data/models/*
+!data/models/.gitkeep
+data/.home/*
+!data/.home/.gitkeep
+
+# IDE/editor state
+.vscode/
+.idea/
+*.swp
+*.swo

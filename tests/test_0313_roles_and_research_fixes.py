@@ -17,9 +17,9 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_release_version_is_0313():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.36.2"
-    assert 'version="0.36.2"' in MAIN
-    assert "Corpus Viewer 0.36.2" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.36.3"
+    assert 'version="0.36.3"' in MAIN
+    assert "Corpus Viewer 0.36.3" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_tooltips_escape_sidebar_and_stack_above_workspace():

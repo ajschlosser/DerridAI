@@ -3,6 +3,8 @@ import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
 import * as runtime from "../legacy/runtime.js";
 
+let languageEventBridgeInstalled = false;
+
 export const useI18nStore = defineStore("i18n", () => {
   const locale = ref(localStorage.getItem("derridai-locale") || "en-US");
   const languages = ref<LanguageInfo[]>([]);
@@ -48,6 +50,20 @@ export const useI18nStore = defineStore("i18n", () => {
       runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value);
       if (document.querySelector("#main")) runtime.renderView();
     } finally { loading.value = false; }
+  }
+
+  async function refreshLanguagesFromEvent() {
+    const requested = locale.value;
+    await loadLanguages();
+    const available = languages.value.some(item => item.code === requested);
+    await setLocale(available ? requested : "en-US");
+  }
+
+  if (typeof window !== "undefined" && !languageEventBridgeInstalled) {
+    languageEventBridgeInstalled = true;
+    window.addEventListener("derridai:languages-changed", () => {
+      void refreshLanguagesFromEvent().catch(exc => console.warn("Could not refresh installed languages", exc));
+    });
   }
 
   async function initialize() {
