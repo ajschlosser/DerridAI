@@ -74,6 +74,11 @@ def test_response_faq_polish_strings_have_english_quebec_french_parity():
         "faq.archive_help",
         "faq.browse_archive",
         "faq.current_response",
+        "faq.find_question",
+        "faq.find_another_question",
+        "faq.current_question",
+        "faq.questions_label",
+        "faq.saved_questions",
         "faq.run_summary",
         "faq.retrieval_help",
         "faq.query_help",
@@ -91,3 +96,14 @@ def test_new_result_and_faq_components_expand_storybook():
     assert "ResponseFaqList.stories.ts" in stories
     assert "ResponseFaqArchiveDialog.stories.ts" in stories
     assert "ResponseFaqSelectionBar.stories.ts" in stories
+
+
+def test_response_faq_question_finder_prioritizes_question_scanning():
+    assert "faq.find_question" in FAQ
+    assert "faq.current_question" in FAQ_SELECTION
+    assert "faq.find_another_question" in FAQ_SELECTION
+    assert "faq.questions_label" in FAQ_ARCHIVE
+    assert ':search="search"' in FAQ_ARCHIVE
+    assert "highlightParts" in FAQ_LIST
+    assert "<mark" in FAQ_LIST
+    assert "response-library-question-icon" in FAQ_LIST

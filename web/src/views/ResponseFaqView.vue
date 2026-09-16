@@ -122,7 +122,7 @@ onMounted(()=>void load({chooseFirst:true}));
         <p>{{i18n.t('faq.page_subtitle','Revisit cached answers with the same source-bound evidence experience used in Research.')}}</p>
       </div>
       <div class="response-faq-page-actions">
-        <button v-if="payload&&cacheTotal" class="btn" type="button" @click="archiveOpen=true"><AppIcon name="search"/>{{i18n.t('faq.browse_archive','Browse saved research')}} <span>{{cacheTotal.toLocaleString(i18n.locale)}}</span></button>
+        <button v-if="payload&&cacheTotal" class="btn" type="button" @click="archiveOpen=true"><AppIcon name="search"/>{{i18n.t('faq.find_question',i18n.t('faq.browse_archive','Browse saved research'))}} <span>{{cacheTotal.toLocaleString(i18n.locale)}}</span></button>
         <button class="btn primary" type="button" @click="newResearch"><AppIcon name="spark"/>{{i18n.t('faq.new_research','New research')}}</button>
       </div>
     </header>
