@@ -4,8 +4,10 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import math
 import re
 import shutil
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
@@ -13,10 +15,14 @@ from typing import Any
 import chromadb
 import httpx
 
-from .config import settings
+from .config import APP_VERSION, settings
 
 
 _JSON_PREFIX = "__json__:"
+
+
+class StoreAlreadyExistsError(ValueError):
+    """Raised when strict collection creation collides with an existing name."""
 
 
 def encode_metadata(
@@ -193,6 +199,27 @@ class ChromaStore:
     _LANG_KEY = "__derridai_language_codes"
     _ROLE_KEY = "__derridai_collection_role"
     _SOURCE_KEY = "__derridai_source_collection"
+    _MANIFEST_VERSION_KEY = "__derridai_manifest_version"
+    _DESCRIPTION_KEY = "__derridai_description"
+    _DIMENSION_KEY = "__derridai_embedding_dimension"
+    _REVISION_KEY = "__derridai_embedding_revision"
+    _DISTANCE_KEY = "__derridai_distance_metric"
+    _RETRIEVAL_KEY = "__derridai_retrieval_mode"
+    _TEXT_FIELD_KEY = "__derridai_text_field"
+    _FILTER_FIELDS_KEY = "__derridai_filter_fields"
+    _RECORD_FINGERPRINT_KEY = "__derridai_source_fingerprint"
+    _STATUS_KEY = "__derridai_status"
+    _BUILD_ID_KEY = "__derridai_build_id"
+    _BUILD_CREATED_KEY = "__derridai_build_created_at"
+    _LAST_SYNCED_KEY = "__derridai_last_synced_at"
+    _SOURCE_KIND_KEY = "__derridai_source_kind"
+    _SOURCE_LABEL_KEY = "__derridai_source_label"
+    _SOURCE_COUNT_KEY = "__derridai_source_record_count"
+    _SOURCE_HASH_KEY = "__derridai_source_snapshot_hash"
+    _SOURCE_WORKS_KEY = "__derridai_source_works"
+    _PROTECTED_KEY = "__derridai_protected"
+    _APP_VERSION_KEY = "__derridai_app_version"
+    _BUILD_HISTORY_KEY = "__derridai_build_history"
 
     def __init__(self) -> None:
         self._client = None
@@ -267,6 +294,253 @@ class ChromaStore:
                 "writable": False,
                 "error": str(exc),
             }
+
+    @staticmethod
+    def _iso_now() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def preflight_embedding(
+        self,
+        *,
+        provider: str,
+        model: str | None = None,
+        embedding_dimension: int | None = None,
+        distance_metric: str = "cosine",
+    ) -> dict[str, Any]:
+        """Resolve the immutable embedding contract before collection creation.
+
+        A one-item probe catches missing Ollama models and records the actual vector
+        dimension so dimension mismatches fail before a collection is populated.
+        """
+        provider = str(provider or settings.embedding_provider).strip().lower()
+        if provider not in {"chroma", "ollama", "precomputed"}:
+            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
+        metric = str(distance_metric or "cosine").strip().lower()
+        if metric not in {"cosine", "l2", "ip"}:
+            raise ValueError("Distance metric must be cosine, l2, or ip.")
+        normalized_model = str(model or "").strip() or None
+        if provider == "ollama" and not normalized_model:
+            normalized_model = settings.ollama_embed_model
+
+        revision: str | None = None
+        if provider == "precomputed":
+            return {
+                "ok": True,
+                "embedding_provider": provider,
+                "embedding_model": normalized_model,
+                "embedding_revision": revision,
+                "embedding_dimension": int(embedding_dimension) if embedding_dimension else None,
+                "distance_metric": metric,
+                "query_supported": False,
+                "probed": False,
+                "message": (
+                    "Precomputed vectors cannot be probed until records are supplied; "
+                    "their first vector establishes the dimension unless one is provided."
+                ),
+            }
+
+        vector = self.embeddings.embed_query(
+            "DerridAI embedding compatibility probe",
+            provider=provider,
+            model=normalized_model,
+        )
+        dimension = len(vector)
+        if provider == "ollama":
+            # Ollama's tags endpoint exposes a content digest. Persisting it means
+            # a mutable model tag (for example ``:latest``) remains auditable.
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    response = client.get(f"{settings.ollama_base_url}/api/tags")
+                    response.raise_for_status()
+                    models = response.json().get("models") or []
+                target = str(normalized_model or "").strip()
+                target_base = target.removesuffix(":latest")
+                for item in models:
+                    item_name = str(item.get("name") or item.get("model") or "").strip()
+                    if item_name == target or item_name.removesuffix(":latest") == target_base:
+                        revision = str(item.get("digest") or "").strip() or None
+                        break
+            except Exception:
+                # Revision discovery is provenance enrichment, not a prerequisite
+                # for a successful embedding probe.
+                revision = None
+        elif provider == "chroma":
+            revision = f"chromadb-{getattr(chromadb, '__version__', 'unknown')}"
+
+        if embedding_dimension is not None and int(embedding_dimension) != dimension:
+            raise ValueError(
+                f"Embedding preflight returned dimension {dimension}, not the requested "
+                f"dimension {embedding_dimension}."
+            )
+        return {
+            "ok": True,
+            "embedding_provider": provider,
+            "embedding_model": normalized_model,
+            "embedding_revision": revision,
+            "embedding_dimension": dimension,
+            "distance_metric": metric,
+            "query_supported": True,
+            "probed": True,
+            "message": f"Embedding probe succeeded with {dimension} dimensions.",
+        }
+
+    @staticmethod
+    def _decode_json_metadata(value: Any, default: Any) -> Any:
+        if not isinstance(value, str) or not value:
+            return default
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return default
+        return parsed
+
+    def _manifest_spec(self, collection) -> dict[str, Any]:
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        count = collection.count()
+        dimension = metadata.get(self._DIMENSION_KEY)
+        try:
+            dimension = int(dimension) if dimension not in (None, "") else None
+        except (TypeError, ValueError):
+            dimension = None
+        status = str(metadata.get(self._STATUS_KEY) or ("ready" if count else "empty"))
+        history = self._decode_json_metadata(metadata.get(self._BUILD_HISTORY_KEY), [])
+        if not isinstance(history, list):
+            history = []
+        works = self._decode_json_metadata(metadata.get(self._SOURCE_WORKS_KEY), [])
+        if not isinstance(works, list):
+            works = []
+        filter_fields = self._decode_json_metadata(metadata.get(self._FILTER_FIELDS_KEY), [])
+        if not isinstance(filter_fields, list):
+            filter_fields = []
+        return {
+            "manifest_version": int(metadata.get(self._MANIFEST_VERSION_KEY) or 1),
+            "description": str(metadata.get(self._DESCRIPTION_KEY) or ""),
+            "embedding_dimension": dimension,
+            "embedding_revision": metadata.get(self._REVISION_KEY),
+            "distance_metric": str(metadata.get(self._DISTANCE_KEY) or "l2"),
+            "retrieval_mode": str(metadata.get(self._RETRIEVAL_KEY) or "semantic"),
+            "text_field": str(metadata.get(self._TEXT_FIELD_KEY) or "text"),
+            "filter_fields": [str(value) for value in filter_fields],
+            "status": status,
+            "build_id": str(metadata.get(self._BUILD_ID_KEY) or ""),
+            "build_created_at": metadata.get(self._BUILD_CREATED_KEY),
+            "last_synced_at": metadata.get(self._LAST_SYNCED_KEY),
+            "source_kind": metadata.get(self._SOURCE_KIND_KEY),
+            "source_label": metadata.get(self._SOURCE_LABEL_KEY),
+            "source_record_count": int(metadata.get(self._SOURCE_COUNT_KEY) or 0),
+            "source_snapshot_hash": metadata.get(self._SOURCE_HASH_KEY),
+            "source_works": [str(value) for value in works],
+            "protected": bool(metadata.get(self._PROTECTED_KEY) or False),
+            "app_version": str(metadata.get(self._APP_VERSION_KEY) or "legacy"),
+            "build_history": history[-20:],
+        }
+
+    def set_protection(self, name: str, protected: bool) -> dict[str, Any]:
+        collection = self._collection(name)
+        metadata = dict(collection.metadata or {})
+        metadata[self._PROTECTED_KEY] = bool(protected)
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+    def begin_sync(
+        self,
+        name: str,
+        *,
+        source_kind: str = "browser_workspace",
+        source_label: str | None = None,
+        source_record_count: int = 0,
+        source_works: list[str] | None = None,
+        source_snapshot_hash: str | None = None,
+    ) -> dict[str, Any]:
+        collection = self._collection(name)
+        metadata = dict(collection.metadata or {})
+        build_id = f"build-{self._iso_now().replace(':', '').replace('-', '')[:15]}-{uuid.uuid4().hex[:8]}"
+        metadata[self._STATUS_KEY] = "building"
+        metadata[self._BUILD_ID_KEY] = build_id
+        metadata[self._BUILD_CREATED_KEY] = self._iso_now()
+        metadata.pop("__derridai_last_build_error", None)
+        metadata[self._SOURCE_KIND_KEY] = str(source_kind or "browser_workspace")
+        if source_label:
+            metadata[self._SOURCE_LABEL_KEY] = str(source_label)
+        metadata[self._SOURCE_COUNT_KEY] = int(max(0, source_record_count))
+        metadata[self._SOURCE_WORKS_KEY] = json.dumps(list(dict.fromkeys(source_works or [])), ensure_ascii=False, separators=(",", ":"))
+        if source_snapshot_hash:
+            metadata[self._SOURCE_HASH_KEY] = str(source_snapshot_hash)
+        collection.modify(metadata=metadata)
+        return {"build_id": build_id, "store": self._public_store(collection)}
+
+    def set_build_status(self, name: str, status: str) -> dict[str, Any]:
+        allowed = {"empty", "queued", "building", "validating", "ready", "stale", "failed"}
+        normalized = str(status or "").strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"Unsupported collection build status: {status!r}")
+        collection = self._collection(name)
+        metadata = dict(collection.metadata or {})
+        metadata[self._STATUS_KEY] = normalized
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+    def finish_sync(self, name: str, *, status: str = "ready") -> dict[str, Any]:
+        collection = self._collection(name)
+        metadata = dict(collection.metadata or {})
+        now = self._iso_now()
+        metadata[self._STATUS_KEY] = status
+        metadata[self._LAST_SYNCED_KEY] = now
+        history = self._decode_json_metadata(metadata.get(self._BUILD_HISTORY_KEY), [])
+        if not isinstance(history, list):
+            history = []
+        history.append({
+            "build_id": metadata.get(self._BUILD_ID_KEY),
+            "status": status,
+            "created_at": metadata.get(self._BUILD_CREATED_KEY),
+            "finished_at": now,
+            "record_count": collection.count(),
+            "source_record_count": int(metadata.get(self._SOURCE_COUNT_KEY) or 0),
+            "source_snapshot_hash": metadata.get(self._SOURCE_HASH_KEY),
+            "embedding_provider": metadata.get(self._PROVIDER_KEY),
+            "embedding_model": metadata.get(self._MODEL_KEY),
+            "embedding_dimension": metadata.get(self._DIMENSION_KEY),
+            "embedding_revision": metadata.get(self._REVISION_KEY),
+            "distance_metric": metadata.get(self._DISTANCE_KEY),
+            "retrieval_mode": metadata.get(self._RETRIEVAL_KEY),
+            "filter_fields": self._decode_json_metadata(metadata.get(self._FILTER_FIELDS_KEY), []),
+            "source_kind": metadata.get(self._SOURCE_KIND_KEY),
+            "source_label": metadata.get(self._SOURCE_LABEL_KEY),
+            "source_works": self._decode_json_metadata(metadata.get(self._SOURCE_WORKS_KEY), []),
+            "app_version": metadata.get(self._APP_VERSION_KEY),
+        })
+        metadata[self._BUILD_HISTORY_KEY] = json.dumps(history[-20:], ensure_ascii=False, separators=(",", ":"))
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+    def fail_sync(self, name: str, message: str | None = None) -> dict[str, Any]:
+        collection = self._collection(name)
+        metadata = dict(collection.metadata or {})
+        metadata[self._STATUS_KEY] = "failed"
+        if message:
+            metadata["__derridai_last_build_error"] = str(message)[:2000]
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+    def _ensure_vector_dimension(self, collection, vectors: list[list[float]]) -> int | None:
+        if not vectors:
+            return None
+        dimensions = {len(vector) for vector in vectors}
+        if len(dimensions) != 1:
+            raise ValueError("A single upsert batch contains vectors with different dimensions.")
+        dimension = next(iter(dimensions))
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        expected = metadata.get(self._DIMENSION_KEY)
+        if expected not in (None, "") and int(expected) != dimension:
+            raise ValueError(
+                f"Embedding dimension mismatch: collection expects {int(expected)}, "
+                f"but this batch produced {dimension}. Rebuild into a new collection "
+                "with the intended embedding model."
+            )
+        if expected in (None, "") and hasattr(collection, "modify"):
+            metadata[self._DIMENSION_KEY] = dimension
+            collection.modify(metadata=metadata)
+        return dimension
 
     def _embedding_spec(self, collection) -> tuple[str, str | None]:
         metadata = dict(getattr(collection, "metadata", None) or {})
@@ -406,12 +680,34 @@ class ChromaStore:
             self._LANG_KEY,
             self._ROLE_KEY,
             self._SOURCE_KEY,
+            self._MANIFEST_VERSION_KEY,
+            self._DESCRIPTION_KEY,
+            self._DIMENSION_KEY,
+            self._REVISION_KEY,
+            self._DISTANCE_KEY,
+            self._RETRIEVAL_KEY,
+            self._TEXT_FIELD_KEY,
+            self._FILTER_FIELDS_KEY,
+            self._STATUS_KEY,
+            self._BUILD_ID_KEY,
+            self._BUILD_CREATED_KEY,
+            self._LAST_SYNCED_KEY,
+            self._SOURCE_KIND_KEY,
+            self._SOURCE_LABEL_KEY,
+            self._SOURCE_COUNT_KEY,
+            self._SOURCE_HASH_KEY,
+            self._SOURCE_WORKS_KEY,
+            self._PROTECTED_KEY,
+            self._APP_VERSION_KEY,
+            self._BUILD_HISTORY_KEY,
+            "__derridai_last_build_error",
         }
         public_metadata = {
             key: value
             for key, value in metadata.items()
             if key not in private
         }
+        manifest = self._manifest_spec(collection)
         return {
             "name": self._public_collection_name(collection),
             "storage_name": collection.name,
@@ -422,6 +718,8 @@ class ChromaStore:
             "language_codes": language_codes,
             "collection_role": role,
             "source_collection": source_collection,
+            **manifest,
+            "last_build_error": metadata.get("__derridai_last_build_error"),
         }
 
     def set_language_tags(
@@ -464,18 +762,24 @@ class ChromaStore:
         collection = self._collection(name)
         current_provider, current_model = self._embedding_spec(collection)
         normalized_model = (model or "").strip() or None
-
-        if collection.count() > 0 and (
+        metadata = dict(collection.metadata or {})
+        changed = (
             current_provider != provider
             or (current_provider == "ollama" and current_model != normalized_model)
-        ):
+        )
+
+        if changed and metadata.get(self._MANIFEST_VERSION_KEY):
             raise ValueError(
-                "Embedding settings cannot be changed on a non-empty collection "
+                "Embedding settings are immutable for manifest-backed collections. "
+                "Create a new collection/build with the desired retrieval contract."
+            )
+        if collection.count() > 0 and changed:
+            raise ValueError(
+                "Embedding settings cannot be changed on a non-empty legacy collection "
                 "because existing vectors may have a different dimension. "
                 "Create a new collection with the desired embedding model."
             )
 
-        metadata = dict(collection.metadata or {})
         metadata[self._PROVIDER_KEY] = provider
         if normalized_model:
             metadata[self._MODEL_KEY] = normalized_model
@@ -502,19 +806,56 @@ class ChromaStore:
         name: str,
         metadata: dict[str, Any] | None = None,
         *,
+        description: str | None = None,
         embedding_provider: str | None = None,
         embedding_model: str | None = None,
+        embedding_dimension: int | None = None,
+        distance_metric: str = "cosine",
+        retrieval_mode: str = "hybrid",
+        text_field: str = "text",
+        filter_fields: list[str] | None = None,
         language_codes: list[str] | None = None,
         collection_role: str | None = None,
+        protected: bool = False,
     ) -> dict[str, Any]:
-        requested_name = name
-        name = self._storage_name(name)
+        requested_name = str(name or "").strip()
+        if len(requested_name) < 3 or len(requested_name) > 128:
+            raise ValueError("Collection names must contain 3 to 128 characters.")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", requested_name):
+            raise ValueError(
+                "Collection names must start and end with a letter or number and "
+                "contain only letters, numbers, periods, underscores, or hyphens."
+            )
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", requested_name):
+            raise ValueError("Collection names cannot be IPv4 addresses.")
+
+        name = self._storage_name(requested_name)
+        existing = {
+            item.name if hasattr(item, "name") else str(item)
+            for item in self.client.list_collections()
+        }
+        if name in existing:
+            raise StoreAlreadyExistsError(
+                f"Collection {requested_name!r} already exists. Open the existing "
+                "collection or choose a new name; Create never reuses an existing collection."
+            )
+
         provider = (embedding_provider or settings.embedding_provider).strip().lower()
-        if provider not in {"chroma", "ollama", "precomputed"}:
-            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
         model = (embedding_model or "").strip() or None
-        if provider == "ollama" and not model:
-            model = settings.ollama_embed_model
+        preflight = self.preflight_embedding(
+            provider=provider,
+            model=model,
+            embedding_dimension=embedding_dimension,
+            distance_metric=distance_metric,
+        )
+        provider = preflight["embedding_provider"]
+        model = preflight.get("embedding_model")
+        dimension = preflight.get("embedding_dimension")
+        revision = preflight.get("embedding_revision")
+        metric = preflight.get("distance_metric") or "cosine"
+        retrieval_mode = str(retrieval_mode or "hybrid").strip().lower()
+        if retrieval_mode not in {"semantic", "hybrid", "lexical"}:
+            raise ValueError("Retrieval mode must be semantic, hybrid, or lexical.")
 
         codes, role = self._infer_language_metadata(
             requested_name,
@@ -522,24 +863,62 @@ class ChromaStore:
             collection_role,
         )
 
+        now = self._iso_now()
+        build_id = f"build-{now.replace(':', '').replace('-', '')[:15]}-{uuid.uuid4().hex[:8]}"
         collection_metadata = dict(metadata or {})
-        collection_metadata[self._PROVIDER_KEY] = provider
-        collection_metadata[self._ROLE_KEY] = role
-        collection_metadata[self._LANG_KEY] = json.dumps(
-            codes,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
+        collection_metadata.update({
+            self._PROVIDER_KEY: provider,
+            self._ROLE_KEY: role,
+            self._LANG_KEY: json.dumps(codes, ensure_ascii=False, separators=(",", ":")),
+            self._MANIFEST_VERSION_KEY: 1,
+            self._DESCRIPTION_KEY: str(description or "").strip(),
+            self._DISTANCE_KEY: metric,
+            self._RETRIEVAL_KEY: retrieval_mode,
+            self._TEXT_FIELD_KEY: str(text_field or "text").strip(),
+            self._FILTER_FIELDS_KEY: json.dumps(list(dict.fromkeys(filter_fields or [])), ensure_ascii=False, separators=(",", ":")),
+            self._STATUS_KEY: "empty",
+            self._BUILD_ID_KEY: build_id,
+            self._BUILD_CREATED_KEY: now,
+            self._PROTECTED_KEY: bool(protected),
+            self._APP_VERSION_KEY: APP_VERSION,
+            self._BUILD_HISTORY_KEY: "[]",
+        })
+        if dimension:
+            collection_metadata[self._DIMENSION_KEY] = int(dimension)
+        if revision:
+            collection_metadata[self._REVISION_KEY] = str(revision)
         if model:
             collection_metadata[self._MODEL_KEY] = model
 
-        col = self.client.get_or_create_collection(
-            name=name,
-            metadata=collection_metadata,
-        )
+        # Chroma 1.x supports collection configuration. Older compatible builds
+        # use the hnsw:space metadata key; keep the fallback isolated here.
+        try:
+            col = self.client.create_collection(
+                name=name,
+                metadata=collection_metadata,
+                configuration={"hnsw": {"space": metric}},
+            )
+        except TypeError:
+            fallback_metadata = dict(collection_metadata)
+            fallback_metadata.setdefault("hnsw:space", metric)
+            col = self.client.create_collection(name=name, metadata=fallback_metadata)
+        except Exception as exc:
+            # Chroma's exception type differs across releases. Convert the race
+            # between the explicit existence check and create into a 409-capable
+            # domain error without weakening strict-create semantics.
+            if "already exists" in str(exc).casefold() or "unique" in str(exc).casefold():
+                raise StoreAlreadyExistsError(
+                    f"Collection {requested_name!r} already exists."
+                ) from exc
+            raise
         return self._public_store(col)
 
-    def delete_store(self, name: str) -> None:
+    def delete_store(self, name: str, *, force: bool = False) -> None:
+        collection = self._collection(name)
+        if self._manifest_spec(collection).get("protected") and not force:
+            raise PermissionError(
+                "Deletion protection is enabled for this collection. Disable protection first."
+            )
         self.client.delete_collection(name=self._storage_name(name))
 
     def _collection(self, name: str):
@@ -644,6 +1023,7 @@ class ChromaStore:
                 provider=provider,
                 model=model,
             )
+            self._ensure_vector_dimension(col, vectors)
             col.upsert(
                 ids=ids,
                 documents=docs,
@@ -1688,6 +2068,86 @@ class ChromaStore:
             found.extend(str(value) for value in (payload.get("ids") or []))
         return found
 
+    def drift_report(
+        self,
+        store: str,
+        items: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Compare a compact source fingerprint set with the indexed collection.
+
+        The browser sends only stable storage ids plus content fingerprints. The
+        server owns the comparison, including rows that disappeared from the
+        source. Legacy vectors without stored fingerprints are conservatively
+        classified as modified so one sync establishes the 0.37 provenance data.
+        """
+        col = self._collection(store)
+        requested: dict[str, str] = {}
+        for item in items:
+            item_id = str(item.get("id") or "").strip()
+            fingerprint = str(item.get("fingerprint") or "").strip()
+            if item_id and fingerprint:
+                requested[item_id] = fingerprint
+        if not requested:
+            raise ValueError("At least one source id and fingerprint is required.")
+
+        indexed: dict[str, str | None] = {}
+        ids = list(requested)
+        for start in range(0, len(ids), 500):
+            payload = col.get(ids=ids[start:start + 500], include=["metadatas"])
+            for chroma_id, metadata in zip(
+                payload.get("ids") or [],
+                payload.get("metadatas") or [],
+            ):
+                raw = (metadata or {}).get(self._RECORD_FINGERPRINT_KEY) if isinstance(metadata, dict) else None
+                indexed[str(chroma_id)] = str(raw).strip() if raw else None
+
+        added = [item_id for item_id in ids if item_id not in indexed]
+        modified = [
+            item_id for item_id in ids
+            if item_id in indexed and indexed[item_id] != requested[item_id]
+        ]
+        unchanged = len(ids) - len(added) - len(modified)
+
+        source_ids = set(ids)
+        removed: list[str] = []
+        # Chroma's get API is paged here so drift checks remain bounded in memory
+        # to identifiers rather than full records or embeddings.
+        total = col.count()
+        for offset in range(0, total, 5000):
+            payload = col.get(limit=min(5000, total - offset), offset=offset, include=[])
+            for chroma_id in payload.get("ids") or []:
+                value = str(chroma_id)
+                if value not in source_ids:
+                    removed.append(value)
+
+        source_hasher = hashlib.sha256()
+        for item_id in sorted(requested):
+            source_hasher.update(item_id.encode("utf-8", errors="replace"))
+            source_hasher.update(b"\0")
+            source_hasher.update(requested[item_id].encode("utf-8", errors="replace"))
+            source_hasher.update(b"\n")
+        source_snapshot_hash = source_hasher.hexdigest()
+        manifest = self._manifest_spec(col)
+        stale_count = len(added) + len(modified) + len(removed)
+        return {
+            "store_name": store,
+            "source_count": len(requested),
+            "indexed_count": total,
+            "added": len(added),
+            "modified": len(modified),
+            "removed": len(removed),
+            "unchanged": unchanged,
+            "stale": bool(stale_count),
+            "stale_count": stale_count,
+            "source_snapshot_hash": source_snapshot_hash,
+            "manifest_snapshot_hash": manifest.get("source_snapshot_hash"),
+            "samples": {
+                "added": added[:100],
+                "modified": modified[:100],
+                "removed": removed[:100],
+            },
+        }
+
     def get_record(
         self,
         store: str,
@@ -1820,6 +2280,7 @@ class ChromaStore:
             )
             document_field = meta.pop("_document_field", "text")
             logical_id = meta.pop("_record_id", None)
+            meta.pop(self._RECORD_FINGERPRINT_KEY, None)
             record = dict(meta)
             if logical_id is not None and "record_id" not in record:
                 record["record_id"] = logical_id
@@ -2018,6 +2479,167 @@ class ChromaStore:
         folded = needle.casefold()
         rows = [row for row in candidates if folded in str(row.get("text") or "").casefold()][:n_results]
         return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+
+    @staticmethod
+    def _lexical_tokens(value: Any) -> list[str]:
+        return [
+            token
+            for token in re.findall(r"[\w’'\-]+", str(value or "").casefold(), flags=re.UNICODE)
+            if token
+        ]
+
+    def lexical_search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Bounded BM25-style lexical ranking over stored record text/metadata.
+
+        Chroma does not expose a sparse/BM25 index in the local collection API,
+        so DerridAI supplies a deterministic lexical leg for hybrid retrieval.
+        The scorer is intentionally query-local: it computes document frequency
+        only for terms in the current query and adds a modest exact-phrase boost.
+        """
+        query = str(query or "").strip()
+        if not query:
+            return self.keyword_search(store, query, n_results, where)
+        col = self._collection(store)
+        scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if where:
+            scan_args["where"] = where
+        try:
+            scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
+            candidates = self._decode_result(col.get(**scan_args))
+        except Exception:
+            scan_args.pop("limit", None)
+            candidates = self._decode_result(col.get(**scan_args))
+        if not candidates:
+            return []
+
+        query_tokens = self._lexical_tokens(query)
+        if not query_tokens:
+            return self.keyword_search(store, query, n_results, where)
+        query_terms = list(dict.fromkeys(query_tokens))
+        docs: list[tuple[dict[str, Any], list[str], str]] = []
+        document_frequencies = {term: 0 for term in query_terms}
+        total_length = 0
+        for row in candidates:
+            searchable = " ".join(
+                str(row.get(field) or "")
+                for field in (
+                    "text",
+                    "work",
+                    "record_id",
+                    "document_author",
+                    "speaker",
+                    "quoted_speaker",
+                    "position_holder",
+                    "target",
+                )
+            )
+            folded = searchable.casefold()
+            tokens = self._lexical_tokens(searchable)
+            docs.append((row, tokens, folded))
+            total_length += len(tokens)
+            token_set = set(tokens)
+            for term in query_terms:
+                if term in token_set:
+                    document_frequencies[term] += 1
+
+        count = len(docs)
+        avg_length = max(1.0, total_length / max(1, count))
+        k1 = 1.2
+        b = 0.75
+        folded_phrase = query.casefold()
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for row, tokens, folded in docs:
+            if not tokens:
+                continue
+            frequencies: dict[str, int] = {}
+            for token in tokens:
+                if token in document_frequencies:
+                    frequencies[token] = frequencies.get(token, 0) + 1
+            score = 0.0
+            length = len(tokens)
+            for term in query_terms:
+                tf = frequencies.get(term, 0)
+                if not tf:
+                    continue
+                df = document_frequencies.get(term, 0)
+                # Robertson/Sparck Jones BM25 IDF with a positive floor.
+                idf = max(0.0, math.log(1.0 + (count - df + 0.5) / (df + 0.5)))
+                denominator = tf + k1 * (1.0 - b + b * length / avg_length)
+                score += idf * (tf * (k1 + 1.0)) / max(denominator, 1e-9)
+            if folded_phrase and folded_phrase in folded:
+                score += 2.5
+            if score > 0:
+                scored.append((score, row))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "lexical_score": score,
+                "record": row,
+            }
+            for score, row in scored[:n_results]
+        ]
+
+    def hybrid_search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+        *,
+        rrf_k: int = 60,
+    ) -> list[dict[str, Any]]:
+        """Fuse dense semantic and BM25-style lexical retrieval with reciprocal rank.
+
+        This deliberately uses DerridAI's stored document text for the lexical leg
+        rather than requiring a second infrastructure service. It gives exact names,
+        quotations, neologisms, and multilingual terminology an independent path
+        into the candidate set while preserving semantic recall.
+        """
+        query = str(query or "").strip()
+        if not query:
+            return self.filter_search(store, n_results, where)
+        fetch_n = min(max(n_results * 4, 32), 400)
+        semantic: list[dict[str, Any]] = []
+        try:
+            semantic = self.search(store, query, fetch_n, where)
+        except ValueError:
+            # Precomputed-vector collections do not have a query embedding function.
+            semantic = []
+        lexical = self.lexical_search(store, query, fetch_n, where)
+
+        fused: dict[str, dict[str, Any]] = {}
+        for search_type, rows in (("semantic", semantic), ("lexical", lexical)):
+            for rank, row in enumerate(rows, start=1):
+                item_id = str(row.get("id") or (row.get("record") or {}).get("record_id") or "")
+                if not item_id:
+                    continue
+                score = 1.0 / (float(rrf_k) + float(rank))
+                if item_id not in fused:
+                    fused[item_id] = {
+                        **row,
+                        "hybrid_score": score,
+                        "retrieval_hits": [{"type": search_type, "rank": rank}],
+                    }
+                else:
+                    fused[item_id]["hybrid_score"] += score
+                    fused[item_id]["retrieval_hits"].append({"type": search_type, "rank": rank})
+                    if row.get("distance") is not None:
+                        current = fused[item_id].get("distance")
+                        if current is None or float(row["distance"]) < float(current):
+                            fused[item_id]["distance"] = row["distance"]
+        return sorted(
+            fused.values(),
+            key=lambda item: (float(item.get("hybrid_score") or 0.0), -float(item.get("distance") or 0.0)),
+            reverse=True,
+        )[:n_results]
 
     def _decode_result(
         self,

@@ -33,7 +33,8 @@ function onToggle(event:Event){
 }
 function choose(kind:"inline"|"full"){
   (popover.value as (HTMLElement & {hidePopover?:()=>void})|null)?.hidePopover?.();
-  emit(kind);
+  if(kind==="inline")emit("inline");
+  else emit("full");
   button.value?.focus();
 }
 </script>

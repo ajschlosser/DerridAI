@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
-from .chroma_store import ChromaStore
+from .chroma_store import ChromaStore, StoreAlreadyExistsError
 from .config import settings
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm_tools import run_pdf_llm, run_rag_grade
@@ -27,6 +27,7 @@ from .models import (
     ResearcherProviderStatusRequest,
     BulkUpsert,
     ChromaPathUpdate,
+    EmbeddingPreflightRequest,
     DeriveLanguageStoresRequest,
     LLMJobCreate,
     LLMToolJobCreate,
@@ -43,8 +44,10 @@ from .models import (
     RecordUpsert,
     SearchRequest,
     StoreCreate,
+    StoreDriftRequest,
     StoreEmbeddingUpdate,
     StoreLanguageUpdate,
+    StoreProtectionUpdate,
     StoredRecordUpdate,
     StoredRecordPatch,
     TouchupRequest,
@@ -66,7 +69,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.36.11")
+app = FastAPI(title="DerridAI Corpus API", version="0.37.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -856,6 +859,8 @@ def create_upsert_job(body: UpsertJobCreate, request: Request):
                     if not entry.get("initiated_by"):
                         entry["initiated_by"] = user.username
         return upsert_jobs.create(body, owner=user.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1132,7 +1137,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.36.11",
+            "app_version": "0.37.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1605,13 +1610,35 @@ def create_store(body: StoreCreate):
         return store.create_store(
             body.name,
             body.metadata,
+            description=body.description,
             embedding_provider=body.embedding_provider,
             embedding_model=body.embedding_model,
+            embedding_dimension=body.embedding_dimension,
+            distance_metric=body.distance_metric,
+            retrieval_mode=body.retrieval_mode,
+            text_field=body.text_field,
+            filter_fields=body.filter_fields,
             language_codes=body.language_codes,
             collection_role=body.collection_role,
+            protected=body.protected,
         )
+    except StoreAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/stores/preflight/embedding")
+def preflight_embedding(body: EmbeddingPreflightRequest):
+    try:
+        return store.preflight_embedding(
+            provider=body.embedding_provider,
+            model=body.embedding_model,
+            embedding_dimension=body.embedding_dimension,
+            distance_metric=body.distance_metric,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/stores/{store_name}")
@@ -1652,6 +1679,14 @@ def update_store_languages(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.put("/api/stores/{store_name}/protection")
+def update_store_protection(store_name: str, body: StoreProtectionUpdate):
+    try:
+        return store.set_protection(store_name, body.protected)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/stores/{store_name}/derive-languages")
 def derive_language_stores(
     store_name: str,
@@ -1678,10 +1713,12 @@ def derive_language_stores(
 
 
 @app.delete("/api/stores/{store_name}")
-def delete_store(store_name: str):
+def delete_store(store_name: str, force: bool = Query(default=False)):
     try:
-        store.delete_store(store_name)
+        store.delete_store(store_name, force=force)
         return {"deleted": store_name}
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1770,6 +1807,17 @@ def list_store_works(store_name: str):
 def record_status(store_name: str, body: RecordStatusRequest):
     try:
         return {"existing_ids": store.existing_ids(store_name, body.ids)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/stores/{store_name}/drift")
+def store_drift(store_name: str, body: StoreDriftRequest):
+    try:
+        return store.drift_report(
+            store_name,
+            [item.model_dump(mode="json") for item in body.items],
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1980,6 +2028,10 @@ def search(store_name: str, body: SearchRequest, request: Request):
             rows = store.filter_search(store_name, body.n_results, body.where)
         elif body.mode == "keyword":
             rows = store.keyword_search(store_name, body.query, body.n_results, body.where)
+        elif body.mode == "lexical":
+            rows = store.lexical_search(store_name, body.query, body.n_results, body.where)
+        elif body.mode == "hybrid":
+            rows = store.hybrid_search(store_name, body.query, body.n_results, body.where)
         elif body.mode == "mmr":
             rows = store.mmr_search(store_name, body.query, body.n_results, body.where, fetch_k=body.fetch_k, lambda_mult=body.lambda_mult)
         else:

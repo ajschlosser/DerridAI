@@ -2,16 +2,21 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import os
 import re
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .llm import TouchupFailure, propose_touchup
 from .chroma_store import ChromaStore
+from .config import settings
 from .models import LLMJobCreate, LLMToolJobCreate, RAGGradeRequest, RAGRunRequest, UpsertJobCreate
 from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
@@ -201,8 +206,14 @@ class LLMJobManager(PersistentJobStateMixin):
                     "Wait for it to finish or cancel it before starting another sync."
                 )
             self._jobs[job_id] = job
+        try:
+            self._write_spool(job_id, body)
+        except Exception:
+            with self._lock:
+                self._jobs.pop(job_id, None)
+            raise
         self._persist_job(job_id)
-        self._executor.submit(self._run, job_id, body)
+        self._executor.submit(self._run_from_spool, job_id)
         return self.get(job_id)
 
     @staticmethod
@@ -626,7 +637,7 @@ class LLMJobManager(PersistentJobStateMixin):
             ]
             for job_id in ids:
                 del self._jobs[job_id]
-            job_repository.clear_finished(self.JOB_TYPE)
+                job_repository.clear_finished(self.JOB_TYPE)
             return len(ids)
 
     @staticmethod
@@ -1884,14 +1895,122 @@ class UpsertJobManager(PersistentJobStateMixin):
             max_workers=max_workers,
             thread_name_prefix="derridai-upsert",
         )
+        spool_default = Path(settings.system_db_path).expanduser().parent / "upsert-jobs"
+        self._spool_dir = Path(os.getenv("UPSERT_JOB_SPOOL_PATH", str(spool_default))).expanduser()
+        self._spool_dir.mkdir(parents=True, exist_ok=True)
         self._start_persistent_state()
+        self._resume_spooled_jobs()
+
+    def _spool_path(self, job_id: str) -> Path:
+        return self._spool_dir / f"{job_id}.json"
+
+    def _write_spool(self, job_id: str, body: UpsertJobCreate) -> None:
+        target = self._spool_path(job_id)
+        temp = target.with_suffix(".json.tmp")
+        temp.write_text(
+            json.dumps(body.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        temp.replace(target)
+
+    def _remove_spool(self, job_id: str) -> None:
+        try:
+            self._spool_path(job_id).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def _run_from_spool(self, job_id: str) -> None:
+        # A queued job may be cancelled before its executor slot starts. In
+        # that case cancellation removes the spool intentionally; do not turn
+        # the already-terminal job into a payload-restoration failure.
+        with self._lock:
+            existing = self._jobs.get(job_id)
+            if existing is None or existing.get("status") == "cancelled":
+                self._remove_spool(job_id)
+                return
+        try:
+            payload = json.loads(self._spool_path(job_id).read_text(encoding="utf-8"))
+            body = UpsertJobCreate.model_validate(payload)
+        except Exception as exc:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job["status"] = "failed"
+                    job["finished_at"] = iso_now()
+                    _store_job_error(job, RuntimeError(f"Could not restore vector-build payload: {exc}"))
+                    job.setdefault("events", []).append({
+                        "timestamp": job["finished_at"],
+                        "stage": "failed",
+                        "detail": "Vector-build payload could not be restored from the durable spool.",
+                    })
+            self._persist_job(job_id)
+            return
+        self._run(job_id, body)
+
+    def _resume_spooled_jobs(self) -> None:
+        to_resume: list[str] = []
+        with self._lock:
+            for job_id, job in self._jobs.items():
+                if job.get("status") not in {"queued", "running", "cancelling"}:
+                    continue
+                if job.get("cancel_requested"):
+                    job["status"] = "cancelled"
+                    job["finished_at"] = iso_now()
+                    job.setdefault("events", []).append({
+                        "timestamp": job["finished_at"],
+                        "stage": "cancelled",
+                        "detail": "Cancellation completed during application restart.",
+                    })
+                    self._remove_spool(job_id)
+                    continue
+                if not self._spool_path(job_id).exists():
+                    job["status"] = "failed"
+                    job["finished_at"] = iso_now()
+                    job["fatal_error"] = "Durable vector-build payload is missing after restart."
+                    job.setdefault("events", []).append({
+                        "timestamp": job["finished_at"],
+                        "stage": "failed",
+                        "detail": job["fatal_error"],
+                    })
+                    continue
+                job["status"] = "queued"
+                job["started_at"] = None
+                job.setdefault("events", []).append({
+                    "timestamp": iso_now(),
+                    "stage": "resumed",
+                    "detail": "Vector build restored from durable server-side spool after restart.",
+                })
+                to_resume.append(job_id)
+        self._persist_all_jobs()
+        for job_id in to_resume:
+            self._executor.submit(self._run_from_spool, job_id)
 
     def create(self, body: UpsertJobCreate, *, owner: str | None = None) -> dict[str, Any]:
-        # Keep only one heavyweight Chroma write in memory at a time. Queuing
-        # several full-work payloads retains every record body even when the
-        # executor itself has one worker, so admission and insertion are kept
-        # under the same lock below to avoid a concurrent-request race.
+        # Large corpus syncs are background operations in 0.37.0. Admit only one
+        # full-record payload at a time so a queue of huge browser submissions
+        # cannot retain several corpora in process memory simultaneously.
+        with self._lock:
+            active = next((
+                job for job in self._jobs.values()
+                if job.get("status") in {"queued", "running", "cancelling"}
+            ), None)
+            if active is not None:
+                raise ValueError(
+                    f"Another vector sync is already active ({active.get('label') or active.get('id')}). "
+                    "Wait for it to finish or cancel it before starting another sync."
+                )
         job_id = str(uuid.uuid4())
+        snapshot_hasher = hashlib.sha256()
+        source_works = list(dict.fromkeys([*(body.source_works or []), *[
+            str(item.record.get("work") or "").strip()
+            for item in body.items if str(item.record.get("work") or "").strip()
+        ]]))
+        for item in sorted(body.items, key=lambda value: str(value.chroma_id or value.key)):
+            snapshot_hasher.update(str(item.chroma_id or item.key).encode("utf-8", errors="replace"))
+            snapshot_hasher.update(b"\0")
+            snapshot_hasher.update(str(item.fingerprint or "").encode("utf-8", errors="replace"))
+            snapshot_hasher.update(b"\n")
+        source_snapshot_hash = snapshot_hasher.hexdigest()
         job = {
             "id": job_id,
             "type": "upsert",
@@ -1901,6 +2020,10 @@ class UpsertJobManager(PersistentJobStateMixin):
             "model": None,
             "store_name": body.store_name,
             "label": body.label or "records",
+            "source_kind": body.source_kind,
+            "source_label": body.source_label,
+            "source_works": source_works,
+            "source_snapshot_hash": source_snapshot_hash,
             "status": "queued",
             "created_at": iso_now(),
             "started_at": None,
@@ -1919,6 +2042,10 @@ class UpsertJobManager(PersistentJobStateMixin):
                 "mirror_languages": body.mirror_languages,
                 "document_field": body.document_field,
                 "embedding_field": body.embedding_field,
+                "source_kind": body.source_kind,
+                "source_label": body.source_label,
+                "source_works": source_works,
+                "source_snapshot_hash": source_snapshot_hash,
             },
             "events": [{
                 "timestamp": iso_now(),
@@ -1928,16 +2055,31 @@ class UpsertJobManager(PersistentJobStateMixin):
             "results": [],
             "mirrored": {},
         }
-        with self._lock:
-            self._jobs[job_id] = job
-        self._persist_job(job_id)
-        self._executor.submit(self._run, job_id, body)
+        # Persist the full request body to disk before scheduling the worker.
+        # The in-memory job record intentionally keeps only a compact request
+        # summary, while the spool makes large builds restart-resumable without
+        # retaining an entire corpus payload in the executor closure.
+        self._write_spool(job_id, body)
+        try:
+            self._store.set_build_status(body.store_name, "queued")
+            with self._lock:
+                self._jobs[job_id] = job
+            self._persist_job(job_id)
+            self._executor.submit(self._run_from_spool, job_id)
+        except Exception:
+            self._remove_spool(job_id)
+            try:
+                self._store.fail_sync(body.store_name, "Vector build could not be queued.")
+            except Exception:
+                pass
+            raise
         return self.get(job_id)
 
     def _run(self, job_id: str, body: UpsertJobCreate) -> None:
         with self._lock:
             job = self._jobs[job_id]
             if job["cancel_requested"] or job["status"] == "cancelled":
+                self._remove_spool(job_id)
                 return
             job["status"] = "running"
             job["started_at"] = iso_now()
@@ -1948,6 +2090,22 @@ class UpsertJobManager(PersistentJobStateMixin):
             })
 
         try:
+            build = self._store.begin_sync(
+                body.store_name,
+                source_kind=body.source_kind,
+                source_label=body.source_label or body.label,
+                source_record_count=len(body.items),
+                source_works=list(job.get("source_works") or []),
+                source_snapshot_hash=job.get("source_snapshot_hash"),
+            )
+            with self._lock:
+                job = self._jobs[job_id]
+                job["build_id"] = build.get("build_id")
+                job["events"].append({
+                    "timestamp": iso_now(),
+                    "stage": "preflight",
+                    "detail": f"Embedding contract validated · build {job.get('build_id') or ''}",
+                })
             for start in range(0, len(body.items), body.batch_size):
                 with self._lock:
                     job = self._jobs[job_id]
@@ -1962,6 +2120,8 @@ class UpsertJobManager(PersistentJobStateMixin):
                 for item in batch_items:
                     record = dict(item.record)
                     record.pop("updates", None)
+                    if item.fingerprint:
+                        record[ChromaStore._RECORD_FINGERPRINT_KEY] = str(item.fingerprint)
                     if item.chroma_id:
                         record["_chroma_id"] = item.chroma_id
                     chroma_id = item.chroma_id or str(record.get("_chroma_id") or record.get("record_id") or "")
@@ -2022,10 +2182,25 @@ class UpsertJobManager(PersistentJobStateMixin):
 
             with self._lock:
                 job = self._jobs[job_id]
-                if job["status"] not in {"cancelled", "failed"}:
-                    job["status"] = "cancelled" if job["cancel_requested"] else "completed"
+                cancelled = bool(job["cancel_requested"] or job["status"] == "cancelled")
+                if not cancelled:
+                    job["events"].append({
+                        "timestamp": iso_now(),
+                        "stage": "validating",
+                        "detail": "Validating collection count and finalizing build manifest",
+                    })
+            if cancelled:
+                self._store.finish_sync(body.store_name, status="stale")
+            else:
+                self._store.set_build_status(body.store_name, "validating")
+                final_store = self._store.finish_sync(body.store_name, status="ready")
+            with self._lock:
+                job = self._jobs[job_id]
+                job["status"] = "cancelled" if cancelled else "completed"
                 job["current_record_id"] = None
                 job["finished_at"] = iso_now()
+                if not cancelled:
+                    job["collection_manifest"] = final_store
                 job["events"].append({
                     "timestamp": job["finished_at"],
                     "stage": job["status"],
@@ -2038,6 +2213,12 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job["failed"] += 1
                 details = _store_job_error(job, exc)
                 job["finished_at"] = iso_now()
+            try:
+                self._store.fail_sync(body.store_name, str(exc))
+            except Exception:
+                pass
+            with self._lock:
+                job = self._jobs[job_id]
                 job["events"].append({
                     "timestamp": job["finished_at"],
                     "stage": "failed",
@@ -2045,6 +2226,10 @@ class UpsertJobManager(PersistentJobStateMixin):
                 })
         finally:
             self._persist_job(job_id)
+            with self._lock:
+                terminal = self._jobs.get(job_id, {}).get("status") not in {"queued", "running", "cancelling"}
+            if terminal:
+                self._remove_spool(job_id)
 
     def list(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -2113,7 +2298,10 @@ class UpsertJobManager(PersistentJobStateMixin):
                     "detail": "Cancellation requested; the current Chroma batch will finish, then the operation will stop.",
                 })
             job_repository.upsert(copy.deepcopy(job))
-            return self._copy(job, include_results=True)
+            result = self._copy(job, include_results=True)
+        if result.get("status") == "cancelled":
+            self._remove_spool(job_id)
+        return result
 
     def delete(self, job_id: str) -> None:
         with self._lock:
@@ -2123,6 +2311,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 raise ValueError("Running jobs must be cancelled before they can be removed.")
             del self._jobs[job_id]
             job_repository.delete(job_id)
+        self._remove_spool(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -2134,7 +2323,9 @@ class UpsertJobManager(PersistentJobStateMixin):
             for job_id in ids:
                 del self._jobs[job_id]
             job_repository.clear_finished(self.JOB_TYPE)
-            return len(ids)
+        for job_id in ids:
+            self._remove_spool(job_id)
+        return len(ids)
 
     @staticmethod
     def _copy(job: dict[str, Any], *, include_results: bool) -> dict[str, Any]:
