@@ -5737,4 +5737,153 @@ DEFAULT_FR_CA.update({
     "research.selected": "Sélectionnée",
 })
 
+# 0.40.1 — Dorar the Explorah: robust, resumable PDF corpus extraction and accessible review.
+DEFAULT_EN_US.update({'pdf_workspace.modes': 'PDF workspace modes', 'pdf_workspace.explorer': 'Explorer', 'pdf_workspace.builder': 'Corpus Builder', 'pdf_workspace.help': 'Source reading and auditable record-set generation', 'pdf_corpus.eyebrow': 'PDF Explorer · Corpus Builder', 'pdf_corpus.title': 'Build auditable records from source PDFs', 'pdf_corpus.subtitle': 'Semantic boundaries and interpretive metadata are proposed by an LLM; source text, page provenance, IDs, validation, and publication remain deterministic.', 'pdf_corpus.use_current_pdf': 'Use current Explorer PDF', 'pdf_corpus.extracting': 'Extracting…', 'pdf_corpus.choose_pdf': 'Choose source PDF', 'pdf_corpus.build_configuration': 'Build configuration', 'pdf_corpus.source_asset': 'Source asset', 'pdf_corpus.choose_persisted_pdf': 'Choose a persisted PDF…', 'pdf_corpus.blocks': 'blocks', 'pdf_corpus.ocr_pages': 'OCR page(s)', 'pdf_corpus.persisted': 'persisted', 'pdf_corpus.provider_profile': 'Provider profile', 'pdf_corpus.provider_profile_help': 'Uses the same centrally managed provider profiles as Research and other LLM workflows.', 'pdf_corpus.no_provider_profiles': 'No LLM provider profiles are configured', 'pdf_corpus.no_provider_profiles_help': 'Create a provider profile or use the manual compatibility settings below.', 'pdf_corpus.manage_providers': 'Manage provider profiles', 'pdf_corpus.model_not_set': 'model not set', 'pdf_corpus.concurrent_requests': 'max concurrent request(s)', 'pdf_corpus.build_records': 'Build record set', 'pdf_corpus.starting': 'Starting…', 'pdf_corpus.manual_provider': 'Manual provider compatibility settings', 'pdf_corpus.manual_provider_help': 'Used only when no provider profile is selected. Provider profiles are recommended because credentials remain server-owned and resumable builds can reuse the same configuration.', 'pdf_corpus.provider': 'Provider', 'pdf_corpus.openai_compatible': 'OpenAI-compatible', 'pdf_corpus.model': 'Model', 'pdf_corpus.provider_default': 'Provider default', 'pdf_corpus.base_url': 'Base URL', 'pdf_corpus.api_key': 'API key', 'pdf_corpus.not_persisted': 'Not persisted in build manifest', 'pdf_corpus.builds': 'Corpus builds', 'pdf_corpus.total': 'total', 'pdf_corpus.refresh_builds': 'Refresh builds', 'pdf_corpus.records': 'records', 'pdf_corpus.no_builds': 'No builds yet.', 'pdf_corpus.cancel': 'Cancel', 'pdf_corpus.resume': 'Resume from checkpoint', 'pdf_corpus.publish_jsonl': 'Publish JSONL', 'pdf_corpus.stage': 'Stage', 'pdf_corpus.need_review': 'need review', 'pdf_corpus.accepted': 'accepted', 'pdf_corpus.build_progress': 'Corpus build progress', 'pdf_corpus.build_error': 'Build error', 'pdf_corpus.warnings_count': '{count} build warning(s)', 'pdf_corpus.validation_passed': 'Validation passed', 'pdf_corpus.validation_attention': 'Validation needs attention', 'pdf_corpus.source_coverage': 'source coverage', 'pdf_corpus.evidence_issues': 'evidence issue(s)', 'pdf_corpus.review_controls': 'Record review controls', 'pdf_corpus.review_only': 'Needs review only', 'pdf_corpus.search_records': 'Search generated records', 'pdf_corpus.matches': 'matches', 'pdf_corpus.source_pdf': 'Source PDF', 'pdf_corpus.printed_pages': 'printed', 'pdf_corpus.source_pdf_for_record': 'Source PDF for selected record', 'pdf_corpus.split_after': 'Split after this block', 'pdf_corpus.generated_records': 'Generated records', 'pdf_corpus.pages': 'pp.', 'pdf_corpus.characters': 'chars', 'pdf_corpus.needs_review': 'Needs review', 'pdf_corpus.accepted_label': 'Accepted', 'pdf_corpus.ready_acceptance': 'Ready for acceptance', 'pdf_corpus.no_records_filter': 'No records match this review filter.', 'pdf_corpus.record_inspector': 'Record inspector', 'pdf_corpus.ready': 'Ready', 'pdf_corpus.merge_previous': 'Merge previous', 'pdf_corpus.merge_next': 'Merge next', 'pdf_corpus.rerun_metadata': 'Rerun metadata', 'pdf_corpus.reopen': 'Reopen', 'pdf_corpus.accept': 'Accept', 'pdf_corpus.immutable_text': 'Immutable source text', 'pdf_corpus.interpretive_metadata': 'Interpretive metadata', 'pdf_corpus.metadata_help': 'Only model/human-owned metadata is editable here. Text, pages, source spans, and record IDs are protected server-side.', 'pdf_corpus.save_metadata': 'Save metadata', 'pdf_corpus.field_evidence': 'Field evidence', 'pdf_corpus.evidence_help': 'Choose a field to highlight only the source blocks bound to that metadata relation.', 'pdf_corpus.no_source_bound': 'no source block bound', 'pdf_corpus.no_evidence': 'No field evidence recorded.', 'pdf_corpus.select_record': 'Select a generated record to inspect its source binding and metadata.', 'pdf_corpus.no_selected_build': 'No corpus build selected', 'pdf_corpus.no_selected_build_help': 'Persist a PDF source and start a semantic corpus build, or choose a historical build from the rail.', 'pdf_corpus.source_ingested': 'Source ingested: {pages} pages · {blocks} source blocks · OCR on {ocr} pages.', 'pdf_corpus.open_pdf_first': 'Open a PDF in Explorer first, or choose a source PDF here.', 'pdf_corpus.build_started': 'Corpus build started. Progress and completed checkpoints are persisted server-side.', 'pdf_corpus.build_resumed': 'Build resumed from its last completed checkpoint.', 'pdf_corpus.metadata_invalid': 'Metadata must be a valid JSON object.', 'pdf_corpus.metadata_saved': 'Metadata saved. Source-bound text and provenance were not modified.', 'pdf_corpus.previous': 'previous', 'pdf_corpus.next': 'next', 'pdf_corpus.merged': 'Merged with {direction} record; the merged boundary now requires review.', 'pdf_corpus.split_done': 'Record split at the selected semantic source boundary. Both records require review.', 'pdf_corpus.metadata_rerun': 'Interpretive metadata rerun. Primary source text remained unchanged.', 'pdf_corpus.published': 'Published {count} records · SHA-256 {hash}…', 'pdf_corpus.cancel_requested': 'Cancellation requested.', 'pdf_corpus.status.queued': 'queued', 'pdf_corpus.status.running': 'running', 'pdf_corpus.status.awaiting_review': 'awaiting review', 'pdf_corpus.status.ready': 'ready', 'pdf_corpus.status.failed': 'failed', 'pdf_corpus.status.interrupted': 'interrupted', 'pdf_corpus.status.cancelled': 'cancelled', 'pdf_corpus.status.published': 'published', 'pdf_corpus.source_page_navigation': 'Source page navigation', 'pdf_corpus.pdf_loading': 'Rendering source page…', 'pdf_corpus.pdf_render_error': 'Could not render the source page: {error}', 'pdf_corpus.pdf_page_canvas': 'PDF page {page}', 'pdf_corpus.pdf_highlight_help': 'Page {page}. Highlighted boxes show the source blocks bound to the selected evidence field.', 'ui.previous': 'Previous', 'ui.next': 'Next'})
+DEFAULT_FR_CA.update({'pdf_workspace.modes': 'Modes de l’espace PDF', 'pdf_workspace.explorer': 'Explorateur', 'pdf_workspace.builder': 'Générateur de corpus', 'pdf_workspace.help': 'Lecture de sources et génération auditable d’ensembles de fiches', 'pdf_corpus.eyebrow': 'Explorateur PDF · Générateur de corpus', 'pdf_corpus.title': 'Créer des fiches auditables à partir de PDF sources', 'pdf_corpus.subtitle': 'Un LLM propose les limites sémantiques et les métadonnées interprétatives; le texte source, la provenance des pages, les identifiants, la validation et la publication restent déterministes.', 'pdf_corpus.use_current_pdf': 'Utiliser le PDF actuel de l’Explorateur', 'pdf_corpus.extracting': 'Extraction…', 'pdf_corpus.choose_pdf': 'Choisir un PDF source', 'pdf_corpus.build_configuration': 'Configuration de la construction', 'pdf_corpus.source_asset': 'Source PDF persistée', 'pdf_corpus.choose_persisted_pdf': 'Choisir un PDF persistant…', 'pdf_corpus.blocks': 'blocs', 'pdf_corpus.ocr_pages': 'page(s) OCR', 'pdf_corpus.persisted': 'persisté', 'pdf_corpus.provider_profile': 'Profil de fournisseur', 'pdf_corpus.provider_profile_help': 'Utilise les mêmes profils fournisseurs gérés centralement que Recherche et les autres flux LLM.', 'pdf_corpus.no_provider_profiles': 'Aucun profil fournisseur LLM n’est configuré', 'pdf_corpus.no_provider_profiles_help': 'Créez un profil fournisseur ou utilisez les paramètres de compatibilité manuels ci-dessous.', 'pdf_corpus.manage_providers': 'Gérer les profils fournisseurs', 'pdf_corpus.model_not_set': 'modèle non défini', 'pdf_corpus.concurrent_requests': 'requête(s) simultanée(s) max.', 'pdf_corpus.build_records': 'Construire l’ensemble de fiches', 'pdf_corpus.starting': 'Démarrage…', 'pdf_corpus.manual_provider': 'Paramètres manuels de compatibilité fournisseur', 'pdf_corpus.manual_provider_help': 'Utilisés uniquement lorsqu’aucun profil fournisseur n’est sélectionné. Les profils sont recommandés, car les identifiants restent côté serveur et les constructions reprenables peuvent réutiliser la même configuration.', 'pdf_corpus.provider': 'Fournisseur', 'pdf_corpus.openai_compatible': 'Compatible OpenAI', 'pdf_corpus.model': 'Modèle', 'pdf_corpus.provider_default': 'Valeur par défaut du fournisseur', 'pdf_corpus.base_url': 'URL de base', 'pdf_corpus.api_key': 'Clé API', 'pdf_corpus.not_persisted': 'Non persistée dans le manifeste de construction', 'pdf_corpus.builds': 'Constructions de corpus', 'pdf_corpus.total': 'au total', 'pdf_corpus.refresh_builds': 'Actualiser les constructions', 'pdf_corpus.records': 'fiches', 'pdf_corpus.no_builds': 'Aucune construction pour le moment.', 'pdf_corpus.cancel': 'Annuler', 'pdf_corpus.resume': 'Reprendre au dernier point de contrôle', 'pdf_corpus.publish_jsonl': 'Publier le JSONL', 'pdf_corpus.stage': 'Étape', 'pdf_corpus.need_review': 'à réviser', 'pdf_corpus.accepted': 'acceptées', 'pdf_corpus.build_progress': 'Progression de la construction du corpus', 'pdf_corpus.build_error': 'Erreur de construction', 'pdf_corpus.warnings_count': '{count} avertissement(s) de construction', 'pdf_corpus.validation_passed': 'Validation réussie', 'pdf_corpus.validation_attention': 'Validation à examiner', 'pdf_corpus.source_coverage': 'couverture de la source', 'pdf_corpus.evidence_issues': 'problème(s) de preuve', 'pdf_corpus.review_controls': 'Commandes de révision des fiches', 'pdf_corpus.review_only': 'À réviser seulement', 'pdf_corpus.search_records': 'Rechercher dans les fiches générées', 'pdf_corpus.matches': 'correspondances', 'pdf_corpus.source_pdf': 'PDF source', 'pdf_corpus.printed_pages': 'imprimé', 'pdf_corpus.source_pdf_for_record': 'PDF source de la fiche sélectionnée', 'pdf_corpus.split_after': 'Scinder après ce bloc', 'pdf_corpus.generated_records': 'Fiches générées', 'pdf_corpus.pages': 'p.', 'pdf_corpus.characters': 'car.', 'pdf_corpus.needs_review': 'À réviser', 'pdf_corpus.accepted_label': 'Acceptée', 'pdf_corpus.ready_acceptance': 'Prête à être acceptée', 'pdf_corpus.no_records_filter': 'Aucune fiche ne correspond à ce filtre de révision.', 'pdf_corpus.record_inspector': 'Inspecteur de fiche', 'pdf_corpus.ready': 'Prête', 'pdf_corpus.merge_previous': 'Fusionner avec la précédente', 'pdf_corpus.merge_next': 'Fusionner avec la suivante', 'pdf_corpus.rerun_metadata': 'Relancer les métadonnées', 'pdf_corpus.reopen': 'Rouvrir', 'pdf_corpus.accept': 'Accepter', 'pdf_corpus.immutable_text': 'Texte source immuable', 'pdf_corpus.interpretive_metadata': 'Métadonnées interprétatives', 'pdf_corpus.metadata_help': 'Seules les métadonnées appartenant au modèle ou à l’humain sont modifiables ici. Le texte, les pages, les segments source et les identifiants de fiche sont protégés côté serveur.', 'pdf_corpus.save_metadata': 'Enregistrer les métadonnées', 'pdf_corpus.field_evidence': 'Preuves par champ', 'pdf_corpus.evidence_help': 'Choisissez un champ pour mettre en évidence uniquement les blocs source liés à cette relation de métadonnées.', 'pdf_corpus.no_source_bound': 'aucun bloc source lié', 'pdf_corpus.no_evidence': 'Aucune preuve par champ enregistrée.', 'pdf_corpus.select_record': 'Sélectionnez une fiche générée pour examiner son lien à la source et ses métadonnées.', 'pdf_corpus.no_selected_build': 'Aucune construction de corpus sélectionnée', 'pdf_corpus.no_selected_build_help': 'Persistez une source PDF et lancez une construction sémantique, ou choisissez une construction historique dans le rail.', 'pdf_corpus.source_ingested': 'Source ingérée : {pages} pages · {blocks} blocs source · OCR sur {ocr} pages.', 'pdf_corpus.open_pdf_first': 'Ouvrez d’abord un PDF dans l’Explorateur, ou choisissez un PDF source ici.', 'pdf_corpus.build_started': 'Construction du corpus démarrée. La progression et les points de contrôle terminés sont persistés côté serveur.', 'pdf_corpus.build_resumed': 'Construction reprise depuis son dernier point de contrôle terminé.', 'pdf_corpus.metadata_invalid': 'Les métadonnées doivent être un objet JSON valide.', 'pdf_corpus.metadata_saved': 'Métadonnées enregistrées. Le texte lié à la source et la provenance n’ont pas été modifiés.', 'pdf_corpus.previous': 'précédente', 'pdf_corpus.next': 'suivante', 'pdf_corpus.merged': 'Fusion avec la fiche {direction}; la limite fusionnée doit maintenant être révisée.', 'pdf_corpus.split_done': 'Fiche scindée à la limite sémantique sélectionnée. Les deux fiches doivent être révisées.', 'pdf_corpus.metadata_rerun': 'Métadonnées interprétatives relancées. Le texte source primaire est resté inchangé.', 'pdf_corpus.published': '{count} fiches publiées · SHA-256 {hash}…', 'pdf_corpus.cancel_requested': 'Annulation demandée.', 'pdf_corpus.status.queued': 'en file', 'pdf_corpus.status.running': 'en cours', 'pdf_corpus.status.awaiting_review': 'en attente de révision', 'pdf_corpus.status.ready': 'prête', 'pdf_corpus.status.failed': 'échec', 'pdf_corpus.status.interrupted': 'interrompue', 'pdf_corpus.status.cancelled': 'annulée', 'pdf_corpus.status.published': 'publiée', 'pdf_corpus.source_page_navigation': 'Navigation des pages source', 'pdf_corpus.pdf_loading': 'Rendu de la page source…', 'pdf_corpus.pdf_render_error': 'Impossible de rendre la page source : {error}', 'pdf_corpus.pdf_page_canvas': 'Page PDF {page}', 'pdf_corpus.pdf_highlight_help': 'Page {page}. Les cadres en surbrillance indiquent les blocs source liés au champ de preuve sélectionné.', 'ui.previous': 'Précédent', 'ui.next': 'Suivant'})
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.pdf_loading": "Rendering source page…",
+    "pdf_corpus.pdf_render_error": "Could not render the source page: {error}",
+    "pdf_corpus.pdf_page_canvas": "PDF page {page}",
+    "pdf_corpus.pdf_highlight_help": "Page {page}. Highlighted boxes show the source blocks bound to the selected evidence field.",
+    "pdf_corpus.source_page_navigation": "Source page navigation",
+    "pdf_corpus.page_mapping": "Printed-page mapping",
+    "pdf_corpus.page_mapping_help": "Physical PDF pages never change. Correct only the scholarly printed-page label when the PDF label or detected folio is wrong.",
+    "pdf_corpus.save_page_overrides": "Save {count} override(s)",
+    "pdf_corpus.physical_pdf_page": "Physical PDF page",
+    "pdf_corpus.printed_label": "Printed label",
+    "pdf_corpus.label_source": "Source",
+    "pdf_corpus.printed_label_for_page": "Printed label for physical PDF page {page}",
+    "pdf_corpus.unknown": "unknown",
+    "pdf_corpus.page_mapping_saved": "Printed-page overrides saved. New corpus builds will use the corrected labels.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.pdf_loading": "Rendu de la page source…",
+    "pdf_corpus.pdf_render_error": "Impossible d’afficher la page source : {error}",
+    "pdf_corpus.pdf_page_canvas": "Page PDF {page}",
+    "pdf_corpus.pdf_highlight_help": "Page {page}. Les cadres en surbrillance indiquent les blocs source liés au champ de preuve sélectionné.",
+    "pdf_corpus.source_page_navigation": "Navigation dans les pages source",
+    "pdf_corpus.page_mapping": "Correspondance des pages imprimées",
+    "pdf_corpus.page_mapping_help": "Les pages PDF physiques ne changent jamais. Corrigez uniquement l’étiquette de page imprimée savante lorsque l’étiquette PDF ou le folio détecté est erroné.",
+    "pdf_corpus.save_page_overrides": "Enregistrer {count} correction(s)",
+    "pdf_corpus.physical_pdf_page": "Page PDF physique",
+    "pdf_corpus.printed_label": "Étiquette imprimée",
+    "pdf_corpus.label_source": "Source",
+    "pdf_corpus.printed_label_for_page": "Étiquette imprimée de la page PDF physique {page}",
+    "pdf_corpus.unknown": "inconnue",
+    "pdf_corpus.page_mapping_saved": "Corrections des pages imprimées enregistrées. Les nouvelles constructions de corpus utiliseront les étiquettes corrigées.",
+})
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.document_manifest": "Document manifest",
+    "pdf_corpus.revision": "revision",
+    "pdf_corpus.manifest_title": "Title",
+    "pdf_corpus.manifest_author": "Document author",
+    "pdf_corpus.manifest_translator": "Translator",
+    "pdf_corpus.manifest_publisher": "Publisher",
+    "pdf_corpus.manifest_year": "Publication year",
+    "pdf_corpus.manifest_edition": "Edition",
+    "pdf_corpus.manifest_language": "Document language",
+    "pdf_corpus.manifest_original_language": "Original language",
+    "pdf_corpus.manifest_type": "Document type",
+    "pdf_corpus.manifest_main_start": "Main text starts on physical PDF page",
+    "pdf_corpus.manifest_main_end": "Main text ends on physical PDF page",
+    "pdf_corpus.manifest_notes": "Source-supported notes",
+    "pdf_corpus.manifest_help": "These values are inherited deterministically by records. Saving regenerates inherited metadata and citations and reopens affected records for review.",
+    "pdf_corpus.save_manifest": "Save document manifest",
+    "pdf_corpus.manifest_saved": "Document manifest saved. Inherited record metadata and citations were regenerated for review.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.document_manifest": "Manifeste du document",
+    "pdf_corpus.revision": "révision",
+    "pdf_corpus.manifest_title": "Titre",
+    "pdf_corpus.manifest_author": "Auteur du document",
+    "pdf_corpus.manifest_translator": "Traducteur ou traductrice",
+    "pdf_corpus.manifest_publisher": "Éditeur",
+    "pdf_corpus.manifest_year": "Année de publication",
+    "pdf_corpus.manifest_edition": "Édition",
+    "pdf_corpus.manifest_language": "Langue du document",
+    "pdf_corpus.manifest_original_language": "Langue originale",
+    "pdf_corpus.manifest_type": "Type de document",
+    "pdf_corpus.manifest_main_start": "Début du texte principal à la page PDF physique",
+    "pdf_corpus.manifest_main_end": "Fin du texte principal à la page PDF physique",
+    "pdf_corpus.manifest_notes": "Notes appuyées par la source",
+    "pdf_corpus.manifest_help": "Ces valeurs sont héritées de façon déterministe par les fiches. L’enregistrement régénère les métadonnées héritées et les citations et rouvre les fiches touchées pour révision.",
+    "pdf_corpus.save_manifest": "Enregistrer le manifeste du document",
+    "pdf_corpus.manifest_saved": "Manifeste du document enregistré. Les métadonnées héritées et les citations ont été régénérées pour révision.",
+})
+
+DEFAULT_EN_US.update({"pdf_corpus.page_label_issues":"printed-page issue(s)"})
+DEFAULT_FR_CA.update({"pdf_corpus.page_label_issues":"problème(s) de pagination imprimée"})
+
+DEFAULT_EN_US.update({
+ "pdf_corpus.escalation_provider":"Escalation provider",
+ "pdf_corpus.no_escalation_provider":"None — keep failures for human review",
+ "pdf_corpus.escalation_provider_help":"Used only after the primary provider exhausts structured-output retries. It never replaces deterministic validation or human review.",
+})
+DEFAULT_FR_CA.update({
+ "pdf_corpus.escalation_provider":"Fournisseur d’escalade",
+ "pdf_corpus.no_escalation_provider":"Aucun — conserver les échecs pour révision humaine",
+ "pdf_corpus.escalation_provider_help":"Utilisé seulement après l’épuisement des tentatives de sortie structurée du fournisseur principal. Il ne remplace jamais la validation déterministe ni la révision humaine.",
+})
+
+DEFAULT_EN_US.update({
+ "pdf_corpus.manifest_short_title":"Short title",
+ "pdf_corpus.manifest_original_title":"Original title",
+ "pdf_corpus.manifest_place":"Publication place",
+ "pdf_corpus.manifest_isbn":"ISBN",
+})
+DEFAULT_FR_CA.update({
+ "pdf_corpus.manifest_short_title":"Titre abrégé",
+ "pdf_corpus.manifest_original_title":"Titre original",
+ "pdf_corpus.manifest_place":"Lieu de publication",
+ "pdf_corpus.manifest_isbn":"ISBN",
+})
+
+DEFAULT_EN_US.update({"pdf_corpus.manifest_translation":"Translation status","pdf_corpus.manifest_unknown":"Unknown","ui.yes":"Yes","ui.no":"No"})
+DEFAULT_FR_CA.update({"pdf_corpus.manifest_translation":"Statut de traduction","pdf_corpus.manifest_unknown":"Inconnu","ui.yes":"Oui","ui.no":"Non"})
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.add_evidence": "Add as evidence",
+    "pdf_corpus.remove_evidence": "Remove as evidence",
+    "pdf_corpus.evidence_saved": "Evidence binding saved. The record remains open for review.",
+    "pdf_corpus.human_evidence_reason": "Human-reviewed evidence binding.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.add_evidence": "Ajouter comme preuve",
+    "pdf_corpus.remove_evidence": "Retirer comme preuve",
+    "pdf_corpus.evidence_saved": "Lien de preuve enregistré. La fiche reste ouverte pour révision.",
+    "pdf_corpus.human_evidence_reason": "Lien de preuve révisé par une personne.",
+})
+
+DEFAULT_EN_US.update({"pdf_corpus.stage.structure":'document structure',"pdf_corpus.stage.segmenting":'semantic segmentation',"pdf_corpus.stage.reconciling":'boundary reconciliation',"pdf_corpus.stage.enriching":'metadata enrichment',"pdf_corpus.stage.review":'human review',"pdf_corpus.stage.ready":'ready',"pdf_corpus.stage.resuming":'resuming',"pdf_corpus.stage.failed":'failed',"pdf_corpus.stage.cancelled":'cancelled'})
+DEFAULT_FR_CA.update({"pdf_corpus.stage.structure":'structure du document',"pdf_corpus.stage.segmenting":'segmentation sémantique',"pdf_corpus.stage.reconciling":'réconciliation des limites',"pdf_corpus.stage.enriching":'enrichissement des métadonnées',"pdf_corpus.stage.review":'révision humaine',"pdf_corpus.stage.ready":'prête',"pdf_corpus.stage.resuming":'reprise',"pdf_corpus.stage.failed":'échec',"pdf_corpus.stage.cancelled":'annulée'})
+
+DEFAULT_EN_US.update({"pdf_corpus.schema_issues":"metadata schema issue(s)"})
+DEFAULT_FR_CA.update({"pdf_corpus.schema_issues":"problème(s) de schéma de métadonnées"})
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.stage.queued": "queued",
+    "pdf_corpus.stage.interrupted": "interrupted",
+    "pdf_corpus.stage.published": "published",
+    "pdf_corpus.validation_details": "Validation details",
+    "pdf_corpus.text_fidelity_issues": "text-fidelity issue(s)",
+    "pdf_corpus.source_order_issues": "source-order issue(s)",
+    "pdf_corpus.page_mapping_issues": "page-mapping issue(s)",
+    "pdf_corpus.citation_issues": "citation issue(s)",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.stage.queued": "en file",
+    "pdf_corpus.stage.interrupted": "interrompue",
+    "pdf_corpus.stage.published": "publiée",
+    "pdf_corpus.validation_details": "Détails de validation",
+    "pdf_corpus.text_fidelity_issues": "problème(s) de fidélité du texte",
+    "pdf_corpus.source_order_issues": "problème(s) d’ordre de la source",
+    "pdf_corpus.page_mapping_issues": "problème(s) de correspondance des pages",
+    "pdf_corpus.citation_issues": "problème(s) de citation",
+})
+
+DEFAULT_EN_US.update({"pdf_corpus.llm_calls":"LLM calls","pdf_corpus.llm_retries":"retries","pdf_corpus.structured_failures":"structured-output corrections","pdf_corpus.escalations":"escalations"})
+DEFAULT_FR_CA.update({"pdf_corpus.llm_calls":"appels LLM","pdf_corpus.llm_retries":"nouvelles tentatives","pdf_corpus.structured_failures":"corrections de sortie structurée","pdf_corpus.escalations":"escalades"})
+
 system_store = SystemStore()

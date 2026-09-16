@@ -120,6 +120,8 @@ def chat_complete(
     prompt: str,
     options: OllamaTouchupOptions | None = None,
     json_mode: bool = False,
+    json_schema: dict[str, Any] | None = None,
+    schema_name: str = "derridai_response",
     max_tokens: int | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> str:
@@ -144,7 +146,12 @@ def chat_complete(
             body["seed"] = tuning.seed
         if tuning.stop:
             body["stop"] = tuning.stop
-        if json_mode:
+        if json_schema is not None:
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": True, "schema": json_schema},
+            }
+        elif json_mode:
             body["response_format"] = {"type": "json_object"}
         for key_name, value in (tuning.extra_options or {}).items():
             if key_name not in {"model", "messages"}:
@@ -197,10 +204,19 @@ def chat_complete(
                 return 200, "".join(chunks).strip(), ""
 
             status, content, detail = stream_once(body)
-            if status == 400 and "response_format" in body:
+            if status in {400, 422} and "response_format" in body:
                 fallback = dict(body)
-                fallback.pop("response_format", None)
+                # Some OpenAI-compatible routers support JSON mode but not JSON Schema.
+                # Preserve structured output when possible before falling all the way
+                # back to unconstrained text.
+                if json_schema is not None:
+                    fallback["response_format"] = {"type": "json_object"}
+                else:
+                    fallback.pop("response_format", None)
                 status, content, detail = stream_once(fallback)
+                if status in {400, 422} and "response_format" in fallback:
+                    fallback.pop("response_format", None)
+                    status, content, detail = stream_once(fallback)
             if status in {400, 422}:
                 # Preserve compatibility with local OpenAI-compatible routers
                 # that support Chat Completions but not streaming.
@@ -238,13 +254,21 @@ def chat_complete(
                 headers=headers,
                 json=body,
             )
-            if response.status_code == 400 and "response_format" in body:
-                body.pop("response_format", None)
-                response = client.post(
-                    f"{url}/chat/completions",
-                    headers=headers,
-                    json=body,
-                )
+            if response.status_code in {400, 422} and "response_format" in body:
+                if json_schema is not None:
+                    body["response_format"] = {"type": "json_object"}
+                    response = client.post(
+                        f"{url}/chat/completions",
+                        headers=headers,
+                        json=body,
+                    )
+                if response.status_code in {400, 422} and "response_format" in body:
+                    body.pop("response_format", None)
+                    response = client.post(
+                        f"{url}/chat/completions",
+                        headers=headers,
+                        json=body,
+                    )
         if response.status_code >= 400:
             raise RuntimeError(
                 f"OpenAI-compatible endpoint returned HTTP {response.status_code}: "
@@ -288,7 +312,12 @@ def chat_complete(
         "messages": [{"role": "user", "content": prompt}],
         "options": option_values,
     }
-    if json_mode:
+    if json_schema is not None:
+        # Ollama accepts a JSON Schema object in `format`; this materially reduces
+        # malformed output from local models while remaining compatible with the
+        # ordinary `format: json` fallback below.
+        body["format"] = json_schema
+    elif json_mode:
         body["format"] = "json"
     if tuning.think is not None:
         body["think"] = tuning.think
@@ -303,31 +332,46 @@ def chat_complete(
         pool=settings.ollama_connect_timeout_seconds,
     )
     if cancelled is not None:
-        streaming = dict(body)
-        streaming["stream"] = True
-        chunks: list[str] = []
-        with httpx.Client(timeout=timeout) as client:
-            with client.stream("POST", f"{url}/api/chat", json=streaming) as response:
-                if response.status_code >= 400:
-                    response.read()
-                    raise RuntimeError(
-                        f"Ollama returned HTTP {response.status_code}: {_response_detail(response)}"
-                    )
-                for line in response.iter_lines():
-                    if cancelled():
-                        raise InterruptedError("RAG generation cancelled.")
-                    if not line:
-                        continue
-                    payload = json.loads(line)
-                    piece = ((payload.get("message") or {}).get("content") or "")
-                    if piece:
-                        chunks.append(str(piece))
-                    if payload.get("done"):
-                        break
-        return "".join(chunks).strip()
+        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+            streaming = dict(payload)
+            streaming["stream"] = True
+            chunks: list[str] = []
+            with httpx.Client(timeout=timeout) as client:
+                with client.stream("POST", f"{url}/api/chat", json=streaming) as response:
+                    if response.status_code >= 400:
+                        raw = response.read().decode("utf-8", errors="replace")
+                        return response.status_code, "", raw[:2000]
+                    for line in response.iter_lines():
+                        if cancelled():
+                            raise InterruptedError("RAG generation cancelled.")
+                        if not line:
+                            continue
+                        payload_line = json.loads(line)
+                        piece = ((payload_line.get("message") or {}).get("content") or "")
+                        if piece:
+                            chunks.append(str(piece))
+                        if payload_line.get("done"):
+                            break
+            return 200, "".join(chunks).strip(), ""
+
+        status, content, detail = ollama_stream_once(body)
+        if status in {400, 422} and json_schema is not None:
+            fallback = dict(body)
+            fallback["format"] = "json"
+            status, content, detail = ollama_stream_once(fallback)
+        if status >= 400:
+            raise RuntimeError(f"Ollama returned HTTP {status}: {detail}")
+        return content
 
     with httpx.Client(timeout=timeout) as client:
         response = client.post(f"{url}/api/chat", json=body)
+        if response.status_code in {400, 422} and json_schema is not None:
+            # Older Ollama builds support JSON mode but not schema-valued format.
+            # Keep the corpus builder compatible while Pydantic validation/retry
+            # still enforces the contract after generation.
+            fallback = dict(body)
+            fallback["format"] = "json"
+            response = client.post(f"{url}/api/chat", json=fallback)
     if response.status_code >= 400:
         raise RuntimeError(
             f"Ollama returned HTTP {response.status_code}: "

@@ -37,7 +37,10 @@ from .models import (
     LLMWarmupRequest,
     PdfLlmRequest,
     PdfCorpusBuildCreate,
+    PdfPageLabelsPatch,
+    PdfCorpusManifestPatch,
     PdfCorpusRecordPatch,
+    PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
@@ -77,7 +80,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.40.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.40.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1152,7 +1155,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.40.0",
+            "app_version": "0.40.1",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1647,7 +1650,21 @@ async def create_pdf_asset(
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
     try:
-        data = await file.read()
+        max_bytes = settings.pdf_max_upload_mb * 1024 * 1024
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"PDF exceeds the {settings.pdf_max_upload_mb} MB upload limit",
+                )
+            chunks.append(chunk)
+        data = b"".join(chunks)
         return pdf_corpus_repository.save_asset(
             data,
             filename=file.filename or "source.pdf",
@@ -1672,6 +1689,18 @@ def get_pdf_asset(asset_id: str):
         return pdf_corpus_repository.get_asset(asset_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+
+
+@app.patch("/api/pdf/assets/{asset_id}/page-labels")
+def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch):
+    try:
+        return pdf_corpus_repository.update_page_labels(asset_id, body.labels)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/pdf/assets/{asset_id}/content")
@@ -1707,10 +1736,41 @@ def list_pdf_corpus_profiles():
     return {"items": list(CORPUS_PROFILES.values())}
 
 
+def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
+    resolved = dict(payload)
+    profile_id = str(resolved.get("provider_profile_id") or "").strip()
+    if profile_id:
+        profile = system_store.researcher_profile(profile_id)
+        if profile is None:
+            raise ValueError("The selected LLM provider profile is not available.")
+        resolved.update({
+            "provider": profile.get("type") or "ollama",
+            "model": profile.get("model"),
+            "base_url": profile.get("base_url"),
+            "api_key": profile.get("api_key"),
+            "generation": _profile_generation_options(profile) or None,
+            "provider_profile_id": profile_id,
+        })
+    review_profile_id = str(resolved.get("review_provider_profile_id") or "").strip()
+    if review_profile_id:
+        review_profile = system_store.researcher_profile(review_profile_id)
+        if review_profile is None:
+            raise ValueError("The selected escalation provider profile is not available.")
+        resolved["_review_provider"] = {
+            "provider": review_profile.get("type") or "ollama",
+            "model": review_profile.get("model"),
+            "base_url": review_profile.get("base_url"),
+            "api_key": review_profile.get("api_key"),
+            "generation": _profile_generation_options(review_profile) or None,
+            "provider_profile_id": review_profile_id,
+        }
+    return {key: value for key, value in resolved.items() if value is not None}
+
+
 @app.post("/api/pdf/corpus-builds")
 def create_pdf_corpus_build(body: PdfCorpusBuildCreate):
     try:
-        return pdf_corpus_builds.create(body.model_dump(exclude_none=True))
+        return pdf_corpus_builds.create(_resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
     except ValueError as exc:
@@ -1728,6 +1788,18 @@ def get_pdf_corpus_build(build_id: str):
         return pdf_corpus_repository.get_build(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/manifest")
+def patch_pdf_corpus_manifest(build_id: str, body: PdfCorpusManifestPatch):
+    try:
+        return pdf_corpus_builds.patch_manifest(build_id, body.changes, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}/records")
@@ -1752,10 +1824,32 @@ def cancel_pdf_corpus_build(build_id: str):
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/resume")
+def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.resume(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata")
 def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch):
     try:
-        return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes)
+        return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")
+def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCorpusEvidencePatch):
+    try:
+        return pdf_corpus_builds.patch_evidence(
+            build_id, record_id, body.field, body.block_ids, body.confidence, body.reason, body.expected_revision
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -1793,7 +1887,7 @@ def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/rerun-metadata")
 def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordRerun):
     try:
-        return pdf_corpus_builds.rerun_metadata(build_id, record_id, body.model_dump(exclude_none=True))
+        return pdf_corpus_builds.rerun_metadata(build_id, record_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

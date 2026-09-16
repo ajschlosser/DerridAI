@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.0
+# DerridAI Corpus Viewer 0.40.1
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,16 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.40.1 — Dorar the Explorah
+
+Version 0.40.1 completes the PDF Corpus Builder reliability pass. Corpus LLM calls now use provider-native JSON Schema when available, strict Pydantic validation, syntax-only JSON repair, and bounded corrective retries instead of failing a book-length build on one malformed response. Semantic boundaries are confidence-gated and uncertain/window-seam boundaries receive a second reconciliation pass before they can alter record topology. Metadata extraction receives neighboring semantic context, requires block-level evidence for attribution-bearing fields, fills the canonical DerridAI metadata contract, and continues as a reviewable record rather than aborting the entire build when one model call cannot be validated.
+
+Corpus builds now checkpoint the document manifest, accepted semantic boundaries, deterministic records, and each completed metadata record. Interrupted or failed builds are resumable from their last completed checkpoint. Provider profiles are resolved server-side so credentials remain centrally managed and resumable jobs can reuse the same configuration. Validation now checks source coverage, exact normalized text fidelity, source ordering, physical PDF page mapping, citation completeness, required attribution evidence, and metadata-schema integrity. Build observability records LLM calls, corrective retries, structured-output failures, and escalation-provider use. The review workspace navigates the PDF by physical PDF page while retaining printed scholarly page numbers for citations, supports field-specific evidence highlighting and human evidence rebinding, exposes recoverable build warnings and detailed validation state, and uses optimistic record revisions to avoid silent concurrent metadata overwrites.
+
+The PDF workspace and Corpus Builder were also brought onto DerridAI's i18n system with English and Québec French strings, logical CSS properties for bidirectional layouts, explicit labels and live regions, keyboard-visible focus treatment, reduced-motion handling, semantic progress reporting, and non-color status text. The review workspace now lets a human correct field-to-source evidence bindings directly against immutable source blocks; structural merge/split edits preserve scholarly printed-page labels separately from physical PDF pages, and deterministic/system-owned metadata cannot be accidentally overwritten in the JSON editor. Reusable Corpus Build Progress, Field Evidence, PDF Evidence Viewer, Printed-Page Mapping, and Document Manifest components are covered in Storybook.
+
+Release validation: 207 automated tests pass, Python application modules compile, `runtime.js` passes Node syntax checking, and `git diff --check` is clean. The full Vue/Vite/Storybook production build could not be executed in the release environment because frontend dependency installation timed out; the source package therefore does not claim that build as verified.
 
 ## 0.40.0 — Pdffffffffft.
 

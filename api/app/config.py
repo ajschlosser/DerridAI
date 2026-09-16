@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-APP_VERSION = "0.40.0"
+APP_VERSION = "0.40.1"
 
 
 def _float_env(name: str, default: float) -> float:
@@ -29,6 +29,7 @@ class Settings:
     auth_db_path: str = os.getenv("AUTH_DB_PATH", "/data/.home/derridai-auth.sqlite3")
     system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
+    pdf_max_upload_mb: int = _int_env("PDF_MAX_UPLOAD_MB", 500)
 
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",

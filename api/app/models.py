@@ -378,19 +378,38 @@ class PdfLlmRequest(BaseModel):
 
 
 
+class PdfPageLabelsPatch(BaseModel):
+    labels: dict[int, str | None] = Field(default_factory=dict)
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v1", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v2", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
     provider_profile_id: str | None = None
+    review_provider_profile_id: str | None = None
     generation: OllamaTouchupOptions | None = None
+
+
+class PdfCorpusManifestPatch(BaseModel):
+    changes: dict[str, Any] = Field(default_factory=dict)
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 class PdfCorpusRecordPatch(BaseModel):
     changes: dict[str, Any] = Field(default_factory=dict)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusEvidencePatch(BaseModel):
+    field: str = Field(min_length=1, max_length=120)
+    block_ids: list[str] = Field(default_factory=list, max_length=500)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    reason: str = Field(default="", max_length=2000)
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 class PdfCorpusRecordAccept(BaseModel):
@@ -411,6 +430,7 @@ class PdfCorpusRecordRerun(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     provider_profile_id: str | None = None
+    review_provider_profile_id: str | None = None
     generation: OllamaTouchupOptions | None = None
 
 
