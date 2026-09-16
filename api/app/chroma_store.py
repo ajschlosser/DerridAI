@@ -1,0 +1,2163 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+from __future__ import annotations
+
+import gc
+import hashlib
+import json
+import re
+import shutil
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Any
+
+import chromadb
+import httpx
+
+from .config import settings
+
+
+_JSON_PREFIX = "__json__:"
+
+
+def encode_metadata(
+    record: dict[str, Any],
+    *,
+    document_field: str,
+    embedding_field: str,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for key, value in record.items():
+        if key in {document_field, embedding_field, "_chroma_id"} or key.startswith("_chroma_"):
+            continue
+        if value is None:
+            continue
+        if key == "updates" and isinstance(value, list):
+            metadata["_updates_count"] = len(value)
+        if isinstance(value, (str, int, float, bool)):
+            metadata[key] = value
+        else:
+            metadata[key] = _JSON_PREFIX + json.dumps(
+                value,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+    return metadata
+
+
+def decode_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    if not metadata:
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if isinstance(value, str) and value.startswith(_JSON_PREFIX):
+            try:
+                out[key] = json.loads(value[len(_JSON_PREFIX):])
+            except json.JSONDecodeError:
+                out[key] = value
+        else:
+            out[key] = value
+    return out
+
+
+def compact_record_payload(record: dict[str, Any], *, include_updates: bool = False) -> dict[str, Any]:
+    """Return a record suitable for ordinary API/RAG transport.
+
+    ``updates`` is intentionally omitted unless a caller explicitly asks for
+    history.  A tiny count is retained so list/search UIs can still indicate
+    that history exists without shipping the history itself.
+    """
+    out = dict(record)
+    updates = out.get("updates")
+    if not include_updates:
+        out.pop("updates", None)
+        if isinstance(updates, list) and updates:
+            out["_updates_count"] = len(updates)
+    return out
+
+
+def compact_nested_record_payloads(value: Any) -> Any:
+    """Compact record objects nested inside transport/cache payloads.
+
+    RAG evidence and selected-evidence request entries wrap records under a
+    ``record`` key.  Older response-cache rows can therefore still contain a
+    historical ``updates`` array even after ordinary store reads became
+    compact.  Walk only those explicit record wrappers rather than deleting an
+    unrelated field named ``updates`` from arbitrary application data.
+    """
+    if isinstance(value, list):
+        return [compact_nested_record_payloads(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    out: dict[str, Any] = {}
+    for key, item in value.items():
+        if key == "record" and isinstance(item, dict):
+            out[key] = compact_record_payload(item, include_updates=False)
+        else:
+            out[key] = compact_nested_record_payloads(item)
+    return out
+
+
+class Embeddings:
+    def __init__(self) -> None:
+        self._default = None
+
+    def embed(
+        self,
+        texts: list[str],
+        records: list[dict[str, Any]],
+        embedding_field: str,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> list[list[float]]:
+        provider = (provider or settings.embedding_provider).strip().lower()
+
+        if provider == "precomputed":
+            vectors: list[list[float]] = []
+            for index, record in enumerate(records):
+                value = record.get(embedding_field)
+                if not isinstance(value, list) or not value:
+                    raise ValueError(
+                        f"Record {index + 1} has no non-empty '{embedding_field}' array."
+                    )
+                vectors.append([float(x) for x in value])
+            return vectors
+
+        if provider == "ollama":
+            return self._ollama(
+                texts,
+                model=(model or settings.ollama_embed_model).strip(),
+            )
+
+        if provider != "chroma":
+            raise ValueError(
+                f"Unsupported embedding provider {provider!r}. "
+                "Use chroma, ollama, or precomputed."
+            )
+
+        if self._default is None:
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            self._default = DefaultEmbeddingFunction()
+
+        result = self._default(texts)
+        return [list(map(float, row)) for row in result]
+
+    def embed_query(
+        self,
+        query: str,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> list[float]:
+        provider = (provider or settings.embedding_provider).strip().lower()
+        if provider == "precomputed":
+            raise ValueError(
+                "Semantic search cannot create a query embedding for a "
+                "precomputed-vector collection. Use chroma or ollama."
+            )
+        return self.embed(
+            [query],
+            [{}],
+            "embedding",
+            provider=provider,
+            model=model,
+        )[0]
+
+    def _ollama(
+        self,
+        texts: list[str],
+        *,
+        model: str,
+    ) -> list[list[float]]:
+        if not model:
+            raise ValueError("An Ollama embedding model is required.")
+        with httpx.Client(timeout=180.0) as client:
+            response = client.post(
+                f"{settings.ollama_base_url}/api/embed",
+                json={"model": model, "input": texts},
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        vectors = payload.get("embeddings")
+        if not isinstance(vectors, list) or len(vectors) != len(texts):
+            raise RuntimeError("Ollama returned an unexpected embedding response.")
+        return [list(map(float, vector)) for vector in vectors]
+
+
+class ChromaStore:
+    _RESPONSE_CACHE_PUBLIC = "_response_cache"
+    _RESPONSE_CACHE_STORAGE = "derridai_response_cache"
+    _PROVIDER_KEY = "__derridai_embedding_provider"
+    _MODEL_KEY = "__derridai_embedding_model"
+    _LANG_KEY = "__derridai_language_codes"
+    _ROLE_KEY = "__derridai_collection_role"
+    _SOURCE_KEY = "__derridai_source_collection"
+
+    def __init__(self) -> None:
+        self._client = None
+        self._data_root = Path(settings.chroma_data_root).expanduser().resolve()
+        self._path = str(self._normalize_path(settings.chroma_path))
+        self.embeddings = Embeddings()
+
+    def _normalize_path(self, path: str) -> Path:
+        root = self._data_root
+        target = Path(path).expanduser()
+        if not target.is_absolute():
+            target = root / target
+        target = target.resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(
+                f"Chroma storage must be inside {root}. "
+                "That directory is the host-mounted persistent data root."
+            )
+        return target
+
+    def _host_path_hint(self, target: Path | None = None) -> str:
+        target = (target or Path(self._path)).resolve()
+        relative = target.relative_to(self._data_root)
+        return "./data" if str(relative) == "." else f"./data/{relative.as_posix()}"
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def client(self):
+        if self._client is None:
+            target = Path(self._path).expanduser()
+            target.mkdir(parents=True, exist_ok=True)
+            self._client = chromadb.PersistentClient(path=str(target))
+        return self._client
+
+    def set_path(self, path: str) -> dict[str, Any]:
+        target = self._normalize_path(path)
+        target.mkdir(parents=True, exist_ok=True)
+
+        probe = target / ".derridai-write-test"
+        try:
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+        except OSError as exc:
+            raise ValueError(f"Chroma path is not writable: {target}: {exc}") from exc
+
+        client = chromadb.PersistentClient(path=str(target))
+        client.list_collections()
+        self._path = str(target)
+        self._client = client
+        return self.health()
+
+    def health(self) -> dict[str, Any]:
+        try:
+            self.client.list_collections()
+            return {
+                "available": True,
+                "path": self._path,
+                "host_path_hint": self._host_path_hint(),
+                "data_root": str(self._data_root),
+                "writable": True,
+                "error": None,
+            }
+        except Exception as exc:
+            return {
+                "available": False,
+                "path": self._path,
+                "host_path_hint": self._host_path_hint(),
+                "data_root": str(self._data_root),
+                "writable": False,
+                "error": str(exc),
+            }
+
+    def _embedding_spec(self, collection) -> tuple[str, str | None]:
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        provider = str(
+            metadata.get(self._PROVIDER_KEY)
+            or settings.embedding_provider
+        ).strip().lower()
+        model_value = metadata.get(self._MODEL_KEY)
+        model = str(model_value).strip() if model_value else None
+        if provider == "ollama" and not model:
+            model = settings.ollama_embed_model
+        return provider, model
+
+    @staticmethod
+    def _normalize_language_code(value: str) -> str | None:
+        token = re.sub(
+            r"[^\w]+",
+            "_",
+            str(value or "").strip().casefold(),
+            flags=re.UNICODE,
+        ).strip("_")
+        english = {
+            "en", "eng", "english", "anglais", "anglaise",
+            "en_us", "enus", "english_us", "english_usa",
+            "american_english", "us_english",
+            "en_gb", "engb", "en_uk", "english_uk", "english_gb",
+            "british_english", "uk_english",
+        }
+        french = {
+            "fr", "fra", "fre", "french", "français", "francais",
+            "fr_fr", "frfr", "french_france",
+        }
+        if token in english or token.startswith("en_"):
+            return "en"
+        if token in french or token.startswith("fr_"):
+            return "fr"
+        if token.startswith(("english_", "american_", "british_")):
+            return "en"
+        if token.startswith(("french_", "français_", "francais_")):
+            return "fr"
+        return None
+
+    @classmethod
+    def _infer_language_metadata(
+        cls,
+        name: str,
+        language_codes: list[str] | None,
+        collection_role: str | None,
+    ) -> tuple[list[str], str]:
+        if language_codes is not None:
+            codes: list[str] = []
+            for value in language_codes:
+                normalized = cls._normalize_language_code(value)
+                if normalized and normalized not in codes:
+                    codes.append(normalized)
+        else:
+            lowered = name.casefold()
+            if lowered.endswith(("_en", "-en", "_en_us", "-en_us", "_en_gb", "-en_gb")):
+                codes = ["en"]
+            elif lowered.endswith(("_fr", "-fr", "_fr_fr", "-fr_fr")):
+                codes = ["fr"]
+            elif "primary" in lowered:
+                codes = ["en", "fr"]
+            else:
+                codes = []
+
+        if collection_role:
+            role = collection_role
+        else:
+            lowered = name.casefold()
+            if (
+                lowered.endswith(("_en", "-en", "_fr", "-fr"))
+                or any(
+                    lowered.endswith(suffix)
+                    for suffix in (
+                        "_en_us", "-en_us", "_en-us", "-en-us",
+                        "_en_gb", "-en_gb", "_en-gb", "-en-gb",
+                        "_fr_fr", "-fr_fr", "_fr-fr", "-fr-fr",
+                    )
+                )
+            ):
+                role = "language"
+            elif "primary" in lowered:
+                role = "primary"
+            else:
+                role = "general"
+        return codes, role
+
+    def _language_spec(self, collection) -> tuple[list[str], str, str | None]:
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        raw_codes = metadata.get(self._LANG_KEY)
+        codes: list[str] = []
+        if isinstance(raw_codes, str):
+            try:
+                parsed = json.loads(raw_codes)
+                if isinstance(parsed, list):
+                    codes = [
+                        code
+                        for code in (
+                            self._normalize_language_code(value)
+                            for value in parsed
+                        )
+                        if code
+                    ]
+            except json.JSONDecodeError:
+                pass
+        if not codes:
+            codes, inferred_role = self._infer_language_metadata(
+                collection.name,
+                None,
+                metadata.get(self._ROLE_KEY),
+            )
+        else:
+            inferred_role = str(metadata.get(self._ROLE_KEY) or "general")
+        source = metadata.get(self._SOURCE_KEY)
+        return list(dict.fromkeys(codes)), inferred_role, str(source) if source else None
+
+    def _response_cache_storage_name(self) -> str:
+        """Resolve the physical response-cache collection across old installs.
+
+        Very early DerridAI builds could persist the public ``_response_cache``
+        name directly, while current builds use ``derridai_response_cache`` and
+        expose the public alias. If both happen to exist, prefer the collection
+        that actually contains more retained responses so upgrades do not make
+        the FAQ appear empty.
+        """
+        candidates: list[tuple[int, str]] = []
+        for candidate in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
+            try:
+                collection = self.client.get_collection(name=candidate)
+                candidates.append((int(collection.count()), candidate))
+            except Exception:
+                continue
+        if not candidates:
+            return self._RESPONSE_CACHE_STORAGE
+        candidates.sort(
+            key=lambda item: (
+                item[0],
+                item[1] == self._RESPONSE_CACHE_STORAGE,
+            ),
+            reverse=True,
+        )
+        return candidates[0][1]
+
+    def _storage_name(self, name: str) -> str:
+        if name == self._RESPONSE_CACHE_PUBLIC:
+            return self._response_cache_storage_name()
+        return name
+
+    def _public_collection_name(self, collection) -> str:
+        # ``derridai_response_cache`` is a reserved internal storage name. Older
+        # builds did not always persist the system marker metadata, which made
+        # the cache appear as a normal corpus collection and caused the FAQ to
+        # miss it. Always expose the reserved storage name through the stable
+        # public alias.
+        if collection.name == self._RESPONSE_CACHE_STORAGE:
+            return self._RESPONSE_CACHE_PUBLIC
+        return collection.name
+
+    def _public_store(self, collection) -> dict[str, Any]:
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        provider, model = self._embedding_spec(collection)
+        language_codes, role, source_collection = self._language_spec(collection)
+        private = {
+            self._PROVIDER_KEY,
+            self._MODEL_KEY,
+            self._LANG_KEY,
+            self._ROLE_KEY,
+            self._SOURCE_KEY,
+        }
+        public_metadata = {
+            key: value
+            for key, value in metadata.items()
+            if key not in private
+        }
+        return {
+            "name": self._public_collection_name(collection),
+            "storage_name": collection.name,
+            "count": collection.count(),
+            "metadata": public_metadata,
+            "embedding_provider": provider,
+            "embedding_model": model,
+            "language_codes": language_codes,
+            "collection_role": role,
+            "source_collection": source_collection,
+        }
+
+    def set_language_tags(
+        self,
+        name: str,
+        *,
+        language_codes: list[str],
+        collection_role: str | None = None,
+    ) -> dict[str, Any]:
+        collection = self._collection(name)
+        codes, inferred_role = self._infer_language_metadata(
+            name,
+            language_codes,
+            collection_role,
+        )
+        role = collection_role or inferred_role
+        metadata = dict(collection.metadata or {})
+        metadata[self._LANG_KEY] = json.dumps(
+            codes,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        metadata[self._ROLE_KEY] = role
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+
+    def set_embedding(
+        self,
+        name: str,
+        *,
+        provider: str,
+        model: str | None,
+    ) -> dict[str, Any]:
+        provider = provider.strip().lower()
+        if provider not in {"chroma", "ollama", "precomputed"}:
+            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
+        if provider == "ollama" and not (model or "").strip():
+            raise ValueError("Choose an Ollama embedding model.")
+        collection = self._collection(name)
+        current_provider, current_model = self._embedding_spec(collection)
+        normalized_model = (model or "").strip() or None
+
+        if collection.count() > 0 and (
+            current_provider != provider
+            or (current_provider == "ollama" and current_model != normalized_model)
+        ):
+            raise ValueError(
+                "Embedding settings cannot be changed on a non-empty collection "
+                "because existing vectors may have a different dimension. "
+                "Create a new collection with the desired embedding model."
+            )
+
+        metadata = dict(collection.metadata or {})
+        metadata[self._PROVIDER_KEY] = provider
+        if normalized_model:
+            metadata[self._MODEL_KEY] = normalized_model
+        else:
+            metadata.pop(self._MODEL_KEY, None)
+        collection.modify(metadata=metadata)
+        return self._public_store(collection)
+
+    def list_stores(self) -> list[dict[str, Any]]:
+        stores = []
+        response_cache_storage = self._response_cache_storage_name()
+        response_cache_names = {self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC}
+        for collection in self.client.list_collections():
+            name = collection.name if hasattr(collection, "name") else str(collection)
+            # Coalesce legacy/current cache collections into one public system
+            # collection. This prevents a stale empty cache from hiding the
+            # populated cache after an upgrade.
+            if name in response_cache_names and name != response_cache_storage:
+                continue
+            col = self.client.get_collection(name)
+            stores.append(self._public_store(col))
+        return sorted(stores, key=lambda item: item["name"].casefold())
+
+    def get_store(self, name: str) -> dict[str, Any]:
+        return self._public_store(
+            self.client.get_collection(name=self._storage_name(name))
+        )
+
+    def create_store(
+        self,
+        name: str,
+        metadata: dict[str, Any] | None = None,
+        *,
+        embedding_provider: str | None = None,
+        embedding_model: str | None = None,
+        language_codes: list[str] | None = None,
+        collection_role: str | None = None,
+    ) -> dict[str, Any]:
+        requested_name = name
+        name = self._storage_name(name)
+        provider = (embedding_provider or settings.embedding_provider).strip().lower()
+        if provider not in {"chroma", "ollama", "precomputed"}:
+            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
+        model = (embedding_model or "").strip() or None
+        if provider == "ollama" and not model:
+            model = settings.ollama_embed_model
+
+        codes, role = self._infer_language_metadata(
+            requested_name,
+            language_codes,
+            collection_role,
+        )
+
+        collection_metadata = dict(metadata or {})
+        collection_metadata[self._PROVIDER_KEY] = provider
+        collection_metadata[self._ROLE_KEY] = role
+        collection_metadata[self._LANG_KEY] = json.dumps(
+            codes,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        if model:
+            collection_metadata[self._MODEL_KEY] = model
+
+        col = self.client.get_or_create_collection(
+            name=name,
+            metadata=collection_metadata,
+        )
+        return self._public_store(col)
+
+    def delete_store(self, name: str) -> None:
+        if name == self._RESPONSE_CACHE_PUBLIC:
+            deleted = False
+            for candidate in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
+                try:
+                    self.client.delete_collection(name=candidate)
+                    deleted = True
+                except Exception:
+                    continue
+            if not deleted:
+                # Preserve the ordinary not-found behavior for callers.
+                self.client.delete_collection(name=self._RESPONSE_CACHE_STORAGE)
+            return
+        self.client.delete_collection(name=name)
+
+    def _collection(self, name: str):
+        return self.client.get_collection(name=self._storage_name(name))
+
+    def upsert_many(
+        self,
+        store: str,
+        records: list[dict[str, Any]],
+        *,
+        document_field: str = "text",
+        id_field: str = "record_id",
+        embedding_field: str = "embedding",
+        id_prefix: str | None = None,
+        audit_entries_by_id: dict[str, list[dict[str, Any]]] | None = None,
+        replace_updates_by_id: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+        col = self._collection(store)
+        provider, model = self._embedding_spec(col)
+        audit_entries_by_id = audit_entries_by_id or {}
+        replace_updates_by_id = replace_updates_by_id or {}
+        if not records:
+            return {"upserted": 0, "count": col.count()}
+
+        total = 0
+        for start in range(0, len(records), settings.api_batch_size):
+            batch = records[start:start + settings.api_batch_size]
+            ids: list[str] = []
+            docs: list[str] = []
+            logical_ids: list[str] = []
+
+            for row, record in enumerate(batch, start=start + 1):
+                raw_id = record.get(id_field)
+                if raw_id is None or str(raw_id).strip() == "":
+                    raise ValueError(f"Record {row} is missing '{id_field}'.")
+
+                logical_id = str(record.get("record_id") or raw_id)
+                storage_id = str(raw_id)
+                chroma_id = f"{id_prefix}::{storage_id}" if id_prefix else storage_id
+                ids.append(chroma_id)
+                docs.append(str(record.get(document_field) or ""))
+                logical_ids.append(logical_id)
+
+            # Chroma metadata upserts replace the whole metadata object. Preserve
+            # an existing encoded audit trail server-side when the incoming
+            # operation intentionally omits ``updates``. This avoids round-
+            # tripping the history through the browser/API while retaining it.
+            existing_updates: dict[str, Any] = {}
+            existing_updates_count: dict[str, int] = {}
+            existing_update_histories: dict[str, list[dict[str, Any]]] = {}
+            if ids:
+                existing_payload = col.get(ids=ids, include=["metadatas"])
+                for existing_id, metadata in zip(
+                    existing_payload.get("ids") or [],
+                    existing_payload.get("metadatas") or [],
+                ):
+                    if not isinstance(metadata, dict):
+                        continue
+                    key = str(existing_id)
+                    if "updates" in metadata:
+                        existing_updates[key] = metadata["updates"]
+                    raw_count = metadata.get("_updates_count")
+                    if isinstance(raw_count, (int, float)):
+                        existing_updates_count[key] = int(raw_count)
+                    if key in audit_entries_by_id:
+                        decoded = decode_metadata(metadata).get("updates")
+                        if isinstance(decoded, list):
+                            existing_update_histories[key] = list(decoded)
+
+            metas: list[dict[str, Any]] = []
+            for record, chroma_id, logical_id in zip(batch, ids, logical_ids):
+                metadata = encode_metadata(
+                    record,
+                    document_field=document_field,
+                    embedding_field=embedding_field,
+                )
+                if chroma_id in replace_updates_by_id:
+                    replacement = list(replace_updates_by_id.get(chroma_id) or [])
+                    metadata["updates"] = _JSON_PREFIX + json.dumps(
+                        replacement, ensure_ascii=False, separators=(",", ":")
+                    )
+                    metadata["_updates_count"] = len(replacement)
+                elif chroma_id in audit_entries_by_id:
+                    history = list(existing_update_histories.get(chroma_id) or [])
+                    history.extend(audit_entries_by_id.get(chroma_id) or [])
+                    metadata["updates"] = _JSON_PREFIX + json.dumps(
+                        history, ensure_ascii=False, separators=(",", ":")
+                    )
+                    metadata["_updates_count"] = len(history)
+                elif "updates" not in record and chroma_id in existing_updates:
+                    metadata["updates"] = existing_updates[chroma_id]
+                    if chroma_id in existing_updates_count:
+                        metadata["_updates_count"] = existing_updates_count[chroma_id]
+                metadata["_record_id"] = logical_id
+                metadata["_document_field"] = document_field
+                metas.append(metadata)
+
+            vectors = self.embeddings.embed(
+                docs,
+                batch,
+                embedding_field,
+                provider=provider,
+                model=model,
+            )
+            col.upsert(
+                ids=ids,
+                documents=docs,
+                metadatas=metas,
+                embeddings=vectors,
+            )
+            total += len(batch)
+
+        return {"upserted": total, "count": col.count()}
+
+    def _language_children(self, source_name: str) -> list[dict[str, Any]]:
+        children: list[dict[str, Any]] = []
+        for item in self.list_stores():
+            if (
+                item.get("collection_role") == "language"
+                and item.get("source_collection") == source_name
+                and item.get("language_codes")
+            ):
+                children.append(item)
+        return children
+
+    @staticmethod
+    def _storage_id_for_record(
+        record: dict[str, Any],
+        *,
+        id_field: str,
+        id_prefix: str | None,
+    ) -> str:
+        raw_id = record.get(id_field)
+        if raw_id is None or str(raw_id).strip() == "":
+            raise ValueError(f"Record is missing '{id_field}'.")
+        storage_id = str(raw_id)
+        return f"{id_prefix}::{storage_id}" if id_prefix else storage_id
+
+    def sync_language_children(
+        self,
+        source_name: str,
+        records: list[dict[str, Any]],
+        *,
+        id_field: str = "record_id",
+        id_prefix: str | None = None,
+    ) -> dict[str, Any]:
+        source = self._collection(source_name)
+        _, source_role, _ = self._language_spec(source)
+        if source_role != "primary":
+            return {"source": source_name, "mirrored": {}, "record_routes": {}}
+
+        children = self._language_children(source_name)
+        if not children or not records:
+            return {"source": source_name, "mirrored": {}, "record_routes": {}}
+
+        ids = [
+            self._storage_id_for_record(
+                record,
+                id_field=id_field,
+                id_prefix=id_prefix,
+            )
+            for record in records
+        ]
+        payload = source.get(
+            ids=ids,
+            include=["documents", "metadatas", "embeddings"],
+        )
+        returned_ids = payload.get("ids") or []
+        documents = payload.get("documents") or []
+        metadatas = payload.get("metadatas") or []
+        embeddings = payload.get("embeddings")
+        embeddings_list = (
+            embeddings.tolist()
+            if hasattr(embeddings, "tolist")
+            else embeddings
+        ) or []
+
+        source_rows: dict[str, dict[str, Any]] = {}
+        for index, chroma_id in enumerate(returned_ids):
+            source_rows[str(chroma_id)] = {
+                "document": documents[index] if index < len(documents) else "",
+                "metadata": metadatas[index] if index < len(metadatas) else {},
+                "embedding": embeddings_list[index] if index < len(embeddings_list) else None,
+            }
+
+        record_by_id = {
+            self._storage_id_for_record(record, id_field=id_field, id_prefix=id_prefix): record
+            for record in records
+        }
+        record_routes: dict[str, list[str]] = {chroma_id: [] for chroma_id in ids}
+        mirrored: dict[str, int] = {}
+
+        for child in children:
+            child_name = child["name"]
+            child_codes = set(child.get("language_codes") or [])
+            child_col = self._collection(child_name)
+            matching_ids: list[str] = []
+
+            for chroma_id in ids:
+                record = record_by_id[chroma_id]
+                language_value = record.get("document_language")
+                if language_value is None:
+                    language_value = record.get("document_languages")
+                codes = self._record_language_codes(language_value)
+                if codes & child_codes:
+                    matching_ids.append(chroma_id)
+                    record_routes[chroma_id].append(child_name)
+
+            # Delete the current record versions from the child first. This keeps
+            # language stores synchronized when a record's language metadata changes.
+            child_col.delete(ids=ids)
+
+            if matching_ids:
+                child_col.upsert(
+                    ids=matching_ids,
+                    documents=[source_rows[chroma_id]["document"] for chroma_id in matching_ids],
+                    metadatas=[source_rows[chroma_id]["metadata"] for chroma_id in matching_ids],
+                    embeddings=[source_rows[chroma_id]["embedding"] for chroma_id in matching_ids],
+                )
+            mirrored[child_name] = len(matching_ids)
+
+        return {
+            "source": source_name,
+            "mirrored": mirrored,
+            "record_routes": record_routes,
+        }
+
+    def upsert_with_language_sync(
+        self,
+        store: str,
+        records: list[dict[str, Any]],
+        *,
+        document_field: str = "text",
+        id_field: str = "record_id",
+        embedding_field: str = "embedding",
+        id_prefix: str | None = None,
+        mirror_languages: bool = True,
+        audit_entries_by_id: dict[str, list[dict[str, Any]]] | None = None,
+        replace_updates_by_id: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+        result = self.upsert_many(
+            store,
+            records,
+            document_field=document_field,
+            id_field=id_field,
+            embedding_field=embedding_field,
+            id_prefix=id_prefix,
+            audit_entries_by_id=audit_entries_by_id,
+            replace_updates_by_id=replace_updates_by_id,
+        )
+        language_sync = (
+            self.sync_language_children(
+                store,
+                records,
+                id_field=id_field,
+                id_prefix=id_prefix,
+            )
+            if mirror_languages
+            else {"source": store, "mirrored": {}, "record_routes": {}}
+        )
+        return {**result, "language_sync": language_sync}
+
+    def update_existing(
+        self,
+        store: str,
+        chroma_id: str,
+        record: dict[str, Any],
+        *,
+        document_field: str = "text",
+        embedding_field: str = "embedding",
+    ) -> dict[str, Any]:
+        col = self._collection(store)
+        provider, model = self._embedding_spec(col)
+        existing = col.get(
+            ids=[chroma_id],
+            include=["documents", "metadatas", "embeddings"],
+        )
+        if not existing.get("ids"):
+            raise KeyError(f"Record {chroma_id!r} was not found.")
+
+        clean_record = {
+            key: value
+            for key, value in record.items()
+            if key != "_chroma_id" and not key.startswith("_chroma_")
+        }
+        document = str(clean_record.get(document_field) or "")
+        logical_id = clean_record.get("record_id")
+        if logical_id is None:
+            old_meta = decode_metadata((existing.get("metadatas") or [{}])[0])
+            logical_id = old_meta.get("_record_id") or chroma_id
+
+        metadata = encode_metadata(
+            clean_record,
+            document_field=document_field,
+            embedding_field=embedding_field,
+        )
+        metadata["_record_id"] = str(logical_id)
+        metadata["_document_field"] = document_field
+
+        if provider == "precomputed" and not clean_record.get(embedding_field):
+            existing_vectors = existing.get("embeddings")
+            if existing_vectors is None or len(existing_vectors) == 0:
+                raise ValueError(
+                    "The existing record has no stored embedding and no "
+                    f"'{embedding_field}' was supplied."
+                )
+            vector = [float(x) for x in existing_vectors[0]]
+        else:
+            vector = self.embeddings.embed(
+                [document],
+                [clean_record],
+                embedding_field,
+                provider=provider,
+                model=model,
+            )[0]
+
+        col.upsert(
+            ids=[chroma_id],
+            documents=[document],
+            metadatas=[metadata],
+            embeddings=[vector],
+        )
+        return {
+            "updated": chroma_id,
+            "count": col.count(),
+            "record": self.get_record(store, chroma_id, include_updates=False),
+        }
+
+    def get_records(
+        self,
+        store: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        work: str | None = None,
+        sort_field: str | None = None,
+        sort_dir: str = "asc",
+        filters: dict[str, str] | None = None,
+        include_updates: bool = False,
+    ) -> dict[str, Any]:
+        col = self._collection(store)
+        filters = {
+            str(key): str(value)
+            for key, value in (filters or {}).items()
+            if str(value).strip()
+        }
+
+        # Plain work-only browsing can stay fully delegated to Chroma. Column
+        # text filters/sorting require decoded flat records, so those are
+        # handled deterministically in Python and paginated afterward.
+        if not filters and not sort_field:
+            where = {"work": work} if work else None
+            kwargs: dict[str, Any] = {
+                "limit": limit,
+                "offset": offset,
+                "include": ["documents", "metadatas"],
+            }
+            if where:
+                kwargs["where"] = where
+            payload = col.get(**kwargs)
+            if where:
+                count_payload = col.get(where=where, include=["metadatas"])
+                count = len(count_payload.get("ids") or [])
+            else:
+                count = col.count()
+            return {
+                "records": self._decode_result(payload, include_updates=include_updates),
+                "count": count,
+                "limit": limit,
+                "offset": offset,
+                "work": work,
+                "sort_field": sort_field,
+                "sort_dir": sort_dir,
+                "filters": filters,
+            }
+
+        kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if work:
+            kwargs["where"] = {"work": work}
+        payload = col.get(**kwargs)
+        records = self._decode_result(payload, include_updates=include_updates)
+
+        def searchable(value: Any) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, (list, tuple, set)):
+                return " ".join(searchable(item) for item in value)
+            if isinstance(value, dict):
+                return " ".join(
+                    f"{key} {searchable(item)}"
+                    for key, item in value.items()
+                )
+            return str(value)
+
+        for field, query in filters.items():
+            needle = query.casefold().strip()
+            records = [
+                record
+                for record in records
+                if needle in searchable(record.get(field)).casefold()
+            ]
+
+        if sort_field:
+            reverse = str(sort_dir).lower() == "desc"
+
+            def sort_value(record: dict[str, Any]):
+                value = record.get(sort_field)
+                if value is None:
+                    return (1, 2, "")
+                if isinstance(value, bool):
+                    return (0, 0, 1.0 if value else 0.0)
+                if isinstance(value, (int, float)):
+                    return (0, 0, float(value))
+                return (0, 1, searchable(value).casefold())
+
+            records.sort(key=sort_value, reverse=reverse)
+
+        count = len(records)
+        page = records[offset:offset + limit]
+        return {
+            "records": page,
+            "count": count,
+            "limit": limit,
+            "offset": offset,
+            "work": work,
+            "sort_field": sort_field,
+            "sort_dir": sort_dir,
+            "filters": filters,
+        }
+
+    def list_works(self, store: str) -> list[str]:
+        return [item["work"] for item in self.work_stats(store)]
+
+    def work_stats(self, store: str) -> list[dict[str, Any]]:
+        col = self._collection(store)
+        payload = col.get(include=["metadatas", "documents"])
+        fields = ("document_author", "year", "publication_year", "publisher", "publication_place", "translator", "edition", "isbn", "document_language", "original_language", "canonical_work_id", "full_citation", "cover_url")
+        grouped: dict[str, dict[str, Any]] = {}
+        metadatas = payload.get("metadatas") or []
+        documents = payload.get("documents") or []
+        for index, metadata in enumerate(metadatas):
+            decoded = decode_metadata(metadata or {})
+            value = decoded.get("work")
+            if value is None or not str(value).strip():
+                continue
+            key = str(value)
+            item = grouped.setdefault(key, {"work": key, "count": 0, "total_words": 0, "_values": {field: set() for field in fields}})
+            item["count"] += 1
+            document = documents[index] if index < len(documents) else ""
+            item["total_words"] += len(str(document or "").split())
+            for field in fields:
+                field_value = decoded.get(field)
+                if field_value is None or not str(field_value).strip():
+                    continue
+                try:
+                    token = json.dumps(field_value, ensure_ascii=False, sort_keys=True)
+                except TypeError:
+                    token = json.dumps(str(field_value), ensure_ascii=False)
+                item["_values"][field].add(token)
+        output: list[dict[str, Any]] = []
+        for work in sorted(grouped, key=str.casefold):
+            item = grouped[work]
+            result = {
+                "work": work,
+                "count": item["count"],
+                "total_words": int(item.get("total_words") or 0),
+                "average_record_length": round((item.get("total_words") or 0) / item["count"]) if item["count"] else 0,
+            }
+            for field, values in item["_values"].items():
+                if len(values) == 1:
+                    result[field] = json.loads(next(iter(values)))
+                elif len(values) > 1:
+                    result[f"{field}_mixed"] = True
+            output.append(result)
+        return output
+
+    @staticmethod
+    def _flatten_language_values(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            output: list[str] = []
+            for item in value:
+                output.extend(ChromaStore._flatten_language_values(item))
+            return output
+        if isinstance(value, dict):
+            output: list[str] = []
+            for item in value.values():
+                output.extend(ChromaStore._flatten_language_values(item))
+            return output
+        return [str(value)]
+
+    @classmethod
+    def _record_language_codes(cls, value: Any) -> set[str]:
+        codes: set[str] = set()
+        for raw in cls._flatten_language_values(value):
+            normalized = cls._normalize_language_code(raw)
+            if normalized:
+                codes.add(normalized)
+        return codes
+
+    def derive_language_stores(
+        self,
+        source_name: str,
+        *,
+        en_name: str | None = None,
+        fr_name: str | None = None,
+        overwrite: bool = True,
+    ) -> dict[str, Any]:
+        source = self._collection(source_name)
+        _, source_role, _ = self._language_spec(source)
+        lowered = source_name.casefold()
+        looks_derived = any(
+            lowered.endswith(suffix)
+            for suffix in (
+                "_en", "-en", "_fr", "-fr",
+                "_en_us", "-en_us", "_en_gb", "-en_gb",
+                "_fr_fr", "-fr_fr",
+            )
+        )
+        if source_role == "language" or looks_derived:
+            raise ValueError(
+                "Language collections cannot be used to generate further "
+                "language collections. Select a primary/general source collection."
+            )
+
+        names = {
+            "en": (en_name or f"{source_name}_en").strip(),
+            "fr": (fr_name or f"{source_name}_fr").strip(),
+        }
+        if any(not value for value in names.values()):
+            raise ValueError("Derived collection names cannot be empty.")
+        if len(set(names.values())) != 2:
+            raise ValueError("English and French collection names must differ.")
+        if source_name in set(names.values()):
+            raise ValueError("Derived collection names must differ from the source.")
+
+        existing = {
+            item.name if hasattr(item, "name") else str(item)
+            for item in self.client.list_collections()
+        }
+
+        # v0.7 generated regional-language collections. When regenerating the
+        # same source under the coarse en/fr model, remove only legacy derived
+        # collections that identify this source as their parent.
+        removed_legacy: list[str] = []
+        for legacy_name in (
+            f"{source_name}_en_us",
+            f"{source_name}_en_gb",
+            f"{source_name}_fr_fr",
+        ):
+            if legacy_name not in existing:
+                continue
+            try:
+                legacy = self.client.get_collection(name=legacy_name)
+                _, legacy_role, legacy_source = self._language_spec(legacy)
+                if legacy_role == "language" and legacy_source == source_name:
+                    self.client.delete_collection(name=legacy_name)
+                    removed_legacy.append(legacy_name)
+                    existing.discard(legacy_name)
+            except Exception:
+                # A legacy collection is never deleted merely by name when its
+                # provenance cannot be verified.
+                pass
+
+        for target in names.values():
+            if target in existing:
+                if not overwrite:
+                    raise ValueError(
+                        f"Collection {target!r} already exists. Enable overwrite "
+                        "or choose another name."
+                    )
+                self.client.delete_collection(name=target)
+
+        source_metadata = dict(source.metadata or {})
+        targets: dict[str, Any] = {}
+        for code, name in names.items():
+            metadata = dict(source_metadata)
+            metadata[self._ROLE_KEY] = "language"
+            metadata[self._SOURCE_KEY] = source_name
+            metadata[self._LANG_KEY] = json.dumps([code])
+            targets[code] = self.client.get_or_create_collection(
+                name=name,
+                metadata=metadata,
+            )
+
+        totals = {"en": 0, "fr": 0, "skipped": 0}
+        batch_size = max(1, settings.api_batch_size)
+        source_count = source.count()
+
+        for offset in range(0, source_count, batch_size):
+            payload = source.get(
+                limit=batch_size,
+                offset=offset,
+                include=["documents", "metadatas", "embeddings"],
+            )
+            ids = payload.get("ids") or []
+            documents = payload.get("documents") or []
+            metadatas = payload.get("metadatas") or []
+            embeddings = payload.get("embeddings")
+            embeddings_list = (
+                embeddings.tolist()
+                if hasattr(embeddings, "tolist")
+                else embeddings
+            ) or []
+
+            buckets = {
+                code: {
+                    "ids": [],
+                    "documents": [],
+                    "metadatas": [],
+                    "embeddings": [],
+                }
+                for code in targets
+            }
+
+            for index, chroma_id in enumerate(ids):
+                metadata = metadatas[index] if index < len(metadatas) else {}
+                decoded = decode_metadata(metadata or {})
+                language_value = decoded.get("document_language")
+                if language_value is None:
+                    language_value = decoded.get("document_languages")
+                codes = self._record_language_codes(language_value)
+
+                matched = False
+                for code in ("en", "fr"):
+                    if code not in codes:
+                        continue
+                    matched = True
+                    bucket = buckets[code]
+                    bucket["ids"].append(chroma_id)
+                    bucket["documents"].append(
+                        documents[index] if index < len(documents) else ""
+                    )
+                    bucket["metadatas"].append(metadata)
+                    if index >= len(embeddings_list):
+                        raise RuntimeError(
+                            "Source collection did not return embeddings required "
+                            "for language-store derivation."
+                        )
+                    bucket["embeddings"].append(embeddings_list[index])
+                    totals[code] += 1
+
+                if not matched:
+                    totals["skipped"] += 1
+
+            for code, target in targets.items():
+                bucket = buckets[code]
+                if not bucket["ids"]:
+                    continue
+                target.upsert(
+                    ids=bucket["ids"],
+                    documents=bucket["documents"],
+                    metadatas=bucket["metadatas"],
+                    embeddings=bucket["embeddings"],
+                )
+
+        return {
+            "source": source_name,
+            "source_count": source_count,
+            "collections": {
+                code: {
+                    "name": names[code],
+                    "count": totals[code],
+                    "language_codes": [code],
+                }
+                for code in ("en", "fr")
+            },
+            "skipped": totals["skipped"],
+            "removed_legacy_collections": removed_legacy,
+        }
+
+    @staticmethod
+    def _response_cache_embedding(
+        text: str,
+        dimensions: int = 64,
+    ) -> list[float]:
+        """Deterministic local cache vector; no embedding service required."""
+        vector = [0.0] * dimensions
+        tokens = re.findall(r"\\w+", str(text or "").casefold())
+        for token in tokens:
+            digest = hashlib.blake2b(
+                token.encode("utf-8"),
+                digest_size=16,
+            ).digest()
+            bucket = int.from_bytes(
+                digest[:4],
+                "little",
+            ) % dimensions
+            sign = -1.0 if digest[4] & 1 else 1.0
+            vector[bucket] += sign
+        norm = sum(value * value for value in vector) ** 0.5
+        if norm == 0:
+            vector[0] = 1.0
+            return vector
+        return [value / norm for value in vector]
+
+    def get_response_cache_records(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        """Read response-cache records across current and legacy storage names.
+
+        Some upgraded installations can contain both the historical public
+        ``_response_cache`` collection and the current internal
+        ``derridai_response_cache`` collection. Generic collection aliasing must
+        choose only one physical collection; the FAQ instead needs a logical
+        merged view so older cached responses never disappear after an upgrade.
+        """
+        records_by_id: dict[str, dict[str, Any]] = {}
+        physical: list[dict[str, Any]] = []
+        for name in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
+            try:
+                collection = self.client.get_collection(name=name)
+            except Exception:
+                continue
+            try:
+                payload = collection.get(include=["documents", "metadatas"])
+                decoded = self._decode_result(payload)
+            except Exception:
+                decoded = []
+            physical.append({"name": name, "count": int(collection.count())})
+            for record in decoded:
+                logical_id = str(
+                    record.get("record_id")
+                    or record.get("response_id")
+                    or record.get("_chroma_id")
+                    or ""
+                )
+                if not logical_id:
+                    continue
+                record = dict(record)
+                record["_cache_storage"] = name
+                previous = records_by_id.get(logical_id)
+                if previous is None:
+                    records_by_id[logical_id] = record
+                    continue
+                previous_time = str(
+                    previous.get("updated_at")
+                    or previous.get("created_at")
+                    or ""
+                )
+                candidate_time = str(
+                    record.get("updated_at")
+                    or record.get("created_at")
+                    or ""
+                )
+                if candidate_time >= previous_time:
+                    records_by_id[logical_id] = record
+
+        records = list(records_by_id.values())
+        records.sort(
+            key=lambda record: str(
+                record.get("created_at")
+                or record.get("updated_at")
+                or ""
+            ),
+            reverse=True,
+        )
+        total = len(records)
+        needle = str(query or "").strip().casefold()
+        if needle:
+            records = [
+                record
+                for record in records
+                if needle in str(record.get("question") or "").casefold()
+            ]
+        count = len(records)
+        page = [
+            compact_nested_record_payloads(record)
+            for record in records[offset:offset + limit]
+        ]
+        return {
+            "records": page,
+            "count": count,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "query": query or "",
+            "exists": bool(physical),
+            "physical_collections": physical,
+        }
+
+    def ensure_response_cache(self) -> dict[str, Any]:
+        name = "_response_cache"
+        # Migrate existing caches in place. Some pre-0.10.1 caches were created
+        # without the provider/system metadata, so Chroma treated later writes
+        # as default 384-D embeddings even though the stored cache vectors are
+        # deterministic 64-D vectors. Repairing metadata here also makes those
+        # collections visible to the Response FAQ again.
+        try:
+            collection = self.client.get_collection(
+                name=self._response_cache_storage_name()
+            )
+        except Exception:
+            collection = None
+        if collection is not None:
+            metadata = dict(collection.metadata or {})
+            metadata[self._PROVIDER_KEY] = "precomputed"
+            metadata[self._MODEL_KEY] = "derridai-response-cache-hash-v1"
+            metadata[self._LANG_KEY] = "[]"
+            metadata[self._ROLE_KEY] = "general"
+            metadata["derridai_system_collection"] = "response_cache"
+            metadata["derridai_cache_embedding"] = (
+                "deterministic-hash-vector-v1"
+            )
+            collection.modify(metadata=metadata)
+            return self._public_store(collection)
+        return self.create_store(
+            name,
+            embedding_provider="precomputed",
+            embedding_model="derridai-response-cache-hash-v1",
+            language_codes=[],
+            collection_role="general",
+            metadata={
+                "derridai_system_collection": "response_cache",
+                "derridai_cache_embedding": (
+                    "deterministic-hash-vector-v1"
+                ),
+            },
+        )
+
+    def cache_rag_response(
+        self,
+        *,
+        job_id: str,
+        request: dict[str, Any],
+        result: dict[str, Any],
+        created_at: str,
+    ) -> dict[str, Any]:
+        self.ensure_response_cache()
+        record_id = f"rag-response::{job_id}"
+        evidence = compact_nested_record_payloads(result.get("evidence") or [])
+        compact_request = compact_nested_record_payloads(request)
+        compact_evidence = [
+            {
+                "evidence_id": item.get("evidence_id"),
+                "record_id": (item.get("record") or {}).get("record_id"),
+                "work": (item.get("record") or {}).get("work"),
+                "inline_citation": item.get("inline_citation"),
+                "collection": item.get("collection"),
+                "rerank_score": item.get("rerank_score"),
+            }
+            for item in evidence
+        ]
+        record = {
+            "record_id": record_id,
+            "response_id": job_id,
+            "response_type": "rag",
+            "question": result.get("prompt") or request.get("prompt") or "",
+            "instructions": request.get("instructions") or "",
+            "text": result.get("answer") or "",
+            "raw_answer": result.get("raw_answer") or "",
+            "provider": result.get("provider") or request.get("provider"),
+            "model": result.get("model") or request.get("model"),
+            "source_collection": request.get("source_collection"),
+            "collections": result.get("collections") or [],
+            "query_metadata": result.get("query_metadata") or {},
+            "retrieval": result.get("retrieval") or {},
+            "pipeline_stages": result.get("stages") or [],
+            "warnings": result.get("warnings") or [],
+            "evidence_summary": compact_evidence,
+            "evidence": evidence,
+            "evidence_count": len(evidence),
+            "elapsed_seconds": result.get("elapsed_seconds"),
+            "rag_request": compact_request,
+            "created_at": created_at,
+            "updated_at": created_at,
+            "grade": None,
+            # Response-cache vectors are local/deterministic. The cache remains
+            # writable even when the corpus embedding service is offline.
+            "embedding": self._response_cache_embedding(
+                result.get("answer") or ""
+            ),
+        }
+        payload = self.upsert_many(
+            "_response_cache",
+            [record],
+            document_field="text",
+            id_field="record_id",
+        )
+        return {
+            "store": "_response_cache",
+            "record_id": record_id,
+            "count": payload.get("count"),
+        }
+
+    def update_response_cache_grade(
+        self,
+        response_record_id: str,
+        grade: dict[str, Any],
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        generation_provider: str | None = None,
+        generation_model: str | None = None,
+    ) -> dict[str, Any]:
+        # A migrated install may contain responses in both the current internal
+        # cache collection and the historical public collection. Locate this
+        # exact response across both physical stores; the normal public alias
+        # can point at only one of them.
+        candidates: list[tuple[str, dict[str, Any], Any]] = []
+        for storage_name in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
+            try:
+                candidate_collection = self.client.get_collection(name=storage_name)
+                payload = candidate_collection.get(
+                    ids=[response_record_id],
+                    include=["documents", "metadatas"],
+                )
+                decoded = self._decode_result(payload)
+            except Exception:
+                continue
+            if decoded:
+                candidate_record = dict(decoded[0])
+                stamp = str(
+                    candidate_record.get("updated_at")
+                    or candidate_record.get("created_at")
+                    or ""
+                )
+                candidates.append((stamp, candidate_record, candidate_collection))
+        if not candidates:
+            raise ValueError("Cached RAG response was not found.")
+        _, record, collection = max(candidates, key=lambda item: item[0])
+        clean = dict(record)
+        chroma_id = str(clean.pop("_chroma_id", response_record_id))
+        graded_at = datetime.now(timezone.utc).isoformat()
+        entry = {
+            "graded_at": graded_at,
+            "provider": provider,
+            "model": model,
+            "generation_provider": generation_provider or clean.get("provider"),
+            "generation_model": generation_model or clean.get("model"),
+            "same_model_as_generation": bool(
+                model
+                and (generation_model or clean.get("model"))
+                and str(model) == str(generation_model or clean.get("model"))
+            ),
+            "result": grade,
+        }
+        history = list(clean.get("grades") or [])
+        history.append(entry)
+        clean["grades"] = history[-50:]
+        clean["grade"] = grade
+        clean["latest_grade"] = entry
+        clean["updated_at"] = graded_at
+        metadata = encode_metadata(
+            clean,
+            document_field="text",
+            embedding_field="embedding",
+        )
+        metadata["_record_id"] = str(clean.get("record_id") or response_record_id)
+        metadata["_document_field"] = "text"
+        # Grade updates only change metadata. Supplying ``documents`` here makes
+        # Chroma invoke the collection embedding function; the response cache uses
+        # deterministic 64-D precomputed vectors, while Chroma's default embedding
+        # function is 384-D. Metadata-only updates preserve the existing cache
+        # vector and avoid dimension mismatch failures during RAG grading.
+        collection.update(
+            ids=[chroma_id],
+            metadatas=[metadata],
+        )
+        return clean
+
+    def export_records(
+        self,
+        store: str,
+        *,
+        work: str | None = None,
+    ) -> list[dict[str, Any]]:
+        total = self.get_records(
+            store,
+            limit=1,
+            offset=0,
+            work=work,
+            include_updates=True,
+        )["count"]
+        output: list[dict[str, Any]] = []
+        batch_size = min(1000, max(1, settings.api_batch_size * 4))
+        for offset in range(0, total, batch_size):
+            page = self.get_records(
+                store,
+                limit=batch_size,
+                offset=offset,
+                work=work,
+                include_updates=True,
+            )
+            for record in page["records"]:
+                clean = dict(record)
+                clean.pop("_chroma_id", None)
+                output.append(clean)
+        return output
+
+    @staticmethod
+    def _backup_jsonable(value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return {
+                str(key): ChromaStore._backup_jsonable(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [ChromaStore._backup_jsonable(item) for item in value]
+        if hasattr(value, "tolist"):
+            return ChromaStore._backup_jsonable(value.tolist())
+        return str(value)
+
+    def write_logical_backup(self, root: Path) -> list[dict[str, Any]]:
+        """Write a portable, embedding-preserving Chroma snapshot under root."""
+        chroma_root = root / "chroma"
+        chroma_root.mkdir(parents=True, exist_ok=True)
+        inventory: list[dict[str, Any]] = []
+        collections = sorted(
+            self.client.list_collections(),
+            key=lambda item: (item.name if hasattr(item, "name") else str(item)).casefold(),
+        )
+        for index, item in enumerate(collections, start=1):
+            name = item.name if hasattr(item, "name") else str(item)
+            collection = self.client.get_collection(name=name)
+            count = collection.count()
+            file_name = f"collection-{index:05d}.jsonl"
+            file_path = chroma_root / file_name
+            raw_metadata = self._backup_jsonable(dict(collection.metadata or {}))
+            raw_configuration = self._backup_jsonable(
+                getattr(collection, "configuration", None)
+            )
+            with file_path.open("w", encoding="utf-8") as handle:
+                for offset in range(0, count, 1000):
+                    payload = collection.get(
+                        limit=min(1000, count - offset),
+                        offset=offset,
+                        include=["documents", "metadatas", "embeddings"],
+                    )
+                    ids = list(payload.get("ids") or [])
+                    docs = list(payload.get("documents") or [])
+                    metas = list(payload.get("metadatas") or [])
+                    embeddings = payload.get("embeddings")
+                    if embeddings is None:
+                        embeddings = [None] * len(ids)
+                    else:
+                        embeddings = self._backup_jsonable(embeddings)
+                    for row, chroma_id in enumerate(ids):
+                        record = {
+                            "id": str(chroma_id),
+                            "document": docs[row] if row < len(docs) else None,
+                            "metadata": metas[row] if row < len(metas) else None,
+                            "embedding": embeddings[row] if row < len(embeddings) else None,
+                        }
+                        handle.write(json.dumps(
+                            self._backup_jsonable(record),
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ) + "\n")
+            inventory.append({
+                "name": self._public_collection_name(collection),
+                "storage_name": name,
+                "count": count,
+                "metadata": raw_metadata,
+                "configuration": raw_configuration,
+                "file": f"chroma/{file_name}",
+                "public": self._public_store(collection),
+            })
+        return inventory
+
+    def restore_logical_backup(
+        self,
+        root: Path,
+        inventory: list[dict[str, Any]],
+        *,
+        replace: bool = True,
+    ) -> dict[str, Any]:
+        """Restore a logical Chroma snapshot, preserving stored embeddings exactly."""
+        if replace:
+            self.nuke()
+        restored: list[dict[str, Any]] = []
+        for entry in inventory:
+            public_name = str(entry.get("name") or "").strip()
+            name = str(entry.get("storage_name") or self._storage_name(public_name)).strip()
+            relative_file = str(entry.get("file") or "").strip()
+            if not name or not public_name or not relative_file:
+                raise ValueError("Backup collection entry is missing name/file.")
+            file_path = (root / relative_file).resolve()
+            if not file_path.is_relative_to(root.resolve()) or not file_path.exists():
+                raise ValueError(f"Backup collection payload is missing or unsafe: {relative_file}")
+            metadata = entry.get("metadata")
+            if metadata is not None and not isinstance(metadata, dict):
+                raise ValueError(f"Collection metadata for {name!r} is invalid.")
+            create_kwargs: dict[str, Any] = {
+                "name": name,
+                "metadata": metadata or None,
+            }
+            configuration = entry.get("configuration")
+            if isinstance(configuration, dict) and configuration:
+                create_kwargs["configuration"] = configuration
+            try:
+                collection = self.client.create_collection(**create_kwargs)
+            except TypeError:
+                # Chroma versions within the supported 1.x range do not all
+                # expose collection configuration through the same constructor.
+                create_kwargs.pop("configuration", None)
+                collection = self.client.create_collection(**create_kwargs)
+            ids: list[str] = []
+            docs: list[str | None] = []
+            metas: list[dict[str, Any] | None] = []
+            embeddings: list[list[float] | None] = []
+
+            def flush() -> None:
+                if not ids:
+                    return
+                grouped: dict[tuple[bool, bool, bool], list[int]] = {}
+                for row_index in range(len(ids)):
+                    key = (
+                        docs[row_index] is not None,
+                        metas[row_index] is not None,
+                        embeddings[row_index] is not None,
+                    )
+                    grouped.setdefault(key, []).append(row_index)
+                for (has_doc, has_meta, has_embedding), indexes in grouped.items():
+                    kwargs: dict[str, Any] = {
+                        "ids": [ids[index] for index in indexes],
+                    }
+                    if has_doc:
+                        kwargs["documents"] = [docs[index] for index in indexes]
+                    if has_meta:
+                        kwargs["metadatas"] = [metas[index] for index in indexes]
+                    if has_embedding:
+                        kwargs["embeddings"] = [embeddings[index] for index in indexes]
+                    elif has_doc:
+                        raise ValueError(
+                            f"Collection {name!r} backup row is missing its stored embedding; "
+                            "restore refuses to silently re-embed it."
+                        )
+                    collection.add(**kwargs)
+                ids.clear(); docs.clear(); metas.clear(); embeddings.clear()
+
+            with file_path.open("r", encoding="utf-8") as handle:
+                for line_number, line in enumerate(handle, start=1):
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(
+                            f"Invalid JSON in {relative_file} line {line_number}."
+                        ) from exc
+                    chroma_id = str(row.get("id") or "").strip()
+                    if not chroma_id:
+                        raise ValueError(
+                            f"Missing Chroma ID in {relative_file} line {line_number}."
+                        )
+                    embedding = row.get("embedding")
+                    if embedding is not None:
+                        embedding = [float(value) for value in embedding]
+                    ids.append(chroma_id)
+                    docs.append(row.get("document"))
+                    metas.append(row.get("metadata"))
+                    embeddings.append(embedding)
+                    if len(ids) >= 500:
+                        flush()
+                flush()
+            actual = collection.count()
+            expected = int(entry.get("count") or 0)
+            if expected != actual:
+                raise ValueError(
+                    f"Collection {name!r} restored {actual} records; expected {expected}."
+                )
+            restored.append(self._public_store(collection))
+        return {"collections": restored, "count": len(restored)}
+
+    def nuke(self) -> dict[str, Any]:
+        names = [
+            collection.name if hasattr(collection, "name") else str(collection)
+            for collection in self.client.list_collections()
+        ]
+        for name in names:
+            self.client.delete_collection(name=name)
+
+        # Keep the Chroma catalog itself valid, but remove orphaned collection
+        # directories below the persistence path after all collections are gone.
+        root = Path(self._path)
+        removed_paths = 0
+        for child in list(root.iterdir()) if root.exists() else []:
+            if child.name in {"chroma.sqlite3", ".derridai-write-test"}:
+                continue
+            try:
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+                removed_paths += 1
+            except OSError:
+                # Collection deletion is the authoritative reset; stale files are
+                # non-fatal and can be removed after the API container stops.
+                pass
+        gc.collect()
+        return {
+            "deleted_collections": len(names),
+            "removed_paths": removed_paths,
+            "path": self._path,
+        }
+
+    def existing_ids(self, store: str, ids: list[str]) -> list[str]:
+        col = self._collection(store)
+        if not ids:
+            return []
+        found: list[str] = []
+        for start in range(0, len(ids), 500):
+            batch = ids[start:start + 500]
+            payload = col.get(ids=batch, include=["metadatas"])
+            found.extend(str(value) for value in (payload.get("ids") or []))
+        return found
+
+    def get_record(
+        self,
+        store: str,
+        chroma_id: str,
+        *,
+        include_updates: bool = False,
+    ) -> dict[str, Any] | None:
+        col = self._collection(store)
+        payload = col.get(
+            ids=[chroma_id],
+            include=["documents", "metadatas"],
+        )
+        records = self._decode_result(payload, include_updates=include_updates)
+        return records[0] if records else None
+
+    def patch_existing(
+        self,
+        store: str,
+        chroma_id: str,
+        changes: dict[str, Any],
+        *,
+        audit_entries: list[dict[str, Any]] | None = None,
+        document_field: str = "text",
+        embedding_field: str = "embedding",
+    ) -> dict[str, Any]:
+        """Patch only changed record fields while preserving omitted data.
+
+        The browser never needs to round-trip a complete record merely to edit
+        one field. Audit history is appended server-side from small delta
+        entries, avoiding the historical O(n) ``updates`` payload on every edit.
+        """
+        existing = self.get_record(store, chroma_id, include_updates=True)
+        if existing is None:
+            raise KeyError(f"Record {chroma_id!r} was not found.")
+        merged = {
+            key: value
+            for key, value in existing.items()
+            if key != "_chroma_id" and not key.startswith("_chroma_")
+        }
+        merged.update(changes or {})
+        if audit_entries:
+            history = list(merged.get("updates") or [])
+            history.extend(audit_entries)
+            merged["updates"] = history
+        return self.update_existing(
+            store,
+            chroma_id,
+            merged,
+            document_field=document_field,
+            embedding_field=embedding_field,
+        )
+
+    def delete_record(self, store: str, chroma_id: str) -> None:
+        self._collection(store).delete(ids=[chroma_id])
+
+    def delete_record_with_language_sync(self, store: str, chroma_id: str) -> dict[str, Any]:
+        collection = self._collection(store)
+        _, role, _ = self._language_spec(collection)
+        self.delete_record(store, chroma_id)
+        mirrored: list[str] = []
+        if role == "primary":
+            for child in self._language_children(store):
+                self._collection(child["name"]).delete(ids=[chroma_id])
+                mirrored.append(child["name"])
+        return {"deleted": chroma_id, "mirrored_deletes": mirrored}
+
+    def delete_work_with_language_sync(self, store: str, work: str) -> dict[str, Any]:
+        """Delete every record whose decoded ``work`` metadata equals ``work``.
+
+        Primary collections mirror the deletion into generated language children.
+        Returning counts makes destructive UI feedback deterministic and allows the
+        caller to distinguish an already-absent work from a successful removal.
+        """
+        collection = self._collection(store)
+        _, role, _ = self._language_spec(collection)
+        where = {"work": str(work)}
+        payload = collection.get(where=where, include=["metadatas"])
+        ids = [str(value) for value in (payload.get("ids") or [])]
+        if ids:
+            collection.delete(ids=ids)
+
+        mirrored: dict[str, int] = {}
+        if role == "primary":
+            for child in self._language_children(store):
+                child_collection = self._collection(child["name"])
+                child_payload = child_collection.get(where=where, include=["metadatas"])
+                child_ids = [str(value) for value in (child_payload.get("ids") or [])]
+                if child_ids:
+                    child_collection.delete(ids=child_ids)
+                mirrored[child["name"]] = len(child_ids)
+        return {
+            "work": str(work),
+            "deleted": len(ids),
+            "mirrored_deletes": mirrored,
+        }
+
+    def semantic_candidates(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+    ) -> list[dict[str, Any]]:
+        col = self._collection(store)
+        count = col.count()
+        if count == 0:
+            return []
+        provider, model = self._embedding_spec(col)
+        vector = self.embeddings.embed_query(
+            query,
+            provider=provider,
+            model=model,
+        )
+        payload = col.query(
+            query_embeddings=[vector],
+            n_results=min(max(1, n_results), count),
+            include=["documents", "metadatas", "distances", "embeddings"],
+        )
+        ids = (payload.get("ids") or [[]])[0]
+        documents = (payload.get("documents") or [[]])[0]
+        metadatas = (payload.get("metadatas") or [[]])[0]
+        distances = (payload.get("distances") or [[]])[0]
+        embedding_payload = payload.get("embeddings")
+        if hasattr(embedding_payload, "tolist"):
+            embedding_payload = embedding_payload.tolist()
+        embeddings = (embedding_payload or [[]])[0]
+        output: list[dict[str, Any]] = []
+        for index, chroma_id in enumerate(ids):
+            meta = decode_metadata(
+                metadatas[index] if index < len(metadatas) else {}
+            )
+            document_field = meta.pop("_document_field", "text")
+            logical_id = meta.pop("_record_id", None)
+            record = dict(meta)
+            if logical_id is not None and "record_id" not in record:
+                record["record_id"] = logical_id
+            record[document_field] = (
+                documents[index] if index < len(documents) else ""
+            )
+            record["_chroma_id"] = chroma_id
+            record = compact_record_payload(record, include_updates=False)
+            embedding = (
+                embeddings[index]
+                if index < len(embeddings)
+                else None
+            )
+            if hasattr(embedding, "tolist"):
+                embedding = embedding.tolist()
+            output.append({
+                "id": chroma_id,
+                "record": record,
+                "distance": (
+                    float(distances[index])
+                    if index < len(distances) and distances[index] is not None
+                    else None
+                ),
+                "embedding": (
+                    [float(x) for x in embedding]
+                    if embedding is not None
+                    else None
+                ),
+                "query_embedding": [float(x) for x in vector],
+                "collection": store,
+            })
+        return output
+
+    def search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        col = self._collection(store)
+        if col.count() == 0:
+            return []
+        provider, model = self._embedding_spec(col)
+        vector = self.embeddings.embed_query(
+            query,
+            provider=provider,
+            model=model,
+        )
+        payload = col.query(
+            query_embeddings=[vector],
+            n_results=min(n_results, col.count()),
+            where=where,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        ids = (payload.get("ids") or [[]])[0]
+        documents = (payload.get("documents") or [[]])[0]
+        metadatas = (payload.get("metadatas") or [[]])[0]
+        distances = (payload.get("distances") or [[]])[0]
+
+        out = []
+        for index, chroma_id in enumerate(ids):
+            meta = decode_metadata(
+                metadatas[index] if index < len(metadatas) else {}
+            )
+            document_field = meta.pop("_document_field", "text")
+            logical_id = meta.pop("_record_id", None)
+            record = dict(meta)
+            if logical_id is not None and "record_id" not in record:
+                record["record_id"] = logical_id
+            record[document_field] = (
+                documents[index] if index < len(documents) else ""
+            )
+            record["_chroma_id"] = chroma_id
+            record = compact_record_payload(record, include_updates=False)
+            out.append({
+                "id": chroma_id,
+                "distance": (
+                    distances[index] if index < len(distances) else None
+                ),
+                "record": record,
+            })
+        return out
+
+    @staticmethod
+    def _cosine(a: list[float] | None, b: list[float] | None) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        dot = sum(float(x) * float(y) for x, y in zip(a, b))
+        na = sum(float(x) * float(x) for x in a) ** 0.5
+        nb = sum(float(y) * float(y) for y in b) ** 0.5
+        return dot / (na * nb) if na and nb else 0.0
+
+    def mmr_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None, *, fetch_k: int = 100, lambda_mult: float = 0.7) -> list[dict[str, Any]]:
+        col = self._collection(store)
+        if col.count() == 0:
+            return []
+        provider, model = self._embedding_spec(col)
+        query_vector = self.embeddings.embed_query(query, provider=provider, model=model)
+        payload = col.query(query_embeddings=[query_vector], n_results=min(max(n_results, fetch_k), col.count()), where=where, include=["documents", "metadatas", "distances", "embeddings"])
+        ids=(payload.get("ids") or [[]])[0]; docs=(payload.get("documents") or [[]])[0]; metas=(payload.get("metadatas") or [[]])[0]; distances=(payload.get("distances") or [[]])[0]; embeddings=(payload.get("embeddings") or [[]])[0]
+        candidates=[]
+        for index,chroma_id in enumerate(ids):
+            meta=decode_metadata(metas[index] if index < len(metas) else {})
+            document_field=meta.pop("_document_field","text"); logical_id=meta.pop("_record_id",None); record=dict(meta)
+            if logical_id is not None and "record_id" not in record: record["record_id"]=logical_id
+            record[document_field]=docs[index] if index < len(docs) else ""; record["_chroma_id"]=chroma_id
+            record=compact_record_payload(record,include_updates=False)
+            candidates.append({"id":chroma_id,"distance":distances[index] if index < len(distances) else None,"record":record,"embedding":embeddings[index] if index < len(embeddings) else None})
+        selected=[]; remaining=list(candidates)
+        while remaining and len(selected)<n_results:
+            best_index=0; best_score=-float("inf")
+            for index,candidate in enumerate(remaining):
+                relevance=1.0/(1.0+max(0.0,float(candidate.get("distance") or 0.0)))
+                diversity=max((self._cosine(candidate.get("embedding"),chosen.get("embedding")) for chosen in selected),default=0.0)
+                score=lambda_mult*relevance-(1.0-lambda_mult)*diversity
+                if score>best_score: best_score=score; best_index=index
+            chosen=remaining.pop(best_index); chosen["mmr_score"]=best_score; chosen.pop("embedding",None); selected.append(chosen)
+        return selected
+
+    def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        col = self._collection(store)
+        where = where or {}
+        contains_filters: dict[str, str] = {}
+        native_where: dict[str, Any] = {}
+        for field, value in where.items():
+            if isinstance(value, dict) and "$contains" in value:
+                contains_filters[field] = str(value.get("$contains") or "").casefold()
+            else:
+                native_where[field] = value
+        args: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if native_where:
+            args["where"] = native_where
+        # A contains filter may target array-like metadata that Chroma persists
+        # through DerridAI's metadata codec. Fetch the native-filtered set,
+        # decode it, then perform membership/substring matching on the decoded
+        # values. Exact-only filters retain Chroma's efficient limit path.
+        if not contains_filters:
+            args["limit"] = n_results
+        rows = self._decode_result(col.get(**args))
+        if contains_filters:
+            def matches(record: dict[str, Any]) -> bool:
+                for field, needle in contains_filters.items():
+                    value = record.get(field)
+                    if isinstance(value, (list, tuple, set)):
+                        values = [str(item).casefold() for item in value]
+                        if needle not in values and not any(needle in item for item in values):
+                            return False
+                    elif isinstance(value, dict):
+                        if needle not in " ".join(f"{k} {v}" for k, v in value.items()).casefold():
+                            return False
+                    elif needle not in str(value or "").casefold():
+                        return False
+                return True
+            rows = [row for row in rows if matches(row)]
+        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
+
+    def keyword_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Case-insensitive record-text search with metadata filtering.
+
+        Chroma's ``$contains`` document filter is case-sensitive on some
+        versions/backends. Researcher "Record search" is expected to behave
+        like ordinary text search, so use the native filter as a fast path and
+        transparently fall back to a bounded case-folded scan when necessary.
+        """
+        col = self._collection(store)
+        needle = str(query or "").strip()
+        args: dict[str, Any] = {"include": ["documents", "metadatas"], "limit": n_results}
+        if where:
+            args["where"] = where
+        if not needle:
+            rows = self._decode_result(col.get(**args))
+            return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+
+        fast_args = dict(args)
+        fast_args["where_document"] = {"$contains": needle}
+        try:
+            rows = self._decode_result(col.get(**fast_args))
+        except Exception:
+            rows = []
+        if rows:
+            return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
+
+        scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if where:
+            scan_args["where"] = where
+        # Keep the fallback predictable on very large corpora while making the
+        # common researcher search robust across capitalization differences.
+        try:
+            scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
+            candidates = self._decode_result(col.get(**scan_args))
+        except Exception:
+            scan_args.pop("limit", None)
+            candidates = self._decode_result(col.get(**scan_args))
+        folded = needle.casefold()
+        rows = [row for row in candidates if folded in str(row.get("text") or "").casefold()][:n_results]
+        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+
+    def _decode_result(
+        self,
+        payload: dict[str, Any],
+        *,
+        include_updates: bool = False,
+    ) -> list[dict[str, Any]]:
+        ids = payload.get("ids") or []
+        docs = payload.get("documents") or []
+        metas = payload.get("metadatas") or []
+        out: list[dict[str, Any]] = []
+
+        for index, chroma_id in enumerate(ids):
+            meta = decode_metadata(
+                metas[index] if index < len(metas) else {}
+            )
+            document_field = meta.pop("_document_field", "text")
+            logical_id = meta.pop("_record_id", None)
+            record = dict(meta)
+            if logical_id is not None and "record_id" not in record:
+                record["record_id"] = logical_id
+            record[document_field] = (
+                docs[index] if index < len(docs) else ""
+            )
+            record["_chroma_id"] = chroma_id
+            out.append(compact_record_payload(record, include_updates=include_updates))
+        return out

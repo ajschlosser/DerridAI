@@ -1,0 +1,5 @@
+<script setup lang="ts">
+import { useI18nStore } from "../stores/i18n";
+const props=defineProps<{hostPath:string;containerPath:string}>();const emit=defineEmits<{change:[]}>();const i18n=useI18nStore();
+</script>
+<template><section class="card modern-storage-settings"><div class="cardhead"><div><b>{{ i18n.t("storage.settings","Storage settings") }}</b><div class="note">{{ i18n.t("storage.review_paths","Review the persistent host folder and service path.") }}</div></div></div><div class="vector-storage-overview"><div class="vector-storage-primary"><span>{{ i18n.t("storage.host_folder","Host folder") }}</span><code>{{props.hostPath}}</code></div><div class="vector-storage-secondary"><span>{{ i18n.t("storage.container_path","Container path") }}</span><code>{{props.containerPath}}</code></div></div><div class="vector-storage-action-row"><div><b>{{ i18n.t("storage.change_location","Change data location") }}</b><small>{{ i18n.t("storage.advanced_deployment","Advanced deployment setting.") }}</small></div><button class="btn" type="button" @click="emit('change')">{{ i18n.t("storage.change_location_short","Change location") }}</button></div></section></template>

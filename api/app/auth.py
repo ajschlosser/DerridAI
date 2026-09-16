@@ -1,0 +1,678 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+import re
+import secrets
+import sqlite3
+import threading
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import TypeAlias
+
+from .config import settings
+
+Role: TypeAlias = str
+
+# Authorization contract shared with the API and frontend. Every navigable
+# page and meaningful feature has a named capability. Administrator access is
+# intentionally immutable/full; non-admin role permissions are configurable from
+# the Roles & permissions page and stored in the auth database. New capabilities
+# default to administrator-only until explicitly enabled.
+CAPABILITY_CATALOG: dict[str, dict[str, str | bool]] = {
+    "page.dashboard": {"category": "Pages", "label": "Dashboard", "description": "Open the dashboard and researcher-safe overview widgets.", "researcher_default": True},
+    "page.record": {"category": "Pages", "label": "Record view", "description": "Open a researcher-visible corpus record.", "researcher_default": True},
+    "page.works": {"category": "Pages", "label": "Works", "description": "Browse works exposed by corpus databases.", "researcher_default": True},
+    "page.search": {"category": "Pages", "label": "Search", "description": "Open corpus/global search.", "researcher_default": True},
+    "page.annotations": {"category": "Pages", "label": "Annotations", "description": "Open the annotations workspace.", "researcher_default": True},
+    "page.compare": {"category": "Pages", "label": "Compare", "description": "Compare researcher-visible records.", "researcher_default": True},
+    "page.vector": {"category": "Pages", "label": "Corpus database", "description": "Browse researcher-visible vector collections.", "researcher_default": True},
+    "page.research": {"category": "Pages", "label": "Research", "description": "Open the evidence-grounded Research workspace.", "researcher_default": True},
+    "page.settings": {"category": "Pages", "label": "Appearance & settings", "description": "Open researcher-safe settings such as appearance.", "researcher_default": True},
+    "page.records": {"category": "Pages", "label": "Loaded records", "description": "Open administrator loaded-record management.", "researcher_default": False},
+    "page.pdf": {"category": "Pages", "label": "PDF Explorer", "description": "Open PDF extraction and exploration tools.", "researcher_default": False},
+    "page.faq": {"category": "Pages", "label": "Response FAQ", "description": "Open the complete response FAQ workspace.", "researcher_default": False},
+    "page.response_cache": {"category": "Pages", "label": "Response cache", "description": "Browse and manage the RAG response cache.", "researcher_default": False},
+    "page.providers": {"category": "Pages", "label": "LLM profiles", "description": "Configure LLM provider profiles.", "researcher_default": False},
+    "page.users": {"category": "Pages", "label": "Users", "description": "Manage user accounts.", "researcher_default": False},
+    "page.languages": {"category": "Pages", "label": "Languages", "description": "Manage translation dictionaries.", "researcher_default": False},
+    "page.roles": {"category": "Pages", "label": "Roles & permissions", "description": "Configure role permissions.", "researcher_default": False},
+    "corpus.read": {"category": "Corpus", "label": "Read corpus", "description": "Read researcher-safe corpus records and work metadata.", "researcher_default": True},
+    "corpus.search": {"category": "Corpus", "label": "Search corpus", "description": "Run keyword, filter, similarity, and MMR searches.", "researcher_default": True},
+    "corpus.manage": {"category": "Corpus", "label": "Manage corpus", "description": "Create, modify, import, export, or delete corpus data and collections.", "researcher_default": False},
+    "records.edit": {"category": "Corpus", "label": "Edit records", "description": "Change record fields, history, and metadata.", "researcher_default": False},
+    "evidence.select": {"category": "Research", "label": "Select evidence", "description": "Pin corpus records into Research evidence packets.", "researcher_default": True},
+    "rag.run": {"category": "Research", "label": "Run RAG", "description": "Start evidence-grounded RAG generation jobs.", "researcher_default": True},
+    "rag.jobs.own": {"category": "Research", "label": "Manage own RAG jobs", "description": "View, cancel, and remove the signed-in user's RAG jobs.", "researcher_default": True},
+    "providers.researcher.use": {"category": "Research", "label": "Use approved LLM profiles", "description": "Use administrator-approved researcher LLM profiles.", "researcher_default": True},
+    "annotations.read": {"category": "Annotations", "label": "Read annotations", "description": "Read annotations attached to accessible corpus evidence.", "researcher_default": True},
+    "annotations.write": {"category": "Annotations", "label": "Write annotations", "description": "Create and remove annotations on accessible evidence.", "researcher_default": True},
+    "activity.read": {"category": "Dashboard", "label": "Recent activity", "description": "See activity for features and corpus works the account can access.", "researcher_default": True},
+    "appearance.manage": {"category": "Settings", "label": "Appearance", "description": "Change personal browser appearance preferences.", "researcher_default": True},
+    "i18n.read": {"category": "Settings", "label": "Use translations", "description": "Read installed interface dictionaries.", "researcher_default": True},
+    "i18n.manage": {"category": "Administration", "label": "Manage languages", "description": "Install, edit, or remove interface dictionaries.", "researcher_default": False},
+    "providers.manage": {"category": "Administration", "label": "Manage LLM profiles", "description": "Create and configure provider profiles and credentials.", "researcher_default": False},
+    "users.manage": {"category": "Administration", "label": "Manage users", "description": "Create, disable, reset, and delete user accounts.", "researcher_default": False},
+    "roles.manage": {"category": "Administration", "label": "Manage roles", "description": "Change role permission assignments.", "researcher_default": False},
+}
+DEFAULT_RESEARCHER_CAPABILITIES = frozenset(
+    capability for capability, metadata in CAPABILITY_CATALOG.items()
+    if bool(metadata.get("researcher_default"))
+)
+
+ADMIN_ONLY_CAPABILITIES = frozenset({
+    "page.records", "page.pdf", "page.faq", "page.response_cache",
+    "page.providers", "page.users", "page.languages", "page.roles",
+    "corpus.manage", "records.edit", "i18n.manage", "providers.manage",
+    "users.manage", "roles.manage",
+})
+SESSION_COOKIE = "derridai_session"
+PBKDF2_ITERATIONS = 600_000
+SESSION_DAYS = 14
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
+    salt = salt or secrets.token_bytes(24)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return salt.hex(), digest.hex()
+
+
+def _verify_password(password: str, salt_hex: str, digest_hex: str) -> bool:
+    try:
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(digest_hex)
+    except ValueError:
+        return False
+    actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return hmac.compare_digest(actual, expected)
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class AuthUser:
+    id: int
+    username: str
+    role: Role
+    role_name: str
+    active: bool
+    created_at: str
+    updated_at: str
+    last_login: str | None = None
+    login_count: int = 0
+
+    def public(self) -> dict:
+        return {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "role_name": self.role_name,
+            "active": self.active,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "last_login": self.last_login,
+            "login_count": self.login_count,
+            "capabilities": capabilities_for_role(self.role),
+        }
+
+
+class AuthStore:
+    def __init__(self) -> None:
+        path = Path(getattr(settings, "auth_db_path", "/data/.home/derridai-auth.sqlite3")).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self._lock = threading.RLock()
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
+    def _init_db(self) -> None:
+        with self._lock, self._connect() as conn:
+            now = _iso_now()
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS roles (
+                    id TEXT PRIMARY KEY COLLATE NOCASE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    locked INTEGER NOT NULL DEFAULT 0,
+                    builtin INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    password_salt TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('admin','researcher')),
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+                CREATE TABLE IF NOT EXISTS role_permissions (
+                    role TEXT NOT NULL,
+                    capability TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY(role, capability)
+                );
+                CREATE TABLE IF NOT EXISTS user_role_assignments (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    role TEXT NOT NULL REFERENCES roles(id) ON DELETE RESTRICT
+                );
+                """
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('admin','Administrator','Full application access. Administrator permissions are locked to prevent loss of administrative control.',1,1,?,?)",
+                (now, now),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
+                (now, now),
+            )
+            # Existing installations used users.role as a two-value base role.
+            # Keep that stable for compatibility and layer arbitrary application
+            # roles through a separate assignment table.
+            conn.execute(
+                "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
+            )
+            role_rows = conn.execute("SELECT id FROM roles ORDER BY id").fetchall()
+            for row in role_rows:
+                role = str(row["id"])
+                known = {
+                    str(item[0]) for item in conn.execute(
+                        "SELECT capability FROM role_permissions WHERE role=?", (role,)
+                    ).fetchall()
+                }
+                if role == "researcher" and not known:
+                    conn.executemany(
+                        "INSERT OR REPLACE INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                        [
+                            (role, capability, 1 if capability in DEFAULT_RESEARCHER_CAPABILITIES else 0)
+                            for capability in sorted(CAPABILITY_CATALOG)
+                        ],
+                    )
+                    continue
+                missing = sorted(set(CAPABILITY_CATALOG) - known)
+                if missing and role != "admin":
+                    conn.executemany(
+                        "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,0)",
+                        [(role, capability) for capability in missing],
+                    )
+            # Forward-only lightweight migrations keep existing 0.20+ auth DBs
+            # usable without requiring a separate migration command.
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "last_login" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
+            if "login_count" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN login_count INTEGER NOT NULL DEFAULT 0")
+
+    @staticmethod
+    def _row_user(row: sqlite3.Row | None) -> AuthUser | None:
+        if row is None:
+            return None
+        keys = set(row.keys())
+        effective_role = str(row["effective_role"] if "effective_role" in keys else row["role"])
+        role_name = str(
+            row["role_name"]
+            if "role_name" in keys and row["role_name"]
+            else ("Administrator" if effective_role == "admin" else "Researcher" if effective_role == "researcher" else effective_role.replace("-", " ").title())
+        )
+        return AuthUser(
+            id=int(row["id"]),
+            username=str(row["username"]),
+            role=effective_role,
+            role_name=role_name,
+            active=bool(row["active"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+            last_login=(str(row["last_login"]) if "last_login" in keys and row["last_login"] else None),
+            login_count=(int(row["login_count"] or 0) if "login_count" in keys else 0),
+        )
+
+    @staticmethod
+    def _user_select(where: str = "", order: str = "") -> str:
+        return f"""
+            SELECT u.*,
+                   COALESCE(a.role,u.role) AS effective_role,
+                   COALESCE(r.name,CASE WHEN COALESCE(a.role,u.role)='admin' THEN 'Administrator' ELSE 'Researcher' END) AS role_name
+            FROM users u
+            LEFT JOIN user_role_assignments a ON a.user_id=u.id
+            LEFT JOIN roles r ON r.id=COALESCE(a.role,u.role)
+            {where}
+            {order}
+        """
+
+    def bootstrap_required(self) -> bool:
+        with self._connect() as conn:
+            return int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]) == 0
+
+    def bootstrap_admin(self, username: str, password: str) -> AuthUser:
+        with self._lock:
+            if not self.bootstrap_required():
+                raise ValueError("Initial administrator has already been created.")
+            return self.create_user(username, password, "admin")
+
+    def role_ids(self) -> set[str]:
+        with self._connect() as conn:
+            return {str(row[0]) for row in conn.execute("SELECT id FROM roles").fetchall()}
+
+    def role_exists(self, role: Role) -> bool:
+        with self._connect() as conn:
+            return conn.execute("SELECT 1 FROM roles WHERE id=?", (str(role),)).fetchone() is not None
+
+    def create_role(self, name: str, description: str = "", clone_from: Role = "researcher") -> dict:
+        clean_name = " ".join(str(name or "").split()).strip()
+        if len(clean_name) < 2 or len(clean_name) > 80:
+            raise ValueError("Role name must be between 2 and 80 characters.")
+        clean_description = " ".join(str(description or "").split()).strip()[:500]
+        source = str(clone_from or "researcher")
+        if not self.role_exists(source):
+            raise ValueError("Template role not found.")
+        base = re.sub(r"[^a-z0-9]+", "-", clean_name.casefold()).strip("-")[:48] or "role"
+        if base in {"admin", "administrator"}:
+            base = "role-admin"
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            role_id = base
+            suffix = 2
+            while conn.execute("SELECT 1 FROM roles WHERE id=?", (role_id,)).fetchone() is not None:
+                role_id = f"{base[:44]}-{suffix}"
+                suffix += 1
+            conn.execute(
+                "INSERT INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES(?,?,?,0,0,?,?)",
+                (role_id, clean_name, clean_description, now, now),
+            )
+            source_permissions = set(self.capabilities_for_role(source)) if source != "admin" else set(DEFAULT_RESEARCHER_CAPABILITIES)
+            source_permissions -= ADMIN_ONLY_CAPABILITIES
+            conn.executemany(
+                "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                [
+                    (role_id, capability, 1 if capability in source_permissions else 0)
+                    for capability in sorted(CAPABILITY_CATALOG)
+                ],
+            )
+        roles, _ = self.role_definitions()
+        return next(item for item in roles if item["id"] == role_id)
+
+    def delete_role(self, role: Role) -> None:
+        role = str(role)
+        if role in {"admin", "researcher"}:
+            raise ValueError("Built-in roles cannot be deleted.")
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT locked,builtin FROM roles WHERE id=?", (role,)).fetchone()
+            if row is None:
+                raise KeyError(role)
+            if bool(row["locked"]) or bool(row["builtin"]):
+                raise ValueError("This role cannot be deleted.")
+            assigned = int(conn.execute("SELECT COUNT(*) FROM user_role_assignments WHERE role=?", (role,)).fetchone()[0])
+            if assigned:
+                raise ValueError("Reassign users from this role before deleting it.")
+            conn.execute("DELETE FROM role_permissions WHERE role=?", (role,))
+            conn.execute("DELETE FROM roles WHERE id=?", (role,))
+
+    def create_user(self, username: str, password: str, role: Role) -> AuthUser:
+        username = username.strip()
+        role = str(role)
+        if len(username) < 2 or len(username) > 80:
+            raise ValueError("Username must be between 2 and 80 characters.")
+        if len(password) < 6:
+            raise ValueError("Password must contain at least 6 characters.")
+        if not self.role_exists(role):
+            raise ValueError("Selected role does not exist.")
+        base_role = "admin" if role == "admin" else "researcher"
+        salt, digest = _hash_password(password)
+        now = _iso_now()
+        try:
+            with self._lock, self._connect() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO users(username,password_salt,password_hash,role,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                    (username, salt, digest, base_role, now, now),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
+                    (cursor.lastrowid, role),
+                )
+                row = conn.execute(self._user_select("WHERE u.id=?"), (cursor.lastrowid,)).fetchone()
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("A user with that username already exists.") from exc
+        assert row is not None
+        return self._row_user(row)  # type: ignore[return-value]
+
+    def authenticate(self, username: str, password: str) -> AuthUser | None:
+        with self._connect() as conn:
+            row = conn.execute(self._user_select("WHERE u.username=? COLLATE NOCASE"), (username.strip(),)).fetchone()
+            if row is None or not bool(row["active"]):
+                return None
+            if not _verify_password(password, str(row["password_salt"]), str(row["password_hash"])):
+                return None
+            now = _iso_now()
+            conn.execute(
+                "UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE id=?",
+                (now, int(row["id"])),
+            )
+            row = conn.execute(self._user_select("WHERE u.id=?"), (int(row["id"]),)).fetchone()
+            return self._row_user(row)
+
+    def record_login(self, user_id: int) -> AuthUser:
+        """Record a successful sign-in (used by first-run bootstrap)."""
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE id=?",
+                (now, user_id),
+            )
+            row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
+        user = self._row_user(row)
+        if user is None:
+            raise KeyError(user_id)
+        return user
+
+    def create_session(self, user_id: int) -> str:
+        token = secrets.token_urlsafe(48)
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(days=SESSION_DAYS)
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now.isoformat(),))
+            conn.execute(
+                "INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)",
+                (_token_hash(token), user_id, now.isoformat(), expires.isoformat()),
+            )
+        return token
+
+    def user_for_session(self, token: str | None) -> AuthUser | None:
+        if not token:
+            return None
+        now = _iso_now()
+        with self._connect() as conn:
+            row = conn.execute(
+                self._user_select(
+                    "JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1"
+                ),
+                (_token_hash(token), now),
+            ).fetchone()
+            return self._row_user(row)
+
+    def delete_session(self, token: str | None) -> None:
+        if not token:
+            return
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM sessions WHERE token_hash=?", (_token_hash(token),))
+
+    def list_users(self) -> list[AuthUser]:
+        with self._connect() as conn:
+            rows = conn.execute(self._user_select(order="ORDER BY u.username COLLATE NOCASE")).fetchall()
+            return [self._row_user(row) for row in rows if row is not None]  # type: ignore[list-item]
+
+    def get_user(self, user_id: int) -> AuthUser | None:
+        with self._connect() as conn:
+            return self._row_user(conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone())
+
+    def update_user(self, user_id: int, *, role: Role | None = None, active: bool | None = None, password: str | None = None) -> AuthUser:
+        current = self.get_user(user_id)
+        if current is None:
+            raise KeyError(user_id)
+        if role is not None and not self.role_exists(str(role)):
+            raise ValueError("Selected role does not exist.")
+        if password is not None and len(password) < 6:
+            raise ValueError("Password must contain at least 6 characters.")
+        next_role = str(role or current.role)
+        next_active = current.active if active is None else active
+        if current.role == "admin" and current.active and (next_role != "admin" or not next_active):
+            if self._active_admin_count() <= 1:
+                raise ValueError("At least one active administrator is required.")
+        base_role = "admin" if next_role == "admin" else "researcher"
+        clauses = ["role=?", "active=?", "updated_at=?"]
+        values: list[object] = [base_role, int(next_active), _iso_now()]
+        if password is not None:
+            salt, digest = _hash_password(password)
+            clauses.extend(["password_salt=?", "password_hash=?"])
+            values.extend([salt, digest])
+        values.append(user_id)
+        with self._lock, self._connect() as conn:
+            conn.execute(f"UPDATE users SET {', '.join(clauses)} WHERE id=?", values)
+            conn.execute(
+                "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
+                (user_id, next_role),
+            )
+            if not next_active:
+                conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+            row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
+        assert row is not None
+        return self._row_user(row)  # type: ignore[return-value]
+
+    def delete_user(self, user_id: int) -> None:
+        current = self.get_user(user_id)
+        if current is None:
+            raise KeyError(user_id)
+        if current.role == "admin" and current.active and self._active_admin_count() <= 1:
+            raise ValueError("The last active administrator cannot be deleted.")
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+
+    def snapshot_users(self) -> list[dict]:
+        """Return a backup-safe logical user snapshot. Sessions are excluded."""
+        with self._connect() as conn:
+            rows = conn.execute(self._user_select(order="ORDER BY u.id")).fetchall()
+            return [
+                {
+                    "id": int(row["id"]),
+                    "username": str(row["username"]),
+                    "password_salt": str(row["password_salt"]),
+                    "password_hash": str(row["password_hash"]),
+                    "role": str(row["effective_role"]),
+                    "active": bool(row["active"]),
+                    "created_at": str(row["created_at"]),
+                    "updated_at": str(row["updated_at"]),
+                    "last_login": (str(row["last_login"]) if row["last_login"] else None),
+                    "login_count": int(row["login_count"] or 0),
+                }
+                for row in rows
+            ]
+
+    def snapshot_roles(self) -> list[dict]:
+        roles, _ = self.role_definitions()
+        return [
+            {
+                "id": role["id"],
+                "name": role["name"],
+                "description": role["description"],
+                "locked": bool(role["locked"]),
+                "builtin": bool(role.get("builtin", False)),
+                "permissions": list(role.get("permissions") or []),
+            }
+            for role in roles
+        ]
+
+    def restore_roles(self, roles: list[dict]) -> int:
+        if not isinstance(roles, list):
+            raise ValueError("Role backup payload is invalid.")
+        restored = 0
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            for raw in roles:
+                if not isinstance(raw, dict):
+                    continue
+                role_id = str(raw.get("id") or "").strip().lower()
+                if role_id in {"", "admin"}:
+                    continue
+                if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", role_id):
+                    raise ValueError(f"Invalid role id in backup: {role_id}")
+                name = " ".join(str(raw.get("name") or role_id).split())[:80]
+                description = " ".join(str(raw.get("description") or "").split())[:500]
+                builtin = 1 if role_id == "researcher" else 0
+                conn.execute(
+                    "INSERT INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES(?,?,?,0,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=excluded.description,updated_at=excluded.updated_at",
+                    (role_id, name, description, builtin, now, now),
+                )
+                permissions = {str(item) for item in (raw.get("permissions") or []) if str(item) in CAPABILITY_CATALOG}
+                permissions -= ADMIN_ONLY_CAPABILITIES
+                conn.executemany(
+                    "INSERT OR REPLACE INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                    [(role_id, capability, 1 if capability in permissions else 0) for capability in sorted(CAPABILITY_CATALOG)],
+                )
+                restored += 1
+        return restored
+
+    def restore_users(self, users: list[dict]) -> int:
+        if not isinstance(users, list) or not users:
+            raise ValueError("User backup must contain at least one account.")
+        normalized: list[tuple] = []
+        active_admins = 0
+        seen_names: set[str] = set()
+        known_roles = self.role_ids()
+        for raw in users:
+            if not isinstance(raw, dict):
+                raise ValueError("User backup contains an invalid account entry.")
+            username = str(raw.get("username") or "").strip()
+            role = str(raw.get("role") or "")
+            active = bool(raw.get("active", True))
+            if len(username) < 2 or role not in known_roles:
+                raise ValueError("User backup contains an invalid username or role.")
+            lowered = username.casefold()
+            if lowered in seen_names:
+                raise ValueError("User backup contains duplicate usernames.")
+            seen_names.add(lowered)
+            salt = str(raw.get("password_salt") or "")
+            digest = str(raw.get("password_hash") or "")
+            try:
+                bytes.fromhex(salt); bytes.fromhex(digest)
+            except ValueError as exc:
+                raise ValueError("User backup contains invalid password credentials.") from exc
+            if role == "admin" and active:
+                active_admins += 1
+            normalized.append((
+                int(raw.get("id") or 0) or None, username, salt, digest, role, int(active),
+                str(raw.get("created_at") or _iso_now()), str(raw.get("updated_at") or _iso_now()),
+                (str(raw.get("last_login")) if raw.get("last_login") else None),
+                max(0, int(raw.get("login_count") or 0)),
+            ))
+        if active_admins < 1:
+            raise ValueError("User backup must contain at least one active administrator.")
+        with self._lock, self._connect() as conn:
+            existing_sessions = [tuple(row) for row in conn.execute(
+                "SELECT token_hash,user_id,created_at,expires_at FROM sessions WHERE expires_at>?",
+                (_iso_now(),),
+            ).fetchall()]
+            conn.execute("DELETE FROM sessions")
+            conn.execute("DELETE FROM user_role_assignments")
+            conn.execute("DELETE FROM users")
+            restored_ids: set[int] = set()
+            for user_id, username, salt, digest, role, active, created_at, updated_at, last_login, login_count in normalized:
+                base_role = "admin" if role == "admin" else "researcher"
+                cursor = conn.execute(
+                    "INSERT INTO users(id,username,password_salt,password_hash,role,active,created_at,updated_at,last_login,login_count) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (user_id, username, salt, digest, base_role, active, created_at, updated_at, last_login, login_count),
+                )
+                restored_id = int(user_id or cursor.lastrowid)
+                restored_ids.add(restored_id)
+                conn.execute(
+                    "INSERT INTO user_role_assignments(user_id,role) VALUES(?,?)",
+                    (restored_id, role),
+                )
+            for token_hash, user_id, created_at, expires_at in existing_sessions:
+                if int(user_id) in restored_ids:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)",
+                        (token_hash, user_id, created_at, expires_at),
+                    )
+        return len(normalized)
+
+    def capabilities_for_role(self, role: Role) -> list[str]:
+        if role == "admin":
+            return ["*"]
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT capability FROM role_permissions WHERE role=? AND enabled=1 ORDER BY capability",
+                (str(role),),
+            ).fetchall()
+        return [str(row["capability"]) for row in rows if str(row["capability"]) in CAPABILITY_CATALOG]
+
+    def role_has_capability(self, role: Role, capability: str) -> bool:
+        if role == "admin":
+            return True
+        return capability in set(self.capabilities_for_role(role))
+
+    def role_definitions(self) -> tuple[list[dict], list[dict]]:
+        capabilities = [
+            {
+                "id": capability,
+                "category": str(metadata.get("category") or "Other"),
+                "label": str(metadata.get("label") or capability),
+                "description": str(metadata.get("description") or ""),
+                "configurable": capability not in ADMIN_ONLY_CAPABILITIES,
+            }
+            for capability, metadata in CAPABILITY_CATALOG.items()
+        ]
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id,name,description,locked,builtin FROM roles ORDER BY CASE id WHEN 'admin' THEN 0 WHEN 'researcher' THEN 1 ELSE 2 END,name COLLATE NOCASE"
+            ).fetchall()
+        roles = []
+        for row in rows:
+            role_id = str(row["id"])
+            roles.append({
+                "id": role_id,
+                "name": str(row["name"]),
+                "description": str(row["description"] or ""),
+                "locked": bool(row["locked"]),
+                "builtin": bool(row["builtin"]),
+                "permissions": ["*"] if role_id == "admin" else self.capabilities_for_role(role_id),
+            })
+        return roles, capabilities
+
+    def set_role_permissions(self, role: Role, permissions: list[str]) -> list[str]:
+        role = str(role)
+        if role == "admin":
+            raise ValueError("Administrator permissions are fixed to full access.")
+        with self._connect() as conn:
+            row = conn.execute("SELECT locked FROM roles WHERE id=?", (role,)).fetchone()
+        if row is None:
+            raise ValueError("Unknown role.")
+        if bool(row["locked"]):
+            raise ValueError("This role's permissions are locked.")
+        allowed = {str(item) for item in permissions if str(item) in CAPABILITY_CATALOG}
+        allowed -= ADMIN_ONLY_CAPABILITIES
+        with self._lock, self._connect() as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                [
+                    (role, capability, 1 if capability in allowed else 0)
+                    for capability in sorted(CAPABILITY_CATALOG)
+                ],
+            )
+        return sorted(allowed)
+
+    def _active_admin_count(self) -> int:
+        with self._connect() as conn:
+            return int(conn.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0])
+
+
+auth_store = AuthStore()
+
+def capabilities_for_role(role: Role) -> list[str]:
+    return auth_store.capabilities_for_role(role)
+
+def role_has_capability(role: Role, capability: str) -> bool:
+    return auth_store.role_has_capability(role, capability)

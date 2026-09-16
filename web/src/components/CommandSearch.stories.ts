@@ -1,0 +1,2 @@
+import type { Meta, StoryObj } from "@storybook/vue3-vite"; import CommandSearch from "./CommandSearch.vue";
+const meta={title:"Shell/Command Search",component:CommandSearch,args:{placeholder:"Search the corpus, works, concepts, or annotations…",shortcut:"⌘K"},parameters:{layout:"centered"}} satisfies Meta<typeof CommandSearch>;export default meta;type Story=StoryObj<typeof meta>;export const Default:Story={};

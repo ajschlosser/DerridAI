@@ -1,0 +1,88 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+services:
+  web:
+    build:
+      context: ./web
+    ports:
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8181}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz | grep -q '^ok$'"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+  # Opt-in frontend development server. Run with:
+  #   docker compose --profile dev up storybook
+  # The source bind mount provides live story edits while the anonymous
+  # node_modules volume keeps container-installed dependencies available.
+  storybook:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.storybook
+    profiles: ["dev"]
+    ports:
+      - "${STORYBOOK_BIND:-127.0.0.1}:${STORYBOOK_PORT:-6006}:6006"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
+    environment:
+      HOME: /data/.home
+      CHROMA_PATH: /data/chroma
+      CHROMA_DATA_ROOT: /data
+      AUTH_DB_PATH: ${AUTH_DB_PATH:-/data/.home/derridai-auth.sqlite3}
+      RESEARCHER_TEXT_MAX_CHARS: ${RESEARCHER_TEXT_MAX_CHARS:-1600}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3:latest}
+      API_BATCH_SIZE: ${API_BATCH_SIZE:-128}
+      OLLAMA_CONNECT_TIMEOUT_SECONDS: ${OLLAMA_CONNECT_TIMEOUT_SECONDS:-8}
+      OLLAMA_STATUS_TIMEOUT_SECONDS: ${OLLAMA_STATUS_TIMEOUT_SECONDS:-3}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-1800}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-10m}
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-http://host.docker.internal:3001/v1}
+      OPENAI_COMPAT_MODEL: ${OPENAI_COMPAT_MODEL:-auto}
+      OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      OPENAI_CONNECT_TIMEOUT_SECONDS: ${OPENAI_CONNECT_TIMEOUT_SECONDS:-10}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-1800}
+      LLM_MAX_TEXT_CHARS: ${LLM_MAX_TEXT_CHARS:-50000}
+      RAG_DEFAULT_K: ${RAG_DEFAULT_K:-64}
+      RAG_DEFAULT_FETCH_K: ${RAG_DEFAULT_FETCH_K:-500}
+      RAG_DEFAULT_RERANK_TOP_N: ${RAG_DEFAULT_RERANK_TOP_N:-24}
+      RAG_DEFAULT_LAMBDA_MULT: ${RAG_DEFAULT_LAMBDA_MULT:-0.7}
+      RAG_DEFAULT_RRF_K: ${RAG_DEFAULT_RRF_K:-60}
+      RAG_DEFAULT_QUERY_NUM_PREDICT: ${RAG_DEFAULT_QUERY_NUM_PREDICT:-768}
+      RAG_DEFAULT_RECORD_CHAR_LIMIT: ${RAG_DEFAULT_RECORD_CHAR_LIMIT:-12000}
+      RAG_DEFAULT_TOTAL_CHAR_LIMIT: ${RAG_DEFAULT_TOTAL_CHAR_LIMIT:-120000}
+      RAG_OLLAMA_MAX_CONCURRENT: ${RAG_OLLAMA_MAX_CONCURRENT:-1}
+      RAG_CROSS_ENCODER_MODEL: ${RAG_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+      RAG_MODEL_CACHE: ${RAG_MODEL_CACHE:-/data/models}
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    gpus: all
+    restart: unless-stopped

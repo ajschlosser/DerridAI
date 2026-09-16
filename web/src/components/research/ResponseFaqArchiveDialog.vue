@@ -1,0 +1,92 @@
+<script setup lang="ts">
+import { nextTick, ref, watch } from "vue";
+import AppIcon from "../AppIcon.vue";
+import { useI18nStore } from "../../stores/i18n";
+import type { ResponseFaqRecord } from "../../types/research";
+import ResponseFaqList from "./ResponseFaqList.vue";
+
+const props=withDefaults(defineProps<{
+  open?:boolean;
+  records?:ResponseFaqRecord[];
+  selectedId?:string;
+  search?:string;
+  loading?:boolean;
+  count?:number;
+  total?:number;
+  page?:number;
+  pages?:number;
+}>(),{open:false,records:()=>[],selectedId:"",search:"",loading:false,count:0,total:0,page:1,pages:1});
+const emit=defineEmits<{
+  close:[];
+  select:[record:ResponseFaqRecord];
+  search:[value:string];
+  refresh:[];
+  page:[delta:number];
+}>();
+const i18n=useI18nStore();
+const dialog=ref<HTMLDialogElement|null>(null);
+const searchInput=ref<HTMLInputElement|null>(null);
+
+watch(()=>props.open,async value=>{
+  await nextTick();
+  const element=dialog.value;
+  if(!element)return;
+  if(value&&!element.open){element.showModal();await nextTick();searchInput.value?.focus()}
+  else if(!value&&element.open)element.close();
+},{immediate:true});
+
+function requestClose(){emit('close')}
+function onNativeClose(){if(props.open)emit('close')}
+function onSearchInput(event:Event){emit('search',(event.target as HTMLInputElement)?.value||'')}
+function choose(record:ResponseFaqRecord){emit('select',record)}
+</script>
+
+<template>
+  <dialog ref="dialog" class="response-archive-dialog" aria-labelledby="responseArchiveTitle" @cancel.prevent="requestClose" @close="onNativeClose">
+    <div class="response-archive-shell">
+      <header class="response-archive-head">
+        <div>
+          <span class="section-label">{{i18n.t('faq.library_kicker','Library')}}</span>
+          <h2 id="responseArchiveTitle">{{i18n.t('faq.library_title','Saved research')}}</h2>
+          <p>{{i18n.t('faq.archive_help','Search and reopen prior Research answers without compressing the answer workspace.')}}</p>
+        </div>
+        <button type="button" class="response-archive-close" :aria-label="i18n.t('ui.close','Close')" @click="requestClose">×</button>
+      </header>
+
+      <div class="response-archive-toolbar">
+        <label class="response-archive-search">
+          <span class="sr-only">{{i18n.t('faq.search_label','Search cached questions')}}</span>
+          <AppIcon name="search" aria-hidden="true"/>
+          <input ref="searchInput" :value="search" type="search" autocomplete="off" :placeholder="i18n.t('faq.search_placeholder','Search cached questions')" @input="onSearchInput"/>
+          <span v-if="loading" class="spinner" aria-hidden="true"></span>
+        </label>
+        <button type="button" class="response-archive-refresh" :disabled="loading" @click="emit('refresh')"><AppIcon name="refresh"/>{{i18n.t('ui.refresh','Refresh')}}</button>
+      </div>
+
+      <div class="response-archive-count" aria-live="polite">
+        <strong>{{(search?count:total).toLocaleString(i18n.locale)}}</strong>
+        <span>{{search?i18n.t('faq.matches','matches'):i18n.t('faq.cached_responses','cached responses')}}</span>
+      </div>
+
+      <div class="response-archive-body">
+        <div v-if="search&&!records.length&&!loading" class="response-archive-empty" role="status">
+          <AppIcon name="search"/>
+          <strong>{{i18n.t('faq.no_matches','No cached responses match this search')}}</strong>
+          <p>{{i18n.t('faq.no_matches_help','Try a broader question or clear the search.')}}</p>
+          <button type="button" @click="emit('search','')">{{i18n.t('ui.clear','Clear')}}</button>
+        </div>
+        <ResponseFaqList v-else :records="records" :selected-id="selectedId" @select="choose"/>
+      </div>
+
+      <footer v-if="records.length" class="response-archive-footer">
+        <button type="button" :disabled="page<=1||loading" @click="emit('page',-1)">← {{i18n.t('ui.previous','Previous')}}</button>
+        <span>{{i18n.tf('faq.page_of','Page {page} of {pages}',{page,pages})}}</span>
+        <button type="button" :disabled="page>=pages||loading" @click="emit('page',1)">{{i18n.t('ui.next','Next')}} →</button>
+      </footer>
+    </div>
+  </dialog>
+</template>
+
+<style scoped>
+.response-archive-dialog{width:min(650px,calc(100vw - 28px));height:min(790px,calc(100dvh - 28px));max-width:none;max-height:none;margin:auto;padding:0;border:0;border-radius:18px;background:#fff;box-shadow:0 28px 90px rgba(15,23,42,.28);overflow:hidden}.response-archive-dialog::backdrop{background:rgba(15,23,42,.42);backdrop-filter:blur(4px)}.response-archive-shell{height:100%;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto}.response-archive-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px 16px;border-bottom:1px solid #e5ebef;background:linear-gradient(180deg,#fff,#fbfcfd)}.response-archive-head h2{margin:3px 0 4px;color:#1f2f45;font-size:21px;line-height:1.15;letter-spacing:-.015em}.response-archive-head p{max-width:500px;margin:0;color:#66758a;font-size:12.5px;line-height:1.5}.response-archive-close{flex:0 0 auto;width:38px;height:38px;border:1px solid #dce4ea;border-radius:10px;background:#fff;color:#526178;font-size:21px;cursor:pointer}.response-archive-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:13px 16px 9px}.response-archive-search{min-height:42px;display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 11px;border:1px solid #9ba9b9;border-radius:10px;background:#fff}.response-archive-search:focus-within{border-color:var(--ui-accent);box-shadow:0 0 0 3px var(--ui-accent-focus)}.response-archive-search svg{width:16px;height:16px;color:#718096}.response-archive-search input{min-width:0;width:100%;border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;padding:0!important;font-size:13.5px}.response-archive-search .spinner{width:14px;height:14px}.response-archive-refresh{min-height:42px;display:flex;align-items:center;gap:7px;border:1px solid #d9e2e8;border-radius:10px;background:#fff;padding:0 11px;color:#45566c;font-weight:750;cursor:pointer}.response-archive-refresh svg{width:15px;height:15px}.response-archive-count{display:flex;align-items:baseline;gap:6px;padding:0 18px 9px;color:#748196;font-size:11.5px}.response-archive-count strong{color:#34455c;font-size:12.5px}.response-archive-body{min-height:0;overflow:auto;padding:0 8px 8px;scrollbar-gutter:stable}.response-archive-empty{min-height:300px;display:grid;place-items:center;align-content:center;gap:7px;padding:24px;text-align:center}.response-archive-empty>svg{width:25px;height:25px;color:#7d8b9e}.response-archive-empty strong{color:#34455c;font-size:13.5px}.response-archive-empty p{max-width:330px;margin:0;color:#718096;font-size:12.5px;line-height:1.5}.response-archive-empty button{min-height:36px;border:0;background:transparent;color:var(--ui-accent-dark);font-weight:800;cursor:pointer}.response-archive-footer{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #e6ebef;background:#fafbfd}.response-archive-footer span{text-align:center;color:#718096;font-size:11.5px}.response-archive-footer button{min-height:36px;border:1px solid #dce4ea;border-radius:9px;background:#fff;padding:0 10px;color:#45566c;font-weight:750;cursor:pointer}.response-archive-footer button:disabled{opacity:.45;cursor:not-allowed}.response-archive-dialog :is(button,input):focus-visible{outline:3px solid var(--ui-accent-focus);outline-offset:2px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){.response-archive-dialog{width:calc(100vw - 10px);height:calc(100dvh - 10px);border-radius:13px}.response-archive-head{padding:16px}.response-archive-toolbar{grid-template-columns:1fr;padding-inline:11px}.response-archive-refresh{justify-content:center}.response-archive-footer{grid-template-columns:1fr 1fr}.response-archive-footer span{grid-column:1/-1;grid-row:1}.response-archive-footer button{grid-row:2}}@media(prefers-reduced-motion:reduce){.response-archive-dialog::backdrop{backdrop-filter:none}}
+</style>

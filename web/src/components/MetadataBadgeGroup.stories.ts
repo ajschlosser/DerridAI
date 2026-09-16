@@ -1,0 +1,2 @@
+import type { Meta, StoryObj } from "@storybook/vue3-vite"; import MetadataBadgeGroup from "./MetadataBadgeGroup.vue";
+const meta={title:"Records/Metadata Badge Group",component:MetadataBadgeGroup,args:{title:"Concepts",values:["différance","trace","presence","writing"]}} satisfies Meta<typeof MetadataBadgeGroup>;export default meta;type Story=StoryObj<typeof meta>;export const Default:Story={};export const Empty:Story={args:{values:[],emptyLabel:"No concepts"}};

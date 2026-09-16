@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+import ast
+import json
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[1]
+SYSTEM_STORE = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
+JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
+VIEW = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "web/src/components/research/ResearchSettingsDrawer.vue").read_text(encoding="utf-8")
+PIPELINE = (ROOT / "web/src/components/research/ResearchPipelineBar.vue").read_text(encoding="utf-8")
+STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
+
+
+def _translation_dicts() -> dict[str, dict[str, str]]:
+    tree = ast.parse(SYSTEM_STORE)
+    found: dict[str, dict[str, str]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id in {"DEFAULT_EN_US", "DEFAULT_FR_CA"}:
+                found[node.target.id] = ast.literal_eval(node.value)
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            call = node.value
+            if (
+                isinstance(call.func, ast.Attribute)
+                and call.func.attr == "update"
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id in {"DEFAULT_EN_US", "DEFAULT_FR_CA"}
+                and len(call.args) == 1
+            ):
+                found.setdefault(call.func.value.id, {}).update(ast.literal_eval(call.args[0]))
+    return found
+
+
+def test_0350_release_version_is_consistent():
+    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
+    assert package["version"] == "0.35.10"
+    assert 'version="0.35.10"' in MAIN
+    assert "Corpus Viewer 0.35.10" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.10" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
+def test_research_supports_multiple_simultaneous_jobs_without_a_ui_job_cap():
+    assert "ResearchPipelineBar" in VIEW
+    assert "sessionJobIds" in VIEW
+    assert "Promise.all(" in VIEW and "activeSessionJobs.map" in VIEW
+    assert "sessionJobIds.value.add(job.id)" in VIEW
+    assert "starting.value" in VIEW
+    # The page may serialize the submission request itself, but an existing active
+    # job must not disable starting a second pipeline.
+    assert "activeJob.value &&" not in VIEW
+    assert "jobs.length >=" not in VIEW
+    assert "Active research pipelines" in PIPELINE
+    assert "overflow-x:auto" in STYLE
+    assert "threading.Thread" in JOBS and "daemon=True" in JOBS
+
+
+def test_parallel_research_keeps_existing_role_boundaries():
+    assert 'auth.can("rag.run")' in VIEW
+    assert 'auth.can("rag.jobs.own")' in VIEW
+    assert "auth.can('evidence.select')" in VIEW
+    assert "canManageRuns" in VIEW
+    assert "rag.jobs.own" in MAIN and "rag.run" in MAIN
+
+
+def test_expert_settings_is_a_centered_sectioned_settings_studio():
+    assert "research-settings-studio-dialog" in SETTINGS
+    assert "research-settings-studio-body" in SETTINGS
+    assert '"retrieval"' in SETTINGS
+    assert '"evidence"' in SETTINGS
+    assert '"generation"' in SETTINGS
+    assert "research-settings-nav" in SETTINGS
+    assert "research-settings-card-grid" in SETTINGS
+    assert "width:min(1080px" in STYLE
+    assert "grid-template-columns:230px minmax(0,1fr)" in STYLE
+    # Do not regress to illegibly tiny helper typography.
+    assert "research-settings-card>p{margin:0 0 13px;color:#66758a;font-size:12.5px" in STYLE
+    assert "research-settings-nav>button b{font-size:13px" in STYLE
+
+
+def test_research_pipeline_and_settings_have_storybook_coverage():
+    assert (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").exists()
+    story = (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").read_text(encoding="utf-8")
+    assert story.count("status:") >= 3
+    assert (ROOT / "web/src/components/research/ResearchSettingsDrawer.stories.ts").exists()
+
+
+def test_english_and_quebec_french_dictionaries_are_complete_and_placeholder_safe():
+    dictionaries = _translation_dicts()
+    english = dictionaries["DEFAULT_EN_US"]
+    french = dictionaries["DEFAULT_FR_CA"]
+    assert len(english) >= 1500
+    assert set(english) == set(french)
+    assert french["language.french_ca"] == "Français (Québec)"
+    assert "500" in french["vector.sync_behavior_help"]
+    assert re.findall(r"\d+", english["vector.sync_behavior_help"]) == re.findall(r"\d+", french["vector.sync_behavior_help"])
+    for key, source in english.items():
+        source_slots = sorted(re.findall(r"\{[A-Za-z_][A-Za-z0-9_]*\}", source))
+        target_slots = sorted(re.findall(r"\{[A-Za-z_][A-Za-z0-9_]*\}", french[key]))
+        assert source_slots == target_slots, key
+
+
+def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
+    dictionaries = _translation_dicts()
+    english = dictionaries["DEFAULT_EN_US"]
+    french = dictionaries["DEFAULT_FR_CA"]
+    used: set[str] = set()
+    patterns = [
+        re.compile(r"\bi18n\.(?:t|tf)\(\s*['\"]([^'\"]+)['\"]"),
+        re.compile(r"\btrf?\(\s*['\"]([^'\"]+)['\"]"),
+    ]
+    for path in (ROOT / "web/src").rglob("*"):
+        if path.suffix not in {".vue", ".ts", ".js"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for pattern in patterns:
+            used.update(pattern.findall(text))
+    assert used - set(english) == set()
+    assert used - set(french) == set()
+
+
+def test_fr_ca_translation_prompt_explicitly_targets_quebec_and_oqlf():
+    for text in (MAIN, JOBS):
+        assert "professional Canadian French as written in Québec" in text
+        assert "Office québécois de la langue française (OQLF)" in text
+        assert "avoid France-only wording" in text
+        assert "Canadian French typography" in text
+
+
+def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edits(tmp_path, monkeypatch):
+    import app.system_store as store_module
+
+    auth_path = tmp_path / "home" / "auth.sqlite3"
+    auth_path.parent.mkdir(parents=True)
+    system_path = auth_path.parent / "derridai-system.json"
+    system_path.write_text(json.dumps({
+        "researcher_provider_profiles": [],
+        "annotations": [],
+        "languages": {
+            "en-US": {"name": "U.S. English", "flag": "🇺🇸", "dictionary": {"app.name": "OLD"}},
+            "fr-CA": {"name": "Français (Canada)", "flag": "🇨🇦", "dictionary": {"app.name": "ANCIEN"}},
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(store_module, "settings", SimpleNamespace(auth_db_path=str(auth_path)))
+
+    store_module.SystemStore()
+    migrated = json.loads(system_path.read_text(encoding="utf-8"))
+    assert migrated["language_dictionary_revision"] == "0.35.10.2"
+    assert migrated["languages"]["fr-CA"]["name"] == "Français (Québec)"
+    assert migrated["languages"]["en-US"]["dictionary"]["app.name"] == "DerridAI"
+    assert migrated["languages"]["fr-CA"]["dictionary"]["nav.rag"] == "Recherche"
+
+    migrated["languages"]["fr-CA"]["dictionary"]["app.subtitle"] = "Mon libellé personnalisé"
+    system_path.write_text(json.dumps(migrated, ensure_ascii=False), encoding="utf-8")
+    store_module.SystemStore()
+    preserved = json.loads(system_path.read_text(encoding="utf-8"))
+    assert preserved["languages"]["fr-CA"]["dictionary"]["app.subtitle"] == "Mon libellé personnalisé"
+
+
+def test_quebec_localization_policy_is_documented():
+    policy = (ROOT / "docs/LOCALIZATION_FR_CA.md").read_text(encoding="utf-8")
+    assert "professional Canadian French as written in Québec" in policy
+    assert "OQLF" in policy
+    assert "Never translate corpus passages" in policy
+    assert "language_dictionary_revision" not in policy or "0.35.0" in policy

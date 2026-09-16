@@ -1,0 +1,26 @@
+import { apiRequest } from "./http";
+
+export interface ProviderProfile {
+  id: string;
+  name: string;
+  type: "ollama" | "openai";
+  model?: string;
+  model_mode?: string;
+  base_url?: string;
+  max_concurrent_requests?: number;
+  [key: string]: unknown;
+}
+
+export interface LanguageInfo { code: string; name: string; flag: string }
+export interface LanguageDictionary extends LanguageInfo { dictionary: Record<string, string> }
+
+export const systemApi = {
+  researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
+  setResearcherProviders: (profiles: ProviderProfile[]) => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers", {method: "PUT", body: JSON.stringify({profiles})}),
+  researcherProviderStatus: (payload: Record<string, unknown>) => apiRequest<{available: boolean; models?: Array<{name: string; [key: string]: unknown}>; error?: string}>("/api/system/researcher-providers/status", {method: "POST", body: JSON.stringify(payload)}),
+  languages: () => apiRequest<{languages: LanguageInfo[]}>("/api/i18n/languages"),
+  language: (code: string) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
+  updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "PUT", body: JSON.stringify(payload)}),
+  installLanguage: (payload: Record<string, unknown>) => apiRequest<any>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
+  deleteLanguage: (code: string) => apiRequest<{deleted: string}>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "DELETE"}),
+};
