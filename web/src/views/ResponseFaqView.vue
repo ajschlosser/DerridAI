@@ -28,10 +28,13 @@ const cacheTotal=computed(()=>Number(payload.value?.total||0));
 const pages=computed(()=>Math.max(1,Math.ceil(total.value/pageSize)));
 const selectedId=computed(()=>recordKey(selected.value));
 const evidenceCount=computed(()=>Number(selected.value?.evidence_count??selected.value?.evidence?.length??0));
-const primaryGrade=computed(()=>{
+function gradeScalar(value:unknown):string|number|null{
+  return typeof value==="string"||typeof value==="number"?value:null;
+}
+const primaryGrade=computed<string|number|null>(()=>{
   const grade=selected.value?.grade as Record<string,unknown>|undefined;
   const value=(grade?.result&&typeof grade.result==="object"?grade.result:grade) as Record<string,unknown>|undefined;
-  return value?.overall??value?.score??null;
+  return gradeScalar(value?.overall??value?.score);
 });
 const result=computed<ResearchResult|null>(()=>{
   const record=selected.value;

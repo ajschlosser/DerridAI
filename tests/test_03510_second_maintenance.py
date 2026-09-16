@@ -67,3 +67,10 @@ def test_record_inspector_tabs_have_keyboard_and_aria_relationships():
     assert ':aria-controls="panelId(item[0])"' in INSPECTOR
     assert ':tabindex="tab===item[0]?0:-1"' in INSPECTOR
     assert ':aria-labelledby="tabId(\'overview\')"' in INSPECTOR
+
+
+def test_response_faq_primary_grade_is_narrowed_to_component_prop_type():
+    faq=(ROOT/"web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
+    assert 'function gradeScalar(value:unknown):string|number|null' in faq
+    assert 'computed<string|number|null>' in faq
+    assert 'return gradeScalar(value?.overall??value?.score)' in faq
