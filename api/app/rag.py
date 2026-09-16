@@ -493,7 +493,15 @@ def _bind_sources(answer: str, evidence: list[dict[str, Any]], include_works_cit
 
 
 def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-    if not a or not b or len(a) != len(b):
+    # Retrieval embeddings may arrive as NumPy arrays from Chroma. Explicit
+    # length checks avoid ambiguous NumPy truth-value evaluation.
+    if (
+        a is None
+        or b is None
+        or len(a) == 0
+        or len(b) == 0
+        or len(a) != len(b)
+    ):
         return 0.0
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))

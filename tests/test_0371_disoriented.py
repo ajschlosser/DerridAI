@@ -69,3 +69,17 @@ def test_vector_stores_uses_task_focused_workspace_and_progressive_disclosure():
     assert ".vector-workspace-tabs" in css
     assert ".vector-record-inspector" in css
     assert ".vector-comparison-grid" in css
+
+
+def test_mmr_handles_numpy_embedding_arrays_without_truth_value_testing():
+    chroma = text("api/app/chroma_store.py")
+    rag = text("api/app/rag.py")
+    assert 'embedding_payload = payload.get("embeddings")' in chroma
+    assert 'hasattr(embedding_payload, "tolist")' in chroma
+    assert 'embedding_payload = embedding_payload.tolist()' in chroma
+    assert 'if not a or not b' not in chroma[chroma.index("def _cosine"):chroma.index("def mmr_search")]
+    assert 'if not a or not b' not in rag[rag.index("def _cosine"):rag.index("def _distance_similarity")]
+    assert "len(a) == 0" in chroma
+    assert "len(b) == 0" in chroma
+    assert "len(a) == 0" in rag
+    assert "len(b) == 0" in rag

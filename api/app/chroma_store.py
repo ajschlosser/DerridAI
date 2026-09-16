@@ -2376,7 +2376,15 @@ class ChromaStore:
 
     @staticmethod
     def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-        if not a or not b or len(a) != len(b):
+        # Chroma may return embeddings as NumPy arrays. Never truth-test an
+        # array: ``if not array`` raises the ambiguous truth-value error.
+        if (
+            a is None
+            or b is None
+            or len(a) == 0
+            or len(b) == 0
+            or len(a) != len(b)
+        ):
             return 0.0
         dot = sum(float(x) * float(y) for x, y in zip(a, b))
         na = sum(float(x) * float(x) for x in a) ** 0.5
@@ -2390,7 +2398,17 @@ class ChromaStore:
         provider, model = self._embedding_spec(col)
         query_vector = self.embeddings.embed_query(query, provider=provider, model=model)
         payload = col.query(query_embeddings=[query_vector], n_results=min(max(n_results, fetch_k), col.count()), where=where, include=["documents", "metadatas", "distances", "embeddings"])
-        ids=(payload.get("ids") or [[]])[0]; docs=(payload.get("documents") or [[]])[0]; metas=(payload.get("metadatas") or [[]])[0]; distances=(payload.get("distances") or [[]])[0]; embeddings=(payload.get("embeddings") or [[]])[0]
+        ids = (payload.get("ids") or [[]])[0]
+        docs = (payload.get("documents") or [[]])[0]
+        metas = (payload.get("metadatas") or [[]])[0]
+        distances = (payload.get("distances") or [[]])[0]
+        embedding_payload = payload.get("embeddings")
+        # Chroma commonly returns embeddings as a NumPy ndarray. Convert it
+        # before fallback/default handling so Python never evaluates the array
+        # as a boolean.
+        if hasattr(embedding_payload, "tolist"):
+            embedding_payload = embedding_payload.tolist()
+        embeddings = (embedding_payload or [[]])[0]
         candidates=[]
         for index,chroma_id in enumerate(ids):
             meta=decode_metadata(metas[index] if index < len(metas) else {})
