@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.1"
-    assert 'version="0.40.1"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.1"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.40.1" in text("README.md")
+    assert package["version"] == "0.40.5"
+    assert 'version="0.40.5"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.5"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.40.5" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
@@ -34,14 +34,14 @@ def test_pdf_sources_are_content_addressed_layout_aware_and_ocr_capable():
 
 def test_semantic_segmentation_does_not_use_page_or_character_boundaries():
     builder = text("api/app/corpus_builder.py")
-    segment = builder[builder.index("    def _segment("):builder.index("    @staticmethod\n    def _construct_records")]
-    assert "speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move" in segment
-    assert "NEVER split merely because a page changes" in segment
-    assert "processing window ends" in segment
-    assert "text reaches a size" in segment
-    assert "after_block_id" in segment
-    assert "soft_min_chars" not in segment
-    assert "soft_max_chars" not in segment
+    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    def _reconcile_boundaries")]
+    assert "speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move" in segmentation
+    assert "NEVER split because a page changes" in segmentation
+    assert "execution window ends" in segmentation
+    assert "text reaches a size" in segmentation
+    assert "after_block_id" in segmentation
+    # Length may guard against an unresolved topology, but never inserts a split.
+    assert "no mechanical boundary was inserted" in segmentation
 
 
 def test_record_text_is_deterministic_and_metadata_is_source_evidence_bound():
@@ -51,7 +51,7 @@ def test_record_text_is_deterministic_and_metadata_is_source_evidence_bound():
     assert 'text = "\\n\\n".join(block["text"].strip()' in construct
     assert '"source_block_ids"' in construct
     assert '"source_spans"' in construct
-    assert "Do not rewrite, summarize, or return the record text" in enrich
+    assert "Do not return quotation relations, topical indexing, bibliographic metadata, summaries, or source text" in enrich
     assert "POSITION HOLDER" in enrich
     assert '"field_evidence"' in enrich
     assert "Source-bound fields cannot be edited" in builder

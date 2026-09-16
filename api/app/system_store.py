@@ -1354,6 +1354,7 @@ class SystemStore:
         self.path = self.repository.path
         self._lock = threading.RLock()
         self._ensure()
+        self._sync_builtin_language_defaults()
 
     def _default(self) -> dict[str, Any]:
         return {
@@ -1369,6 +1370,36 @@ class SystemStore:
         with self._lock:
             if self.repository.is_empty():
                 self._write(self._default())
+
+    def _sync_builtin_language_defaults(self) -> None:
+        """Add newly shipped UI strings without overwriting user translations.
+
+        Release-local dictionary additions used to be invisible in an existing
+        durable System Store because defaults were only copied on first run.
+        Treat English as the canonical key set, add the bundled Québec French
+        translation where available, and use English only as a fallback for any
+        other installed locale. Administrator-edited values always win.
+        """
+        with self._lock:
+            languages = self.repository.list_languages()
+            if not isinstance(languages, dict):
+                return
+            for code, language in languages.items():
+                if not isinstance(language, dict):
+                    continue
+                dictionary = language.setdefault("dictionary", {})
+                if not isinstance(dictionary, dict):
+                    dictionary = {}
+                    language["dictionary"] = dictionary
+                defaults = DEFAULT_EN_US if code == "en-US" else DEFAULT_FR_CA if code == "fr-CA" else DEFAULT_EN_US
+                changed = False
+                for key, english in DEFAULT_EN_US.items():
+                    if key in dictionary:
+                        continue
+                    dictionary[key] = defaults.get(key, english)
+                    changed = True
+                if changed:
+                    self.repository.put_language(code, language)
 
     def _read(self) -> dict[str, Any]:
         try:
@@ -5886,4 +5917,175 @@ DEFAULT_FR_CA.update({
 DEFAULT_EN_US.update({"pdf_corpus.llm_calls":"LLM calls","pdf_corpus.llm_retries":"retries","pdf_corpus.structured_failures":"structured-output corrections","pdf_corpus.escalations":"escalations"})
 DEFAULT_FR_CA.update({"pdf_corpus.llm_calls":"appels LLM","pdf_corpus.llm_retries":"nouvelles tentatives","pdf_corpus.structured_failures":"corrections de sortie structurée","pdf_corpus.escalations":"escalades"})
 
+# 0.40.1 Corpus Builder reliability/operations follow-up.
+DEFAULT_EN_US.update({
+    "pdf_corpus.execution_settings":"Execution settings",
+    "pdf_corpus.execution_settings_help":"Tune this corpus build without changing the saved provider profile. Stage budgets bound structured output; they do not create record boundaries.",
+    "pdf_corpus.use_profile_defaults":"Use provider-profile generation defaults",
+    "pdf_corpus.context_window":"Context window",
+    "pdf_corpus.context_window_help":"Maximum model context tokens for this build.",
+    "pdf_corpus.max_concurrent":"Max concurrent records",
+    "pdf_corpus.max_concurrent_help":"Metadata families remain serial per record; this caps records processed in parallel.",
+    "pdf_corpus.temperature":"Temperature",
+    "pdf_corpus.top_k":"Top K",
+    "pdf_corpus.top_p":"Top P",
+    "pdf_corpus.min_p":"Min P",
+    "pdf_corpus.repeat_penalty":"Repeat penalty",
+    "pdf_corpus.seed":"Seed",
+    "pdf_corpus.thinking":"Thinking",
+    "pdf_corpus.thinking_off":"Off",
+    "pdf_corpus.thinking_on":"On",
+    "pdf_corpus.thinking_low":"Low",
+    "pdf_corpus.thinking_medium":"Medium",
+    "pdf_corpus.thinking_high":"High",
+    "pdf_corpus.stage_budgets":"Structured-output budgets",
+    "pdf_corpus.stage_budgets_help":"Smaller bounded responses are more reliable with local models. Increase a stage only when validated output is being truncated.",
+    "pdf_corpus.segmentation_window":"Segmentation input window",
+    "pdf_corpus.segmentation_window_help":"Approximate input tokens per semantic analysis window; never used as a record-size rule.",
+    "pdf_corpus.segmentation_output":"Segmentation output",
+    "pdf_corpus.reconciliation_output":"Reconciliation output",
+    "pdf_corpus.manifest_output":"Manifest output",
+    "pdf_corpus.discourse_output":"Discourse metadata output",
+    "pdf_corpus.quotation_output":"Quotation metadata output",
+    "pdf_corpus.indexing_output":"Indexing metadata output",
+    "pdf_corpus.context_safe":"Context budget looks safe",
+    "pdf_corpus.context_unsafe":"Context budget is too small",
+    "pdf_corpus.context_budget_detail":"Largest segmentation turn needs about {required} tokens before provider overhead; context is {context}.",
+    "pdf_corpus.context_unknown":"The provider profile does not declare a context window; DerridAI cannot preflight context capacity.",
+    "pdf_corpus.context_start_blocked":"Increase the context window or reduce the segmentation window/output budget before starting. Approximate minimum: {count} tokens.",
+    "pdf_corpus.segmentation_blocked":"Segmentation blocked",
+    "pdf_corpus.segmentation_blocked_help":"DerridAI could not validate every required semantic transition, so it stopped before constructing records. No giant fallback record was fabricated. Adjust the provider/settings or retry the unresolved regions.",
+    "pdf_corpus.retry_segmentation":"Retry unresolved segmentation",
+    "pdf_corpus.unresolved_count":"{count} unresolved region(s)",
+    "pdf_corpus.unresolved_regions":"unresolved segmentation region(s)",
+    "pdf_corpus.status.blocked":"blocked",
+    "pdf_corpus.stage.segmentation_review":"segmentation review",
+    "pdf_corpus.operation_label":"PDF corpus build",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.execution_settings":"Paramètres d’exécution",
+    "pdf_corpus.execution_settings_help":"Ajustez cette construction de corpus sans modifier le profil de fournisseur enregistré. Les budgets d’étape limitent la sortie structurée; ils ne déterminent jamais les limites des notices.",
+    "pdf_corpus.use_profile_defaults":"Utiliser les paramètres de génération du profil de fournisseur",
+    "pdf_corpus.context_window":"Fenêtre de contexte",
+    "pdf_corpus.context_window_help":"Nombre maximal de jetons de contexte du modèle pour cette construction.",
+    "pdf_corpus.max_concurrent":"Notices simultanées maximales",
+    "pdf_corpus.max_concurrent_help":"Les familles de métadonnées restent séquentielles pour chaque notice; ce réglage limite le nombre de notices traitées en parallèle.",
+    "pdf_corpus.temperature":"Température",
+    "pdf_corpus.top_k":"Top K",
+    "pdf_corpus.top_p":"Top P",
+    "pdf_corpus.min_p":"Min P",
+    "pdf_corpus.repeat_penalty":"Pénalité de répétition",
+    "pdf_corpus.seed":"Graine",
+    "pdf_corpus.thinking":"Raisonnement",
+    "pdf_corpus.thinking_off":"Désactivé",
+    "pdf_corpus.thinking_on":"Activé",
+    "pdf_corpus.thinking_low":"Faible",
+    "pdf_corpus.thinking_medium":"Moyen",
+    "pdf_corpus.thinking_high":"Élevé",
+    "pdf_corpus.stage_budgets":"Budgets de sortie structurée",
+    "pdf_corpus.stage_budgets_help":"Des réponses plus petites et bornées sont plus fiables avec les modèles locaux. Augmentez un budget seulement si une sortie validée est tronquée.",
+    "pdf_corpus.segmentation_window":"Fenêtre d’entrée de segmentation",
+    "pdf_corpus.segmentation_window_help":"Nombre approximatif de jetons d’entrée par fenêtre d’analyse sémantique; ce réglage ne sert jamais de règle de taille des notices.",
+    "pdf_corpus.segmentation_output":"Sortie de segmentation",
+    "pdf_corpus.reconciliation_output":"Sortie de réconciliation",
+    "pdf_corpus.manifest_output":"Sortie du manifeste",
+    "pdf_corpus.discourse_output":"Sortie des métadonnées discursives",
+    "pdf_corpus.quotation_output":"Sortie des métadonnées de citation",
+    "pdf_corpus.indexing_output":"Sortie des métadonnées d’indexation",
+    "pdf_corpus.context_safe":"Le budget de contexte semble adéquat",
+    "pdf_corpus.context_unsafe":"Le budget de contexte est insuffisant",
+    "pdf_corpus.context_budget_detail":"Le plus grand tour de segmentation exige environ {required} jetons avant les frais généraux du fournisseur; le contexte est de {context}.",
+    "pdf_corpus.context_unknown":"Le profil de fournisseur ne précise pas de fenêtre de contexte; DerridAI ne peut pas vérifier la capacité à l’avance.",
+    "pdf_corpus.context_start_blocked":"Augmentez la fenêtre de contexte ou réduisez la fenêtre/le budget de sortie de segmentation avant de démarrer. Minimum approximatif : {count} jetons.",
+    "pdf_corpus.segmentation_blocked":"Segmentation bloquée",
+    "pdf_corpus.segmentation_blocked_help":"DerridAI n’a pas pu valider toutes les transitions sémantiques requises; la construction s’est donc arrêtée avant de créer des notices. Aucune notice géante de repli n’a été fabriquée. Ajustez le fournisseur ou les paramètres, puis réessayez les régions non résolues.",
+    "pdf_corpus.retry_segmentation":"Réessayer la segmentation non résolue",
+    "pdf_corpus.unresolved_count":"{count} région(s) non résolue(s)",
+    "pdf_corpus.unresolved_regions":"région(s) de segmentation non résolue(s)",
+    "pdf_corpus.status.blocked":"bloquée",
+    "pdf_corpus.stage.segmentation_review":"révision de la segmentation",
+    "pdf_corpus.operation_label":"Construction de corpus PDF",
+})
+
+# 0.40.5 Record Extraction Pipeline Corrections.
+DEFAULT_EN_US.update({
+    "pdf_corpus.open_build":"Open corpus build",
+    "pdf_corpus.workflow.label":"Corpus build workflow",
+    "pdf_corpus.workflow.source":"Source",
+    "pdf_corpus.workflow.analyze":"Analyze structure",
+    "pdf_corpus.workflow.enrich":"Build & enrich",
+    "pdf_corpus.workflow.review":"Review & publish",
+    "pdf_corpus.workflow.complete":"Complete",
+    "pdf_corpus.workflow.current":"Current",
+    "pdf_corpus.workflow.upcoming":"Upcoming",
+    "pdf_corpus.quality.title":"Build quality",
+    "pdf_corpus.quality.help":"Quality gates summarize semantic topology, metadata completion, and source fidelity before publication.",
+    "pdf_corpus.quality.segmentation":"Segmentation",
+    "pdf_corpus.quality.boundaries":"validated boundaries",
+    "pdf_corpus.quality.unresolved":"{count} unresolved",
+    "pdf_corpus.quality.resolved":"Resolved",
+    "pdf_corpus.quality.metadata":"Metadata",
+    "pdf_corpus.quality.records_complete":"records complete",
+    "pdf_corpus.quality.need_review":"{count} need review",
+    "pdf_corpus.quality.source":"Source fidelity",
+    "pdf_corpus.quality.accounted":"accounted for",
+    "pdf_corpus.quality.passed":"Validation passed",
+    "pdf_corpus.quality.attention":"Needs attention",
+    "pdf_corpus.quality.pending":"Pending",
+    "pdf_corpus.mirostat":"Mirostat",
+    "pdf_corpus.mirostat_off":"Off",
+    "pdf_corpus.mirostat_eta":"Mirostat eta",
+    "pdf_corpus.mirostat_tau":"Mirostat tau",
+    "operations.background":"Background operations",
+    "operations.shared_queue":"LLM, RAG, PDF corpus builds, and Chroma upserts share this queue",
+    "operations.summary":"{active} active · {retained} retained · {queue}",
+    "pdf_corpus.retry_metadata_failures":"Retry incomplete metadata",
+    "pdf_corpus.manifest_review_required":"Review document structure",
+    "pdf_corpus.manifest_review_required_help":"Confirm detected work-level metadata and printed-page mapping before these values propagate into segmentation and generated records.",
+    "pdf_corpus.confirm_manifest_continue":"Confirm document & continue",
+    "pdf_corpus.manifest_confirmed":"Document manifest confirmed. Semantic segmentation has started.",
+    "pdf_corpus.status.awaiting_manifest_review":"awaiting document review",
+    "pdf_corpus.stage.document_review":"document review",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.open_build":"Ouvrir la construction du corpus",
+    "pdf_corpus.workflow.label":"Flux de construction du corpus",
+    "pdf_corpus.workflow.source":"Source",
+    "pdf_corpus.workflow.analyze":"Analyser la structure",
+    "pdf_corpus.workflow.enrich":"Construire et enrichir",
+    "pdf_corpus.workflow.review":"Réviser et publier",
+    "pdf_corpus.workflow.complete":"Terminé",
+    "pdf_corpus.workflow.current":"Étape actuelle",
+    "pdf_corpus.workflow.upcoming":"À venir",
+    "pdf_corpus.quality.title":"Qualité de la construction",
+    "pdf_corpus.quality.help":"Les contrôles de qualité résument la topologie sémantique, l’achèvement des métadonnées et la fidélité à la source avant la publication.",
+    "pdf_corpus.quality.segmentation":"Segmentation",
+    "pdf_corpus.quality.boundaries":"limites validées",
+    "pdf_corpus.quality.unresolved":"{count} non résolue(s)",
+    "pdf_corpus.quality.resolved":"Résolue",
+    "pdf_corpus.quality.metadata":"Métadonnées",
+    "pdf_corpus.quality.records_complete":"notices terminées",
+    "pdf_corpus.quality.need_review":"{count} à réviser",
+    "pdf_corpus.quality.source":"Fidélité à la source",
+    "pdf_corpus.quality.accounted":"de la source comptabilisée",
+    "pdf_corpus.quality.passed":"Validation réussie",
+    "pdf_corpus.quality.attention":"Attention requise",
+    "pdf_corpus.quality.pending":"En attente",
+    "pdf_corpus.mirostat":"Mirostat",
+    "pdf_corpus.mirostat_off":"Désactivé",
+    "pdf_corpus.mirostat_eta":"Eta de Mirostat",
+    "pdf_corpus.mirostat_tau":"Tau de Mirostat",
+    "operations.background":"Opérations en arrière-plan",
+    "operations.shared_queue":"Les appels LLM, les pipelines RAG, les constructions de corpus PDF et les synchronisations Chroma partagent cette file",
+    "operations.summary":"{active} active(s) · {retained} conservée(s) · {queue}",
+    "pdf_corpus.retry_metadata_failures":"Réessayer les métadonnées incomplètes",
+    "pdf_corpus.manifest_review_required":"Réviser la structure du document",
+    "pdf_corpus.manifest_review_required_help":"Confirmez les métadonnées au niveau de l’œuvre et la correspondance des pages imprimées avant leur propagation dans la segmentation et les notices générées.",
+    "pdf_corpus.confirm_manifest_continue":"Confirmer le document et continuer",
+    "pdf_corpus.manifest_confirmed":"Manifeste du document confirmé. La segmentation sémantique a commencé.",
+    "pdf_corpus.status.awaiting_manifest_review":"en attente de révision du document",
+    "pdf_corpus.stage.document_review":"révision du document",
+})
+
+# Instantiate only after every built-in dictionary extension above has loaded.
 system_store = SystemStore()

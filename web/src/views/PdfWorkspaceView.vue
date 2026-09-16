@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import LegacySurface from "../components/LegacySurface.vue";
 import PdfCorpusBuilder from "../components/PdfCorpusBuilder.vue";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
-const mode=ref<"explorer"|"builder">("explorer");
+const route=useRoute();
+const requestedMode=()=>route.query.mode==="builder"||Boolean(route.query.build)?"builder":"explorer";
+const mode=ref<"explorer"|"builder">(requestedMode());
 async function setMode(next:"explorer"|"builder"){
   mode.value=next;
   if(next==="explorer"){
@@ -15,6 +18,7 @@ async function setMode(next:"explorer"|"builder"){
   }
 }
 function openBuilder(){void setMode("builder")}
+watch(()=>[route.query.mode,route.query.build],()=>{const next=requestedMode();if(next!==mode.value)void setMode(next)});
 onMounted(()=>window.addEventListener("derridai:pdf-builder",openBuilder));
 onBeforeUnmount(()=>window.removeEventListener("derridai:pdf-builder",openBuilder));
 </script>

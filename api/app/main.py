@@ -80,7 +80,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.40.1")
+app = FastAPI(title="DerridAI Corpus API", version="0.40.5")
 
 app.add_middleware(
     CORSMiddleware,
@@ -882,7 +882,7 @@ def list_jobs(request: Request):
     if user.role != "admin":
         jobs = [job for job in rag_jobs.list() if job.get("owner") == user.username]
     else:
-        jobs = llm_jobs.list() + llm_tool_jobs.list() + rag_jobs.list() + upsert_jobs.list()
+        jobs = llm_jobs.list() + llm_tool_jobs.list() + rag_jobs.list() + upsert_jobs.list() + pdf_corpus_builds.list_operations()
     jobs.sort(key=lambda job: job.get("created_at", ""), reverse=True)
     return {"jobs": jobs}
 
@@ -894,11 +894,16 @@ def _job_manager_for(job_id: str):
             return manager
         except KeyError:
             continue
+    try:
+        pdf_corpus_repository.get_build(job_id)
+        return pdf_corpus_builds
+    except KeyError:
+        pass
     raise KeyError(job_id)
 
 
 def _researcher_job_access(user: AuthUser, manager, job_id: str) -> dict:
-    job = manager.get(job_id)
+    job = manager.operation(job_id) if manager is pdf_corpus_builds else manager.get(job_id)
     if user.role != "admin":
         if manager is not rag_jobs or job.get("owner") != user.username:
             raise HTTPException(status_code=404, detail="Job not found.")
@@ -925,6 +930,8 @@ def cancel_job(job_id: str, request: Request):
         manager = _job_manager_for(job_id)
         _researcher_job_access(user, manager, job_id)
         result = manager.cancel(job_id)
+        if manager is pdf_corpus_builds:
+            return manager.operation(job_id)
         if user.role != "admin":
             return sanitize_rag_job(result, max_chars=settings.researcher_text_max_chars)
         return result
@@ -949,7 +956,13 @@ def delete_job(job_id: str, request: Request):
 @app.delete("/api/jobs")
 def clear_finished_jobs():
     return {
-        "deleted": llm_jobs.clear_finished() + llm_tool_jobs.clear_finished() + rag_jobs.clear_finished() + upsert_jobs.clear_finished()
+        "deleted": (
+            llm_jobs.clear_finished()
+            + llm_tool_jobs.clear_finished()
+            + rag_jobs.clear_finished()
+            + upsert_jobs.clear_finished()
+            + pdf_corpus_builds.clear_finished()
+        )
     }
 
 
@@ -1155,7 +1168,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.40.1",
+            "app_version": "0.40.5",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1586,7 +1599,7 @@ def get_restored_current_pdf():
 
 @app.post("/api/admin/nuke")
 def nuke():
-    if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count():
+    if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count() or pdf_corpus_builds.active_count():
         raise HTTPException(
             status_code=409,
             detail=(
@@ -1600,6 +1613,7 @@ def nuke():
             + llm_tool_jobs.clear_finished()
             + rag_jobs.clear_finished()
             + upsert_jobs.clear_finished()
+            + pdf_corpus_builds.clear_finished()
         )
         chroma_result = store.nuke()
         data_root = Path(settings.chroma_data_root).expanduser().resolve()
@@ -1747,6 +1761,14 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     are stripped by the build manager before the public build manifest is saved.
     """
     resolved = dict(payload)
+    # Build-level generation overrides are intentionally distinct from the saved
+    # profile.  Resolve server-owned credentials/options first, then layer only
+    # the explicitly supplied per-build values over the profile defaults.
+    generation_override = resolved.get("generation")
+    if hasattr(generation_override, "model_dump"):
+        generation_override = generation_override.model_dump(exclude_none=True)
+    if not isinstance(generation_override, dict):
+        generation_override = {}
     direct_review = resolved.pop("review_provider", None)
     if hasattr(direct_review, "model_dump"):
         direct_review = direct_review.model_dump(exclude_none=True)
@@ -1755,12 +1777,14 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     if profile_id:
         profile = system_store.researcher_profile(profile_id)
         if profile is not None:
+            profile_generation = _profile_generation_options(profile) or {}
+            profile_generation.update({key: value for key, value in generation_override.items() if value is not None})
             resolved.update({
                 "provider": profile.get("type") or "ollama",
                 "model": profile.get("model"),
                 "base_url": profile.get("base_url"),
                 "api_key": profile.get("api_key"),
-                "generation": _profile_generation_options(profile) or None,
+                "generation": profile_generation or None,
                 "provider_profile_id": profile_id,
             })
         elif not (resolved.get("provider") and (resolved.get("model") or resolved.get("base_url"))):
@@ -1835,6 +1859,18 @@ def list_pdf_corpus_records(
         return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, query=query)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/confirm-manifest")
+def confirm_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.confirm_manifest(
+            build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/cancel")

@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.1"
-    assert 'version="0.40.1"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.1"' in text("api/app/config.py")
+    assert package["version"] == "0.40.5"
+    assert 'version="0.40.5"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.5"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -40,22 +40,22 @@ def test_corpus_llm_uses_typed_json_schema_validation_repair_and_bounded_retry()
 def test_malformed_metadata_is_reviewable_instead_of_aborting_build():
     builder = text("api/app/corpus_builder.py")
     enrich = builder[builder.index("    def _enrich_record("):builder.index("    @staticmethod\n    def validate_records")]
-    assert "Metadata extraction could not be validated" in enrich
-    assert 'record["metadata_complete"] = False' in enrich
+    assert "metadata extraction could not be validated" in enrich
+    assert 'record["metadata_complete"] = successful_tasks == len(tasks)' in enrich
     assert "return record" in enrich
     run = builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     assert "self.repo.save_records(build_id, records)" in run
-    assert 'if record.get("metadata_complete")' in run
+    assert 'if not record.get("metadata_complete")' in run
 
 
 def test_segmentation_is_confidence_gated_and_semantically_reconciled():
     builder = text("api/app/corpus_builder.py")
-    segment = builder[builder.index("    def _segment("):builder.index("    @staticmethod\n    def _construct_records")]
-    assert 'item.get("decision") == "split"' in segment
-    assert '>= threshold' in segment
-    assert "_reconcile_boundaries" in segment
-    assert "Prefer KEEP when the evidence for a discourse transition is weak" in segment
-    assert "NEVER split merely because a page changes" in segment
+    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    @staticmethod\n    def _construct_records")]
+    assert 'item.get("decision") == "split"' in segmentation
+    assert '>= threshold' in segmentation
+    assert "_reconcile_boundaries" in segmentation
+    assert "Judge only genuine discourse boundaries" in segmentation
+    assert "NEVER split because a page changes" in segmentation
 
 
 def test_metadata_has_neighbor_context_required_attribution_evidence_and_citations():
@@ -137,7 +137,9 @@ def test_segmentation_checkpoints_degraded_mode_and_resume_do_not_discard_work()
     assert 'save_checkpoint(build_id, "segmentation_state"' in segment
     assert 'segmentation_failed_windows' in segment
     assert 'segmentation_degraded' in segment
-    assert 'Semantic segmentation was degraded' in run
+    assert 'status="blocked"' in run
+    assert 'record_count=0' in run
+    assert 'No record set was constructed' in segment
 
 
 def test_document_manifest_and_printed_page_mapping_are_human_correctable():

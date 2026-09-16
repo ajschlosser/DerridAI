@@ -1098,6 +1098,7 @@ tbody tr.row-selected:hover{background:#eaf2ef}
 .job-status.running{background:#eaf2ef;color:#2e6954}
 .job-status.completed{background:#e8f4eb;color:#2e6b3d}
 .job-status.cancelled,.job-status.failed{background:#f8e8e8;color:#934141}
+.job-status.blocked{background:#fff2d8;color:#765313}
 .job-applied{background:#eef0f5;color:#50576b}
 .operation-inline-progress{height:5px;border-radius:999px;overflow:hidden;background:#ecefeb}
 .operation-inline-progress i{display:block;height:100%;background:var(--accent)}

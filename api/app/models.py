@@ -390,6 +390,23 @@ class PdfCorpusProviderConfig(BaseModel):
     generation: OllamaTouchupOptions | None = None
 
 
+
+
+class PdfCorpusStageLimits(BaseModel):
+    """Per-build structured-output budgets for corpus construction stages.
+
+    These limits deliberately sit beside, rather than inside, the reusable
+    provider profile. A corpus build can need larger/smaller output envelopes
+    than ordinary metadata review without mutating the saved profile.
+    """
+    manifest_num_predict: int = Field(default=1800, ge=256, le=8192)
+    segmentation_num_predict: int = Field(default=1200, ge=256, le=8192)
+    reconciliation_num_predict: int = Field(default=1000, ge=256, le=8192)
+    discourse_num_predict: int = Field(default=1600, ge=256, le=8192)
+    quotation_num_predict: int = Field(default=1500, ge=256, le=8192)
+    indexing_num_predict: int = Field(default=1200, ge=256, le=8192)
+    segmentation_window_tokens: int = Field(default=5000, ge=1024, le=24000)
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
     profile_id: str = Field(default="derrida-scholarly-v2", min_length=1, max_length=200)
@@ -401,6 +418,10 @@ class PdfCorpusBuildCreate(BaseModel):
     review_provider_profile_id: str | None = None
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool = True
+    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    review_manifest_before_segmentation: bool = True
 
 
 class PdfCorpusManifestPatch(BaseModel):
@@ -442,6 +463,9 @@ class PdfCorpusRecordRerun(BaseModel):
     review_provider_profile_id: str | None = None
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool = True
+    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
 
 
 class PdfCorpusPublishRequest(BaseModel):

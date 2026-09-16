@@ -2643,6 +2643,7 @@ async function refreshJobs({rerender=false}={}){
 function jobLabel(job){
   if(job.type==="rag")return "RAG pipeline";
   if(job.type==="upsert")return "Chroma upsert";
+  if(job.type==="pdf_corpus")return tr("pdf_corpus.operation_label","PDF corpus build");
   if(job.type==="llm_tool")return job.label||({pdf_clean_text:"PDF · clean text",pdf_draft_record:"PDF · draft record",pdf_link_record:"PDF · link record",rag_grade:"RAG · grade response",rag_grade_batch:"RAG · grade response cache",work_metadata:tr("works.populate_metadata_llm","Populate metadata with LLM")}[job.tool||job.mode]||"LLM operation");
   return job.mode==="auto"?"Auto-improve":"LLM review";
 }
@@ -2701,6 +2702,15 @@ function operationDetailPairs(job){
       const gradeProfile=request.auto_grade_provider_profile_id?providerProfiles().find(item=>item.id===request.auto_grade_provider_profile_id):null;
       pairs.push(["Auto-grade",`${gradeProfile?providerDisplayName(gradeProfile):(request.auto_grade_provider||job.provider||"grader")} · ${request.auto_grade_model||job.model||"model"}`]);
     }
+  }else if(job.type==="pdf_corpus"){
+    pairs.push(
+      [tr("pdf_corpus.source_pdf","Source PDF"),job.source_filename||"—"],
+      [tr("pdf_corpus.stage","Stage"),job.stage||"—"],
+      [tr("pdf_corpus.records","records"),job.record_count??0],
+      [tr("pdf_corpus.need_review","need review"),job.review_count??0],
+      [tr("pdf_corpus.unresolved_regions","Unresolved regions"),job.unresolved_regions??0],
+      [tr("pdf_corpus.concurrent_requests","max concurrent request(s)"),job.max_concurrent_requests??1]
+    );
   }else if(job.type==="llm_tool"){
     pairs.push(["Operation",job.label||job.tool||job.mode||"LLM tool"],["Provider",job.provider||"—"],["Model",job.model||"—"],["Stage",job.stage||"—"],["Max concurrent",job.max_concurrent_requests??"—"]);
     if(request.pdf_file)pairs.push(["PDF",request.pdf_file],["Page",request.pdf_page??"—"]);
@@ -2782,8 +2792,8 @@ function ensureJobProgressCard(job){
     : esc(detail);
   const detailRows=operationDetailPairs(job).map(([name,value])=>`<div><span>${esc(name)}</span><b>${esc(value)}</b></div>`).join("");
   const recent=(job.events||[]).slice(-4).reverse().map(event=>`<div class="operation-toast-event"><time>${esc(formatTimestamp(event.timestamp))}</time><span>${esc(event.detail||event.stage||"")}</span></div>`).join("");
-  const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed");
-  const resultActionLabel=job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")?"View grade":"Open result";
+  const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status));
+  const resultActionLabel=job.type==="pdf_corpus"?tr("pdf_corpus.open_build","Open corpus build"):job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")?"View grade":"Open result";
   panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}${jobProviderSummary(job)?` · ${esc(jobProviderSummary(job))}`:""}</b><span>${job.completed.toLocaleString()} of ${job.total.toLocaleString()} (${pct}%) · ${esc(job.status)}</span></div><div class="operation-toast-actions">${active?(job.cancel_requested||job.status==="cancelling"?'<span class="cancel-pending">Cancelling…</span>':`<button class="btn tiny danger" data-toast-cancel-job="${job.id}">Cancel</button>`):`${canOpenResult?`<button class="btn tiny primary" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-dismiss-job="${job.id}">Dismiss</button>`}${active?'<div class="spinner small-spinner"></div>':""}</div></div><div class="operation-progress-track"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><details class="operation-toast-details" ${wasOpen?"open":""}><summary>Details</summary><div class="operation-toast-grid">${detailRows}</div>${recent?`<div class="operation-toast-events">${recent}</div>`:""}<div class="tools">${job.type==="llm"&&Number(job.pending_result_count||0)>0?`<button class="btn tiny primary" data-toast-review-results="${job.id}">Review ${Number(job.pending_result_count||0)} available</button>`:""}${canOpenResult?`<button class="btn tiny" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-open-details="${job.id}">Open full details</button></div></details>`;
   panel.querySelector("[data-toast-cancel-job]")?.addEventListener("click",()=>cancelBackgroundJob(job.id));
   panel.querySelector("[data-toast-review-results]")?.addEventListener("click",()=>openJobResults(job.id));
@@ -3497,7 +3507,7 @@ function renderOperationsPanel(){
   const activeCount=jobs.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
   return `<section class="card dashboard-operations" id="operationsPanel" data-no-collapse="true">
     <div class="cardhead">
-      <div><b>Background operations</b><div class="note">${activeCount} active · ${jobs.length} retained · LLM, RAG, and Chroma upserts share this queue</div></div>
+      <div><b>${esc(tr("operations.background","Background operations"))}</b><div class="note">${esc(trf("operations.summary",{active:activeCount,retained:jobs.length,queue:tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")},`${activeCount} active · ${jobs.length} retained · ${tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")}`))}</div></div>
       <div class="tools operations-header-actions"><button class="btn small" id="refreshJobs">${icon("refresh")}${esc(tr("ui.refresh","Refresh"))}</button><button class="btn small" id="clearFinishedJobs" ${jobs.some(job=>!["queued","running","cancelling"].includes(job.status))?"":`disabled data-disabled-reason="${esc(tr("operations.no_finished","There are no finished operations to clear."))}"`}>${esc(tr("operations.clear_finished","Clear finished"))}</button></div>
     </div>
     <div class="operations-list">${jobs.map(job=>{
@@ -3513,6 +3523,8 @@ function renderOperationsPanel(){
           ? `${esc(job.stage_detail||job.stage||"queued")}`
           : job.type==="upsert"
             ? `${esc(job.store_name||"collection")} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`
+            : job.type==="pdf_corpus"
+              ? `${esc(job.source_filename||tr("pdf_corpus.source_pdf","Source PDF"))} · ${esc(job.stage_detail||job.stage||job.raw_status||"queued")}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${esc(tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)"))}`:""}`
             : job.type==="llm_tool"
               ? `${esc(job.stage_detail||job.label||job.tool||"LLM operation")} · ${esc(job.provider||"")} · ${esc(job.model||"")}`
               : `${job.completed}/${job.total} records${job.current_record_id?` · current: ${esc(job.current_record_id)}`:""}${job.failed?` · ${job.failed} failed`:""}`;
@@ -3527,7 +3539,7 @@ function renderOperationsPanel(){
         <div class="tools operation-actions">
           <button class="btn small" data-job-details="${job.id}">Details</button>
           ${job.type==="llm"&&hasPartialLlmResults?`<button class="btn small primary" data-job-result="${job.id}">${active?"Review available results":"Review results"}</button>`:""}
-          ${["rag","llm_tool"].includes(job.type)&&job.status==="completed"?`<button class="btn small primary" data-job-result="${job.id}">Open result</button>`:""}
+          ${(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status))?`<button class="btn small primary" data-job-result="${job.id}">${job.type==="pdf_corpus"?esc(tr("pdf_corpus.open_build","Open corpus build")):"Open result"}</button>`:""}
           ${active?(job.cancel_requested||job.status==="cancelling"?'<button class="btn small" disabled>Cancelling…</button>':`<button class="btn small danger" data-cancel-job="${job.id}">Cancel</button>`):`<button class="btn small" data-remove-job="${job.id}">Remove</button>`}
         </div>
       </div>`;
@@ -3608,6 +3620,16 @@ async function openJobDetails(jobId){
           language_mirrors:job.mirrored||{},
           receipt_count:(job.results||[]).length,
         }
+      : job.type==="pdf_corpus"
+        ? {
+            source_pdf:job.source_filename||null,
+            build_id:job.build_id||job.id,
+            raw_status:job.raw_status||job.status,
+            stage:job.stage||null,
+            record_count:job.record_count||0,
+            review_count:job.review_count||0,
+            unresolved_regions:job.unresolved_regions||0,
+          }
       : job.type==="llm_tool"
         ? {
             operation:job.label||job.tool||job.mode,
@@ -3661,7 +3683,7 @@ async function openJobDetails(jobId){
     <button class="btn" data-close>Close</button>
     ${["queued","running","cancelling"].includes(job.status)?(job.cancel_requested||job.status==="cancelling"?'<button class="btn" disabled>Cancelling…</button>':`<button class="btn danger" id="detailsCancelJob">Cancel operation</button>`):""}
     ${job.type==="llm"&&(job.pending_result_count??(job.results||[]).length)>0?`<button class="btn primary" id="detailsOpenResult">${["queued","running","cancelling"].includes(job.status)?"Review available results":"Review results"}</button>`:""}
-    ${["rag","llm_tool"].includes(job.type)&&job.status==="completed"?`<button class="btn primary" id="detailsOpenResult">Open result</button>`:""}
+    ${((["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status)))?`<button class="btn primary" id="detailsOpenResult">${job.type==="pdf_corpus"?esc(tr("pdf_corpus.open_build","Open corpus build")):"Open result"}</button>`:""}
   </div>`;
   document.body.appendChild(dialog);
   showAppModal(dialog);
@@ -3757,6 +3779,10 @@ async function openJobResults(jobId){
     if(job.type==="rag")return openRagResult(job);
     if(job.type==="llm_tool")return openLlmToolResult(job);
     if(job.type==="upsert")return openJobDetails(job.id);
+    if(job.type==="pdf_corpus"){
+      window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:`/pdf?mode=builder&build=${encodeURIComponent(job.build_id||job.id)}`,legacyView:"pdf"}}));
+      return;
+    }
   }catch(error){
     console.error("Could not render operation result",error,job);
     await openMessageModal({title:"Could not render operation result",message:error.message||String(error),detail:jobLabel(job),tone:"danger"});
@@ -9055,7 +9081,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.40.1",
+      backup_client_version:"0.40.5",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),

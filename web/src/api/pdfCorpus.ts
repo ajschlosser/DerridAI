@@ -37,6 +37,8 @@ export interface CorpusBuild {
   validation?: {valid?:boolean;source_valid?:boolean;metadata_valid?:boolean;coverage?:number;missing_block_ids?:string[];duplicate_block_ids?:string[];text_fidelity_errors?:string[];source_order_errors?:string[];page_mapping_errors?:string[];printed_page_label_errors?:string[];metadata_evidence_errors?:Array<{record_id?:string;field?:string;reason?:string}>;metadata_schema_errors?:Array<{record_id?:string;reason?:string}>;citation_errors?:string[]};
   manifest?: Record<string, unknown>;
   manifest_revision?: number;
+  manifest_confirmed_at?: string | null;
+  manifest_confirmed_revision?: number | null;
   publication?: {publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}|null;
   error?: string | null;
   warnings?: string[];
@@ -46,6 +48,12 @@ export interface CorpusBuild {
   segmentation_degraded?: boolean;
   segmentation_failed_windows?: number;
   segmentation_total_windows?: number;
+  segmentation_recovered_windows?: number;
+  segmentation_blocked?: boolean;
+  segmentation_unresolved_regions?: Array<{after_block_id?:string;next_block_id?:string;left_block_id?:string;right_block_id?:string;start_block_id?:string;end_block_id?:string;reason?:string;kind?:string;[key:string]:unknown}>;
+  metadata_completed?: number;
+  metadata_total?: number;
+  metadata_concurrency?: number;
   request?: Record<string,unknown>;
   llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number};
 }
@@ -93,6 +101,7 @@ export const pdfCorpusApi = {
   merge: (buildId:string, recordId:string, direction:"previous"|"next") => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/merge`, {method:"POST",body:JSON.stringify({direction})}),
   split: (buildId:string, recordId:string, afterBlockId:string) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId})}),
   rerunMetadata: (buildId:string, recordId:string, payload:Record<string,unknown>) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`, {method:"POST",body:JSON.stringify(payload)}),
+  confirmManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/confirm-manifest`, {method:"POST",body:JSON.stringify(payload)}),
   cancel: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/cancel`, {method:"POST"}),
   resume: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/resume`, {method:"POST",body:JSON.stringify(payload)}),
   publish: (buildId:string) => apiRequest<{publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/publish`, {method:"POST",body:JSON.stringify({require_acceptance:true})}),

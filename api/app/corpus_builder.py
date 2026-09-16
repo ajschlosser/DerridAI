@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -23,10 +23,10 @@ from .models import OllamaTouchupOptions
 from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v2"
-SEGMENTATION_PROMPT_VERSION = "derridai-semantic-boundaries-v2"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v2"
+SEGMENTATION_PROMPT_VERSION = "derridai-semantic-boundaries-v3"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v2"
+PROFILE_VERSION = "derrida-scholarly-v3"
 
 
 class DocumentManifestModel(BaseModel):
@@ -128,6 +128,107 @@ class MetadataResponseModel(BaseModel):
     metadata: RecordMetadataModel = Field(default_factory=RecordMetadataModel)
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
     review_reason: str = ""
+
+
+
+
+BoundaryDimension = Literal[
+    "speaker", "position_holder", "stance", "target", "quotation_frame",
+    "discourse_role", "argumentative_move",
+]
+
+
+class CompactBoundaryDecisionModel(BaseModel):
+    """Compact boundary response used by book-scale segmentation.
+
+    Large prose reasons and nested boolean objects were a major source of local
+    model truncation. The corpus builder asks only for the topology-changing
+    facts here; uncertain boundaries can be adjudicated in a later, smaller call.
+    """
+    model_config = ConfigDict(extra="forbid")
+    after: str = Field(min_length=1, max_length=200)
+    decision: Literal["split", "keep", "uncertain"] = "uncertain"
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
+
+
+class PairBoundaryResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["split", "keep", "uncertain"] = "uncertain"
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
+
+
+class CompactSegmentationResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=32)
+
+
+class CompactReconciliationDecisionModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    after: str = Field(min_length=1, max_length=200)
+    decision: Literal["split", "keep"]
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class CompactReconciliationResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decisions: list[CompactReconciliationDecisionModel] = Field(default_factory=list, max_length=16)
+
+
+class DiscourseMetadataModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    language: str | None = None
+    region_type: str | None = None
+    region_author: str | None = None
+    speaker: str | None = None
+    position_holder: str | None = None
+    target: str | None = None
+    discourse_role: str | None = None
+    proposition_status: str | None = None
+    semantic_function: list[str] = Field(default_factory=list, max_length=12)
+    stance: str | None = None
+    claim_scope: str | None = None
+
+
+class DiscourseMetadataResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metadata: DiscourseMetadataModel = Field(default_factory=DiscourseMetadataModel)
+    field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
+    review_reason: str = Field(default="", max_length=1000)
+
+
+class QuotationMetadataModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    is_direct_quote: bool | None = None
+    quoted_speaker: list[str] = Field(default_factory=list, max_length=12)
+    quoted_author: list[str] = Field(default_factory=list, max_length=12)
+    quoted_work: list[str] = Field(default_factory=list, max_length=12)
+    quoted_position_holder: list[str] = Field(default_factory=list, max_length=12)
+    quoted_addressee: list[str] = Field(default_factory=list, max_length=12)
+    quoted_referent: list[str] = Field(default_factory=list, max_length=12)
+    quotation_chain: list[str] = Field(default_factory=list, max_length=16)
+
+
+class QuotationMetadataResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metadata: QuotationMetadataModel = Field(default_factory=QuotationMetadataModel)
+    field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
+    review_reason: str = Field(default="", max_length=1000)
+
+
+class IndexMetadataModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    topics: list[str] = Field(default_factory=list, max_length=24)
+    concepts: list[str] = Field(default_factory=list, max_length=24)
+    persons: list[str] = Field(default_factory=list, max_length=24)
+    works_referenced: list[str] = Field(default_factory=list, max_length=24)
+
+
+class IndexMetadataResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metadata: IndexMetadataModel = Field(default_factory=IndexMetadataModel)
+    review_reason: str = Field(default="", max_length=1000)
 
 
 ATTRIBUTION_EVIDENCE_FIELDS = {
@@ -632,18 +733,33 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "min_metadata_confidence": 0.72,
         "soft_min_chars": 180,
         "soft_max_chars": 18000,
+        "topology_review_chars": 36000,
     },
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v2",
+    "derrida-scholarly-v2": {
+        "id": "derrida-scholarly-v2",
+        "name": "Derrida scholarly corpus v2 (legacy)",
         "version": 2,
-        "description": "Typed, reconciled semantic/discourse segmentation with checkpointed metadata provenance and conservative attribution.",
+        "description": "0.40.1 typed semantic/discourse profile retained for historical build compatibility.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
         "min_boundary_confidence": 0.72,
         "min_metadata_confidence": 0.72,
         "soft_min_chars": 180,
         "soft_max_chars": 18000,
+        "topology_review_chars": 36000,
+    },
+    PROFILE_VERSION: {
+        "id": PROFILE_VERSION,
+        "name": "Derrida scholarly corpus v3",
+        "version": 3,
+        "description": "Book-scale compact semantic segmentation with recursive recovery, explicit topology blocking, staged metadata extraction, and auditable source evidence.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
+        "min_boundary_confidence": 0.72,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "soft_max_chars": 18000,
+        "topology_review_chars": 36000,
     }
 }
 
@@ -667,11 +783,50 @@ class PdfCorpusBuildManager:
                 build["finished_at"] = iso_now()
                 self.repo.save_build(build)
 
+    @staticmethod
+    def _generation_options(request: dict[str, Any]) -> OllamaTouchupOptions:
+        generation = request.get("generation")
+        if isinstance(generation, OllamaTouchupOptions):
+            return generation
+        if isinstance(generation, dict):
+            return OllamaTouchupOptions.model_validate(generation)
+        return OllamaTouchupOptions()
+
+    @classmethod
+    def _context_window(cls, request: dict[str, Any]) -> int | None:
+        try:
+            value = cls._generation_options(request).num_ctx
+            return int(value) if value else None
+        except (TypeError, ValueError, ValidationError):
+            return None
+
+    @classmethod
+    def _validate_execution_budget(cls, request: dict[str, Any]) -> None:
+        """Reject an explicitly impossible segmentation context before work starts.
+
+        Context size is a model execution constraint, never a record-boundary rule.
+        Unknown remote-provider context limits are allowed; explicit local limits
+        must be large enough for the configured source window plus structured
+        output and conservative schema/system overhead.
+        """
+        context = cls._context_window(request)
+        if not context:
+            return
+        limits = cls._stage_limits(request)
+        required = int(limits["segmentation_window_tokens"]) + int(limits["segmentation_num_predict"]) + 1536
+        if context < required:
+            raise ValueError(
+                f"Corpus build context is too small for the configured segmentation turn: "
+                f"num_ctx={context}, approximate minimum={required}. Increase the provider/build context "
+                "or reduce the segmentation input/output budgets."
+            )
+
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         asset = self.repo.get_asset(str(request["asset_id"]))
         profile_id = str(request.get("profile_id") or PROFILE_VERSION)
         if profile_id not in CORPUS_PROFILES:
             raise ValueError(f"Unknown corpus profile: {profile_id}")
+        self._validate_execution_budget(request)
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build = self.repo.create_build({
             "asset_id": asset["asset_id"],
@@ -700,17 +855,151 @@ class PdfCorpusBuildManager:
             raise ValueError("This corpus build is already running.")
         if build.get("status") in {"published"}:
             raise ValueError("Published builds are immutable; create a new build instead.")
+        self._validate_execution_budget(request)
+
+        # A resume is also the supported way to recover a blocked build with a
+        # better model, larger context, or different stage budgets. Persist the
+        # new public execution contract so Operations and provenance describe the
+        # run that actually completed, while keeping secrets out of build.json.
+        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
+        build["provider"] = request.get("provider") or build.get("provider") or "ollama"
+        build["model"] = request.get("model") or build.get("model")
+        build["request"] = public_request
         build["status"] = "queued"
         build["stage"] = "resuming"
         build["error"] = None
         build["resumable"] = True
+        build["finished_at"] = None
+        build["cancel_requested"] = False
+        build["operation_hidden"] = False
+
+        # If the previous attempt reached a topology guard (for example, a long
+        # book returned valid-but-empty boundary arrays), successful-window caches
+        # are not useful: retry the segmentation topology with the new settings.
+        unresolved = list(build.get("segmentation_unresolved_regions") or [])
+        if any(str(item.get("kind") or "").startswith("topology_guard") for item in unresolved if isinstance(item, dict)):
+            self.repo.save_checkpoint(build_id, "segmentation_state", {})
+            self.repo.save_checkpoint(build_id, "reconciliation_state", {})
+            self.repo.save_checkpoint(build_id, "boundaries_partial", [])
         self.repo.save_build(build)
         self._executor.submit(self._run, build_id, request, True)
         return build
 
+    def confirm_manifest(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Confirm the document-level contract and continue into segmentation.
+
+        Book-level bibliographic/page structure is deliberately reviewed before it
+        can influence hundreds of records. Confirmation records the exact manifest
+        revision and then resumes from the persisted manifest checkpoint.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Wait for the document-analysis stage to finish before confirming its manifest.")
+        if build.get("status") == "published":
+            raise ValueError("Published builds are immutable.")
+        manifest = build.get("manifest")
+        if not isinstance(manifest, dict) or not manifest:
+            manifest = self.repo.load_checkpoint(build_id, "manifest")
+        if not isinstance(manifest, dict) or not manifest:
+            raise ValueError("This build does not yet have a document manifest to confirm.")
+        build["manifest_confirmed_at"] = iso_now()
+        build["manifest_confirmed_revision"] = int(build.get("manifest_revision") or 1)
+        build["status"] = "awaiting_manifest_review"
+        build["stage"] = "document_review"
+        self.repo.save_build(build)
+        return self.resume(build_id, request)
+
     def active_count(self) -> int:
         listing = self.repo.list_builds(offset=0, limit=10000)
         return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
+
+    @staticmethod
+    def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
+        raw_status = str(build.get("status") or "queued")
+        if raw_status in {"queued", "running"}:
+            status = raw_status
+        elif raw_status == "cancelled":
+            status = "cancelled"
+        elif raw_status in {"failed", "interrupted"}:
+            status = "failed"
+        elif raw_status in {"blocked", "awaiting_manifest_review"}:
+            status = "blocked"
+        else:
+            status = "completed"
+        source_total = max(1, int(build.get("source_block_count") or 1))
+        progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
+        unresolved = list(build.get("segmentation_unresolved_regions") or [])
+        return {
+            "id": str(build.get("build_id") or ""),
+            "type": "pdf_corpus",
+            "kind": "pdf_corpus",
+            "label": f"PDF corpus · {build.get('source_filename') or 'source'}",
+            "status": status,
+            "raw_status": raw_status,
+            "stage": build.get("stage"),
+            "stage_detail": (
+                f"{len(unresolved)} unresolved segmentation region(s)"
+                if build.get("segmentation_blocked")
+                else str(build.get("stage") or raw_status).replace("_", " ")
+            ),
+            "provider": build.get("provider"),
+            "model": build.get("model"),
+            "provider_profile_id": (build.get("request") or {}).get("provider_profile_id"),
+            "max_concurrent_requests": (build.get("request") or {}).get("max_concurrent_requests", 1),
+            "request": build.get("request") or {},
+            "source_filename": build.get("source_filename"),
+            "build_id": build.get("build_id"),
+            "record_count": int(build.get("record_count") or 0),
+            "review_count": int(build.get("needs_review_count") or 0),
+            "unresolved_regions": len(unresolved),
+            "progress": progress,
+            "total": source_total,
+            "completed": min(source_total, int(round(source_total * progress))),
+            "failed": len(unresolved),
+            "created_at": build.get("created_at"),
+            "started_at": build.get("started_at"),
+            "finished_at": build.get("finished_at"),
+            "cancel_requested": bool(build.get("cancel_requested")),
+            "fatal_error": build.get("error"),
+            "href": f"/pdf?mode=builder&build={build.get('build_id')}",
+        }
+
+    def list_operations(self, limit: int = 200) -> list[dict[str, Any]]:
+        listing = self.repo.list_builds(offset=0, limit=max(1, min(1000, limit)))
+        return [
+            self._operation_from_build(build)
+            for build in listing["items"]
+            if not build.get("operation_hidden")
+        ]
+
+    def operation(self, build_id: str) -> dict[str, Any]:
+        return self._operation_from_build(self.repo.get_build(build_id))
+
+    def delete(self, build_id: str) -> None:
+        """Dismiss a finished build from the global Operations feed.
+
+        Corpus builds are scholarly artifacts, not disposable job-log rows. The
+        generic Operations "Remove" action therefore hides the operation entry
+        without deleting the build, its source bindings, or a publication.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Running corpus builds must be cancelled before they can be dismissed from Operations.")
+        build["operation_hidden"] = True
+        build["operation_hidden_at"] = iso_now()
+        self.repo.save_build(build)
+
+    def clear_finished(self) -> int:
+        count = 0
+        listing = self.repo.list_builds(offset=0, limit=10000)
+        for build in listing["items"]:
+            if build.get("status") in {"queued", "running"} or build.get("operation_hidden"):
+                continue
+            build["operation_hidden"] = True
+            build["operation_hidden_at"] = iso_now()
+            self.repo.save_build(build)
+            count += 1
+        return count
 
     def cancel(self, build_id: str) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -936,17 +1225,30 @@ class PdfCorpusBuildManager:
         add_many(blocks[midpoint:midpoint + 30])
         add_many(blocks[-40:])
         chosen = sorted(chosen[:140], key=lambda b: (int(b.get("page") or 0), str(b.get("block_id") or "")))
+        limits = self._stage_limits(request)
+        context = self._context_window(request)
+        # Keep manifest analysis representative across the whole book even on
+        # smaller local contexts. We reduce the number/size of excerpts rather
+        # than truncating the end of a front-loaded prompt.
+        manifest_input_tokens = 12000 if not context else max(2200, min(12000, context - limits["manifest_num_predict"] - 1800))
+        sample_char_budget = max(8000, manifest_input_tokens * 4)
+        if chosen:
+            max_samples = max(12, min(len(chosen), sample_char_budget // 720))
+            if len(chosen) > max_samples:
+                indices = sorted({round(i * (len(chosen) - 1) / max(1, max_samples - 1)) for i in range(max_samples)})
+                chosen = [chosen[index] for index in indices]
+        per_excerpt = max(280, min(900, sample_char_budget // max(1, len(chosen)) - 100))
         sample_text = "\n".join(
-            f"[{b['block_id']} PDF p.{b['page']} label={b.get('printed_page_label')!r} {b['type']}] {b['text'][:900]}"
+            f"[{b['block_id']} PDF p.{b['page']} label={b.get('printed_page_label')!r} {b['type']}] {str(b.get('text') or '')[:per_excerpt]}"
             for b in chosen
-        )
+        )[:sample_char_budget]
         prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
 Use only evidence in the supplied PDF metadata and source blocks. Use null when unsupported. Never fill bibliographic facts from general knowledge. Distinguish the PDF page index from a printed page label. The manifest will be inherited deterministically by generated records, so be conservative.
 
 PDF metadata: {json.dumps(metadata, ensure_ascii=False)}
 Filename: {asset.get('filename')}
 Strategic whole-document sample:
-{sample_text[:56000]}
+{sample_text}
 
 Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical PDF pages when supported. `document_is_translation` should be null unless the source itself supports that conclusion.
 """
@@ -955,7 +1257,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 request,
                 prompt,
                 response_model=DocumentManifestModel,
-                max_tokens=2200,
+                max_tokens=limits["manifest_num_predict"],
                 schema_name="derridai_document_manifest",
                 build_id=build_id,
             )
@@ -973,112 +1275,355 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
         return result
 
-    def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
-        profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
-        threshold = float(profile.get("min_boundary_confidence") or 0.72)
-        window_size = 24
-        overlap = 6
+    @staticmethod
+    def _stage_limits(request: dict[str, Any]) -> dict[str, int]:
+        defaults = {
+            "manifest_num_predict": 1800,
+            "segmentation_num_predict": 1200,
+            "reconciliation_num_predict": 1000,
+            "discourse_num_predict": 1600,
+            "quotation_num_predict": 1500,
+            "indexing_num_predict": 1200,
+            "segmentation_window_tokens": 5000,
+        }
+        supplied = request.get("stage_limits")
+        if hasattr(supplied, "model_dump"):
+            supplied = supplied.model_dump()
+        if isinstance(supplied, dict):
+            for key, default in list(defaults.items()):
+                try:
+                    value = int(supplied.get(key, default))
+                except (TypeError, ValueError):
+                    value = default
+                if key == "segmentation_window_tokens":
+                    defaults[key] = max(1024, min(24000, value))
+                else:
+                    defaults[key] = max(256, min(8192, value))
+        return defaults
+
+    @staticmethod
+    def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> list[list[dict[str, Any]]]:
+        """Create overlapping semantic-analysis windows using an approximate token budget.
+
+        Window size is only an execution constraint. It never becomes a record
+        boundary. Two source blocks are overlapped so a transition at a window
+        seam can be judged in both contexts.
+        """
+        if not blocks:
+            return []
+        char_budget = max(4096, int(token_budget) * 4)
+        overlap = 2
         windows: list[list[dict[str, Any]]] = []
-        start = 0
-        while start < len(blocks):
-            windows.append(blocks[start:start + window_size])
-            if start + window_size >= len(blocks):
-                break
-            start += window_size - overlap
-
-        segmentation_state = self.repo.load_checkpoint(build_id, "segmentation_state", {})
-        if not isinstance(segmentation_state, dict):
-            segmentation_state = {}
-        candidates = {str(key): value for key, value in (segmentation_state.get("candidates") or {}).items() if isinstance(value, dict)}
-        next_window = max(0, min(len(windows), int(segmentation_state.get("next_window") or 0)))
-        failed_windows = int(segmentation_state.get("failed_windows") or 0)
-
-        for wi, window in enumerate(windows):
-            if wi < next_window:
+        current: list[dict[str, Any]] = []
+        current_chars = 0
+        index = 0
+        while index < len(blocks):
+            block = blocks[index]
+            block_chars = len(str(block.get("text") or "")) + 120
+            if current and current_chars + block_chars > char_budget and len(current) >= 4:
+                windows.append(current)
+                carry = current[-overlap:] if len(current) > overlap else list(current)
+                current = list(carry)
+                current_chars = sum(len(str(item.get("text") or "")) + 120 for item in current)
+                # Do not advance index; the current block still needs to be added.
                 continue
-            if self._cancelled(build_id):
-                raise InterruptedError("Corpus build cancelled")
-            block_ids = {b["block_id"] for b in window}
-            block_text = "\n\n".join(
-                f"[{b['block_id']} | PDF p.{b['page']} | {b['type']}]\n{b['text']}"
-                for b in window
-            )
-            prompt = f"""You are a conservative semantic-boundary auditor for a Derrida scholarly corpus.
-Judge only genuine discourse boundaries. A split is warranted when a coherent argumentative/discursive unit ends because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. NEVER split merely because a page changes, a processing window ends, or text reaches a size. Keep quotations with the attribution necessary to identify them. Prefer fewer coherent records over fragmentary records.
+            current.append(block)
+            current_chars += block_chars
+            index += 1
+        if current:
+            if windows and current == windows[-1][-len(current):]:
+                return windows
+            windows.append(current)
+        return windows
 
-Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+    def _compact_segment_prompt(self, window: list[dict[str, Any]], manifest: dict[str, Any]) -> str:
+        block_text = "\n\n".join(
+            f"[{b['block_id']} | PDF p.{b['page']} | {b['type']}]\n{b['text']}"
+            for b in window
+        )
+        manifest_summary = {
+            key: manifest.get(key)
+            for key in ("title", "document_author", "translator", "language", "document_type")
+            if manifest.get(key) not in (None, "")
+        }
+        return f"""You are a conservative semantic-boundary auditor for a Derrida scholarly corpus.
+Judge only genuine discourse boundaries. Split when one coherent argumentative/discursive unit ends because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. NEVER split because a page changes, an execution window ends, or text reaches a size. Keep a quotation with the attribution needed to understand who owns the quoted proposition.
+
+Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
 
 SOURCE BLOCKS (immutable IDs):
-{block_text[:52000]}
+{block_text}
 
-Return decisions only for plausible transition points. `decision=split` means the next source block begins a new semantic/discourse unit. `decision=uncertain` means there is evidence of a transition but the context is insufficient. `decision=keep` may be used to explicitly reject an apparent boundary. Never return source text and never invent block IDs.
+Return a COMPACT JSON object. Include only plausible transition points. For each boundary return: `after` (an exact source block ID), `decision` (`split`, `keep`, or `uncertain`), `confidence` (0..1), and `changes` (zero or more of speaker, position_holder, stance, target, quotation_frame, discourse_role, argumentative_move). Do not return source text, prose explanations, Markdown, or invented IDs.
 """
-            try:
-                result = self._chat_json(
-                    request,
-                    prompt,
-                    response_model=SegmentationResponseModel,
-                    max_tokens=3000,
-                    schema_name="derridai_semantic_boundaries",
-                    build_id=build_id,
-                )
-            except InterruptedError:
-                raise
-            except Exception as exc:
-                failed_windows += 1
-                self._append_warning(build_id, f"Segmentation window {wi + 1}/{len(windows)} could not be validated and was skipped: {exc}")
-                self.repo.save_checkpoint(build_id, "segmentation_state", {"next_window": wi + 1, "failed_windows": failed_windows, "candidates": candidates})
-                self._update(build_id, stage="segmenting", progress=0.12 + 0.24 * ((wi + 1) / max(1, len(windows))))
-                continue
+
+    def _segment_pair(
+        self,
+        left: dict[str, Any],
+        right: dict[str, Any],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+        build_id: str,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        prompt = f"""Classify ONE possible semantic record boundary in a Derrida scholarly corpus.
+Do not use page changes or length as evidence. Decide whether the second source block begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move.
+
+LEFT [{left['block_id']}]:\n{str(left.get('text') or '')[:7000]}
+
+RIGHT [{right['block_id']}]:\n{str(right.get('text') or '')[:7000]}
+
+Return only `decision`, `confidence`, and `changes` in the supplied schema.
+"""
+        limits = self._stage_limits(request)
+        try:
+            result = self._chat_json(
+                request,
+                prompt,
+                response_model=PairBoundaryResponseModel,
+                max_tokens=min(700, limits["segmentation_num_predict"]),
+                schema_name="derridai_boundary_pair",
+                attempts=2,
+                build_id=build_id,
+            )
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            return None, {
+                "after_block_id": left["block_id"],
+                "next_block_id": right["block_id"],
+                "reason": str(exc),
+                "kind": "pair",
+            }
+        return {
+            "after_block_id": left["block_id"],
+            "decision": str(result.get("decision") or "uncertain"),
+            "confidence": max(0.0, min(1.0, float(result.get("confidence") or 0))),
+            "changes": list(result.get("changes") or []),
+            "source": "pair_fallback",
+        }, None
+
+    def _segment_window_recursive(
+        self,
+        window: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+        build_id: str,
+        *,
+        depth: int = 0,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        limits = self._stage_limits(request)
+        block_ids = {str(block.get("block_id") or "") for block in window}
+        try:
+            result = self._chat_json(
+                request,
+                self._compact_segment_prompt(window, manifest),
+                response_model=CompactSegmentationResponseModel,
+                max_tokens=limits["segmentation_num_predict"],
+                schema_name="derridai_semantic_boundaries_compact",
+                attempts=2,
+                build_id=build_id,
+            )
+            candidates: list[dict[str, Any]] = []
             for item in result.get("boundaries") or []:
-                block_id = str(item.get("after_block_id") or "")
-                if block_id not in block_ids:
+                block_id = str(item.get("after") or "")
+                if block_id not in block_ids or block_id == str(window[-1].get("block_id") or ""):
                     continue
-                candidate = {
+                candidates.append({
                     "after_block_id": block_id,
                     "decision": str(item.get("decision") or "uncertain"),
                     "confidence": max(0.0, min(1.0, float(item.get("confidence") or 0))),
-                    "reason": str(item.get("reason") or ""),
-                    "change": item.get("change") or {},
-                    "window": wi,
-                }
-                previous = candidates.get(block_id)
-                if previous is None or candidate["confidence"] > float(previous.get("confidence") or 0):
-                    candidates[block_id] = candidate
-            self.repo.save_checkpoint(build_id, "segmentation_state", {"next_window": wi + 1, "failed_windows": failed_windows, "candidates": candidates})
-            self._update(build_id, stage="segmenting", progress=0.12 + 0.24 * ((wi + 1) / max(1, len(windows))))
+                    "changes": list(item.get("changes") or []),
+                    "source": "compact_window",
+                    "depth": depth,
+                })
+            return candidates, []
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            self._increment_metric(build_id, "segmentation_window_failures")
+            # A malformed large response should become a smaller problem, not a
+            # missing slice of the book. Recursively divide the source evidence.
+            if len(window) > 6 and depth < 4:
+                midpoint = len(window) // 2
+                left = window[:min(len(window), midpoint + 2)]
+                right = window[max(0, midpoint - 1):]
+                left_candidates, left_unresolved = self._segment_window_recursive(
+                    left, manifest, request, build_id, depth=depth + 1
+                )
+                right_candidates, right_unresolved = self._segment_window_recursive(
+                    right, manifest, request, build_id, depth=depth + 1
+                )
+                return left_candidates + right_candidates, left_unresolved + right_unresolved
 
-        ordered_ids = [b["block_id"] for b in blocks]
-        index_by_id = {block_id: i for i, block_id in enumerate(ordered_ids)}
-        raw = [
-            item for item in candidates.values()
-            if index_by_id.get(item["after_block_id"], len(blocks) - 1) < len(blocks) - 1
-            and item.get("decision") != "keep"
-        ]
-        raw.sort(key=lambda item: index_by_id.get(item["after_block_id"], 10**9))
+            # At the minimum window size, classify each transition independently.
+            # These tiny schemas are intentionally difficult for a model to truncate.
+            pair_candidates: list[dict[str, Any]] = []
+            unresolved: list[dict[str, Any]] = []
+            for left, right in zip(window, window[1:]):
+                candidate, failure = self._segment_pair(left, right, manifest, request, build_id)
+                if candidate:
+                    pair_candidates.append(candidate)
+                if failure:
+                    unresolved.append(failure)
+            if unresolved:
+                unresolved.append({
+                    "after_block_id": str(window[0].get("block_id") or ""),
+                    "next_block_id": str(window[-1].get("block_id") or ""),
+                    "reason": f"Window remained unresolved after recursive reduction: {exc}",
+                    "kind": "window",
+                })
+            return pair_candidates, unresolved
 
-        # Adjacent proposals usually describe the same transition. Keep the
-        # strongest candidate, then ask a second semantic pass to adjudicate
-        # low-confidence/window-seam decisions instead of treating every proposal
-        # as a record boundary.
-        collapsed: list[dict[str, Any]] = []
-        for item in raw:
-            if collapsed and index_by_id[item["after_block_id"]] - index_by_id[collapsed[-1]["after_block_id"]] <= 1:
-                if item["confidence"] > collapsed[-1]["confidence"]:
-                    collapsed[-1] = item
+    def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
+        profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
+        threshold = float(profile.get("min_boundary_confidence") or 0.72)
+        limits = self._stage_limits(request)
+        windows = self._segmentation_windows(blocks, limits["segmentation_window_tokens"])
+        state = self.repo.load_checkpoint(build_id, "segmentation_state", {})
+        if not isinstance(state, dict):
+            state = {}
+        window_results = state.get("window_results") if isinstance(state.get("window_results"), dict) else {}
+        recovered_windows = int(state.get("recovered_windows") or 0)
+
+        all_candidates: list[dict[str, Any]] = []
+        unresolved_regions: list[dict[str, Any]] = []
+        for wi, window in enumerate(windows):
+            if self._cancelled(build_id):
+                raise InterruptedError("Corpus build cancelled")
+            key = f"w{wi:04d}:{window[0]['block_id']}:{window[-1]['block_id']}"
+            cached = window_results.get(key) if isinstance(window_results, dict) else None
+            # Successfully validated windows are immutable checkpoints. Windows
+            # with unresolved transitions are deliberately retried on resume.
+            if isinstance(cached, dict) and not cached.get("unresolved"):
+                all_candidates.extend(cached.get("candidates") or [])
             else:
-                collapsed.append(item)
+                candidates, unresolved = self._segment_window_recursive(window, manifest, request, build_id)
+                if isinstance(cached, dict) and cached.get("unresolved") and not unresolved:
+                    recovered_windows += 1
+                window_results[key] = {"candidates": candidates, "unresolved": unresolved}
+                all_candidates.extend(candidates)
+                unresolved_regions.extend(unresolved)
+                self.repo.save_checkpoint(build_id, "segmentation_state", {
+                    "window_results": window_results,
+                    "recovered_windows": recovered_windows,
+                })
+            self._update(
+                build_id,
+                stage="segmenting",
+                progress=0.12 + 0.22 * ((wi + 1) / max(1, len(windows))),
+                segmentation_total_windows=len(windows),
+            )
 
-        accepted = [item for item in collapsed if item.get("decision") == "split" and float(item.get("confidence") or 0) >= threshold]
-        uncertain = [item for item in collapsed if item not in accepted]
+        # Merge overlapping-window proposals by source transition. The strongest
+        # proposal wins; execution-window seams never create boundaries themselves.
+        by_id: dict[str, dict[str, Any]] = {}
+        ordered_ids = [str(block["block_id"]) for block in blocks]
+        index_by_id = {block_id: index for index, block_id in enumerate(ordered_ids)}
+        for item in all_candidates:
+            block_id = str(item.get("after_block_id") or "")
+            if block_id not in index_by_id or index_by_id[block_id] >= len(blocks) - 1:
+                continue
+            previous = by_id.get(block_id)
+            if previous is None or float(item.get("confidence") or 0) > float(previous.get("confidence") or 0):
+                by_id[block_id] = item
+        # Keep distinct source transitions distinct. Adjacent semantic boundaries
+        # can be legitimate (for example, a short quotation framed by two changes
+        # in position holder). Earlier code collapsed adjacent proposals and could
+        # silently under-segment the book. Overlapping-window duplicates are already
+        # resolved above by source block ID.
+        candidates = [item for item in by_id.values() if item.get("decision") != "keep"]
+        candidates.sort(key=lambda item: index_by_id.get(str(item.get("after_block_id") or ""), 10**9))
+
+        accepted = [
+            item for item in candidates
+            if item.get("decision") == "split" and float(item.get("confidence") or 0) >= threshold
+        ]
+        uncertain = [item for item in candidates if item not in accepted]
+        reconciliation_unresolved: list[dict[str, Any]] = []
         if uncertain:
-            accepted.extend(self._reconcile_boundaries(blocks, manifest, uncertain, request, build_id, threshold))
-        accepted.sort(key=lambda item: index_by_id.get(item["after_block_id"], 10**9))
-        self.repo.save_checkpoint(build_id, "boundaries", accepted)
-        degraded = bool(windows and (failed_windows / len(windows)) >= 0.20) or (len(blocks) > window_size and not accepted)
-        if degraded:
-            self._append_warning(build_id, "Semantic segmentation is degraded: too many windows failed validation or no validated boundaries were retained. Records are preserved but must be reviewed before publication.")
-        self._update(build_id, stage="reconciling", progress=0.40, boundary_count=len(accepted), boundary_candidate_count=len(collapsed), segmentation_failed_windows=failed_windows, segmentation_total_windows=len(windows), segmentation_degraded=degraded)
+            reconciled, reconciliation_unresolved = self._reconcile_boundaries(
+                blocks, manifest, uncertain, request, build_id, threshold
+            )
+            accepted.extend(reconciled)
+            unresolved_regions.extend(reconciliation_unresolved)
+        accepted.sort(key=lambda item: index_by_id.get(str(item.get("after_block_id") or ""), 10**9))
+
+        # Deduplicate unresolved transitions reported through overlapping recursive
+        # windows. These are blockers, not reasons to manufacture a giant record.
+        unresolved_map: dict[tuple[str, str], dict[str, Any]] = {}
+        for item in unresolved_regions:
+            key = (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""))
+            if key != ("", ""):
+                unresolved_map[key] = item
+        unresolved_regions = list(unresolved_map.values())
+        total_chars = sum(len(str(block.get("text") or "")) for block in blocks)
+        no_boundary_guard = total_chars > int(profile.get("soft_max_chars") or 18000) and not accepted
+        if no_boundary_guard and not unresolved_regions:
+            unresolved_regions.append({
+                "after_block_id": str(blocks[0].get("block_id") or ""),
+                "next_block_id": str(blocks[-1].get("block_id") or ""),
+                "kind": "topology_guard_no_boundaries",
+                "reason": "A long source produced no validated semantic boundaries. The length threshold is only a safety guard; it did not create a split. Retry or review the semantic topology before record construction.",
+            })
+
+        # Record size is never a segmentation rule, but an implausibly large
+        # provisional semantic unit is evidence that topology is unresolved. Block
+        # construction rather than publishing a 50k–100k character pseudo-record.
+        # This guard therefore requests more semantic review; it does not insert a
+        # boundary at a character/page threshold.
+        topology_review_chars = int(profile.get("topology_review_chars") or 36000)
+        split_after = {str(item.get("after_block_id") or "") for item in accepted}
+        provisional: list[list[dict[str, Any]]] = []
+        group: list[dict[str, Any]] = []
+        for block in blocks:
+            group.append(block)
+            if str(block.get("block_id") or "") in split_after:
+                provisional.append(group)
+                group = []
+        if group:
+            provisional.append(group)
+        existing_guard_ranges = {
+            (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""))
+            for item in unresolved_regions
+            if isinstance(item, dict) and str(item.get("kind") or "").startswith("topology_guard")
+        }
+        for span in provisional:
+            span_chars = sum(len(str(block.get("text") or "")) for block in span)
+            if span_chars <= topology_review_chars or len(span) < 2:
+                continue
+            range_key = (str(span[0].get("block_id") or ""), str(span[-1].get("block_id") or ""))
+            if range_key in existing_guard_ranges:
+                continue
+            unresolved_regions.append({
+                "after_block_id": range_key[0],
+                "next_block_id": range_key[1],
+                "kind": "topology_guard_large_unit",
+                "character_count": span_chars,
+                "block_count": len(span),
+                "reason": "A provisional semantic unit remains unusually large. Size triggered review only; no mechanical boundary was inserted.",
+            })
+
+        blocked = bool(unresolved_regions)
+        build = self.repo.get_build(build_id)
+        build["segmentation_blocked"] = blocked
+        build["segmentation_unresolved_regions"] = unresolved_regions[:500]
+        build["segmentation_failed_windows"] = sum(
+            1 for value in window_results.values()
+            if isinstance(value, dict) and value.get("unresolved")
+        )
+        build["segmentation_total_windows"] = len(windows)
+        build["segmentation_recovered_windows"] = recovered_windows
+        build["segmentation_degraded"] = blocked
+        build["boundary_candidate_count"] = len(candidates)
+        build["boundary_count"] = len(accepted)
+        self.repo.save_build(build)
+        self.repo.save_checkpoint(build_id, "boundaries_partial", accepted)
+        if blocked:
+            self._append_warning(
+                build_id,
+                f"Semantic segmentation stopped with {len(unresolved_regions)} unresolved transition region(s). No record set was constructed; retry or change model/settings to resolve them.",
+            )
+        self._update(build_id, stage="reconciling", progress=0.40)
         return accepted
 
     def _reconcile_boundaries(
@@ -1089,83 +1634,100 @@ Return decisions only for plausible transition points. `decision=split` means th
         request: dict[str, Any],
         build_id: str,
         threshold: float,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         block_index = {block["block_id"]: i for i, block in enumerate(blocks)}
         accepted: list[dict[str, Any]] = []
-        reconciliation_state = self.repo.load_checkpoint(build_id, "reconciliation_state", {})
-        if not isinstance(reconciliation_state, dict):
-            reconciliation_state = {}
-        completed_batches = {
-            int(value)
-            for value in reconciliation_state.get("completed_batches") or []
-            if isinstance(value, int) or str(value).isdigit()
-        }
-        restored = reconciliation_state.get("accepted") or []
+        unresolved: list[dict[str, Any]] = []
+        state = self.repo.load_checkpoint(build_id, "reconciliation_state", {})
+        if not isinstance(state, dict):
+            state = {}
+        completed = {str(value) for value in state.get("completed") or []}
+        restored = state.get("accepted") or []
         if isinstance(restored, list):
             accepted.extend(item for item in restored if isinstance(item, dict))
+        limits = self._stage_limits(request)
 
-        for offset in range(0, len(candidates), 12):
-            batch_number = offset // 12
-            if batch_number in completed_batches:
+        # Small batches keep structured output short and make local-model retries
+        # cheap. No prose reasons are requested in this topology-changing stage.
+        for offset in range(0, len(candidates), 8):
+            batch = candidates[offset:offset + 8]
+            batch_key = ",".join(str(item.get("after_block_id") or "") for item in batch)
+            if batch_key in completed:
                 continue
-            batch = candidates[offset:offset + 12]
             excerpts: list[str] = []
             for candidate in batch:
-                idx = block_index.get(candidate["after_block_id"], -1)
+                idx = block_index.get(str(candidate.get("after_block_id") or ""), -1)
                 if idx < 0:
                     continue
                 context = blocks[max(0, idx - 2):min(len(blocks), idx + 4)]
                 excerpts.append(
-                    "\n".join([
-                        f"CANDIDATE after {candidate['after_block_id']} confidence={candidate['confidence']:.2f} reason={candidate.get('reason','')}",
-                        *[f"[{b['block_id']}] {b['text'][:900]}" for b in context],
-                    ])
+                    f"CANDIDATE {candidate['after_block_id']} prior-confidence={float(candidate.get('confidence') or 0):.2f}\n"
+                    + "\n".join(f"[{b['block_id']}] {str(b.get('text') or '')[:1000]}" for b in context)
                 )
-            prompt = f"""You are reconciling uncertain semantic boundaries proposed by an earlier pass. Decide whether each candidate is a genuine record boundary. Use the surrounding source context, not character length or page changes. A split must preserve coherent attribution, quotation framing and argumentative relations. Prefer KEEP when the evidence for a discourse transition is weak.
+            prompt = f"""Reconcile uncertain semantic record boundaries. Keep a boundary only when the surrounding source shows a genuine discourse/argument transition. Do not use page changes, window seams, or length as evidence. Preserve attribution and quotation framing. Prefer KEEP when evidence is weak.
 
-Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+{chr(10).join(excerpts)}
 
-CANDIDATES AND LOCAL CONTEXT:
-{chr(10).join(excerpts)[:52000]}
-
-Return one decision for each supplied candidate ID. `split` means retain the boundary; `keep` means remove it.
+Return one compact decision for every supplied candidate using exact `after` IDs. No prose explanations.
 """
             try:
                 result = self._chat_json(
                     request,
                     prompt,
-                    response_model=ReconciliationResponseModel,
-                    max_tokens=2200,
-                    schema_name="derridai_boundary_reconciliation",
+                    response_model=CompactReconciliationResponseModel,
+                    max_tokens=limits["reconciliation_num_predict"],
+                    schema_name="derridai_boundary_reconciliation_compact",
+                    attempts=2,
                     build_id=build_id,
                 )
             except InterruptedError:
                 raise
             except Exception as exc:
-                self._append_warning(build_id, f"Boundary reconciliation batch {offset // 12 + 1} failed; only already high-confidence boundaries were retained: {exc}")
+                # A topology-changing decision that cannot be reconciled is never
+                # silently converted to KEEP. Preserve it as an explicit blocker so
+                # the book cannot be under-segmented merely because structured
+                # output failed in the reconciliation stage.
+                for candidate in batch:
+                    block_id = str(candidate.get("after_block_id") or "")
+                    idx = block_index.get(block_id, -1)
+                    next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
+                    unresolved.append({
+                        "after_block_id": block_id,
+                        "next_block_id": next_id,
+                        "kind": "reconciliation",
+                        "reason": f"Boundary reconciliation could not be validated: {exc}",
+                    })
                 continue
-            original = {item["after_block_id"]: item for item in batch}
+            original = {str(item["after_block_id"]): item for item in batch}
+            decided: set[str] = set()
             for decision in result.get("decisions") or []:
-                block_id = str(decision.get("after_block_id") or "")
-                if block_id not in original or decision.get("decision") != "split":
+                block_id = str(decision.get("after") or "")
+                if block_id not in original:
+                    continue
+                decided.add(block_id)
+                if decision.get("decision") != "split":
                     continue
                 confidence = float(decision.get("confidence") or 0)
                 if confidence < threshold:
                     continue
                 merged = dict(original[block_id])
-                merged.update({
-                    "decision": "split",
-                    "confidence": confidence,
-                    "reconciled": True,
-                    "reconciliation_reason": str(decision.get("reason") or ""),
-                })
+                merged.update({"decision": "split", "confidence": confidence, "reconciled": True})
                 accepted.append(merged)
-            completed_batches.add(batch_number)
+            for block_id in sorted(set(original) - decided):
+                idx = block_index.get(block_id, -1)
+                next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
+                unresolved.append({
+                    "after_block_id": block_id,
+                    "next_block_id": next_id,
+                    "kind": "reconciliation",
+                    "reason": "Boundary reconciliation omitted a required candidate decision.",
+                })
+            completed.add(batch_key)
             self.repo.save_checkpoint(build_id, "reconciliation_state", {
-                "completed_batches": sorted(completed_batches),
+                "completed": sorted(completed),
                 "accepted": accepted,
             })
-        return accepted
+        return accepted, unresolved
 
     @staticmethod
     def _scholarly_page_range(group: list[dict[str, Any]]) -> tuple[int | str | None, int | str | None]:
@@ -1291,92 +1853,134 @@ Return one decision for each supplied candidate ID. `split` means retain the bou
         next_text: str = "",
         build_id: str = "",
     ) -> dict[str, Any]:
+        """Infer interpretive metadata through several small structured tasks.
+
+        A single all-fields JSON object proved fragile with local models: one
+        truncated brace could invalidate every metadata dimension.  The staged
+        design keeps output schemas small, preserves successful partial work, and
+        makes retries/escalation local to the failed metadata family.
+        """
         self._apply_manifest_metadata(record, manifest)
+        limits = self._stage_limits(request)
         neighbor_context = {
-            "previous_record_tail": previous_text[-2200:] if previous_text else "",
-            "next_record_head": next_text[:2200] if next_text else "",
+            "previous_record_tail": previous_text[-1800:] if previous_text else "",
+            "next_record_head": next_text[:1800] if next_text else "",
         }
-        prompt = f"""Infer ONLY source-supported interpretive metadata for one immutable DerridAI record.
-Do not rewrite, summarize, or return the record text. Distinguish the grammatical/textual speaker from the POSITION HOLDER whose proposition is being presented. A named person is not automatically a quoted speaker or position holder. Preserve modality, negation, uncertainty, and quotation framing. Use null or [] when unsupported.
-
-The neighboring excerpts are context only. Evidence for an attribution field MUST cite immutable source block IDs from the current record; do not cite neighboring text as field evidence.
-
-Document manifest: {json.dumps(manifest, ensure_ascii=False)}
-Neighbor context: {json.dumps(neighbor_context, ensure_ascii=False)}
-Current source block IDs: {json.dumps(record['source_block_ids'])}
-CURRENT RECORD TEXT:
-{record['text'][:42000]}
-
-For every populated attribution-bearing field (speaker, position_holder, target, stance, proposition_status, quoted_* and quotation_chain), include `field_evidence` with supporting current-record block IDs, confidence 0..1, and a short evidence reason. `semantic_function` is an array. Quotation relation fields are arrays. Do not invent bibliographic metadata; document-level bibliography is inherited separately by deterministic code.
-"""
-        try:
-            result = self._chat_json(
-                request,
-                prompt,
-                response_model=MetadataResponseModel,
-                max_tokens=4200,
-                schema_name="derridai_record_metadata",
-                build_id=build_id,
-            )
-        except InterruptedError:
-            raise
-        except Exception as exc:
+        source_ids = [str(value) for value in record.get("source_block_ids") or []]
+        source_id_json = json.dumps(source_ids, ensure_ascii=False)
+        # Semantic records should already be bounded. This is a context-safety
+        # guard, not a segmentation rule: no source text is rewritten or split here.
+        source_text = str(record.get("text") or "")
+        context = self._context_window(request)
+        largest_metadata_output = max(limits["discourse_num_predict"], limits["quotation_num_predict"], limits["indexing_num_predict"])
+        metadata_input_tokens = 9000 if not context else max(1800, min(12000, context - largest_metadata_output - 1800))
+        metadata_char_budget = max(7000, metadata_input_tokens * 4)
+        if len(source_text) > metadata_char_budget:
+            half = max(2500, metadata_char_budget // 2)
+            source_text = source_text[:half] + "\n\n[...middle retained in source record but omitted from this metadata prompt...]\n\n" + source_text[-half:]
             record["needs_review"] = True
-            record["review_reason"] = f"Metadata extraction could not be validated: {exc}"
-            record["metadata_evidence"] = {}
-            record["metadata_complete"] = False
-            if build_id:
-                self._append_warning(build_id, f"{record.get('record_id')}: metadata extraction requires review ({exc})")
-            inline, full = _citation_strings(record)
-            record["inline_citation"] = inline
-            record["full_citation"] = full
-            return record
+            record["review_reason"] = "Record exceeds this model's metadata context envelope; metadata was inferred from head/tail context and requires review."
 
-        metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
-        for key, value in metadata.items():
-            if key in ALLOWED_METADATA_FIELDS and key not in SOURCE_BOUND_FIELDS:
-                record[key] = value
+        base_context = f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
+Current source block IDs: {source_id_json}
+CURRENT RECORD TEXT (immutable):
+{source_text}
+"""
+        stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
 
-        evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
-        valid_ids = set(record["source_block_ids"])
-        clean_evidence: dict[str, Any] = {}
-        review_reasons: list[str] = []
-        confidences: list[float] = []
-        attribution_confidences: list[float] = []
-        for field, info in evidence.items():
-            if field not in ALLOWED_METADATA_FIELDS or not isinstance(info, dict):
-                continue
-            block_ids = [str(value) for value in info.get("block_ids") or [] if str(value) in valid_ids]
+        discourse_prompt = f"""Infer ONLY discourse/attribution metadata for one immutable DerridAI record.
+Distinguish the grammatical/textual speaker from the POSITION HOLDER whose proposition is being presented. A named person is not automatically a speaker or position holder. Preserve modality, negation, uncertainty, and stance. Do not return quotation relations, topical indexing, bibliographic metadata, summaries, or source text.
+
+{base_context}
+For every populated attribution-bearing field in this task (speaker, position_holder, target, stance, proposition_status), include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.
+"""
+        quotation_prompt = f"""Infer ONLY quotation relations for one immutable DerridAI record.
+Determine whether there is direct quotation and, only when source-supported, identify quoted speaker/author/work/position-holder/addressee/referent and quotation chains. A mentioned name is not automatically a quoted source. Do not return discourse fields, topical indexing, bibliographic metadata, summaries, or source text.
+
+{base_context}
+For every populated quoted_* or quotation_chain field, include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use [] when unsupported.
+"""
+        indexing_prompt = f"""Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.
+Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage.
+
+{base_context}
+"""
+
+        tasks = [
+            ("discourse", discourse_prompt, DiscourseMetadataResponseModel, limits["discourse_num_predict"], "derridai_record_discourse"),
+            ("quotation", quotation_prompt, QuotationMetadataResponseModel, limits["quotation_num_predict"], "derridai_record_quotation"),
+            ("indexing", indexing_prompt, IndexMetadataResponseModel, limits["indexing_num_predict"], "derridai_record_indexing"),
+        ]
+        for task_name, prompt, response_model, max_tokens, schema_name in tasks:
             try:
-                confidence = max(0.0, min(1.0, float(info.get("confidence") or 0)))
-            except (TypeError, ValueError):
-                confidence = 0.0
-            clean_evidence[field] = {
-                "block_ids": block_ids,
-                "confidence": confidence,
-                "reason": str(info.get("reason") or ""),
-            }
-            confidences.append(confidence)
-            if field in ATTRIBUTION_EVIDENCE_FIELDS:
-                attribution_confidences.append(confidence)
+                result = self._chat_json(
+                    request,
+                    prompt,
+                    response_model=response_model,
+                    max_tokens=max_tokens,
+                    schema_name=schema_name,
+                    build_id=build_id,
+                )
+                stage_results.append((task_name, result, None))
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                stage_results.append((task_name, None, exc))
+                if build_id:
+                    self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
-        # Validate evidence from the metadata outward. A populated high-risk field
-        # is unsupported unless its corresponding evidence entry exists and points
-        # to at least one source block in this record.
+        clean_evidence: dict[str, Any] = dict(record.get("metadata_evidence") or {})
+        valid_ids = set(source_ids)
+        review_reasons: list[str] = []
+        evidence_confidences: list[float] = []
+        attribution_confidences: list[float] = []
+        model_review_reasons: list[str] = []
+        successful_tasks = 0
+
+        for task_name, result, failure in stage_results:
+            if failure is not None or not isinstance(result, dict):
+                review_reasons.append(f"{task_name} metadata extraction could not be validated: {failure}")
+                continue
+            successful_tasks += 1
+            metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+            for key, value in metadata.items():
+                if key in ALLOWED_METADATA_FIELDS and key not in SOURCE_BOUND_FIELDS:
+                    record[key] = value
+            evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
+            for field, info in evidence.items():
+                if field not in ALLOWED_METADATA_FIELDS or not isinstance(info, dict):
+                    continue
+                block_ids = [str(value) for value in info.get("block_ids") or [] if str(value) in valid_ids]
+                try:
+                    confidence = max(0.0, min(1.0, float(info.get("confidence") or 0)))
+                except (TypeError, ValueError):
+                    confidence = 0.0
+                clean_evidence[field] = {
+                    "block_ids": block_ids,
+                    "confidence": confidence,
+                    "reason": str(info.get("reason") or ""),
+                }
+                evidence_confidences.append(confidence)
+                if field in ATTRIBUTION_EVIDENCE_FIELDS:
+                    attribution_confidences.append(confidence)
+            reason = str(result.get("review_reason") or "").strip()
+            if reason:
+                model_review_reasons.append(reason)
+
         profile_id = PROFILE_VERSION
         if build_id:
             try:
                 profile_id = str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)
             except Exception:
-                profile_id = PROFILE_VERSION
+                pass
         minimum = float(CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]).get("min_metadata_confidence") or 0.72)
         for field in sorted(ATTRIBUTION_EVIDENCE_FIELDS):
             value = record.get(field)
-            populated = value not in (None, "", [])
-            if not populated:
+            if value in (None, "", []):
                 continue
             info = clean_evidence.get(field)
-            if not info:
+            if not isinstance(info, dict):
                 review_reasons.append(f"{field} has no bound source evidence")
                 continue
             if not info.get("block_ids"):
@@ -1385,15 +1989,19 @@ For every populated attribution-bearing field (speaker, position_holder, target,
                 review_reasons.append(f"{field} evidence confidence is below {minimum:.2f}")
 
         record["metadata_evidence"] = clean_evidence
-        record["semantic_classification_confidence"] = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
+        record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else 0.0
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
-        model_review_reason = str(result.get("review_reason") or "").strip()
-        if model_review_reason:
-            review_reasons.append(model_review_reason)
+        review_reasons.extend(model_review_reasons)
         if review_reasons:
             record["needs_review"] = True
-            record["review_reason"] = "; ".join(dict.fromkeys(review_reasons))[:1800]
-        record["metadata_complete"] = True
+            prior = str(record.get("review_reason") or "").strip()
+            combined = ([prior] if prior else []) + review_reasons
+            record["review_reason"] = "; ".join(dict.fromkeys(value for value in combined if value))[:2400]
+        record["metadata_complete"] = successful_tasks == len(tasks)
+        record["metadata_stage_status"] = {
+            task_name: ("complete" if failure is None else "needs_review")
+            for task_name, _result, failure in stage_results
+        }
         inline, full = _citation_strings(record)
         record["inline_citation"] = inline
         record["full_citation"] = full
@@ -1535,53 +2143,125 @@ For every populated attribution-bearing field (speaker, position_holder, target,
                 manifest = self._document_manifest(asset, blocks, request, build_id)
                 self.repo.save_checkpoint(build_id, "manifest", manifest)
             current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
-            self._update(build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
+            self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
 
-            boundaries = self.repo.load_checkpoint(build_id, "boundaries") if resume else None
+            manifest_build = self.repo.get_build(build_id)
+            if bool(request.get("review_manifest_before_segmentation", True)) and not manifest_build.get("manifest_confirmed_at"):
+                self._update(
+                    build_id,
+                    status="awaiting_manifest_review",
+                    stage="document_review",
+                    progress=0.12,
+                    finished_at=iso_now(),
+                    resumable=True,
+                    error=None,
+                )
+                return
+
+            self._update(build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12))
+            previous_build = self.repo.get_build(build_id)
+            # A segmentation-blocked build intentionally has no authoritative final
+            # boundary checkpoint. Resume retries unresolved semantic regions using
+            # the currently selected provider/settings instead of reusing the
+            # partial topology that caused the block.
+            boundaries = None
+            if resume and not previous_build.get("segmentation_blocked"):
+                boundaries = self.repo.load_checkpoint(build_id, "boundaries")
             if not isinstance(boundaries, list):
                 boundaries = self._segment(blocks, manifest, request, build_id)
-                self.repo.save_checkpoint(build_id, "boundaries", boundaries)
             if self._cancelled(build_id):
                 raise InterruptedError("Corpus build cancelled")
+            if self.repo.get_build(build_id).get("segmentation_blocked"):
+                self._update(
+                    build_id,
+                    status="blocked",
+                    stage="segmentation_review",
+                    progress=0.40,
+                    finished_at=iso_now(),
+                    record_count=0,
+                    needs_review_count=0,
+                    accepted_count=0,
+                    resumable=True,
+                    error=None,
+                )
+                return
+            self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
             records = self.repo.load_records(build_id) if resume else []
             if not records:
                 records = self._construct_records(asset, blocks, boundaries)
-                segmentation_degraded = bool(self.repo.get_build(build_id).get("segmentation_degraded"))
                 for record in records:
                     self._apply_manifest_metadata(record, manifest)
                     inline, full = _citation_strings(record)
                     record["inline_citation"] = inline
                     record["full_citation"] = full
-                    if segmentation_degraded:
-                        record["needs_review"] = True
-                        record["review_reason"] = "Semantic segmentation was degraded; verify this record boundary before publication."
                 # Persist deterministic records before any metadata call. A provider
                 # failure can therefore never discard successful segmentation work.
                 self.repo.save_records(build_id, records)
             self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records))
 
             total = max(1, len(records))
-            for index, record in enumerate(records):
-                if self._cancelled(build_id):
-                    raise InterruptedError("Corpus build cancelled")
-                if record.get("metadata_complete"):
-                    continue
-                previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
-                next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
-                records[index] = self._enrich_record(
-                    record,
-                    manifest,
-                    request,
-                    previous_text=previous_text,
-                    next_text=next_text,
-                    build_id=build_id,
-                )
-                # Checkpoint every completed record. JSONL rewrite is intentionally
-                # simple and atomic; correctness/restart safety is more important
-                # than micro-optimizing this offline corpus-construction path.
-                self.repo.save_records(build_id, records)
-                self._update(build_id, stage="enriching", progress=0.42 + 0.43 * ((index + 1) / total))
+            pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
+            already_complete = len(records) - len(pending)
+            max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+            if pending:
+                # Parallelism is a build-level execution concern. Each worker performs
+                # the three small metadata families serially for one record, while the
+                # main thread alone updates/checkpoints the shared JSONL. This avoids
+                # corrupting restart state and respects provider-profile concurrency.
+                with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta") as pool:
+                    futures = {}
+                    for index in pending:
+                        if self._cancelled(build_id):
+                            raise InterruptedError("Corpus build cancelled")
+                        record = dict(records[index])
+                        previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
+                        next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
+                        future = pool.submit(
+                            self._enrich_record,
+                            record,
+                            manifest,
+                            request,
+                            previous_text=previous_text,
+                            next_text=next_text,
+                            build_id=build_id,
+                        )
+                        futures[future] = index
+                    completed = already_complete
+                    for future in as_completed(futures):
+                        if self._cancelled(build_id):
+                            for outstanding in futures:
+                                outstanding.cancel()
+                            raise InterruptedError("Corpus build cancelled")
+                        index = futures[future]
+                        try:
+                            records[index] = future.result()
+                        except Exception as exc:
+                            # A programming/provider failure in one metadata worker
+                            # must never discard the other successfully enriched
+                            # records in a book-length build. Preserve the immutable
+                            # source-derived record and route this item to review.
+                            fallback = dict(records[index])
+                            fallback["metadata_complete"] = False
+                            fallback["needs_review"] = True
+                            reasons = [str(fallback.get("review_reason") or "").strip()]
+                            reasons.append(f"Metadata worker failed and requires review: {exc}")
+                            fallback["review_reason"] = " ".join(reason for reason in reasons if reason).strip()
+                            records[index] = fallback
+                            self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
+                        completed += 1
+                        # Persist each finished record in the coordinator thread. A
+                        # provider/API restart therefore loses at most the calls that
+                        # were actively in flight, never the completed book so far.
+                        self.repo.save_records(build_id, records)
+                        self._update(
+                            build_id,
+                            stage="enriching",
+                            progress=0.42 + 0.43 * (completed / total),
+                            metadata_completed=completed,
+                            metadata_total=len(records),
+                            metadata_concurrency=max_workers,
+                        )
 
             profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
             validation = self.validate_records(blocks, records, profile)
