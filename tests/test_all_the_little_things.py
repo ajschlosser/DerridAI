@@ -26,9 +26,9 @@ def _load_content_filter():
 
 def test_release_version_is_current_everywhere_primary():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.10"
-    assert 'version="0.35.10"' in MAIN
-    assert "Corpus Viewer 0.35.10" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.12"
+    assert 'version="0.35.12"' in MAIN
+    assert "Corpus Viewer 0.35.12" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_uses_specific_users_and_language_icons():
@@ -76,12 +76,14 @@ def test_language_translation_is_a_background_job_with_clear_followup():
     assert "registerExternalJob" in LANGUAGES_VIEW
     assert "Runs in the background" in LANGUAGES_VIEW
     assert "Track it in Operations" in LANGUAGES_VIEW
-    assert "Start translation" in LANGUAGES_VIEW
+    assert "Translate & install" in LANGUAGES_VIEW
     assert 'body.task == "language_dictionary"' in JOBS
-    # Do not put the large translated dictionary back into the job result packet.
+    # The worker delegates to the bounded validator and keeps the large translated
+    # dictionary out of the job result packet.
     language_runner = JOBS[JOBS.index("def _run_language_dictionary"):JOBS.index("def _run(", JOBS.index("def _run_language_dictionary"))]
-    assert '"key_count": len(clean)' in language_runner
-    assert "return system_store.put_language" not in language_runner
+    assert "translate_english_dictionary(" in language_runner
+    assert "**stats" in language_runner
+    assert '"dictionary": clean' not in language_runner
 
 
 def test_record_badges_use_robust_flattening_and_history_clear_is_modernized():

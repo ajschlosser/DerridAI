@@ -20,7 +20,6 @@ from .chroma_store import ChromaStore
 from .config import settings
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm_tools import run_pdf_llm, run_rag_grade
-from .rag import chat_complete, _extract_json
 from .researcher_view import sanitize_rag_job, sanitize_records_payload, summarize_record
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .models import (
@@ -62,11 +61,12 @@ from .models import (
 )
 from .pdf_tools import extract_pdf_text
 from .system_store import system_store, normalize_locale_code
+from .i18n_translation import translate_english_dictionary
 from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.35.10")
+app = FastAPI(title="DerridAI Corpus API", version="0.35.12")
 
 app.add_middleware(
     CORSMiddleware,
@@ -480,46 +480,30 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
         code = normalize_locale_code(body.code)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if system_store.get_language(code) is not None:
+        raise HTTPException(status_code=409, detail=f"Locale {code} is already installed. Edit the existing dictionary or remove it before reinstalling.")
     base = system_store.get_language("en-US") or {"dictionary": {}}
     dictionary = dict(base.get("dictionary") or {})
     model = body.model or (settings.openai_compat_model if body.provider == "openai" else settings.ollama_model)
     if not model:
         raise HTTPException(status_code=400, detail="Select a model to translate the language dictionary.")
-    locale_style = (
-        "For fr-CA, use professional Canadian French as written in Québec: "
-        "follow Office québécois de la langue française (OQLF) terminology where applicable, "
-        "prefer natural Québec software-interface vocabulary, avoid France-only wording and "
-        "unnecessary English calques, and follow Canadian French typography. "
-        if code == "fr-CA" else ""
-    )
-    prompt = (
-        f"Translate every VALUE in this JSON object into locale {code}. "
-        + locale_style
-        + "Keep every key exactly unchanged. Preserve product names, placeholders such as {count}, "
-        + "technical acronyms such as API/RAG/LLM, punctuation, and concise inclusive UI tone. "
-        + "Return only one JSON object with exactly the same keys.\n\n"
-        + json.dumps(dictionary, ensure_ascii=False)
-    )
     try:
-        raw = chat_complete(
+        translated, _stats = translate_english_dictionary(
+            code=code,
+            dictionary=dictionary,
             provider=body.provider,
             model=model,
             base_url=body.base_url,
             api_key=body.api_key,
-            prompt=prompt,
-            options=body.generation,
-            json_mode=True,
-            max_tokens=max(2048, min(12000, len(json.dumps(dictionary)) * 2)),
+            generation=body.generation,
         )
-        translated = _extract_json(raw)
-        clean = {str(key): str(translated.get(key) or value) for key, value in dictionary.items()}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Language translation failed: {exc}") from exc
     return system_store.put_language(
         code,
         name=body.name or code,
         flag=body.flag or "🌐",
-        dictionary=clean,
+        dictionary=translated,
     )
 
 
@@ -1117,7 +1101,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.35.10",
+            "app_version": "0.35.12",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),

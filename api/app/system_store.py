@@ -889,15 +889,32 @@ DEFAULT_FR_CA.update({
     "record.clear_find_empty": "Saisissez une recherche avant de l’effacer.",
 })
 
-_LOCALE_RE = re.compile(r"^([A-Za-z]{2,3})-([A-Za-z]{2}|[0-9]{3})$")
+_LOCALE_RE = re.compile(
+    r"^(?P<language>[A-Za-z]{2,3})(?:-(?P<script>[A-Za-z]{4}))?(?:-(?P<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?P<variants>[A-Za-z0-9][A-Za-z0-9-]{0,24}))?$"
+)
 
 def normalize_locale_code(code: str) -> str:
-    value = str(code or "").strip()
+    """Normalize the common BCP 47 forms used for interface locales.
+
+    Supports language-only tags plus optional script, region, and variants, for
+    example ``de``, ``pt-BR`` and ``zh-Hant-TW``. The parser remains deliberately
+    conservative rather than accepting arbitrary private-use tags.
+    """
+    value = str(code or "").strip().replace("_", "-")
     match = _LOCALE_RE.fullmatch(value)
     if not match:
-        raise ValueError("Language code must use a language-location code such as en-US or fr-CA.")
-    language, region = match.groups()
-    return f"{language.lower()}-{region.upper() if region.isalpha() else region}"
+        raise ValueError("Language code must be a valid BCP 47 locale such as de-DE, pt-BR, or zh-Hant-TW.")
+    parts = [match.group("language").lower()]
+    script = match.group("script")
+    region = match.group("region")
+    variants = match.group("variants")
+    if script:
+        parts.append(script.title())
+    if region:
+        parts.append(region.upper() if region.isalpha() else region)
+    if variants:
+        parts.extend(part.lower() for part in variants.split("-") if part)
+    return "-".join(parts)
 
 
 DEFAULT_EN_US.update({"auth.session_expired":"Your session expired. Sign in again."})
@@ -1550,7 +1567,18 @@ class SystemStore:
         clean = {str(key): str(value) for key, value in dictionary.items() if str(key).strip()}
         with self._lock:
             data = self._read()
-            data.setdefault("languages", {})[code] = {"name": name.strip() or code, "flag": flag.strip() or "🌐", "dictionary": clean}
+            languages = data.setdefault("languages", {})
+            languages[code] = {"name": name.strip() or code, "flag": flag.strip() or "🌐", "dictionary": clean}
+            # en-US is the canonical key set. When an administrator introduces a
+            # new English key, make it immediately editable in every installed
+            # locale as an English fallback instead of waiting for a restart.
+            if code == "en-US":
+                for locale_code, language in languages.items():
+                    if locale_code == "en-US" or not isinstance(language, dict):
+                        continue
+                    target = language.setdefault("dictionary", {})
+                    for key, value in clean.items():
+                        target.setdefault(key, value)
             self._write(data)
         return self.get_language(code) or {}
 
@@ -4822,6 +4850,157 @@ DEFAULT_FR_CA.update({
     "faq.question_matches": "questions correspondantes",
     "faq.evidence_short": "preuves",
     "faq.current_response": "Réponse enregistrée affichée",
+})
+
+
+# 0.35.12 — Tongue Twister: localization studio, validated installs, and flag library.
+DEFAULT_EN_US.update({
+    "language.workspace_kicker": "Localization studio",
+    "language.page_description_modern": "Manage interface locales from one bilingual translation workspace. English is the canonical source; installed locales stay editable and auditable.",
+    "language.locales": "Locales",
+    "language.source_strings": "English strings",
+    "language.localization_summary": "Localization summary",
+    "language.locale_library": "Locale library",
+    "language.search_locales": "Search locales",
+    "language.no_locale_matches": "No installed locales match this search.",
+    "language.built_in": "Built-in",
+    "language.custom": "Custom",
+    "language.canonical_source": "Canonical source",
+    "language.translation_target": "Translation target",
+    "language.interface_strings": "interface strings",
+    "language.coverage": "Coverage",
+    "language.matches_english": "Matches English",
+    "language.missing": "Missing",
+    "language.unsaved_changes": "Unsaved changes",
+    "language.locale_identity": "Locale identity",
+    "language.locale_icon": "Locale icon",
+    "language.flag_library_help": "Choose from the country flag library or use the neutral globe for languages without a country-specific locale.",
+    "language.source_language": "Source language",
+    "language.source_language_help": "All installed translations are keyed to the canonical English interface set.",
+    "language.search_strings": "Search keys, English source, or translation…",
+    "language.translation_filters": "Translation filters",
+    "language.filled": "Filled",
+    "language.localized": "Localized",
+    "language.translation_editor": "Translation editor",
+    "language.key_context": "Key & context",
+    "language.english_source": "English source",
+    "language.english_value": "English value",
+    "language.english_fallback_note": "Currently matches the English source",
+    "language.no_string_matches": "No interface strings match these filters.",
+    "language.add_source_key": "Add canonical English key",
+    "language.add_source_key_help": "English defines the canonical key set. New keys become visible as English fallbacks in installed locales until translated.",
+    "language.description_record": "Record workspace text",
+    "language.install_dictionary_modern": "Translate & install locale",
+    "language.install_help_modern": "DerridAI translates the complete canonical English interface set first, validates every key and placeholder, then installs the locale only if translation succeeds.",
+    "language.english_source_set": "Source: English (U.S.)",
+    "language.source_key_count": "{count} interface strings will be translated.",
+    "language.canonical": "Canonical",
+    "language.identity_section_help_modern": "Use a BCP 47 locale code. Script-aware locales such as zh-Hant-TW are supported.",
+    "language.locale_code_help_modern": "Examples: de-DE, pt-BR, zh-Hant-TW.",
+    "language.translation_section_help_modern": "DerridAI checks the provider before starting. Translation runs in bounded batches so smaller local models do not receive the entire dictionary at once.",
+    "language.atomic_install": "Validated before installation",
+    "language.atomic_install_help": "Missing keys, damaged placeholders, truncated JSON, or an effectively untranslated response stop the install and produce a clear error.",
+    "language.background_translation_help_modern": "Progress remains visible here and in Operations. The locale appears only after the complete translation passes validation.",
+    "language.translate_install": "Translate & install",
+    "language.checking_provider": "Checking provider…",
+    "language.translation_started_modern": "Translation started. DerridAI is translating the complete English interface set before installing the locale.",
+    "language.translating_install": "Translating before installation",
+    "language.translation_in_progress": "Translating the canonical English dictionary…",
+    "language.translation_complete": "Language translated and installed.",
+    "language.translation_failed": "Translation failed.",
+    "language.translation_failed_detail": "The selected model/provider could not install this language: {message}",
+    "language.provider_unavailable": "The selected provider cannot be reached: {message}",
+    "language.provider_unavailable_short": "provider unavailable",
+    "language.locale_already_installed": "That locale is already installed. Select it from the locale list to edit it.",
+    "language.leave_install_title": "Leave language installation?",
+    "language.leave_install_help": "Manage provider profiles opens another page. Values entered in this installation form will be discarded.",
+    "language.leave_manage_providers": "Leave and manage providers",
+    "language.unsaved_title": "Save changes before switching locale?",
+    "language.unsaved_help": "This locale has unsaved dictionary or identity changes.",
+    "language.discard_switch": "Discard & switch",
+    "language.save_switch": "Save & switch",
+    "language.choose_flag": "Choose a country flag",
+    "language.flag_library": "Country flag library",
+    "language.search_flags": "Search countries…",
+    "language.no_country_flag": "No country flag",
+    "language.use_locale_region": "Use locale region",
+    "language.no_flag_matches": "No countries match this search.",
+    "ui.all": "All",
+    "ui.stay": "Stay here",
+})
+DEFAULT_FR_CA.update({
+    "language.workspace_kicker": "Studio de localisation",
+    "language.page_description_modern": "Gérez les paramètres régionaux de l’interface dans un même espace de traduction bilingue. L’anglais constitue la source canonique; les paramètres régionaux installés demeurent modifiables et vérifiables.",
+    "language.locales": "Paramètres régionaux",
+    "language.source_strings": "Chaînes anglaises",
+    "language.localization_summary": "Résumé de la localisation",
+    "language.locale_library": "Bibliothèque de paramètres régionaux",
+    "language.search_locales": "Rechercher des paramètres régionaux",
+    "language.no_locale_matches": "Aucun paramètre régional installé ne correspond à cette recherche.",
+    "language.built_in": "Intégré",
+    "language.custom": "Personnalisé",
+    "language.canonical_source": "Source canonique",
+    "language.translation_target": "Cible de traduction",
+    "language.interface_strings": "chaînes d’interface",
+    "language.coverage": "Couverture",
+    "language.matches_english": "Identique à l’anglais",
+    "language.missing": "Manquantes",
+    "language.unsaved_changes": "Modifications non enregistrées",
+    "language.locale_identity": "Identité du paramètre régional",
+    "language.locale_icon": "Icône du paramètre régional",
+    "language.flag_library_help": "Choisissez un drapeau dans la bibliothèque ou utilisez le globe neutre pour les langues sans paramètre régional propre à un pays.",
+    "language.source_language": "Langue source",
+    "language.source_language_help": "Toutes les traductions installées sont rattachées à l’ensemble canonique de l’interface anglaise.",
+    "language.search_strings": "Rechercher des clés, la source anglaise ou la traduction…",
+    "language.translation_filters": "Filtres de traduction",
+    "language.filled": "Renseignées",
+    "language.localized": "Localisées",
+    "language.translation_editor": "Éditeur de traduction",
+    "language.key_context": "Clé et contexte",
+    "language.english_source": "Source anglaise",
+    "language.english_value": "Valeur anglaise",
+    "language.english_fallback_note": "Correspond actuellement à la source anglaise",
+    "language.no_string_matches": "Aucune chaîne d’interface ne correspond à ces filtres.",
+    "language.add_source_key": "Ajouter une clé anglaise canonique",
+    "language.add_source_key_help": "L’anglais définit l’ensemble canonique des clés. Les nouvelles clés apparaissent comme valeurs anglaises de repli dans les paramètres régionaux installés jusqu’à leur traduction.",
+    "language.description_record": "Texte de l’espace de fiche",
+    "language.install_dictionary_modern": "Traduire et installer le paramètre régional",
+    "language.install_help_modern": "DerridAI traduit d’abord l’ensemble complet de l’interface anglaise canonique, valide chaque clé et chaque variable, puis n’installe le paramètre régional que si la traduction réussit.",
+    "language.english_source_set": "Source : anglais (États-Unis)",
+    "language.source_key_count": "{count} chaînes d’interface seront traduites.",
+    "language.canonical": "Canonique",
+    "language.identity_section_help_modern": "Utilisez une balise de langue BCP 47. Les paramètres régionaux avec écriture explicite, comme zh-Hant-TW, sont pris en charge.",
+    "language.locale_code_help_modern": "Exemples : de-DE, pt-BR, zh-Hant-TW.",
+    "language.translation_section_help_modern": "DerridAI vérifie le fournisseur avant de démarrer. La traduction s’effectue par lots bornés afin que les petits modèles locaux ne reçoivent pas tout le dictionnaire en une seule fois.",
+    "language.atomic_install": "Validation avant installation",
+    "language.atomic_install_help": "Une clé manquante, une variable endommagée, un JSON tronqué ou une réponse pratiquement non traduite interrompt l’installation et produit une erreur claire.",
+    "language.background_translation_help_modern": "La progression reste visible ici et dans Opérations. Le paramètre régional n’apparaît qu’une fois la traduction complète validée.",
+    "language.translate_install": "Traduire et installer",
+    "language.checking_provider": "Vérification du fournisseur…",
+    "language.translation_started_modern": "La traduction a démarré. DerridAI traduit l’ensemble complet de l’interface anglaise avant d’installer le paramètre régional.",
+    "language.translating_install": "Traduction avant installation",
+    "language.translation_in_progress": "Traduction du dictionnaire anglais canonique…",
+    "language.translation_complete": "Langue traduite et installée.",
+    "language.translation_failed": "Échec de la traduction.",
+    "language.translation_failed_detail": "Le modèle ou fournisseur sélectionné n’a pas pu installer cette langue : {message}",
+    "language.provider_unavailable": "Le fournisseur sélectionné est inaccessible : {message}",
+    "language.provider_unavailable_short": "fournisseur inaccessible",
+    "language.locale_already_installed": "Ce paramètre régional est déjà installé. Sélectionnez-le dans la liste pour le modifier.",
+    "language.leave_install_title": "Quitter l’installation de la langue?",
+    "language.leave_install_help": "La gestion des profils fournisseur ouvre une autre page. Les valeurs saisies dans ce formulaire d’installation seront perdues.",
+    "language.leave_manage_providers": "Quitter et gérer les fournisseurs",
+    "language.unsaved_title": "Enregistrer les modifications avant de changer de paramètre régional?",
+    "language.unsaved_help": "Ce paramètre régional comporte des modifications non enregistrées au dictionnaire ou à son identité.",
+    "language.discard_switch": "Ignorer et changer",
+    "language.save_switch": "Enregistrer et changer",
+    "language.choose_flag": "Choisir un drapeau de pays",
+    "language.flag_library": "Bibliothèque de drapeaux de pays",
+    "language.search_flags": "Rechercher des pays…",
+    "language.no_country_flag": "Aucun drapeau de pays",
+    "language.use_locale_region": "Utiliser la région du paramètre régional",
+    "language.no_flag_matches": "Aucun pays ne correspond à cette recherche.",
+    "ui.all": "Tout",
+    "ui.stay": "Rester ici",
 })
 
 system_store = SystemStore()

@@ -62,11 +62,15 @@ const breadcrumbForwardLabel=computed(()=>nativeForwardPath.value?i18n.t("ui.for
 function invoke(action:()=>unknown){return action()}
 function chooseFiles(){if(auth.isAdmin)fileInput.value?.click()}
 function onFiles(event:Event){if(!auth.isAdmin)return;const input=event.target as HTMLInputElement;if(input.files?.length)runtime.triggerImport(input.files);input.value=""}
-function navigateNative(path:string){
+function navigateNative(path:string,legacyView?:string){
   const current=router.currentRoute.value.fullPath;
   if(current===path)return;
   nativeBackPath.value=current;
   nativeForwardPath.value=null;
+  if(legacyView){
+    runtime.navigateView(legacyView);
+    return;
+  }
   void router.push(path);
 }
 function goBreadcrumbBack(){
@@ -157,7 +161,7 @@ async function handleAuthExpired(){
 
 onMounted(async()=>{
   window.addEventListener("derridai-auth-expired",()=>{void handleAuthExpired()});
-  window.addEventListener("derridai:navigate-native",((event:Event)=>{const path=(event as CustomEvent<{path?:string}>).detail?.path;if(path)navigateNative(path)}) as EventListener);
+  window.addEventListener("derridai:navigate-native",((event:Event)=>{const detail=(event as CustomEvent<{path?:string;legacyView?:string}>).detail||{};if(detail.path)navigateNative(detail.path,detail.legacyView)}) as EventListener);
   window.addEventListener("keydown",(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==="k"){event.preventDefault();commandSearch.value?.focus()}});
   // Authentication must be resolved before protected runtime bootstrap. The
   // read-only language endpoints are public so the sign-in screen can still be
@@ -199,7 +203,7 @@ watch(()=>auth.user?.id,(id)=>{
       <nav class="vue-breadcrumb v030-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="v030-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
       <div v-if="auth.isAdmin&&s.files.length" class="file-tabs v030-file-tabs"><div v-for="file in s.files" :key="file.id" class="tab" :class="{active:file.active}" @click="runtime.activateFile(file.id)"><span v-if="file.dirty" class="dot"></span><span class="tn">{{file.name}}</span><span class="badge">{{file.count.toLocaleString(i18n.locale)}}</span><button class="x" :title="i18n.t('ui.close_file','Close file')" @click="closeFile($event,file.id)">×</button></div></div>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
-      <footer class="app-footer">© 2026 The New England Transcendentalist Club of California · DerridAI 0.35.10</footer>
+      <footer class="app-footer">© 2026 The New England Transcendentalist Club of California · DerridAI 0.35.12</footer>
     </section>
   </div>
   <div id="toast" class="toast"></div>

@@ -13,9 +13,10 @@ from typing import Any
 from .llm import TouchupFailure, propose_touchup
 from .chroma_store import ChromaStore
 from .models import LLMJobCreate, LLMToolJobCreate, RAGGradeRequest, RAGRunRequest, UpsertJobCreate
-from .rag import run_rag_pipeline, chat_complete, _extract_json
+from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
 from .system_store import system_store, normalize_locale_code
+from .i18n_translation import translate_english_dictionary
 
 
 def iso_now() -> str:
@@ -1315,6 +1316,9 @@ class LLMToolJobManager:
                 raise ValueError("The response cache does not contain any RAG responses to grade.")
         elif body.task == "work_metadata":
             total = len(body.work_metadata.works)
+        elif body.task == "language_dictionary":
+            base = system_store.get_language("en-US") or {"dictionary": {}}
+            total = len(base.get("dictionary") or {})
 
         job_id = str(uuid.uuid4())
         label = body.label or {
@@ -1436,50 +1440,62 @@ class LLMToolJobManager:
         assert body.language is not None
         config = body.language
         code = normalize_locale_code(config.code)
+        if system_store.get_language(code) is not None:
+            raise ValueError(f"Locale {code} is already installed. Edit the existing dictionary or remove it before reinstalling.")
         base = system_store.get_language("en-US") or {"dictionary": {}}
         dictionary = dict(base.get("dictionary") or {})
-        model = str(config.model or "").strip()
+
+        # Provider profiles keep API keys write-only in the browser. Resolve the
+        # selected profile again on the server so translation jobs can use a
+        # stored secret without ever sending it back to the client.
+        stored_profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
+        provider = str((stored_profile or {}).get("type") or config.provider)
+        model = str(config.model or (stored_profile or {}).get("model") or "").strip()
+        base_url = config.base_url or (stored_profile or {}).get("base_url")
+        api_key = config.api_key or (stored_profile or {}).get("api_key")
         if not model:
             raise ValueError("Select a model to translate the language dictionary.")
-        with self._lock:
-            job = self._jobs[job_id]
-            job["stage"] = "translation"
-            job["stage_detail"] = f"Translating {len(dictionary):,} interface strings to {code}"
-        locale_style = (
-            "For fr-CA, use professional Canadian French as written in Québec: "
-            "follow Office québécois de la langue française (OQLF) terminology where applicable, "
-            "prefer natural Québec software-interface vocabulary, avoid France-only wording and "
-            "unnecessary English calques, and follow Canadian French typography. "
-            if code == "fr-CA" else ""
+
+        def cancelled() -> bool:
+            with self._lock:
+                return bool(self._jobs[job_id]["cancel_requested"])
+
+        def translation_progress(completed: int, total: int, detail: str) -> None:
+            with self._lock:
+                job = self._jobs[job_id]
+                job["completed"] = completed
+                job["total"] = total
+                job["stage"] = "translation"
+                job["stage_detail"] = detail
+                if completed == 0 or completed == total or completed % 250 == 0:
+                    job["events"].append({
+                        "timestamp": iso_now(),
+                        "stage": "translation",
+                        "detail": detail,
+                    })
+
+        clean, stats = translate_english_dictionary(
+            code=code,
+            dictionary=dictionary,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            generation=config.generation,
+            cancelled=cancelled,
+            progress=translation_progress,
         )
-        prompt = (
-            f"Translate every VALUE in this JSON object into locale {code}. "
-            + locale_style
-            + "Keep every key exactly unchanged. Preserve product names, placeholders such as {count}, "
-            + "technical acronyms such as API/RAG/LLM, punctuation, and concise inclusive UI tone. "
-            + "Return only one JSON object with exactly the same keys.\n\n"
-            + __import__("json").dumps(dictionary, ensure_ascii=False)
-        )
-        raw = chat_complete(
-            provider=config.provider, model=model, base_url=config.base_url, api_key=config.api_key,
-            prompt=prompt, options=config.generation, json_mode=True,
-            max_tokens=max(2048, min(12000, len(__import__("json").dumps(dictionary)) * 2)),
-        )
-        translated = _extract_json(raw)
-        clean = {str(key): str(translated.get(key) or value) for key, value in dictionary.items()}
         saved = system_store.put_language(
             code,
             name=config.name or code,
             flag=config.flag or "🌐",
             dictionary=clean,
         )
-        # The dictionary itself can be large. The job packet only needs enough
-        # information for the client to refresh the language list.
         return {
             "code": str(saved.get("code") or code),
             "name": str(saved.get("name") or config.name or code),
             "flag": str(saved.get("flag") or config.flag or "🌐"),
-            "key_count": len(clean),
+            **stats,
         }
 
     def _run(self, job_id: str, body: LLMToolJobCreate) -> None:
@@ -1545,9 +1561,9 @@ class LLMToolJobManager:
                         job["stage_detail"] = "Cancelled"
                     else:
                         job["status"] = "completed"
-                        if body.task not in {"rag_grade_batch", "work_metadata"}:
+                        if body.task not in {"rag_grade_batch", "work_metadata", "language_dictionary"}:
                             job["completed"] = 1
-                        elif body.task == "work_metadata":
+                        elif body.task in {"work_metadata", "language_dictionary"}:
                             job["completed"] = job["total"]
                         job["stage"] = "completed"
                         if body.task == "rag_grade_batch":

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { systemApi, type LanguageDictionary, type LanguageInfo, type ProviderProfile } from "../api/system";
+import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../legacy/runtime.js";
 import LanguageFlag from "../components/LanguageFlag.vue";
 import ProviderProfileSelect from "../components/ProviderProfileSelect.vue";
+import CountryFlagPicker from "../components/CountryFlagPicker.vue";
+import LanguageWorkspaceHeader from "../components/LanguageWorkspaceHeader.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const i18n = useI18nStore();
 const languages = ref<LanguageInfo[]>([]);
@@ -18,22 +22,84 @@ const saving = ref(false);
 const installing = ref(false);
 const error = ref("");
 const installOpen = ref(false);
-const installTrigger = ref<HTMLButtonElement | null>(null);
+const manageProvidersConfirm = ref(false);
+const headerRef = ref<InstanceType<typeof LanguageWorkspaceHeader> | null>(null);
 const installCodeInput = ref<HTMLInputElement | null>(null);
+const installDialog = ref<HTMLElement | null>(null);
+const manageProvidersDialog = ref<HTMLElement | null>(null);
+const unsavedDialog = ref<HTMLElement | null>(null);
+const deleteDialog = ref<HTMLElement | null>(null);
+let confirmationReturnFocus: HTMLElement | null = null;
 const pendingDelete = ref<LanguageInfo | null>(null);
+const pendingLocaleCode = ref("");
+const localeQuery = ref("");
+const keyQuery = ref("");
+const statusFilter = ref<"all" | "localized" | "english" | "missing">("all");
 const install = ref({ code: "", name: "", flag: "🌐" });
+const installAutoName = ref("");
+const installFlagTouched = ref(false);
 const newKey = ref("");
 const newValue = ref("");
+const baseline = ref("");
+const installJob = ref<JobSummary | null>(null);
+let installPollTimer = 0;
 
-const rows = computed(() => Object.entries(current.value?.dictionary || {}).sort(([a], [b]) => a.localeCompare(b)));
 const selectedProvider = computed(() => providerProfiles.value.find(item => item.id === selectedProviderId.value) || providerProfiles.value[0] || null);
+const isCanonical = computed(() => current.value?.code === "en-US");
+const allKeys = computed(() => {
+  const keys = new Set<string>([...Object.keys(referenceDictionary.value), ...Object.keys(current.value?.dictionary || {})]);
+  return [...keys].sort((a, b) => a.localeCompare(b));
+});
+const rows = computed(() => allKeys.value.map(key => [key, current.value?.dictionary?.[key] || ""] as const));
+const stats = computed(() => {
+  const total = rows.value.length;
+  let missing = 0;
+  let matchesEnglish = 0;
+  let localized = 0;
+  for (const [key, value] of rows.value) {
+    if (!value.trim()) missing += 1;
+    else if (!isCanonical.value && value.trim() === sourceValue(key).trim()) matchesEnglish += 1;
+    else localized += 1;
+  }
+  return { total, missing, matchesEnglish, localized, coverage: total ? Math.round(((total - missing) / total) * 100) : 0 };
+});
+const filteredRows = computed(() => {
+  const needle = keyQuery.value.trim().toLocaleLowerCase(i18n.locale);
+  return rows.value.filter(([key, value]) => {
+    const source = sourceValue(key);
+    const matchesSearch = !needle || key.toLocaleLowerCase(i18n.locale).includes(needle) || source.toLocaleLowerCase(i18n.locale).includes(needle) || value.toLocaleLowerCase(i18n.locale).includes(needle);
+    if (!matchesSearch) return false;
+    if (statusFilter.value === "missing") return !value.trim();
+    if (statusFilter.value === "english") return !isCanonical.value && Boolean(value.trim()) && value.trim() === source.trim();
+    if (statusFilter.value === "localized") return isCanonical.value ? Boolean(value.trim()) : Boolean(value.trim()) && value.trim() !== source.trim();
+    return true;
+  });
+});
+const filteredLanguages = computed(() => {
+  const needle = localeQuery.value.trim().toLocaleLowerCase(i18n.locale);
+  if (!needle) return languages.value;
+  return languages.value.filter(item => item.code.toLowerCase().includes(needle) || item.name.toLocaleLowerCase(i18n.locale).includes(needle));
+});
+const dirty = computed(() => Boolean(current.value) && snapshotCurrent() !== baseline.value);
+const installProgress = computed(() => {
+  const total = Number(installJob.value?.total || 0);
+  const completed = Number(installJob.value?.completed || 0);
+  return total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+});
+const installCodeExists = computed(() => {
+  const candidate = install.value.code.trim().replaceAll("_", "-").toLowerCase();
+  return Boolean(candidate) && languages.value.some(item => item.code.replaceAll("_", "-").toLowerCase() === candidate);
+});
 
 function flagFor(code: string, fallback = "🌐") {
   if (code === "en-US") return "🇺🇸";
   if (code === "fr-CA") return "🇨🇦";
   return fallback || "🌐";
 }
-
+function snapshotCurrent() {
+  if (!current.value) return "";
+  return JSON.stringify({ name: current.value.name, flag: current.value.flag, dictionary: current.value.dictionary });
+}
 function describeKey(key: string) {
   const [prefix] = key.split(".");
   const kind: Record<string, string> = {
@@ -43,17 +109,31 @@ function describeKey(key: string) {
     language: i18n.t("language.description_language", "Language-settings interface text"),
     research: i18n.t("language.description_research", "Research workspace text"),
     rag: i18n.t("language.description_rag", "Research and RAG workflow text"),
+    record: i18n.t("language.description_record", "Record workspace text"),
     section: i18n.t("language.description_section", "Section heading"),
     role: i18n.t("language.description_role", "Role label"),
     app: i18n.t("language.description_app", "Application identity text"),
   };
   return kind[prefix] || i18n.t("language.description_generic", "Interface text");
 }
-
 function sourceValue(key: string) {
-  return referenceDictionary.value[key] || "";
+  return isCanonical.value ? (current.value?.dictionary?.[key] || referenceDictionary.value[key] || "") : (referenceDictionary.value[key] || "");
 }
-
+function localeDisplayName(code: string) {
+  try { return new Intl.DisplayNames([i18n.locale], { type: "language" }).of(code) || code; }
+  catch { return code; }
+}
+function regionFlagForLocale(code: string) {
+  try {
+    const region = new Intl.Locale(code.replaceAll("_", "-")).region;
+    if (!region || !/^[A-Z]{2}$/i.test(region)) return "🌐";
+    return region.toUpperCase().replace(/[A-Z]/g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
+  } catch { return "🌐"; }
+}
+function setInstallFlag(value: string) {
+  install.value.flag = value;
+  installFlagTouched.value = true;
+}
 function refreshProviderProfiles() {
   providerProfiles.value = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
   const preferred = runtime.getDefaultProviderProfileId?.() || "";
@@ -61,31 +141,53 @@ function refreshProviderProfiles() {
     selectedProviderId.value = providerProfiles.value.some(item => item.id === preferred) ? preferred : (providerProfiles.value[0]?.id || "");
   }
 }
-
 async function refreshLanguages() {
   const data = await systemApi.languages();
-  languages.value = data.languages.map(item => ({...item, flag: flagFor(item.code, item.flag)}));
+  languages.value = data.languages.map(item => ({ ...item, flag: flagFor(item.code, item.flag) }));
   if (!languages.value.some(item => item.code === selectedCode.value)) selectedCode.value = languages.value[0]?.code || "en-US";
 }
-
 async function load(code = selectedCode.value) {
   loading.value = true;
   error.value = "";
   try {
     selectedCode.value = code;
     const value = await systemApi.language(code);
-    current.value = {...value, flag: flagFor(value.code, value.flag)};
+    current.value = { ...value, flag: flagFor(value.code, value.flag) };
+    baseline.value = snapshotCurrent();
+    keyQuery.value = "";
+    statusFilter.value = "all";
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally { loading.value = false; }
 }
-
+function rememberConfirmationFocus() {
+  confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+}
+function restoreConfirmationFocus() {
+  const target = confirmationReturnFocus;
+  confirmationReturnFocus = null;
+  if (target?.isConnected) target.focus();
+}
+async function focusDialog(root: HTMLElement | null) {
+  await nextTick();
+  root?.querySelector<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')?.focus();
+}
+function requestLoad(code: string) {
+  if (code === selectedCode.value) return;
+  if (dirty.value) { rememberConfirmationFocus(); pendingLocaleCode.value = code; return; }
+  void load(code);
+}
+function discardAndSwitch() {
+  const code = pendingLocaleCode.value;
+  pendingLocaleCode.value = "";
+  if (code) void load(code);
+}
 function updateValue(key: string, value: string) {
   if (!current.value) return;
   current.value = { ...current.value, dictionary: { ...current.value.dictionary, [key]: value } };
 }
 function addDictionaryEntry() {
-  if (!current.value) return;
+  if (!current.value || !isCanonical.value) return;
   const key = newKey.value.trim();
   if (!key) return;
   current.value = { ...current.value, dictionary: { ...current.value.dictionary, [key]: newValue.value } };
@@ -93,14 +195,13 @@ function addDictionaryEntry() {
   newValue.value = "";
 }
 function removeDictionaryEntry(key: string) {
-  if (!current.value) return;
-  const next = {...current.value.dictionary};
+  if (!current.value || !isCanonical.value) return;
+  const next = { ...current.value.dictionary };
   delete next[key];
-  current.value = {...current.value, dictionary: next};
+  current.value = { ...current.value, dictionary: next };
 }
-
 async function save() {
-  if (!current.value) return;
+  if (!current.value) return false;
   saving.value = true;
   error.value = "";
   try {
@@ -109,13 +210,22 @@ async function save() {
       flag: flagFor(current.value.code, current.value.flag),
       dictionary: current.value.dictionary,
     });
+    if (current.value.code === "en-US") referenceDictionary.value = { ...current.value.dictionary };
+    baseline.value = snapshotCurrent();
     await refreshLanguages();
     if (i18n.locale === current.value.code) await i18n.setLocale(current.value.code);
-    runtime.notifyToast?.(i18n.t("language.saved", "Language dictionary saved."), {tone: "success"});
-  } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
+    runtime.notifyToast?.(i18n.t("language.saved", "Language dictionary saved."), { tone: "success" });
+    return true;
+  } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); return false; }
   finally { saving.value = false; }
 }
-
+async function saveAndSwitch() {
+  const code = pendingLocaleCode.value;
+  if (await save()) {
+    pendingLocaleCode.value = "";
+    if (code) await load(code);
+  }
+}
 function providerGeneration(profile: ProviderProfile) {
   const value = (key: string) => profile[key] as any;
   return {
@@ -134,22 +244,43 @@ function providerGeneration(profile: ProviderProfile) {
     keep_alive: value("keep_alive") || undefined,
   };
 }
-
+async function monitorInstall(jobId: string) {
+  window.clearTimeout(installPollTimer);
+  try {
+    const job = await jobsApi.get(jobId);
+    installJob.value = job;
+    if (["completed", "failed", "cancelled"].includes(job.status)) {
+      if (job.status === "completed") {
+        await refreshLanguages();
+        await i18n.loadLanguages();
+        const code = String(job.result?.code || install.value.code || "");
+        if (code) await load(code);
+        runtime.notifyToast?.(i18n.t("language.translation_complete", "Language translated and installed."), { tone: "success" });
+      } else if (job.status === "failed") {
+        error.value = i18n.tf("language.translation_failed_detail", "The selected model/provider could not install this language: {message}", { message: job.stage_detail || i18n.t("language.translation_failed", "Translation failed.") });
+      }
+      return;
+    }
+    installPollTimer = window.setTimeout(() => void monitorInstall(jobId), 1200);
+  } catch (exc) {
+    installPollTimer = window.setTimeout(() => void monitorInstall(jobId), 2000);
+  }
+}
 async function installLanguage() {
   const profile = selectedProvider.value;
-  if (!profile) {
-    error.value = i18n.t("language.provider_profile_required", "Configure an LLM provider profile before installing a dictionary.");
-    return;
-  }
+  if (!profile) { error.value = i18n.t("language.provider_profile_required", "Configure an LLM provider profile before installing a dictionary."); return; }
+  if (installCodeExists.value) { error.value = i18n.t("language.locale_already_installed", "That locale is already installed. Select it from the locale list to edit it."); return; }
   installing.value = true;
   error.value = "";
   try {
     const model = String(profile.model || "").trim();
     if (!model) throw new Error(i18n.t("language.provider_model_required", "The selected provider profile does not have a model configured."));
+    const status = await systemApi.researcherProviderStatus({ id: profile.id, type: profile.type, base_url: profile.base_url || undefined, api_key: profile.api_key || undefined });
+    if (!status.available) throw new Error(i18n.tf("language.provider_unavailable", "The selected provider cannot be reached: {message}", { message: status.error || i18n.t("language.provider_unavailable_short", "provider unavailable") }));
     const created = await systemApi.installLanguage({
       code: install.value.code.trim(),
-      name: install.value.name.trim() || install.value.code.trim(),
-      flag: install.value.flag.trim() || "🌐",
+      name: install.value.name.trim() || localeDisplayName(install.value.code.trim()),
+      flag: install.value.flag.trim() || regionFlagForLocale(install.value.code) || "🌐",
       provider: profile.type,
       model,
       base_url: profile.base_url || undefined,
@@ -159,15 +290,26 @@ async function installLanguage() {
       max_concurrent_requests: profile.max_concurrent_requests || 1,
     });
     installOpen.value = false;
-    install.value = { code: "", name: "", flag: "🌐" };
+    installJob.value = created;
     runtime.registerExternalJob?.(created);
-    runtime.notifyToast?.(i18n.t("language.translation_started", "Translation started in the background. Track progress in Operations; the new language will appear when the job finishes."), {tone: "success"});
+    runtime.notifyToast?.(i18n.t("language.translation_started_modern", "Translation started. DerridAI is translating the complete English interface set before installing the locale."), { tone: "success" });
+    void monitorInstall(created.id);
+    install.value = { code: "", name: "", flag: "🌐" };
+    installAutoName.value = "";
+    installFlagTouched.value = false;
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { installing.value = false; }
 }
-
-async function removeLanguage(item: LanguageInfo) {
+function requestManageProviders() { rememberConfirmationFocus(); manageProvidersConfirm.value = true; }
+function confirmManageProviders() {
+  confirmationReturnFocus = null;
+  manageProvidersConfirm.value = false;
+  installOpen.value = false;
+  window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path: "/providers", legacyView: "providers" } }));
+}
+function removeLanguage(item: LanguageInfo) {
   if (["en-US", "fr-CA"].includes(item.code)) return;
+  rememberConfirmationFocus();
   pendingDelete.value = item;
 }
 async function confirmRemoveLanguage() {
@@ -177,10 +319,18 @@ async function confirmRemoveLanguage() {
     await systemApi.deleteLanguage(item.code);
     pendingDelete.value = null;
     await refreshLanguages();
-    await load(languages.value[0]?.code || "en-US");
     await i18n.loadLanguages();
-    runtime.notifyToast?.(i18n.t("language.removed", "Language removed."), {tone: "success"});
+    await load(languages.value[0]?.code || "en-US");
+    runtime.notifyToast?.(i18n.t("language.removed", "Language removed."), { tone: "success" });
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
+}
+function trapFocus(event: KeyboardEvent, root: HTMLElement | null) {
+  if (event.key !== "Tab" || !root) return;
+  const focusable = [...root.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')].filter(el => !el.hasAttribute("hidden"));
+  if (!focusable.length) return;
+  const first = focusable[0]; const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 }
 
 watch(installOpen, async open => {
@@ -188,7 +338,36 @@ watch(installOpen, async open => {
     refreshProviderProfiles();
     await nextTick();
     installCodeInput.value?.focus();
-  } else installTrigger.value?.focus();
+  } else if (!manageProvidersConfirm.value) headerRef.value?.focusInstall?.();
+});
+
+watch(manageProvidersConfirm, async open => {
+  if (open) await focusDialog(manageProvidersDialog.value);
+  else if (installOpen.value) restoreConfirmationFocus();
+});
+watch(pendingLocaleCode, async code => {
+  if (code) await focusDialog(unsavedDialog.value);
+  else restoreConfirmationFocus();
+});
+watch(pendingDelete, async item => {
+  if (item) await focusDialog(deleteDialog.value);
+  else restoreConfirmationFocus();
+});
+
+watch(() => install.value.code, code => {
+  const value = code.trim();
+  if (!value) {
+    if (install.value.name === installAutoName.value) install.value.name = "";
+    installAutoName.value = "";
+    if (!installFlagTouched.value) install.value.flag = "🌐";
+    return;
+  }
+  const suggestedName = localeDisplayName(value);
+  if (!install.value.name.trim() || install.value.name === installAutoName.value) {
+    install.value.name = suggestedName;
+    installAutoName.value = suggestedName;
+  }
+  if (!installFlagTouched.value) install.value.flag = regionFlagForLocale(value);
 });
 
 onMounted(async () => {
@@ -200,87 +379,104 @@ onMounted(async () => {
     await load(selectedCode.value);
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); loading.value = false; }
 });
+onUnmounted(() => window.clearTimeout(installPollTimer));
 </script>
 
 <template>
-  <main class="vue-native-page languages-page">
-    <section class="page-heading">
-      <div><p>{{ i18n.t("section.system", "System") }}</p><h1>{{ i18n.t("language.page_title", "Languages & internationalization") }}</h1><span>{{ i18n.t("language.page_description", "Built-in locales are U.S. English and Canadian French (Québec). Install additional locale dictionaries with a configured LLM provider profile, then review every translated UI string directly.") }}</span></div>
-      <button ref="installTrigger" class="btn primary" @click="installOpen = true">{{ i18n.t("language.install", "Install language") }}</button>
+  <main class="vue-native-page languages-page language-studio">
+    <LanguageWorkspaceHeader ref="headerRef" :language-count="languages.length" :key-count="Object.keys(referenceDictionary).length" @install="installOpen = true" />
+
+    <div v-if="error" class="language-alert error" role="alert"><AppIcon name="warning"/><span>{{ error }}</span><button type="button" :aria-label="i18n.t('ui.close','Close')" @click="error=''">×</button></div>
+    <section v-if="installJob && !['completed','failed','cancelled'].includes(installJob.status)" class="translation-progress-card" aria-live="polite">
+      <div class="translation-progress-icon"><span class="spinner"></span></div>
+      <div><b>{{ i18n.t("language.translating_install", "Translating before installation") }}</b><span>{{ installJob.stage_detail || i18n.t("language.translation_in_progress", "Translating the canonical English dictionary…") }}</span><div class="translation-progress-track"><i :style="{width:`${installProgress}%`}"></i></div></div>
+      <div class="translation-progress-actions"><strong>{{ installProgress }}%</strong><button type="button" class="btn tiny" @click="runtime.triggerOperations?.()">{{ i18n.t("language.track_operations", "Track it in Operations") }}</button></div>
     </section>
-    <div v-if="error" class="info error">{{ error }}</div>
 
-    <Teleport to="body">
-      <div v-if="installOpen" class="workflow-overlay" role="presentation" @mousedown.self="installOpen=false" @keydown.esc.stop.prevent="installOpen=false">
-        <section class="workflow-dialog language-install-dialog" role="dialog" aria-modal="true" aria-labelledby="language-install-title">
-          <header class="workflow-dialog-header">
-            <div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary", "Install translated dictionary") }}</h2><span>{{ i18n.t("language.install_help", "Translate the canonical English interface dictionary with one of the same provider profiles used elsewhere in DerridAI. Dictionary keys remain unchanged.") }}</span></div></div>
-            <button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="installOpen=false">×</button>
-          </header>
-
-          <ol class="workflow-steps" :aria-label="i18n.t('language.install_steps','Installation steps')"><li class="active"><span>1</span><b>{{ i18n.t("language.step_identity","Language") }}</b></li><li class="active"><span>2</span><b>{{ i18n.t("language.step_provider","Provider profile") }}</b></li><li><span>3</span><b>{{ i18n.t("language.step_review","Install") }}</b></li></ol>
-
-          <form class="workflow-form" @submit.prevent="installLanguage">
-            <section class="workflow-section">
-              <div class="workflow-section-copy"><b>{{ i18n.t("language.identity_section","Language identity") }}</b><span>{{ i18n.t("language.identity_section_help","Choose the locale code and the label people will see in the language picker.") }}</span></div>
-              <div class="workflow-fields workflow-identity-fields">
-                <label class="workflow-field"><span>{{ i18n.t("language.locale_code","Locale code") }}</span><input ref="installCodeInput" v-model="install.code" class="control" required autocomplete="off" spellcheck="false" placeholder="de-DE"><small>{{ i18n.t("language.locale_code_help","BCP 47 locale identifier, for example de-DE or es-MX.") }}</small></label>
-                <label class="workflow-field"><span>{{ i18n.t("language.name","Display name") }}</span><input v-model="install.name" class="control" autocomplete="off" placeholder="Deutsch (Deutschland)"><small>{{ i18n.t("language.name_help","Human-readable language name shown in the picker.") }}</small></label>
-                <label class="workflow-field"><span>{{ i18n.t("language.flag","Flag / symbol") }}</span><div class="language-symbol-control"><span class="language-symbol-preview">{{ install.flag || '🌐' }}</span><input v-model="install.flag" class="control" maxlength="32"></div><small>{{ i18n.t("language.flag_help","Unicode emoji or symbol shown beside the locale name.") }}</small></label>
-              </div>
-            </section>
-
-            <section class="workflow-section">
-              <div class="workflow-section-copy"><b>{{ i18n.t("language.translation_section","Translation provider") }}</b><span>{{ i18n.t("language.translation_section_help","Use an existing LLM provider profile so model, endpoint, credentials, and generation defaults stay consistent with the rest of DerridAI.") }}</span></div>
-              <div class="workflow-provider-area">
-                <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('language.provider_profile','Provider profile')" :help="i18n.t('language.provider_profile_help','Uses the same provider profiles and model defaults as Research, PDF tools, and LLM review.')" :empty-title="i18n.t('language.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('language.no_provider_profiles_help','Create a provider profile first, then return here to translate a dictionary.')" :manage-label="i18n.t('language.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('language.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('language.concurrent_requests','max concurrent request(s)')" @manage="runtime.navigateView('providers'); installOpen=false" />
-              </div>
-            </section>
-
-            <section class="workflow-next-steps" :aria-label="i18n.t('language.what_happens_next','What happens next')">
-              <div class="workflow-next-step"><span class="workflow-step-icon">1</span><div><b>{{ i18n.t("language.background_translation","Runs in the background") }}</b><small>{{ i18n.t("language.background_translation_help","You can close this window immediately and continue working.") }}</small></div></div>
-              <div class="workflow-next-step"><span class="workflow-step-icon">2</span><div><b>{{ i18n.t("language.track_operations","Track it in Operations") }}</b><small>{{ i18n.t("language.track_operations_help","Progress and failures appear with other background jobs.") }}</small></div></div>
-              <div class="workflow-next-step"><span class="workflow-step-icon">3</span><div><b>{{ i18n.t("language.review_after","Review after completion") }}</b><small>{{ i18n.t("language.review_after_help","The installed dictionary will appear here when translation finishes; review and edit any field normally.") }}</small></div></div>
-            </section>
-
-            <footer class="workflow-actions"><button type="button" class="btn" @click="installOpen=false">{{ i18n.t("ui.cancel","Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider">{{ installing ? i18n.t("language.starting","Starting…") : i18n.t("language.start_translation","Start translation") }}</button></footer>
-          </form>
-        </section>
-      </div>
-    </Teleport>
-
-    <section class="language-layout">
-      <aside class="card language-list-card">
-        <div class="cardhead"><div><b>{{ i18n.t("language.installed", "Installed locales") }}</b><div class="note">{{ languages.length }} {{ i18n.t("language.locale_count", languages.length === 1 ? "language" : "languages") }}</div></div></div>
-        <div v-for="item in languages" :key="item.code" class="language-row" :class="{active: item.code === selectedCode}" role="button" tabindex="0" @click="load(item.code)" @keydown.enter="load(item.code)">
-          <LanguageFlag :code="item.code" :symbol="flagFor(item.code,item.flag)" :label="item.name" /><span><b>{{ item.name }}</b><small>{{ item.code }}</small></span>
-          <button v-if="!['en-US','fr-CA'].includes(item.code)" class="btn tiny danger" type="button" @click.stop="removeLanguage(item)">{{ i18n.t("ui.remove", "Remove") }}</button>
+    <section class="language-studio-grid">
+      <aside class="language-locale-rail" :aria-label="i18n.t('language.installed','Installed locales')">
+        <div class="language-rail-head"><div><p>{{ i18n.t("language.locale_library", "Locale library") }}</p><h2>{{ i18n.t("language.installed", "Installed locales") }}</h2></div><span>{{ languages.length }}</span></div>
+        <label class="language-search-field"><span class="sr-only">{{ i18n.t("language.search_locales", "Search locales") }}</span><AppIcon name="search"/><input v-model="localeQuery" type="search" :placeholder="i18n.t('language.search_locales','Search locales')"></label>
+        <div class="language-locale-list">
+          <button v-for="item in filteredLanguages" :key="item.code" type="button" class="language-locale-card" :class="{active:item.code===selectedCode}" :aria-current="item.code===selectedCode?'page':undefined" @click="requestLoad(item.code)">
+            <LanguageFlag :code="item.code" :symbol="flagFor(item.code,item.flag)" :label="item.name" size="large" />
+            <span class="language-locale-copy"><b>{{ item.name }}</b><small>{{ item.code }}</small></span>
+            <span v-if="['en-US','fr-CA'].includes(item.code)" class="locale-kind">{{ i18n.t("language.built_in", "Built-in") }}</span>
+            <span v-else class="locale-kind custom">{{ i18n.t("language.custom", "Custom") }}</span>
+          </button>
+          <p v-if="!filteredLanguages.length" class="language-empty-list">{{ i18n.t("language.no_locale_matches", "No installed locales match this search.") }}</p>
         </div>
       </aside>
 
-      <section class="card language-editor-card">
-        <div v-if="loading" class="loading-state"><span class="spinner"></span>{{ i18n.t("ui.loading_dictionary", "Loading dictionary…") }}</div>
+      <section class="language-editor-workspace" aria-live="polite">
+        <div v-if="loading" class="language-loading"><span class="spinner"></span>{{ i18n.t("ui.loading_dictionary", "Loading dictionary…") }}</div>
         <template v-else-if="current">
-          <div class="cardhead"><div><b class="language-editor-title"><LanguageFlag :code="current.code" :symbol="flagFor(current.code,current.flag)" :label="current.name" /> {{ current.name }}</b><div class="note">{{ current.code }} · {{ rows.length }} {{ i18n.t("language.translated_keys", "translated keys") }}</div></div><button class="btn primary" :disabled="saving" @click="save">{{ saving ? i18n.t("ui.saving", "Saving…") : i18n.t("language.save_dictionary", "Save dictionary") }}</button></div>
-          <div class="language-meta-grid aligned-field-grid"><label class="workflow-field"><span>{{ i18n.t("language.name", "Name") }}</span><input v-model="current.name" class="control"><small>{{ i18n.t("language.name_help","Human-readable language name shown in the picker.") }}</small></label><label class="workflow-field"><span>{{ i18n.t("language.flag", "Flag / symbol") }}</span><input v-model="current.flag" class="control"><small>{{ i18n.t("language.flag_help","Unicode emoji or symbol shown beside the locale name.") }}</small></label></div>
-          <form class="language-dictionary-add" @submit.prevent="addDictionaryEntry">
-            <input v-model="newKey" class="control" placeholder="ui.new_key" :aria-label="i18n.t('language.dictionary_key','Dictionary key')">
-            <input v-model="newValue" class="control" :placeholder="i18n.t('language.translation','Translation')" :aria-label="i18n.t('language.dictionary_value','Dictionary value')">
-            <button class="btn small" :disabled="!newKey.trim()">{{ i18n.t("language.add_key", "Add key") }}</button>
-          </form>
-          <div class="language-dictionary-table">
-            <div class="language-dictionary-head"><span>{{ i18n.t("language.key", "Key") }}</span><span>{{ i18n.t("language.field_description", "Description") }}</span><span>{{ i18n.t("language.translation", "Translation") }}</span><span></span></div>
-            <div v-for="([key, value]) in rows" :key="key" class="language-dictionary-row">
-              <code :title="sourceValue(key)">{{ key }}</code>
-              <small class="language-field-description" :title="sourceValue(key)">{{ describeKey(key) }}</small>
-              <textarea class="control language-translation-field" rows="1" :value="value" :aria-label="`${i18n.t('language.translation','Translation')}: ${key}`" @input="updateValue(key, ($event.target as HTMLTextAreaElement).value)"></textarea>
-              <button class="btn tiny danger" type="button" :title="i18n.t('language.remove_key', 'Remove dictionary key')" @click="removeDictionaryEntry(key)">×</button>
+          <header class="language-editor-hero">
+            <div class="language-editor-identity"><LanguageFlag :code="current.code" :symbol="flagFor(current.code,current.flag)" :label="current.name" size="large"/><div><p>{{ isCanonical ? i18n.t("language.canonical_source", "Canonical source") : i18n.t("language.translation_target", "Translation target") }}</p><h2>{{ current.name }}</h2><span>{{ current.code }} · {{ stats.total.toLocaleString(i18n.locale) }} {{ i18n.t("language.interface_strings", "interface strings") }}</span></div></div>
+            <div class="language-editor-metrics">
+              <span><b>{{ stats.coverage }}%</b>{{ i18n.t("language.coverage", "Coverage") }}</span>
+              <span v-if="!isCanonical"><b>{{ stats.matchesEnglish.toLocaleString(i18n.locale) }}</b>{{ i18n.t("language.matches_english", "Matches English") }}</span>
+              <span><b>{{ stats.missing.toLocaleString(i18n.locale) }}</b>{{ i18n.t("language.missing", "Missing") }}</span>
             </div>
-          </div>
+            <div class="language-editor-save"><span v-if="dirty" class="unsaved-dot">{{ i18n.t("language.unsaved_changes", "Unsaved changes") }}</span><button class="btn primary" type="button" :disabled="saving || !dirty" @click="save">{{ saving ? i18n.t("ui.saving", "Saving…") : i18n.t("language.save_dictionary", "Save dictionary") }}</button></div>
+          </header>
+
+          <section class="language-identity-card" :aria-label="i18n.t('language.locale_identity','Locale identity')">
+            <label class="language-meta-field"><span>{{ i18n.t("language.name", "Display name") }}</span><input v-model="current.name" class="control"><small>{{ i18n.t("language.name_help", "Human-readable language name shown in the picker.") }}</small></label>
+            <CountryFlagPicker v-model="current.flag" :locale-code="current.code" :label="i18n.t('language.locale_icon','Locale icon')" :help="i18n.t('language.flag_library_help','Choose from the country flag library or use the neutral globe for languages without a country-specific locale.')" />
+            <div class="language-source-card"><span>{{ i18n.t("language.source_language", "Source language") }}</span><b>🇺🇸 {{ i18n.t("language.english_us", "English (U.S.)") }}</b><small>{{ i18n.t("language.source_language_help", "All installed translations are keyed to the canonical English interface set.") }}</small></div>
+            <button v-if="!['en-US','fr-CA'].includes(current.code)" type="button" class="language-remove-action" @click="removeLanguage(current)"><AppIcon name="trash"/>{{ i18n.t("language.remove_language", "Remove language") }}</button>
+          </section>
+
+          <section class="language-translation-toolbar">
+            <label class="language-key-search"><span class="sr-only">{{ i18n.t("language.search_strings", "Search interface strings") }}</span><AppIcon name="search"/><input v-model="keyQuery" type="search" :placeholder="i18n.t('language.search_strings','Search keys, English source, or translation…')"></label>
+            <div class="language-filter-tabs" :aria-label="i18n.t('language.translation_filters','Translation filters')">
+              <button type="button" :aria-pressed="statusFilter==='all'" @click="statusFilter='all'">{{ i18n.t("ui.all", "All") }} <span>{{ rows.length }}</span></button>
+              <button type="button" :aria-pressed="statusFilter==='localized'" @click="statusFilter='localized'">{{ isCanonical ? i18n.t("language.filled", "Filled") : i18n.t("language.localized", "Localized") }} <span>{{ stats.localized }}</span></button>
+              <button v-if="!isCanonical" type="button" :aria-pressed="statusFilter==='english'" @click="statusFilter='english'">{{ i18n.t("language.matches_english", "Matches English") }} <span>{{ stats.matchesEnglish }}</span></button>
+              <button type="button" :aria-pressed="statusFilter==='missing'" @click="statusFilter='missing'">{{ i18n.t("language.missing", "Missing") }} <span>{{ stats.missing }}</span></button>
+            </div>
+          </section>
+
+          <section class="language-string-editor" :aria-label="i18n.t('language.translation_editor','Translation editor')">
+            <div class="language-string-head" :class="{canonical:isCanonical}"><span>{{ i18n.t("language.key_context", "Key & context") }}</span><span v-if="!isCanonical">{{ i18n.t("language.english_source", "English source") }}</span><span>{{ isCanonical ? i18n.t("language.english_value", "English value") : i18n.t("language.translation", "Translation") }}</span></div>
+            <article v-for="([key,value]) in filteredRows" :key="key" class="language-string-row" :class="{canonical:isCanonical, fallback:!isCanonical && value.trim()===sourceValue(key).trim() && Boolean(value.trim()), missing:!value.trim()}">
+              <div class="language-key-cell"><code>{{ key }}</code><small>{{ describeKey(key) }}</small></div>
+              <div v-if="!isCanonical" class="language-source-cell" :lang="'en-US'"><span class="mobile-column-label">{{ i18n.t("language.english_source", "English source") }}</span>{{ sourceValue(key) }}</div>
+              <label class="language-target-cell"><span class="sr-only">{{ `${i18n.t('language.translation','Translation')}: ${key}` }}</span><textarea class="control" rows="2" :lang="current.code" :dir="i18n.directionForLocale(current.code)" :value="value" @input="updateValue(key, ($event.target as HTMLTextAreaElement).value)"></textarea><small v-if="!isCanonical && value.trim()===sourceValue(key).trim() && Boolean(value.trim())">{{ i18n.t("language.english_fallback_note", "Currently matches the English source") }}</small></label>
+              <button v-if="isCanonical" class="language-row-remove" type="button" :title="i18n.t('language.remove_key','Remove dictionary key')" :aria-label="`${i18n.t('language.remove_key','Remove dictionary key')}: ${key}`" @click="removeDictionaryEntry(key)">×</button>
+            </article>
+            <div v-if="!filteredRows.length" class="language-no-results"><AppIcon name="search"/><b>{{ i18n.t("language.no_string_matches", "No interface strings match these filters.") }}</b><button type="button" class="btn small" @click="keyQuery='';statusFilter='all'">{{ i18n.t("research.clear_filters", "Clear filters") }}</button></div>
+          </section>
+
+          <details v-if="isCanonical" class="language-advanced-key"><summary>{{ i18n.t("language.add_source_key", "Add canonical English key") }}</summary><form @submit.prevent="addDictionaryEntry"><label><span>{{ i18n.t("language.dictionary_key", "Dictionary key") }}</span><input v-model="newKey" class="control" placeholder="ui.new_key"></label><label><span>{{ i18n.t("language.english_value", "English value") }}</span><input v-model="newValue" class="control"></label><button class="btn" :disabled="!newKey.trim()">{{ i18n.t("language.add_key", "Add key") }}</button></form><p>{{ i18n.t("language.add_source_key_help", "English defines the canonical key set. New keys become visible as English fallbacks in installed locales until translated.") }}</p></details>
         </template>
       </section>
     </section>
 
-    <div v-if="pendingDelete" class="native-confirm-backdrop" role="presentation" @click.self="pendingDelete = null"><section class="card native-confirm-card" role="dialog" aria-modal="true"><div class="cardhead"><div><b>{{ i18n.t("language.remove_confirm","Remove language?") }}</b><div class="note">{{ pendingDelete.name }} · {{ pendingDelete.code }}</div></div></div><p>{{ i18n.t("language.remove_help","The installed dictionary will be deleted from this DerridAI instance.") }}</p><div class="actions"><button class="btn" @click="pendingDelete=null">{{ i18n.t("ui.cancel","Cancel") }}</button><button class="btn danger" @click="confirmRemoveLanguage">{{ i18n.t("language.remove_language","Remove language") }}</button></div></section></div>
+    <Teleport to="body">
+      <div v-if="installOpen" class="workflow-overlay language-modal-overlay" role="presentation" @mousedown.self="installOpen=false" @keydown.esc.stop.prevent="installOpen=false" @keydown="trapFocus($event, installDialog)">
+        <section ref="installDialog" class="workflow-dialog language-install-dialog modern-language-dialog" role="dialog" aria-modal="true" aria-labelledby="language-install-title" aria-describedby="language-install-description">
+          <header class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary_modern", "Translate & install locale") }}</h2><span id="language-install-description">{{ i18n.t("language.install_help_modern", "DerridAI translates the complete canonical English interface set first, validates every key and placeholder, then installs the locale only if translation succeeds.") }}</span></div></div><button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="installOpen=false">×</button></header>
+          <form class="workflow-form language-install-form" @submit.prevent="installLanguage">
+            <section class="language-install-source"><span class="language-install-source-icon">🇺🇸</span><div><b>{{ i18n.t("language.english_source_set", "Source: English (U.S.)") }}</b><small>{{ i18n.tf("language.source_key_count", "{count} interface strings will be translated.", {count:Object.keys(referenceDictionary).length.toLocaleString(i18n.locale)}) }}</small></div><span class="source-lock"><AppIcon name="lock"/>{{ i18n.t("language.canonical", "Canonical") }}</span></section>
+            <section class="workflow-section"><div class="workflow-section-copy"><b>{{ i18n.t("language.identity_section", "Language identity") }}</b><span>{{ i18n.t("language.identity_section_help_modern", "Use a BCP 47 locale code. Script-aware locales such as zh-Hant-TW are supported.") }}</span></div><div class="workflow-fields workflow-identity-fields"><label class="workflow-field"><span>{{ i18n.t("language.locale_code", "Locale code") }}</span><input ref="installCodeInput" v-model="install.code" class="control" required autocomplete="off" spellcheck="false" placeholder="de-DE" aria-describedby="locale-code-help"><small id="locale-code-help">{{ i18n.t("language.locale_code_help_modern", "Examples: de-DE, pt-BR, zh-Hant-TW.") }}</small></label><label class="workflow-field"><span>{{ i18n.t("language.name", "Display name") }}</span><input v-model="install.name" class="control" autocomplete="off" placeholder="Deutsch (Deutschland)"><small>{{ i18n.t("language.name_help", "Human-readable language name shown in the picker.") }}</small></label><CountryFlagPicker :model-value="install.flag" :locale-code="install.code" :label="i18n.t('language.locale_icon','Locale icon')" :help="i18n.t('language.flag_library_help','Choose from the country flag library or use the neutral globe for languages without a country-specific locale.')" @update:model-value="setInstallFlag" /></div></section>
+            <section class="workflow-section"><div class="workflow-section-copy"><b>{{ i18n.t("language.translation_section", "Translation provider") }}</b><span>{{ i18n.t("language.translation_section_help_modern", "DerridAI checks the provider before starting. Translation runs in bounded batches so smaller local models do not receive the entire dictionary at once.") }}</span></div><div class="workflow-provider-area"><ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('language.provider_profile','Provider profile')" :help="i18n.t('language.provider_profile_help','Uses the same provider profiles and model defaults as Research, PDF tools, and LLM review.')" :empty-title="i18n.t('language.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('language.no_provider_profiles_help','Create a provider profile first, then return here to translate a dictionary.')" :manage-label="i18n.t('language.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('language.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('language.concurrent_requests','max concurrent request(s)')" @manage="requestManageProviders" /></div></section>
+            <section class="language-install-assurance"><div><AppIcon name="check"/><span><b>{{ i18n.t("language.atomic_install", "Validated before installation") }}</b><small>{{ i18n.t("language.atomic_install_help", "Missing keys, damaged placeholders, truncated JSON, or an effectively untranslated response stop the install and produce a clear error.") }}</small></span></div><div><AppIcon name="history"/><span><b>{{ i18n.t("language.background_translation", "Runs in the background") }}</b><small>{{ i18n.t("language.background_translation_help_modern", "Progress remains visible here and in Operations. The locale appears only after the complete translation passes validation.") }}</small></span></div></section>
+            <footer class="workflow-actions"><button type="button" class="btn" @click="installOpen=false">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider || installCodeExists">{{ installing ? i18n.t("language.checking_provider", "Checking provider…") : i18n.t("language.translate_install", "Translate & install") }}</button></footer>
+          </form>
+        </section>
+      </div>
+
+      <div v-if="manageProvidersConfirm" class="native-confirm-backdrop" role="presentation" @click.self="manageProvidersConfirm=false" @keydown.esc.stop.prevent="manageProvidersConfirm=false" @keydown="trapFocus($event, manageProvidersDialog)"><section ref="manageProvidersDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="manage-provider-warning"><div class="cardhead"><div><b id="manage-provider-warning">{{ i18n.t("language.leave_install_title", "Leave language installation?") }}</b><div class="note">{{ i18n.t("language.leave_install_help", "Manage provider profiles opens another page. Values entered in this installation form will be discarded.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="manageProvidersConfirm=false">{{ i18n.t("ui.stay", "Stay here") }}</button><button class="btn primary" type="button" @click="confirmManageProviders">{{ i18n.t("language.leave_manage_providers", "Leave and manage providers") }}</button></div></section></div>
+
+      <div v-if="pendingLocaleCode" class="native-confirm-backdrop" role="presentation" @click.self="pendingLocaleCode=''" @keydown.esc.stop.prevent="pendingLocaleCode=''" @keydown="trapFocus($event, unsavedDialog)"><section ref="unsavedDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="unsaved-language-title"><div class="cardhead"><div><b id="unsaved-language-title">{{ i18n.t("language.unsaved_title", "Save changes before switching locale?") }}</b><div class="note">{{ i18n.t("language.unsaved_help", "This locale has unsaved dictionary or identity changes.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="pendingLocaleCode=''">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn" type="button" @click="discardAndSwitch">{{ i18n.t("language.discard_switch", "Discard & switch") }}</button><button class="btn primary" type="button" @click="saveAndSwitch">{{ i18n.t("language.save_switch", "Save & switch") }}</button></div></section></div>
+
+      <div v-if="pendingDelete" class="native-confirm-backdrop" role="presentation" @click.self="pendingDelete=null" @keydown.esc.stop.prevent="pendingDelete=null" @keydown="trapFocus($event, deleteDialog)"><section ref="deleteDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="remove-language-title"><div class="cardhead"><div><b id="remove-language-title">{{ i18n.t("language.remove_confirm", "Remove language?") }}</b><div class="note">{{ pendingDelete.name }} · {{ pendingDelete.code }}</div></div></div><p>{{ i18n.t("language.remove_help", "The installed dictionary will be deleted from this DerridAI instance.") }}</p><div class="actions"><button class="btn" type="button" @click="pendingDelete=null">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn danger" type="button" @click="confirmRemoveLanguage">{{ i18n.t("language.remove_language", "Remove language") }}</button></div></section></div>
+    </Teleport>
   </main>
 </template>
+
+<style scoped>
+.language-studio{display:grid;gap:14px;max-width:1680px;margin:0 auto;padding:14px 16px 30px}.language-alert{min-height:46px;display:grid;grid-template-columns:20px minmax(0,1fr) 34px;gap:10px;align-items:center;padding:8px 10px;border:1px solid #efc8c8;border-radius:11px;background:#fff6f6;color:#8f3030;font-size:12.5px}.language-alert :deep(svg){width:18px;height:18px}.language-alert button{min-width:34px;min-height:34px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:20px;cursor:pointer}.translation-progress-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid #d8e4dc;border-radius:12px;background:#f8fbf9}.translation-progress-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#fff}.translation-progress-card>div:nth-child(2){display:grid;gap:3px}.translation-progress-card b{font-size:12.5px;color:#2d4236}.translation-progress-card span{font-size:11px;color:#69788b}.translation-progress-actions{display:grid;justify-items:end;gap:5px}.translation-progress-actions>strong{font-size:13px;color:var(--ui-accent-dark,#286442);font-variant-numeric:tabular-nums}.translation-progress-track{height:5px;overflow:hidden;border-radius:999px;background:#dfe7e2;margin-top:3px}.translation-progress-track i{display:block;height:100%;background:var(--ui-accent,#3c8d62);transition:width .25s ease}.language-studio-grid{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;align-items:start}.language-locale-rail{position:sticky;top:116px;max-height:calc(100vh - 140px);display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:12px;border:1px solid #e0e6eb;border-radius:14px;background:#fff;box-shadow:0 6px 22px rgba(15,23,42,.04)}.language-rail-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}.language-rail-head p{margin:0;color:var(--ui-accent-dark,#286442);font-size:9.5px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-rail-head h2{margin:2px 0 0;font-size:16px;color:#25364b}.language-rail-head>span{min-width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#f1f5f3;color:#536578;font-size:11px;font-weight:800}.language-search-field,.language-key-search{min-height:40px;display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:7px;border:1px solid #dce3e9;border-radius:10px;background:#fbfcfd;padding:0 10px}.language-search-field :deep(svg),.language-key-search :deep(svg){width:15px;height:15px;color:#7b8898}.language-search-field input,.language-key-search input{width:100%;border:0;outline:0;background:transparent;color:#34465b;font:inherit;font-size:12px}.language-locale-list{min-height:0;overflow:auto;display:grid;align-content:start;gap:5px;padding-inline-end:2px}.language-locale-card{width:100%;min-height:59px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid transparent;border-radius:11px;background:transparent;padding:7px;text-align:start;color:#33465a;cursor:pointer}.language-locale-card:hover{background:#f7f9f8}.language-locale-card.active{border-color:#cbdcd2;background:var(--ui-accent-soft,#eef7f1);box-shadow:inset 3px 0 0 var(--ui-accent,#3c8d62)}.language-locale-copy{display:grid;gap:2px;min-width:0}.language-locale-copy b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.language-locale-copy small{font-size:10px;color:#607086}.locale-kind{padding:4px 6px;border-radius:999px;background:#eef2f5;color:#647386;font-size:8.5px;font-weight:750;text-transform:uppercase;letter-spacing:.03em}.locale-kind.custom{background:#f5f0e8;color:#806a46}.language-empty-list{padding:24px 10px;text-align:center;color:#788697;font-size:11px}.language-editor-workspace{min-width:0;display:grid;gap:12px}.language-loading{min-height:260px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #e2e7eb;border-radius:14px;background:#fff;color:#6f7d8d;font-size:12px}.language-editor-hero{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:18px;align-items:center;padding:15px 16px;border:1px solid #e0e6eb;border-radius:14px;background:#fff}.language-editor-identity{display:flex;align-items:center;gap:11px;min-width:0}.language-editor-identity>div{min-width:0}.language-editor-identity p{margin:0;color:var(--ui-accent-dark,#286442);font-size:9.5px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-editor-identity h2{margin:1px 0;font:600 22px/1.15 Georgia,"Times New Roman",serif;color:#24354a}.language-editor-identity span{font-size:10.5px;color:#607086}.language-editor-metrics{display:flex;gap:7px}.language-editor-metrics span{min-width:84px;display:grid;gap:1px;padding:7px 9px;border:1px solid #e1e7eb;border-radius:9px;background:#fafbfc;color:#607086;font-size:8.5px;text-transform:uppercase;letter-spacing:.03em}.language-editor-metrics b{font-size:14px;color:#304257;letter-spacing:0}.language-editor-save{display:grid;justify-items:end;gap:5px}.unsaved-dot{font-size:9.5px;color:#8d6522}.language-identity-card{display:grid;grid-template-columns:minmax(180px,.9fr) minmax(250px,1.1fr) minmax(220px,.85fr) auto;gap:12px;align-items:end;padding:13px 14px;border:1px solid #e0e6eb;border-radius:14px;background:#fff}.language-meta-field{display:grid;gap:7px}.language-meta-field>span,.language-source-card>span{font-size:11px;font-weight:750;color:#34465d}.language-meta-field small,.language-source-card small{font-size:9.8px;line-height:1.35;color:#607086}.language-source-card{min-height:73px;display:grid;align-content:start;gap:5px;padding:9px 10px;border:1px solid #e3e8ec;border-radius:10px;background:#fafbfc}.language-source-card b{font-size:12px;color:#33465b}.language-remove-action{min-height:40px;display:flex;align-items:center;gap:6px;border:1px solid #ead3d3;border-radius:9px;background:#fff9f9;padding:0 10px;color:#9b4242;font-size:11px;font-weight:700;cursor:pointer}.language-remove-action :deep(svg){width:14px;height:14px}.language-translation-toolbar{position:sticky;top:115px;z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid #e0e6eb;border-radius:12px;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);box-shadow:0 5px 18px rgba(15,23,42,.05)}.language-key-search{flex:1;max-width:520px}.language-filter-tabs{display:flex;gap:5px;flex-wrap:wrap}.language-filter-tabs button{min-height:34px;display:flex;align-items:center;gap:6px;border:1px solid #dfe5ea;border-radius:9px;background:#fff;padding:0 9px;color:#536477;font-size:10.5px;cursor:pointer}.language-filter-tabs button[aria-pressed="true"]{border-color:#c8dacf;background:var(--ui-accent-soft,#eef7f1);color:#2f5d43}.language-filter-tabs button span{padding:2px 5px;border-radius:999px;background:#edf1f4;font-size:8.5px}.language-string-editor{overflow:hidden;border:1px solid #dde5ea;border-radius:14px;background:#fff}.language-string-head,.language-string-row{display:grid;grid-template-columns:minmax(160px,.72fr) minmax(220px,1fr) minmax(280px,1.3fr);gap:0}.language-string-head.canonical,.language-string-row.canonical{grid-template-columns:minmax(190px,.7fr) minmax(320px,1.5fr) 40px}.language-string-head{position:sticky;top:169px;z-index:10;border-bottom:1px solid #dfe6eb;background:#f6f8f9}.language-string-head span{padding:9px 11px;color:#687789;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.language-string-row{border-bottom:1px solid #edf1f3}.language-string-row:last-of-type{border-bottom:0}.language-string-row.fallback{background:#fffdf8}.language-string-row.missing{background:#fff9f9}.language-key-cell,.language-source-cell,.language-target-cell{min-width:0;padding:10px 11px;border-inline-end:1px solid #edf1f3}.language-key-cell{display:grid;align-content:start;gap:5px}.language-key-cell code{font-size:10.5px;color:#334d63;overflow-wrap:anywhere}.language-key-cell small{font-size:9.5px;line-height:1.35;color:#607086}.language-source-cell{font-size:11.5px;line-height:1.5;color:#4a5c70;white-space:pre-wrap;overflow-wrap:anywhere}.mobile-column-label{display:none}.language-target-cell{display:grid;gap:4px}.language-target-cell textarea{width:100%;min-height:48px;resize:vertical;font-size:12px;line-height:1.45}.language-target-cell small{color:#956f2b;font-size:9.5px}.language-row-remove{align-self:start;justify-self:center;min-width:28px;min-height:28px;margin-top:9px;border:1px solid #ead4d4;border-radius:8px;background:#fff;color:#a34747;font-size:17px;cursor:pointer}.language-no-results{display:grid;justify-items:center;gap:7px;padding:38px;color:#6e7d8e;font-size:11px}.language-no-results :deep(svg){width:22px;height:22px}.language-advanced-key{padding:12px 14px;border:1px solid #e0e6eb;border-radius:12px;background:#fff}.language-advanced-key summary{cursor:pointer;font-size:11.5px;font-weight:750;color:#42556b}.language-advanced-key form{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(240px,1.3fr) auto;gap:9px;align-items:end;margin-top:11px}.language-advanced-key label{display:grid;gap:5px;font-size:10.5px;font-weight:700;color:#46586d}.language-advanced-key p{margin:8px 0 0;color:#607086;font-size:9.8px}.modern-language-dialog{width:min(980px,calc(100vw - 32px))}.language-install-form{display:grid}.language-install-source{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;margin:16px 20px 0;padding:10px 12px;border:1px solid #dae4de;border-radius:11px;background:#f7faf8}.language-install-source-icon{font-size:25px}.language-install-source>div{display:grid;gap:2px}.language-install-source b{font-size:12px;color:#304538}.language-install-source small{font-size:10px;color:#607086}.source-lock{display:flex;align-items:center;gap:5px;color:#5e7567;font-size:9.5px;font-weight:750}.source-lock :deep(svg){width:13px;height:13px}.language-install-assurance{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px}.language-install-assurance>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:10px;border:1px solid #e0e7e3;border-radius:10px;background:#fafcfb}.language-install-assurance :deep(svg){width:17px;height:17px;color:var(--ui-accent-dark,#286442)}.language-install-assurance span{display:grid;gap:2px}.language-install-assurance b{font-size:11px;color:#385044}.language-install-assurance small{font-size:9.8px;line-height:1.4;color:#607086}.language-confirm-card{max-width:520px}.language-confirm-card .actions{justify-content:flex-end;flex-wrap:wrap}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--ui-accent,#3c8d62) 48%,#fff);outline-offset:2px}@media(max-width:1200px){.language-studio-grid{grid-template-columns:235px minmax(0,1fr)}.language-identity-card{grid-template-columns:1fr 1fr}.language-source-card{grid-column:1/-1}.language-editor-hero{grid-template-columns:1fr auto}.language-editor-metrics{grid-row:2;grid-column:1/-1}.language-editor-save{grid-column:2;grid-row:1}.language-string-head,.language-string-row{grid-template-columns:minmax(145px,.6fr) minmax(190px,.9fr) minmax(250px,1.2fr)}}@media(max-width:900px){.language-studio-grid{grid-template-columns:1fr}.language-locale-rail{position:static;max-height:none}.language-locale-list{grid-template-columns:repeat(2,minmax(0,1fr));max-height:260px}.language-translation-toolbar{top:112px;align-items:stretch;flex-direction:column}.language-key-search{max-width:none}.language-string-head{display:none}.language-string-row,.language-string-row.canonical{grid-template-columns:1fr}.language-key-cell,.language-source-cell,.language-target-cell{border-inline-end:0;border-bottom:1px solid #edf1f3}.mobile-column-label{display:block!important;margin-bottom:5px;color:#607086;font-size:8.5px;font-weight:800;text-transform:uppercase}.language-row-remove{justify-self:end;margin:0 10px 9px}.language-advanced-key form{grid-template-columns:1fr}.language-install-assurance{grid-template-columns:1fr}}@media(max-width:560px){.language-studio{padding-inline:9px}.language-locale-list{grid-template-columns:1fr}.language-editor-hero{grid-template-columns:1fr}.language-editor-save{grid-column:1;grid-row:auto;justify-items:stretch}.language-editor-metrics{grid-column:1;grid-row:auto;overflow:auto}.language-identity-card{grid-template-columns:1fr}.language-filter-tabs{display:grid;grid-template-columns:1fr 1fr}.language-filter-tabs button{justify-content:center}.language-install-source{grid-template-columns:34px 1fr}.source-lock{grid-column:1/-1}.language-install-assurance{padding-inline:14px}}
+</style>

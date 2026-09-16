@@ -414,7 +414,7 @@ class LanguageDictionaryUpdate(BaseModel):
 
 
 class LanguageInstallRequest(BaseModel):
-    code: str = Field(min_length=4, max_length=16)
+    code: str = Field(min_length=2, max_length=35)
     name: str | None = Field(default=None, max_length=160)
     flag: str | None = Field(default=None, max_length=32)
     provider: Literal["ollama", "openai"] = "ollama"

@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_STORE = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
+I18N_TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 VIEW = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "web/src/components/research/ResearchSettingsDrawer.vue").read_text(encoding="utf-8")
 PIPELINE = (ROOT / "web/src/components/research/ResearchPipelineBar.vue").read_text(encoding="utf-8")
@@ -38,10 +39,10 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
 
 def test_0350_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.10"
-    assert 'version="0.35.10"' in MAIN
-    assert "Corpus Viewer 0.35.10" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.10" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.35.12"
+    assert 'version="0.35.12"' in MAIN
+    assert "Corpus Viewer 0.35.12" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.35.12" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -125,11 +126,10 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
 
 
 def test_fr_ca_translation_prompt_explicitly_targets_quebec_and_oqlf():
-    for text in (MAIN, JOBS):
-        assert "professional Canadian French as written in Québec" in text
-        assert "Office québécois de la langue française (OQLF)" in text
-        assert "avoid France-only wording" in text
-        assert "Canadian French typography" in text
+    assert "professional Canadian French as written in Québec" in I18N_TRANSLATION
+    assert "Office québécois de la langue française (OQLF)" in I18N_TRANSLATION
+    assert "avoid France-only wording" in I18N_TRANSLATION
+    assert "Canadian French typography" in I18N_TRANSLATION
 
 
 def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edits(tmp_path, monkeypatch):

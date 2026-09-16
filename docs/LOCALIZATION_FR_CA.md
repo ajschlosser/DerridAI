@@ -20,3 +20,11 @@ The translated-dictionary installer also applies the Québec localization brief 
 ## 0.35.10 Record Workspace
 
 Version 0.35.10 adds the Vue-native Record Workspace strings in both `en-US` and professional Québec `fr-CA`, preserving exact key parity. Record-workspace terminology uses *fiche*, *indexation*, *piste d’audit*, *Explorateur PDF*, and Québec-oriented interface phrasing rather than France-specific vocabulary or unnecessary English calques.
+
+## 0.35.12 — Tongue Twister localization studio
+
+The Languages & internationalization workspace now treats `en-US` as the visible canonical source beside every translated value. Installing a locale translates the complete English interface dictionary before persistence, in bounded batches, and rejects missing keys, empty values, damaged `{placeholders}`, or output that is effectively unchanged English. Installation is atomic: failed or refused translations do not create a partial locale.
+
+Locale identity uses common BCP 47 language tags (including language-only and script-aware tags such as `de`, `pt-BR`, and `zh-Hant-TW`) and a searchable ISO 3166-1 country-flag library. Country flags are presentation metadata, not a claim that a language belongs to one country; the neutral globe remains available. The runtime also sets the document `lang` and script-aware `dir` attributes when the active locale changes.
+
+The LLM translation workflow applies only to DerridAI interface strings. Never translate corpus passages, quotations, evidence, bibliographic titles, or other research content as part of interface localization. Québec French continues to follow the policy above, including OQLF-informed terminology and Canadian French typography.

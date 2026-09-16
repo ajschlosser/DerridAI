@@ -20,6 +20,13 @@ export const useI18nStore = defineStore("i18n", () => {
     return text;
   }
 
+  function directionForLocale(code: string) {
+    try {
+      const script = new Intl.Locale(code).maximize().script || "";
+      return new Set(["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"]).has(script) ? "rtl" : "ltr";
+    } catch { return "ltr"; }
+  }
+
   async function loadLanguages() {
     try { languages.value = (await systemApi.languages()).languages; }
     catch { languages.value = [{code: "en-US", name: "U.S. English", flag: "🇺🇸"}, {code: "fr-CA", name: "Français (Québec)", flag: "🇨🇦"}]; }
@@ -37,6 +44,7 @@ export const useI18nStore = defineStore("i18n", () => {
       baseDictionary.value = base.dictionary || {};
       localStorage.setItem("derridai-locale", data.code);
       document.documentElement.lang = data.code;
+      document.documentElement.dir = directionForLocale(data.code);
       runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value);
       if (document.querySelector("#main")) runtime.renderView();
     } finally { loading.value = false; }
@@ -55,9 +63,10 @@ export const useI18nStore = defineStore("i18n", () => {
       dictionary.value = {};
       baseDictionary.value = {};
       document.documentElement.lang = available;
+      document.documentElement.dir = directionForLocale(available);
       runtime.setTranslationDictionary(available, {}, {});
     }
   }
 
-  return { locale, languages, dictionary, baseDictionary, loading, t, tf, loadLanguages, setLocale, initialize };
+  return { locale, languages, dictionary, baseDictionary, loading, t, tf, directionForLocale, loadLanguages, setLocale, initialize };
 });
