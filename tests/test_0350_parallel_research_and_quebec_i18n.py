@@ -39,10 +39,10 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
 
 def test_0350_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.35.17"
-    assert 'version="0.35.17"' in MAIN
-    assert "Corpus Viewer 0.35.17" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.35.17" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.36.0"
+    assert 'version="0.36.0"' in MAIN
+    assert "Corpus Viewer 0.36.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.36.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -134,11 +134,12 @@ def test_fr_ca_translation_prompt_explicitly_targets_quebec_and_oqlf():
 
 def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edits(tmp_path, monkeypatch):
     import app.system_store as store_module
+    from app.persistence import SQLiteSystemRepository
 
-    auth_path = tmp_path / "home" / "auth.sqlite3"
-    auth_path.parent.mkdir(parents=True)
-    system_path = auth_path.parent / "derridai-system.json"
-    system_path.write_text(json.dumps({
+    home = tmp_path / "home"
+    home.mkdir(parents=True)
+    legacy_path = home / "derridai-system.json"
+    legacy_path.write_text(json.dumps({
         "researcher_provider_profiles": [],
         "annotations": [],
         "languages": {
@@ -146,19 +147,24 @@ def test_builtin_dictionary_revision_migrates_once_and_then_preserves_admin_edit
             "fr-CA": {"name": "Français (Canada)", "flag": "🇨🇦", "dictionary": {"app.name": "ANCIEN"}},
         },
     }), encoding="utf-8")
-    monkeypatch.setattr(store_module, "settings", SimpleNamespace(auth_db_path=str(auth_path)))
 
-    store_module.SystemStore()
-    migrated = json.loads(system_path.read_text(encoding="utf-8"))
-    assert migrated["language_dictionary_revision"] == "0.35.17.1"
+    repository = SQLiteSystemRepository(home / "derridai-system.sqlite3")
+    monkeypatch.setattr(store_module, "system_repository", repository)
+
+    store = store_module.SystemStore()
+    migrated = store.snapshot()
+    assert migrated["language_dictionary_revision"] == "0.36.0.1"
     assert migrated["languages"]["fr-CA"]["name"] == "Français"
     assert migrated["languages"]["en-US"]["dictionary"]["app.name"] == "DerridAI"
     assert migrated["languages"]["fr-CA"]["dictionary"]["nav.rag"] == "Recherche"
+    assert (home / "derridai-system.migrated-v0.36.0.json").exists()
 
-    migrated["languages"]["fr-CA"]["dictionary"]["app.subtitle"] = "Mon libellé personnalisé"
-    system_path.write_text(json.dumps(migrated, ensure_ascii=False), encoding="utf-8")
-    store_module.SystemStore()
-    preserved = json.loads(system_path.read_text(encoding="utf-8"))
+    fr = store.get_language("fr-CA")
+    dictionary = dict(fr["dictionary"])
+    dictionary["app.subtitle"] = "Mon libellé personnalisé"
+    store.put_language("fr-CA", name=fr["name"], flag=fr["flag"], dictionary=dictionary)
+
+    preserved = store_module.SystemStore().snapshot()
     assert preserved["languages"]["fr-CA"]["dictionary"]["app.subtitle"] == "Mon libellé personnalisé"
 
 

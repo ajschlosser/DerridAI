@@ -66,7 +66,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.35.17")
+app = FastAPI(title="DerridAI Corpus API", version="0.36.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -425,6 +425,13 @@ def researcher_provider_profiles(request: Request):
 def update_researcher_provider_profiles(body: ResearcherProviderProfilesUpdate, request: Request):
     _require_admin(request)
     return {"profiles": system_store.set_researcher_profiles(body.profiles)}
+
+
+@app.get("/api/system/storage")
+def system_storage_info(request: Request):
+    """Describe the durable server-owned metadata store for administrators."""
+    _require_admin(request)
+    return system_store.storage_info()
 
 
 @app.post("/api/system/researcher-providers/status")
@@ -1062,6 +1069,7 @@ async def create_full_backup(
 
         operation_snapshot = {
             "llm": llm_jobs.snapshot(),
+            "llm_tool": llm_tool_jobs.snapshot(),
             "rag": rag_jobs.snapshot(),
             "upsert": upsert_jobs.snapshot(),
             "note": (
@@ -1124,7 +1132,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.35.17",
+            "app_version": "0.36.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1390,10 +1398,12 @@ async def restore_full_backup(backup: UploadFile = File(...)):
         operations_path = extract_root / "operations.json"
         restored_operations = {
             "llm": 0,
+            "llm_tool": 0,
             "rag": 0,
             "upsert": 0,
         }
         llm_jobs.clear_finished()
+        llm_tool_jobs.clear_finished()
         rag_jobs.clear_finished()
         upsert_jobs.clear_finished()
         if operations_path.exists():
@@ -1404,6 +1414,11 @@ async def restore_full_backup(backup: UploadFile = File(...)):
                 restored_operations["llm"] = (
                     llm_jobs.restore_snapshot(
                         operations.get("llm") or []
+                    )
+                )
+                restored_operations["llm_tool"] = (
+                    llm_tool_jobs.restore_snapshot(
+                        operations.get("llm_tool") or []
                     )
                 )
                 restored_operations["rag"] = (
@@ -1526,7 +1541,7 @@ def get_restored_current_pdf():
 
 @app.post("/api/admin/nuke")
 def nuke():
-    if llm_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count():
+    if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count():
         raise HTTPException(
             status_code=409,
             detail=(
@@ -1537,6 +1552,7 @@ def nuke():
     try:
         cleared_jobs = (
             llm_jobs.clear_finished()
+            + llm_tool_jobs.clear_finished()
             + rag_jobs.clear_finished()
             + upsert_jobs.clear_finished()
         )

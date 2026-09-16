@@ -197,6 +197,7 @@ def translate_english_dictionary(
     generation: OllamaTouchupOptions | None = None,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int, str], None] | None = None,
+    checkpoint: Callable[[dict[str, str], list[str], list[dict[str, str]], dict[str, Any]], None] | None = None,
     resume_dictionary: Mapping[str, str] | None = None,
     retry_keys: list[str] | None = None,
     max_failure_ratio: float = 0.10,
@@ -246,8 +247,20 @@ def translate_english_dictionary(
             "resumed_count": initial_resumed,
         }
 
+    def emit_checkpoint(*, changed: int = 0, candidates: int = 0) -> None:
+        if checkpoint is None:
+            return
+        current = stats_payload(changed=changed, candidates=candidates)
+        checkpoint(
+            dict(translated_all),
+            list(current["failed_keys"]),
+            list(current["failures"]),
+            current,
+        )
+
     def interrupted() -> None:
         current = stats_payload()
+        emit_checkpoint()
         raise LanguageTranslationInterrupted(
             "Language translation cancelled. The completed portion can be resumed.",
             partial_dictionary=translated_all,
@@ -389,6 +402,7 @@ def translate_english_dictionary(
         processed = min(total, len(translated_all) + len(failure_by_key))
         if progress:
             progress(processed, total, f"Processed {processed:,} of {total:,} English interface strings")
+        emit_checkpoint()
 
     # If the model structurally succeeded but mostly copied English, retry those
     # exact strings in very small, explicit repair batches before declaring the
@@ -401,6 +415,7 @@ def translate_english_dictionary(
                 translated_all.pop(key, None)
             translate_batch(batch, retry=True)
         changed, candidates, unchanged_keys = _translation_signal(source, translated_all)
+        emit_checkpoint(changed=changed, candidates=candidates)
 
     effectively_untranslated = False
     if primary_language != "en" and candidates >= 20:
@@ -416,6 +431,7 @@ def translate_english_dictionary(
     stats = stats_payload(changed=changed, candidates=candidates)
     stats["failure_ratio"] = failure_ratio
     stats["fallback_count"] = len(failed_keys)
+    emit_checkpoint(changed=changed, candidates=candidates)
 
     if failure_ratio >= max_failure_ratio or effectively_untranslated:
         failures = failure_list()

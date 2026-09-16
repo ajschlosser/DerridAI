@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.35.17
+# DerridAI Corpus Viewer 0.36.0
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -64,6 +64,19 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+
+
+## 0.36.0 — The SQL Prequel
+
+- Replaced the monolithic `derridai-system.json` runtime store with a durable SQLite database at `SYSTEM_DB_PATH` (default `/data/.home/derridai-system.sqlite3`). Provider profiles, annotations, installed language dictionaries, translation reports, and system metadata now sit behind a repository abstraction instead of whole-file JSON rewrites.
+- Existing installations migrate automatically and non-destructively: when the new SQLite store is empty, DerridAI imports `derridai-system.json` in one transaction and preserves the legacy file as `derridai-system.migrated-v0.36.0.json` when the filesystem permits.
+- Added a durable SQLite operation ledger for LLM review, RAG, LLM-tool/translation, and Chroma upsert jobs. Finished operations survive API restarts; jobs interrupted by a restart are retained as failed/interrupted records rather than disappearing or being silently replayed.
+- Language dictionary translation now writes resumable checkpoints to SQLite after validated batches, so a process restart loses at most the in-flight model call rather than the completed portion of a long translation. Hidden partial dictionaries remain server-side and are never exposed through the public operations API.
+- Full backup/restore now includes LLM-tool operations, including incomplete resumable language translations, in addition to the existing LLM, RAG, and upsert operation histories.
+- SQLite uses WAL mode, foreign keys, a busy timeout, indexed operation/annotation lookups, and explicit schema migrations. Authentication remains in its existing SQLite database and Chroma remains the vector store; this release intentionally does not add Redis or migrate vectors.
+- Added an administrator-only `/api/system/storage` diagnostic endpoint so deployments can verify the active backend, database path, journal mode, schema version, and approximate database size without exposing that filesystem detail to non-admin accounts.
+
+This is the deliberately low-risk intermediate storage architecture: local/single-host deployments gain transactional durability and restart-safe operation history now, while the repository boundary keeps a future PostgreSQL backend feasible without coupling application logic directly to SQLite.
 
 
 ## 0.35.17 — Lingua Franca

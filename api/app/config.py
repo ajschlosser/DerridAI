@@ -25,6 +25,7 @@ class Settings:
     chroma_data_root: str = os.getenv("CHROMA_DATA_ROOT", "/data")
     embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "ollama").strip().lower()
     auth_db_path: str = os.getenv("AUTH_DB_PATH", "/data/.home/derridai-auth.sqlite3")
+    system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
 
     ollama_base_url: str = os.getenv(

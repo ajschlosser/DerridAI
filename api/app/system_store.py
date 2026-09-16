@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import copy
-import json
 import re
 import threading
 from pathlib import Path
 from typing import Any
 
 from .config import settings
+from .persistence import system_repository
 
 # Server-owned configuration shared across browser sessions. Keeping researcher
 # provider policy here avoids leaking provider API keys through client storage.
@@ -1352,17 +1352,34 @@ DEFAULT_FR_CA.update({'dynamic.record_one': 'fiche', 'dynamic.work_one': 'œuvre
 
 class SystemStore:
     def __init__(self) -> None:
-        root = Path(getattr(settings, "auth_db_path", "/data/.home/derridai-auth.sqlite3")).expanduser().parent
-        root.mkdir(parents=True, exist_ok=True)
-        self.path = root / "derridai-system.json"
+        # 0.36.0: system metadata is durable SQLite state behind a repository
+        # boundary. Keep the former JSON path only as a one-time migration source.
+        self.repository = system_repository
+        self.path = self.repository.path
+        self.legacy_path = self.path.with_name("derridai-system.json")
         self._lock = threading.RLock()
+        # Prior releases placed derridai-system.json beside AUTH_DB_PATH. Honor
+        # that location as well as the new SYSTEM_DB_PATH directory so custom
+        # deployments migrate without requiring users to move files manually.
+        legacy_candidates = [
+            self.legacy_path,
+            Path(getattr(settings, "auth_db_path", "/data/.home/derridai-auth.sqlite3")).expanduser().parent / "derridai-system.json",
+        ]
+        seen: set[Path] = set()
+        for candidate in legacy_candidates:
+            candidate = candidate.resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            if self.repository.migrate_legacy_json(candidate):
+                break
         self._ensure()
 
     def _default(self) -> dict[str, Any]:
         return {
             "researcher_provider_profiles": [],
             "annotations": [],
-            "language_dictionary_revision": "0.35.17.1",
+            "language_dictionary_revision": "0.36.0.1",
             "languages": {
                 "en-US": {"name": "English", "flag": "🇺🇸", "dictionary": DEFAULT_EN_US},
                 "fr-CA": {"name": "Français", "flag": "🇨🇦", "dictionary": DEFAULT_FR_CA},
@@ -1379,7 +1396,7 @@ class SystemStore:
             data.setdefault("researcher_provider_profiles", [])
             data.setdefault("annotations", [])
             languages = data.setdefault("languages", {})
-            dictionary_revision = "0.35.17.1"
+            dictionary_revision = "0.36.0.1"
             refresh_builtins = str(data.get("language_dictionary_revision") or "") != dictionary_revision
             for code, value in self._default()["languages"].items():
                 if code not in languages:
@@ -1437,14 +1454,17 @@ class SystemStore:
 
     def _read(self) -> dict[str, Any]:
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
+            return self.repository.load()
         except Exception:
+            # Preserve the previous startup behavior: a damaged/temporarily
+            # unavailable store does not make localization defaults disappear.
             return self._default()
 
     def _write(self, data: dict[str, Any]) -> None:
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.path)
+        self.repository.replace(data)
+
+    def storage_info(self) -> dict[str, Any]:
+        return self.repository.describe()
 
     @staticmethod
     def _public_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -1460,10 +1480,10 @@ class SystemStore:
 
     def list_annotations(self, *, user_id: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
-            rows = copy.deepcopy(self._read().get("annotations") or [])
+            rows = copy.deepcopy(self.repository.list_annotations())
         if user_id is not None:
             rows = [row for row in rows if int(row.get("user_id") or 0) == int(user_id)]
-        return sorted(rows, key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        return rows
 
     def add_annotation(self, value: dict[str, Any]) -> dict[str, Any]:
         import uuid
@@ -1473,22 +1493,17 @@ class SystemStore:
         item["created_at"] = str(item.get("created_at") or datetime.now(timezone.utc).isoformat())
         item["tags"] = [str(tag).strip() for tag in item.get("tags") or [] if str(tag).strip()]
         with self._lock:
-            data = self._read(); data.setdefault("annotations", []).append(item); self._write(data)
+            self.repository.put_annotation(item)
         return item
 
     def delete_annotation(self, annotation_id: str, *, user_id: int | None = None, admin: bool = False) -> bool:
         annotation_id = str(annotation_id or "").strip()
         with self._lock:
-            data = self._read(); rows = data.setdefault("annotations", [])
-            before = len(rows)
-            data["annotations"] = [row for row in rows if not (str(row.get("id")) == annotation_id and (admin or user_id is None or int(row.get("user_id") or 0) == int(user_id)))]
-            changed = len(data["annotations"]) != before
-            if changed: self._write(data)
-        return changed
+            return self.repository.delete_annotation(annotation_id, user_id=user_id, admin=admin)
 
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
-            profiles = copy.deepcopy(self._read().get("researcher_provider_profiles") or [])
+            profiles = copy.deepcopy(self.repository.list_provider_profiles())
         if include_secrets:
             return profiles
         return [self._public_profile(profile) for profile in profiles]
@@ -1532,9 +1547,7 @@ class SystemStore:
                 endpoint = str(profile.get("base_url") or "").rstrip("/").lower()
                 profile["max_concurrent_requests"] = endpoint_limits.get(endpoint, profile["max_concurrent_requests"])
         with self._lock:
-            data = self._read()
-            data["researcher_provider_profiles"] = normalized
-            self._write(data)
+            self.repository.replace_provider_profiles(normalized)
         return [self._public_profile(profile) for profile in normalized]
 
     def researcher_profile(self, profile_id: str) -> dict[str, Any] | None:
@@ -1545,7 +1558,7 @@ class SystemStore:
 
     def list_languages(self) -> list[dict[str, str]]:
         with self._lock:
-            languages = copy.deepcopy(self._read().get("languages") or {})
+            languages = copy.deepcopy(self.repository.list_languages())
         return [
             {"code": code, "name": str(value.get("name") or code), "flag": str(value.get("flag") or "🌐")}
             for code, value in sorted(languages.items())
@@ -1557,7 +1570,7 @@ class SystemStore:
         except ValueError:
             return None
         with self._lock:
-            value = copy.deepcopy((self._read().get("languages") or {}).get(code))
+            value = copy.deepcopy(self.repository.get_language(code))
         if not value:
             return None
         return {"code": code, **value}
@@ -1574,8 +1587,7 @@ class SystemStore:
         code = normalize_locale_code(code)
         clean = {str(key): str(value) for key, value in dictionary.items() if str(key).strip()}
         with self._lock:
-            data = self._read()
-            languages = data.setdefault("languages", {})
+            languages = self.repository.list_languages()
             previous = languages.get(code) if isinstance(languages.get(code), dict) else {}
             report = copy.deepcopy(translation_report if translation_report is not None else previous.get("translation_report"))
             # Keep the durable report useful after an administrator manually fixes
@@ -1595,7 +1607,7 @@ class SystemStore:
             language_value: dict[str, Any] = {"name": name.strip() or code, "flag": flag.strip() or "🌐", "dictionary": clean}
             if isinstance(report, dict):
                 language_value["translation_report"] = report
-            languages[code] = language_value
+            self.repository.put_language(code, language_value)
             # en-US is the canonical key set. When an administrator introduces a
             # new English key, make it immediately editable in every installed
             # locale as an English fallback instead of waiting for a restart.
@@ -1604,9 +1616,13 @@ class SystemStore:
                     if locale_code == "en-US" or not isinstance(language, dict):
                         continue
                     target = language.setdefault("dictionary", {})
+                    changed = False
                     for key, value in clean.items():
-                        target.setdefault(key, value)
-            self._write(data)
+                        if key not in target:
+                            target[key] = value
+                            changed = True
+                    if changed:
+                        self.repository.put_language(locale_code, language)
         return self.get_language(code) or {}
 
     def delete_language(self, code: str) -> None:
@@ -1614,12 +1630,8 @@ class SystemStore:
         if code in {"en-US", "fr-CA"}:
             raise ValueError("Built-in languages cannot be removed.")
         with self._lock:
-            data = self._read()
-            languages = data.setdefault("languages", {})
-            if code not in languages:
+            if not self.repository.delete_language(code):
                 raise KeyError(code)
-            del languages[code]
-            self._write(data)
 
     def snapshot(self) -> dict[str, Any]:
         """Return the complete server-owned configuration for full backups.

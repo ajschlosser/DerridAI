@@ -17,6 +17,7 @@ from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
+from .persistence import job_repository
 
 
 def iso_now() -> str:
@@ -60,7 +61,56 @@ def _store_job_error(job: dict[str, Any], exc: Exception) -> dict[str, Any]:
     return details
 
 
-class LLMJobManager:
+class PersistentJobStateMixin:
+    """Mirror live worker state into the durable SQLite operation ledger.
+
+    Workers still keep a small in-process working copy for low-latency progress
+    updates, but SQLite is now the durable source across restarts. A lightweight
+    checkpoint loop captures nested progress/event mutations without forcing a
+    database transaction for every token or record-field update.
+    """
+
+    JOB_TYPE = "operation"
+
+    def _start_persistent_state(self) -> None:
+        persisted = job_repository.load(self.JOB_TYPE)
+        with self._lock:
+            self._jobs = {str(job["id"]): copy.deepcopy(job) for job in persisted if job.get("id")}
+        thread = threading.Thread(
+            target=self._persistence_loop,
+            daemon=True,
+            name=f"derridai-{self.JOB_TYPE}-sqlite-checkpoint",
+        )
+        self._persistence_thread = thread
+        thread.start()
+
+    def _persistence_loop(self) -> None:
+        while True:
+            time.sleep(1.0)
+            try:
+                with self._lock:
+                    jobs = [copy.deepcopy(job) for job in self._jobs.values()]
+                if jobs:
+                    job_repository.upsert_many(jobs)
+            except Exception:
+                # Persistence is retried on the next checkpoint. API calls keep
+                # their existing behavior rather than crashing a worker thread.
+                continue
+
+    def _persist_job(self, job_id: str) -> None:
+        with self._lock:
+            job = copy.deepcopy(self._jobs.get(job_id))
+        if job is not None:
+            job_repository.upsert(job)
+
+    def _persist_all_jobs(self) -> None:
+        with self._lock:
+            jobs = [copy.deepcopy(job) for job in self._jobs.values()]
+        job_repository.upsert_many(jobs)
+
+
+class LLMJobManager(PersistentJobStateMixin):
+    JOB_TYPE = "llm"
     def __init__(self, max_workers: int = 64) -> None:
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
@@ -70,6 +120,7 @@ class LLMJobManager:
             max_workers=max(4, min(64, int(max_workers))),
             thread_name_prefix="derridai-llm",
         )
+        self._start_persistent_state()
 
     def create(self, body: LLMJobCreate, *, owner: str | None = None) -> dict[str, Any]:
         job_id = str(uuid.uuid4())
@@ -150,6 +201,7 @@ class LLMJobManager:
                     "Wait for it to finish or cancel it before starting another sync."
                 )
             self._jobs[job_id] = job
+        self._persist_job(job_id)
         self._executor.submit(self._run, job_id, body)
         return self.get(job_id)
 
@@ -192,11 +244,13 @@ class LLMJobManager:
                 job = self._jobs[job_id]
                 job["status"] = "cancelled"
                 job["finished_at"] = iso_now()
+            self._persist_job(job_id)
             return
         try:
             self._run_with_provider_slot(job_id, body)
         finally:
             self._release_provider_slot(body)
+            self._persist_job(job_id)
 
     def _run_with_provider_slot(self, job_id: str, body: LLMJobCreate) -> None:
         with self._lock:
@@ -437,6 +491,7 @@ class LLMJobManager:
             })
             if dismiss_job:
                 job["dismissed"] = True
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
     def reject_and_dismiss(self, job_id: str) -> dict[str, Any]:
@@ -472,6 +527,7 @@ class LLMJobManager:
                 job["cancel_requested"] = True
                 job["cancel_requested_at"] = job["last_resolution_at"]
                 job["status"] = "cancelling"
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
     def snapshot(self) -> list[dict[str, Any]]:
@@ -508,6 +564,8 @@ class LLMJobManager:
                 job.setdefault("dismissed", False)
                 self._jobs[job_id] = job
                 restored += 1
+        retained = [copy.deepcopy(job) for job in self._jobs.values() if job.get("status") not in {"queued", "running", "cancelling"}]
+        job_repository.replace_finished(self.JOB_TYPE, retained)
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
@@ -538,6 +596,7 @@ class LLMJobManager:
                         "the next safe checkpoint."
                     ),
                 })
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
     def delete(self, job_id: str) -> None:
@@ -548,6 +607,7 @@ class LLMJobManager:
             if job["status"] in {"queued", "running", "cancelling"}:
                 raise ValueError("Running jobs must be cancelled before they can be removed.")
             del self._jobs[job_id]
+            job_repository.delete(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -566,6 +626,7 @@ class LLMJobManager:
             ]
             for job_id in ids:
                 del self._jobs[job_id]
+            job_repository.clear_finished(self.JOB_TYPE)
             return len(ids)
 
     @staticmethod
@@ -600,7 +661,8 @@ class LLMJobManager:
         return out
 
 
-class RAGJobManager:
+class RAGJobManager(PersistentJobStateMixin):
+    JOB_TYPE = "rag"
     """
     RAG scheduling uses provider-profile concurrency gates.
 
@@ -625,6 +687,7 @@ class RAGJobManager:
         self._ollama_max_concurrent = max(1, int(ollama_max_concurrent))
         self._provider_active: dict[str, int] = {}
         self._threads: dict[str, threading.Thread] = {}
+        self._start_persistent_state()
 
     def set_ollama_limit(self, limit: int) -> dict[str, Any]:
         value = max(1, min(32, int(limit)))
@@ -740,6 +803,7 @@ class RAGJobManager:
                 "result": None,
             }
             self._jobs[job_id] = job
+        self._persist_job(job_id)
 
         # Each RAG job receives its own daemon thread. Provider-profile gates
         # control actual concurrent pipeline execution; Ollama also retains the
@@ -1145,6 +1209,7 @@ class RAGJobManager:
                 self._release_provider_slot(body)
             with self._lock:
                 self._threads.pop(job_id, None)
+            self._persist_job(job_id)
 
     def list(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -1184,6 +1249,8 @@ class RAGJobManager:
                 job.setdefault("events", [])
                 self._jobs[job_id] = job
                 restored += 1
+        retained = [copy.deepcopy(job) for job in self._jobs.values() if job.get("status") not in {"queued", "running", "cancelling"}]
+        job_repository.replace_finished(self.JOB_TYPE, retained)
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
@@ -1220,6 +1287,7 @@ class RAGJobManager:
                         "pipeline checkpoint."
                     ),
                 })
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_result=True)
 
     def delete(self, job_id: str) -> None:
@@ -1232,6 +1300,7 @@ class RAGJobManager:
                     "Running jobs must be cancelled before they can be removed."
                 )
             del self._jobs[job_id]
+            job_repository.delete(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -1250,6 +1319,7 @@ class RAGJobManager:
             ]
             for job_id in ids:
                 del self._jobs[job_id]
+            job_repository.clear_finished(self.JOB_TYPE)
             return len(ids)
 
     @staticmethod
@@ -1266,7 +1336,8 @@ class RAGJobManager:
         return out
 
 
-class LLMToolJobManager:
+class LLMToolJobManager(PersistentJobStateMixin):
+    JOB_TYPE = "llm_tool"
     """Runs one-off LLM tools and cache-wide RAG grading jobs.
 
     Tool jobs share a provider-profile concurrency gate. A cache-wide grading
@@ -1282,6 +1353,7 @@ class LLMToolJobManager:
         self._condition = threading.Condition(self._lock)
         self._active: dict[str, int] = {}
         self._threads: dict[str, threading.Thread] = {}
+        self._start_persistent_state()
 
     @staticmethod
     def _payload(body: LLMToolJobCreate):
@@ -1358,6 +1430,7 @@ class LLMToolJobManager:
         }
         with self._lock:
             self._jobs[job_id] = job
+        self._persist_job(job_id)
 
         thread = threading.Thread(
             target=self._run,
@@ -1474,6 +1547,33 @@ class LLMToolJobManager:
                         "detail": detail,
                     })
 
+        def translation_checkpoint(
+            partial: dict[str, str],
+            failed_keys: list[str],
+            failures: list[dict[str, str]],
+            stats: dict[str, Any],
+        ) -> None:
+            # Keep validated translations durable while the pipeline is still
+            # running. A restart therefore loses at most the current model call,
+            # not the entire dictionary operation. Hidden checkpoint payloads are
+            # not returned by the public job API.
+            with self._lock:
+                current = self._jobs[job_id]
+                current["_resume_dictionary"] = dict(partial)
+                current["_resume_failed_keys"] = list(failed_keys)
+                current["result"] = {
+                    "code": code,
+                    "name": config.name or code,
+                    "flag": config.flag or "🌐",
+                    "partial_key_count": len(partial),
+                    "failed_count": len(failed_keys),
+                    "failure_samples": list(failures)[:20],
+                    "resumable": True,
+                    "checkpoint_at": iso_now(),
+                    **{key: value for key, value in stats.items() if key not in {"failed_keys", "failures"}},
+                }
+            self._persist_job(job_id)
+
         resume_dictionary: dict[str, str] | None = None
         retry_keys: list[str] | None = None
         if config.resume_job_id:
@@ -1502,6 +1602,7 @@ class LLMToolJobManager:
                 generation=config.generation,
                 cancelled=cancelled,
                 progress=translation_progress,
+                checkpoint=translation_checkpoint,
                 resume_dictionary=resume_dictionary,
                 retry_keys=retry_keys,
             )
@@ -1630,6 +1731,12 @@ class LLMToolJobManager:
                         else:
                             job["stage_detail"] = "Completed"
                         job["result"] = result
+                        if body.task == "language_dictionary":
+                            # The installed locale is now the durable copy; drop
+                            # the temporary server-side resume payload to keep
+                            # the operation ledger compact.
+                            job.pop("_resume_dictionary", None)
+                            job.pop("_resume_failed_keys", None)
                     job["finished_at"] = iso_now()
             except InterruptedError:
                 with self._lock:
@@ -1655,6 +1762,7 @@ class LLMToolJobManager:
                 self._condition.notify_all()
             with self._lock:
                 self._threads.pop(job_id, None)
+            self._persist_job(job_id)
 
     def list(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -1666,6 +1774,44 @@ class LLMToolJobManager:
             if job_id not in self._jobs:
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], True)
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        # Raw copies intentionally retain hidden language-translation checkpoints
+        # so a full backup can restore an incomplete/resumable dictionary job.
+        with self._lock:
+            return [
+                copy.deepcopy(job)
+                for job in self._jobs.values()
+                if job.get("status") not in {"queued", "running", "cancelling"}
+            ]
+
+    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+        restored = 0
+        with self._lock:
+            self._jobs = {
+                job_id: job
+                for job_id, job in self._jobs.items()
+                if job.get("status") in {"queued", "running", "cancelling"}
+            }
+            for raw in jobs or []:
+                if not isinstance(raw, dict):
+                    continue
+                job_id = str(raw.get("id") or "").strip()
+                if not job_id or raw.get("status") in {"queued", "running", "cancelling"}:
+                    continue
+                job = copy.deepcopy(raw)
+                job.setdefault("result", None)
+                job.setdefault("events", [])
+                job.setdefault("type", "llm_tool")
+                self._jobs[job_id] = job
+                restored += 1
+        retained = [
+            copy.deepcopy(job)
+            for job in self._jobs.values()
+            if job.get("status") not in {"queued", "running", "cancelling"}
+        ]
+        job_repository.replace_finished(self.JOB_TYPE, retained)
+        return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
         with self._condition:
@@ -1682,6 +1828,7 @@ class LLMToolJobManager:
                 job["cancel_requested_at"] = iso_now()
                 job["status"] = "cancelling"
             self._condition.notify_all()
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, True)
 
     def delete(self, job_id: str) -> None:
@@ -1691,6 +1838,7 @@ class LLMToolJobManager:
             if self._jobs[job_id]["status"] in {"queued", "running", "cancelling"}:
                 raise ValueError("Running jobs must be cancelled first.")
             del self._jobs[job_id]
+            job_repository.delete(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -1709,6 +1857,7 @@ class LLMToolJobManager:
             ]
             for job_id in ids:
                 del self._jobs[job_id]
+            job_repository.clear_finished(self.JOB_TYPE)
             return len(ids)
 
     @staticmethod
@@ -1725,7 +1874,8 @@ class LLMToolJobManager:
         return out
 
 
-class UpsertJobManager:
+class UpsertJobManager(PersistentJobStateMixin):
+    JOB_TYPE = "upsert"
     def __init__(self, store: ChromaStore, max_workers: int = 1) -> None:
         self._store = store
         self._jobs: dict[str, dict[str, Any]] = {}
@@ -1734,6 +1884,7 @@ class UpsertJobManager:
             max_workers=max_workers,
             thread_name_prefix="derridai-upsert",
         )
+        self._start_persistent_state()
 
     def create(self, body: UpsertJobCreate, *, owner: str | None = None) -> dict[str, Any]:
         # Keep only one heavyweight Chroma write in memory at a time. Queuing
@@ -1779,6 +1930,7 @@ class UpsertJobManager:
         }
         with self._lock:
             self._jobs[job_id] = job
+        self._persist_job(job_id)
         self._executor.submit(self._run, job_id, body)
         return self.get(job_id)
 
@@ -1891,6 +2043,8 @@ class UpsertJobManager:
                     "stage": "failed",
                     "detail": str(exc),
                 })
+        finally:
+            self._persist_job(job_id)
 
     def list(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -1930,6 +2084,8 @@ class UpsertJobManager:
                 job.setdefault("events", [])
                 self._jobs[job_id] = job
                 restored += 1
+        retained = [copy.deepcopy(job) for job in self._jobs.values() if job.get("status") not in {"queued", "running", "cancelling"}]
+        job_repository.replace_finished(self.JOB_TYPE, retained)
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
@@ -1956,6 +2112,7 @@ class UpsertJobManager:
                     "stage": "cancellation_requested",
                     "detail": "Cancellation requested; the current Chroma batch will finish, then the operation will stop.",
                 })
+            job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
     def delete(self, job_id: str) -> None:
@@ -1965,6 +2122,7 @@ class UpsertJobManager:
             if self._jobs[job_id]["status"] in {"queued", "running", "cancelling"}:
                 raise ValueError("Running jobs must be cancelled before they can be removed.")
             del self._jobs[job_id]
+            job_repository.delete(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -1975,6 +2133,7 @@ class UpsertJobManager:
             ids = [job_id for job_id, job in self._jobs.items() if job["status"] not in {"queued", "running", "cancelling"}]
             for job_id in ids:
                 del self._jobs[job_id]
+            job_repository.clear_finished(self.JOB_TYPE)
             return len(ids)
 
     @staticmethod
