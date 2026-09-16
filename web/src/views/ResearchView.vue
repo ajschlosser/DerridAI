@@ -164,7 +164,7 @@ function applyPreset(value:string){
     updateConfig({skip_retrieval:true});
     return;
   }
-  const common={skip_retrieval:false,reranker:"cross_encoder",search_types:["mmr","similarity"]};
+  const common={skip_retrieval:false,reranker:"cross_encoder",search_types:["similarity","lexical","mmr"]};
   if(value==="balanced")updateConfig({...common,k:64,fetch_k:500,lambda_mult:.7,rrf_k:60,rerank_top_n:24});
   else if(value==="precision")updateConfig({...common,k:40,fetch_k:320,lambda_mult:.82,rrf_k:60,rerank_top_n:16});
   else if(value==="recall")updateConfig({...common,k:96,fetch_k:1000,lambda_mult:.58,rrf_k:60,rerank_top_n:32});

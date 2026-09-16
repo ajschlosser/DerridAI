@@ -816,7 +816,7 @@ def run_rag_pipeline(
     if not request.skip_retrieval and not str(request.source_collection or "").strip():
         raise ValueError("Select a source collection when retrieval is enabled.")
 
-    # Step 3: similarity + MMR retrieval. Selected-evidence-only runs bypass
+    # Step 3: semantic + lexical + MMR retrieval. Selected-evidence-only runs bypass
     # vector retrieval completely; ordinary runs pin selected evidence alongside
     # retrieved candidates so user-curated context cannot be dropped by reranking.
     stage_start = time.perf_counter()
@@ -847,14 +847,12 @@ def run_rag_pipeline(
             if "fr" in locale_codes and "en" not in locale_codes
             else query_metadata["prompt_query"]
         )
-        candidates = store.semantic_candidates(
-            collection["name"],
-            query,
-            min(fetch_k, max(1, collection["count"])),
-        )
-        if collection.get("collection_role") != "language":
+
+        def scope_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            if collection.get("collection_role") == "language":
+                return rows
             scoped: list[dict[str, Any]] = []
-            for candidate in candidates:
+            for candidate in rows:
                 record = candidate.get("record") or {}
                 language_value = record.get("document_language")
                 if language_value is None:
@@ -862,7 +860,28 @@ def run_rag_pipeline(
                 codes = ChromaStore._record_language_codes(language_value)
                 if not locale_codes or codes & locale_codes:
                     scoped.append(candidate)
-            candidates = scoped
+            return scoped
+
+        semantic_candidates: list[dict[str, Any]] = []
+        if {"similarity", "mmr"} & set(request.search_types):
+            try:
+                semantic_candidates = scope_candidates(store.semantic_candidates(
+                    collection["name"],
+                    query,
+                    min(fetch_k, max(1, collection["count"])),
+                ))
+            except ValueError as exc:
+                # Precomputed-vector collections remain useful through the lexical
+                # route even though they cannot embed a new query.
+                if "lexical" not in request.search_types:
+                    raise
+                update(
+                    "retrieval",
+                    unit,
+                    total_units,
+                    f"Semantic route unavailable for {collection['name']}: {exc}",
+                )
+
         if "similarity" in request.search_types:
             unit += 1
             update(
@@ -871,11 +890,32 @@ def run_rag_pipeline(
                 total_units,
                 f"Similarity · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            for rank, candidate in enumerate(candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(semantic_candidates[:retrieve_k], start=1):
                 row = dict(candidate)
                 row["search_type"] = "similarity"
                 row["search_rank"] = rank
                 raw_results.append(row)
+
+        if "lexical" in request.search_types:
+            unit += 1
+            update(
+                "retrieval",
+                unit,
+                total_units,
+                f"Lexical · {collection['name']} · {collection.get('_rag_route', '')}",
+            )
+            lexical_candidates = scope_candidates(store.lexical_search(
+                collection["name"],
+                query,
+                min(fetch_k, max(1, collection["count"])),
+            ))
+            for rank, candidate in enumerate(lexical_candidates[:retrieve_k], start=1):
+                row = dict(candidate)
+                row["collection"] = collection["name"]
+                row["search_type"] = "lexical"
+                row["search_rank"] = rank
+                raw_results.append(row)
+
         if "mmr" in request.search_types:
             unit += 1
             update(
@@ -885,7 +925,7 @@ def run_rag_pipeline(
                 f"MMR · {collection['name']} · {collection.get('_rag_route', '')}",
             )
             mmr = _mmr_select(
-                candidates,
+                semantic_candidates,
                 k=retrieve_k,
                 lambda_mult=request.lambda_mult,
             )

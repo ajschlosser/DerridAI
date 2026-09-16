@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.36.11
+# DerridAI Corpus Viewer 0.37.0
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,14 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.37.0 — New Direction
+
+Version 0.37.0 rebuilds Vector Stores around explicit, reproducible retrieval contracts rather than treating a Chroma collection as an opaque mutable container. Collection creation now uses a Source → Retrieval → Review & build workflow with strict create semantics, embedding preflight, recorded vector dimension and distance metric, hybrid retrieval as the recommended default, deletion protection, source/build provenance, and background synchronization for collections of every size. Existing collection names return a conflict instead of being silently reused.
+
+Vector Stores now foreground collection health and provenance: status, embedding contract, source snapshot, current build, synchronization time, build history, and protection state are visible alongside the data browser. The retrieval test can compare hybrid, semantic, lexical, and MMR behavior. Large synchronization no longer requires the Vector Stores tab to remain open; builds are handled by the persistent operations system, and completed builds finalize a manifest with source fingerprint and build history. Infrastructure storage controls are intentionally demoted to an advanced system-storage section.
+
+This release also hardens embedding compatibility. Generated embeddings are probed before collection creation, the resolved dimension becomes part of the collection contract, upserts reject dimension drift before Chroma writes the batch, and manifest-backed embedding settings are immutable. Precomputed-vector collections may establish their dimension on first ingest and remain usable for lexical and hybrid retrieval even when query embedding is unavailable.
 
 ## 0.36.11 — Peekaboo
 

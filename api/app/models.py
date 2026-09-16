@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
+RetrievalMode = Literal["semantic", "hybrid", "lexical"]
+DistanceMetric = Literal["cosine", "l2", "ip"]
 
 
 class ChromaPathUpdate(BaseModel):
@@ -15,12 +18,57 @@ class ChromaPathUpdate(BaseModel):
 
 
 class StoreCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=3, max_length=128)
     metadata: dict[str, Any] | None = None
+    description: str | None = Field(default=None, max_length=2000)
     embedding_provider: Literal["chroma", "ollama", "precomputed"] | None = None
     embedding_model: str | None = None
+    embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
+    distance_metric: DistanceMetric = "cosine"
+    retrieval_mode: RetrievalMode = "hybrid"
+    text_field: str = Field(default="text", min_length=1, max_length=128)
+    filter_fields: list[str] = Field(default_factory=list, max_length=128)
     language_codes: list[LanguageCode] | None = None
     collection_role: CollectionRole | None = None
+    protected: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _validate_collection_name(cls, value: str) -> str:
+        value = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", value):
+            raise ValueError(
+                "Collection names must start and end with a letter or number and "
+                "contain only letters, numbers, periods, underscores, or hyphens."
+            )
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", value):
+            raise ValueError("Collection names cannot be IPv4 addresses.")
+        return value
+
+    @field_validator("filter_fields")
+    @classmethod
+    def _validate_filter_fields(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in values:
+            value = str(raw or "").strip()
+            if not value or len(value) > 128:
+                raise ValueError("Filter field names must contain 1 to 128 characters.")
+            if value.startswith("__derridai_") or value.startswith("_chroma_"):
+                raise ValueError("Reserved internal fields cannot be declared filter fields.")
+            if value not in cleaned:
+                cleaned.append(value)
+        return cleaned
+
+
+class EmbeddingPreflightRequest(BaseModel):
+    embedding_provider: Literal["chroma", "ollama", "precomputed"] = "ollama"
+    embedding_model: str | None = None
+    embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
+    distance_metric: DistanceMetric = "cosine"
+
+
+class StoreProtectionUpdate(BaseModel):
+    protected: bool
 
 
 class StoreEmbeddingUpdate(BaseModel):
@@ -111,17 +159,29 @@ class UpsertJobCreate(BaseModel):
     batch_size: int = Field(default=500, ge=1, le=1000)
     mirror_languages: bool = True
     include_updates: bool = False
+    source_kind: Literal["browser_workspace", "database", "subset", "manual"] = "browser_workspace"
+    source_label: str | None = Field(default=None, max_length=500)
+    source_works: list[str] = Field(default_factory=list, max_length=10000)
 
 
 class RecordStatusRequest(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=5000)
 
 
+class SourceFingerprintProbe(BaseModel):
+    id: str = Field(min_length=1, max_length=1024)
+    fingerprint: str = Field(min_length=1, max_length=256)
+
+
+class StoreDriftRequest(BaseModel):
+    items: list[SourceFingerprintProbe] = Field(min_length=1, max_length=50000)
+
+
 class SearchRequest(BaseModel):
     query: str = ""
     n_results: int = Field(default=10, ge=1, le=100)
     where: dict[str, Any] | None = None
-    mode: Literal["similarity", "mmr", "filter", "keyword"] = "similarity"
+    mode: Literal["similarity", "mmr", "filter", "keyword", "lexical", "hybrid"] = "similarity"
     fetch_k: int = Field(default=100, ge=1, le=1000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
 
@@ -265,7 +325,7 @@ class RAGRunRequest(BaseModel):
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
     locales: list[LanguageCode] = Field(default_factory=lambda: ["en", "fr"])
-    search_types: list[Literal["mmr", "similarity"]] = Field(default_factory=lambda: ["mmr", "similarity"])
+    search_types: list[Literal["mmr", "similarity", "lexical"]] = Field(default_factory=lambda: ["similarity", "lexical", "mmr"])
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
