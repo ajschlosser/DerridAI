@@ -1737,33 +1737,54 @@ def list_pdf_corpus_profiles():
 
 
 def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
+    """Resolve server-owned researcher profiles without rejecting admin profiles.
+
+    Administrator provider profiles are stored in the browser workspace for legacy
+    compatibility, while researcher-approved profiles are persisted server-side.
+    PDF Corpus Builder must support both sources.  When a profile id is known to
+    the server we resolve its secrets there; otherwise an explicit provider
+    configuration supplied by the authenticated admin request is used.  Secrets
+    are stripped by the build manager before the public build manifest is saved.
+    """
     resolved = dict(payload)
+    direct_review = resolved.pop("review_provider", None)
+    if hasattr(direct_review, "model_dump"):
+        direct_review = direct_review.model_dump(exclude_none=True)
+
     profile_id = str(resolved.get("provider_profile_id") or "").strip()
     if profile_id:
         profile = system_store.researcher_profile(profile_id)
-        if profile is None:
+        if profile is not None:
+            resolved.update({
+                "provider": profile.get("type") or "ollama",
+                "model": profile.get("model"),
+                "base_url": profile.get("base_url"),
+                "api_key": profile.get("api_key"),
+                "generation": _profile_generation_options(profile) or None,
+                "provider_profile_id": profile_id,
+            })
+        elif not (resolved.get("provider") and (resolved.get("model") or resolved.get("base_url"))):
             raise ValueError("The selected LLM provider profile is not available.")
-        resolved.update({
-            "provider": profile.get("type") or "ollama",
-            "model": profile.get("model"),
-            "base_url": profile.get("base_url"),
-            "api_key": profile.get("api_key"),
-            "generation": _profile_generation_options(profile) or None,
-            "provider_profile_id": profile_id,
-        })
+
     review_profile_id = str(resolved.get("review_provider_profile_id") or "").strip()
     if review_profile_id:
         review_profile = system_store.researcher_profile(review_profile_id)
-        if review_profile is None:
+        if review_profile is not None:
+            resolved["_review_provider"] = {
+                "provider": review_profile.get("type") or "ollama",
+                "model": review_profile.get("model"),
+                "base_url": review_profile.get("base_url"),
+                "api_key": review_profile.get("api_key"),
+                "generation": _profile_generation_options(review_profile) or None,
+                "provider_profile_id": review_profile_id,
+            }
+        elif isinstance(direct_review, dict) and direct_review.get("provider"):
+            resolved["_review_provider"] = {**direct_review, "provider_profile_id": review_profile_id}
+        else:
             raise ValueError("The selected escalation provider profile is not available.")
-        resolved["_review_provider"] = {
-            "provider": review_profile.get("type") or "ollama",
-            "model": review_profile.get("model"),
-            "base_url": review_profile.get("base_url"),
-            "api_key": review_profile.get("api_key"),
-            "generation": _profile_generation_options(review_profile) or None,
-            "provider_profile_id": review_profile_id,
-        }
+    elif isinstance(direct_review, dict) and direct_review.get("provider"):
+        resolved["_review_provider"] = direct_review
+
     return {key: value for key, value in resolved.items() if value is not None}
 
 

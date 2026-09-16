@@ -245,3 +245,23 @@ def test_0401_build_observability_tracks_structured_output_retries_and_escalatio
         assert token in builder
     assert "llmMetrics" in progress
     assert "validation_details" in progress
+
+
+def test_0401_pdf_builder_uses_configured_admin_profiles_not_only_researcher_allowlist():
+    component = text("web/src/components/PdfCorpusBuilder.vue")
+    runtime = text("web/src/legacy/runtime.js")
+    main = text("api/app/main.py")
+    models = text("api/app/models.py")
+    assert "getProviderProfilesForUi" in component
+    assert "serverProviderIds" in component
+    assert "directProfilePayload" in component
+    assert "getProviderRequestConfigForUi" in runtime
+    assert 'elif not (resolved.get("provider") and (resolved.get("model") or resolved.get("base_url")))' in main
+    assert "review_provider: PdfCorpusProviderConfig | None = None" in models
+
+
+def test_0401_pdf_builder_does_not_persist_direct_provider_secrets_in_public_manifest():
+    builder = text("api/app/corpus_builder.py")
+    main = text("api/app/main.py")
+    assert 'public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}' in builder
+    assert 'direct_review = resolved.pop("review_provider", None)' in main

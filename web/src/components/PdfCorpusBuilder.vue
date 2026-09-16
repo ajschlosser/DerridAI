@@ -16,6 +16,7 @@ const assets=ref<PdfAsset[]>([]);
 const builds=ref<CorpusBuild[]>([]);
 const buildsTotal=ref(0);
 const providerProfiles=ref<ProviderProfile[]>([]);
+const serverProviderIds=ref<Set<string>>(new Set());
 const selectedProviderId=ref("");
 const selectedReviewProviderId=ref("");
 const selectedAssetId=ref("");
@@ -75,10 +76,39 @@ const selectedPdfPageIndex=computed(()=>Math.max(0,recordPdfPages.value.indexOf(
 const selectedPageMeta=computed(()=>selectedAsset.value?.pages?.find(page=>Number(page.pdf_page)===Number(selectedPdfPage.value))||null);
 const selectedPageBlocks=computed(()=>visibleBlocks.value.filter(block=>Number(block.page)===Number(selectedPdfPage.value)));
 const evidenceIdsArray=computed(()=>Array.from(evidenceBlockIds.value));
+function directProfilePayload(profileId:string){
+  const config=(runtime as any).getProviderRequestConfigForUi?.(profileId,{textReview:false}) as Record<string,unknown>|null;
+  if(!config)return null;
+  const ollama=config.ollama;
+  return {
+    provider_profile_id:profileId,
+    provider:config.provider,
+    model:config.model,
+    base_url:config.base_url,
+    api_key:config.api_key,
+    generation:ollama&&typeof ollama==="object"?ollama:undefined,
+  };
+}
 const providerPayload=computed<Record<string,unknown>>(()=>{
   if(selectedProviderId.value){
-    const payload:Record<string,unknown>={provider_profile_id:selectedProviderId.value};
-    if(selectedReviewProviderId.value&&selectedReviewProviderId.value!==selectedProviderId.value)payload.review_provider_profile_id=selectedReviewProviderId.value;
+    const primary=directProfilePayload(selectedProviderId.value)||{provider_profile_id:selectedProviderId.value};
+    const payload:Record<string,unknown>={...primary};
+    // A server-owned researcher profile can be resolved by id alone. Browser-owned
+    // administrator profiles include their explicit connection settings so the PDF
+    // build does not depend on the separate Researcher Profiles allow-list.
+    if(serverProviderIds.value.has(selectedProviderId.value)){
+      for(const key of ["provider","model","base_url","api_key","generation"])delete payload[key];
+    }
+    if(selectedReviewProviderId.value&&selectedReviewProviderId.value!==selectedProviderId.value){
+      payload.review_provider_profile_id=selectedReviewProviderId.value;
+      if(!serverProviderIds.value.has(selectedReviewProviderId.value)){
+        const review=directProfilePayload(selectedReviewProviderId.value);
+        if(review){
+          const {provider_profile_id: _profileId,...reviewConfig}=review;
+          payload.review_provider=reviewConfig;
+        }
+      }
+    }
     return payload;
   }
   const payload:Record<string,unknown>={provider:manualProvider.value};
@@ -101,7 +131,23 @@ function recordMetadata(record:CorpusRecord){
 }
 function manageProviders(){window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/providers",legacyView:"providers"}}))}
 
-async function refreshProviders(){try{providerProfiles.value=(await systemApi.researcherProviders()).profiles;if(!selectedProviderId.value&&providerProfiles.value[0])selectedProviderId.value=providerProfiles.value[0].id}catch{providerProfiles.value=[]}}
+async function refreshProviders(){
+  const runtimeProfiles=((runtime as any).getProviderProfilesForUi?.()||[]) as ProviderProfile[];
+  let serverProfiles:ProviderProfile[]=[];
+  try{serverProfiles=(await systemApi.researcherProviders()).profiles||[]}catch{serverProfiles=[]}
+  serverProviderIds.value=new Set(serverProfiles.map(profile=>profile.id));
+  const merged=new Map<string,ProviderProfile>();
+  // Runtime profiles are the source of truth for administrators; researcher
+  // profiles from the server fill in when the native view mounts before legacy
+  // runtime bootstrap has completed. Prefer the richer runtime copy on conflicts.
+  for(const profile of serverProfiles)merged.set(profile.id,profile);
+  for(const profile of runtimeProfiles)merged.set(profile.id,profile);
+  providerProfiles.value=Array.from(merged.values());
+  const defaultId=String((runtime as any).getDefaultProviderProfileId?.()||"");
+  if(!providerProfiles.value.some(profile=>profile.id===selectedProviderId.value)){
+    selectedProviderId.value=providerProfiles.value.find(profile=>profile.id===defaultId)?.id||providerProfiles.value[0]?.id||"";
+  }
+}
 async function refreshAssets(){const result=await pdfCorpusApi.listAssets();assets.value=result.items;if(!selectedAssetId.value&&assets.value[0])selectedAssetId.value=assets.value[0].asset_id}
 async function refreshBuilds(){const result=await pdfCorpusApi.listBuilds(0,100);builds.value=result.items;buildsTotal.value=result.total;if(!selectedBuildId.value&&builds.value[0])selectedBuildId.value=builds.value[0].build_id}
 async function refreshBuild(){if(!selectedBuildId.value){currentBuild.value=null;return}try{currentBuild.value=await pdfCorpusApi.build(selectedBuildId.value)}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error");return}if(currentBuild.value?.asset_id)selectedAssetId.value=currentBuild.value.asset_id;const request=currentBuild.value?.request||{};if(typeof request.provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.provider_profile_id))selectedProviderId.value=request.provider_profile_id;if(typeof request.review_provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.review_provider_profile_id))selectedReviewProviderId.value=request.review_provider_profile_id}
@@ -188,7 +234,7 @@ onBeforeUnmount(stopPolling);
       </div>
 
       <div class="provider-area">
-        <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :label="i18n.t('pdf_corpus.provider_profile','Provider profile')" :help="i18n.t('pdf_corpus.provider_profile_help','Uses the same centrally managed provider profiles as Research and other LLM workflows.')" :empty-title="i18n.t('pdf_corpus.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('pdf_corpus.no_provider_profiles_help','Create a provider profile or use the manual compatibility settings below.')" :manage-label="i18n.t('pdf_corpus.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('pdf_corpus.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('pdf_corpus.concurrent_requests','max concurrent request(s)')" @manage="manageProviders" />
+        <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('pdf_corpus.provider_profile','Provider profile')" :help="i18n.t('pdf_corpus.provider_profile_help','Uses the same centrally managed provider profiles as Research and other LLM workflows.')" :empty-title="i18n.t('pdf_corpus.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('pdf_corpus.no_provider_profiles_help','Create a provider profile or use the manual compatibility settings below.')" :manage-label="i18n.t('pdf_corpus.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('pdf_corpus.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('pdf_corpus.concurrent_requests','max concurrent request(s)')" @manage="manageProviders" />
       </div>
 
       <button type="button" class="btn primary build-button" @click="startBuild" :disabled="!selectedAssetId||busy!==''||buildRunning">{{busy==='build'?i18n.t('pdf_corpus.starting','Starting…'):i18n.t('pdf_corpus.build_records','Build record set')}}</button>

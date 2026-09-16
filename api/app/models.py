@@ -382,6 +382,14 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PdfCorpusProviderConfig(BaseModel):
+    provider: Literal["ollama", "openai"] = "ollama"
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    generation: OllamaTouchupOptions | None = None
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
     profile_id: str = Field(default="derrida-scholarly-v2", min_length=1, max_length=200)
@@ -391,6 +399,7 @@ class PdfCorpusBuildCreate(BaseModel):
     api_key: str | None = None
     provider_profile_id: str | None = None
     review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
 
 
@@ -431,6 +440,7 @@ class PdfCorpusRecordRerun(BaseModel):
     api_key: str | None = None
     provider_profile_id: str | None = None
     review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
 
 

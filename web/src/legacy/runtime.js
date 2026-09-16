@@ -9680,6 +9680,10 @@ function triggerBack(){return goBack()}
 function triggerForward(){return goForward()}
 function navigateView(view){return navigateTo(view)}
 function getProviderProfilesForUi(){return cloneAuditValue(providerProfiles())}
+function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
+  const profile=providerProfile(profileId);
+  return profile?cloneAuditValue(providerRequestConfig(profile,{textReview})):null;
+}
 function getDefaultProviderProfileId(){return state.appConfig.default_provider_profile||defaultProviderProfile()?.id||""}
 function closeWorkspaceFile(fileId){return closeFile(fileId)}
 function notifyToast(message,options={}){return toast(message,options)}
@@ -10453,6 +10457,7 @@ export {
   triggerBack,
   triggerForward,
   getProviderProfilesForUi,
+  getProviderRequestConfigForUi,
   getDefaultProviderProfileId,
   notifyToast,
   registerExternalJob,
