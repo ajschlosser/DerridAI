@@ -25,6 +25,9 @@ const state = {
   dbSearchWhere: {},
   dbSearchFetchK: 100,
   dbSearchLambda: 0.7,
+  globalAdvancedOpen: false,
+  searchFacetFilters: {},
+  searchDatabaseRan: false,
   worksSearch: "",
   workOverview: "",
   researcherRecordId: "",
@@ -732,6 +735,8 @@ function workspacePrefs(){
     dbSearchWhere:state.dbSearchWhere,
     dbSearchFetchK:state.dbSearchFetchK,
     dbSearchLambda:state.dbSearchLambda,
+    globalAdvancedOpen:state.globalAdvancedOpen,
+    searchFacetFilters:state.searchFacetFilters,
     worksSearch:state.worksSearch,
     workOverview:state.workOverview,
     researcherRecordId:state.researcherRecordId,
@@ -795,7 +800,7 @@ async function restoreWorkspace(){
     if(prefs){
       const preservedAppDefaults={...state.appConfig};
       const preservedLlmDefaults={...state.llmConfig};
-      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeWork","storeSort","storeFilters","storeBrowseMode","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
+      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeWork","storeSort","storeFilters","storeBrowseMode","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
         if(prefs[key]!==undefined)state[key]=prefs[key];
       }
       state.appConfig={...preservedAppDefaults,...(prefs.appConfig||{})};
@@ -2323,7 +2328,7 @@ function currentTableUrlState(view=state.view){
     const f=activeFile();if(!f)return null;
     return {c:state.tableColumns.list||null,s:state.sorts[f.id]||null,f:state.listFilters[f.id]||null,p:state.pages[f.id]||1,z:state.pageSize,q:state.searches[f.id]||""};
   }
-  if(view==="global")return {c:state.tableColumns.global||null,s:state.globalSort,f:state.globalFilters,p:state.globalPage,z:state.pageSize,q:state.globalSearch,m:state.globalSearchMode,dm:state.dbSearchMethod,dw:state.dbSearchWhere,dk:state.dbSearchFetchK,dl:state.dbSearchLambda,l:state.searchResultLayouts};
+  if(view==="global")return {c:state.tableColumns.global||null,s:state.globalSort,f:state.globalFilters,sf:state.searchFacetFilters||{},p:state.globalPage,z:state.pageSize,q:state.globalSearch,m:state.globalSearchMode,dm:state.dbSearchMethod,dw:state.dbSearchWhere,dk:state.dbSearchFetchK,dl:state.dbSearchLambda,ao:Boolean(state.globalAdvancedOpen),l:state.searchResultLayouts};
   if(view==="vector")return {c:state.tableColumns.vector||null,s:state.storeSort,f:state.storeFilters,p:state.storePage,z:state.storePageSize,w:state.storeWork,b:state.storeBrowseMode,ss:state.storeSearchSort,q:state.storeQuery};
   if(view==="works")return {q:state.worksSearch||"",w:state.workOverview||""};
   if(view==="annotations")return {q:state.annotationSearch||"",m:state.annotationView||"works"};
@@ -2346,6 +2351,7 @@ function applyCompressedTableUrlState(value,view=state.view){
     if(Array.isArray(value.c))state.tableColumns.global=value.c;
     if(value.s)state.globalSort=value.s;
     if(Array.isArray(value.f))state.globalFilters=value.f;
+    if(value.sf&&typeof value.sf==="object"&&!Array.isArray(value.sf))state.searchFacetFilters=Object.fromEntries(Object.entries(value.sf).map(([field,values])=>[field,Array.isArray(values)?values.map(String):[]]).filter(([,values])=>values.length));
     if(Number.isFinite(+value.p))state.globalPage=Math.max(1,+value.p);
     if(Number.isFinite(+value.z))state.pageSize=Math.max(10,+value.z);
     if(typeof value.q==="string")state.globalSearch=value.q;
@@ -2354,6 +2360,7 @@ function applyCompressedTableUrlState(value,view=state.view){
     if(value.dw&&typeof value.dw==="object"&&!Array.isArray(value.dw))state.dbSearchWhere=value.dw;
     if(Number.isFinite(+value.dk))state.dbSearchFetchK=Math.max(1,+value.dk);
     if(Number.isFinite(+value.dl))state.dbSearchLambda=Math.max(0,Math.min(1,+value.dl));
+    if(typeof value.ao==="boolean")state.globalAdvancedOpen=value.ao;
     if(value.l&&typeof value.l==="object")state.searchResultLayouts={...state.searchResultLayouts,...value.l};
     if(state.globalSearchMode==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;
   }else if(view==="vector"){
@@ -6245,6 +6252,18 @@ function valueMatches(v,op,n){
 
 function dbFilterDisplayValue(value){return value&&typeof value==="object"&&"$contains" in value?`${tr("research.contains","contains")} ${value.$contains}`:String(value??"")}
 function dbSearchWhere(){return Object.fromEntries(Object.entries(state.dbSearchWhere||{}).filter(([,value])=>String(value??"").trim()!==""))}
+function safeDbSearchWhere(method=state.dbSearchMethod){
+  const safe={};
+  for(const [rawField,rawValue] of Object.entries(dbSearchWhere())){
+    const field=String(rawField||"").trim();
+    if(!field||field.startsWith("$"))continue;
+    if(method==="filter"&&rawValue&&typeof rawValue==="object"&&!Array.isArray(rawValue)&&Object.prototype.hasOwnProperty.call(rawValue,"$contains")){
+      const value=String(rawValue.$contains??"").trim();if(value)safe[field]={$contains:value};continue;
+    }
+    if(["string","number","boolean"].includes(typeof rawValue)&&String(rawValue).trim()!=="")safe[field]=rawValue;
+  }
+  return safe;
+}
 function researcherDbRecords(){
   const map=new Map();
   for(const item of state.storeSearchResults||[]){const record=item.record||{};const id=String(item.id||record._chroma_id||record.record_id||"");if(id)map.set(id,{...record,_chroma_id:id})}
@@ -6404,6 +6423,283 @@ function wireFilterRow(row,main){
   row.querySelector(".op").onchange=e=>{f.op=e.target.value;state.globalPage=1;persistPrefs();syncUrl({replace:true});renderGlobal(main)};
   row.querySelector(".value").onchange=e=>{f.value=e.target.value;state.globalPage=1;persistPrefs();syncUrl({replace:true});renderGlobal(main)};
   row.querySelector(".remove").onclick=()=>{state.globalFilters=state.globalFilters.filter(x=>x!==f);persistPrefs();syncUrl({replace:true});renderGlobal(main)};
+}
+
+
+// 0.36.10 native Search bridge. SearchView owns presentation while the runtime
+// continues to own browser-local corpus state, Chroma transport, evidence
+// selection, URL serialization, and the existing LLM review workflows.
+const SEARCH_FACET_FIELDS=["work","needs_review","__db_status","document_author","quoted_speaker","speaker","position_holder","discourse_role","document_language","topics","concepts"];
+const SEARCH_FILTER_FIELDS=["work","document_author","year","document_language","original_language","speaker","quoted_speaker","position_holder","target","discourse_role","proposition_status","stance","topics","concepts","persons","needs_review"];
+const SEARCH_AUTOCOMPLETE_EXCLUDED=new Set(["text","extracted_text","extractedText","raw_text","ocr_text","updates"]);
+
+function searchScope(){return state.globalSearchMode==="database"||isResearcher()?"database":"loaded"}
+function searchLayout(scope=searchScope()){
+  const key=scope==="database"?"database":"traditional";
+  const value=state.searchResultLayouts?.[key]|| (key==="database"?"cards":"compact");
+  return ["compact","roomy","cards"].includes(value)?value:(key==="database"?"cards":"compact");
+}
+function searchFacetRawValues(record,field,row=null){
+  if(field==="needs_review")return [record?.needs_review?"true":"false"];
+  if(field==="__db_status"){
+    if(row?.file)return [recordDbStatus(row.file,row.index,record).kind];
+    return ["exists"];
+  }
+  const value=record?.[field];
+  if(value==null||value==="")return [];
+  if(Array.isArray(value))return value.flatMap(item=>item==null?[]:[String(item).trim()]).filter(Boolean);
+  if(typeof value==="object")return Object.values(value).flatMap(item=>item==null?[]:[String(item).trim()]).filter(Boolean);
+  return [String(value).trim()].filter(Boolean);
+}
+function searchFacetDisplay(field,value){
+  if(field==="needs_review")return value==="true"?tr("search.needs_review","Needs review"):tr("search.reviewed","Reviewed");
+  if(field==="__db_status"){
+    const labelsByKind={synced:tr("search.db_synced","Synced"),changed:tr("search.db_pending","Pending"),exists:tr("search.db_in_database","In DB"),absent:tr("search.db_not_in_database","Not in DB"),unknown:tr("search.db_unknown","Unknown"),none:tr("search.db_none","No database")};
+    return labelsByKind[value]||value;
+  }
+  return value||tr("ui.none","None");
+}
+function searchFacetMatches(record,field,selected,row=null){
+  if(!selected?.length)return true;
+  const values=searchFacetRawValues(record,field,row).map(value=>String(value).toLocaleLowerCase());
+  return selected.some(value=>values.includes(String(value).toLocaleLowerCase()));
+}
+function searchRowMatchesFacets(row,excludeField=""){
+  for(const [field,values] of Object.entries(state.searchFacetFilters||{})){
+    if(field===excludeField||!Array.isArray(values)||!values.length)continue;
+    if(!searchFacetMatches(row.record,field,values,row))return false;
+  }
+  return true;
+}
+function searchRecordMatchesFacets(record,excludeField=""){
+  for(const [field,values] of Object.entries(state.searchFacetFilters||{})){
+    if(field===excludeField||!Array.isArray(values)||!values.length)continue;
+    if(!searchFacetMatches(record,field,values,null))return false;
+  }
+  return true;
+}
+function localSearchBaseRows(){
+  const q=String(state.globalSearch||"").trim().toLocaleLowerCase();
+  return allRows().filter(row=>(!q||String(row.record.text||"").toLocaleLowerCase().includes(q))&&state.globalFilters.every(filter=>valueMatches(row.record[filter.field],filter.op,filter.value)));
+}
+function searchFacetCountsFromRows(baseRows,field){
+  const counts=new Map();
+  for(const row of baseRows){
+    if(!searchRowMatchesFacets(row,field))continue;
+    for(const value of searchFacetRawValues(row.record,field,row))counts.set(value,(counts.get(value)||0)+1);
+  }
+  return counts;
+}
+function searchFacetCountsFromRecords(records,field){
+  const counts=new Map();
+  for(const record of records){
+    if(!searchRecordMatchesFacets(record,field))continue;
+    for(const value of searchFacetRawValues(record,field,null))counts.set(value,(counts.get(value)||0)+1);
+  }
+  return counts;
+}
+function buildSearchFacets(source,{database=false}={}){
+  const rows=database?null:source;
+  const records=database?source:null;
+  return SEARCH_FACET_FIELDS.filter(field=>!(database&&field==="__db_status")).map(field=>{
+    const counts=database?searchFacetCountsFromRecords(records,field):searchFacetCountsFromRows(rows,field);
+    const selected=new Set((state.searchFacetFilters?.[field]||[]).map(String));
+    const values=[...counts.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).slice(0,20).map(([value,count])=>({value:String(value),label:searchFacetDisplay(field,String(value)),count,selected:selected.has(String(value))}));
+    for(const value of selected){if(!values.some(item=>item.value===value))values.push({value,label:searchFacetDisplay(field,value),count:0,selected:true})}
+    return {field,label:label(field),values};
+  }).filter(facet=>facet.values.length);
+}
+function searchSuggestions(recordsOrRows,{database=false}={}){
+  const out={};
+  const rows=database?recordsOrRows.map(record=>({record})):recordsOrRows;
+  const fields=[...new Set([...SEARCH_FILTER_FIELDS,...recordFields().filter(field=>!SEARCH_AUTOCOMPLETE_EXCLUDED.has(field))])];
+  for(const field of fields){
+    if(SEARCH_AUTOCOMPLETE_EXCLUDED.has(field))continue;
+    const values=new Set();
+    for(const row of rows){
+      for(const value of searchFacetRawValues(row.record,field,row.file?row:null)){
+        const text=String(value).trim();if(text&&text.length<=180)values.add(text);
+        if(values.size>=120)break;
+      }
+      if(values.size>=120)break;
+    }
+    if(values.size)out[field]=[...values].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}));
+  }
+  return out;
+}
+function searchFilterDescriptor(filter){
+  const ops=filterOpsForField(filter.field);const op=ops.find(([value])=>value===filter.op);
+  return {id:String(filter.id||uid()),field:String(filter.field||""),field_label:label(filter.field||""),op:String(filter.op||"eq"),op_label:tr(`search.operator_${filter.op}`,op?.[1]||filter.op||"equals"),value:String(filter.value??"")};
+}
+function dbSearchFilterDescriptors(){
+  return Object.entries(dbSearchWhere()).map(([field,value])=>{
+    const contains=value&&typeof value==="object"&&"$contains" in value;
+    return {id:`db:${field}`,field,field_label:label(field),op:contains?"has":"eq",op_label:contains?tr("search.operator_has","contains"):tr("search.operator_eq","equals"),value:String(contains?value.$contains:value??"")};
+  });
+}
+function searchColumnOptions(available){return available.map(key=>({key,label:label(key)}))}
+function searchSimilarity(distance){
+  if(distance==null||!Number.isFinite(Number(distance)))return null;
+  return Math.max(0,Math.min(1,1/(1+Math.max(0,Number(distance)))));
+}
+function searchMatchReasons(record,query,{database=false,method="similarity"}={}){
+  const reasons=[];const terms=String(query||"").toLocaleLowerCase().split(/\s+/).filter(term=>term.length>2);
+  for(const field of ["work","document_author","speaker","quoted_speaker","position_holder","target","discourse_role","topics","concepts","persons"]){
+    if(!terms.length)break;
+    const text=display(record?.[field]).toLocaleLowerCase();
+    if(terms.some(term=>text.includes(term)))reasons.push(label(field));
+    if(reasons.length>=3)break;
+  }
+  if(database&&method==="similarity")reasons.unshift(tr("search.semantic_match","Semantic similarity"));
+  if(database&&method==="mmr")reasons.unshift(tr("search.mmr_match","Semantic relevance + diversity"));
+  if(database&&method==="filter")reasons.unshift(tr("search.filter_match","Metadata filter match"));
+  if(!database&&terms.length&&String(record?.text||"").toLocaleLowerCase().includes(terms[0]))reasons.unshift(tr("search.text_match","Text match"));
+  return [...new Set(reasons)].slice(0,4);
+}
+function buildWorkspaceSearchResult(row){
+  const record=row.record;const selectionKey=reviewKey(row.file,row.index);const evidenceKey=workspaceEvidenceSelectionKey(row.file,row.index);
+  return {key:`workspace:${selectionKey}`,kind:"workspace",file_id:row.file.id,file_name:row.file.name,index:row.index,record_id:String(record.record_id||row.index+1),work:String(record.work||""),page_span:mlaPageSpan(record,{prefix:false}),text:String(record.text||""),record:cloneAuditValue(record),db_status:recordDbStatus(row.file,row.index,record),selected:state.reviewSelection.has(selectionKey),evidence_selected:evidenceIsSelected(evidenceKey),evidence_available:hasCapability("evidence.select"),distance:null,similarity:null,mmr_score:null,match_reasons:searchMatchReasons(record,state.globalSearch,{database:false})};
+}
+function buildDatabaseSearchResult(item){
+  const record=item.record||{};const id=String(item.id||record._chroma_id||record.record_id||"");const evidenceKey=dbEvidenceKey(state.activeStore,id);
+  return {key:`database:${state.activeStore}:${id}`,kind:"database",collection:state.activeStore,chroma_id:id,record_id:String(record.record_id||id),work:String(record.work||""),page_span:mlaPageSpan(record,{prefix:false}),text:String(record.text||""),record:cloneAuditValue(record),db_status:{kind:"exists",label:tr("search.db_in_database","In DB"),title:state.activeStore},selected:false,evidence_selected:evidenceIsSelected(evidenceKey),evidence_available:hasCapability("evidence.select"),distance:item.distance??null,similarity:searchSimilarity(item.distance),mmr_score:item.mmr_score??null,match_reasons:searchMatchReasons(record,state.globalSearch,{database:true,method:state.dbSearchMethod})};
+}
+function sortDatabaseSearchResults(results){
+  const sort=state.storeSearchSort||{key:"similarity",dir:-1};const dir=Number(sort.dir)||1;const key=sort.key||"similarity";
+  return [...results].sort((a,b)=>{
+    let av,bv;
+    if(key==="similarity"){av=a.similarity??-1;bv=b.similarity??-1}
+    else if(key==="page_start"){av=Number(a.record?.page_start??0);bv=Number(b.record?.page_start??0)}
+    else {av=String(a.record?.[key]??"");bv=String(b.record?.[key]??"")}
+    if(typeof av==="number"&&typeof bv==="number")return (av-bv)*dir;
+    return String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:"base"})*dir;
+  });
+}
+async function getSearchWorkspaceSnapshot({refresh=true,autoRun=true}={}){
+  // Native Search may be re-entered through Vue breadcrumb/history navigation.
+  // Keep the legacy state owner aligned without rewriting the URL that brought
+  // the user here; popstate/app bootstrap already restore encoded URL state.
+  state.view="global";
+  if(refresh){try{await refreshStores()}catch(error){console.warn("Search store refresh failed",error)}}
+  const stores=recordStores();
+  if(!state.activeStore&&stores.length)state.activeStore=stores[0].name;
+  if(state.activeStore&&!stores.some(store=>store.name===state.activeStore))state.activeStore=stores[0]?.name||"";
+  if(isResearcher())state.globalSearchMode="database";
+  if(autoRun&&state.globalSearchAutoRun&&searchScope()==="database"&&stores.length){state.globalSearchAutoRun=false;persistPrefs();await runSearchWorkspace({silent:true})}
+  const scope=searchScope();const layout=searchLayout(scope);const pageSize=Math.max(10,Number(state.pageSize)||100);
+  let results=[],total=0,facets=[],suggestions={},available=[],filters=[];
+  if(scope==="loaded"){
+    const base=localSearchBaseRows();let rows=base.filter(row=>searchRowMatchesFacets(row));rows=sortRows(rows,state.globalSort);
+    total=rows.length;const pages=Math.max(1,Math.ceil(total/pageSize));state.globalPage=Math.max(1,Math.min(pages,Number(state.globalPage)||1));const start=(state.globalPage-1)*pageSize;const slice=rows.slice(start,start+pageSize);
+    await refreshPresenceForRows(slice).catch(()=>undefined);
+    results=slice.map(buildWorkspaceSearchResult);facets=buildSearchFacets(base);suggestions=searchSuggestions(allRows());available=tableAvailableFields(allRows(),["__file","__db_status"]);filters=state.globalFilters.map(searchFilterDescriptor);
+  }else{
+    let dbItems=(state.storeSearchResults||[]).map(buildDatabaseSearchResult).filter(result=>searchRecordMatchesFacets(result.record));dbItems=sortDatabaseSearchResults(dbItems);total=dbItems.length;const pages=Math.max(1,Math.ceil(total/pageSize));state.globalPage=Math.max(1,Math.min(pages,Number(state.globalPage)||1));const start=(state.globalPage-1)*pageSize;results=dbItems.slice(start,start+pageSize);const records=(state.storeSearchResults||[]).map(item=>item.record||{});facets=buildSearchFacets(records,{database:true});suggestions=searchSuggestions(records,{database:true});available=tableAvailableFields(records.map(record=>({record})),["__db_status"]);filters=dbSearchFilterDescriptors();
+  }
+  if(!available.includes("__db_status"))available.unshift("__db_status");
+  const columns=getTableColumns("global",available);
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  const filterFields=[...new Set([...SEARCH_FILTER_FIELDS,...available.filter(field=>!field.startsWith("__")&&!SEARCH_AUTOCOMPLETE_EXCLUDED.has(field))])].filter(Boolean).sort((a,b)=>label(a).localeCompare(label(b)));
+  return {ready:true,is_researcher:isResearcher(),scope,query:String(state.globalSearch||""),method:["similarity","mmr","filter"].includes(state.dbSearchMethod)?state.dbSearchMethod:"similarity",fetch_k:Math.max(1,Number(state.dbSearchFetchK)||100),lambda_mult:Math.max(0,Math.min(1,Number(state.dbSearchLambda??0.7))),advanced_open:Boolean(state.globalAdvancedOpen),stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),active_store:state.activeStore||"",has_database:stores.length>0,has_loaded_records:allRows().length>0,total_loaded_records:allRows().length,results,total,page:state.globalPage,page_size:pageSize,pages,layout,sort:scope==="database"?(state.storeSearchSort||{key:"similarity",dir:-1}):(state.globalSort||{key:"__file",dir:1}),columns:searchColumnOptions(columns),available_columns:searchColumnOptions(available),facets,filters,filter_fields:searchColumnOptions(filterFields),filter_suggestions:suggestions,selection_count:state.reviewSelection.size,selected_evidence_count:selectedEvidenceEntries().length,loading:Boolean(state.storeSearchLoading),search_has_run:scope==="loaded"||Boolean(state.searchDatabaseRan||state.storeSearchResults.length),capabilities:{can_select:scope==="loaded"&&canUse("editLocalRecords"),can_review:scope==="loaded"&&canUse("editLocalRecords"),can_bulk_edit:scope==="loaded"&&canUse("editLocalRecords"),can_manage_database:canUse("manageCorpus"),can_select_evidence:hasCapability("evidence.select")}};
+}
+async function setSearchScope(scope){
+  const next=scope==="database"||isResearcher()?"database":"traditional";state.globalSearchMode=next;state.globalPage=1;state.storeSearchResults=[];state.searchDatabaseRan=false;persistPrefs();syncUrl({replace:false});shell();return getSearchWorkspaceSnapshot({refresh:true,autoRun:false});
+}
+function updateSearchQuery(value,{replace=true}={}){state.globalSearch=String(value||"");state.globalPage=1;persistPrefs();syncUrl({replace});return state.globalSearch}
+function setSearchAdvancedOpen(value){state.globalAdvancedOpen=Boolean(value);persistPrefs();syncUrl({replace:true})}
+function setSearchMethod(method){
+  if(!["similarity","mmr","filter"].includes(method))return;
+  if(method!=="filter"){
+    const previous=state.dbSearchWhere||{};
+    const safe=Object.fromEntries(Object.entries(previous).filter(([,value])=>!(value&&typeof value==="object"&&Object.prototype.hasOwnProperty.call(value,"$contains"))));
+    if(Object.keys(safe).length!==Object.keys(previous).length){
+      state.dbSearchWhere=safe;
+      toast(tr("search.contains_filter_removed","Contains metadata filters are available only in Filters only mode and were removed."),{tone:"info"});
+    }
+  }
+  state.dbSearchMethod=method;state.storeSearchResults=[];state.searchDatabaseRan=false;state.globalPage=1;persistPrefs();syncUrl({replace:true});
+}
+function setSearchStore(name){state.activeStore=recordStores().some(store=>store.name===name)?name:(recordStores()[0]?.name||"");state.storeSearchResults=[];state.searchDatabaseRan=false;state.globalPage=1;persistPrefs();syncUrl({replace:true});shell()}
+function setSearchMmrOptions({fetch_k,lambda_mult}={}){if(fetch_k!=null)state.dbSearchFetchK=Math.max(1,Math.min(1000,Number(fetch_k)||100));if(lambda_mult!=null)state.dbSearchLambda=Math.max(0,Math.min(1,Number(lambda_mult)||0));persistPrefs();syncUrl({replace:true})}
+function setSearchLayout(layout){if(!["compact","roomy","cards"].includes(layout))return;const key=searchScope()==="database"?"database":"traditional";state.searchResultLayouts={...(state.searchResultLayouts||{}),[key]:layout};persistPrefs();syncUrl({replace:true})}
+function setSearchPage(page){state.globalPage=Math.max(1,Number(page)||1);persistPrefs();syncUrl({replace:true})}
+function setSearchPageSize(size){state.pageSize=Math.max(10,Math.min(500,Number(size)||100));state.globalPage=1;persistPrefs();syncUrl({replace:true})}
+function setSearchColumns(columns){const available=searchScope()==="loaded"?tableAvailableFields(allRows(),["__file","__db_status"]):tableAvailableFields((state.storeSearchResults||[]).map(item=>({record:item.record||{}})),["__db_status"]);state.tableColumns.global=[...new Set((columns||[]).map(String))].filter(key=>available.includes(key));if(!state.tableColumns.global.length)state.tableColumns.global=TABLE_DEFAULTS.global.filter(key=>available.includes(key));persistPrefs();syncUrl({replace:true})}
+function setSearchSort(key){
+  if(searchScope()==="database"){
+    const sort=state.storeSearchSort||{key:"similarity",dir:-1};state.storeSearchSort={key,dir:sort.key===key?-Number(sort.dir||1):(key==="similarity"?-1:1)};
+  }else toggleSort(state.globalSort,key);
+  state.globalPage=1;persistPrefs();syncUrl({replace:true});
+}
+function toggleSearchFacet(field,value){
+  const next={...(state.searchFacetFilters||{})};const values=new Set(Array.isArray(next[field])?next[field].map(String):[]);const token=String(value);values.has(token)?values.delete(token):values.add(token);if(values.size)next[field]=[...values];else delete next[field];state.searchFacetFilters=next;state.globalPage=1;persistPrefs();syncUrl({replace:true});
+}
+function clearSearchFacetFilters(){state.searchFacetFilters={};state.globalPage=1;persistPrefs();syncUrl({replace:true})}
+function clearSearchAllFilters(){state.searchFacetFilters={};state.globalFilters=[];state.dbSearchWhere={};state.globalPage=1;state.storeSearchResults=[];state.searchDatabaseRan=false;persistPrefs();syncUrl({replace:true})}
+function addSearchAdvancedFilter({field,op="eq",value=""}={}){
+  field=String(field||"");value=String(value??"").trim();if(!field)return;
+  if(searchScope()==="database"){
+    if(!value)return;const next={...(state.dbSearchWhere||{})};next[field]=op==="has"?{$contains:value}:value;state.dbSearchWhere=next;state.storeSearchResults=[];state.searchDatabaseRan=false;
+  }else{
+    const nextOp=filterOpsForField(field).some(([candidate])=>candidate===op)?op:"eq";if(!["empty","notempty"].includes(nextOp)&&!value)return;state.globalFilters=[...(state.globalFilters||[]),{id:uid(),field,op:nextOp,value}];
+  }
+  state.globalPage=1;persistPrefs();syncUrl({replace:true});
+}
+function removeSearchAdvancedFilter(id){
+  if(String(id).startsWith("db:")){const field=String(id).slice(3);const next={...(state.dbSearchWhere||{})};delete next[field];state.dbSearchWhere=next;state.storeSearchResults=[];state.searchDatabaseRan=false}else state.globalFilters=(state.globalFilters||[]).filter(filter=>String(filter.id)!==String(id));
+  state.globalPage=1;persistPrefs();syncUrl({replace:true});
+}
+async function runSearchWorkspace({silent=false}={}){
+  if(searchScope()!=="database")return getSearchWorkspaceSnapshot({refresh:false,autoRun:false});
+  await refreshStores().catch(()=>undefined);const stores=recordStores();if(!stores.length){if(canAccessPage("vector"))openDatabaseCreationFromResearch();return getSearchWorkspaceSnapshot({refresh:false,autoRun:false})}
+  if(!state.activeStore||!stores.some(store=>store.name===state.activeStore))state.activeStore=stores[0].name;
+  const method=["similarity","mmr","filter"].includes(state.dbSearchMethod)?state.dbSearchMethod:"similarity";const query=String(state.globalSearch||"").trim();if(method!=="filter"&&!query){if(!silent)toast(tr("search.enter_query","Enter a search query first."),{tone:"warn"});return getSearchWorkspaceSnapshot({refresh:false,autoRun:false})}
+  state.dbSearchFetchK=Math.max(1,Math.min(1000,Number(state.dbSearchFetchK)||100));state.dbSearchLambda=Math.max(0,Math.min(1,Number(state.dbSearchLambda??0.7)));state.storeSearchLoading=true;state.searchDatabaseRan=true;state.globalPage=1;persistPrefs();syncUrl({replace:true});
+  try{
+    const safeWhere=safeDbSearchWhere(method);state.dbSearchWhere=safeWhere;
+    const body={query,mode:method,n_results:100,where:Object.keys(safeWhere).length?safeWhere:null,fetch_k:state.dbSearchFetchK,lambda_mult:state.dbSearchLambda};
+    const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify(body)});state.storeSearchResults=Array.isArray(data?.results)?data.results:[];
+  }catch(error){state.storeSearchResults=[];if(!silent)toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}
+  finally{state.storeSearchLoading=false;persistPrefs();syncUrl({replace:true})}
+  return getSearchWorkspaceSnapshot({refresh:false,autoRun:false});
+}
+function searchResultFromKey(key){
+  const token=String(key||"");if(token.startsWith("workspace:"))return reviewItemFromKey(token.slice("workspace:".length));
+  if(token.startsWith("database:")){
+    const rest=token.slice("database:".length);const split=rest.indexOf(":");const collection=split>=0?rest.slice(0,split):state.activeStore;const id=split>=0?rest.slice(split+1):rest;const item=(state.storeSearchResults||[]).find(result=>String(result.id||result.record?._chroma_id||result.record?.record_id||"")===id);return item?{collection,id,record:item.record||{},item}:null;
+  }
+  return null;
+}
+async function searchResultAction(key,action){
+  const result=searchResultFromKey(key);if(!result)return false;
+  if(String(key).startsWith("workspace:")){
+    if(action==="open"){navigateTo("record",{fileId:result.file.id,index:result.index});return true}
+    if(action==="citation-inline"){await copyCitation(result.record,"inline");return true}
+    if(action==="citation-full"){await copyCitation(result.record,"full");return true}
+    if(action==="evidence"){toggleWorkspaceEvidence(result.file,result.index);return true}
+    if(action==="select"){setReviewSelected(result.file,result.index,!state.reviewSelection.has(reviewKey(result.file,result.index)));return true}
+  }else{
+    if(action==="open"||action==="edit"){
+      if(isResearcher()){state.activeStore=result.collection;state.researcherRecordId=result.id;persistPrefs();navigateTo("record")}else openStoreRecordEditor({...result.record,_chroma_id:result.id});return true;
+    }
+    if(action==="citation-inline"){await copyCitation(result.record,"inline");return true}
+    if(action==="citation-full"){await copyCitation(result.record,"full");return true}
+    if(action==="evidence"){toggleDbEvidence(result.collection,result.id,result.record);return true}
+  }
+  return false;
+}
+function setSearchResultSelected(key,selected){const item=searchResultFromKey(key);if(item?.file)setReviewSelected(item.file,item.index,Boolean(selected));}
+function setSearchPageSelected(keys,selected){for(const key of keys||[])setSearchResultSelected(key,selected);persistPrefs()}
+function clearSearchSelection(){clearReviewSelection()}
+function runSearchSelectionAction(action){
+  const items=selectedReviewItems();if(!items.length)return;
+  if(action==="review")return openTouchup(items);
+  if(action==="improve")return openTouchup(items,"auto");
+  if(action==="bulk")return openBulkFieldEditor({rows:items,title:tr("search.bulk_edit_selected","Bulk edit selected records")});
+}
+function getSearchShareHref(){const path=urlFromState();return new URL(path,location.origin).href}
+function restoreSearchViewFromHref(href){
+  const url=new URL(String(href||""),location.origin);const token=url.searchParams.get("ts");state.view="global";if(token)applyCompressedTableUrlState(decompressUrlState(token),"global");const store=url.searchParams.get("store");if(store)state.activeStore=store;state.storeSearchResults=[];state.searchDatabaseRan=false;if(searchScope()==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;persistPrefs();syncUrl({replace:false});shell();return getSearchWorkspaceSnapshot({refresh:true,autoRun:true});
 }
 
 const ligatures={"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"};
@@ -8670,7 +8966,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.36.4",
+      backup_client_version:"0.36.10",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -10103,4 +10399,29 @@ export {
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
+  getSearchWorkspaceSnapshot,
+  setSearchScope,
+  updateSearchQuery,
+  setSearchAdvancedOpen,
+  setSearchMethod,
+  setSearchStore,
+  setSearchMmrOptions,
+  setSearchLayout,
+  setSearchPage,
+  setSearchPageSize,
+  setSearchColumns,
+  setSearchSort,
+  toggleSearchFacet,
+  clearSearchFacetFilters,
+  clearSearchAllFilters,
+  addSearchAdvancedFilter,
+  removeSearchAdvancedFilter,
+  runSearchWorkspace,
+  searchResultAction,
+  setSearchResultSelected,
+  setSearchPageSelected,
+  clearSearchSelection,
+  runSearchSelectionAction,
+  getSearchShareHref,
+  restoreSearchViewFromHref,
 };

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import DashboardView from "../views/DashboardView.vue";
 import CorpusView from "../views/CorpusView.vue";
 import ResearchView from "../views/ResearchView.vue";
+import SearchView from "../views/SearchView.vue";
 import RecordView from "../views/RecordView.vue";
 import ResponseFaqView from "../views/ResponseFaqView.vue";
 import ToolsView from "../views/ToolsView.vue";
@@ -16,7 +17,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/records", name: "list", component: CorpusView, meta: { view: "list", capability: "page.records", adminOnly: true } },
   { path: "/record", name: "record", component: RecordView, meta: { view: "record", capability: "page.record", vueNative: true } },
   { path: "/works", name: "works", component: CorpusView, meta: { view: "works", capability: "page.works" } },
-  { path: "/search", name: "global", component: CorpusView, meta: { view: "global", capability: "page.search" } },
+  { path: "/search", name: "global", component: SearchView, meta: { view: "global", capability: "page.search", vueNative: true } },
   { path: "/annotations", name: "annotations", component: CorpusView, meta: { view: "annotations", capability: "page.annotations" } },
   { path: "/pdf", name: "pdf", component: ToolsView, meta: { view: "pdf", capability: "page.pdf", adminOnly: true } },
   { path: "/compare", name: "compare", component: ToolsView, meta: { view: "compare", capability: "page.compare" } },
