@@ -40,7 +40,7 @@ def test_works_mixed_metadata_inspector_and_filtered_counts():
 
 def test_single_work_insights_and_storybook_component():
     assert "function workInsightMetrics" in RUNTIME
-    for field in ("persons", "concepts", "topics", "speaker", "position_holder"):
+    for field in ("persons", "concepts", "topics", "target", "discourse_role"):
         assert f'field:"{field}"' in RUNTIME
     assert "singleLoadedWork?workInsightMetrics" in RUNTIME
     assert (ROOT / "web/src/components/WorkInsightsPanel.vue").exists()
@@ -64,7 +64,8 @@ def test_new_ux_strings_exist_in_both_builtin_dictionaries():
         "works.metadata_variants",
         "works.work_insights",
         "dashboard.top_persons_work",
-        "dashboard.top_position_holders_work",
+        "dashboard.top_discourse_targets_work",
+        "dashboard.discourse_roles_share_work",
         "llm.connection_from_profile",
     ):
         assert SYSTEM.count(f'"{key}"') >= 2

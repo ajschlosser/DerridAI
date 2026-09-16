@@ -14,16 +14,12 @@ FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
 
 def test_0363_release_identity():
     assert "0.36.3 — All The Little Things" in README
-    assert "# DerridAI Corpus Viewer 0.36.3" in README
+    assert "# DerridAI Corpus Viewer 0.36.4" in README
 
 
-def test_export_can_use_native_file_system_overwrite_flow():
-    assert 'window.showSaveFilePicker' in RUNTIME
-    assert 'window.showDirectoryPicker' in RUNTIME
-    assert 'handle.createWritable()' in RUNTIME
-    assert 'getFileHandle(file.name,{create:true})' in RUNTIME
-    assert 'export.allow_overwrite' in RUNTIME
-    assert 'downloadBlob' in RUNTIME
+def test_export_still_has_shared_download_blob_support_for_subset_exports():
+    assert 'function downloadBlob' in RUNTIME
+    assert 'downloadBlob(blob,name)' in RUNTIME
 
 
 def test_scroll_regions_own_wheel_input_and_do_not_scroll_background():
@@ -44,8 +40,8 @@ def test_record_search_layout_cleanup_and_db_evidence_path():
 
 def test_record_inspector_has_page_context():
     assert 'const pageSpan=computed' in INSPECTOR
-    assert 'record-page-context' in INSPECTOR
-    assert 'i18n.t(\'record.page\',\'Page\')' in INSPECTOR
+    assert "'region_author','__pages','primary_text'" in INSPECTOR
+    assert "i18n.t('record.page','Page')" in INSPECTOR
 
 
 def test_subset_builder_autocomplete_is_source_scoped_and_skips_large_text():
@@ -80,8 +76,6 @@ def test_response_faq_neutral_empty_state_and_storybook_variant():
 
 def test_new_strings_are_bilingual():
     for key in (
-        "export.allow_overwrite",
-        "export.overwrite_unsupported",
         "subset.autocomplete_count",
         "subset.autocomplete_large_field",
         "records.columns",

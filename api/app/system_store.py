@@ -5109,8 +5109,6 @@ DEFAULT_EN_US.update({
     "dashboard.top_persons_work": "Top 5 persons mentioned in the work",
     "dashboard.top_concepts_work": "Top 5 concepts mentioned in the work",
     "dashboard.top_topics_work": "Top 5 topics in the work",
-    "dashboard.top_speakers_work": "Top 5 speakers in the work",
-    "dashboard.top_position_holders_work": "Top 5 position holders in the work",
     "llm.provider_profile": "Provider profile",
     "llm.openai_compatible": "OpenAI-compatible",
     "llm.model_not_set": "Model not set",
@@ -5141,8 +5139,6 @@ DEFAULT_FR_CA.update({
     "dashboard.top_persons_work": "5 principales personnes mentionnées dans l’œuvre",
     "dashboard.top_concepts_work": "5 principaux concepts mentionnés dans l’œuvre",
     "dashboard.top_topics_work": "5 principaux sujets de l’œuvre",
-    "dashboard.top_speakers_work": "5 principaux locuteurs de l’œuvre",
-    "dashboard.top_position_holders_work": "5 principaux détenteurs de position dans l’œuvre",
     "llm.provider_profile": "Profil de fournisseur",
     "llm.openai_compatible": "Compatible avec OpenAI",
     "llm.model_not_set": "Modèle non défini",
@@ -5154,21 +5150,16 @@ DEFAULT_FR_CA.update({
 })
 
 
-# 0.36.3 — All The Little Things: export overwrite UX, resilient scrolling,
+# 0.36.3 — All The Little Things: export strings, resilient scrolling,
 # contextual subset autocomplete, live language refresh, and annotation cleanup.
 DEFAULT_EN_US.update({
     "export.title": "Export JSONL",
-    "export.help": "Download copies, or use the system file picker to save into an existing location and overwrite files when you confirm it.",
-    "export.allow_overwrite": "Save to disk / allow overwrite",
-    "export.allow_overwrite_help": "Uses your browser's system file or folder picker. Choosing an existing file with the same name can replace it after the browser confirms.",
-    "export.overwrite_unsupported": "This browser does not expose the File System Access API; exports will download as copies instead.",
     "export.current": "Current file",
     "export.changed": "Changed files",
     "export.all": "All files separately",
     "export.aggregate": "Aggregate JSONL",
     "export.changed_aggregate": "Changed + aggregate",
     "export.nothing": "There are no files to export.",
-    "export.saved_count": "Saved {count} file(s). Existing same-name files in the selected location were replaced.",
     "subset.value": "Value",
     "subset.remove_condition": "Remove condition",
     "subset.autocomplete_large_field": "Autocomplete is disabled for large text fields.",
@@ -5180,17 +5171,12 @@ DEFAULT_EN_US.update({
 })
 DEFAULT_FR_CA.update({
     "export.title": "Exporter en JSONL",
-    "export.help": "Téléchargez des copies ou utilisez le sélecteur de fichiers du système pour enregistrer dans un emplacement existant et remplacer les fichiers lorsque vous le confirmez.",
-    "export.allow_overwrite": "Enregistrer sur le disque / autoriser le remplacement",
-    "export.allow_overwrite_help": "Utilise le sélecteur de fichiers ou de dossiers du navigateur. Le choix d'un fichier existant portant le même nom peut le remplacer après confirmation du navigateur.",
-    "export.overwrite_unsupported": "Ce navigateur n'expose pas l'API File System Access; les exportations seront plutôt téléchargées comme des copies.",
     "export.current": "Fichier actuel",
     "export.changed": "Fichiers modifiés",
     "export.all": "Tous les fichiers séparément",
     "export.aggregate": "JSONL agrégé",
     "export.changed_aggregate": "Modifiés + agrégé",
     "export.nothing": "Il n'y a aucun fichier à exporter.",
-    "export.saved_count": "{count} fichier(s) enregistré(s). Les fichiers portant le même nom dans l'emplacement choisi ont été remplacés.",
     "subset.value": "Valeur",
     "subset.remove_condition": "Supprimer la condition",
     "subset.autocomplete_large_field": "La saisie semi-automatique est désactivée pour les grands champs de texte.",
@@ -5199,6 +5185,30 @@ DEFAULT_FR_CA.update({
     "records.columns": "Colonnes",
     "record.page": "Page",
     "annotations.remove_local_help": "Cette action supprime l'annotation de la fiche JSONL locale et consigne la modification dans son historique d'audit.",
+})
+
+
+# 0.36.4 — Oops You Did It Again: simpler exports, refined record actions,
+# work-level discourse analytics, and database-creation routing from Search.
+DEFAULT_EN_US.update({
+    "ui.get_citation": "Get Citation",
+    "ui.inline": "Inline",
+    "ui.full": "Full",
+    "dashboard.top_discourse_targets_work": "Top 5 discourse targets in the work",
+    "dashboard.discourse_roles_share_work": "Top discourse roles as percentage of recorded roles",
+    "works.other_values": "Other",
+    "works.role_occurrences": "role occurrences",
+    "search.redirect_database": "Search needs a corpus database. Opening database creation now.",
+})
+DEFAULT_FR_CA.update({
+    "ui.get_citation": "Obtenir la citation",
+    "ui.inline": "Abrégée",
+    "ui.full": "Complète",
+    "dashboard.top_discourse_targets_work": "5 principales cibles discursives de l’œuvre",
+    "dashboard.discourse_roles_share_work": "Principaux rôles discursifs en pourcentage des rôles consignés",
+    "works.other_values": "Autres",
+    "works.role_occurrences": "occurrences de rôle",
+    "search.redirect_database": "La recherche nécessite une base de données du corpus. Ouverture de la création de base de données.",
 })
 
 system_store = SystemStore()

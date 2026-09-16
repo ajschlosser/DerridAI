@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.36.3
+# DerridAI Corpus Viewer 0.36.4
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,17 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.36.4 — Oops You Did It Again
+
+- Reverted the 0.36.3 native-file-picker export treatment. JSONL export is back to the compact download menu, with no overwrite toggle or File System Access API workflow.
+- Record Inspector page/page-range information now appears as a normal metadata row immediately below Region Author instead of a separate context card.
+- Single-work analytics replace Speakers and Position holders with **Discourse targets** and **Discourse roles**. Targets use a top-five ranking; discourse roles use an accessible share pie showing the top roles as a percentage of all recorded role occurrences, with the remainder grouped as Other. The reusable Storybook work-insights component mirrors the same ranking/pie model.
+- Record-table actions consolidate Inline and Full citation copying under an accessible **Get Citation** submenu. Comfortable Search tables use a larger Extracted Text type size for sustained reading.
+- Search now defaults only to DB status, Work, Page Start, Needs Review, Extracted Text, plus the dedicated Actions column. Card layout continues to omit column configuration.
+- Semantic Search no longer strands users at “No corpus database available.” When the current role can manage databases, Search routes directly to the database-creation workflow, matching Research behavior; roles without that permission retain the explanatory empty state.
+- Added matching English and Canadian French strings and preserved keyboard/focus behavior for the revised controls.
+
 
 ## 0.36.3 — All The Little Things
 
