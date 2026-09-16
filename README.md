@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.36.1
+# DerridAI Corpus Viewer 0.36.2
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -64,6 +64,20 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+
+
+## 0.36.2 — Bugs in the Machine
+
+- URL state is now the authoritative share contract for view configuration: record-table search/filter/sort/page/columns, global search modes and database search settings, Works search/selection, Annotations search/view, Dashboard metric selection, Record find state, and Response FAQ search/page are encoded into the URL. Breadcrumb history snapshots preserve the same state. JSONL file identities are content-derived so the same file can resolve the same shared Records URL on another browser after that file is loaded.
+- Shared local-JSONL links no longer silently substitute a different locally cached file. If the linked JSONL is not present, the Records page explicitly asks the recipient to load the same file and then restores the encoded filters/view state. The JSONL contents themselves are intentionally not embedded in the URL.
+- The Records table now scrolls horizontally when needed, uses a compact Page Start column and narrower Extracted Text column, and defaults to DB status, Work, Page Start, Needs Review, Extracted Text, plus the dedicated Record Actions column.
+- Fixed the empty-workspace **Choose JSONL files** call to action.
+- Works metadata marked **Mixed** now has an inspectable, accessible variants dialog showing every distinct value, its frequency, and contributing source files before a user decides whether to bulk-edit. Work-card record/review counts now open Global Search with the corresponding filters applied.
+- When exactly one JSONL work is loaded, Dashboard corpus-wide charts are replaced by reusable work-level top-five views for persons, concepts, topics, speakers, and position holders. The same insight panel is also embedded in the Work overview and represented as a reusable Storybook component.
+- LLM Review Workspace provider selection now truncates safely instead of overflowing. Endpoint/API-key configuration is no longer duplicated in the review modal; connection details are consumed from the centralized provider profile, with a direct **Manage provider profiles** action.
+- Added WCAG focus states, keyboard-scrollable table overflow, accessible mixed-value inspection, and matching English / Canadian French strings for the new interactions.
+
+See `docs/SHAREABLE_STATE_AND_DATA_MODEL_0.36.2.md` for the URL-sharing contract and the distinction between JSONL records, JSONL files, and database records.
 
 
 ## 0.36.1 — Fresh-start SQLite cleanup

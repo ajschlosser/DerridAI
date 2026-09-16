@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import AppIcon from "../components/AppIcon.vue";
 import ResponseFaqArchiveDialog from "../components/research/ResponseFaqArchiveDialog.vue";
@@ -13,15 +13,20 @@ import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
 const router=useRouter();
+const route=useRoute();
 const loading=ref(false);
-const search=ref("");
-const page=ref(1);
+const routeText=(value:unknown)=>Array.isArray(value)?String(value[0]??""):String(value??"");
+const routePage=(value:unknown)=>Math.max(1,Number.parseInt(routeText(value),10)||1);
+const search=ref(routeText(route.query.q));
+const page=ref(routePage(route.query.page));
 const pageSize=25;
 const payload=ref<ResponseFaqPage|null>(null);
 const selected=ref<ResponseFaqRecord|null>(null);
 const activeEvidenceIndex=ref(0);
 const archiveOpen=ref(false);
 let searchTimer:number|undefined;
+let applyingRoute=false;
+let writingRoute=false;
 
 const records=computed(()=>payload.value?.records||[]);
 const total=computed(()=>Number(payload.value?.count||0));
@@ -73,7 +78,23 @@ const runMetrics=computed(()=>{
 });
 
 function recordKey(record:ResponseFaqRecord|null){return String(record?.record_id||record?.question||"")}
-function choose(record:ResponseFaqRecord){selected.value=record;activeEvidenceIndex.value=0;archiveOpen.value=false}
+function currentFaqQuery(){
+  const query:Record<string,string>={};
+  if(search.value.trim())query.q=search.value.trim();
+  if(page.value>1)query.page=String(page.value);
+  if(selectedId.value)query.id=selectedId.value;
+  return query;
+}
+async function syncFaqUrl(){
+  if(applyingRoute)return;
+  const next=currentFaqQuery();
+  const current={q:routeText(route.query.q),page:routeText(route.query.page),id:routeText(route.query.id)};
+  const normalized={q:next.q||"",page:next.page||"",id:next.id||""};
+  if(current.q===normalized.q&&current.page===normalized.page&&current.id===normalized.id)return;
+  writingRoute=true;
+  try{await router.replace({path:"/faq",query:next})}finally{writingRoute=false}
+}
+function choose(record:ResponseFaqRecord){selected.value=record;activeEvidenceIndex.value=0;archiveOpen.value=false;void syncFaqUrl()}
 function formatJson(value:unknown){try{return JSON.stringify(value||{},null,2)}catch{return "{}"}}
 function formatDate(value?:unknown){if(!value)return "";try{return new Intl.DateTimeFormat(i18n.locale,{dateStyle:"medium",timeStyle:"short"}).format(new Date(String(value)))}catch{return String(value)}}
 function gradeOverall(entry:Record<string,unknown>){let grade=(entry.result&&typeof entry.result==="object"?entry.result:entry) as Record<string,unknown>;if(grade.grade&&typeof grade.grade==="object")grade=grade.grade as Record<string,unknown>;if(grade.result&&typeof grade.result==="object"&&!('overall' in grade))grade=grade.result as Record<string,unknown>;const raw=grade.overall??grade.score;if(raw&&typeof raw==="object")return (raw as Record<string,unknown>).score??"—";return raw??"—"}
@@ -95,12 +116,16 @@ async function load({chooseFirst=false}:{chooseFirst?:boolean}={}){
     payload.value=next;
     const maxPage=Math.max(1,Math.ceil(Number(next.count||0)/pageSize));
     if(page.value>maxPage){page.value=maxPage;await load({chooseFirst});return}
-    if(chooseFirst||!selected.value)selected.value=next.records[0]||null;
+    const requestedId=routeText(route.query.id);
+    const requested=requestedId?next.records.find(record=>recordKey(record)===requestedId):null;
+    if(requested)selected.value=requested;
+    else if(chooseFirst||!selected.value||!next.records.some(record=>recordKey(record)===selectedId.value))selected.value=next.records[0]||null;
     activeEvidenceIndex.value=0;
+    await syncFaqUrl();
   }catch(error){runtime.notifyToast(error instanceof Error?error.message:String(error),{tone:"danger"})}
   finally{loading.value=false}
 }
-function scheduleSearch(){window.clearTimeout(searchTimer);page.value=1;searchTimer=window.setTimeout(()=>void load(),250)}
+function scheduleSearch(){if(applyingRoute)return;window.clearTimeout(searchTimer);page.value=1;searchTimer=window.setTimeout(()=>void load({chooseFirst:true}),250);void syncFaqUrl()}
 async function copyAnswer(){try{await navigator.clipboard.writeText(result.value?.answer||"");runtime.notifyToast(i18n.t("research.answer_copied","Answer copied"),{tone:"success"})}catch{runtime.notifyToast(i18n.t("research.clipboard_failed","Could not access the clipboard"),{tone:"danger"})}}
 function focusEvidence(index:number){activeEvidenceIndex.value=index}
 function grade(){if(selected.value)runtime.gradeResponseFaqRecord(selected.value)}
@@ -108,9 +133,28 @@ function rerun(){if(selected.value)runtime.rerunResponseFaqRecord(selected.value
 function focusDetails(){document.querySelector('#faqRunDetails')?.scrollIntoView({behavior:'smooth',block:'start'})}
 function setArchiveSearch(value:string){search.value=value}
 function newResearch(){void router.push("/rag")}
-async function goPage(delta:number){page.value=Math.min(pages.value,Math.max(1,page.value+delta));await load()}
+async function goPage(delta:number){page.value=Math.min(pages.value,Math.max(1,page.value+delta));await syncFaqUrl();await load({chooseFirst:true})}
 
 watch(search,scheduleSearch);
+watch(
+  ()=>[route.query.q,route.query.page,route.query.id] as const,
+  async()=>{
+    if(writingRoute)return;
+    const nextSearch=routeText(route.query.q);
+    const nextPage=routePage(route.query.page);
+    const nextId=routeText(route.query.id);
+    if(nextSearch===search.value&&nextPage===page.value&&nextId===selectedId.value)return;
+    applyingRoute=true;
+    window.clearTimeout(searchTimer);
+    try{
+      search.value=nextSearch;
+      page.value=nextPage;
+      selected.value=null;
+      await load({chooseFirst:true});
+      if(nextId){const match=records.value.find(record=>recordKey(record)===nextId);if(match)selected.value=match}
+    }finally{applyingRoute=false}
+  }
+);
 onMounted(()=>void load({chooseFirst:true}));
 </script>
 
