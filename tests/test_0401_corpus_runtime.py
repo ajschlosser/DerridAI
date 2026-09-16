@@ -278,3 +278,38 @@ def test_manifest_review_checkpoint_stops_before_segmentation_and_confirm_resume
     confirmed=repo.get_build(build["build_id"])
     assert confirmed.get("manifest_confirmed_at")
     assert confirmed.get("manifest_confirmed_revision")==1
+
+
+def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(monkeypatch, tmp_path: Path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo, blocks=30)
+    build.update({
+        "status": "blocked",
+        "stage": "segmentation_review",
+        "segmentation_blocked": True,
+        "segmentation_unresolved_regions": [{
+            "kind": "topology_guard_no_boundaries",
+            "start_block_id": "p001-b000",
+            "end_block_id": "p003-b029",
+        }],
+        "resumable": True,
+    })
+    repo.save_build(build)
+    submissions = []
+    monkeypatch.setattr(manager._executor, "submit", lambda *args, **kwargs: submissions.append((args, kwargs)))
+
+    queued = manager.resume(build["build_id"], {"provider": "ollama", "model": "better-model"})
+    assert queued["status"] == "queued"
+    assert queued["retrying_segmentation"] is True
+    assert queued["segmentation_blocked"] is True  # preserved until the retry resolves it
+
+    operation = manager._operation_from_build(queued)
+    assert operation["status"] == "queued"
+    assert operation["raw_status"] == "queued"
+    assert operation["stage_detail"] == "Retrying 1 unresolved segmentation region(s)"
+
+    duplicate = manager.resume(build["build_id"], {"provider": "ollama", "model": "better-model"})
+    assert duplicate["status"] == "queued"
+    assert duplicate["retrying_segmentation"] is True
+    assert len(submissions) == 1  # no second background worker

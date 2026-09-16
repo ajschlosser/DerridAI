@@ -852,7 +852,10 @@ class PdfCorpusBuildManager:
     def resume(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
-            raise ValueError("This corpus build is already running.")
+            # Resume is intentionally idempotent while work is active. Stale
+            # clients can safely repeat the action without creating a second
+            # worker or surfacing an HTTP 422 for an operation already underway.
+            return build
         if build.get("status") in {"published"}:
             raise ValueError("Published builds are immutable; create a new build instead.")
         self._validate_execution_budget(request)
@@ -877,6 +880,7 @@ class PdfCorpusBuildManager:
         # book returned valid-but-empty boundary arrays), successful-window caches
         # are not useful: retry the segmentation topology with the new settings.
         unresolved = list(build.get("segmentation_unresolved_regions") or [])
+        build["retrying_segmentation"] = bool(build.get("segmentation_blocked"))
         if any(str(item.get("kind") or "").startswith("topology_guard") for item in unresolved if isinstance(item, dict)):
             self.repo.save_checkpoint(build_id, "segmentation_state", {})
             self.repo.save_checkpoint(build_id, "reconciliation_state", {})
@@ -938,7 +942,9 @@ class PdfCorpusBuildManager:
             "raw_status": raw_status,
             "stage": build.get("stage"),
             "stage_detail": (
-                f"{len(unresolved)} unresolved segmentation region(s)"
+                f"Retrying {len(unresolved)} unresolved segmentation region(s)"
+                if raw_status in {"queued", "running"} and build.get("retrying_segmentation")
+                else f"{len(unresolved)} unresolved segmentation region(s)"
                 if build.get("segmentation_blocked")
                 else str(build.get("stage") or raw_status).replace("_", " ")
             ),
@@ -2183,8 +2189,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                     accepted_count=0,
                     resumable=True,
                     error=None,
+                    retrying_segmentation=False,
                 )
                 return
+            self._update(build_id, retrying_segmentation=False)
             self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
             records = self.repo.load_records(build_id) if resume else []
@@ -2278,13 +2286,14 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 accepted_count=sum(1 for record in records if record.get("accepted")),
                 validation=validation,
                 resumable=False,
+                retrying_segmentation=False,
             )
         except InterruptedError as exc:
-            self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True)
+            self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
         except Exception as exc:
             # Checkpoints intentionally survive a failed stage. The user can repair
             # provider configuration and resume instead of restarting a long book.
-            self._update(build_id, status="failed", stage="failed", finished_at=iso_now(), error=str(exc), resumable=True)
+            self._update(build_id, status="failed", stage="failed", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
         finally:
             with self._lock:
                 self._cancel.discard(build_id)

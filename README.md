@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.5
+# DerridAI Corpus Viewer 0.40.6
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,20 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.40.6 — Not Quite Building a Corpus
+
+Version 0.40.6 makes **Corpus Builder** the primary PDF workflow. The `/pdf` workspace now opens directly in Corpus Builder, PDF Explorer is the secondary tab, and the main navigation is renamed accordingly. The builder retains **Use current Explorer PDF** for carrying an already-open source into a build without reselecting it.
+
+Corpus builds are no longer easy to lose. Home now has a dedicated **Corpus builds** card showing recent PDF-to-corpus pipelines, live progress, current stage, and blocked/failed states, with one-click navigation back to the build. Home also rerenders after the initial background-operation refresh, fixing the case where blocked or completed corpus jobs were fetched but never appeared because no active polling cycle forced a redraw. The global Background Operations feed remains available for detailed operation diagnostics.
+
+The build setup area has been reorganized around a cleaner two-card Source / Primary LLM provider layout, compact provider capability summary, explicit optional escalation provider, full-width execution settings, and a single launch row that states source readiness and context-budget blockers. The current scholarly profile for new builds is now consistently `derrida-scholarly-v3` in both the API model and the UI; v1/v2 remain compatibility profiles for existing builds.
+
+Retry state is now coherent across the builder and Home. Resuming a segmentation-blocked build marks it as an active segmentation retry while preserving the checkpoint information the backend needs. The blocked panel and **Retry unresolved segmentation** action disappear while that retry is queued/running; a live retry message replaces them. Sidebar build state synchronizes on every poll rather than remaining stuck at the pre-resume `blocked` snapshot. Duplicate resume clicks are prevented client-side, and the resume API is idempotent while a build is already active, so a stale client can no longer turn the same action into a raw HTTP 422 error. Failed, interrupted, and cancelled builds now include explicit checkpoint/recovery guidance.
+
+Regression coverage for this release checks the builder-first PDF workspace, Home visibility and bootstrap refresh behavior, provider UI/profile consistency, synchronized build-rail state, segmentation-retry locking and backend operation detail, English/Québec French strings, and the 0.40.6 release identity.
+
+Release validation: 236 automated tests pass, Python application modules compile, `runtime.js` passes Node syntax checking, and `git diff --check` is clean. The full Vue/Vite/Storybook production build was not executed in the release environment because the attached repository does not include installed frontend dependencies; this release does not represent that build as verified.
 
 ## 0.40.5 — Record Extraction Pipeline Corrections
 

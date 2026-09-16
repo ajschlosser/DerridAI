@@ -9,9 +9,9 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.40.5"
-    assert 'version="0.40.5"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.5"' in text("api/app/config.py")
+    assert package["version"]=="0.40.6"
+    assert 'version="0.40.6"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.6"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 

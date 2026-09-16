@@ -329,7 +329,7 @@ const viewConfig = [
   {id:"works", label:"Works", icon:"books", section:"Corpus"},
   {id:"global", label:"Search", icon:"search", section:"Corpus"},
   {id:"annotations", label:"Annotations", icon:"record", section:"Corpus"},
-  {id:"pdf", label:"PDF Explorer", icon:"pdf", section:"Tools"},
+  {id:"pdf", label:"Corpus Builder", icon:"pdf", section:"Tools"},
   {id:"compare", label:"Compare", icon:"compare", section:"Tools"},
   {id:"vector", label:"Vector Stores", icon:"database", section:"Tools"},
   {id:"rag", label:"Research", icon:"spark", section:"Research"},
@@ -407,7 +407,7 @@ function currentContext(){
     works:["Corpus","Works","Cross-file work overview"],
     global:["Corpus","Global Search","Search and filter every loaded record"],
     annotations:["Corpus","Annotations","Review annotations by work or in recent-activity order"],
-    pdf:["Tools",state.pdf.title||"PDF Explorer",state.pdf.name?`${state.pdf.name} · page ${state.pdf.page}`:"Render and extract PDF text in the browser"],
+    pdf:["Tools",state.pdf.title||"Corpus Builder",state.pdf.name?`${state.pdf.name} · page ${state.pdf.page}`:"Build auditable records or inspect source PDFs"],
     compare:["Tools","Record Comparison","Inspect field and text differences"],
     vector:["Storage","Vector Stores","Persistent local ChromaDB collections"],
     rag:["Research","Research","Run the evidence-grounded DerridAI retrieval and synthesis pipeline"],
@@ -1881,14 +1881,17 @@ async function loadPdfMetadata(doc,fileName){
     return {title:fallback,author:""};
   }
 }
-function openLoadedPdfPage(page,{push=true}={}){
+function openPdfExplorerWorkspace(){
+  window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/pdf?mode=explorer",legacyView:"pdf"}}));
+}
+function openLoadedPdfPage(page){
   if(!state.pdf.doc&& !state.pdf.file)return toast("Open the linked PDF in PDF Explorer first");
   const max=state.pdf.doc?.numPages||Number(page)||1;
   state.pdf.page=Math.max(1,Math.min(max,Number(page)||1));
   state.pdf.text="";
   state.pdf.extractError="";
   state.pdf.extractionSource="";
-  navigateTo("pdf",{push});
+  openPdfExplorerWorkspace();
 }
 
 function normalizePdfLinkChanges(record,links){
@@ -2379,8 +2382,8 @@ function urlFromState(){
   const query=params.toString();
   return `${path}${query?`?${query}`:""}${url.hash}`;
 }
-function syncUrl({replace=false}={}){
-  const href=urlFromState();
+function syncUrl({replace=false,href=null}={}){
+  href=href||urlFromState();
   const current=`${location.pathname}${location.search}${location.hash}`;
   if(href===current)return;
   const snapshot=navSnapshot();
@@ -2415,7 +2418,7 @@ function applyUrlState(){
   const compressed=params.get("ts");
   if(compressed)applyCompressedTableUrlState(decompressUrlState(compressed));
 }
-function navigateTo(view,{fileId=null,index=null,push=true}={}){
+function navigateTo(view,{fileId=null,index=null,push=true,href=null}={}){
   if(!canAccessPage(view))view="home";
   // Research performs an authoritative store refresh on entry. Do not redirect
   // from this legacy navigation bridge using the cached hasCorpusDb() value; a
@@ -2439,7 +2442,7 @@ function navigateTo(view,{fileId=null,index=null,push=true}={}){
   }
   state.view=view;
   persistPrefs();
-  syncUrl({replace:!push});
+  syncUrl({replace:!push,href});
   shell();
   renderView();
 }
@@ -2632,7 +2635,7 @@ async function refreshJobs({rerender=false}={}){
       operationsButton.classList.toggle("soft",active>0);
       operationsButton.innerHTML=`${icon("history")}Operations <span class="button-count">${active}</span>`;
     }
-    if(rerender&&state.view==="home")refreshOperationsPanelOnly();
+    if(rerender&&state.view==="home"){refreshOperationsPanelOnly();refreshCorpusBuildsHomeCardOnly();}
     if(state.view==="rag")refreshRagProgressPanel();
     return state.jobs;
   }catch(error){
@@ -3578,6 +3581,19 @@ function refreshOperationsPanelOnly(){
   if(replacement)current.replaceWith(replacement);
   wireOperationsPanel();
   if(state.view==="rag")refreshRagProgressPanel();
+}
+function wireCorpusBuildsHomeCard(root=document){
+  root.querySelector("#dashCorpusBuilder")?.addEventListener("click",()=>window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/pdf?mode=builder",legacyView:"pdf"}})));
+  root.querySelectorAll("[data-dashboard-corpus-build]").forEach(button=>button.addEventListener("click",()=>openJobResults(button.dataset.dashboardCorpusBuild)));
+}
+function refreshCorpusBuildsHomeCardOnly(){
+  const current=document.querySelector(".dashboard-corpus-builds");
+  if(!current)return;
+  const holder=document.createElement("div");
+  holder.innerHTML=renderCorpusBuildsHomeCard();
+  const replacement=holder.firstElementChild;
+  if(replacement)current.replaceWith(replacement);
+  wireCorpusBuildsHomeCard();
 }
 
 async function openJobDetails(jobId){
@@ -5090,6 +5106,17 @@ async function dashboardRecordPreview(){
   return {record:item.record,target:{kind:"workspace",fileId:item.file.id,index:item.index},lastViewed:false};
 }
 
+function renderCorpusBuildsHomeCard(){
+  if(isResearcher())return "";
+  const builds=(state.jobs||[]).filter(job=>job.type==="pdf_corpus").slice(0,4);
+  const active=builds.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
+  return `<section class="card dashboard-corpus-builds" aria-label="${esc(tr("pdf_corpus.home_title","Corpus builds"))}">
+    <div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("pdf")}</span><b>${esc(tr("pdf_corpus.home_title","Corpus builds"))}</b>${active?`<span class="dashboard-corpus-active">${active} ${esc(tr("operations.active","active"))}</span>`:""}</div><button class="dashboard-text-link" id="dashCorpusBuilder">${esc(tr("pdf_corpus.open_builder","Open Corpus Builder"))} →</button></div>
+    <p class="dashboard-corpus-help">${esc(tr("pdf_corpus.home_help","Recent PDF-to-corpus pipelines stay visible here even after you leave Corpus Builder."))}</p>
+    <div class="dashboard-corpus-list">${builds.length?builds.map(job=>{const pct=Math.max(0,Math.min(100,Math.round(Number(job.progress||0)*100)));const status=job.raw_status||job.status||"unknown";return `<button type="button" class="dashboard-corpus-row" data-dashboard-corpus-build="${esc(job.id)}"><span class="dashboard-corpus-state ${esc(job.status||"")}" aria-hidden="true"></span><span class="dashboard-corpus-copy"><b>${esc(job.source_filename||tr("pdf_corpus.source_pdf","Source PDF"))}</b><small>${esc(String(status).replaceAll("_"," "))} · ${esc(String(job.stage_detail||job.stage||""))}</small></span><span class="dashboard-corpus-progress"><b>${pct}%</b><i><span style="width:${pct}%"></span></i></span></button>`}).join(""):`<div class="dashboard-corpus-empty">${esc(tr("pdf_corpus.home_empty","No corpus builds yet. Start with a source PDF in Corpus Builder."))}</div>`}</div>
+  </section>`;
+}
+
 async function renderDashboard(main){
   if(isResearcher()){
     try{await refreshStores();if(!state.activeStore)state.activeStore=recordStores()[0]?.name||"";if(state.activeStore)await refreshStoreWorks(true)}catch(error){console.warn("Could not refresh researcher dashboard data",error)}
@@ -5128,9 +5155,9 @@ async function renderDashboard(main){
     <article class="card dashboard-quick-card dashboard-provider-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("spark")}</span><b>${esc(tr("dashboard.llm_provider_settings","LLM Provider Settings"))}</b></div><p>${esc(tr("dashboard.llm_provider_help","Configure the provider used for LLM-assisted workflows."))}</p><div class="dashboard-provider-fields"><div class="dashboard-quick-field"><span>${esc(tr("dashboard.default_provider","Default provider"))}</span><b>${currentProvider?esc(providerDisplayName(currentProvider)):esc(tr("dashboard.not_configured","Not configured"))}</b></div><div class="dashboard-quick-field"><span>${esc(tr("dashboard.model","Model"))}</span><b>${currentProvider?esc(currentProvider.model||"auto"):"—"}</b></div></div><button class="btn" id="dashProviders">${esc(isResearcher()?tr("nav.rag","Research"):tr("dashboard.manage_provider","Manage provider"))}</button></article>
     <article class="card dashboard-quick-card dashboard-record-preview"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.record_view","Record View"))}</b></div><button class="dashboard-text-link" id="dashRecordView" ${previewTarget?"":`disabled data-disabled-reason="${esc(tr("dashboard.no_record_available","No record is available to open."))}"`}>${esc(tr("research.open","Open"))} →</button></div>${previewRecord?`<div class="dashboard-record-state">${esc(preview.lastViewed?tr("dashboard.last_viewed_record","Last viewed record"):tr("dashboard.random_record","A record from the corpus"))}</div><div class="dashboard-record-meta"><b>${esc(previewRecord.work||previewRecord.record_id||tr("dashboard.record","Record"))}</b><span class="dashboard-record-pages">${esc(mlaPageSpan(previewRecord)||"")}</span></div><div class="dashboard-record-text">${esc(String(previewRecord.text||"").replace(/\s+/g," ").slice(0,220))}${String(previewRecord.text||"").length>220?"…":""}</div>`:`<div class="dashboard-record-empty">${esc(tr("dashboard.no_record_selected","No corpus record is currently available."))}</div>`}</article>
     ${latestAnnotation?`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.latest_annotation","Latest annotation"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("annotations.view_all","View all"))} →</button></div><button class="dashboard-annotation-preview" ${latestAnnotation.server?`data-recent-server-annotation-record="${esc(latestAnnotation.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(latestAnnotation.annotation.store||"")}"`:`data-recent-annotation-file="${esc(latestAnnotation.file.id)}" data-recent-annotation-index="${latestAnnotation.index}"`}><div class="dashboard-annotation-meta"><span class="dashboard-annotation-work">${esc(latestAnnotation.work)}</span><span class="dashboard-annotation-pages">${esc(mlaPageSpan(latestAnnotation.record)||tr("record.page_not_recorded","Page not recorded"))}</span><span class="dashboard-annotation-author">${esc(latestAnnotation.annotation.initiated_by||latestAnnotation.annotation.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(latestAnnotation.annotation.created_at))}</time><small>${esc(latestAnnotation.record.record_id||tr("nav.record","Record"))}</small></div>${latestAnnotation.annotation.note?`<p>${esc(latestAnnotation.annotation.note)}</p>`:latestAnnotation.annotation.quote?`<blockquote>${esc(latestAnnotation.annotation.quote)}</blockquote>`:`<p>${esc(tr("annotations.record_note","Record annotation"))}</p>`}</button></article>`:`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.annotations","Annotations"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("research.open","Open"))} →</button></div><p>${esc(isResearcher()?tr("annotations.researcher_help","Annotations are organized by work when available in the current workspace."):tr("dashboard.annotations_help","Collect notes, tags, and discussion threads attached to corpus evidence."))}</p></article>`}
-    </section>${renderOperationsPanel()}</div>`;
+    </section>${renderCorpusBuildsHomeCard()}${renderOperationsPanel()}</div>`;
   const goSearch=async()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"",semantic=state.globalSearchMode==="database";state.globalPage=1;state.storeSearchResults=[];if(semantic){if(!state.activeStore){try{await refreshStores()}catch{};state.activeStore=recordStores()[0]?.name||""}state.globalSearchMode="database";if(!state.activeStore){persistPrefs();if(canAccessPage("vector")){toast(tr("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});openDatabaseCreationFromResearch()}else{navigateTo("global");toast(tr("research.no_database","No corpus database available"),{tone:"warn"})}return;}state.dbSearchWhere=work?{work}:{};state.storeQuery=state.globalSearch;if(state.globalSearch&&state.dbSearchMethod==="filter")state.dbSearchMethod="similarity";if(!state.globalSearch&&work)state.dbSearchMethod="filter";state.globalSearchAutoRun=false;state.storeSearchLoading=true;persistPrefs();navigateTo("global");try{const mode=state.dbSearchMethod||"similarity";const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:state.globalSearch,mode,n_results:100,where:Object.keys(dbSearchWhere()).length?dbSearchWhere():null,fetch_k:Number(state.dbSearchFetchK||100),lambda_mult:Number(state.dbSearchLambda??0.7)})});state.storeSearchResults=data.results||[]}catch(error){toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}finally{state.storeSearchLoading=false;persistPrefs();if(state.view==="global")renderGlobal(document.querySelector("#main"))}}else{state.globalSearchMode="traditional";state.globalSearchAutoRun=false;if(isResearcher())state.dbSearchWhere=work?{work}:{};else state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")}};
-  main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireOperationsPanel();decorateDisabledControls(main);
+  main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireCorpusBuildsHomeCard(main);wireOperationsPanel();decorateDisabledControls(main);
 }
 
 
@@ -5503,10 +5530,10 @@ function renderRecord(main){
   document.querySelector("#queueRecord").onclick=()=>{const selected=state.reviewSelection.has(reviewKey(f,i));setReviewSelected(f,i,!selected);shell();renderView()};
   document.querySelector("#linkPdf")?.addEventListener("click",()=>linkPdfPage(f,i,state.pdf.page));
   document.querySelector("#returnToPdf")?.addEventListener("click",()=>openLoadedPdfPage(state.pdf.page));
-  document.querySelector("#openPdfExplorer")?.addEventListener("click",()=>navigateTo("pdf"));
+  document.querySelector("#openPdfExplorer")?.addEventListener("click",openPdfExplorerWorkspace);
   document.querySelector("#bridgeBackCurrent")?.addEventListener("click",()=>openLoadedPdfPage(state.pdf.page));
   document.querySelector("#bridgeOpenExplorer")?.addEventListener("click",()=>{
-    navigateTo("pdf");
+    openPdfExplorerWorkspace();
     toast(`Open ${linkedPdfName||"the linked PDF"} to activate page jumps`);
   });
   document.querySelectorAll("[data-bridge-pdf-link]").forEach(button=>button.onclick=()=>{
@@ -5514,13 +5541,13 @@ function renderRecord(main){
     if(!link)return;
     if(pdfLoaded&&link.pdf_file===state.pdf.name)openLoadedPdfPage(link.pdf_page);
     else{
-      navigateTo("pdf");
+      openPdfExplorerWorkspace();
       toast(`Open ${link.pdf_file} to jump to page ${link.pdf_page}`);
     }
   });
   document.querySelectorAll("[data-pdf-explorer-link]").forEach(button=>button.onclick=()=>{
     const link=links[+button.dataset.pdfExplorerLink];
-    navigateTo("pdf");
+    openPdfExplorerWorkspace();
     if(link)toast(`Open ${link.pdf_file} to jump to page ${link.pdf_page}`);
   });
   document.querySelectorAll("[data-open-pdf-link]").forEach(button=>button.onclick=()=>{
@@ -9081,7 +9108,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.40.5",
+      backup_client_version:"0.40.6",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -9704,7 +9731,7 @@ function triggerExport(){return canUse("manageCorpus")?exportMenu():toast("Your 
 function triggerEdit(){return canUse("editLocalRecords")?openEditor():toast("Your role does not have permission to edit records.")}
 function triggerBack(){return goBack()}
 function triggerForward(){return goForward()}
-function navigateView(view){return navigateTo(view)}
+function navigateView(view,href=null){return navigateTo(view,{href})}
 function getProviderProfilesForUi(){return cloneAuditValue(providerProfiles())}
 function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   const profile=providerProfile(profileId);
@@ -9877,6 +9904,7 @@ async function bootstrapRuntime(){
   // One discovery request on startup is not a polling loop. Polling begins only
   // if this request finds an active job and then runs every four seconds.
   await refreshJobs({rerender:false});
+  if(state.view==="home"&&document.querySelector("#main"))renderDashboard(document.querySelector("#main"));
   startJobPolling();
   if(!isResearcher())warmupConfiguredLlm();
 }
@@ -10435,9 +10463,9 @@ async function currentRecordPrimaryAction(action,payload={}){
   if(action==="open_pdf"){
     if(!canAccessPage("pdf"))throw new Error(tr("permissions.pdf_denied","Your role cannot open PDF Explorer."));
     const snapshot=await getRecordWorkspaceSnapshot();const link=snapshot?.pdf_links?.[Number(payload.index)||0];if(!link)return false;
-    if(state.pdf.file&&link.pdf_file===state.pdf.name)openLoadedPdfPage(link.pdf_page);else{navigateTo("pdf");toast(tr("record.open_pdf_first",`Open ${link.pdf_file} in PDF Explorer to jump to the linked page.`).replace("{file}",link.pdf_file),{tone:"info"})}return true;
+    if(state.pdf.file&&link.pdf_file===state.pdf.name)openLoadedPdfPage(link.pdf_page);else{openPdfExplorerWorkspace();toast(tr("record.open_pdf_first",`Open ${link.pdf_file} in PDF Explorer to jump to the linked page.`).replace("{file}",link.pdf_file),{tone:"info"})}return true;
   }
-  if(action==="pdf_explorer"){if(!canAccessPage("pdf"))throw new Error(tr("permissions.pdf_denied","Your role cannot open PDF Explorer."));navigateTo("pdf");return true}
+  if(action==="pdf_explorer"){if(!canAccessPage("pdf"))throw new Error(tr("permissions.pdf_denied","Your role cannot open PDF Explorer."));openPdfExplorerWorkspace();return true}
   if(action==="link_pdf"){
     if(isResearcher())return false;const file=activeFile();if(!file)return false;await linkPdfPage(file,selectedIndex(file),state.pdf.page);return true;
   }

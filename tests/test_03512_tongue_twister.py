@@ -20,11 +20,11 @@ SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
 
 def test_03512_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.40.5"
-    assert 'version="0.40.5"' in MAIN
-    assert '"app_version": "0.40.5"' in MAIN
-    assert "Corpus Viewer 0.40.5" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.40.5" in APP
+    assert package["version"] == "0.40.6"
+    assert 'version="0.40.6"' in MAIN
+    assert '"app_version": "0.40.6"' in MAIN
+    assert "Corpus Viewer 0.40.6" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.40.6" in APP
     assert "0.35.12 — Tongue Twister" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -152,7 +152,7 @@ def test_provider_navigation_warns_and_native_back_path_survives_legacy_destinat
     assert 'detail: { path: "/providers", legacyView: "providers" }' in LANGUAGE_VIEW
     assert "function navigateNative(path:string,legacyView?:string)" in APP
     assert "nativeBackPath.value=current" in APP
-    assert "runtime.navigateView(legacyView)" in APP
+    assert "runtime.navigateView(legacyView,path)" in APP
     assert "detail.legacyView" in APP
 
 

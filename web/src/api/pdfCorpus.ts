@@ -50,6 +50,7 @@ export interface CorpusBuild {
   segmentation_total_windows?: number;
   segmentation_recovered_windows?: number;
   segmentation_blocked?: boolean;
+  retrying_segmentation?: boolean;
   segmentation_unresolved_regions?: Array<{after_block_id?:string;next_block_id?:string;left_block_id?:string;right_block_id?:string;start_block_id?:string;end_block_id?:string;reason?:string;kind?:string;[key:string]:unknown}>;
   metadata_completed?: number;
   metadata_total?: number;

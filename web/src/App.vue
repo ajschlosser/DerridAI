@@ -68,7 +68,10 @@ function navigateNative(path:string,legacyView?:string){
   nativeBackPath.value=current;
   nativeForwardPath.value=null;
   if(legacyView){
-    runtime.navigateView(legacyView);
+    // Keep legacy runtime state and the native route/query in lockstep. Some
+    // native workspaces (notably Corpus Builder / PDF Explorer) use query
+    // parameters to select a tab or a durable background build.
+    runtime.navigateView(legacyView,path);
     return;
   }
   void router.push(path);
@@ -203,7 +206,7 @@ watch(()=>auth.user?.id,(id)=>{
       <nav class="vue-breadcrumb v030-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="v030-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
       <div v-if="auth.isAdmin&&s.files.length" class="file-tabs v030-file-tabs"><div v-for="file in s.files" :key="file.id" class="tab" :class="{active:file.active}" @click="runtime.activateFile(file.id)"><span v-if="file.dirty" class="dot"></span><span class="tn">{{file.name}}</span><span class="badge">{{file.count.toLocaleString(i18n.locale)}}</span><button class="x" :title="i18n.t('ui.close_file','Close file')" @click="closeFile($event,file.id)">×</button></div></div>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
-      <footer class="app-footer">© 2026 The New England Transcendental Club of California · DerridAI 0.40.5</footer>
+      <footer class="app-footer">© 2026 The New England Transcendental Club of California · DerridAI 0.40.6</footer>
     </section>
   </div>
   <div id="toast" class="toast"></div>
