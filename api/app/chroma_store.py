@@ -819,17 +819,23 @@ class ChromaStore:
         protected: bool = False,
     ) -> dict[str, Any]:
         requested_name = str(name or "").strip()
-        if len(requested_name) < 3 or len(requested_name) > 128:
+        # ``_response_cache`` is a stable logical alias exposed by DerridAI.
+        # Chroma itself rejects leading underscores, so validate and create the
+        # physical storage name instead. Public API models still reject arbitrary
+        # user-created names that begin with underscores; this exception is only
+        # reachable by the internal response-cache lifecycle.
+        name = self._storage_name(requested_name)
+        validation_name = name if requested_name == self._RESPONSE_CACHE_PUBLIC else requested_name
+        if len(validation_name) < 3 or len(validation_name) > 128:
             raise ValueError("Collection names must contain 3 to 128 characters.")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", requested_name):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", validation_name):
             raise ValueError(
                 "Collection names must start and end with a letter or number and "
                 "contain only letters, numbers, periods, underscores, or hyphens."
             )
-        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", requested_name):
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", validation_name):
             raise ValueError("Collection names cannot be IPv4 addresses.")
 
-        name = self._storage_name(requested_name)
         existing = {
             item.name if hasattr(item, "name") else str(item)
             for item in self.client.list_collections()
@@ -1684,6 +1690,8 @@ class ChromaStore:
                 self._RESPONSE_CACHE_PUBLIC,
                 embedding_provider="precomputed",
                 embedding_model="derridai-response-cache-hash-v1",
+                embedding_dimension=64,
+                distance_metric="cosine",
                 language_codes=[],
                 collection_role="general",
                 metadata={

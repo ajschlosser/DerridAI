@@ -192,28 +192,15 @@ class LLMJobManager(PersistentJobStateMixin):
             "dismissed": False,
             "last_resolution_at": None,
         }
+        # LLM jobs are intentionally not spooled to disk: request bodies may
+        # contain provider API keys. Provider-specific concurrency gates below
+        # already bound parallel work safely, so keep the sensitive request only
+        # in the executor closure for the lifetime of the job. Persisted job
+        # state contains the redacted request summary, never credentials.
         with self._lock:
-            active = next(
-                (
-                    existing for existing in self._jobs.values()
-                    if existing.get("status") in {"queued", "running", "cancelling"}
-                ),
-                None,
-            )
-            if active is not None:
-                raise ValueError(
-                    f"Another Chroma upsert is already active ({active.get('label') or active['id']}). "
-                    "Wait for it to finish or cancel it before starting another sync."
-                )
             self._jobs[job_id] = job
-        try:
-            self._write_spool(job_id, body)
-        except Exception:
-            with self._lock:
-                self._jobs.pop(job_id, None)
-            raise
         self._persist_job(job_id)
-        self._executor.submit(self._run_from_spool, job_id)
+        self._executor.submit(self._run, job_id, body)
         return self.get(job_id)
 
     @staticmethod
@@ -1103,11 +1090,50 @@ class RAGJobManager(PersistentJobStateMixin):
                             generation_provider=body.provider,
                             generation_model=body.model,
                         )
-                        grade_payload = run_rag_grade(
-                            grade_body,
-                            self._store,
-                            cancelled=cancelled,
-                        )
+                        grade_payload = None
+                        grade_attempts = max(1, int(settings.rag_auto_grade_max_attempts))
+                        for grade_attempt in range(1, grade_attempts + 1):
+                            try:
+                                grade_payload = run_rag_grade(
+                                    grade_body,
+                                    self._store,
+                                    cancelled=cancelled,
+                                )
+                                break
+                            except InterruptedError:
+                                raise
+                            except Exception as grade_exc:
+                                failure = _error_details(grade_exc)
+                                message_lc = str(failure.get("message") or "").casefold()
+                                transient = (
+                                    failure.get("http_status") in {408, 425, 429, 500, 502, 503, 504}
+                                    or "provider_error" in message_lc
+                                    or "upstream" in message_lc
+                                    or "temporarily unavailable" in message_lc
+                                    or "retry time budget" in message_lc
+                                )
+                                if not transient or grade_attempt >= grade_attempts:
+                                    raise
+                                status_label = (
+                                    f"HTTP {failure['http_status']}"
+                                    if failure.get("http_status")
+                                    else "provider error"
+                                )
+                                progress(
+                                    "auto_grade",
+                                    0,
+                                    1,
+                                    f"Grader temporarily unavailable ({status_label}); "
+                                    f"retrying {grade_attempt + 1}/{grade_attempts}",
+                                )
+                                delay = max(0.1, float(settings.rag_auto_grade_retry_delay_seconds))
+                                deadline = time.monotonic() + delay
+                                while time.monotonic() < deadline:
+                                    if cancelled():
+                                        raise InterruptedError()
+                                    time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+                        if grade_payload is None:
+                            raise RuntimeError("Auto-grade did not return a result.")
                         auto_grade_result = grade_payload.get("grade")
                         result["auto_grade"] = auto_grade_result
                         result["auto_grade_provider"] = grade_provider
@@ -1141,21 +1167,33 @@ class RAGJobManager(PersistentJobStateMixin):
                     except InterruptedError:
                         raise
                     except Exception as exc:
-                        auto_grade_error = str(exc)
+                        failure = _error_details(exc)
+                        status_label = (
+                            f"HTTP {failure['http_status']}"
+                            if failure.get("http_status")
+                            else "provider error"
+                        )
+                        auto_grade_error = (
+                            f"Auto-grade provider unavailable ({status_label}). "
+                            "The Research answer is complete; retry grading from the Response Library."
+                        )
                         result["auto_grade_error"] = auto_grade_error
+                        result["auto_grade_error_details"] = failure
                         result.setdefault("stages", []).append({
                             "name": "auto_grade",
                             "seconds": time.perf_counter() - auto_grade_started,
-                            "detail": {"error": auto_grade_error},
+                            "detail": {
+                                "error": auto_grade_error,
+                                "http_status": failure.get("http_status"),
+                                "retryable": failure.get("http_status") in {408, 425, 429, 500, 502, 503, 504},
+                            },
                         })
-                        result.setdefault("warnings", []).append(
-                            f"Auto-grade failed: {auto_grade_error}"
-                        )
+                        result.setdefault("warnings", []).append(auto_grade_error)
                         progress(
                             "auto_grade",
                             1,
                             1,
-                            f"Auto-grade failed: {auto_grade_error}",
+                            auto_grade_error,
                         )
 
                 with self._lock:
@@ -1986,7 +2024,7 @@ class UpsertJobManager(PersistentJobStateMixin):
             self._executor.submit(self._run_from_spool, job_id)
 
     def create(self, body: UpsertJobCreate, *, owner: str | None = None) -> dict[str, Any]:
-        # Large corpus syncs are background operations in 0.37.0. Admit only one
+        # Large corpus syncs are durable background operations. Admit only one
         # full-record payload at a time so a queue of huge browser submissions
         # cannot retain several corpora in process memory simultaneously.
         with self._lock:

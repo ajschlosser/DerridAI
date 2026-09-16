@@ -17,9 +17,9 @@ def text(path: str) -> str:
 
 def test_0370_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.37.0"
-    assert 'version="0.37.0"' in text("api/app/main.py")
-    assert "# DerridAI Corpus Viewer 0.37.0" in text("README.md")
+    assert package["version"] == "0.37.1"
+    assert 'version="0.37.1"' in text("api/app/main.py")
+    assert "# DerridAI Corpus Viewer 0.37.1" in text("README.md")
     assert "0.37.0 — New Direction" in text("README.md")
 
 
@@ -90,7 +90,7 @@ def test_vector_store_ui_exposes_new_direction_workflow_and_retrieval_testing():
         "Manifest & builds",
         "toggleStoreProtection",
         "/protection",
-        "System storage",
+        "Storage settings",
     ):
         assert token in runtime
     assert 'mode,n_results:30' in runtime

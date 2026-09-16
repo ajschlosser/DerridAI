@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-APP_VERSION = "0.37.0"
+APP_VERSION = "0.37.1"
 
 
 def _float_env(name: str, default: float) -> float:
@@ -99,6 +99,14 @@ class Settings:
     rag_ollama_max_concurrent: int = _int_env(
         "RAG_OLLAMA_MAX_CONCURRENT",
         1,
+    )
+    rag_auto_grade_max_attempts: int = _int_env(
+        "RAG_AUTO_GRADE_MAX_ATTEMPTS",
+        2,
+    )
+    rag_auto_grade_retry_delay_seconds: float = _float_env(
+        "RAG_AUTO_GRADE_RETRY_DELAY_SECONDS",
+        1.5,
     )
     rag_cross_encoder_model: str = os.getenv(
         "RAG_CROSS_ENCODER_MODEL",

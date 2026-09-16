@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.37.0
+# DerridAI Corpus Viewer 0.37.1
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,12 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.37.1 — Disoriented
+
+Version 0.37.1 streamlines the Vector Stores workspace around a persistent collection rail, compact status header, and five task-focused sections: Overview, Data, Retrieval, Builds, and Settings. Redundant KPI/management cards are removed, collections are searchable from the rail, record actions use progressive disclosure, records open in a contextual inspector drawer, retrieval modes can be compared side-by-side, and infrastructure storage is reduced to a compact backend control instead of competing with collection work.
+
+Research pipeline resilience is also improved. The logical `_response_cache` now validates and creates its Chroma-safe physical alias correctly, fixing cache writes that failed on the public leading-underscore name. Background LLM review jobs no longer call vector-upsert spool methods or persist provider credentials to disk; they execute through their intended provider concurrency gates. Auto-grade treats transient upstream 408/425/429/5xx failures as retryable, retries once by default, preserves full diagnostics for audit, and reports a concise recoverable warning when the grading provider remains unavailable without turning a completed Research answer into a failed pipeline.
 
 ## 0.37.0 — New Direction
 
