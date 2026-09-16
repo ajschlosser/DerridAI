@@ -6636,7 +6636,8 @@ function toggleSearchFacet(field,value){
 }
 function clearSearchFacetFilters(){state.searchFacetFilters={};state.globalPage=1;persistPrefs();syncUrl({replace:true})}
 function clearSearchAllFilters(){state.searchFacetFilters={};state.globalFilters=[];state.dbSearchWhere={};state.globalPage=1;state.storeSearchResults=[];state.searchDatabaseRan=false;persistPrefs();syncUrl({replace:true})}
-function addSearchAdvancedFilter({field,op="eq",value=""}={}){
+/** @param {{field?: string, op?: string, value?: string}} [options] */
+function addSearchAdvancedFilter({field="",op="eq",value=""}={}){
   field=String(field||"");value=String(value??"").trim();if(!field)return;
   if(searchScope()==="database"){
     if(!value)return;const next={...(state.dbSearchWhere||{})};next[field]=op==="has"?{$contains:value}:value;state.dbSearchWhere=next;state.storeSearchResults=[];state.searchDatabaseRan=false;
