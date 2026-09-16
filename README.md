@@ -72,7 +72,7 @@ Corpus builds now checkpoint the document manifest, accepted semantic boundaries
 
 The PDF workspace and Corpus Builder were also brought onto DerridAI's i18n system with English and Québec French strings, logical CSS properties for bidirectional layouts, explicit labels and live regions, keyboard-visible focus treatment, reduced-motion handling, semantic progress reporting, and non-color status text. The review workspace now lets a human correct field-to-source evidence bindings directly against immutable source blocks; structural merge/split edits preserve scholarly printed-page labels separately from physical PDF pages, and deterministic/system-owned metadata cannot be accidentally overwritten in the JSON editor. Reusable Corpus Build Progress, Field Evidence, PDF Evidence Viewer, Printed-Page Mapping, and Document Manifest components are covered in Storybook.
 
-Release validation: 207 automated tests pass, Python application modules compile, `runtime.js` passes Node syntax checking, and `git diff --check` is clean. The full Vue/Vite/Storybook production build could not be executed in the release environment because frontend dependency installation timed out; the source package therefore does not claim that build as verified.
+Release validation: 208 automated tests pass, Python application modules compile, `runtime.js` passes Node syntax checking, and `git diff --check` is clean. The full Vue/Vite/Storybook production build could not be executed in the release environment because frontend dependency installation timed out; the source package therefore does not claim that build as verified.
 
 ## 0.40.0 — Pdffffffffft.
 
