@@ -4,10 +4,8 @@ from __future__ import annotations
 import copy
 import re
 import threading
-from pathlib import Path
 from typing import Any
 
-from .config import settings
 from .persistence import system_repository
 
 # Server-owned configuration shared across browser sessions. Keeping researcher
@@ -1352,34 +1350,15 @@ DEFAULT_FR_CA.update({'dynamic.record_one': 'fiche', 'dynamic.work_one': 'œuvre
 
 class SystemStore:
     def __init__(self) -> None:
-        # 0.36.0: system metadata is durable SQLite state behind a repository
-        # boundary. Keep the former JSON path only as a one-time migration source.
         self.repository = system_repository
         self.path = self.repository.path
-        self.legacy_path = self.path.with_name("derridai-system.json")
         self._lock = threading.RLock()
-        # Prior releases placed derridai-system.json beside AUTH_DB_PATH. Honor
-        # that location as well as the new SYSTEM_DB_PATH directory so custom
-        # deployments migrate without requiring users to move files manually.
-        legacy_candidates = [
-            self.legacy_path,
-            Path(getattr(settings, "auth_db_path", "/data/.home/derridai-auth.sqlite3")).expanduser().parent / "derridai-system.json",
-        ]
-        seen: set[Path] = set()
-        for candidate in legacy_candidates:
-            candidate = candidate.resolve()
-            if candidate in seen:
-                continue
-            seen.add(candidate)
-            if self.repository.migrate_legacy_json(candidate):
-                break
         self._ensure()
 
     def _default(self) -> dict[str, Any]:
         return {
             "researcher_provider_profiles": [],
             "annotations": [],
-            "language_dictionary_revision": "0.36.0.1",
             "languages": {
                 "en-US": {"name": "English", "flag": "🇺🇸", "dictionary": DEFAULT_EN_US},
                 "fr-CA": {"name": "Français", "flag": "🇨🇦", "dictionary": DEFAULT_FR_CA},
@@ -1388,69 +1367,8 @@ class SystemStore:
 
     def _ensure(self) -> None:
         with self._lock:
-            if not self.path.exists():
+            if self.repository.is_empty():
                 self._write(self._default())
-                return
-            data = self._read()
-            changed = False
-            data.setdefault("researcher_provider_profiles", [])
-            data.setdefault("annotations", [])
-            languages = data.setdefault("languages", {})
-            dictionary_revision = "0.36.0.1"
-            refresh_builtins = str(data.get("language_dictionary_revision") or "") != dictionary_revision
-            for code, value in self._default()["languages"].items():
-                if code not in languages:
-                    languages[code] = copy.deepcopy(value)
-                    changed = True
-                else:
-                    if "name" not in languages[code]:
-                        languages[code]["name"] = value["name"]
-                        changed = True
-                    if "flag" not in languages[code]:
-                        languages[code]["flag"] = value["flag"]
-                        changed = True
-                    if code == "en-US" and (languages[code].get("name") != "English" or languages[code].get("flag") != "🇺🇸"):
-                        languages[code]["name"] = "English"
-                        languages[code]["flag"] = "🇺🇸"
-                        changed = True
-                    if code == "fr-CA" and (languages[code].get("name") != "Français" or languages[code].get("flag") != "🇨🇦"):
-                        languages[code]["name"] = "Français"
-                        languages[code]["flag"] = "🇨🇦"
-                        changed = True
-                    # A built-in dictionary revision is a one-time migration. It
-                    # replaces canonical en-US/fr-CA values on upgrade so an
-                    # existing installation receives the professional Québec
-                    # localization shipped with this release. Once the revision
-                    # is current, administrators may edit built-in strings and
-                    # those edits are preserved across ordinary restarts.
-                    if refresh_builtins:
-                        languages[code]["dictionary"] = copy.deepcopy(value["dictionary"])
-                        changed = True
-                    else:
-                        dictionary = languages[code].setdefault("dictionary", {})
-                        for key, text in value["dictionary"].items():
-                            if key not in dictionary:
-                                dictionary[key] = text
-                                changed = True
-            if refresh_builtins:
-                data["language_dictionary_revision"] = dictionary_revision
-                changed = True
-            # Custom locale dictionaries also inherit newly introduced canonical
-            # keys as English fallbacks. This keeps every installed language
-            # editable after an application upgrade instead of silently omitting
-            # controls added in a newer release; admins can translate the new keys
-            # in-place or reinstall/regenerate the locale.
-            canonical = languages.get("en-US", {}).get("dictionary", DEFAULT_EN_US)
-            for code, language in languages.items():
-                if code in {"en-US", "fr-CA"} or not isinstance(language, dict):
-                    continue
-                dictionary = language.setdefault("dictionary", {})
-                for key, text in canonical.items():
-                    if key not in dictionary:
-                        dictionary[key] = text
-                        changed = True
-            if changed:
-                self._write(data)
 
     def _read(self) -> dict[str, Any]:
         try:

@@ -4093,7 +4093,6 @@ async function renderFaq(main){
   }
   main.innerHTML=`<div class="toolbar faq-toolbar"><div class="search"><input id="faqSearch" value="${esc(state.faqSearch||"")}" placeholder="Search cached questions"></div><div class="tools"><span class="note">${cacheTotal.toLocaleString()} cached response${cacheTotal===1?"":"s"}${state.faqSearch?` · ${matchedTotal.toLocaleString()} match${matchedTotal===1?"":"es"}`:""}</span>${state.faqSearch?'<button class="btn small" id="faqClearSearch">Clear search</button>':""}<button class="btn small" id="faqExpandAll">Expand all</button><button class="btn small" id="faqCollapseAll">Collapse all</button>${isResearcher()?"":`<button class="btn small soft" id="faqGradeAll">${icon("spark")}Grade every response</button>`}<button class="btn" id="faqGoRag">${icon("spark")}New RAG query</button></div></div>
   ${noMatches?`<div class="info">The response cache contains ${cacheTotal.toLocaleString()} response${cacheTotal===1?"":"s"}, but none match the current FAQ search. Clear the search to show all cached responses.</div>`:""}
-  ${payload.physical_collections?.length>1?`<div class="info">Merged ${payload.physical_collections.length} response-cache collections from an upgraded installation.</div>`:""}
   <section class="faq-list" id="faqList"></section>
   <div class="pagebar"><span>Page ${state.faqPage||1} of ${pagesTotal}</span><div class="tools"><button class="btn small" id="faqPrev" ${(state.faqPage||1)<=1?"disabled":""}>← Previous</button><button class="btn small" id="faqNext" ${(state.faqPage||1)>=pagesTotal?"disabled":""}>Next →</button></div></div>`;
   const cardHtml=(record,index)=>{
@@ -8446,7 +8445,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.36.0",
+      backup_client_version:"0.36.1",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -8752,7 +8751,6 @@ async function renderResponseCache(main){
     <section class="card response-cache-overview">
       <div class="cardhead"><div><b>RAG response cache</b><div class="note">System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.</div></div><div class="tools"><button class="btn" id="cacheFaq">${icon("books")}Open FAQ</button>${exists?'<button class="btn danger" id="clearResponseCache">Clear cache</button>':""}</div></div>
       <div class="dashboard-kpis response-cache-kpis"><div class="dash-kpi"><span>Cached responses</span><strong>${count.toLocaleString()}</strong></div><div class="dash-kpi"><span>Collection</span><strong>${exists?"_response_cache":"Not created"}</strong></div><div class="dash-kpi"><span>Embedding</span><strong>${esc(cache?.embedding_model||"system-managed")}</strong></div></div>
-      ${payload.physical_collections?.length>1?`<div class="info">This upgraded installation contains ${payload.physical_collections.length} physical response-cache collections. They are merged logically for browsing and FAQ display.</div>`:""}
       <div class="info">Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs.</div>
     </section>
     <section class="card"><div class="cardhead"><div><b>Recent cached responses</b><div class="note">Latest 100 response-cache entries. Use Response FAQ for full answer/evidence browsing and re-runs.</div></div></div>

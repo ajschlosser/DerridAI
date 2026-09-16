@@ -171,5 +171,4 @@ export type ResponseFaqPage = {
   offset: number;
   query?: string;
   exists?: boolean;
-  physical_collections?: Array<{name:string;count:number}>;
 };

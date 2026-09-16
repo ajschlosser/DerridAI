@@ -33,10 +33,9 @@ def _json_loads(value: str | bytes | None, default: Any) -> Any:
 class SQLiteRepositoryBase:
     """Small SQLite repository foundation shared by durable application state.
 
-    0.36.0 deliberately keeps authentication in its existing SQLite database
-    while moving server-owned system metadata and operation state out of JSON
-    files/process memory.  The repository boundary is intentionally backend-
-    neutral enough to make a later PostgreSQL implementation straightforward.
+    Authentication remains in its existing SQLite database while server-owned
+    system metadata and operation state use a second durable SQLite database.
+    This release assumes a fresh database and initializes only the current schema.
     """
 
     def __init__(self, path: str | Path | None = None) -> None:
@@ -59,18 +58,6 @@ class SQLiteRepositoryBase:
         with self._lock, self._connect() as conn:
             conn.executescript(
                 """
-                CREATE TABLE IF NOT EXISTS schema_migrations (
-                    version INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    applied_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS system_meta (
-                    key TEXT PRIMARY KEY,
-                    value_json TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-
                 CREATE TABLE IF NOT EXISTS researcher_provider_profiles (
                     id TEXT PRIMARY KEY,
                     position INTEGER NOT NULL DEFAULT 0,
@@ -114,22 +101,16 @@ class SQLiteRepositoryBase:
                     ON jobs(status, updated_at DESC);
                 """
             )
-            conn.execute(
-                "INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(1,'0.36.0 initial durable system/job store',?)",
-                (_iso_now(),),
-            )
 
     def describe(self) -> dict[str, Any]:
         with self._connect() as conn:
             page_count = int(conn.execute("PRAGMA page_count").fetchone()[0])
             page_size = int(conn.execute("PRAGMA page_size").fetchone()[0])
             journal_mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0])
-            schema_version = int(conn.execute("SELECT COALESCE(MAX(version),0) FROM schema_migrations").fetchone()[0])
         return {
             "backend": "sqlite",
             "path": str(self.path),
             "journal_mode": journal_mode,
-            "schema_version": schema_version,
             "size_bytes": page_count * page_size,
         }
 
@@ -143,16 +124,11 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 int(conn.execute("SELECT COUNT(*) FROM researcher_provider_profiles").fetchone()[0]),
                 int(conn.execute("SELECT COUNT(*) FROM annotations").fetchone()[0]),
                 int(conn.execute("SELECT COUNT(*) FROM languages").fetchone()[0]),
-                int(conn.execute("SELECT COUNT(*) FROM system_meta").fetchone()[0]),
             ]
         return not any(counts)
 
     def load(self) -> dict[str, Any]:
         with self._lock, self._connect() as conn:
-            meta: dict[str, Any] = {}
-            for row in conn.execute("SELECT key,value_json FROM system_meta"):
-                meta[str(row["key"])] = _json_loads(row["value_json"], None)
-
             profiles = [
                 _json_loads(row["payload_json"], {})
                 for row in conn.execute(
@@ -178,13 +154,11 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     value["translation_report"] = _json_loads(row["translation_report_json"], {})
                 languages[str(row["code"])] = value
 
-        data: dict[str, Any] = {
+        return {
             "researcher_provider_profiles": profiles,
             "annotations": annotations,
             "languages": languages,
         }
-        data.update(meta)
-        return data
 
     def replace(self, data: dict[str, Any]) -> None:
         if not isinstance(data, dict):
@@ -195,14 +169,12 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         if not isinstance(profiles, list) or not isinstance(annotations, list) or not isinstance(languages, dict):
             raise ValueError("System repository payload is invalid.")
 
-        known = {"researcher_provider_profiles", "annotations", "languages"}
         now = _iso_now()
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("DELETE FROM researcher_provider_profiles")
             conn.execute("DELETE FROM annotations")
             conn.execute("DELETE FROM languages")
-            conn.execute("DELETE FROM system_meta")
 
             for position, profile in enumerate(profiles):
                 if not isinstance(profile, dict):
@@ -251,13 +223,6 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     ),
                 )
 
-            for key, value in data.items():
-                if key in known:
-                    continue
-                conn.execute(
-                    "INSERT INTO system_meta(key,value_json,updated_at) VALUES(?,?,?)",
-                    (str(key), _json_dumps(value), now),
-                )
             conn.commit()
 
     def list_provider_profiles(self) -> list[dict[str, Any]]:
@@ -401,30 +366,6 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             conn.commit()
             return bool(cursor.rowcount)
 
-    def migrate_legacy_json(self, legacy_path: Path) -> bool:
-        """One-time, non-destructive migration from derridai-system.json.
-
-        The old file is preserved as a .migrated-v0.36.0.json safety copy after
-        the SQLite transaction succeeds.  We never delete a user's only copy.
-        """
-        if not self.is_empty() or not legacy_path.exists():
-            return False
-        try:
-            payload = json.loads(legacy_path.read_text(encoding="utf-8"))
-        except Exception:
-            return False
-        if not isinstance(payload, dict):
-            return False
-        self.replace(payload)
-        backup = legacy_path.with_name("derridai-system.migrated-v0.36.0.json")
-        if not backup.exists():
-            try:
-                legacy_path.replace(backup)
-            except OSError:
-                # State is already safely in SQLite. Leaving the original JSON
-                # in place is preferable to making startup fail over a rename.
-                pass
-        return True
 
 
 class SQLiteJobRepository(SQLiteRepositoryBase):

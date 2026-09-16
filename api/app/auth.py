@@ -162,7 +162,9 @@ class AuthStore:
                     role TEXT NOT NULL CHECK(role IN ('admin','researcher')),
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    last_login TEXT,
+                    login_count INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS sessions (
                     token_hash TEXT PRIMARY KEY,
@@ -191,9 +193,8 @@ class AuthStore:
                 "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
                 (now, now),
             )
-            # Existing installations used users.role as a two-value base role.
-            # Keep that stable for compatibility and layer arbitrary application
-            # roles through a separate assignment table.
+            # users.role remains the built-in base role; arbitrary application
+            # roles are represented through the assignment table.
             conn.execute(
                 "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
             )
@@ -220,13 +221,6 @@ class AuthStore:
                         "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,0)",
                         [(role, capability) for capability in missing],
                     )
-            # Forward-only lightweight migrations keep existing 0.20+ auth DBs
-            # usable without requiring a separate migration command.
-            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(users)").fetchall()}
-            if "last_login" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
-            if "login_count" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN login_count INTEGER NOT NULL DEFAULT 0")
 
     @staticmethod
     def _row_user(row: sqlite3.Row | None) -> AuthUser | None:

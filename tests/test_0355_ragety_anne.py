@@ -30,10 +30,10 @@ def _dictionaries():
 
 def test_release_version_0355_is_consistent():
     package=json.loads((ROOT/"web/package.json").read_text(encoding="utf-8"))
-    assert package["version"]=="0.36.0"
-    assert 'version="0.36.0"' in MAIN
-    assert "Corpus Viewer 0.36.0" in (ROOT/"web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.36.0" in (ROOT/"web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"]=="0.36.1"
+    assert 'version="0.36.1"' in MAIN
+    assert "Corpus Viewer 0.36.1" in (ROOT/"web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.36.1" in (ROOT/"web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.5 — RAGety Anne" in (ROOT/"README.md").read_text(encoding="utf-8")
 
 
@@ -90,4 +90,3 @@ def test_new_faq_strings_have_english_quebec_french_parity():
     ):
         assert key in en and key in fr
         assert en[key] and fr[key]
-    assert 'language_dictionary_revision": "0.36.0.1"' in SYSTEM

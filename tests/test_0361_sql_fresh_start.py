@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
@@ -10,25 +12,25 @@ sys.path.insert(0, str(ROOT / "api"))
 from app.persistence import SQLiteJobRepository, SQLiteSystemRepository
 
 
-def test_0360_release_identity_and_storage_configuration():
+def test_0361_release_identity_and_storage_configuration():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
     main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
     config = (ROOT / "api/app/config.py").read_text(encoding="utf-8")
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert package["version"] == "0.36.0"
-    assert 'version="0.36.0"' in main
-    assert '"app_version": "0.36.0"' in main
+    assert package["version"] == "0.36.1"
+    assert 'version="0.36.1"' in main
+    assert '"app_version": "0.36.1"' in main
     assert "SYSTEM_DB_PATH" in config
     assert "SYSTEM_DB_PATH" in compose
-    assert "0.36.0 — The SQL Prequel" in readme
+    assert "0.36.1" in readme
 
 
 def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
-    repo = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    db_path = tmp_path / "derridai-system.sqlite3"
+    repo = SQLiteSystemRepository(db_path)
     payload = {
-        "language_dictionary_revision": "test.1",
         "researcher_provider_profiles": [
             {"id": "local", "name": "Local", "type": "ollama", "api_key": "write-only-secret"}
         ],
@@ -47,32 +49,68 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
     }
 
     repo.replace(payload)
-    restored = repo.load()
+    assert repo.load() == payload
 
-    assert restored == payload
     info = repo.describe()
     assert info["backend"] == "sqlite"
     assert info["journal_mode"].lower() == "wal"
-    assert info["schema_version"] >= 1
     assert info["size_bytes"] > 0
+    assert "schema_version" not in info
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "schema_migrations" not in tables
+    assert "system_meta" not in tables
+    assert {"researcher_provider_profiles", "annotations", "languages", "jobs"} <= tables
 
 
-def test_legacy_system_json_migrates_non_destructively(tmp_path: Path):
+def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
+    import app.system_store as module
+
     db_path = tmp_path / "derridai-system.sqlite3"
-    legacy = tmp_path / "derridai-system.json"
-    payload = {
-        "language_dictionary_revision": "legacy",
-        "researcher_provider_profiles": [],
-        "annotations": [],
-        "languages": {"en-US": {"name": "English", "flag": "🇺🇸", "dictionary": {"x": "X"}}},
-    }
-    legacy.write_text(json.dumps(payload), encoding="utf-8")
+    old_json = tmp_path / "derridai-system.json"
+    old_json.write_text(json.dumps({
+        "languages": {
+            "en-US": {"name": "Old English", "flag": "X", "dictionary": {"app.name": "OLD"}},
+        }
+    }), encoding="utf-8")
 
-    repo = SQLiteSystemRepository(db_path)
-    assert repo.migrate_legacy_json(legacy) is True
-    assert repo.load() == payload
-    assert not legacy.exists()
-    assert (tmp_path / "derridai-system.migrated-v0.36.0.json").exists()
+    repository = SQLiteSystemRepository(db_path)
+    monkeypatch.setattr(module, "system_repository", repository)
+    store = module.SystemStore()
+
+    assert store.get_language("en-US")["name"] == "English"
+    assert store.get_language("en-US")["dictionary"]["app.name"] == "DerridAI"
+    assert store.get_language("fr-CA")["name"] == "Français"
+    assert old_json.exists()
+    assert old_json.read_text(encoding="utf-8").find("OLD") >= 0
+
+
+def test_auth_schema_is_current_on_first_create_without_alter_migrations(tmp_path: Path, monkeypatch):
+    import app.auth as module
+
+    monkeypatch.setattr(module, "settings", SimpleNamespace(auth_db_path=str(tmp_path / "derridai-auth.sqlite3")))
+    store = module.AuthStore()
+    with sqlite3.connect(store.path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+    assert {"last_login", "login_count"} <= columns
+
+    source = (ROOT / "api/app/auth.py").read_text(encoding="utf-8")
+    assert "ALTER TABLE users" not in source
+
+
+def test_no_system_storage_migration_scaffolding_remains():
+    persistence = (ROOT / "api/app/persistence.py").read_text(encoding="utf-8")
+    system_store = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+
+    for token in (
+        "migrate_legacy_json",
+        "schema_migrations",
+        "derridai-system.migrated-",
+        "language_dictionary_revision",
+    ):
+        assert token not in persistence
+        assert token not in system_store
 
 
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):
@@ -95,10 +133,8 @@ def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_pa
 
     restarted = SQLiteJobRepository(db_path)
     assert restarted.recover_interrupted() == 1
-    loaded = restarted.load("llm_tool")
+    recovered = restarted.load("llm_tool")[0]
 
-    assert len(loaded) == 1
-    recovered = loaded[0]
     assert recovered["status"] == "failed"
     assert recovered["_resume_dictionary"] == {"a": "A traduit"}
     assert recovered["_resume_failed_keys"] == ["b"]
@@ -156,30 +192,3 @@ def test_language_translation_emits_durable_checkpoint(monkeypatch):
     assert stats["failed_count"] == 0
     assert checkpoints
     assert checkpoints[-1][0] == {"hello": "Bonjour"}
-
-
-def test_system_store_finds_legacy_json_beside_custom_auth_db(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    import app.system_store as module
-
-    legacy_home = tmp_path / "legacy-home"
-    sqlite_home = tmp_path / "sqlite-home"
-    legacy_home.mkdir()
-    sqlite_home.mkdir()
-    legacy = legacy_home / "derridai-system.json"
-    legacy.write_text(json.dumps({
-        "researcher_provider_profiles": [],
-        "annotations": [],
-        "languages": {
-            "en-US": {"name": "English", "flag": "🇺🇸", "dictionary": {"app.name": "legacy"}},
-            "fr-CA": {"name": "Français", "flag": "🇨🇦", "dictionary": {"app.name": "ancien"}},
-        },
-    }), encoding="utf-8")
-
-    repository = SQLiteSystemRepository(sqlite_home / "derridai-system.sqlite3")
-    monkeypatch.setattr(module, "system_repository", repository)
-    monkeypatch.setattr(module, "settings", SimpleNamespace(auth_db_path=str(legacy_home / "auth.sqlite3")))
-
-    store = module.SystemStore()
-    assert store.get_language("en-US")["dictionary"]["app.name"] == "DerridAI"
-    assert (legacy_home / "derridai-system.migrated-v0.36.0.json").exists()

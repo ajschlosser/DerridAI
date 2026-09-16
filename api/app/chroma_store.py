@@ -384,44 +384,14 @@ class ChromaStore:
         source = metadata.get(self._SOURCE_KEY)
         return list(dict.fromkeys(codes)), inferred_role, str(source) if source else None
 
-    def _response_cache_storage_name(self) -> str:
-        """Resolve the physical response-cache collection across old installs.
-
-        Very early DerridAI builds could persist the public ``_response_cache``
-        name directly, while current builds use ``derridai_response_cache`` and
-        expose the public alias. If both happen to exist, prefer the collection
-        that actually contains more retained responses so upgrades do not make
-        the FAQ appear empty.
-        """
-        candidates: list[tuple[int, str]] = []
-        for candidate in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
-            try:
-                collection = self.client.get_collection(name=candidate)
-                candidates.append((int(collection.count()), candidate))
-            except Exception:
-                continue
-        if not candidates:
-            return self._RESPONSE_CACHE_STORAGE
-        candidates.sort(
-            key=lambda item: (
-                item[0],
-                item[1] == self._RESPONSE_CACHE_STORAGE,
-            ),
-            reverse=True,
-        )
-        return candidates[0][1]
-
     def _storage_name(self, name: str) -> str:
         if name == self._RESPONSE_CACHE_PUBLIC:
-            return self._response_cache_storage_name()
+            return self._RESPONSE_CACHE_STORAGE
         return name
 
     def _public_collection_name(self, collection) -> str:
-        # ``derridai_response_cache`` is a reserved internal storage name. Older
-        # builds did not always persist the system marker metadata, which made
-        # the cache appear as a normal corpus collection and caused the FAQ to
-        # miss it. Always expose the reserved storage name through the stable
-        # public alias.
+        # The response cache has a stable public alias while using a reserved
+        # internal Chroma collection name.
         if collection.name == self._RESPONSE_CACHE_STORAGE:
             return self._RESPONSE_CACHE_PUBLIC
         return collection.name
@@ -516,15 +486,8 @@ class ChromaStore:
 
     def list_stores(self) -> list[dict[str, Any]]:
         stores = []
-        response_cache_storage = self._response_cache_storage_name()
-        response_cache_names = {self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC}
         for collection in self.client.list_collections():
             name = collection.name if hasattr(collection, "name") else str(collection)
-            # Coalesce legacy/current cache collections into one public system
-            # collection. This prevents a stale empty cache from hiding the
-            # populated cache after an upgrade.
-            if name in response_cache_names and name != response_cache_storage:
-                continue
             col = self.client.get_collection(name)
             stores.append(self._public_store(col))
         return sorted(stores, key=lambda item: item["name"].casefold())
@@ -577,19 +540,7 @@ class ChromaStore:
         return self._public_store(col)
 
     def delete_store(self, name: str) -> None:
-        if name == self._RESPONSE_CACHE_PUBLIC:
-            deleted = False
-            for candidate in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
-                try:
-                    self.client.delete_collection(name=candidate)
-                    deleted = True
-                except Exception:
-                    continue
-            if not deleted:
-                # Preserve the ordinary not-found behavior for callers.
-                self.client.delete_collection(name=self._RESPONSE_CACHE_STORAGE)
-            return
-        self.client.delete_collection(name=name)
+        self.client.delete_collection(name=self._storage_name(name))
 
     def _collection(self, name: str):
         return self.client.get_collection(name=self._storage_name(name))
@@ -1293,56 +1244,26 @@ class ChromaStore:
         offset: int = 0,
         query: str | None = None,
     ) -> dict[str, Any]:
-        """Read response-cache records across current and legacy storage names.
+        """Read the current response-cache collection."""
+        try:
+            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+        except Exception:
+            return {
+                "records": [],
+                "count": 0,
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "query": query or "",
+                "exists": False,
+            }
 
-        Some upgraded installations can contain both the historical public
-        ``_response_cache`` collection and the current internal
-        ``derridai_response_cache`` collection. Generic collection aliasing must
-        choose only one physical collection; the FAQ instead needs a logical
-        merged view so older cached responses never disappear after an upgrade.
-        """
-        records_by_id: dict[str, dict[str, Any]] = {}
-        physical: list[dict[str, Any]] = []
-        for name in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
-            try:
-                collection = self.client.get_collection(name=name)
-            except Exception:
-                continue
-            try:
-                payload = collection.get(include=["documents", "metadatas"])
-                decoded = self._decode_result(payload)
-            except Exception:
-                decoded = []
-            physical.append({"name": name, "count": int(collection.count())})
-            for record in decoded:
-                logical_id = str(
-                    record.get("record_id")
-                    or record.get("response_id")
-                    or record.get("_chroma_id")
-                    or ""
-                )
-                if not logical_id:
-                    continue
-                record = dict(record)
-                record["_cache_storage"] = name
-                previous = records_by_id.get(logical_id)
-                if previous is None:
-                    records_by_id[logical_id] = record
-                    continue
-                previous_time = str(
-                    previous.get("updated_at")
-                    or previous.get("created_at")
-                    or ""
-                )
-                candidate_time = str(
-                    record.get("updated_at")
-                    or record.get("created_at")
-                    or ""
-                )
-                if candidate_time >= previous_time:
-                    records_by_id[logical_id] = record
+        try:
+            payload = collection.get(include=["documents", "metadatas"])
+            records = [dict(record) for record in self._decode_result(payload)]
+        except Exception:
+            records = []
 
-        records = list(records_by_id.values())
         records.sort(
             key=lambda record: str(
                 record.get("created_at")
@@ -1371,48 +1292,25 @@ class ChromaStore:
             "limit": limit,
             "offset": offset,
             "query": query or "",
-            "exists": bool(physical),
-            "physical_collections": physical,
+            "exists": True,
         }
 
     def ensure_response_cache(self) -> dict[str, Any]:
-        name = "_response_cache"
-        # Migrate existing caches in place. Some pre-0.10.1 caches were created
-        # without the provider/system metadata, so Chroma treated later writes
-        # as default 384-D embeddings even though the stored cache vectors are
-        # deterministic 64-D vectors. Repairing metadata here also makes those
-        # collections visible to the Response FAQ again.
         try:
-            collection = self.client.get_collection(
-                name=self._response_cache_storage_name()
-            )
-        except Exception:
-            collection = None
-        if collection is not None:
-            metadata = dict(collection.metadata or {})
-            metadata[self._PROVIDER_KEY] = "precomputed"
-            metadata[self._MODEL_KEY] = "derridai-response-cache-hash-v1"
-            metadata[self._LANG_KEY] = "[]"
-            metadata[self._ROLE_KEY] = "general"
-            metadata["derridai_system_collection"] = "response_cache"
-            metadata["derridai_cache_embedding"] = (
-                "deterministic-hash-vector-v1"
-            )
-            collection.modify(metadata=metadata)
+            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
             return self._public_store(collection)
-        return self.create_store(
-            name,
-            embedding_provider="precomputed",
-            embedding_model="derridai-response-cache-hash-v1",
-            language_codes=[],
-            collection_role="general",
-            metadata={
-                "derridai_system_collection": "response_cache",
-                "derridai_cache_embedding": (
-                    "deterministic-hash-vector-v1"
-                ),
-            },
-        )
+        except Exception:
+            return self.create_store(
+                self._RESPONSE_CACHE_PUBLIC,
+                embedding_provider="precomputed",
+                embedding_model="derridai-response-cache-hash-v1",
+                language_codes=[],
+                collection_role="general",
+                metadata={
+                    "derridai_system_collection": "response_cache",
+                    "derridai_cache_embedding": "deterministic-hash-vector-v1",
+                },
+            )
 
     def cache_rag_response(
         self,
@@ -1489,32 +1387,18 @@ class ChromaStore:
         generation_provider: str | None = None,
         generation_model: str | None = None,
     ) -> dict[str, Any]:
-        # A migrated install may contain responses in both the current internal
-        # cache collection and the historical public collection. Locate this
-        # exact response across both physical stores; the normal public alias
-        # can point at only one of them.
-        candidates: list[tuple[str, dict[str, Any], Any]] = []
-        for storage_name in (self._RESPONSE_CACHE_STORAGE, self._RESPONSE_CACHE_PUBLIC):
-            try:
-                candidate_collection = self.client.get_collection(name=storage_name)
-                payload = candidate_collection.get(
-                    ids=[response_record_id],
-                    include=["documents", "metadatas"],
-                )
-                decoded = self._decode_result(payload)
-            except Exception:
-                continue
-            if decoded:
-                candidate_record = dict(decoded[0])
-                stamp = str(
-                    candidate_record.get("updated_at")
-                    or candidate_record.get("created_at")
-                    or ""
-                )
-                candidates.append((stamp, candidate_record, candidate_collection))
-        if not candidates:
+        try:
+            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+            payload = collection.get(
+                ids=[response_record_id],
+                include=["documents", "metadatas"],
+            )
+            decoded = self._decode_result(payload)
+        except Exception as exc:
+            raise ValueError("Cached RAG response was not found.") from exc
+        if not decoded:
             raise ValueError("Cached RAG response was not found.")
-        _, record, collection = max(candidates, key=lambda item: item[0])
+        record = dict(decoded[0])
         clean = dict(record)
         chroma_id = str(clean.pop("_chroma_id", response_record_id))
         graded_at = datetime.now(timezone.utc).isoformat()

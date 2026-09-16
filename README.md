@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.36.0
+# DerridAI Corpus Viewer 0.36.1
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -64,6 +64,18 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+
+
+## 0.36.1 — Fresh-start SQLite cleanup
+
+- Removed the 0.36.0 JSON-to-SQLite import path and all startup inspection/renaming of `derridai-system.json`. 0.36.1 initializes the current SQLite store directly and assumes a clean installation.
+- Removed the `schema_migrations` and generic `system_meta` tables. The system database now contains only the tables the current application uses: provider profiles, annotations, languages, and durable jobs.
+- Removed built-in language dictionary revision/update machinery. English 🇺🇸 and Français 🇨🇦 are seeded directly when the system database is empty, and existing database values are left alone on normal restarts.
+- Removed the authentication `ALTER TABLE` upgrade path. `last_login` and `login_count` are part of the current `users` schema from first creation.
+- `/api/system/storage` now reports the active SQLite backend, path, journal mode, and size without exposing a migration/schema-version concept.
+- This release intentionally has **no storage upgrade path**. Run it from a clean data directory rather than reusing databases or `derridai-system.json` from an older release.
+
+See `docs/STORAGE_0.36.1.md` for the fresh-install storage contract.
 
 
 ## 0.36.0 — The SQL Prequel
