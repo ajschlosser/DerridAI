@@ -409,7 +409,7 @@ class PdfCorpusStageLimits(BaseModel):
 
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v3", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v5", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None
@@ -421,7 +421,8 @@ class PdfCorpusBuildCreate(BaseModel):
     use_profile_defaults: bool = True
     max_concurrent_requests: int = Field(default=1, ge=1, le=16)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
-    review_manifest_before_segmentation: bool = True
+    review_manifest_before_segmentation: bool = False
+    auto_enrich_work_metadata: bool = True
 
 
 class PdfCorpusManifestPatch(BaseModel):

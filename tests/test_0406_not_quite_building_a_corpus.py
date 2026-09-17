@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.6"
-    assert 'version="0.40.6"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.6"' in text("api/app/config.py")
-    assert "0.40.6 — Not Quite Building a Corpus" in text("README.md")
+    assert package["version"] == "0.40.8"
+    assert 'version="0.40.8"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
+    assert "0.40.8 — Coming Around the Mountain" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
@@ -36,7 +36,8 @@ def test_explorer_specific_actions_still_open_the_secondary_explorer_tab():
     assert 'openLoadedPdfPage(page)' in runtime
     assert 'runtime.navigateView(legacyView,path)' in app
     assert 'function syncUrl({replace=false,href=null}={})' in runtime
-    assert 'function navigateView(view,href=null)' in runtime
+    assert '@param {string} [href=""]' in runtime
+    assert 'function navigateView(view,href="")' in runtime
 
 
 def test_home_has_dedicated_corpus_build_card_and_initial_jobs_refresh_rerenders_it():
@@ -57,7 +58,7 @@ def test_home_has_dedicated_corpus_build_card_and_initial_jobs_refresh_rerenders
     assert ".dashboard-corpus-row" in style
 
 
-def test_provider_setup_is_streamlined_and_current_profile_is_v3_everywhere():
+def test_provider_setup_is_streamlined_and_current_profile_is_v5_everywhere():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     selector = text("web/src/components/ProviderProfileSelect.vue")
     models = text("api/app/models.py")
@@ -68,8 +69,8 @@ def test_provider_setup_is_streamlined_and_current_profile_is_v3_everywhere():
     assert "provider-summary-card" in selector
     assert "provider-stat-group" in selector
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
-    assert 'profile_id:"derrida-scholarly-v3"' in builder
-    assert 'default="derrida-scholarly-v3"' in models
+    assert 'profile_id:"derrida-scholarly-v5"' in builder
+    assert 'default="derrida-scholarly-v5"' in models
     assert '"pdf_corpus.provider_profile": "Primary LLM provider"' in dictionary
 
 
@@ -77,11 +78,11 @@ def test_retry_ui_hides_blocked_action_while_build_is_running_and_syncs_rail():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     api = text("web/src/api/pdfCorpus.ts")
     assert "retrying_segmentation?: boolean" in api
-    assert "const showSegmentationBlocked=computed(()=>Boolean(currentBuild.value?.segmentation_blocked && !buildRunning.value))" in builder
+    assert "const segmentationNeedsReview=computed" in builder
     assert "const retryingSegmentation=computed(()=>Boolean(buildRunning.value" in builder
     assert 'v-if="retryingSegmentation"' in builder
-    assert 'v-if="showSegmentationBlocked"' in builder
-    assert ':disabled="busy!==\'\'||buildRunning"' in builder
+    assert 'v-if="segmentationNeedsReview"' in builder
+    assert "boundary decision(s) to review" in text("web/src/components/CorpusBuildProgress.vue")
     assert "function syncBuildInRail(build:CorpusBuild)" in builder
     assert "syncBuildInRail(currentBuild.value)" in builder
     assert "registerBuildOperation(currentBuild.value)" in builder

@@ -37,8 +37,14 @@ function concurrent(event:Event){const value=Math.max(1,Math.min(16,Math.trunc(N
 </script>
 
 <template>
+  <details class="execution-settings-shell" :open="!props.useProfileDefaults||!contextSafe">
+    <summary class="execution-settings-summary">
+      <span>{{i18n.t('pdf_corpus.execution_settings','Execution settings')}}</span>
+      <small v-if="props.useProfileDefaults&&contextSafe">{{i18n.t('pdf_corpus.execution_settings_using_defaults','Provider defaults · context budget safe')}}</small>
+      <small v-else-if="!contextSafe">{{i18n.t('pdf_corpus.context_unsafe','Context budget is too small')}}</small>
+      <small v-else>{{i18n.t('pdf_corpus.execution_settings_custom','Custom build settings')}}</small>
+    </summary>
   <fieldset class="execution-settings" :disabled="props.disabled">
-    <legend>{{i18n.t('pdf_corpus.execution_settings','Execution settings')}}</legend>
     <p class="help" id="corpus-execution-help">{{i18n.t('pdf_corpus.execution_settings_help','Tune this corpus build without changing the saved provider profile. Stage budgets bound structured output; they do not create record boundaries.')}}</p>
     <label class="defaults-toggle">
       <input type="checkbox" :checked="props.useProfileDefaults" @change="emit('update:useProfileDefaults',($event.target as HTMLInputElement).checked)">
@@ -80,8 +86,9 @@ function concurrent(event:Event){const value=Math.max(1,Math.min(16,Math.trunc(N
       <span v-else>{{i18n.t('pdf_corpus.context_unknown','The provider profile does not declare a context window; DerridAI cannot preflight context capacity.')}}</span>
     </div>
   </fieldset>
+  </details>
 </template>
 
 <style scoped>
-.execution-settings{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-inline-size:0;display:grid;gap:10px}.execution-settings>legend{font-size:10px;font-weight:800;padding-inline:4px}.help,.field small{font-size:9px;color:var(--muted);line-height:1.4}.help{margin:0}.defaults-toggle{display:flex;gap:7px;align-items:center;font-size:10px;font-weight:700}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px}.field{display:grid;gap:4px;align-content:start;font-size:9px;font-weight:700}.field small{font-weight:400}.stage-budgets{border-top:1px solid var(--line);padding-top:8px}.stage-budgets summary{cursor:pointer;font-size:9px;font-weight:800}.stage-grid{margin-top:8px}.context-check{display:grid;gap:2px;padding:8px 10px;border-radius:8px;background:#edf8f1;font-size:9px}.context-check.unsafe{background:#fff2f2;color:#7d2222}.context-check span{color:inherit}.control:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:900px){.settings-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.settings-grid{grid-template-columns:1fr}}
+.execution-settings-shell{border:1px solid var(--line);border-radius:10px;background:var(--card)}.execution-settings-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;cursor:pointer;font-size:10px;font-weight:800}.execution-settings-summary small{font-size:9px;font-weight:500;color:var(--muted)}.execution-settings{border:0;border-top:1px solid var(--line);padding:10px 12px;min-inline-size:0;display:grid;gap:10px}.execution-settings>legend{font-size:10px;font-weight:800;padding-inline:4px}.help,.field small{font-size:9px;color:var(--muted);line-height:1.4}.help{margin:0}.defaults-toggle{display:flex;gap:7px;align-items:center;font-size:10px;font-weight:700}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px}.field{display:grid;gap:4px;align-content:start;font-size:9px;font-weight:700}.field small{font-weight:400}.stage-budgets{border-top:1px solid var(--line);padding-top:8px}.stage-budgets summary{cursor:pointer;font-size:9px;font-weight:800}.stage-grid{margin-top:8px}.context-check{display:grid;gap:2px;padding:8px 10px;border-radius:8px;background:#edf8f1;font-size:9px}.context-check.unsafe{background:#fff2f2;color:#7d2222}.context-check span{color:inherit}.control:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:900px){.settings-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.settings-grid{grid-template-columns:1fr}}
 </style>

@@ -17,9 +17,9 @@ def text(path: str) -> str:
 
 def test_0370_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.6"
-    assert 'version="0.40.6"' in text("api/app/main.py")
-    assert "# DerridAI Corpus Viewer 0.40.6" in text("README.md")
+    assert package["version"] == "0.40.8"
+    assert 'version="0.40.8"' in text("api/app/main.py")
+    assert "# DerridAI Corpus Viewer 0.40.8" in text("README.md")
     assert "0.37.0 — New Direction" in text("README.md")
 
 

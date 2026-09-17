@@ -52,6 +52,8 @@ export interface CorpusBuild {
   segmentation_blocked?: boolean;
   retrying_segmentation?: boolean;
   segmentation_unresolved_regions?: Array<{after_block_id?:string;next_block_id?:string;left_block_id?:string;right_block_id?:string;start_block_id?:string;end_block_id?:string;reason?:string;kind?:string;[key:string]:unknown}>;
+  segmentation_boundary_reviews?: Array<{after_block_id?:string;next_block_id?:string;reason?:string;kind?:string;[key:string]:unknown}>;
+  boundary_review_count?: number;
   metadata_completed?: number;
   metadata_total?: number;
   metadata_concurrency?: number;

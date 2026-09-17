@@ -5608,7 +5608,10 @@ function metadataLinkHtml(field,value,{className="metadata-inline-link",contains
 function chips(values){return Array.isArray(values)&&values.length?values.map(v=>`<span class="chip">${esc(display(v))}</span>`).join(""):'<span class="note">None</span>'}
 
 const WORK_METADATA_FIELDS=[
-  "work","document_title","short_title","original_title","document_author","edition","year","publication_year","publisher","publication_place","translator","document_language","original_language","document_is_translation","canonical_work_id","isbn","full_citation","cover_url"
+  "work","source_type","document_type","document_title","short_title","original_title","document_author",
+  "container_title","journal_title","editor","edition","volume","issue","pages","year","publication_year",
+  "publisher","publication_place","translator","document_language","original_language","document_is_translation",
+  "canonical_work_id","isbn","doi","url","full_citation","cover_url"
 ];
 function commonWorkValue(rows,field){
   const values=rows.map(row=>row.record[field]);
@@ -5716,9 +5719,9 @@ function openWorkMetadataEditor(work,rows){
 
 
 const WORK_METADATA_LLM_FIELDS=[
-  "document_title","short_title","document_author","edition","year","publication_year",
-  "publisher","publication_place","translator","document_language","document_is_translation",
-  "isbn","full_citation","cover_url"
+  "source_type","document_type","document_title","short_title","document_author","container_title","journal_title",
+  "editor","edition","volume","issue","pages","year","publication_year","publisher","publication_place",
+  "translator","document_language","document_is_translation","isbn","doi","url","full_citation","cover_url"
 ];
 function representativeWorkMetadata(rows){
   const metadata={};
@@ -5760,11 +5763,11 @@ function openWorkMetadataLlmDialog(items){
   const dialog=document.createElement("dialog");
   dialog.className="workflow-dialog work-metadata-llm-dialog";
   const sample=works.slice(0,6).map(item=>`<span>${esc(item.work)}</span>`).join("");
-  dialog.innerHTML=`<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker","Bibliographic enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help","DerridAI searches Open Library, asks the selected LLM to identify the best edition, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close","Close"))}">×</button></div>
+  dialog.innerHTML=`<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker","Bibliographic enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help","DerridAI searches format-appropriate public bibliographic sources (Open Library, Google Books, and Crossref), asks the selected LLM to identify the best match, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close","Close"))}">×</button></div>
     <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope","Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider","Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review","Review proposals"))}</b></li></ol>
-    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope","Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help","Retrieve bibliographic metadata for {count} work(s).",{count:works.length.toLocaleString()}))}</span></div><div class="work-metadata-scope"><strong>${works.length.toLocaleString()} ${esc(tr("dynamic.works","works"))}</strong><div class="work-metadata-sample">${sample}${works.length>6?`<span>+${works.length-6}</span>`:""}</div><small>${esc(tr("works.metadata_fields_help","Proposals can include publisher, publication year/place, edition, translator, ISBN, language, citation, and cover image."))}</small></div></section>
+    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope","Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help","Retrieve bibliographic metadata for {count} work(s).",{count:works.length.toLocaleString()}))}</span></div><div class="work-metadata-scope"><strong>${works.length.toLocaleString()} ${esc(tr("dynamic.works","works"))}</strong><div class="work-metadata-sample">${sample}${works.length>6?`<span>+${works.length-6}</span>`:""}</div><small>${esc(tr("works.metadata_fields_help","Proposals can include source type, container/journal, volume/issue/pages, publisher, year, edition, translator/editor, ISBN/DOI, language, MLA citation, and cover image."))}</small></div></section>
     <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile","Provider profile"))}</b><span>${esc(tr("works.provider_profile_help","Uses the same configured provider profiles as RAG, PDF tools, and LLM review."))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers","Manage provider profiles"))}</button></div></section>
-    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation","Background operation"))}</b><small>${esc(tr("works.background_operation_help","You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source","Catalogue source"))}</b><small>Open Library</small></span></section></div>
+    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation","Background operation"))}</b><small>${esc(tr("works.background_operation_help","You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source","Catalogue source"))}</b><small>Open Library · Google Books · Crossref</small></span></section></div>
     <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel","Cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length?"":`disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup","Start background lookup"))}</button></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);decorateDisabledControls(dialog);
   const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
@@ -5801,7 +5804,7 @@ function openWorkMetadataProposalResult(job){
   }
   const dialog=document.createElement("dialog");dialog.className="work-metadata-proposal-dialog";
   const errors=proposals.filter(item=>item.error||item.message&&!Object.keys(item.changes||{}).length);
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.review_metadata_proposals","Review work metadata proposals"))}</h2><div class="dialog-subtitle">${esc(jobLabel(job))} · ${flattened.length.toLocaleString()} ${esc(tr("works.proposed_field_changes","proposed field changes"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db work-proposal-body">${errors.length?`<div class="info warn">${esc(trf("works.metadata_no_match_count","{count} work(s) had no usable catalogue match or returned an error.",{count:errors.length}))}</div>`:""}<div class="work-proposal-toolbar"><button class="btn small" id="selectAllWorkProposals">${esc(tr("ui.select_all","Select all"))}</button><button class="btn small" id="clearWorkProposals">${esc(tr("ui.clear","Clear"))}</button><span class="note">${esc(tr("works.proposal_edit_help","Edit proposed values if needed, then apply selected fields across every loaded record belonging to that work."))}</span></div>${flattened.length?`<div class="work-proposal-table-wrap"><table class="work-proposal-table"><thead><tr><th></th><th>${esc(tr("nav.works","Work"))}</th><th>${esc(tr("works.field","Field"))}</th><th>${esc(tr("works.current_value","Current"))}</th><th>${esc(tr("works.proposed_value","Proposed"))}</th><th>${esc(tr("works.source_reason","Source / reason"))}</th></tr></thead><tbody>${flattened.map((entry,index)=>`<tr><td><input type="checkbox" data-work-proposal-select="${index}" checked></td><td><b>${esc(entry.item.work)}</b><small>${entry.item.count.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></td><td>${esc(label(entry.field))}</td><td><div class="proposal-current">${esc(display(entry.current))}</div></td><td><textarea class="control proposal-value" data-work-proposal-value="${index}" rows="2">${esc(entry.proposed==null?"":typeof entry.proposed==="object"?JSON.stringify(entry.proposed):String(entry.proposed))}</textarea></td><td><small>${esc(entry.rationale||tr("works.catalogue_selected","Open Library catalogue match selected by the LLM."))}</small>${entry.proposal.confidence!=null?`<span class="proposal-confidence">${Math.round(Number(entry.proposal.confidence||0)*100)}%</span>`:""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="llm-empty">${esc(tr("works.no_metadata_changes","No metadata changes were proposed."))}</div>`}${errors.length?`<details class="work-proposal-errors"><summary>${esc(tr("works.unmatched_works","Unmatched / failed works"))}</summary>${errors.map(item=>`<div><b>${esc(item.work)}</b><span>${esc(item.error||item.message||tr("works.no_catalogue_match","No catalogue match"))}</span></div>`).join("")}</details>`:""}</div><div class="da"><button class="btn" data-close>${esc(tr("ui.close","Close"))}</button><button class="btn primary" id="applyWorkProposals" ${flattened.length?"":"disabled"}>${icon("check")}${esc(tr("works.apply_selected_metadata","Apply selected metadata"))}</button></div>`;
+  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.review_metadata_proposals","Review work metadata proposals"))}</h2><div class="dialog-subtitle">${esc(jobLabel(job))} · ${flattened.length.toLocaleString()} ${esc(tr("works.proposed_field_changes","proposed field changes"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db work-proposal-body">${errors.length?`<div class="info warn">${esc(trf("works.metadata_no_match_count","{count} work(s) had no usable catalogue match or returned an error.",{count:errors.length}))}</div>`:""}<div class="work-proposal-toolbar"><button class="btn small" id="selectAllWorkProposals">${esc(tr("ui.select_all","Select all"))}</button><button class="btn small" id="clearWorkProposals">${esc(tr("ui.clear","Clear"))}</button><span class="note">${esc(tr("works.proposal_edit_help","Edit proposed values if needed, then apply selected fields across every loaded record belonging to that work."))}</span></div>${flattened.length?`<div class="work-proposal-table-wrap"><table class="work-proposal-table"><thead><tr><th></th><th>${esc(tr("nav.works","Work"))}</th><th>${esc(tr("works.field","Field"))}</th><th>${esc(tr("works.current_value","Current"))}</th><th>${esc(tr("works.proposed_value","Proposed"))}</th><th>${esc(tr("works.source_reason","Source / reason"))}</th></tr></thead><tbody>${flattened.map((entry,index)=>`<tr><td><input type="checkbox" data-work-proposal-select="${index}" checked></td><td><b>${esc(entry.item.work)}</b><small>${entry.item.count.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></td><td>${esc(label(entry.field))}</td><td><div class="proposal-current">${esc(display(entry.current))}</div></td><td><textarea class="control proposal-value" data-work-proposal-value="${index}" rows="2">${esc(entry.proposed==null?"":typeof entry.proposed==="object"?JSON.stringify(entry.proposed):String(entry.proposed))}</textarea></td><td><small>${esc(entry.rationale||tr("works.catalogue_selected","Public bibliographic catalogue match selected by the LLM."))}</small>${entry.proposal.confidence!=null?`<span class="proposal-confidence">${Math.round(Number(entry.proposal.confidence||0)*100)}%</span>`:""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="llm-empty">${esc(tr("works.no_metadata_changes","No metadata changes were proposed."))}</div>`}${errors.length?`<details class="work-proposal-errors"><summary>${esc(tr("works.unmatched_works","Unmatched / failed works"))}</summary>${errors.map(item=>`<div><b>${esc(item.work)}</b><span>${esc(item.error||item.message||tr("works.no_catalogue_match","No catalogue match"))}</span></div>`).join("")}</details>`:""}</div><div class="da"><button class="btn" data-close>${esc(tr("ui.close","Close"))}</button><button class="btn primary" id="applyWorkProposals" ${flattened.length?"":"disabled"}>${icon("check")}${esc(tr("works.apply_selected_metadata","Apply selected metadata"))}</button></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);decorateDisabledControls(dialog);
   const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
   dialog.querySelector("#selectAllWorkProposals")?.addEventListener("click",()=>dialog.querySelectorAll("[data-work-proposal-select]").forEach(box=>box.checked=true));
@@ -5891,6 +5894,14 @@ function subsetRuleMatches(record,rule,caseSensitive=false){
     default:return false;
   }
 }
+const SUBSET_PROFILE_STORAGE_KEY="derridai.subset-filter-profiles.v1";
+function loadSubsetProfiles(){
+  try{const value=JSON.parse(localStorage.getItem(SUBSET_PROFILE_STORAGE_KEY)||"[]");return Array.isArray(value)?value:[]}catch{return []}
+}
+function saveSubsetProfiles(profiles){
+  localStorage.setItem(SUBSET_PROFILE_STORAGE_KEY,JSON.stringify((profiles||[]).slice(0,50)));
+}
+
 function openSubsetBuilder(){
   if(!state.files.length)return toast("Load one or more JSONL files first");
   const dialog=document.createElement("dialog");
@@ -5903,13 +5914,12 @@ function openSubsetBuilder(){
   ].join("");
   const fieldOptions=fields.map(field=>`<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`).join("");
   const operatorOptions=[["equals","Equals"],["not_equals","Does not equal"],["contains","Contains"],["not_contains","Does not contain"],["array_contains","Array contains exact value"],["exists","Exists / non-empty"],["missing","Missing / empty"],["truthy","Truthy"],["falsy","Falsy"],["regex","Regular expression"]].map(([value,name])=>`<option value="${value}">${name}</option>`).join("");
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Create JSONL subset</h2><div class="dialog-subtitle">Build explicit boolean groups such as A AND B AND (C OR D OR E) AND F.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db subset-body">
-    <div class="subset-head-grid"><div class="field"><label>Source</label><select class="control" id="subsetSource">${sourceOptions}</select></div><div class="field"><label>Expression</label><div class="subset-logic-note">Top-level AND/OR plus explicit nested groups</div></div><div class="field"><label>New JSONL tab name</label><input class="control" id="subsetName" value="${esc((activeFile()?.name||"subset.jsonl").replace(/\.jsonl$/i,""))}-subset.jsonl"></div><label class="check-item subset-case"><input type="checkbox" id="subsetCase"><span>Case-sensitive</span></label></div>
-    <div class="subset-expression" id="subsetExpression"></div>
-    <div class="subset-builder-actions"><button class="btn small" id="addSubsetRule">${icon("plus")}Add condition</button><button class="btn small" id="addSubsetGroup">${icon("plus")}Add group</button><span class="note" id="subsetPreview">Add at least one condition.</span></div>
-    <div class="subset-expression-preview" id="subsetExpressionPreview"></div>
-    <div class="info">Groups are evaluated first. At the top level, AND binds before OR. This supports expressions like <code>author = Derrida AND language = fr AND (topic = writing OR topic = différance OR topic = trace) AND needs_review = true</code>.</div>
+  const profiles=loadSubsetProfiles();
+  dialog.innerHTML=`<div class="dh subset-dialog-head"><div><span class="section-label">Corpus utility</span><h2 class="dialog-title">Create JSONL subset</h2><div class="dialog-subtitle">Build reusable record filters without editing the source JSONL.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
+  <div class="db subset-body subset-body-v3">
+    <section class="subset-config-card"><div class="subset-config-copy"><b>Source & output</b><span>Choose the loaded records to filter and the name of the derived JSONL tab.</span></div><div class="subset-head-grid"><div class="field"><label>Source</label><select class="control" id="subsetSource">${sourceOptions}</select></div><div class="field"><label>New JSONL tab name</label><input class="control" id="subsetName" value="${esc((activeFile()?.name||"subset.jsonl").replace(/\.jsonl$/i,""))}-subset.jsonl"></div><label class="check-item subset-case"><input type="checkbox" id="subsetCase"><span>Case-sensitive matching</span></label></div></section>
+    <section class="subset-config-card"><div class="subset-config-copy"><b>Saved filter profile</b><span>Reuse common corpus slices such as primary Derrida text, one language, or records needing review.</span></div><div class="subset-profile-row"><select class="control" id="subsetProfile"><option value="">No saved profile</option>${profiles.map(profile=>`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join("")}</select><button class="btn small" id="saveSubsetProfile">${icon("plus")}Save current</button><button class="btn small danger" id="deleteSubsetProfile" disabled>Delete</button></div></section>
+    <section class="subset-config-card subset-filter-card"><div class="subset-config-copy"><b>Filter expression</b><span>Conditions are readable, grouped explicitly, and previewed against the selected source as you edit.</span></div><div class="subset-expression" id="subsetExpression"></div><div class="subset-builder-actions"><button class="btn small" id="addSubsetRule">${icon("plus")}Condition</button><button class="btn small" id="addSubsetGroup">${icon("plus")}Group</button><span class="subset-match-count" id="subsetPreview">Add at least one condition.</span></div><div class="subset-expression-preview" id="subsetExpressionPreview"></div></section>
   </div>
   <div class="da"><button class="btn" data-close>Cancel</button><button class="btn" id="createSubsetDownload">Create & download</button><button class="btn primary" id="createSubset">Create subset tab</button></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);
@@ -6039,6 +6049,31 @@ function openSubsetBuilder(){
     decorateDisabledControls(dialog);
   }
   const refreshSubsetSuggestions=()=>expression.querySelectorAll(".subset-rule-row").forEach(row=>row.querySelector(".subset-field")?.dispatchEvent(new Event("input",{bubbles:false})));
+  const applyProfile=profile=>{
+    expression.innerHTML="";
+    for(const item of profile?.expression||[]){
+      if(item?.type==="group"){addGroup({mode:item.mode||"OR",rules:item.rules||[]});const added=expression.lastElementChild;if(added&&item.join)added.querySelector(":scope > .subset-join").value=item.join}
+      else if(item?.rule){addTopRule(item.rule);const added=expression.lastElementChild;if(added&&item.join)added.querySelector(":scope > .subset-join").value=item.join}
+    }
+    dialog.querySelector("#subsetCase").checked=Boolean(profile?.caseSensitive);
+    normalizeTopJoins();refreshSubsetSuggestions();updatePreview();
+  };
+  const profileSelect=dialog.querySelector("#subsetProfile");
+  profileSelect?.addEventListener("change",()=>{
+    const profile=loadSubsetProfiles().find(item=>item.id===profileSelect.value);
+    dialog.querySelector("#deleteSubsetProfile").disabled=!profile;
+    if(profile)applyProfile(profile);
+  });
+  dialog.querySelector("#saveSubsetProfile")?.addEventListener("click",async()=>{
+    const items=readExpression();if(!items.length)return toast("Add at least one condition before saving a profile");
+    const name=prompt("Filter profile name");if(!name?.trim())return;
+    const profiles=loadSubsetProfiles();const profile={id:uid(),name:name.trim(),expression:items,caseSensitive:dialog.querySelector("#subsetCase").checked,created_at:new Date().toISOString()};
+    profiles.push(profile);saveSubsetProfiles(profiles);
+    profileSelect.insertAdjacentHTML("beforeend",`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`);profileSelect.value=profile.id;dialog.querySelector("#deleteSubsetProfile").disabled=false;toast(`Saved filter profile “${profile.name}”`,{tone:"success"});
+  });
+  dialog.querySelector("#deleteSubsetProfile")?.addEventListener("click",()=>{
+    const id=profileSelect.value;if(!id)return;const profiles=loadSubsetProfiles();const profile=profiles.find(item=>item.id===id);saveSubsetProfiles(profiles.filter(item=>item.id!==id));profileSelect.querySelector(`option[value="${CSS.escape(id)}"]`)?.remove();profileSelect.value="";dialog.querySelector("#deleteSubsetProfile").disabled=true;if(profile)toast(`Deleted filter profile “${profile.name}”`);
+  });
   dialog.querySelector("#addSubsetRule").onclick=()=>addTopRule({field:fields.includes("work")?"work":fields[0],operator:"equals",value:""});
   dialog.querySelector("#addSubsetGroup").onclick=()=>addGroup();
   dialog.querySelector("#subsetSource")?.addEventListener("change",()=>{refreshSubsetSuggestions();schedulePreview()});
@@ -6178,6 +6213,19 @@ async function openRemoveWorkModal(work,rows){
   };
 }
 
+async function openSeparateWorksModal(){
+  const eligible=state.files.filter(file=>{const works=new Set(file.records.map(record=>String(record?.work||record?.document_title||"").trim()).filter(Boolean));return works.size>1});
+  if(!eligible.length)return toast("No loaded JSONL file contains multiple named works");
+  const dialog=document.createElement("dialog");dialog.className="work-separate-dialog";
+  const options=eligible.map(file=>`<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} records</option>`).join("");
+  dialog.innerHTML=`<div class="dh"><div><span class="section-label">JSONL organization</span><h2 class="dialog-title">Separate works from a JSONL file</h2><div class="dialog-subtitle">Create one derived JSONL tab per selected work while preserving record metadata and audit history.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>Source JSONL</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>Remove separated records from the source tab after creating the new tabs</span></label><div class="info">By default this is non-destructive: new tabs are created as copies. Enable removal only when you want to partition the original loaded JSONL.</div></div><div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="separateWorksCreate">Separate selected works</button></div>`;
+  document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
+  const source=()=>state.files.find(file=>file.id===dialog.querySelector("#separateWorksSource").value);
+  const renderList=()=>{const file=source();const groups=new Map();for(const record of file?.records||[]){const work=String(record?.work||record?.document_title||"").trim()||"(Untitled work)";if(!groups.has(work))groups.set(work,[]);groups.get(work).push(record)}dialog.querySelector("#separateWorksList").innerHTML=[...groups.entries()].map(([work,records])=>`<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work==="(Untitled work)"?"":"checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} records</small></span></label>`).join("")};
+  dialog.querySelector("#separateWorksSource").addEventListener("change",renderList);renderList();
+  dialog.querySelector("#separateWorksCreate").onclick=async()=>{const file=source();const selected=[...dialog.querySelectorAll("[data-separate-work]:checked")].map(box=>box.dataset.separateWork);if(!selected.length)return toast("Select at least one work");const selectedSet=new Set(selected);const created=[];for(const work of selected){const records=file.records.filter(record=>(String(record?.work||record?.document_title||"").trim()||"(Untitled work)")===work).map(cloneAuditValue);if(!records.length)continue;const stem=work.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,80)||"untitled-work";const derived={id:uid(),name:`${stem}.jsonl`,records,errors:[],dirty:new Set(),imported_at:new Date().toISOString(),derived_from:{type:"work_separation",source_file:file.name,work}};state.files.push(derived);await persistFileNow(derived);created.push(derived)}if(dialog.querySelector("#separateWorksRemove").checked){file.records=file.records.filter(record=>!selectedSet.has(String(record?.work||record?.document_title||"").trim()||"(Untitled work)"));file.dirty=new Set(file.records.map((_,index)=>index));await persistFileNow(file)}if(created.length)state.activeFileId=created[0].id;close();corpusCache.fields=null;persistPrefs();shell();renderView();toast(`Created ${created.length} work JSONL tab${created.length===1?"":"s"}`,{tone:"success"})};
+}
+
 async function renderWorks(main){
   if(isResearcher())return renderResearcherWorks(main);
   try{await refreshServerAnnotations()}catch{}
@@ -6198,7 +6246,7 @@ async function renderWorks(main){
   const metadataValue=(rows,field)=>{const value=commonWorkValue(rows,field);return value.mixed?mixedWorkValueButton(rows,field):esc(display(value.value))};
   const overviewHtml=selected?(()=>{
     const cover=workCoverUrl(selected.rows);
-    const coreFields=["document_author","publisher","publication_year","edition","translator","publication_place","isbn","document_language","original_language"];
+    const coreFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
     const citationText=fullCitation(selected.rows[0]?.record||{work:selected.work},{includePages:false});
     const annotationCount=allAnnotations().filter(item=>String(item.work||"")===String(selected.work)).length;
     return `<section class="card work-overview-card"><div class="work-overview-cover">${cover?`<img src="${esc(cover)}" alt="${esc(trf("works.cover_alt","Cover of {work}",{work:selected.work}))}" loading="lazy">`:`<div class="work-cover-placeholder">${icon("books")}</div>`}</div><div class="work-overview-content"><div class="work-overview-heading"><div><span class="section-label">${esc(tr("works.overview","Work overview"))}</span><h1>${esc(selected.work)}</h1><p>${selected.count.toLocaleString()} ${esc(tr("dynamic.records","records"))} · ${selected.files.size.toLocaleString()} ${esc(tr("works.source_files","source files"))}</p></div><span class="db-status ${workDbStatus(selected.rows,selected.work).kind}"><i></i>${esc(workDbStatus(selected.rows,selected.work).label)}</span></div><div class="work-overview-metadata">${coreFields.map(field=>`<div><span>${esc(label(field))}</span><b>${metadataValue(selected.rows,field)}</b></div>`).join("")}</div><div class="work-overview-citation"><span>${esc(label("full_citation"))}</span><p>${esc(citationText)}</p></div>${workInsightsPanelHtml(selected.rows,selected.work)}<div class="work-overview-actions"><button class="btn primary" id="overviewSearchWork">${icon("search")}${esc(tr("works.search_records","Search records"))}</button><button class="btn" id="overviewEditWork">${icon("edit")}${esc(tr("works.edit_metadata","Edit work metadata"))}</button><button class="btn soft" id="overviewPopulateWork">${icon("spark")}${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</button>${annotationCount?`<button class="btn" id="overviewAnnotations">${icon("record")}${esc(trf("works.view_annotations","Annotations ({count})",{count:annotationCount.toLocaleString()}))}</button>`:""}</div></div></section>`;
@@ -6214,7 +6262,7 @@ async function renderWorks(main){
 
   const activeStoreInfo=recordStores().find(store=>store.name===state.activeStore)||null;
   const dbContext=`<section class="card works-database-context"><div><span class="section-label">${esc(tr("works.database_context","Works synchronization database"))}</span><b>${esc(state.activeStore||tr("research.none_selected","No database selected"))}</b><small>${esc(tr("works.database_context_help","Sync status and Sync actions on this page refer to the selected corpus database. Changing it does not change your loaded JSONL files."))}</small></div><label class="field"><span>${esc(tr("research.corpus_database","Corpus database"))}</span>${collectionPicker("worksStore")}<small>${activeStoreInfo?`${Number(activeStoreInfo.count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}`:esc(noDbReason)}</small></label></section>`;
-  main.innerHTML=`${dbContext}${overviewHtml}<div class="toolbar works-toolbar aligned-toolbar"><div class="search"><input id="worksSearch" value="${esc(state.worksSearch)}" placeholder="${esc(tr("works.filter_title","Filter works by title"))}"></div><div class="tools"><button class="btn small soft" id="populateAllWorks" ${profiles.length&&map.size?"":`disabled data-disabled-reason="${esc(profiles.length?tr("works.no_works_to_populate","No works are available to populate."):tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.populate_all_metadata","Populate all metadata with LLM"))}</button><button class="btn small primary" id="syncAllWorks" ${state.activeStore&&totalRecords&&hasCorpusDb()?"":`disabled data-disabled-reason="${esc(noDbReason||tr("works.select_collection","Select a corpus collection first."))}"`}>${icon("database")}${esc(tr("works.sync_all","Sync all works"))}</button><span class="note">${works.length.toLocaleString()} ${esc(tr("works.shown","shown"))} · ${map.size.toLocaleString()} ${esc(tr("dynamic.works","works"))} · ${totalRecords.toLocaleString()} ${esc(tr("dynamic.records","records"))}</span></div></div><section class="works works-library-grid" id="worksGrid"></section>`;
+  main.innerHTML=`${dbContext}${overviewHtml}<div class="toolbar works-toolbar aligned-toolbar"><div class="search"><input id="worksSearch" value="${esc(state.worksSearch)}" placeholder="${esc(tr("works.filter_title","Filter works by title"))}"></div><div class="tools"><button class="btn small" id="separateWorks">${icon("filter")}${esc(tr("works.separate_jsonl","Separate works"))}</button><button class="btn small soft" id="populateAllWorks" ${profiles.length&&map.size?"":`disabled data-disabled-reason="${esc(profiles.length?tr("works.no_works_to_populate","No works are available to populate."):tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.populate_all_metadata","Populate all metadata with LLM"))}</button><button class="btn small primary" id="syncAllWorks" ${state.activeStore&&totalRecords&&hasCorpusDb()?"":`disabled data-disabled-reason="${esc(noDbReason||tr("works.select_collection","Select a corpus collection first."))}"`}>${icon("database")}${esc(tr("works.sync_all","Sync all works"))}</button><span class="note">${works.length.toLocaleString()} ${esc(tr("works.shown","shown"))} · ${map.size.toLocaleString()} ${esc(tr("dynamic.works","works"))} · ${totalRecords.toLocaleString()} ${esc(tr("dynamic.records","records"))}</span></div></div><section class="works works-library-grid" id="worksGrid"></section>`;
   const grid=main.querySelector("#worksGrid");
   progressiveRender(grid,works,workCard,{batchSize:12,label:trf("works.loading_cards","Loading {count} work cards",{count:works.length.toLocaleString()}),token,onDone:()=>{
     if(state.view!=="works"||token!==progressiveRenderToken)return;
@@ -6231,6 +6279,7 @@ async function renderWorks(main){
     searchTimer=setTimeout(()=>{if(state.view!=="works")return;syncUrl({replace:true});renderWorks(main);requestAnimationFrame(()=>{const x=main.querySelector("#worksSearch");if(x){x.focus();x.setSelectionRange(pos,pos)}})},180);
   };
   main.querySelector("#worksStore").onchange=e=>{setActiveStore(e.target.value);renderWorks(main)};
+  main.querySelector("#separateWorks")?.addEventListener("click",()=>openSeparateWorksModal());
   main.querySelector("#syncAllWorks")?.addEventListener("click",async()=>{const rows=[...map.values()].flatMap(item=>item.rows);const ok=await upsertRows(rows,tr("works.all_records_label","records across all works"));if(ok)renderWorks(main)});
   main.querySelector("#populateAllWorks")?.addEventListener("click",()=>openWorkMetadataLlmDialog([...map.values()].sort((a,b)=>a.work.localeCompare(b.work))));
   main.querySelector("#overviewSearchWork")?.addEventListener("click",()=>{state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:selected.work}];state.globalPage=1;persistPrefs();navigateTo("global")});
@@ -9108,7 +9157,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.40.6",
+      backup_client_version:"0.40.8",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),
@@ -9731,7 +9780,12 @@ function triggerExport(){return canUse("manageCorpus")?exportMenu():toast("Your 
 function triggerEdit(){return canUse("editLocalRecords")?openEditor():toast("Your role does not have permission to edit records.")}
 function triggerBack(){return goBack()}
 function triggerForward(){return goForward()}
-function navigateView(view,href=null){return navigateTo(view,{href})}
+/**
+ * Navigate the legacy runtime and, when supplied, preserve an explicit native URL.
+ * @param {string} view
+ * @param {string} [href=""]
+ */
+function navigateView(view,href=""){return navigateTo(view,{href})}
 function getProviderProfilesForUi(){return cloneAuditValue(providerProfiles())}
 function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   const profile=providerProfile(profileId);

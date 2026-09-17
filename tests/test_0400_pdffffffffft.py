@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.6"
-    assert 'version="0.40.6"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.6"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.40.6" in text("README.md")
+    assert package["version"] == "0.40.8"
+    assert 'version="0.40.8"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.40.8" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
@@ -40,8 +40,10 @@ def test_semantic_segmentation_does_not_use_page_or_character_boundaries():
     assert "execution window ends" in segmentation
     assert "text reaches a size" in segmentation
     assert "after_block_id" in segmentation
-    # Length may guard against an unresolved topology, but never inserts a split.
-    assert "no mechanical boundary was inserted" in segmentation
+    # Length is only a deterministic candidate/safety signal; it never asks the LLM to partition a book globally.
+    assert "soft_length_candidate" in segmentation
+    assert "hard_size_safety_split" in segmentation
+    assert "provisional" in segmentation
 
 
 def test_record_text_is_deterministic_and_metadata_is_source_evidence_bound():

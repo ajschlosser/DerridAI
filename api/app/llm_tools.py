@@ -225,36 +225,7 @@ def _edition_translator(entry: dict[str, Any]) -> str:
     return ", ".join(names)
 
 
-def _mla_author_name(value: str | None) -> str:
-    name = str(value or "").strip()
-    if not name or "," in name:
-        return name
-    parts = name.split()
-    if len(parts) < 2:
-        return name
-    return f"{parts[-1]}, {' '.join(parts[:-1])}"
-
-
-def _mla_book_citation(*, author: str | None, title: str | None, translator: str | None = None, edition: str | None = None, publisher: str | None = None, year: int | str | None = None) -> str:
-    opening = []
-    if author:
-        opening.append(_mla_author_name(author).rstrip(". ") + ".")
-    if title:
-        opening.append(str(title).strip().rstrip(". ") + ".")
-    publication = []
-    if translator:
-        publication.append(f"Translated by {str(translator).strip()}")
-    if edition:
-        publication.append(str(edition).strip())
-    if publisher:
-        publication.append(str(publisher).strip())
-    if year not in (None, ""):
-        publication.append(str(year).strip())
-    tail = ", ".join(part for part in publication if part)
-    if tail:
-        tail = tail.rstrip(". ") + "."
-    return " ".join([*opening, tail] if tail else opening).strip()
-
+from .bibliography import _mla_citation, _mla_book_citation
 
 def _edition_metadata(
     *,
@@ -309,6 +280,8 @@ def _edition_metadata(
         year=year,
     )
     return {
+        "source_type": "book",
+        "document_type": "book",
         "document_title": title or None,
         "short_title": title or None,
         "document_author": author or None,
@@ -416,6 +389,119 @@ def _openlibrary_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
         return candidates[:10]
 
 
+def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
+    current = seed.current_metadata or {}
+    query = str(current.get("document_title") or seed.work).strip()
+    author = str(current.get("document_author") or "").strip()
+    params = {"query.bibliographic": query, "rows": 8}
+    if author:
+        params["query.author"] = author
+    with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.40.8 (bibliographic metadata lookup)"}) as client:
+        response = client.get("https://api.crossref.org/works", params=params)
+        response.raise_for_status()
+        items = list((((response.json() or {}).get("message") or {}).get("items") or []))
+    out: list[dict[str, Any]] = []
+    for item in items:
+        title = _first_catalog_value(item.get("title"))
+        container = _first_catalog_value(item.get("container-title"))
+        authors = []
+        for person in item.get("author") or []:
+            if isinstance(person, dict):
+                name = " ".join(str(person.get(k) or "").strip() for k in ("given", "family") if str(person.get(k) or "").strip())
+                if name: authors.append(name)
+        issued = (((item.get("issued") or {}).get("date-parts") or [[None]])[0] or [None])[0]
+        kind = str(item.get("type") or "").casefold()
+        source_type = "journal_article" if "journal" in kind else "book_chapter" if kind in {"book-chapter", "reference-entry"} else "book" if kind in {"book", "monograph", "edited-book"} else kind.replace("-", "_") or "article"
+        metadata = {
+            "source_type": source_type,
+            "document_type": source_type,
+            "document_title": title or None,
+            "short_title": title or None,
+            "document_author": ", ".join(authors) or None,
+            "container_title": container or None,
+            "journal_title": (container or None) if source_type == "journal_article" else None,
+            "publisher": _catalog_text(item.get("publisher")) or None,
+            "publication_year": issued,
+            "year": issued,
+            "volume": _catalog_text(item.get("volume")) or None,
+            "issue": _catalog_text(item.get("issue")) or None,
+            "pages": _catalog_text(item.get("page")) or None,
+            "doi": _catalog_text(item.get("DOI")) or None,
+            "url": _catalog_text(item.get("URL")) or None,
+            "isbn": _first_catalog_value(item.get("ISBN")) or None,
+        }
+        metadata["full_citation"] = _mla_citation(metadata) or None
+        metadata["_catalog_source"] = "Crossref"
+        out.append(metadata)
+    return out
+
+
+def _google_books_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
+    current = seed.current_metadata or {}
+    query = str(current.get("document_title") or seed.work).strip()
+    author = str(current.get("document_author") or "").strip()
+    q = f'intitle:"{query}"' + (f'+inauthor:"{author}"' if author else "")
+    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+        response = client.get("https://www.googleapis.com/books/v1/volumes", params={"q": q, "maxResults": 8, "printType": "books"})
+        response.raise_for_status()
+        items = list((response.json() or {}).get("items") or [])
+    out: list[dict[str, Any]] = []
+    for item in items:
+        info = item.get("volumeInfo") or {}
+        year = _year_from_publish_date(info.get("publishedDate"))
+        identifiers = {str(x.get("type") or ""): str(x.get("identifier") or "") for x in info.get("industryIdentifiers") or [] if isinstance(x, dict)}
+        metadata = {
+            "source_type": "book", "document_type": "book",
+            "document_title": _catalog_text(info.get("title")) or None,
+            "short_title": _catalog_text(info.get("title")) or None,
+            "document_author": ", ".join(str(v).strip() for v in info.get("authors") or [] if str(v).strip()) or None,
+            "publisher": _catalog_text(info.get("publisher")) or None,
+            "publication_year": year, "year": year,
+            "document_language": _catalog_text(info.get("language")) or None,
+            "isbn": identifiers.get("ISBN_13") or identifiers.get("ISBN_10") or None,
+            "cover_url": ((info.get("imageLinks") or {}).get("thumbnail") or (info.get("imageLinks") or {}).get("smallThumbnail")),
+            "url": _catalog_text(info.get("infoLink")) or None,
+            "_catalog_source": "Google Books",
+        }
+        metadata["full_citation"] = _mla_citation(metadata) or None
+        out.append(metadata)
+    return out
+
+
+def _multi_catalog_candidates(seed: WorkMetadataSeed) -> tuple[list[dict[str, Any]], list[str]]:
+    """Try format-appropriate bibliographic sources instead of stopping at Open Library."""
+    current = seed.current_metadata or {}
+    source_type = str(current.get("source_type") or current.get("document_type") or "").casefold()
+    attempted_sources: list[str] = []
+    result_sources: list[str] = []
+    candidates: list[dict[str, Any]] = []
+    lookups = []
+    if any(token in source_type for token in ("article", "journal", "chapter")):
+        lookups = [("Crossref", _crossref_candidates), ("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates)]
+    else:
+        lookups = [("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates), ("Crossref", _crossref_candidates)]
+    for name, lookup in lookups:
+        attempted_sources.append(name)
+        try:
+            found = lookup(seed)
+        except httpx.HTTPError:
+            found = []
+        if found:
+            result_sources.append(name)
+            for item in found:
+                item = dict(item)
+                item.setdefault("_catalog_source", name)
+                candidates.append(item)
+        # Always consult at least two catalogue families. If neither gives a
+        # useful candidate pool, continue to the third rather than treating a
+        # noisy Open Library title match as authoritative.
+        if len(attempted_sources) >= 2 and len(candidates) >= 8:
+            break
+    # Keep the attempted-source list for audit even when a service returned no
+    # result; callers can separately infer result sources from candidate provenance.
+    return candidates[:16], attempted_sources
+
+
 def _candidate_public(candidate: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in candidate.items() if not key.startswith("_") and value not in (None, "", [])}
 
@@ -428,10 +514,7 @@ def run_work_metadata_lookup(
 ) -> dict[str, Any]:
     if cancelled and cancelled():
         raise InterruptedError()
-    try:
-        candidates = _openlibrary_candidates(seed)
-    except httpx.HTTPError as exc:
-        raise RuntimeError(f"Open Library lookup failed for {seed.work}: {exc}") from exc
+    candidates, catalog_sources = _multi_catalog_candidates(seed)
     if cancelled and cancelled():
         raise InterruptedError()
     if not candidates:
@@ -440,8 +523,8 @@ def run_work_metadata_lookup(
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
-            "catalog_source": "Open Library",
-            "message": "No matching bibliographic catalogue result was found.",
+            "catalog_source": ", ".join(catalog_sources) or "Open Library / Google Books / Crossref",
+            "message": "No matching bibliographic catalogue result was found across the configured public catalogues.",
         }
 
     compact = [_candidate_public(item) for item in candidates]
@@ -454,7 +537,7 @@ WORK LABEL:
 CURRENT METADATA:
 {json.dumps(seed.current_metadata or {}, ensure_ascii=False, indent=2)}
 
-OPEN LIBRARY CANDIDATES:
+BIBLIOGRAPHIC CANDIDATES (Open Library, Google Books, and/or Crossref):
 {json.dumps(compact, ensure_ascii=False, indent=2)}
 
 Return exactly one JSON object:
@@ -487,7 +570,8 @@ DerridAI will copy them deterministically from the selected catalogue record."""
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
-            "catalog_source": "Open Library",
+            "catalog_source": ", ".join(catalog_sources) or "Public catalogues",
+            "catalog_sources_tried": catalog_sources,
             "message": str(choice.get("reason") or "The LLM did not identify a sufficiently reliable catalogue match."),
             "confidence": choice.get("confidence"),
             "model": model,
@@ -500,10 +584,11 @@ DerridAI will copy them deterministically from the selected catalogue record."""
     current = seed.current_metadata or {}
     for field, proposed in public.items():
         if field not in {
-            "document_title", "short_title", "document_author", "edition", "year",
-            "publication_year", "publisher", "publication_place", "translator",
-            "document_language", "document_is_translation",
-            "isbn", "full_citation", "cover_url",
+            "source_type", "document_type", "document_title", "short_title", "original_title",
+            "document_author", "container_title", "journal_title", "editor", "edition",
+            "volume", "issue", "pages", "year", "publication_year", "publisher",
+            "publication_place", "translator", "document_language", "original_language",
+            "document_is_translation", "isbn", "doi", "url", "full_citation", "cover_url",
         }:
             continue
         if proposed in (None, "", []):
@@ -512,7 +597,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
         if str(current_value or "").strip() == str(proposed or "").strip():
             continue
         changes[field] = proposed
-        rationale[field] = "Open Library catalogue metadata from the LLM-selected edition."
+        rationale[field] = f"{selected.get('_catalog_source') or 'Public catalogue'} metadata from the LLM-selected record."
 
     return {
         "work": seed.work,
@@ -521,7 +606,8 @@ DerridAI will copy them deterministically from the selected catalogue record."""
         "rationale": rationale,
         "confidence": choice.get("confidence"),
         "match_reason": str(choice.get("reason") or ""),
-        "catalog_source": "Open Library",
+        "catalog_source": selected.get("_catalog_source") or ", ".join(catalog_sources) or "Public catalogue",
+        "catalog_sources_tried": catalog_sources,
         "catalog_match": public,
         "openlibrary_work_key": selected.get("_openlibrary_work_key"),
         "openlibrary_edition_key": selected.get("_openlibrary_edition_key"),

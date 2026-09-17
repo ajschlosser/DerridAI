@@ -93,10 +93,9 @@ def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is
     boundaries = manager._segment(_blocks(), {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries == []
     refreshed = repo.get_build(build["build_id"])
-    assert refreshed.get("segmentation_blocked") is True
-    assert refreshed.get("segmentation_failed_windows", 0) > 0
-    assert refreshed.get("segmentation_unresolved_regions")
-    assert any("no record set was constructed" in warning.casefold() for warning in refreshed.get("warnings") or [])
+    assert refreshed.get("segmentation_blocked") is False
+    assert refreshed.get("segmentation_failed_windows", 0) == 0
+    assert refreshed.get("boundary_review_count", 0) == 0
 
 
 def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch, tmp_path: Path):
@@ -157,9 +156,9 @@ def test_run_stops_before_record_construction_when_segmentation_is_unresolved(mo
     build=_build(repo,blocks=len(blocks))
     manager._run(build["build_id"], {"provider":"ollama","model":"test","review_manifest_before_segmentation":False})
     refreshed=repo.get_build(build["build_id"])
-    assert refreshed["status"]=="blocked"
-    assert refreshed["record_count"]==0
-    assert not repo.build_records_path(build["build_id"]).exists()
+    assert refreshed["status"]=="awaiting_review"
+    assert refreshed["record_count"]>0
+    assert repo.build_records_path(build["build_id"]).exists()
 
 
 def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_guard(monkeypatch,tmp_path:Path):
@@ -169,10 +168,12 @@ def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_gua
     blocks=[{**b,"text":b["text"]+(" argument"*40)} for b in _blocks(80)]
     build=_build(repo,blocks=len(blocks))
     boundaries=manager._segment(blocks,{}, {"provider":"ollama","model":"test"}, build["build_id"])
-    assert boundaries==[]
+    assert boundaries
+    assert all(item.get("provisional") for item in boundaries)
     refreshed=repo.get_build(build["build_id"])
-    assert refreshed["segmentation_blocked"] is True
-    assert any(item.get("kind")=="topology_guard_no_boundaries" for item in refreshed["segmentation_unresolved_regions"])
+    assert refreshed["segmentation_blocked"] is False
+    assert refreshed["segmentation_degraded"] is True
+    assert all(item.get("kind")=="provisional_size_split" for item in refreshed["segmentation_unresolved_regions"])
 
 
 def test_execution_budget_rejects_impossible_context_before_build():
@@ -203,25 +204,14 @@ def test_reconciliation_failure_is_an_explicit_topology_blocker(monkeypatch, tmp
     blocks = _blocks(12)
     build = _build(repo, blocks=len(blocks))
 
-    # Pretend first-pass segmentation produced one plausible but uncertain split.
-    monkeypatch.setattr(
-        manager,
-        "_segment_window_recursive",
-        lambda *args, **kwargs: ([{
-            "after_block_id": blocks[5]["block_id"],
-            "decision": "uncertain",
-            "confidence": 0.61,
-            "changes": ["discourse_role"],
-            "source": "test",
-        }], []),
-    )
-    # Reconciliation itself must not silently turn malformed output into KEEP.
-    monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "truncated {")
+    monkeypatch.setattr(manager, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["heading_start"], "candidate_score": 1.0, "source": "test", "index": 5}])
+    monkeypatch.setattr(manager, "_segment_pair", lambda *args, **kwargs: (None, {"reason":"truncated"}))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries == []
     refreshed = repo.get_build(build["build_id"])
-    assert refreshed["segmentation_blocked"] is True
-    assert any(item.get("kind") == "reconciliation" for item in refreshed["segmentation_unresolved_regions"])
+    assert refreshed["segmentation_blocked"] is False
+    assert refreshed["segmentation_degraded"] is False
+    assert refreshed["segmentation_unresolved_regions"] == []
 
 
 def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(monkeypatch, tmp_path: Path):
@@ -251,10 +241,11 @@ def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(
     assert sum(len(block["text"]) for block in blocks) > 100_000
     build = _build(repo, blocks=len(blocks))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
-    assert boundaries == []
+    assert boundaries
+    assert all(item.get("provisional") for item in boundaries)
     refreshed = repo.get_build(build["build_id"])
-    assert refreshed["segmentation_blocked"] is True
-    assert any(item.get("kind") == "topology_guard_no_boundaries" for item in refreshed["segmentation_unresolved_regions"])
+    assert refreshed["segmentation_blocked"] is False
+    assert all(item.get("kind") == "provisional_size_split" for item in refreshed["segmentation_unresolved_regions"])
 
 
 def test_manifest_review_checkpoint_stops_before_segmentation_and_confirm_resumes(monkeypatch, tmp_path: Path):

@@ -19,14 +19,14 @@ import fitz
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .config import APP_VERSION, settings
-from .models import OllamaTouchupOptions
+from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 
-SCHEMA_VERSION = "pdf-corpus-v2"
-SEGMENTATION_PROMPT_VERSION = "derridai-semantic-boundaries-v3"
+SCHEMA_VERSION = "pdf-corpus-v3"
+SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v5"
 METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v3"
+PROFILE_VERSION = "derrida-scholarly-v5"
 
 
 class DocumentManifestModel(BaseModel):
@@ -161,7 +161,7 @@ class PairBoundaryResponseModel(BaseModel):
 
 class CompactSegmentationResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=32)
+    boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=96)
 
 
 class CompactReconciliationDecisionModel(BaseModel):
@@ -648,7 +648,7 @@ class PdfCorpusRepository:
             "record_count": 0,
             "needs_review_count": 0,
             "accepted_count": 0,
-            "validation": {},
+            "validation": None,
             "publication": None,
             "error": None,
             **payload,
@@ -748,11 +748,11 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_max_chars": 18000,
         "topology_review_chars": 36000,
     },
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v3",
+    "derrida-scholarly-v3": {
+        "id": "derrida-scholarly-v3",
+        "name": "Derrida scholarly corpus v3 (legacy)",
         "version": 3,
-        "description": "Book-scale compact semantic segmentation with recursive recovery, explicit topology blocking, staged metadata extraction, and auditable source evidence.",
+        "description": "0.40.5/0.40.6 compact semantic segmentation profile retained for historical build compatibility.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
         "min_boundary_confidence": 0.72,
@@ -760,6 +760,19 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_min_chars": 180,
         "soft_max_chars": 18000,
         "topology_review_chars": 36000,
+    },
+    PROFILE_VERSION: {
+        "id": PROFILE_VERSION,
+        "name": "Derrida scholarly corpus v5",
+        "version": 5,
+        "description": "Deterministic topology with local LLM boundary classification, boundary-level review, staged metadata extraction, and auditable source evidence.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
+        "min_boundary_confidence": 0.72,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "soft_max_chars": 9000,
+        "topology_review_chars": 12000,
     }
 }
 
@@ -961,7 +974,9 @@ class PdfCorpusBuildManager:
             "progress": progress,
             "total": source_total,
             "completed": min(source_total, int(round(source_total * progress))),
-            "failed": len(unresolved),
+            # Localized segmentation uncertainty is review work, not a failed operation.
+            "failed": 1 if raw_status == "failed" else 0,
+            "review_required": len(unresolved),
             "created_at": build.get("created_at"),
             "started_at": build.get("started_at"),
             "finished_at": build.get("finished_at"),
@@ -1171,6 +1186,19 @@ class PdfCorpusBuildManager:
                 try:
                     if build_id:
                         self._increment_metric(build_id, "calls")
+                        metric_stage = (
+                            "manifest" if "manifest" in schema_name else
+                            "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
+                            "metadata" if "record_" in schema_name else
+                            "other"
+                        )
+                        self._increment_metric(build_id, f"{metric_stage}_calls")
+                        if "record_discourse" in schema_name:
+                            self._increment_metric(build_id, "discourse_calls")
+                        elif "record_quotation" in schema_name:
+                            self._increment_metric(build_id, "quotation_calls")
+                        elif "record_indexing" in schema_name:
+                            self._increment_metric(build_id, "indexing_calls")
                         if attempt > 1:
                             self._increment_metric(build_id, "retries")
                     raw = chat_complete(
@@ -1281,6 +1309,80 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
         return result
 
+    def _catalog_enrich_manifest(self, manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> dict[str, Any]:
+        """Fill missing work-level bibliography through the same multi-catalog LLM path used by Works.
+
+        Source-derived manifest values remain authoritative. Public catalogue values only
+        fill blanks and are recorded separately for audit. Catalogue/network failure is
+        non-fatal and never pauses corpus construction.
+        """
+        title = str(manifest.get("title") or manifest.get("document_title") or "").strip()
+        if not title:
+            return manifest
+        current = {
+            "document_title": manifest.get("title"),
+            "short_title": manifest.get("short_title"),
+            "original_title": manifest.get("original_title"),
+            "document_author": manifest.get("document_author"),
+            "document_type": manifest.get("document_type"),
+            "publisher": manifest.get("publisher"),
+            "publication_place": manifest.get("publication_place"),
+            "publication_year": manifest.get("publication_year"),
+            "edition": manifest.get("edition"),
+            "translator": manifest.get("translator"),
+            "isbn": manifest.get("isbn"),
+            "document_language": manifest.get("language"),
+            "original_language": manifest.get("original_language"),
+            "document_is_translation": manifest.get("document_is_translation"),
+        }
+        try:
+            # Local import keeps the corpus builder lightweight in test/runtime
+            # contexts that do not initialize Chroma until the Works tool is used.
+            from .llm_tools import run_work_metadata_lookup
+            generation = request.get("generation")
+            body = WorkMetadataRequest(
+                works=[WorkMetadataSeed(work=title, current_metadata=current)],
+                provider=request.get("provider") or "ollama",
+                model=request.get("model"),
+                base_url=request.get("base_url"),
+                api_key=request.get("api_key"),
+                generation=generation,
+                provider_profile_id=request.get("provider_profile_id"),
+            )
+            proposal = run_work_metadata_lookup(
+                body.works[0], body,
+                cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+            )
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            self._append_warning(build_id, f"Automatic bibliographic lookup was unavailable; continuing with source-derived metadata ({exc}).")
+            return manifest
+        changes = proposal.get("changes") if isinstance(proposal.get("changes"), dict) else {}
+        mapping = {
+            "document_title": "title", "short_title": "short_title", "original_title": "original_title",
+            "document_author": "document_author", "document_type": "document_type", "publisher": "publisher",
+            "publication_place": "publication_place", "publication_year": "publication_year", "edition": "edition",
+            "translator": "translator", "isbn": "isbn", "document_language": "language",
+            "original_language": "original_language", "document_is_translation": "document_is_translation",
+        }
+        applied: dict[str, Any] = {}
+        for source_field, manifest_field in mapping.items():
+            proposed = changes.get(source_field)
+            if proposed in (None, "", []):
+                continue
+            if manifest.get(manifest_field) in (None, "", []):
+                manifest[manifest_field] = proposed
+                applied[manifest_field] = proposed
+        manifest["catalog_metadata"] = {
+            "source": proposal.get("catalog_source"),
+            "sources_tried": proposal.get("catalog_sources_tried") or [],
+            "confidence": proposal.get("confidence"),
+            "match_reason": proposal.get("match_reason") or proposal.get("message"),
+            "applied_missing_fields": applied,
+        }
+        return manifest
+
     @staticmethod
     def _stage_limits(request: dict[str, Any]) -> dict[str, int]:
         defaults = {
@@ -1306,6 +1408,89 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 else:
                     defaults[key] = max(256, min(8192, value))
         return defaults
+
+    @staticmethod
+    def _semantic_atoms(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Reconstruct stable semantic atoms from noisy PDF layout blocks.
+
+        PyMuPDF blocks are provenance units, not reliable discourse units. Many
+        PDFs emit one block per visual line. We conservatively join adjacent tiny
+        body blocks on the same physical page while preserving the last original
+        block ID as the transition anchor and retaining every source block ID.
+        """
+        atoms: list[dict[str, Any]] = []
+        pending: list[dict[str, Any]] = []
+
+        def flush() -> None:
+            nonlocal pending
+            if not pending:
+                return
+            last = pending[-1]
+            text_parts = [str(item.get("text") or "").strip() for item in pending if str(item.get("text") or "").strip()]
+            atom = dict(last)
+            atom["text"] = " ".join(text_parts)
+            atom["source_block_ids"] = [str(item.get("block_id") or "") for item in pending]
+            atom["atom_first_block_id"] = str(pending[0].get("block_id") or "")
+            atom["atom_last_block_id"] = str(last.get("block_id") or "")
+            # Keep the last real source block ID so a boundary remains directly
+            # applicable to deterministic record construction.
+            atom["block_id"] = str(last.get("block_id") or "")
+            atoms.append(atom)
+            pending = []
+
+        for block in blocks:
+            text = str(block.get("text") or "").strip()
+            if not text:
+                continue
+            block_type = str(block.get("type") or "body")
+            if block_type not in {"body", "paragraph", "text"}:
+                flush()
+                atom = dict(block)
+                atom["source_block_ids"] = [str(block.get("block_id") or "")]
+                atom["atom_first_block_id"] = atom["atom_last_block_id"] = str(block.get("block_id") or "")
+                atoms.append(atom)
+                continue
+            if not pending:
+                pending = [block]
+                continue
+            prev = pending[-1]
+            same_page = int(prev.get("page") or 0) == int(block.get("page") or 0)
+            pending_chars = sum(len(str(item.get("text") or "")) for item in pending)
+            prev_text = str(prev.get("text") or "").rstrip()
+            # Join line-like fragments, but stop at likely paragraph endings,
+            # headings, quotations, list starts, or a healthy paragraph size.
+            likely_continuation = (
+                same_page
+                and pending_chars < 1400
+                and (len(prev_text) < 180 or not re.search(r'[.!?][”"\']?$', prev_text))
+                and not re.match(r'^\s*(?:[-•*]|\d+[.)])\s+', text)
+                and not (len(text) < 90 and text.isupper())
+            )
+            if likely_continuation:
+                pending.append(block)
+            else:
+                flush()
+                pending = [block]
+        flush()
+        return atoms
+
+    @staticmethod
+    def _manifest_main_text_blocks(blocks: list[dict[str, Any]], manifest: dict[str, Any]) -> list[dict[str, Any]]:
+        """Apply reviewed physical-page manifest bounds when they are plausible."""
+        try:
+            start = int(manifest.get("main_text_start_page")) if manifest.get("main_text_start_page") is not None else None
+            end = int(manifest.get("main_text_end_page")) if manifest.get("main_text_end_page") is not None else None
+        except (TypeError, ValueError):
+            return blocks
+        if start is None and end is None:
+            return blocks
+        selected = [
+            block for block in blocks
+            if (start is None or int(block.get("page") or 0) >= start)
+            and (end is None or int(block.get("page") or 0) <= end)
+        ]
+        # Refuse implausible manifest ranges rather than accidentally erasing the book.
+        return selected if len(selected) >= max(2, min(10, len(blocks) // 20)) else blocks
 
     @staticmethod
     def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> list[list[dict[str, Any]]]:
@@ -1360,7 +1545,7 @@ Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
 SOURCE BLOCKS (immutable IDs):
 {block_text}
 
-Return a COMPACT JSON object. Include only plausible transition points. For each boundary return: `after` (an exact source block ID), `decision` (`split`, `keep`, or `uncertain`), `confidence` (0..1), and `changes` (zero or more of speaker, position_holder, stance, target, quotation_frame, discourse_role, argumentative_move). Do not return source text, prose explanations, Markdown, or invented IDs.
+Return a COMPACT JSON object containing ONLY transitions that plausibly need a split or explicit review. Omit ordinary KEEP transitions. For each returned transition use: `after` (the exact left-hand source block ID), `decision` (`split` or `uncertain`), `confidence` (0..1), and `changes` (zero or more of speaker, position_holder, stance, target, quotation_frame, discourse_role, argumentative_move). An omitted transition is deterministically treated as KEEP. Do not return source text, prose explanations, Markdown, or invented IDs.
 """
 
     def _segment_pair(
@@ -1430,10 +1615,12 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
                 build_id=build_id,
             )
             candidates: list[dict[str, Any]] = []
+            returned: set[str] = set()
             for item in result.get("boundaries") or []:
                 block_id = str(item.get("after") or "")
                 if block_id not in block_ids or block_id == str(window[-1].get("block_id") or ""):
                     continue
+                returned.add(block_id)
                 candidates.append({
                     "after_block_id": block_id,
                     "decision": str(item.get("decision") or "uncertain"),
@@ -1442,6 +1629,10 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
                     "source": "compact_window",
                     "depth": depth,
                 })
+            # Omitted transitions are ordinary KEEP decisions. Requiring a model
+            # to echo every no-op transition made output scale with document length
+            # and caused exactly the failure cascade this compact stage is intended
+            # to avoid. Only explicit split/uncertain proposals are returned.
             return candidates, []
         except InterruptedError:
             raise
@@ -1480,154 +1671,210 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
                 })
             return pair_candidates, unresolved
 
+    @staticmethod
+    def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+        """Generate a finite set of plausible local split points without an LLM.
+
+        Python owns topology coverage.  The model is only asked to classify local
+        candidates.  Layout/page seams alone are never candidates.  Length is used
+        only to *surface* a nearby paragraph transition for inspection; it never
+        silently creates a semantic boundary.
+        """
+        if len(blocks) < 2:
+            return []
+        candidates: list[dict[str, Any]] = []
+        chars_since_boundary = 0
+        soft_target = max(4500, min(int(profile.get("soft_max_chars") or 18000) // 2, 10000))
+        heading_types = {"heading", "title", "subtitle", "section", "chapter"}
+        speaker_re = re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
+        quote_start_re = re.compile(r'^\s*[“\"]')
+        quote_end_re = re.compile(r'[”\"]\s*$')
+
+        for i, (left, right) in enumerate(zip(blocks, blocks[1:])):
+            left_text = str(left.get("text") or "").strip()
+            right_text = str(right.get("text") or "").strip()
+            chars_since_boundary += len(left_text)
+            signals: list[str] = []
+            score = 0.0
+            left_type = str(left.get("type") or "body").casefold()
+            right_type = str(right.get("type") or "body").casefold()
+
+            if right_type in heading_types:
+                signals.append("heading_start")
+                score += 0.95
+            if left_type in heading_types and right_type not in heading_types:
+                signals.append("heading_to_body")
+                score += 0.35
+            if speaker_re.match(right_text):
+                signals.append("speaker_label")
+                score += 0.85
+            if quote_start_re.search(right_text) != quote_start_re.search(left_text):
+                signals.append("quotation_frame_change")
+                score += 0.30
+            if quote_end_re.search(left_text) and not quote_start_re.search(right_text):
+                signals.append("quotation_exit")
+                score += 0.25
+            if re.match(r"^\s*(?:\d+[.)]|[-•*])\s+", right_text):
+                signals.append("list_or_numbered_move")
+                score += 0.20
+            if chars_since_boundary >= soft_target:
+                signals.append("soft_length_candidate")
+                score += 0.12
+                chars_since_boundary = 0
+
+            # Avoid flooding the model with every paragraph transition.  A candidate
+            # needs a structural signal or a sparse soft-length inspection point.
+            if not signals:
+                continue
+            candidates.append({
+                "after_block_id": str(left.get("block_id") or ""),
+                "next_block_id": str(right.get("block_id") or ""),
+                "candidate_score": min(1.0, score),
+                "signals": signals,
+                "source": "deterministic_candidate",
+                "index": i,
+            })
+        return candidates
+
     def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
+        """Classify local candidate transitions and always produce a usable topology.
+
+        0.40.8 deliberately removes book-scale topology generation from the LLM.
+        Python proposes local candidate transitions, the LLM classifies only those
+        transitions, and failures default to KEEP.  Only an explicit high-signal
+        uncertainty or a deterministic hard-size fallback becomes boundary-review
+        work.  Boundary review never propagates into every neighboring record.
+        """
         profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
         threshold = float(profile.get("min_boundary_confidence") or 0.72)
-        limits = self._stage_limits(request)
-        windows = self._segmentation_windows(blocks, limits["segmentation_window_tokens"])
-        state = self.repo.load_checkpoint(build_id, "segmentation_state", {})
+        hard_max = max(12000, int(profile.get("topology_review_chars") or 36000))
+        index_by_id = {str(block.get("block_id") or ""): i for i, block in enumerate(blocks)}
+        candidates = self._deterministic_boundary_candidates(blocks, profile)
+        state = self.repo.load_checkpoint(build_id, "local_boundary_state", {})
         if not isinstance(state, dict):
             state = {}
-        window_results = state.get("window_results") if isinstance(state.get("window_results"), dict) else {}
-        recovered_windows = int(state.get("recovered_windows") or 0)
+        decisions = state.get("decisions") if isinstance(state.get("decisions"), dict) else {}
 
-        all_candidates: list[dict[str, Any]] = []
-        unresolved_regions: list[dict[str, Any]] = []
-        for wi, window in enumerate(windows):
+        accepted: list[dict[str, Any]] = []
+        boundary_reviews: list[dict[str, Any]] = []
+        for ci, candidate in enumerate(candidates):
             if self._cancelled(build_id):
                 raise InterruptedError("Corpus build cancelled")
-            key = f"w{wi:04d}:{window[0]['block_id']}:{window[-1]['block_id']}"
-            cached = window_results.get(key) if isinstance(window_results, dict) else None
-            # Successfully validated windows are immutable checkpoints. Windows
-            # with unresolved transitions are deliberately retried on resume.
-            if isinstance(cached, dict) and not cached.get("unresolved"):
-                all_candidates.extend(cached.get("candidates") or [])
+            block_id = str(candidate.get("after_block_id") or "")
+            idx = index_by_id.get(block_id, -1)
+            if idx < 0 or idx >= len(blocks) - 1:
+                continue
+            cached = decisions.get(block_id)
+            if isinstance(cached, dict):
+                pair, failure = cached.get("pair"), cached.get("failure")
             else:
-                candidates, unresolved = self._segment_window_recursive(window, manifest, request, build_id)
-                if isinstance(cached, dict) and cached.get("unresolved") and not unresolved:
-                    recovered_windows += 1
-                window_results[key] = {"candidates": candidates, "unresolved": unresolved}
-                all_candidates.extend(candidates)
-                unresolved_regions.extend(unresolved)
-                self.repo.save_checkpoint(build_id, "segmentation_state", {
-                    "window_results": window_results,
-                    "recovered_windows": recovered_windows,
+                pair, failure = self._segment_pair(blocks[idx], blocks[idx + 1], manifest, request, build_id)
+                decisions[block_id] = {"pair": pair, "failure": failure}
+                self.repo.save_checkpoint(build_id, "local_boundary_state", {"decisions": decisions})
+
+            if pair and pair.get("decision") == "split" and float(pair.get("confidence") or 0) >= threshold:
+                merged = dict(candidate)
+                merged.update(pair)
+                merged["source"] = "local_pair_classifier"
+                accepted.append(merged)
+            elif pair and pair.get("decision") == "uncertain" and float(pair.get("confidence") or 0) >= threshold:
+                boundary_reviews.append({
+                    "after_block_id": block_id,
+                    "next_block_id": str(blocks[idx + 1].get("block_id") or ""),
+                    "kind": "semantic_boundary_uncertain",
+                    "confidence": float(pair.get("confidence") or 0),
+                    "signals": list(candidate.get("signals") or []),
+                    "reason": "Local semantic classifier returned an explicit high-confidence uncertain decision.",
                 })
+            # Malformed/failed/low-confidence classifications are deterministic KEEP.
+            # They are metrics, not unresolved corpus regions.
+            if failure:
+                self._increment_metric(build_id, "local_boundary_classifier_failures")
+
             self._update(
                 build_id,
                 stage="segmenting",
-                progress=0.12 + 0.22 * ((wi + 1) / max(1, len(windows))),
-                segmentation_total_windows=len(windows),
+                progress=0.12 + 0.23 * ((ci + 1) / max(1, len(candidates))),
+                boundary_candidates_completed=ci + 1,
+                boundary_candidate_count=len(candidates),
             )
 
-        # Merge overlapping-window proposals by source transition. The strongest
-        # proposal wins; execution-window seams never create boundaries themselves.
-        by_id: dict[str, dict[str, Any]] = {}
-        ordered_ids = [str(block["block_id"]) for block in blocks]
-        index_by_id = {block_id: index for index, block_id in enumerate(ordered_ids)}
-        for item in all_candidates:
-            block_id = str(item.get("after_block_id") or "")
-            if block_id not in index_by_id or index_by_id[block_id] >= len(blocks) - 1:
-                continue
-            previous = by_id.get(block_id)
-            if previous is None or float(item.get("confidence") or 0) > float(previous.get("confidence") or 0):
-                by_id[block_id] = item
-        # Keep distinct source transitions distinct. Adjacent semantic boundaries
-        # can be legitimate (for example, a short quotation framed by two changes
-        # in position holder). Earlier code collapsed adjacent proposals and could
-        # silently under-segment the book. Overlapping-window duplicates are already
-        # resolved above by source block ID.
-        candidates = [item for item in by_id.values() if item.get("decision") != "keep"]
-        candidates.sort(key=lambda item: index_by_id.get(str(item.get("after_block_id") or ""), 10**9))
+        # Ensure hard upper bounds never prevent corpus construction.  If a span is
+        # still too large, insert the closest existing atom transition to the hard
+        # target and mark *that boundary* provisional.  No record gets needs_review
+        # merely because it touches this boundary.
+        def grouped(boundaries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+            split_ids = {str(item.get("after_block_id") or "") for item in boundaries}
+            out: list[list[dict[str, Any]]] = []
+            current: list[dict[str, Any]] = []
+            for block in blocks:
+                current.append(block)
+                if str(block.get("block_id") or "") in split_ids:
+                    out.append(current)
+                    current = []
+            if current:
+                out.append(current)
+            return out
 
-        accepted = [
-            item for item in candidates
-            if item.get("decision") == "split" and float(item.get("confidence") or 0) >= threshold
-        ]
-        uncertain = [item for item in candidates if item not in accepted]
-        reconciliation_unresolved: list[dict[str, Any]] = []
-        if uncertain:
-            reconciled, reconciliation_unresolved = self._reconcile_boundaries(
-                blocks, manifest, uncertain, request, build_id, threshold
-            )
-            accepted.extend(reconciled)
-            unresolved_regions.extend(reconciliation_unresolved)
+        provisional: list[dict[str, Any]] = []
+        while True:
+            span = next((g for g in grouped(accepted + provisional) if len(g) > 1 and sum(len(str(b.get("text") or "")) for b in g) > hard_max), None)
+            if span is None:
+                break
+            running = 0
+            target = hard_max * 0.72
+            choice = span[max(0, len(span)//2 - 1)]
+            for block in span[:-1]:
+                running += len(str(block.get("text") or ""))
+                choice = block
+                if running >= target:
+                    break
+            boundary = {
+                "after_block_id": str(choice.get("block_id") or ""),
+                "decision": "split",
+                "confidence": 0.0,
+                "changes": [],
+                "provisional": True,
+                "source": "hard_size_safety_split",
+            }
+            if any(str(item.get("after_block_id") or "") == boundary["after_block_id"] for item in accepted + provisional):
+                break
+            provisional.append(boundary)
+            idx = index_by_id.get(boundary["after_block_id"], -1)
+            boundary_reviews.append({
+                "after_block_id": boundary["after_block_id"],
+                "next_block_id": str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else "",
+                "kind": "provisional_size_split",
+                "reason": "A deterministic safety split was inserted because the surrounding semantic span exceeded the hard review size. Review this boundary; the rest of the corpus remains valid.",
+            })
+
+        accepted.extend(provisional)
         accepted.sort(key=lambda item: index_by_id.get(str(item.get("after_block_id") or ""), 10**9))
+        # Deduplicate boundary-review objects by the actual transition.
+        review_map: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for item in boundary_reviews:
+            key = (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""), str(item.get("kind") or ""))
+            review_map[key] = item
+        boundary_reviews = list(review_map.values())
 
-        # Deduplicate unresolved transitions reported through overlapping recursive
-        # windows. These are blockers, not reasons to manufacture a giant record.
-        unresolved_map: dict[tuple[str, str], dict[str, Any]] = {}
-        for item in unresolved_regions:
-            key = (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""))
-            if key != ("", ""):
-                unresolved_map[key] = item
-        unresolved_regions = list(unresolved_map.values())
-        total_chars = sum(len(str(block.get("text") or "")) for block in blocks)
-        no_boundary_guard = total_chars > int(profile.get("soft_max_chars") or 18000) and not accepted
-        if no_boundary_guard and not unresolved_regions:
-            unresolved_regions.append({
-                "after_block_id": str(blocks[0].get("block_id") or ""),
-                "next_block_id": str(blocks[-1].get("block_id") or ""),
-                "kind": "topology_guard_no_boundaries",
-                "reason": "A long source produced no validated semantic boundaries. The length threshold is only a safety guard; it did not create a split. Retry or review the semantic topology before record construction.",
-            })
-
-        # Record size is never a segmentation rule, but an implausibly large
-        # provisional semantic unit is evidence that topology is unresolved. Block
-        # construction rather than publishing a 50k–100k character pseudo-record.
-        # This guard therefore requests more semantic review; it does not insert a
-        # boundary at a character/page threshold.
-        topology_review_chars = int(profile.get("topology_review_chars") or 36000)
-        split_after = {str(item.get("after_block_id") or "") for item in accepted}
-        provisional: list[list[dict[str, Any]]] = []
-        group: list[dict[str, Any]] = []
-        for block in blocks:
-            group.append(block)
-            if str(block.get("block_id") or "") in split_after:
-                provisional.append(group)
-                group = []
-        if group:
-            provisional.append(group)
-        existing_guard_ranges = {
-            (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""))
-            for item in unresolved_regions
-            if isinstance(item, dict) and str(item.get("kind") or "").startswith("topology_guard")
-        }
-        for span in provisional:
-            span_chars = sum(len(str(block.get("text") or "")) for block in span)
-            if span_chars <= topology_review_chars or len(span) < 2:
-                continue
-            range_key = (str(span[0].get("block_id") or ""), str(span[-1].get("block_id") or ""))
-            if range_key in existing_guard_ranges:
-                continue
-            unresolved_regions.append({
-                "after_block_id": range_key[0],
-                "next_block_id": range_key[1],
-                "kind": "topology_guard_large_unit",
-                "character_count": span_chars,
-                "block_count": len(span),
-                "reason": "A provisional semantic unit remains unusually large. Size triggered review only; no mechanical boundary was inserted.",
-            })
-
-        blocked = bool(unresolved_regions)
         build = self.repo.get_build(build_id)
-        build["segmentation_blocked"] = blocked
-        build["segmentation_unresolved_regions"] = unresolved_regions[:500]
-        build["segmentation_failed_windows"] = sum(
-            1 for value in window_results.values()
-            if isinstance(value, dict) and value.get("unresolved")
-        )
-        build["segmentation_total_windows"] = len(windows)
-        build["segmentation_recovered_windows"] = recovered_windows
-        build["segmentation_degraded"] = blocked
+        build["segmentation_blocked"] = False
+        build["segmentation_unresolved_regions"] = boundary_reviews[:500]  # compatibility alias
+        build["segmentation_boundary_reviews"] = boundary_reviews[:500]
+        build["boundary_review_count"] = len(boundary_reviews)
+        build["segmentation_failed_windows"] = 0
+        build["segmentation_total_windows"] = 0
+        build["segmentation_recovered_windows"] = 0
+        build["segmentation_degraded"] = bool(boundary_reviews)
         build["boundary_candidate_count"] = len(candidates)
         build["boundary_count"] = len(accepted)
+        build["provisional_boundary_count"] = len(provisional)
         self.repo.save_build(build)
         self.repo.save_checkpoint(build_id, "boundaries_partial", accepted)
-        if blocked:
+        if boundary_reviews:
             self._append_warning(
                 build_id,
-                f"Semantic segmentation stopped with {len(unresolved_regions)} unresolved transition region(s). No record set was constructed; retry or change model/settings to resolve them.",
+                f"Corpus topology was constructed with {len(boundary_reviews)} boundary decision(s) requiring review. Metadata enrichment will continue; review is localized to those transitions.",
             )
         self._update(build_id, stage="reconciling", progress=0.40)
         return accepted
@@ -1689,19 +1936,23 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             except InterruptedError:
                 raise
             except Exception as exc:
-                # A topology-changing decision that cannot be reconciled is never
-                # silently converted to KEEP. Preserve it as an explicit blocker so
-                # the book cannot be under-segmented merely because structured
-                # output failed in the reconciliation stage.
+                # Reconciliation is advisory. A failed compact reconciliation must
+                # not turn every candidate in the batch into an apparent pipeline
+                # failure. Preserve only genuinely uncertain/high-signal candidates
+                # as localized review items; ordinary weak candidates become KEEP.
+                self._increment_metric(build_id, "reconciliation_failures")
                 for candidate in batch:
+                    confidence = float(candidate.get("confidence") or 0)
+                    if candidate.get("decision") != "uncertain" and confidence < threshold:
+                        continue
                     block_id = str(candidate.get("after_block_id") or "")
                     idx = block_index.get(block_id, -1)
                     next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
                     unresolved.append({
                         "after_block_id": block_id,
                         "next_block_id": next_id,
-                        "kind": "reconciliation",
-                        "reason": f"Boundary reconciliation could not be validated: {exc}",
+                        "kind": "reconciliation_review",
+                        "reason": f"This candidate could not be automatically reconciled and remains a local review item: {exc}",
                     })
                 continue
             original = {str(item["after_block_id"]): item for item in batch}
@@ -1719,16 +1970,33 @@ Return one compact decision for every supplied candidate using exact `after` IDs
                 merged = dict(original[block_id])
                 merged.update({"decision": "split", "confidence": confidence, "reconciled": True})
                 accepted.append(merged)
+            batch_unresolved = False
             for block_id in sorted(set(original) - decided):
                 idx = block_index.get(block_id, -1)
-                next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
-                unresolved.append({
-                    "after_block_id": block_id,
-                    "next_block_id": next_id,
-                    "kind": "reconciliation",
-                    "reason": "Boundary reconciliation omitted a required candidate decision.",
-                })
-            completed.add(batch_key)
+                if 0 <= idx < len(blocks) - 1:
+                    pair, failure = self._segment_pair(blocks[idx], blocks[idx + 1], manifest, request, build_id)
+                else:
+                    pair, failure = None, None
+                if pair and pair.get("decision") == "split" and float(pair.get("confidence") or 0) >= threshold:
+                    merged = dict(original[block_id])
+                    merged.update(pair)
+                    merged["reconciled"] = True
+                    merged["source"] = "reconciliation_pair_fallback"
+                    accepted.append(merged)
+                elif pair and pair.get("decision") == "keep":
+                    continue
+                else:
+                    batch_unresolved = True
+                    next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
+                    unresolved.append({
+                        "after_block_id": block_id,
+                        "next_block_id": next_id,
+                        "kind": "reconciliation",
+                        "reason": str((failure or {}).get("reason") or "Boundary reconciliation remained uncertain after pairwise fallback."),
+                    })
+            # Do not checkpoint an incomplete reconciliation batch as completed.
+            if not batch_unresolved:
+                completed.add(batch_key)
             self.repo.save_checkpoint(build_id, "reconciliation_state", {
                 "completed": sorted(completed),
                 "accepted": accepted,
@@ -1788,6 +2056,28 @@ Return one compact decision for every supplied candidate using exact `after` IDs
                 "updates": [],
             })
         return records
+
+    @staticmethod
+    def _mark_segmentation_review(records: list[dict[str, Any]], unresolved: list[dict[str, Any]]) -> None:
+        """Attach boundary-review context without turning records into failures.
+
+        Segmentation uncertainty belongs to a transition, not to both neighboring
+        records.  Records remain independently reviewable for metadata problems;
+        boundary review is represented on the adjacent record edges only.
+        """
+        if not unresolved:
+            return
+        by_block: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            for block_id in record.get("source_block_ids") or []:
+                by_block.setdefault(str(block_id), []).append(record)
+        for item in unresolved:
+            left_records = by_block.get(str(item.get("after_block_id") or ""), [])
+            right_records = by_block.get(str(item.get("next_block_id") or ""), [])
+            for record in left_records:
+                record.setdefault("boundary_review_after", []).append(item)
+            for record in right_records:
+                record.setdefault("boundary_review_before", []).append(item)
 
     @staticmethod
     def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -> None:
@@ -2147,12 +2437,14 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
             if not isinstance(manifest, dict):
                 manifest = self._document_manifest(asset, blocks, request, build_id)
+                if bool(request.get("auto_enrich_work_metadata", True)):
+                    manifest = self._catalog_enrich_manifest(manifest, request, build_id)
                 self.repo.save_checkpoint(build_id, "manifest", manifest)
             current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
             self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
 
             manifest_build = self.repo.get_build(build_id)
-            if bool(request.get("review_manifest_before_segmentation", True)) and not manifest_build.get("manifest_confirmed_at"):
+            if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
                 self._update(
                     build_id,
                     status="awaiting_manifest_review",
@@ -2164,7 +2456,16 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 )
                 return
 
-            self._update(build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12))
+            # The reviewed manifest defines the semantic-analysis region. Source
+            # blocks outside it remain in the persisted source asset for audit.
+            source_blocks = self._manifest_main_text_blocks(blocks, manifest)
+            semantic_blocks = self._semantic_atoms(source_blocks)
+            if len(semantic_blocks) < 2:
+                semantic_blocks = source_blocks
+            self._update(
+                build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12),
+                semantic_atom_count=len(semantic_blocks), main_text_block_count=len(source_blocks),
+            )
             previous_build = self.repo.get_build(build_id)
             # A segmentation-blocked build intentionally has no authoritative final
             # boundary checkpoint. Resume retries unresolved semantic regions using
@@ -2174,30 +2475,16 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             if resume and not previous_build.get("segmentation_blocked"):
                 boundaries = self.repo.load_checkpoint(build_id, "boundaries")
             if not isinstance(boundaries, list):
-                boundaries = self._segment(blocks, manifest, request, build_id)
+                boundaries = self._segment(semantic_blocks, manifest, request, build_id)
             if self._cancelled(build_id):
                 raise InterruptedError("Corpus build cancelled")
-            if self.repo.get_build(build_id).get("segmentation_blocked"):
-                self._update(
-                    build_id,
-                    status="blocked",
-                    stage="segmentation_review",
-                    progress=0.40,
-                    finished_at=iso_now(),
-                    record_count=0,
-                    needs_review_count=0,
-                    accepted_count=0,
-                    resumable=True,
-                    error=None,
-                    retrying_segmentation=False,
-                )
-                return
             self._update(build_id, retrying_segmentation=False)
             self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
             records = self.repo.load_records(build_id) if resume else []
             if not records:
-                records = self._construct_records(asset, blocks, boundaries)
+                records = self._construct_records(asset, source_blocks, boundaries)
+                self._mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
                 for record in records:
                     self._apply_manifest_metadata(record, manifest)
                     inline, full = _citation_strings(record)
@@ -2272,9 +2559,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                         )
 
             profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
-            validation = self.validate_records(blocks, records, profile)
+            validation = self.validate_records(source_blocks, records, profile)
             needs_review = sum(1 for record in records if record.get("needs_review"))
-            status = "awaiting_review" if needs_review or not validation.get("valid") else "ready"
+            boundary_review_count = len(self.repo.get_build(build_id).get("segmentation_boundary_reviews") or [])
+            status = "awaiting_review" if needs_review or boundary_review_count or not validation.get("valid") else "ready"
             self._update(
                 build_id,
                 status=status,
@@ -2283,6 +2571,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 finished_at=iso_now(),
                 record_count=len(records),
                 needs_review_count=needs_review,
+                boundary_review_count=boundary_review_count,
                 accepted_count=sum(1 for record in records if record.get("accepted")),
                 validation=validation,
                 resumable=False,
@@ -2304,6 +2593,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             block for block in self.repo.load_blocks(build["asset_id"])
             if not block.get("excluded_reason")
         ]
+        blocks = self._manifest_main_text_blocks(blocks, build.get("manifest") or {})
         profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
         validation = self.validate_records(blocks, records, profile)
         self.repo.save_records(build_id, records)
@@ -2311,7 +2601,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
         build["accepted_count"] = sum(1 for record in records if record.get("accepted"))
         build["validation"] = validation
-        requires_review = bool(build["needs_review_count"] or not validation.get("valid"))
+        build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
+        requires_review = bool(build["needs_review_count"] or build["boundary_review_count"] or not validation.get("valid"))
         build["status"] = "awaiting_review" if requires_review else "ready"
         build["stage"] = "review" if requires_review else "ready"
         self.repo.save_build(build)

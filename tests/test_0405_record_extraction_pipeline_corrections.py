@@ -9,17 +9,17 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.40.6"
-    assert 'version="0.40.6"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.6"' in text("api/app/config.py")
+    assert package["version"]=="0.40.8"
+    assert 'version="0.40.8"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
 def test_0405_new_semantic_pipeline_is_provenance_versioned():
     builder=text("api/app/corpus_builder.py")
-    assert 'SEGMENTATION_PROMPT_VERSION = "derridai-semantic-boundaries-v3"' in builder
+    assert 'SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v5"' in builder
     assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"' in builder
-    assert 'PROFILE_VERSION = "derrida-scholarly-v3"' in builder
+    assert 'PROFILE_VERSION = "derrida-scholarly-v5"' in builder
     assert '"derrida-scholarly-v2"' in builder  # old build compatibility
 
 
@@ -27,12 +27,12 @@ def test_segmentation_never_fabricates_one_giant_fallback_record():
     builder=text("api/app/corpus_builder.py")
     run=builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     segment=builder[builder.index("    def _segment("):builder.index("    def _reconcile_boundaries")]
-    assert 'status="blocked"' in run
-    assert 'record_count=0' in run
-    assert "topology_guard_no_boundaries" in segment
-    assert "topology_guard_large_unit" in segment
-    assert "No record set was constructed" in segment
-    assert "no mechanical boundary was inserted" in segment
+    assert "hard_size_safety_split" in segment
+    assert "provisional_size_split" in segment
+    assert 'build["segmentation_blocked"] = False' in segment
+    assert "Metadata enrichment will continue" in segment
+    assert "hard_size_safety_split" in segment
+    assert "_mark_segmentation_review" in builder
 
 
 def test_segmentation_reduces_failed_windows_to_pairwise_structured_tasks():
@@ -96,7 +96,7 @@ def test_document_manifest_is_a_review_checkpoint_before_segmentation():
     models=text("api/app/models.py")
     component=text("web/src/components/PdfCorpusBuilder.vue")
     api=text("web/src/api/pdfCorpus.ts")
-    assert "review_manifest_before_segmentation: bool = True" in models
+    assert "review_manifest_before_segmentation: bool = False" in models
     assert 'status="awaiting_manifest_review"' in builder
     assert "def confirm_manifest(" in builder
     assert '@app.post("/api/pdf/corpus-builds/{build_id}/confirm-manifest")' in main
@@ -108,7 +108,8 @@ def test_document_manifest_is_a_review_checkpoint_before_segmentation():
 def test_reconciliation_failures_cannot_silently_undersegment():
     builder=text("api/app/corpus_builder.py")
     reconcile=builder[builder.index("    def _reconcile_boundaries("):builder.index("    @staticmethod\n    def _scholarly_page_range")]
-    assert "Boundary reconciliation could not be validated" in reconcile
+    assert "could not be automatically reconciled" in reconcile
     assert '"kind": "reconciliation"' in reconcile
-    assert "Boundary reconciliation omitted a required candidate decision" in reconcile
+    assert "remained uncertain after pairwise fallback" in reconcile
+    assert "if not batch_unresolved" in reconcile
     assert "return accepted, unresolved" in reconcile

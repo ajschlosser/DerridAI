@@ -5957,7 +5957,7 @@ DEFAULT_EN_US.update({
     "pdf_corpus.segmentation_blocked_help":"DerridAI could not validate every required semantic transition, so it stopped before constructing records. No giant fallback record was fabricated. Adjust the provider/settings or retry the unresolved regions.",
     "pdf_corpus.retry_segmentation":"Retry unresolved segmentation",
     "pdf_corpus.unresolved_count":"{count} unresolved region(s)",
-    "pdf_corpus.unresolved_regions":"unresolved segmentation region(s)",
+    "pdf_corpus.unresolved_regions":"boundary decision(s) to review",
     "pdf_corpus.status.blocked":"blocked",
     "pdf_corpus.stage.segmentation_review":"segmentation review",
     "pdf_corpus.operation_label":"PDF corpus build",
@@ -6001,7 +6001,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.segmentation_blocked_help":"DerridAI n’a pas pu valider toutes les transitions sémantiques requises; la construction s’est donc arrêtée avant de créer des notices. Aucune notice géante de repli n’a été fabriquée. Ajustez le fournisseur ou les paramètres, puis réessayez les régions non résolues.",
     "pdf_corpus.retry_segmentation":"Réessayer la segmentation non résolue",
     "pdf_corpus.unresolved_count":"{count} région(s) non résolue(s)",
-    "pdf_corpus.unresolved_regions":"région(s) de segmentation non résolue(s)",
+    "pdf_corpus.unresolved_regions":"décision(s) de limite à réviser",
     "pdf_corpus.status.blocked":"bloquée",
     "pdf_corpus.stage.segmentation_review":"révision de la segmentation",
     "pdf_corpus.operation_label":"Construction de corpus PDF",
@@ -6087,7 +6087,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.stage.document_review":"révision du document",
 })
 
-# 0.40.6 — Not Quite Building a Corpus: make corpus construction the primary PDF workflow
+# 0.40.8 — Corpus Christi: make corpus construction the primary PDF workflow
 # and make long-running/retry state visible and unambiguous across the app.
 DEFAULT_EN_US.update({
     "nav.pdf": "Corpus Builder",
@@ -6148,5 +6148,40 @@ DEFAULT_FR_CA.update({
     "operations.active": "active(s)",
 })
 
+# 0.40.8 — Corpus Christi
+DEFAULT_EN_US.update({
+    "pdf_corpus.segmentation_review_title": "Localized segmentation review",
+    "pdf_corpus.segmentation_review_help": "The corpus was constructed successfully. Boundary review is stored on the transition itself and does not turn neighboring records into failures. Metadata enrichment continues normally.",
+    "pdf_corpus.show_review_records": "Show affected records",
+    "works.separate_jsonl": "Separate works",
+    "works.populate_metadata_help": "DerridAI searches format-appropriate public bibliographic sources (Open Library, Google Books, and Crossref), asks the selected LLM to identify the best match, then returns proposed metadata changes for review. Nothing is applied automatically.",
+    "works.catalogue_selected": "Public bibliographic catalogue match selected by the LLM.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.segmentation_review_title": "Révision localisée de la segmentation",
+    "pdf_corpus.segmentation_review_help": "Le corpus a été construit malgré un petit nombre de transitions incertaines. Seuls les enregistrements concernés sont marqués À réviser. Inspectez-les ci-dessous et utilisez Scinder ou Fusionner pour corriger la topologie; il n’est pas nécessaire de répéter le même appel déterministe de segmentation.",
+    "pdf_corpus.show_review_records": "Afficher les enregistrements concernés",
+    "works.separate_jsonl": "Séparer les œuvres",
+    "works.populate_metadata_help": "DerridAI interroge des sources bibliographiques publiques adaptées au format (Open Library, Google Books et Crossref), demande au LLM sélectionné d’identifier la meilleure correspondance, puis renvoie des modifications proposées à vérifier. Rien n’est appliqué automatiquement.",
+    "works.catalogue_selected": "Correspondance de catalogue bibliographique public sélectionnée par le LLM.",
+})
+DEFAULT_EN_US.update({
+    "pdf_corpus.execution_settings_using_defaults": "Provider defaults · context budget safe",
+    "pdf_corpus.execution_settings_custom": "Custom build settings",
+    "pdf_corpus.next_stage": "Next",
+    "pdf_corpus.manifest_calls": "document analysis",
+    "pdf_corpus.segmentation_calls": "segmentation",
+    "pdf_corpus.metadata_calls": "record enrichment",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.execution_settings_using_defaults": "Valeurs du fournisseur · budget de contexte sûr",
+    "pdf_corpus.execution_settings_custom": "Paramètres personnalisés",
+    "pdf_corpus.next_stage": "Prochaine étape",
+    "pdf_corpus.manifest_calls": "analyse du document",
+    "pdf_corpus.segmentation_calls": "segmentation",
+    "pdf_corpus.metadata_calls": "enrichissement des notices",
+})
+
 # Instantiate only after every built-in dictionary extension above has loaded.
 system_store = SystemStore()
+
