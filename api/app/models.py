@@ -409,7 +409,7 @@ class PdfCorpusStageLimits(BaseModel):
 
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v5", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v6", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None

@@ -23,10 +23,10 @@ from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
-SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v5"
+SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v6"
 METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v5"
+PROFILE_VERSION = "derrida-scholarly-v6"
 
 
 class DocumentManifestModel(BaseModel):
@@ -157,6 +157,19 @@ class PairBoundaryResponseModel(BaseModel):
     decision: Literal["split", "keep", "uncertain"] = "uncertain"
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
+
+
+class BatchBoundaryDecisionModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    after: str = Field(min_length=1, max_length=200)
+    decision: Literal["split", "keep"]
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
+
+
+class BoundaryBatchResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decisions: list[BatchBoundaryDecisionModel] = Field(default_factory=list, max_length=12)
 
 
 class CompactSegmentationResponseModel(BaseModel):
@@ -761,14 +774,32 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_max_chars": 18000,
         "topology_review_chars": 36000,
     },
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v5",
+    "derrida-scholarly-v5": {
+        "id": "derrida-scholarly-v5",
+        "name": "Derrida scholarly corpus v5 (legacy)",
         "version": 5,
-        "description": "Deterministic topology with local LLM boundary classification, boundary-level review, staged metadata extraction, and auditable source evidence.",
+        "description": "0.40.8 deterministic topology with local LLM boundary classification, retained so existing 0.40.8 builds remain resumable and auditable.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
         "min_boundary_confidence": 0.72,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "soft_max_chars": 9000,
+        "topology_review_chars": 12000,
+    },
+    PROFILE_VERSION: {
+        "id": PROFILE_VERSION,
+        "name": "Derrida scholarly corpus v6",
+        "version": 6,
+        "description": "Conservative deterministic-first topology: obvious seams are handled locally, ambiguous high-value seams are batch-adjudicated, uncertainty defaults to KEEP, and human review is reserved for demonstrated provenance hazards.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
+        "min_boundary_confidence": 0.72,
+        "candidate_llm_threshold": 0.30,
+        "deterministic_split_threshold": 0.92,
+        "review_risk_threshold": 0.90,
+        "max_llm_boundary_calls_per_100_atoms": 18,
+        "boundary_batch_size": 6,
         "min_metadata_confidence": 0.72,
         "soft_min_chars": 180,
         "soft_max_chars": 9000,
@@ -1672,58 +1703,89 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
             return pair_candidates, unresolved
 
     @staticmethod
-    def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
-        """Generate a finite set of plausible local split points without an LLM.
+    def _is_protected_transition(left: dict[str, Any], right: dict[str, Any]) -> bool:
+        """Return True when splitting would likely detach attribution or syntax.
 
-        Python owns topology coverage.  The model is only asked to classify local
-        candidates.  Layout/page seams alone are never candidates.  Length is used
-        only to *surface* a nearby paragraph transition for inspection; it never
-        silently creates a semantic boundary.
+        These guards are deliberately cheap and deterministic. They prevent the
+        classifier and hard-size fallback from creating common provenance errors
+        such as separating a speaker label or quotation lead-in from its speech.
+        """
+        left_text = str(left.get("text") or "").strip()
+        right_text = str(right.get("text") or "").strip()
+        left_type = str(left.get("type") or "body").casefold()
+        right_type = str(right.get("type") or "body").casefold()
+        heading_types = {"heading", "title", "subtitle", "section", "chapter"}
+        speaker_label_only = re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s*$")
+        quote_start = re.compile(r'^\s*[“\"]')
+        attribution_lead = re.compile(r"(?:writes?|says?|asks?|replies?|continues?|according to|as .*? puts it)\s*[:;,]?\s*$", re.I)
+        list_marker = re.compile(r"^\s*(?:\d+[.)]|[-•*])\s+")
+
+        if left_type in heading_types and right_type not in heading_types:
+            return True
+        if speaker_label_only.match(left_text):
+            return True
+        if (left_text.endswith(":") or attribution_lead.search(left_text)) and quote_start.search(right_text):
+            return True
+        if list_marker.match(left_text) and right_text and not re.search(r"[.!?][”\"]?$", left_text):
+            return True
+        return False
+
+    @staticmethod
+    def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+        """Generate structural candidates without turning length into evidence.
+
+        0.40.9 removes the former soft-length probe. Approaching a preferred
+        record size is handled later by a local best-seam search; it never earns
+        an LLM call on its own.
         """
         if len(blocks) < 2:
             return []
         candidates: list[dict[str, Any]] = []
-        chars_since_boundary = 0
-        soft_target = max(4500, min(int(profile.get("soft_max_chars") or 18000) // 2, 10000))
         heading_types = {"heading", "title", "subtitle", "section", "chapter"}
         speaker_re = re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
         quote_start_re = re.compile(r'^\s*[“\"]')
         quote_end_re = re.compile(r'[”\"]\s*$')
+        strong_heading_re = re.compile(r"^\s*(?:§|chapter|part|session|section|book|introduction|preface|foreword|conclusion|epilogue|notes|bibliography|works cited)\b|^\s*(?:[IVXLCDM]+|\d+)\s*[.:—-]\s+", re.I)
+        heading_counts = Counter(
+            _normalize_text(str(block.get("text") or "")).casefold()
+            for block in blocks
+            if str(block.get("type") or "body").casefold() in heading_types and len(_normalize_text(str(block.get("text") or ""))) < 180
+        )
 
         for i, (left, right) in enumerate(zip(blocks, blocks[1:])):
             left_text = str(left.get("text") or "").strip()
             right_text = str(right.get("text") or "").strip()
-            chars_since_boundary += len(left_text)
             signals: list[str] = []
             score = 0.0
             left_type = str(left.get("type") or "body").casefold()
             right_type = str(right.get("type") or "body").casefold()
 
             if right_type in heading_types:
-                signals.append("heading_start")
-                score += 0.95
+                normalized_heading = _normalize_text(right_text).casefold()
+                if normalized_heading and heading_counts.get(normalized_heading, 0) >= 3:
+                    signals.append("repeated_running_heading")
+                    score += 0.08
+                else:
+                    signals.append("heading_start")
+                    score += 0.62
+                    if strong_heading_re.search(right_text):
+                        signals.append("strong_heading_start")
+                        score += 0.36
             if left_type in heading_types and right_type not in heading_types:
                 signals.append("heading_to_body")
-                score += 0.35
+                score += 0.20
             if speaker_re.match(right_text):
                 signals.append("speaker_label")
-                score += 0.85
-            if quote_start_re.search(right_text) != quote_start_re.search(left_text):
+                score += 0.90
+            if bool(quote_start_re.search(right_text)) != bool(quote_start_re.search(left_text)):
                 signals.append("quotation_frame_change")
-                score += 0.30
+                score += 0.34
             if quote_end_re.search(left_text) and not quote_start_re.search(right_text):
                 signals.append("quotation_exit")
-                score += 0.25
+                score += 0.28
             if re.match(r"^\s*(?:\d+[.)]|[-•*])\s+", right_text):
                 signals.append("list_or_numbered_move")
-                score += 0.20
-            if chars_since_boundary >= soft_target:
-                signals.append("soft_length_candidate")
-                score += 0.12
-                chars_since_boundary = 0
-
-            # Avoid flooding the model with every paragraph transition.  A candidate
-            # needs a structural signal or a sparse soft-length inspection point.
+                score += 0.18
             if not signals:
                 continue
             candidates.append({
@@ -1733,150 +1795,271 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
                 "signals": signals,
                 "source": "deterministic_candidate",
                 "index": i,
+                "protected": PdfCorpusBuildManager._is_protected_transition(left, right) or "repeated_running_heading" in signals,
             })
         return candidates
 
-    def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
-        """Classify local candidate transitions and always produce a usable topology.
+    @staticmethod
+    def _candidate_route(candidate: dict[str, Any], profile: dict[str, Any]) -> str:
+        if bool(candidate.get("protected")):
+            return "keep"
+        signals = set(candidate.get("signals") or [])
+        score = float(candidate.get("candidate_score") or 0.0)
+        deterministic_threshold = float(profile.get("deterministic_split_threshold") or 0.92)
+        llm_threshold = float(profile.get("candidate_llm_threshold") or 0.30)
+        # A genuine heading start is document structure, not an inference task.
+        if "strong_heading_start" in signals and score >= deterministic_threshold:
+            return "split"
+        if score < llm_threshold:
+            return "keep"
+        return "llm"
 
-        0.40.8 deliberately removes book-scale topology generation from the LLM.
-        Python proposes local candidate transitions, the LLM classifies only those
-        transitions, and failures default to KEEP.  Only an explicit high-signal
-        uncertainty or a deterministic hard-size fallback becomes boundary-review
-        work.  Boundary review never propagates into every neighboring record.
+    def _boundary_cache_fingerprint(self, left: dict[str, Any], right: dict[str, Any], request: dict[str, Any]) -> str:
+        generation = self._generation_options(request)
+        payload = {
+            "prompt": SEGMENTATION_PROMPT_VERSION,
+            "left_id": left.get("block_id"), "left_text": left.get("text"),
+            "right_id": right.get("block_id"), "right_text": right.get("text"),
+            "provider": request.get("provider"), "model": request.get("model"),
+            "temperature": generation.temperature, "top_p": generation.top_p,
+            "top_k": generation.top_k, "seed": generation.seed,
+        }
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+    def _segment_candidate_batch(
+        self,
+        batch: list[dict[str, Any]],
+        blocks: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+        build_id: str,
+    ) -> tuple[dict[str, dict[str, Any]], str | None]:
+        """Adjudicate a small set of already-filtered transitions in one call.
+
+        The schema is intentionally binary. If the model cannot support SPLIT,
+        returns malformed output, omits an item, or attempts an `uncertain` value,
+        the transition deterministically remains KEEP.
         """
-        profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
-        threshold = float(profile.get("min_boundary_confidence") or 0.72)
-        hard_max = max(12000, int(profile.get("topology_review_chars") or 36000))
-        index_by_id = {str(block.get("block_id") or ""): i for i, block in enumerate(blocks)}
-        candidates = self._deterministic_boundary_candidates(blocks, profile)
-        state = self.repo.load_checkpoint(build_id, "local_boundary_state", {})
-        if not isinstance(state, dict):
-            state = {}
-        decisions = state.get("decisions") if isinstance(state.get("decisions"), dict) else {}
-
-        accepted: list[dict[str, Any]] = []
-        boundary_reviews: list[dict[str, Any]] = []
-        for ci, candidate in enumerate(candidates):
-            if self._cancelled(build_id):
-                raise InterruptedError("Corpus build cancelled")
-            block_id = str(candidate.get("after_block_id") or "")
-            idx = index_by_id.get(block_id, -1)
-            if idx < 0 or idx >= len(blocks) - 1:
-                continue
-            cached = decisions.get(block_id)
-            if isinstance(cached, dict):
-                pair, failure = cached.get("pair"), cached.get("failure")
-            else:
-                pair, failure = self._segment_pair(blocks[idx], blocks[idx + 1], manifest, request, build_id)
-                decisions[block_id] = {"pair": pair, "failure": failure}
-                self.repo.save_checkpoint(build_id, "local_boundary_state", {"decisions": decisions})
-
-            if pair and pair.get("decision") == "split" and float(pair.get("confidence") or 0) >= threshold:
-                merged = dict(candidate)
-                merged.update(pair)
-                merged["source"] = "local_pair_classifier"
-                accepted.append(merged)
-            elif pair and pair.get("decision") == "uncertain" and float(pair.get("confidence") or 0) >= threshold:
-                boundary_reviews.append({
-                    "after_block_id": block_id,
-                    "next_block_id": str(blocks[idx + 1].get("block_id") or ""),
-                    "kind": "semantic_boundary_uncertain",
-                    "confidence": float(pair.get("confidence") or 0),
-                    "signals": list(candidate.get("signals") or []),
-                    "reason": "Local semantic classifier returned an explicit high-confidence uncertain decision.",
-                })
-            # Malformed/failed/low-confidence classifications are deterministic KEEP.
-            # They are metrics, not unresolved corpus regions.
-            if failure:
-                self._increment_metric(build_id, "local_boundary_classifier_failures")
-
-            self._update(
-                build_id,
-                stage="segmenting",
-                progress=0.12 + 0.23 * ((ci + 1) / max(1, len(candidates))),
-                boundary_candidates_completed=ci + 1,
-                boundary_candidate_count=len(candidates),
+        items=[]
+        for c in batch:
+            i=int(c["index"])
+            left,right=blocks[i],blocks[i+1]
+            items.append(
+                f"TRANSITION {left['block_id']} -> {right['block_id']}\n"
+                f"Signals: {', '.join(c.get('signals') or [])}\n"
+                f"LEFT:\n{str(left.get('text') or '')[-3200:]}\nRIGHT:\n{str(right.get('text') or '')[:3200]}"
             )
+        context={k:manifest.get(k) for k in ("title","document_author","language","document_type") if manifest.get(k) not in (None,"")}
+        prompt=f"""You are a conservative semantic-boundary adjudicator for an auditable Derrida corpus.
+Python has already filtered out ordinary prose and protected attribution-sensitive seams. For each listed transition choose SPLIT only when the right block clearly begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. Otherwise choose KEEP. Page changes and text length are never evidence. When in doubt, KEEP.
 
-        # Ensure hard upper bounds never prevent corpus construction.  If a span is
-        # still too large, insert the closest existing atom transition to the hard
-        # target and mark *that boundary* provisional.  No record gets needs_review
-        # merely because it touches this boundary.
-        def grouped(boundaries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-            split_ids = {str(item.get("after_block_id") or "") for item in boundaries}
-            out: list[list[dict[str, Any]]] = []
-            current: list[dict[str, Any]] = []
+Document context: {json.dumps(context, ensure_ascii=False)}
+
+{"\n\n---\n\n".join(items)}
+
+Return one compact decision per transition using its exact left-hand block ID in `after`. Do not return prose or source text."""
+        limits=self._stage_limits(request)
+        try:
+            result=self._chat_json(request,prompt,response_model=BoundaryBatchResponseModel,max_tokens=min(limits["segmentation_num_predict"],1400),schema_name="derridai_boundary_batch_v6",attempts=2,build_id=build_id)
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            return {},str(exc)
+        valid_ids={str(c.get("after_block_id") or "") for c in batch}
+        out={}
+        for item in result.get("decisions") or []:
+            after=str(item.get("after") or "")
+            if after not in valid_ids:
+                continue
+            out[after]={
+                "after_block_id":after,
+                "decision":str(item.get("decision") or "keep"),
+                "confidence":max(0.0,min(1.0,float(item.get("confidence") or 0))),
+                "changes":list(item.get("changes") or []),
+                "source":"local_batch_classifier",
+            }
+        return out,None
+
+    @staticmethod
+    def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[dict[str, Any], bool]:
+        """Choose the strongest safe seam near the preferred size target."""
+        target=hard_max*0.72
+        cumulative=0
+        total=max(1,sum(len(str(b.get("text") or "")) for b in span))
+        scored=[]
+        heading_types={"heading","title","subtitle","section","chapter"}
+        speaker_re=re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
+        for idx,(left,right) in enumerate(zip(span,span[1:])):
+            cumulative+=len(str(left.get("text") or ""))
+            distance=abs(cumulative-target)/max(target,1)
+            structural=0.0
+            if str(right.get("type") or "body").casefold() in heading_types: structural+=1.0
+            if speaker_re.match(str(right.get("text") or "")): structural+=0.8
+            if re.search(r'[.!?][”\"]?$',str(left.get("text") or "").strip()): structural+=0.25
+            if re.search(r'[”\"]\s*$',str(left.get("text") or "").strip()): structural+=0.15
+            protected=PdfCorpusBuildManager._is_protected_transition(left,right)
+            score=structural-(distance*0.55)-(3.0 if protected else 0.0)
+            scored.append((score,not protected,left))
+        safe=[item for item in scored if item[1]]
+        if safe:
+            return max(safe,key=lambda x:x[0])[2],False
+        # Extremely unusual: every seam is protected. Force the least-bad seam and
+        # surface exactly this demonstrated provenance hazard for human review.
+        return max(scored,key=lambda x:x[0])[2],True
+
+    @staticmethod
+    def _topology_sanity(records: list[dict[str, Any]], hard_max: int) -> dict[str, Any]:
+        sizes=[int(r.get("text_length") or len(str(r.get("text") or ""))) for r in records]
+        issues=[]
+        if not records:
+            issues.append("no_records")
+        if any(size <= 0 for size in sizes):
+            issues.append("empty_record")
+        if any(size > int(hard_max*1.15) for size in sizes):
+            issues.append("oversized_record")
+        return {
+            "valid":not issues,
+            "issues":issues,
+            "record_count":len(records),
+            "max_record_chars":max(sizes,default=0),
+            "median_record_chars":sorted(sizes)[len(sizes)//2] if sizes else 0,
+        }
+
+    def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
+        """Build topology with deterministic-first routing and bounded LLM work.
+
+        Human review is no longer an output of ordinary model uncertainty. The
+        builder owns the topology: protected/weak seams KEEP, obvious structural
+        seams SPLIT, and only a budgeted ambiguous subset reaches the LLM. The
+        binary classifier's omission/failure/low confidence also means KEEP.
+        """
+        profile=CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
+        threshold=float(profile.get("min_boundary_confidence") or 0.72)
+        hard_max=max(12000,int(profile.get("topology_review_chars") or 36000))
+        index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
+        candidates=self._deterministic_boundary_candidates(blocks,profile)
+        state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
+        if not isinstance(state,dict): state={}
+        decisions=state.get("decisions") if isinstance(state.get("decisions"),dict) else {}
+
+        accepted=[]
+        boundary_reviews=[]
+        llm_candidates=[]
+        deterministic_split_count=0
+        deterministic_keep_count=0
+        for candidate in candidates:
+            i=int(candidate.get("index") or 0)
+            route=self._candidate_route(candidate,profile)
+            if route=="split":
+                accepted.append({**candidate,"decision":"split","confidence":1.0,"changes":[],"source":"deterministic_structural_split"})
+                deterministic_split_count+=1
+            elif route=="keep":
+                deterministic_keep_count+=1
+            else:
+                llm_candidates.append(candidate)
+
+        import math
+        max_adjudications=max(8,int(math.ceil(max(1,len(blocks))*float(profile.get("max_llm_boundary_calls_per_100_atoms") or 18)/100.0)))
+        llm_candidates=sorted(llm_candidates,key=lambda c:float(c.get("candidate_score") or 0),reverse=True)
+        budget_skipped=max(0,len(llm_candidates)-max_adjudications)
+        llm_candidates=llm_candidates[:max_adjudications]
+        batch_size=max(1,min(12,int(profile.get("boundary_batch_size") or 6)))
+        llm_split_count=0
+        llm_keep_count=budget_skipped
+        batch_call_count=0
+        classifier_failures=0
+
+        # Reuse only provenance-compatible local decisions. Old 0.40.8 checkpoints
+        # cannot silently affect 0.40.9 topology because the fingerprint contains
+        # the prompt version, evidence text, model, and relevant generation knobs.
+        pending=[]
+        for candidate in llm_candidates:
+            i=int(candidate["index"])
+            left,right=blocks[i],blocks[i+1]
+            bid=str(candidate["after_block_id"])
+            fingerprint=self._boundary_cache_fingerprint(left,right,request)
+            cached=decisions.get(bid)
+            if isinstance(cached,dict) and cached.get("fingerprint")==fingerprint and isinstance(cached.get("pair"),dict):
+                pair=cached["pair"]
+                if pair.get("decision")=="split" and float(pair.get("confidence") or 0)>=threshold:
+                    accepted.append({**candidate,**pair,"source":"cached_local_classifier"}); llm_split_count+=1
+                else: llm_keep_count+=1
+            else:
+                pending.append((candidate,fingerprint))
+
+        completed=len(llm_candidates)-len(pending)
+        for offset in range(0,len(pending),batch_size):
+            if self._cancelled(build_id): raise InterruptedError("Corpus build cancelled")
+            chunk=pending[offset:offset+batch_size]
+            batch=[item[0] for item in chunk]
+            results,failure=self._segment_candidate_batch(batch,blocks,manifest,request,build_id)
+            batch_call_count+=1
+            if failure:
+                classifier_failures+=len(batch)
+                self._increment_metric(build_id,"local_boundary_classifier_failures",len(batch))
+            for candidate,fingerprint in chunk:
+                bid=str(candidate["after_block_id"])
+                pair=results.get(bid) or {"after_block_id":bid,"decision":"keep","confidence":0.0,"changes":[],"source":"deterministic_keep_after_omission"}
+                decisions[bid]={"pair":pair,"failure":failure,"fingerprint":fingerprint}
+                if pair.get("decision")=="split" and float(pair.get("confidence") or 0)>=threshold:
+                    accepted.append({**candidate,**pair,"source":"local_batch_classifier"}); llm_split_count+=1
+                else:
+                    llm_keep_count+=1
+            self.repo.save_checkpoint(build_id,"local_boundary_state",{"decisions":decisions})
+            completed+=len(chunk)
+            self._update(build_id,stage="segmenting",progress=0.12+0.23*(completed/max(1,len(llm_candidates))),boundary_candidates_completed=min(len(candidates),deterministic_split_count+deterministic_keep_count+completed),boundary_candidate_count=len(candidates))
+
+        def grouped(boundaries:list[dict[str,Any]])->list[list[dict[str,Any]]]:
+            split_ids={str(item.get("after_block_id") or "") for item in boundaries}
+            out=[]; current=[]
             for block in blocks:
                 current.append(block)
                 if str(block.get("block_id") or "") in split_ids:
-                    out.append(current)
-                    current = []
-            if current:
-                out.append(current)
+                    out.append(current); current=[]
+            if current: out.append(current)
             return out
 
-        provisional: list[dict[str, Any]] = []
+        provisional=[]
         while True:
-            span = next((g for g in grouped(accepted + provisional) if len(g) > 1 and sum(len(str(b.get("text") or "")) for b in g) > hard_max), None)
-            if span is None:
-                break
-            running = 0
-            target = hard_max * 0.72
-            choice = span[max(0, len(span)//2 - 1)]
-            for block in span[:-1]:
-                running += len(str(block.get("text") or ""))
-                choice = block
-                if running >= target:
-                    break
-            boundary = {
-                "after_block_id": str(choice.get("block_id") or ""),
-                "decision": "split",
-                "confidence": 0.0,
-                "changes": [],
-                "provisional": True,
-                "source": "hard_size_safety_split",
-            }
-            if any(str(item.get("after_block_id") or "") == boundary["after_block_id"] for item in accepted + provisional):
-                break
+            span=next((g for g in grouped(accepted+provisional) if len(g)>1 and sum(len(str(b.get("text") or "")) for b in g)>hard_max),None)
+            if span is None: break
+            choice,forced_protected=self._best_safety_boundary(span,hard_max)
+            boundary={"after_block_id":str(choice.get("block_id") or ""),"decision":"split","confidence":0.0,"changes":[],"provisional":True,"source":"best_local_size_safety_split"}
+            if any(str(item.get("after_block_id") or "")==boundary["after_block_id"] for item in accepted+provisional): break
             provisional.append(boundary)
-            idx = index_by_id.get(boundary["after_block_id"], -1)
-            boundary_reviews.append({
-                "after_block_id": boundary["after_block_id"],
-                "next_block_id": str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else "",
-                "kind": "provisional_size_split",
-                "reason": "A deterministic safety split was inserted because the surrounding semantic span exceeded the hard review size. Review this boundary; the rest of the corpus remains valid.",
-            })
+            if forced_protected:
+                idx=index_by_id.get(boundary["after_block_id"],-1)
+                boundary_reviews.append({"after_block_id":boundary["after_block_id"],"next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "","kind":"forced_protected_size_split","reason":"Every nearby seam was attribution/syntax-protected; a hard-size split was unavoidable and this exact provenance hazard requires human review."})
 
         accepted.extend(provisional)
-        accepted.sort(key=lambda item: index_by_id.get(str(item.get("after_block_id") or ""), 10**9))
-        # Deduplicate boundary-review objects by the actual transition.
-        review_map: dict[tuple[str, str, str], dict[str, Any]] = {}
-        for item in boundary_reviews:
-            key = (str(item.get("after_block_id") or ""), str(item.get("next_block_id") or ""), str(item.get("kind") or ""))
-            review_map[key] = item
-        boundary_reviews = list(review_map.values())
+        accepted.sort(key=lambda item:index_by_id.get(str(item.get("after_block_id") or ""),10**9))
+        review_map={(str(i.get("after_block_id") or ""),str(i.get("next_block_id") or ""),str(i.get("kind") or "")):i for i in boundary_reviews}
+        boundary_reviews=list(review_map.values())
 
-        build = self.repo.get_build(build_id)
-        build["segmentation_blocked"] = False
-        build["segmentation_unresolved_regions"] = boundary_reviews[:500]  # compatibility alias
-        build["segmentation_boundary_reviews"] = boundary_reviews[:500]
-        build["boundary_review_count"] = len(boundary_reviews)
-        build["segmentation_failed_windows"] = 0
-        build["segmentation_total_windows"] = 0
-        build["segmentation_recovered_windows"] = 0
-        build["segmentation_degraded"] = bool(boundary_reviews)
-        build["boundary_candidate_count"] = len(candidates)
-        build["boundary_count"] = len(accepted)
-        build["provisional_boundary_count"] = len(provisional)
+        build=self.repo.get_build(build_id)
+        build.update({
+            "segmentation_blocked":False,
+            "segmentation_unresolved_regions":boundary_reviews[:500],
+            "segmentation_boundary_reviews":boundary_reviews[:500],
+            "boundary_review_count":len(boundary_reviews),
+            "segmentation_failed_windows":0,"segmentation_total_windows":0,"segmentation_recovered_windows":0,
+            "segmentation_degraded":bool(boundary_reviews),
+            "boundary_candidate_count":len(candidates),"boundary_count":len(accepted),
+            "provisional_boundary_count":len(provisional),
+            "boundary_deterministic_split_count":deterministic_split_count,
+            "boundary_deterministic_keep_count":deterministic_keep_count,
+            "boundary_llm_adjudication_count":len(llm_candidates),
+            "boundary_llm_batch_call_count":batch_call_count,
+            "boundary_llm_split_count":llm_split_count,
+            "boundary_llm_keep_count":llm_keep_count,
+            "boundary_budget_skipped_count":budget_skipped,
+            "boundary_classifier_failure_count":classifier_failures,
+        })
         self.repo.save_build(build)
-        self.repo.save_checkpoint(build_id, "boundaries_partial", accepted)
+        self.repo.save_checkpoint(build_id,"boundaries_partial",accepted)
         if boundary_reviews:
-            self._append_warning(
-                build_id,
-                f"Corpus topology was constructed with {len(boundary_reviews)} boundary decision(s) requiring review. Metadata enrichment will continue; review is localized to those transitions.",
-            )
-        self._update(build_id, stage="reconciling", progress=0.40)
+            self._append_warning(build_id,f"Corpus topology contains {len(boundary_reviews)} demonstrated provenance hazard(s) requiring boundary review. Ordinary uncertainty has already resolved conservatively to KEEP.")
+        self._update(build_id,stage="reconciling",progress=0.40)
         return accepted
 
     def _reconcile_boundaries(
@@ -2490,6 +2673,21 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                     inline, full = _citation_strings(record)
                     record["inline_citation"] = inline
                     record["full_citation"] = full
+                # Validate topology before spending time on metadata enrichment.
+                # At this point all source-derived text and boundaries are deterministic;
+                # any failure is therefore an implementation/topology problem, not an
+                # invitation to burn more LLM calls and ask the user to clean it up.
+                active_profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
+                hard_max = max(12000, int(active_profile.get("topology_review_chars") or 36000))
+                topology_validation = self._topology_sanity(records, hard_max)
+                current_build = self.repo.get_build(build_id)
+                current_build["topology_validation"] = topology_validation
+                self.repo.save_build(current_build)
+                if not topology_validation.get("valid"):
+                    raise RuntimeError(
+                        "Deterministic topology sanity check failed before metadata enrichment: "
+                        + ", ".join(topology_validation.get("issues") or ["unknown topology error"])
+                    )
                 # Persist deterministic records before any metadata call. A provider
                 # failure can therefore never discard successful segmentation work.
                 self.repo.save_records(build_id, records)

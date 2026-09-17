@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.8
+# DerridAI Corpus Viewer 0.40.9
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -64,11 +64,23 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+## 0.40.9 — Enter Sandman
+
+Version 0.40.9 makes automatic corpus topology the normal outcome rather than turning model ambiguity into user cleanup. The current profile is `derrida-scholarly-v6` and segmentation provenance is `derridai-local-boundaries-v6`. Boundary construction is deterministic-first: protected attribution/syntax seams resolve to KEEP, obvious structural seams can split without inference, weak candidates never reach a model, and only a bounded high-value subset is adjudicated. Adjudication is batched with a binary SPLIT/KEEP schema; omission, malformed output, provider failure, low confidence, or attempted uncertainty all conservatively resolve to KEEP.
+
+Length no longer creates an LLM candidate. When a span exceeds the hard safety size, DerridAI searches nearby source transitions for the best non-protected seam and records the result as a provisional engineering split without requiring human review. A boundary review is created only in the exceptional case where every nearby seam is provenance-sensitive and the size guard must force a protected split. Topology receives a deterministic sanity check before any record-metadata enrichment begins, preventing expensive enrichment work on an obviously broken record set. Local boundary decisions are checkpointed with a prompt/model/evidence fingerprint so incompatible historical decisions are not silently reused.
+
+Corpus Builder now reports segmentation telemetry: candidate transitions, deterministic splits, bounded LLM adjudications, batch-call count, model splits, safety splits, classifier failures that defaulted to KEEP, and genuinely review-required boundaries. The telemetry is implemented as a reusable Storybook component using semantic definition lists, text labels rather than color alone, keyboard/focus-compatible native semantics, logical layout properties, reduced-motion-safe progress behavior, and localized English/Canadian French strings. This release continues DerridAI's i18n-first UI contract and WCAG-oriented accessible status/progress reporting.
+
+Regression coverage includes soft-length non-candidacy, deterministic heading routing, protected-transition KEEP behavior, binary uncertainty/failure fallback, LLM budget enforcement, safe hard-size splitting without review, forced protected-seam review, topology preflight before enrichment, cache fingerprinting, telemetry contract, and release identity.
+
+Release validation: **258 Python tests pass**, all API modules compile, and `runtime.js` passes Node syntax checking. The frontend dependency installation was attempted in the release environment but timed out before `vue-tsc`/Vite became available, so this package does not claim a completed production frontend build.
+
 ## 0.40.8 — Coming Around the Mountain
 
 Version 0.40.8 changes Corpus Builder topology ownership. PDF layout blocks remain immutable provenance units and are conservatively reconstructed into semantic atoms. Python generates a finite set of plausible boundary candidates from structural signals such as headings, speaker labels, quotation-frame changes, and sparse size-review points. The LLM no longer partitions a book or returns a book-scale boundary list; it receives only local left/right split/keep/uncertain classification tasks.
 
-Malformed, failed, or low-confidence local classifications deterministically default to **KEEP**. Explicit high-confidence uncertainty is persisted as a boundary-review object rather than as a failed record. When a semantic span exceeds the hard safety size, Python inserts a provisional safety boundary and records that boundary for review. Boundary review belongs to the transition itself: neighboring records are not marked `needs_review` merely because they touch an uncertain or provisional boundary. Corpus construction and metadata enrichment continue regardless, while publication remains gated by any remaining boundary review and validation. The current profile is `derrida-scholarly-v5` and the segmentation provenance identifier is `derridai-local-boundaries-v5`.
+Malformed, failed, omitted, uncertain, or low-confidence local classifications deterministically default to **KEEP**. Human review is reserved for demonstrated provenance hazards rather than ordinary model uncertainty. When a semantic span exceeds the hard safety size, Python searches for the best nearby safe seam and records the split as provisional; a review item is created only when the fallback is forced through a protected transition. Boundary review belongs to the transition itself: neighboring records are not marked `needs_review` merely because they touch a provisional boundary. Corpus construction and metadata enrichment continue regardless, while publication remains gated by any remaining boundary review and validation. The current profile is `derrida-scholarly-v6` and the segmentation provenance identifier is `derridai-local-boundaries-v6`; `derrida-scholarly-v5` remains available for resuming 0.40.8 builds.
 
 Works metadata continues to model books, journal articles, chapters in edited books, and other container-based formats, including MLA rendering. **Populate metadata with LLM** uses Open Library, Google Books, and Crossref as source-aware catalogue inputs. Mixed JSONL files can be separated by work, and the **Create JSONL subset** workflow supports saved reusable filter profiles.
 

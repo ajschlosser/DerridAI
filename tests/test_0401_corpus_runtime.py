@@ -172,8 +172,10 @@ def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_gua
     assert all(item.get("provisional") for item in boundaries)
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["segmentation_blocked"] is False
-    assert refreshed["segmentation_degraded"] is True
-    assert all(item.get("kind")=="provisional_size_split" for item in refreshed["segmentation_unresolved_regions"])
+    assert refreshed["segmentation_degraded"] is False
+    assert refreshed["boundary_review_count"] == 0
+    assert refreshed["provisional_boundary_count"] >= 1
+    assert refreshed["segmentation_unresolved_regions"] == []
 
 
 def test_execution_budget_rejects_impossible_context_before_build():
@@ -204,14 +206,15 @@ def test_reconciliation_failure_is_an_explicit_topology_blocker(monkeypatch, tmp
     blocks = _blocks(12)
     build = _build(repo, blocks=len(blocks))
 
-    monkeypatch.setattr(manager, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["heading_start"], "candidate_score": 1.0, "source": "test", "index": 5}])
-    monkeypatch.setattr(manager, "_segment_pair", lambda *args, **kwargs: (None, {"reason":"truncated"}))
+    monkeypatch.setattr(manager, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["quotation_frame_change"], "candidate_score": .5, "source": "test", "index": 5, "protected": False}])
+    monkeypatch.setattr(manager, "_segment_candidate_batch", lambda *args, **kwargs: ({}, "truncated"))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries == []
     refreshed = repo.get_build(build["build_id"])
     assert refreshed["segmentation_blocked"] is False
     assert refreshed["segmentation_degraded"] is False
     assert refreshed["segmentation_unresolved_regions"] == []
+    assert refreshed["boundary_classifier_failure_count"] == 1
 
 
 def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(monkeypatch, tmp_path: Path):

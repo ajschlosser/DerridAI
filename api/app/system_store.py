@@ -6185,3 +6185,37 @@ DEFAULT_FR_CA.update({
 # Instantiate only after every built-in dictionary extension above has loaded.
 system_store = SystemStore()
 
+
+# 0.40.9 — Enter Sandman: deterministic-first corpus topology telemetry.
+DEFAULT_EN_US.update({
+    "pdf_corpus.segmentation_telemetry":"Segmentation decisions",
+    "pdf_corpus.segmentation_telemetry_help":"Most transitions are resolved deterministically. LLM work is limited to a small ambiguous subset; uncertainty, omission, and classifier failure resolve conservatively to KEEP.",
+    "pdf_corpus.boundary_candidates":"Candidates",
+    "pdf_corpus.deterministic_splits":"Deterministic splits",
+    "pdf_corpus.llm_adjudications":"LLM adjudications",
+    "pdf_corpus.llm_batch_calls":"LLM batch calls",
+    "pdf_corpus.llm_splits":"LLM splits",
+    "pdf_corpus.provisional_splits":"Safety splits",
+    "pdf_corpus.boundary_review_required":"Review-required boundaries",
+    "pdf_corpus.boundary_budget_skipped":"{count} lower-value candidate(s) resolved to KEEP by the LLM budget.",
+    "pdf_corpus.boundary_failures_kept":"{count} classifier failure(s) resolved to KEEP.",
+    "pdf_corpus.progress_percent":"{percent}% complete",
+    "pdf_corpus.stage_help.segmenting":"Scoring structural transitions locally. Protected and weak seams resolve without inference; only a bounded ambiguous subset is sent for LLM adjudication.",
+    "pdf_corpus.stage_help.reconciling":"Finalizing topology. Weak, omitted, uncertain, or failed classifications resolve to KEEP. Safety splits require review only when every nearby seam is provenance-sensitive.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.segmentation_telemetry":"Décisions de segmentation",
+    "pdf_corpus.segmentation_telemetry_help":"La plupart des transitions sont résolues de façon déterministe. Le LLM est limité à un petit sous-ensemble ambigu; l’incertitude, l’omission et les échecs du classificateur sont résolus prudemment par CONSERVER.",
+    "pdf_corpus.boundary_candidates":"Transitions candidates",
+    "pdf_corpus.deterministic_splits":"Scissions déterministes",
+    "pdf_corpus.llm_adjudications":"Adjudications LLM",
+    "pdf_corpus.llm_batch_calls":"Appels LLM groupés",
+    "pdf_corpus.llm_splits":"Scissions LLM",
+    "pdf_corpus.provisional_splits":"Scissions de sécurité",
+    "pdf_corpus.boundary_review_required":"Limites à réviser",
+    "pdf_corpus.boundary_budget_skipped":"{count} transition(s) candidate(s) de moindre valeur résolue(s) par CONSERVER selon le budget LLM.",
+    "pdf_corpus.boundary_failures_kept":"{count} échec(s) du classificateur résolu(s) par CONSERVER.",
+    "pdf_corpus.progress_percent":"{percent} % terminé",
+    "pdf_corpus.stage_help.segmenting":"Évaluation locale des transitions structurelles. Les limites protégées ou faibles sont résolues sans inférence; seul un sous-ensemble ambigu et borné est soumis au LLM.",
+    "pdf_corpus.stage_help.reconciling":"Finalisation de la topologie. Les classifications faibles, omises, incertaines ou en échec sont résolues par CONSERVER. Une scission de sécurité n’exige une révision que si toutes les limites proches présentent un risque de provenance.",
+})

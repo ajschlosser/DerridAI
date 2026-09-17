@@ -24,10 +24,10 @@ def test_boundary_review_does_not_mark_neighbor_records_needs_review():
 
 def test_failed_local_classifier_defaults_to_keep_without_unresolved_region(monkeypatch,tmp_path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
-    build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":5,"provider":"ollama","model":"test","request":{},"warnings":[]})
+    build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":6,"provider":"ollama","model":"test","request":{},"warnings":[]})
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["heading_start"],"candidate_score":1.0,"source":"test","index":5}])
-    monkeypatch.setattr(manager,"_segment_pair",lambda *args,**kwargs:(None,{"reason":"bad json"}))
+    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
+    monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},"bad json"))
     boundaries=manager._segment(_blocks(),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
     assert boundaries==[]
@@ -35,14 +35,15 @@ def test_failed_local_classifier_defaults_to_keep_without_unresolved_region(monk
     assert refreshed.get("boundary_review_count")==0
 
 
-def test_explicit_uncertain_is_boundary_review_not_record_failure(monkeypatch,tmp_path):
+def test_explicit_uncertain_defaults_to_keep_without_boundary_review(monkeypatch,tmp_path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
-    build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":5,"provider":"ollama","model":"test","request":{},"warnings":[]})
+    build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":6,"provider":"ollama","model":"test","request":{},"warnings":[]})
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["speaker_label"],"candidate_score":.9,"source":"test","index":5}])
-    monkeypatch.setattr(manager,"_segment_pair",lambda *args,**kwargs:({"after_block_id":"b5","decision":"uncertain","confidence":.9,"changes":["speaker"],"source":"pair_fallback"},None))
+    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
+    # Binary v6 adjudication cannot return uncertainty; omission is its operational equivalent and defaults to KEEP.
+    monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},None))
     boundaries=manager._segment(_blocks(),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
     assert boundaries==[]
-    assert refreshed["boundary_review_count"]==1
-    assert refreshed["segmentation_boundary_reviews"][0]["after_block_id"]=="b5"
+    assert refreshed["boundary_review_count"]==0
+    assert refreshed["segmentation_boundary_reviews"]==[]

@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.8"
-    assert 'version="0.40.8"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
-    assert "0.40.8 — Coming Around the Mountain" in text("README.md")
+    assert package["version"] == "0.40.9"
+    assert 'version="0.40.9"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.9"' in text("api/app/config.py")
+    assert "0.40.9 — Enter Sandman" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
@@ -58,7 +58,7 @@ def test_home_has_dedicated_corpus_build_card_and_initial_jobs_refresh_rerenders
     assert ".dashboard-corpus-row" in style
 
 
-def test_provider_setup_is_streamlined_and_current_profile_is_v5_everywhere():
+def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     selector = text("web/src/components/ProviderProfileSelect.vue")
     models = text("api/app/models.py")
@@ -69,8 +69,8 @@ def test_provider_setup_is_streamlined_and_current_profile_is_v5_everywhere():
     assert "provider-summary-card" in selector
     assert "provider-stat-group" in selector
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
-    assert 'profile_id:"derrida-scholarly-v5"' in builder
-    assert 'default="derrida-scholarly-v5"' in models
+    assert 'profile_id:"derrida-scholarly-v5"' not in builder
+    assert 'default="derrida-scholarly-v6"' in models
     assert '"pdf_corpus.provider_profile": "Primary LLM provider"' in dictionary
 
 

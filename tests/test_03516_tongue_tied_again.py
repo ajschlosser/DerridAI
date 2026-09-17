@@ -21,11 +21,11 @@ SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
 def test_03516_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
     main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert package["version"] == "0.40.8"
-    assert 'version="0.40.8"' in main
-    assert '"app_version": "0.40.8"' in main
-    assert "Corpus Viewer 0.40.8" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.40.8" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.40.9"
+    assert 'version="0.40.9"' in main
+    assert '"app_version": "0.40.9"' in main
+    assert "Corpus Viewer 0.40.9" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.40.9" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.16 — Tongue Tied Again" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 

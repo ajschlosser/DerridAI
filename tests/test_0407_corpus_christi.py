@@ -13,9 +13,9 @@ def text(path: str) -> str:
 
 
 def test_0408_release_identity():
-    assert json.loads(text("web/package.json"))["version"] == "0.40.8"
-    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
-    assert "0.40.8 — Coming Around the Mountain" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"] == "0.40.9"
+    assert 'APP_VERSION = "0.40.9"' in text("api/app/config.py")
+    assert "0.40.9 — Enter Sandman" in text("README.md")
 
 
 def test_segmentation_uses_deterministic_candidates_and_boundary_level_review():
@@ -23,9 +23,9 @@ def test_segmentation_uses_deterministic_candidates_and_boundary_level_review():
     assert "def _semantic_atoms" in builder
     assert "def _manifest_main_text_blocks" in builder
     assert "def _deterministic_boundary_candidates" in builder
-    assert "local_pair_classifier" in builder
-    assert "Malformed/failed/low-confidence classifications are deterministic KEEP" in builder
-    assert 'build["segmentation_boundary_reviews"]' in builder
+    assert "local_batch_classifier" in builder
+    assert "omission/failure/low confidence also means KEEP" in builder
+    assert '"segmentation_boundary_reviews":boundary_reviews[:500]' in builder
     assert "boundary_review_after" in builder and "boundary_review_before" in builder
 
 

@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.8"
-    assert 'version="0.40.8"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
+    assert package["version"] == "0.40.9"
+    assert 'version="0.40.9"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.9"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -133,15 +133,15 @@ def test_segmentation_checkpoints_degraded_mode_and_resume_do_not_discard_work()
     builder = text("api/app/corpus_builder.py")
     segment = builder[builder.index("    def _segment("):builder.index("    def _reconcile_boundaries")]
     run = builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
-    assert 'load_checkpoint(build_id, "local_boundary_state"' in segment
-    assert 'save_checkpoint(build_id, "local_boundary_state"' in segment
+    assert 'load_checkpoint(build_id,"local_boundary_state"' in segment
+    assert 'save_checkpoint(build_id,"local_boundary_state"' in segment
     assert 'segmentation_failed_windows' in segment
     assert 'segmentation_degraded' in segment
     assert 'status="awaiting_review"' in run or 'status=status' in run
-    assert 'segmentation_blocked"] = False' in builder
+    assert '"segmentation_blocked":False' in segment or '"segmentation_blocked": False' in segment
     assert '_construct_records' in run
     assert '_mark_segmentation_review' in run
-    assert 'Metadata enrichment will continue' in segment
+    assert 'Ordinary uncertainty has already resolved conservatively to KEEP' in segment
 
 
 def test_document_manifest_and_printed_page_mapping_are_human_correctable():

@@ -9,17 +9,17 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.40.8"
-    assert 'version="0.40.8"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.8"' in text("api/app/config.py")
+    assert package["version"]=="0.40.9"
+    assert 'version="0.40.9"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.9"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
 def test_0405_new_semantic_pipeline_is_provenance_versioned():
     builder=text("api/app/corpus_builder.py")
-    assert 'SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v5"' in builder
+    assert 'SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v6"' in builder
     assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"' in builder
-    assert 'PROFILE_VERSION = "derrida-scholarly-v5"' in builder
+    assert 'PROFILE_VERSION = "derrida-scholarly-v6"' in builder
     assert '"derrida-scholarly-v2"' in builder  # old build compatibility
 
 
@@ -27,11 +27,11 @@ def test_segmentation_never_fabricates_one_giant_fallback_record():
     builder=text("api/app/corpus_builder.py")
     run=builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     segment=builder[builder.index("    def _segment("):builder.index("    def _reconcile_boundaries")]
-    assert "hard_size_safety_split" in segment
-    assert "provisional_size_split" in segment
-    assert 'build["segmentation_blocked"] = False' in segment
-    assert "Metadata enrichment will continue" in segment
-    assert "hard_size_safety_split" in segment
+    assert "best_local_size_safety_split" in segment
+    assert "forced_protected_size_split" in segment
+    assert '"segmentation_blocked":False' in segment or '"segmentation_blocked": False' in segment
+    assert "Ordinary uncertainty has already resolved conservatively to KEEP" in segment
+    assert "best_local_size_safety_split" in segment
     assert "_mark_segmentation_review" in builder
 
 
