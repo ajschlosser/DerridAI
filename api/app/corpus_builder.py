@@ -308,7 +308,7 @@ MANIFEST_INHERITED_FIELDS = {
 }
 
 HUMAN_EDITABLE_METADATA_FIELDS = {
-    "language", "region_type", "region_author", "speaker",
+    "language", "region_type", "region_author", "primary_text", "speaker",
     "position_holder", "target", "discourse_role", "proposition_status",
     "semantic_function", "stance", "claim_scope", "is_direct_quote",
     "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder",
@@ -3675,7 +3675,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if target is None:
             raise KeyError(record_id)
         current_revision = self._assert_record_revision(target, expected_revision)
-        if disposition == "accepted" and list(target.get("metadata_review_fields") or []):
+        if disposition == "accepted" and (list(target.get("metadata_review_fields") or []) or list(target.get("metadata_incomplete_fields") or [])):
             raise ValueError("Resolve the queued record metadata before accepting this record.")
         if disposition == "accepted":
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
@@ -3712,6 +3712,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         q = str(query or "").casefold().strip()
         changed = 0
         blocked_metadata = 0
+        blocked_record_ids: list[str] = []
         for record in records:
             if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
                 continue
@@ -3720,8 +3721,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
-            if disposition == "accepted" and list(record.get("metadata_review_fields") or []):
+            if disposition == "accepted" and (list(record.get("metadata_review_fields") or []) or list(record.get("metadata_incomplete_fields") or [])):
                 blocked_metadata += 1
+                if len(blocked_record_ids) < 100:
+                    blocked_record_ids.append(str(record.get("record_id") or ""))
                 continue
             current_revision = int(record.get("record_revision") or 1)
             if disposition == "accepted":
@@ -3744,7 +3747,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata}
+        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids}
 
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
         checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)

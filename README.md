@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
-**0.42.1 — Bunny Rabbit - Again** completes a major Corpus Builder workflow pass: a dedicated record-first Focus Review, field-aware hybrid metadata inference, explicit enrichment/review/publication handoffs, metadata issue queues, auditable field provenance, and end-to-end workflow regression coverage.
-# DerridAI Corpus Viewer 0.42.1
+**0.43.0 — Crocodile** makes record review the primary Corpus Builder task: metadata is reviewed alongside record text, blocked decisions are actionable rather than inert, source/evidence context moves behind focused inspector tabs, and review mutations preserve the user’s viewport.
+# DerridAI Corpus Viewer 0.43.0
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -66,6 +66,16 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
+
+## 0.43.0 — Crocodile
+
+Crocodile turns Corpus Builder review into a single record-first decision workspace. During active review, the large pipeline/quality dashboard collapses to a compact progress summary while full diagnostics remain available under Technical build details. The left rail is navigation, the center pane is the proposed record, and the right inspector is explicitly tabbed between **Metadata**, **Evidence**, and **Source** so the PDF no longer permanently competes with the text being judged.
+
+Record acceptance is now actionable even when metadata blocks it. **Accept & next** no longer looks broken: if required metadata is unresolved, the action opens the Metadata inspector, identifies the blocking fields, moves focus to the first decision without scrolling the page, and leaves the record pending. Once metadata is resolved, the same action accepts the record and advances to the next proposal. Review mutations preserve window/queue/inspector position rather than resetting the page. Bulk acceptance reports records blocked by metadata and routes them into the metadata-decision queue.
+
+`primary_text` is now a genuinely human-reviewable record field. It uses an explicit Yes/No control, preserves `false` as a valid value, is accepted by the server-side human-edit schema, records human-confirmed provenance, and is covered by a regression test that saves `false`, reloads the record, and verifies that the value remains false. High-confidence LLM metadata proposals remain inspectable and are human-confirmed when the record is accepted; uncertain `region_type`, `primary_text`, `discourse_role`, attribution, stance, proposition-status, and scope fields remain explicit review decisions.
+
+The review queues use clearer task language (pending review, topology attention, metadata decisions). Queue rows surface metadata-decision counts, evidence selection synchronizes the Source tab, and the full-screen Focus Review uses the same non-dead-end acceptance behavior. New strings are localized in English and Canadian French, and Storybook includes the false/secondary-text human-decision state.
 
 ## 0.42.1 — Bunny Rabbit - Again
 

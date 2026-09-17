@@ -1348,7 +1348,7 @@ DEFAULT_EN_US.update({'dynamic.record_one': 'record', 'dynamic.work_one': 'work'
 DEFAULT_FR_CA.update({'dynamic.record_one': 'fiche', 'dynamic.work_one': 'œuvre', 'dynamic.model_one': 'modèle', 'dynamic.models': 'modèles', 'dynamic.profile_one': 'profil', 'dynamic.profiles': 'profils', 'dynamic.word_one': 'mot', 'dynamic.words': 'mots', 'dynamic.character_one': 'caractère', 'dynamic.characters': 'caractères', 'dynamic.change_one': 'modification', 'dynamic.changes': 'modifications', 'dynamic.annotation_one': 'annotation', 'dynamic.annotations': 'annotations', 'dynamic.cached_response_one': 'réponse mise en cache', 'dynamic.cached_responses': 'réponses mises en cache', 'dynamic.selected_count': '{count} éléments sélectionnés', 'dynamic.record_range_count': '{shown} sur {total} fiches', 'dynamic.page_of_pages': 'Page {page} / {pages}', 'dynamic.ready_models': 'Prêt · {count} modèles', 'dynamic.history_latest': 'Affichage des {shown} plus récentes parmi {total} modifications. L’historique complet est conservé dans le champ updates de la fiche.', 'dynamic.cleared_history_records': 'Historique des modifications effacé pour {count} fiches', 'dynamic.restored_fields': 'État original de la fiche restauré · {count} champs modifiés', 'dynamic.loaded_records': '{count} fiches chargées', 'dynamic.loaded_records_issues': '{count} fiches chargées · {issues} problèmes d’analyse', 'dynamic.merged_tabs_records': '{tabs} onglets fusionnés et remplacés · {records} fiches', 'dynamic.cleaned_records': '{records} fiches nettoyées · {changes} modifications consignées', 'dynamic.exported_records': '{count} fiches exportées depuis {collection}'})
 
 
-# 0.42.1 — Bunny Rabbit - Again: integrated record + metadata review.
+# 0.43.0 — Crocodile: integrated record + metadata review.
 DEFAULT_EN_US.update({
     "pdf_corpus.record_metadata_review": "Record metadata review",
     "pdf_corpus.metadata_record_review_help": "Review the LLM-proposed record metadata together with the text. Uncertain fields must be resolved before the record can be accepted; accepting the record confirms the remaining proposals.",
@@ -6347,7 +6347,7 @@ DEFAULT_FR_CA.update({
 })
 
 
-# 0.42.1 — Bunny Rabbit: record-first corpus review and explicit lifecycle.
+# 0.43.0 — Crocodile: record-first corpus review and explicit lifecycle.
 DEFAULT_EN_US.update({
     "pdf_corpus.review_queue":"Review queue","pdf_corpus.queue_all":"All","pdf_corpus.queue_pending":"Pending","pdf_corpus.queue_attention":"Needs attention","pdf_corpus.queue_metadata":"Metadata","pdf_corpus.queue_accepted":"Accepted","pdf_corpus.queue_rejected":"Rejected",
     "pdf_corpus.accept_all_queue":"Accept queue","pdf_corpus.reject_next":"Reject & next","pdf_corpus.reject_all_queue":"Reject queue","pdf_corpus.proposed_record":"Proposed record","pdf_corpus.accept_next":"Accept & next","pdf_corpus.record_decision":"Record decision","pdf_corpus.record_data":"Record data & evidence","pdf_corpus.source_context":"Source context","pdf_corpus.extracted_source_text":"Extracted source text",
@@ -6365,7 +6365,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.bulk_confirm":"{action} {count} fiche(s) dans la file actuelle?"
 })
 
-# 0.42.1 — Bunny Rabbit: field-aware metadata and dedicated focus-review workflow.
+# 0.43.0 — Crocodile: field-aware metadata and dedicated focus-review workflow.
 DEFAULT_EN_US.update({
     "pdf_corpus.read_record":"Read the record",
     "pdf_corpus.unresolved_fields":"unresolved fields",
@@ -6497,7 +6497,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.status.awaiting_metadata": "en attente de métadonnées",
 })
 
-# 0.42.1 — Bunny Rabbit: explicit Finish Corpus, metadata-resolution, and publication-readiness workflow.
+# 0.43.0 — Crocodile: explicit Finish Corpus, metadata-resolution, and publication-readiness workflow.
 DEFAULT_EN_US.update({
     "pdf_corpus.metadata_resolution":"Metadata resolution",
     "pdf_corpus.metadata_resolution_intro":"Corpus construction and record review can be complete while required scholarly metadata remains unresolved. {records} record(s) contain {fields} required field issue(s).",
@@ -6717,6 +6717,49 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.next_action.publish":"Publiez l’instantané validé du corpus.",
     "pdf_corpus.next_action.download_publication":"Téléchargez l’instantané publié ou modifiez le brouillon pour créer une nouvelle révision.",
     "pdf_corpus.next_action.inspect":"Examinez l’état restant du corpus.",
+})
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.review_mode":"Record review",
+    "pdf_corpus.review_progress_compact":"{accepted} accepted · {pending} pending · {metadata} metadata decisions",
+    "pdf_corpus.review_mode_help":"Review the proposed record and its metadata together. Build diagnostics remain available under Technical build details.",
+    "pdf_corpus.review_detail_views":"Review detail views",
+    "pdf_corpus.metadata_tab":"Metadata",
+    "pdf_corpus.evidence_tab":"Evidence",
+    "pdf_corpus.source_tab":"Source",
+    "pdf_corpus.advanced_metadata":"Advanced metadata",
+    "pdf_corpus.evidence_review_help":"Select a metadata field to inspect or adjust its source-block evidence.",
+    "pdf_corpus.metadata_decisions_count":"{count} metadata decision(s)",
+    "pdf_corpus.metadata_decision_required":"Metadata decision required",
+    "pdf_corpus.resolve_metadata_before_accept_fields":"Confirm {fields} before accepting this record.",
+    "pdf_corpus.resolve_metadata_to_accept":"Resolve metadata to accept",
+    "pdf_corpus.accept_blocked_metadata":"Confirm the required metadata before accepting this record: {fields}.",
+    "pdf_corpus.primary_text_help":"Choose whether this record belongs to the substantive work rather than front/back matter or publishing apparatus.",
+    "pdf_corpus.queue_pending":"Pending review",
+    "pdf_corpus.queue_attention":"Topology attention",
+    "pdf_corpus.queue_metadata":"Metadata decisions",
+    "pdf_corpus.bulk_done_metadata_blocked":"Accepted {count} eligible record(s); {blocked} record(s) still require metadata decisions and are now shown in the metadata queue.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.review_mode":"Révision des fiches",
+    "pdf_corpus.review_progress_compact":"{accepted} acceptées · {pending} en attente · {metadata} décisions de métadonnées",
+    "pdf_corpus.review_mode_help":"Révisez la fiche proposée et ses métadonnées ensemble. Les diagnostics de construction restent accessibles sous Détails techniques de la construction.",
+    "pdf_corpus.review_detail_views":"Vues détaillées de révision",
+    "pdf_corpus.metadata_tab":"Métadonnées",
+    "pdf_corpus.evidence_tab":"Preuves",
+    "pdf_corpus.source_tab":"Source",
+    "pdf_corpus.advanced_metadata":"Métadonnées avancées",
+    "pdf_corpus.evidence_review_help":"Sélectionnez un champ de métadonnées pour inspecter ou ajuster ses preuves liées aux blocs sources.",
+    "pdf_corpus.metadata_decisions_count":"{count} décision(s) de métadonnées",
+    "pdf_corpus.metadata_decision_required":"Décision de métadonnées requise",
+    "pdf_corpus.resolve_metadata_before_accept_fields":"Confirmez {fields} avant d’accepter cette fiche.",
+    "pdf_corpus.resolve_metadata_to_accept":"Résoudre les métadonnées pour accepter",
+    "pdf_corpus.accept_blocked_metadata":"Confirmez les métadonnées requises avant d’accepter cette fiche : {fields}.",
+    "pdf_corpus.primary_text_help":"Indiquez si cette fiche appartient au texte substantiel de l’œuvre plutôt qu’aux pages liminaires/finales ou à l’appareil éditorial.",
+    "pdf_corpus.queue_pending":"Révision en attente",
+    "pdf_corpus.queue_attention":"Attention topologique",
+    "pdf_corpus.queue_metadata":"Décisions de métadonnées",
+    "pdf_corpus.bulk_done_metadata_blocked":"{count} fiche(s) admissible(s) acceptée(s); {blocked} fiche(s) exigent encore des décisions de métadonnées et sont maintenant affichées dans la file des métadonnées.",
 })
 
 system_store = SystemStore()
