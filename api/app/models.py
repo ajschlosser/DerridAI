@@ -469,14 +469,30 @@ class PdfCorpusEvidencePatch(BaseModel):
 
 class PdfCorpusRecordAccept(BaseModel):
     accepted: bool = True
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusRecordDisposition(BaseModel):
+    disposition: Literal["pending", "accepted", "rejected"]
+    reason: str = Field(default="", max_length=2000)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusBulkDisposition(BaseModel):
+    disposition: Literal["pending", "accepted", "rejected"]
+    reason: str = Field(default="", max_length=2000)
+    needs_review: bool | None = None
+    query: str = Field(default="", max_length=500)
 
 
 class PdfCorpusRecordMerge(BaseModel):
     direction: Literal["previous", "next"]
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 class PdfCorpusRecordSplit(BaseModel):
     after_block_id: str = Field(min_length=1, max_length=200)
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 class PdfCorpusRecordRerun(BaseModel):

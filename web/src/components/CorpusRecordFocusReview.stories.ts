@@ -1,0 +1,5 @@
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
+const record={record_id:"record-00014",text:"A representative passage under review. The focus view deliberately removes configuration and navigation clutter so the reviewer can compare source and proposed record quickly.",text_length:194,page_start:22,page_end:23,source_block_ids:["b1"],source_spans:[],needs_review:true,review_reason:"Boundary requires human review.",review_disposition:"pending" as const,record_revision:2};
+const meta={title:"PDF Corpus/Record Focus Review",component:CorpusRecordFocusReview,args:{pdfUrl:"",page:1,blocks:[],canMergePrevious:true,canMergeNext:true,record}} satisfies Meta<typeof CorpusRecordFocusReview>;
+export default meta; type Story=StoryObj<typeof meta>; export const Pending:Story={}; export const Rejected:Story={args:{record:{...record,review_disposition:"rejected",rejected:true,needs_review:false,review_reason:"Rejected during human review."}}};

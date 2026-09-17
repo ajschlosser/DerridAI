@@ -396,7 +396,7 @@ def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     params = {"query.bibliographic": query, "rows": 8}
     if author:
         params["query.author"] = author
-    with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.40.10 (bibliographic metadata lookup)"}) as client:
+    with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.40.15 (bibliographic metadata lookup)"}) as client:
         response = client.get("https://api.crossref.org/works", params=params)
         response.raise_for_status()
         items = list((((response.json() or {}).get("message") or {}).get("items") or []))

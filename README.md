@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.10
+# DerridAI Corpus Viewer 0.40.15
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,11 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+
+## 0.40.15 — The Record Scratch Moment
+
+This release finishes the high-frequency record-review loop. Review state is explicit (`pending`, `accepted`, `rejected`), acceptance/rejection advances to the next matching record, bulk disposition actions operate on the active filter, merge/split preserve unrelated record identities and source-bound evidence, and one-level structural undo restores the previous topology. The new Focus view removes configuration/list clutter and presents source PDF, proposed record, review reason, topology actions, and disposition controls in a keyboard-friendly modal workspace. PDF.js document lifetime is now separated from page rendering so page navigation reuses one loaded document and teardown awaits render/loading destruction, eliminating the common worker-destroy race. Review-only/search filters are session-local rather than silently persisted between builds.
 
 ## 0.40.10 — Corpus of Engineers
 

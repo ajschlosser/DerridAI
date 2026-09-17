@@ -6255,8 +6255,15 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.size_optimized_splits":"Limites optimisées selon la taille",
     "pdf_corpus.absolute_safety_splits":"Scissions au plafond absolu",
 })
+# 0.40.15 — The Record Scratch Moment: focused, accessible record review.
+DEFAULT_EN_US.update({
+    "pdf_corpus.focus_view":"Focus view","pdf_corpus.reject":"Reject","pdf_corpus.rejected":"Rejected","pdf_corpus.accept_all":"Accept all","pdf_corpus.reject_all":"Reject all","pdf_corpus.undo":"Undo","pdf_corpus.skip":"Skip","pdf_corpus.show_all_records":"Show all records","pdf_corpus.bulk_confirm":"{action} {count} record(s) matching the current filter?","pdf_corpus.bulk_done":"Updated {count} record(s).","pdf_corpus.accepted_notice":"Record accepted. Advanced to the next record.","pdf_corpus.rejected_notice":"Record rejected. Advanced to the next record.","pdf_corpus.reopened_notice":"Record reopened for review.","pdf_corpus.undo_done":"The last merge or split was undone.","pdf_corpus.disposition.pending":"Pending","pdf_corpus.disposition.accepted":"Accepted","pdf_corpus.disposition.rejected":"Rejected","pdf_corpus.remaining":"remaining"
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.focus_view":"Vue ciblée","pdf_corpus.reject":"Rejeter","pdf_corpus.rejected":"Rejeté","pdf_corpus.accept_all":"Tout accepter","pdf_corpus.reject_all":"Tout rejeter","pdf_corpus.undo":"Annuler","pdf_corpus.skip":"Passer","pdf_corpus.show_all_records":"Afficher toutes les fiches","pdf_corpus.bulk_confirm":"{action} {count} fiche(s) correspondant au filtre actuel?","pdf_corpus.bulk_done":"{count} fiche(s) mise(s) à jour.","pdf_corpus.accepted_notice":"Fiche acceptée. Passage à la fiche suivante.","pdf_corpus.rejected_notice":"Fiche rejetée. Passage à la fiche suivante.","pdf_corpus.reopened_notice":"Fiche rouverte pour révision.","pdf_corpus.undo_done":"La dernière fusion ou division a été annulée.","pdf_corpus.disposition.pending":"En attente","pdf_corpus.disposition.accepted":"Acceptée","pdf_corpus.disposition.rejected":"Rejetée","pdf_corpus.remaining":"restantes"
+})
+
 
 # Instantiate only after every built-in dictionary extension has loaded so fresh
 # and existing installations receive release-local i18n keys during synchronization.
 system_store = SystemStore()
-

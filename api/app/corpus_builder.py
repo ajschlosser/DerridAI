@@ -716,18 +716,24 @@ class PdfCorpusRepository:
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
         total = 0
+        topology_count = 0
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
                 record = json.loads(line)
+                topology_index = topology_count
+                topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
                     continue
                 if q and q not in line.casefold():
                     continue
                 if total >= offset and len(items) < limit:
+                    record["topology_index"] = topology_index
                     items.append(record)
                 total += 1
+        for record in items:
+            record["topology_count"] = topology_count
         return {"items": items, "total": total, "offset": offset, "limit": limit}
 
     def publication_path(self, publication_id: str) -> Path:
@@ -3031,6 +3037,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 needs_review_count=needs_review,
                 boundary_review_count=boundary_review_count,
                 accepted_count=sum(1 for record in records if record.get("accepted")),
+                rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
                 validation=validation,
                 resumable=False,
                 retrying_segmentation=False,
@@ -3047,6 +3054,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
     def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
+        for record in records:
+            if not record.get("review_disposition"):
+                record["review_disposition"] = "accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"
+            record["rejected"] = str(record.get("review_disposition")) == "rejected"
         blocks = [
             block for block in self.repo.load_blocks(build["asset_id"])
             if not block.get("excluded_reason")
@@ -3058,9 +3069,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build["record_count"] = len(records)
         build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
         build["accepted_count"] = sum(1 for record in records if record.get("accepted"))
+        build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
         build["validation"] = validation
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
-        requires_review = bool(build["needs_review_count"] or build["boundary_review_count"] or not validation.get("valid"))
+        requires_review = bool(build["needs_review_count"] or build.get("rejected_count") or build["boundary_review_count"] or not validation.get("valid"))
         build["status"] = "awaiting_review" if requires_review else "ready"
         build["stage"] = "review" if requires_review else "ready"
         self.repo.save_build(build)
@@ -3106,21 +3118,84 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build = self.repo.get_build(build_id)
         return build
 
-    def accept_record(self, build_id: str, record_id: str, accepted: bool = True) -> dict[str, Any]:
+    def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
+        current_revision = int(record.get("record_revision") or 1)
+        if expected_revision is not None and current_revision != int(expected_revision):
+            raise ValueError("This record changed after it was opened. Reload it before continuing.")
+        return current_revision
+
+    def _save_review_undo(self, build_id: str, records: list[dict[str, Any]], *, action: str, selected_record_id: str) -> None:
+        # Single-level structural undo is deliberately stored outside build.json so
+        # large record snapshots do not bloat normal build reads.
+        self.repo.save_checkpoint(build_id, "review_undo", {
+            "action": action,
+            "selected_record_id": selected_record_id,
+            "created_at": iso_now(),
+            "records": records,
+        })
+
+    def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
+        if disposition not in {"pending", "accepted", "rejected"}:
+            raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
-        found = False
-        for record in records:
-            if record.get("record_id") == record_id:
-                record["accepted"] = bool(accepted)
-                if accepted:
-                    record["needs_review"] = False
-                    record["review_reason"] = ""
-                found = True
-                break
-        if not found:
+        target = next((record for record in records if record.get("record_id") == record_id), None)
+        if target is None:
             raise KeyError(record_id)
+        current_revision = self._assert_record_revision(target, expected_revision)
+        target["review_disposition"] = disposition
+        target["accepted"] = disposition == "accepted"
+        target["rejected"] = disposition == "rejected"
+        if disposition == "accepted":
+            target["needs_review"] = False
+            target["review_reason"] = ""
+        elif disposition == "rejected":
+            target["needs_review"] = False
+            target["review_reason"] = str(reason or "Rejected during human review.")
+        else:
+            target["needs_review"] = True
+            target["review_reason"] = str(reason or target.get("review_reason") or "Pending human review.")
+        target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
-        return next(record for record in records if record.get("record_id") == record_id)
+        return target
+
+    def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
+        return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
+
+    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "") -> dict[str, Any]:
+        if disposition not in {"pending", "accepted", "rejected"}:
+            raise ValueError("Unsupported review disposition.")
+        records = self.repo.load_records(build_id)
+        q = str(query or "").casefold().strip()
+        changed = 0
+        for record in records:
+            if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
+                continue
+            if q and q not in json.dumps(record, ensure_ascii=False).casefold():
+                continue
+            current_revision = int(record.get("record_revision") or 1)
+            record["review_disposition"] = disposition
+            record["accepted"] = disposition == "accepted"
+            record["rejected"] = disposition == "rejected"
+            if disposition == "accepted":
+                record["needs_review"] = False; record["review_reason"] = ""
+            elif disposition == "rejected":
+                record["needs_review"] = False; record["review_reason"] = str(reason or "Rejected during human review.")
+            else:
+                record["needs_review"] = True; record["review_reason"] = str(reason or record.get("review_reason") or "Pending human review.")
+            record["record_revision"] = current_revision + 1
+            changed += 1
+        self._rewrite_and_validate(build_id, records)
+        return {"changed": changed, "disposition": disposition}
+
+    def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
+        checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)
+        if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get("records"), list):
+            raise KeyError(build_id)
+        records = checkpoint["records"]
+        self._rewrite_and_validate(build_id, records)
+        # Consuming the snapshot prevents an accidental second undo from applying stale topology.
+        self.repo.save_checkpoint(build_id, "review_undo", {"consumed_at": iso_now()})
+        return {"restored": True, "action": checkpoint.get("action"), "selected_record_id": checkpoint.get("selected_record_id"), "record_count": len(records)}
 
     def patch_metadata(self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         forbidden = sorted(set(changes) - HUMAN_EDITABLE_METADATA_FIELDS)
@@ -3147,6 +3222,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 for key, value in changes.items():
                     record[key] = value
                 record["accepted"] = False
+                record["rejected"] = False
+                record["review_disposition"] = "pending"
                 record["needs_review"] = True
                 record["review_reason"] = "Metadata edited during human review."
                 record["record_revision"] = current_revision + 1
@@ -3193,17 +3270,21 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             evidence.pop(field, None)
         target["metadata_evidence"] = evidence
         target["accepted"] = False
+        target["rejected"] = False
+        target["review_disposition"] = "pending"
         target["needs_review"] = True
         target["review_reason"] = "Source evidence binding edited during human review."
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         return target
 
-    def merge(self, build_id: str, record_id: str, direction: str) -> dict[str, Any]:
+    def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
             raise KeyError(record_id)
+        self._assert_record_revision(records[index], expected_revision)
+        self._save_review_undo(build_id, json.loads(json.dumps(records)), action="merge", selected_record_id=record_id)
         other_index = index - 1 if direction == "previous" else index + 1
         if other_index < 0 or other_index >= len(records):
             raise ValueError(f"No {direction} record is available to merge.")
@@ -3215,21 +3296,27 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         text = "\n\n".join(block["text"].strip() for block in group if block.get("text", "").strip())
         pages = sorted({int(block["page"]) for block in group})
         page_start, page_end = self._scholarly_page_range(group)
-        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": {}, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
+        merged_evidence: dict[str, Any] = {}
+        for evidence_map in (first.get("metadata_evidence") or {}, second.get("metadata_evidence") or {}):
+            for field, info in evidence_map.items():
+                existing = merged_evidence.setdefault(field, {"block_ids": [], "confidence": 1.0, "reason": "Preserved across human merge.", "reviewed_by": "human", "reviewed_at": iso_now()})
+                existing["block_ids"] = list(dict.fromkeys(list(existing.get("block_ids") or []) + list(info.get("block_ids") or [])))
+                existing["confidence"] = min(float(existing.get("confidence") or 1.0), float(info.get("confidence") or 1.0))
+        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
+        # Keep the first record's immutable identity. Unrelated downstream IDs never change.
+        merged["record_id"] = first.get("record_id")
         records[first_index:second_index + 1] = [merged]
-        # Stable sequential IDs after a structural edit avoid duplicate IDs.
-        prefix = re.sub(r"-\d{5}$", "", str(records[0].get("record_id") or "pdf"))
-        for i, record in enumerate(records, 1):
-            record["record_id"] = f"{prefix}-{i:05d}"
         self._rewrite_and_validate(build_id, records)
         return merged
 
-    def split(self, build_id: str, record_id: str, after_block_id: str) -> dict[str, Any]:
+    def split(self, build_id: str, record_id: str, after_block_id: str, expected_revision: int | None = None) -> dict[str, Any]:
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
             raise KeyError(record_id)
         target = records[index]
+        self._assert_record_revision(target, expected_revision)
+        self._save_review_undo(build_id, json.loads(json.dumps(records)), action="split", selected_record_id=record_id)
         ids = list(target.get("source_block_ids") or [])
         if after_block_id not in ids or ids.index(after_block_id) >= len(ids) - 1:
             raise ValueError("Split point must be a non-final source block in the selected record.")
@@ -3241,11 +3328,15 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             text = "\n\n".join(block["text"].strip() for block in group if block.get("text", "").strip())
             pages = sorted({int(block["page"]) for block in group})
             page_start, page_end = self._scholarly_page_range(group)
-            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "review_reason": "Record boundary was split during human review.", "metadata_evidence": {}, "record_revision": int(target.get("record_revision") or 1) + 1})
+            piece_evidence: dict[str, Any] = {}
+            for field, info in (target.get("metadata_evidence") or {}).items():
+                kept = [block_id for block_id in (info.get("block_ids") or []) if block_id in piece_ids]
+                if kept:
+                    piece_evidence[field] = {**info, "block_ids": kept, "reason": str(info.get("reason") or "") + " Preserved across human split."}
+            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
+        pieces[0]["record_id"] = target.get("record_id")
+        pieces[1]["record_id"] = f"{re.sub(r'-[0-9a-f]{8}$', '', str(target.get('record_id') or 'pdf'))}-s{uuid.uuid4().hex[:8]}"
         records[index:index + 1] = pieces
-        prefix = re.sub(r"-\d{5}$", "", str(records[0].get("record_id") or "pdf"))
-        for i, record in enumerate(records, 1):
-            record["record_id"] = f"{prefix}-{i:05d}"
         self._rewrite_and_validate(build_id, records)
         return {"records": pieces}
 
@@ -3269,6 +3360,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build_id=build_id,
         )
         target["accepted"] = False
+        target["rejected"] = False
+        target["review_disposition"] = "pending"
         self._rewrite_and_validate(build_id, records)
         return target
 
@@ -3281,6 +3374,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         unresolved = [record for record in records if record.get("needs_review")]
         if unresolved:
             raise ValueError(f"Publication is blocked: {len(unresolved)} record(s) still need review.")
+        rejected = [record for record in records if str(record.get("review_disposition") or "") == "rejected" or record.get("rejected")]
+        if rejected:
+            raise ValueError(f"Publication is blocked: {len(rejected)} record(s) were rejected and require correction or removal through topology review.")
         if require_acceptance:
             unaccepted = [record for record in records if not record.get("accepted")]
             if unaccepted:

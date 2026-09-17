@@ -6,77 +6,16 @@ import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
-
-const props=withDefaults(defineProps<{
-  pdfUrl:string;
-  page:number;
-  pageWidth?:number;
-  pageHeight?:number;
-  blocks?:SourceBlock[];
-  evidenceBlockIds?:string[];
-}>(),{pageWidth:0,pageHeight:0,blocks:()=>[],evidenceBlockIds:()=>[]});
-const i18n=useI18nStore();
-const canvas=ref<HTMLCanvasElement|null>(null);
-const shell=ref<HTMLElement|null>(null);
-const loading=ref(false);
-const error=ref("");
-let task:any=null;
-let renderTask:any=null;
-let generation=0;
-
-const pageBlocks=computed(()=>props.blocks.filter(block=>Number(block.page)===Number(props.page)));
-const evidenceSet=computed(()=>new Set(props.evidenceBlockIds.map(String)));
-function boxStyle(block:SourceBlock){
-  const [x0=0,y0=0,x1=0,y1=0]=block.bbox||[];
-  const width=Number(props.pageWidth||0);
-  const height=Number(props.pageHeight||0);
-  if(!width||!height)return {display:"none"};
-  return {
-    insetInlineStart:`${Math.max(0,Math.min(100,(x0/width)*100))}%`,
-    top:`${Math.max(0,Math.min(100,(y0/height)*100))}%`,
-    width:`${Math.max(0,Math.min(100,((x1-x0)/width)*100))}%`,
-    height:`${Math.max(0,Math.min(100,((y1-y0)/height)*100))}%`,
-  };
-}
-
-async function render(){
-  const token=++generation;
-  error.value="";
-  if(!props.pdfUrl||!canvas.value)return;
-  loading.value=true;
-  try{
-    renderTask?.cancel?.();
-    task?.destroy?.();
-    task=pdfjsLib.getDocument({url:props.pdfUrl,withCredentials:true});
-    const doc=await task.promise;
-    if(token!==generation)return;
-    const safePage=Math.min(Math.max(1,Number(props.page)||1),doc.numPages);
-    const page=await doc.getPage(safePage);
-    if(token!==generation)return;
-    const available=Math.max(320,Math.min(900,shell.value?.clientWidth||700));
-    const base=page.getViewport({scale:1});
-    const scale=available/base.width;
-    const viewport=page.getViewport({scale});
-    const outputScale=Math.min(2,window.devicePixelRatio||1);
-    const node=canvas.value;
-    if(!node)return;
-    node.width=Math.floor(viewport.width*outputScale);
-    node.height=Math.floor(viewport.height*outputScale);
-    node.style.width=`${Math.floor(viewport.width)}px`;
-    node.style.height=`${Math.floor(viewport.height)}px`;
-    const context=node.getContext("2d");
-    if(!context)throw new Error("Canvas 2D context is unavailable.");
-    renderTask=page.render({canvasContext:context,viewport,transform:outputScale===1?undefined:[outputScale,0,0,outputScale,0,0]});
-    await renderTask.promise;
-  }catch(exc:any){
-    if(exc?.name!=="RenderingCancelledException")error.value=exc instanceof Error?exc.message:String(exc);
-  }finally{
-    if(token===generation)loading.value=false;
-  }
-}
-
-watch(()=>[props.pdfUrl,props.page],()=>void nextTick(render),{immediate:true});
-onBeforeUnmount(()=>{generation+=1;renderTask?.cancel?.();task?.destroy?.()});
+const props=withDefaults(defineProps<{pdfUrl:string;page:number;pageWidth?:number;pageHeight?:number;blocks?:SourceBlock[];evidenceBlockIds?:string[]}>(),{pageWidth:0,pageHeight:0,blocks:()=>[],evidenceBlockIds:()=>[]});
+const i18n=useI18nStore(); const canvas=ref<HTMLCanvasElement|null>(null); const shell=ref<HTMLElement|null>(null); const loading=ref(false); const error=ref("");
+let loadingTask:any=null; let pdfDocument:any=null; let renderTask:any=null; let documentGeneration=0; let renderGeneration=0;
+const pageBlocks=computed(()=>props.blocks.filter(block=>Number(block.page)===Number(props.page))); const evidenceSet=computed(()=>new Set(props.evidenceBlockIds.map(String)));
+function boxStyle(block:SourceBlock){const [x0=0,y0=0,x1=0,y1=0]=block.bbox||[];const width=Number(props.pageWidth||0),height=Number(props.pageHeight||0);if(!width||!height)return {display:"none"};return {insetInlineStart:`${Math.max(0,Math.min(100,(x0/width)*100))}%`,top:`${Math.max(0,Math.min(100,(y0/height)*100))}%`,width:`${Math.max(0,Math.min(100,((x1-x0)/width)*100))}%`,height:`${Math.max(0,Math.min(100,((y1-y0)/height)*100))}%`}}
+async function cancelRender(){const active=renderTask;renderTask=null;if(active){try{active.cancel?.();await active.promise}catch(exc:any){if(exc?.name!=="RenderingCancelledException")throw exc}}}
+async function destroyDocument(){documentGeneration+=1;renderGeneration+=1;await cancelRender().catch(()=>{});const doc=pdfDocument;pdfDocument=null;if(doc){try{await doc.destroy?.()}catch{}}const task=loadingTask;loadingTask=null;if(task){try{await task.destroy?.()}catch{}}}
+async function loadDocument(){await destroyDocument();const token=++documentGeneration;if(!props.pdfUrl)return;error.value="";loading.value=true;try{const task=pdfjsLib.getDocument({url:props.pdfUrl,withCredentials:true});loadingTask=task;const doc=await task.promise;if(token!==documentGeneration){await doc.destroy?.();return}pdfDocument=doc;await nextTick();await renderPage()}catch(exc:any){if(token===documentGeneration)error.value=exc instanceof Error?exc.message:String(exc)}finally{if(token===documentGeneration)loading.value=false}}
+async function renderPage(){const token=++renderGeneration;error.value="";if(!pdfDocument||!canvas.value)return;loading.value=true;try{await cancelRender();const safePage=Math.min(Math.max(1,Number(props.page)||1),pdfDocument.numPages);const page=await pdfDocument.getPage(safePage);if(token!==renderGeneration)return;const available=Math.max(320,Math.min(900,shell.value?.clientWidth||700));const base=page.getViewport({scale:1});const viewport=page.getViewport({scale:available/base.width});const outputScale=Math.min(2,window.devicePixelRatio||1);const node=canvas.value;if(!node)return;node.width=Math.floor(viewport.width*outputScale);node.height=Math.floor(viewport.height*outputScale);node.style.width=`${Math.floor(viewport.width)}px`;node.style.height=`${Math.floor(viewport.height)}px`;const context=node.getContext("2d");if(!context)throw new Error("Canvas 2D context is unavailable.");const active=page.render({canvasContext:context,viewport,transform:outputScale===1?undefined:[outputScale,0,0,outputScale,0,0]});renderTask=active;await active.promise;if(renderTask===active)renderTask=null}catch(exc:any){if(exc?.name!=="RenderingCancelledException"&&token===renderGeneration)error.value=exc instanceof Error?exc.message:String(exc)}finally{if(token===renderGeneration)loading.value=false}}
+watch(()=>props.pdfUrl,()=>void loadDocument(),{immediate:true});watch(()=>props.page,()=>void nextTick(renderPage));onBeforeUnmount(async()=>{await destroyDocument()});
 </script>
 
 <template>

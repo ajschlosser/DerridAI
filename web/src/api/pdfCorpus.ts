@@ -27,6 +27,7 @@ export interface CorpusBuild {
   record_count: number;
   needs_review_count: number;
   accepted_count: number;
+  rejected_count?: number;
   model?: string | null;
   provider?: string | null;
   profile_id: string;
@@ -88,7 +89,11 @@ export interface CorpusRecord {
   needs_review?: boolean;
   review_reason?: string;
   accepted?: boolean;
+  rejected?: boolean;
+  review_disposition?: "pending"|"accepted"|"rejected";
   record_revision?: number;
+  topology_index?: number;
+  topology_count?: number;
   pdf_pages?: number[];
   [key:string]: unknown;
 }
@@ -113,11 +118,14 @@ export const pdfCorpusApi = {
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
   records: (buildId:string, offset=0, limit=50, reviewOnly=false, query="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewOnly?"&needs_review=true":""}${query?`&query=${encodeURIComponent(query)}`:""}`),
-  accept: (buildId:string, recordId:string, accepted=true) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted})}),
+  accept: (buildId:string, recordId:string, accepted=true, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted,expected_revision:expectedRevision})}),
+  disposition: (buildId:string, recordId:string, disposition:"pending"|"accepted"|"rejected", reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,expected_revision:expectedRevision})}),
+  bulkDisposition: (buildId:string, disposition:"pending"|"accepted"|"rejected", needsReview:boolean|null, query="", reason="") => apiRequest<{changed:number;disposition:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,needs_review:needsReview,query})}),
+  undoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/undo`, {method:"POST"}),
   patchMetadata: (buildId:string, recordId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   patchEvidence: (buildId:string, recordId:string, field:string, blockIds:string[], confidence=1, reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence`, {method:"PATCH",body:JSON.stringify({field,block_ids:blockIds,confidence,reason,expected_revision:expectedRevision})}),
-  merge: (buildId:string, recordId:string, direction:"previous"|"next") => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/merge`, {method:"POST",body:JSON.stringify({direction})}),
-  split: (buildId:string, recordId:string, afterBlockId:string) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId})}),
+  merge: (buildId:string, recordId:string, direction:"previous"|"next", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/merge`, {method:"POST",body:JSON.stringify({direction,expected_revision:expectedRevision})}),
+  split: (buildId:string, recordId:string, afterBlockId:string, expectedRevision?:number) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId,expected_revision:expectedRevision})}),
   rerunMetadata: (buildId:string, recordId:string, payload:Record<string,unknown>) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`, {method:"POST",body:JSON.stringify(payload)}),
   confirmManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/confirm-manifest`, {method:"POST",body:JSON.stringify(payload)}),
   cancel: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/cancel`, {method:"POST"}),

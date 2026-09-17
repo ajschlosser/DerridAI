@@ -42,6 +42,8 @@ from .models import (
     PdfCorpusRecordPatch,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
+    PdfCorpusRecordDisposition,
+    PdfCorpusBulkDisposition,
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
     PdfCorpusRecordRerun,
@@ -80,7 +82,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.40.10")
+app = FastAPI(title="DerridAI Corpus API", version="0.40.15")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1168,7 +1170,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.40.10",
+            "app_version": "0.40.15",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1916,15 +1918,45 @@ def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCor
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept")
 def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordAccept):
     try:
-        return pdf_corpus_builds.accept_record(build_id, record_id, body.accepted)
+        return pdf_corpus_builds.accept_record(build_id, record_id, body.accepted, body.expected_revision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition")
+def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCorpusRecordDisposition):
+    try:
+        return pdf_corpus_builds.set_disposition(build_id, record_id, body.disposition, body.reason, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
+def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition):
+    try:
+        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/review/undo")
+def undo_pdf_corpus_review_edit(build_id: str):
+    try:
+        return pdf_corpus_builds.undo_last_review_edit(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="No review edit is available to undo") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge")
 def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordMerge):
     try:
-        return pdf_corpus_builds.merge(build_id, record_id, body.direction)
+        return pdf_corpus_builds.merge(build_id, record_id, body.direction, body.expected_revision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -1934,7 +1966,7 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/split")
 def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit):
     try:
-        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id)
+        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
