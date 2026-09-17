@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 import fitz
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .config import APP_VERSION, settings
 from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
@@ -25,10 +25,10 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v5"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v6"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v9"
+PROFILE_VERSION = "derrida-scholarly-v10"
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -40,6 +40,7 @@ DISCOURSE_ROLES = [
     "commentary", "paratext", "bibliographic",
 ]
 HYBRID_REQUIRED_FIELDS = ("region_type", "primary_text", "discourse_role")
+REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "speaker", "position_holder", "target", "stance", "proposition_status", "claim_scope")
 
 
 class DocumentManifestModel(BaseModel):
@@ -61,6 +62,13 @@ class DocumentManifestModel(BaseModel):
     main_text_start_page: int | None = None
     main_text_end_page: int | None = None
     notes: str = ""
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def normalize_nullable_notes(cls, value: Any) -> str:
+        # Optional LLM/legacy manifest notes may be JSON null. Normalize that at
+        # the schema boundary so an internal validation detail never reaches UI.
+        return "" if value is None else str(value)
 
 
 class BoundaryChangeModel(BaseModel):
@@ -218,10 +226,18 @@ class DiscourseMetadataModel(BaseModel):
     claim_scope: str | None = None
 
 
+class RecordFieldAssessmentModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    needs_review: bool = False
+    reason: str = Field(default="", max_length=500)
+
+
 class DiscourseMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metadata: DiscourseMetadataModel = Field(default_factory=DiscourseMetadataModel)
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
+    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -885,16 +901,42 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_max_chars": 3500,
         "topology_review_chars": 6000,
     },
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v9",
+    "derrida-scholarly-v9": {
+        "id": "derrida-scholarly-v9",
+        "name": "Derrida scholarly corpus v9 (legacy)",
         "version": 9,
-        "description": "Bunny Rabbit profile: explicit staged workflow, field-level metadata issue resolution, publication-readiness validation, source-quality gating, and auditable retry operations.",
+        "description": "0.42.0 Bunny Rabbit profile retained for historical build compatibility.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
         "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
         "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "min_boundary_confidence": 0.72,
+        "candidate_llm_threshold": 0.30,
+        "deterministic_split_threshold": 0.92,
+        "review_risk_threshold": 0.90,
+        "max_llm_boundary_calls_per_100_atoms": 18,
+        "boundary_batch_size": 6,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "preferred_record_chars": 1750,
+        "record_length_tolerance": 200,
+        "long_record_chars": 3500,
+        "absolute_record_chars": 6000,
+        "soft_max_chars": 3500,
+        "topology_review_chars": 6000,
+    },
+    PROFILE_VERSION: {
+        "id": PROFILE_VERSION,
+        "name": "Derrida scholarly corpus v10",
+        "version": 10,
+        "description": "Bunny Rabbit - Again: integrated record/metadata review, evidence-bound LLM proposals, human confirmation of uncertain fields, and normalized workflow errors.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": DISCOURSE_ROLES,
+        "region_types": REGION_TYPES,
+        "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "review_metadata_fields": list(REVIEW_METADATA_FIELDS),
         "min_boundary_confidence": 0.72,
         "candidate_llm_threshold": 0.30,
         "deterministic_split_threshold": 0.92,
@@ -2900,6 +2942,7 @@ If a field is genuinely unsupported, return null rather than inventing a value.
 
 {base_context}
 For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.
+Also return field_assessments for region_type, primary_text, discourse_role, speaker, position_holder, target, stance, proposition_status, and claim_scope. Each assessment must contain confidence, needs_review, and a short reason. Mark needs_review=true whenever a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or confidence is not sufficient for scholarly acceptance.
 """
         quotation_prompt = f"""Infer ONLY quotation relations for one immutable DerridAI record.
 Determine whether there is direct quotation and, only when source-supported, identify quoted speaker/author/work/position-holder/addressee/referent and quotation chains. A mentioned name is not automatically a quoted source. Do not return discourse fields, topical indexing, bibliographic metadata, summaries, or source text.
@@ -2942,6 +2985,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         evidence_confidences: list[float] = []
         attribution_confidences: list[float] = []
         model_review_reasons: list[str] = []
+        field_assessments: dict[str, dict[str, Any]] = {}
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -2950,6 +2994,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+            if task_name == "discourse" and isinstance(result.get("field_assessments"), dict):
+                field_assessments.update({str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)})
             field_status = record.setdefault("metadata_field_status", {})
             for key, value in metadata.items():
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
@@ -3007,18 +3053,28 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
         record["metadata_evidence"] = clean_evidence
         field_status = record.setdefault("metadata_field_status", {})
-        for field in required_metadata_fields:
+        review_metadata_fields = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
+        for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
             if current.get("status") == "deterministic":
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
-            if value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": 0.0, "reason_code": "ambiguous", "reason": "No validated deterministic or model classification was available."}
-            elif evidence_info.get("block_ids") and float(evidence_info.get("confidence") or 0) >= minimum:
-                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason_code": "resolved", "reason": str(evidence_info.get("reason") or "Evidence-bound model classification.")}
+            assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            confidence = float(assessment.get("confidence") or evidence_info.get("confidence") or 0.0)
+            reason = str(assessment.get("reason") or evidence_info.get("reason") or "Model assessment.")
+            needs_human = bool(assessment.get("needs_review"))
+            if field not in required_metadata_fields and value in (None, "", []) and not assessment:
+                # Optional attribution fields can be genuinely absent. If the model
+                # made no assessment and proposed no value, do not manufacture an
+                # uncertainty item merely because the field exists in the schema.
+                continue
+            if field in required_metadata_fields and value in (None, "", []):
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "reason_code": "ambiguous", "reason": reason}
+            elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or float(evidence_info.get("confidence") or 0) < minimum)):
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason_code": "evidence_failed", "reason": "The model classification did not meet evidence or confidence requirements."}
+                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "reason_code": "resolved", "reason": reason}
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else 0.0
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
@@ -3033,6 +3089,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             if (record.get(field) in (None, "", []) or str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"})
         ]
         record["metadata_incomplete_fields"] = incomplete_fields
+        review_fields = [field for field in review_metadata_fields if str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"}]
+        record["metadata_review_fields"] = review_fields
+        if review_fields:
+            record["metadata_needs_attention"] = True
+            record["metadata_attention_reasons"] = list(dict.fromkeys((record.get("metadata_attention_reasons") or []) + ["Record metadata requires human review before acceptance."]))[:50]
         # Optional indexing/quotation failures remain visible but do not make a structurally
         # valid record permanently unpublishable. Required hybrid classifications and
         # the discourse task are the publication-critical metadata gate.
@@ -3467,7 +3528,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         human_record_ids: set[str] = set()
         retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
         for record in records:
-            incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
+            incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
             statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             record_issues: list[dict[str, Any]] = []
             for field in incomplete:
@@ -3614,6 +3675,17 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if target is None:
             raise KeyError(record_id)
         current_revision = self._assert_record_revision(target, expected_revision)
+        if disposition == "accepted" and list(target.get("metadata_review_fields") or []):
+            raise ValueError("Resolve the queued record metadata before accepting this record.")
+        if disposition == "accepted":
+            status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+            for field in REVIEW_METADATA_FIELDS:
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                if info and info.get("status") == "llm_inferred":
+                    info["status"] = "human_confirmed"
+                    info["method"] = "human_review_of_llm_proposal"
+                    info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()
+            target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
         target["rejected"] = disposition == "rejected"
@@ -3639,6 +3711,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         records = self.repo.load_records(build_id)
         q = str(query or "").casefold().strip()
         changed = 0
+        blocked_metadata = 0
         for record in records:
             if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
                 continue
@@ -3647,7 +3720,18 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
+            if disposition == "accepted" and list(record.get("metadata_review_fields") or []):
+                blocked_metadata += 1
+                continue
             current_revision = int(record.get("record_revision") or 1)
+            if disposition == "accepted":
+                status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                for field in REVIEW_METADATA_FIELDS:
+                    info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                    if info and info.get("status") == "llm_inferred":
+                        info["status"] = "human_confirmed"
+                        info["method"] = "human_review_of_llm_proposal"
+                record["metadata_reviewed_at"] = iso_now()
             record["review_disposition"] = disposition
             record["accepted"] = disposition == "accepted"
             record["rejected"] = disposition == "rejected"
@@ -3660,7 +3744,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        return {"changed": changed, "disposition": disposition}
+        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata}
 
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
         checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)
@@ -3696,7 +3780,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                     raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
                 for key, value in changes.items():
                     record[key] = value
-                    if key in HYBRID_REQUIRED_FIELDS:
+                    if key in REVIEW_METADATA_FIELDS:
                         status = record.setdefault("metadata_field_status", {})
                         status[key] = {
                             "status": "human_confirmed",
@@ -3708,10 +3792,12 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 required = list(profile.get("required_metadata_fields") or [])
                 incomplete = [field for field in required if record.get(field) in (None, "", [])]
                 record["metadata_incomplete_fields"] = incomplete
+                review_fields = [field for field in profile.get("review_metadata_fields", REVIEW_METADATA_FIELDS) if str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"}]
+                record["metadata_review_fields"] = review_fields
                 if not incomplete:
                     record["metadata_complete"] = True
-                record["metadata_needs_attention"] = bool(incomplete)
-                record["metadata_attention_reasons"] = (["Required metadata remains unresolved after human editing."] if incomplete else [])
+                record["metadata_needs_attention"] = bool(incomplete or review_fields)
+                record["metadata_attention_reasons"] = (["Record metadata remains unresolved after human editing."] if (incomplete or review_fields) else [])
                 record["record_revision"] = current_revision + 1
                 break
         if target is None:

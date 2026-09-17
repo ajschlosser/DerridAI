@@ -30,10 +30,10 @@ def _dictionaries():
 
 def test_record_player_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.42.0"
-    assert 'version="0.42.0"' in MAIN
-    assert "Corpus Viewer 0.42.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.42.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.42.1"
+    assert 'version="0.42.1"' in MAIN
+    assert "Corpus Viewer 0.42.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.42.1" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "## 0.35.10 — Record Player" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 

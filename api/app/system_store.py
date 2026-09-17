@@ -1348,6 +1348,26 @@ DEFAULT_EN_US.update({'dynamic.record_one': 'record', 'dynamic.work_one': 'work'
 DEFAULT_FR_CA.update({'dynamic.record_one': 'fiche', 'dynamic.work_one': 'œuvre', 'dynamic.model_one': 'modèle', 'dynamic.models': 'modèles', 'dynamic.profile_one': 'profil', 'dynamic.profiles': 'profils', 'dynamic.word_one': 'mot', 'dynamic.words': 'mots', 'dynamic.character_one': 'caractère', 'dynamic.characters': 'caractères', 'dynamic.change_one': 'modification', 'dynamic.changes': 'modifications', 'dynamic.annotation_one': 'annotation', 'dynamic.annotations': 'annotations', 'dynamic.cached_response_one': 'réponse mise en cache', 'dynamic.cached_responses': 'réponses mises en cache', 'dynamic.selected_count': '{count} éléments sélectionnés', 'dynamic.record_range_count': '{shown} sur {total} fiches', 'dynamic.page_of_pages': 'Page {page} / {pages}', 'dynamic.ready_models': 'Prêt · {count} modèles', 'dynamic.history_latest': 'Affichage des {shown} plus récentes parmi {total} modifications. L’historique complet est conservé dans le champ updates de la fiche.', 'dynamic.cleared_history_records': 'Historique des modifications effacé pour {count} fiches', 'dynamic.restored_fields': 'État original de la fiche restauré · {count} champs modifiés', 'dynamic.loaded_records': '{count} fiches chargées', 'dynamic.loaded_records_issues': '{count} fiches chargées · {issues} problèmes d’analyse', 'dynamic.merged_tabs_records': '{tabs} onglets fusionnés et remplacés · {records} fiches', 'dynamic.cleaned_records': '{records} fiches nettoyées · {changes} modifications consignées', 'dynamic.exported_records': '{count} fiches exportées depuis {collection}'})
 
 
+# 0.42.1 — Bunny Rabbit - Again: integrated record + metadata review.
+DEFAULT_EN_US.update({
+    "pdf_corpus.record_metadata_review": "Record metadata review",
+    "pdf_corpus.metadata_record_review_help": "Review the LLM-proposed record metadata together with the text. Uncertain fields must be resolved before the record can be accepted; accepting the record confirms the remaining proposals.",
+    "pdf_corpus.not_identified": "Not identified",
+    "pdf_corpus.confirmed_on_accept": "This proposal will be human-confirmed when you accept the record.",
+    "pdf_corpus.bulk_done_metadata_blocked": "Updated {count} record(s); {blocked} still need metadata review before acceptance.",
+    "pdf_corpus.resolve_metadata_before_accept": "Resolve the highlighted metadata fields before accepting this record.",
+    "pdf_corpus.confirm_no_value": "Confirm no supported value",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.record_metadata_review": "Révision des métadonnées de la fiche",
+    "pdf_corpus.metadata_record_review_help": "Révisez les métadonnées proposées par le LLM avec le texte. Les champs incertains doivent être résolus avant l’acceptation; accepter la fiche confirme les autres propositions.",
+    "pdf_corpus.not_identified": "Non identifié",
+    "pdf_corpus.confirmed_on_accept": "Cette proposition sera confirmée par la personne réviseuse lors de l’acceptation de la fiche.",
+    "pdf_corpus.bulk_done_metadata_blocked": "{count} fiche(s) mise(s) à jour; {blocked} nécessitent encore une révision des métadonnées avant acceptation.",
+    "pdf_corpus.resolve_metadata_before_accept": "Résolvez les champs de métadonnées signalés avant d’accepter cette fiche.",
+    "pdf_corpus.confirm_no_value": "Confirmer qu’aucune valeur n’est étayée",
+})
+
 class SystemStore:
     def __init__(self) -> None:
         self.repository = system_repository
@@ -6327,7 +6347,7 @@ DEFAULT_FR_CA.update({
 })
 
 
-# 0.42.0 — Bunny Rabbit: record-first corpus review and explicit lifecycle.
+# 0.42.1 — Bunny Rabbit: record-first corpus review and explicit lifecycle.
 DEFAULT_EN_US.update({
     "pdf_corpus.review_queue":"Review queue","pdf_corpus.queue_all":"All","pdf_corpus.queue_pending":"Pending","pdf_corpus.queue_attention":"Needs attention","pdf_corpus.queue_metadata":"Metadata","pdf_corpus.queue_accepted":"Accepted","pdf_corpus.queue_rejected":"Rejected",
     "pdf_corpus.accept_all_queue":"Accept queue","pdf_corpus.reject_next":"Reject & next","pdf_corpus.reject_all_queue":"Reject queue","pdf_corpus.proposed_record":"Proposed record","pdf_corpus.accept_next":"Accept & next","pdf_corpus.record_decision":"Record decision","pdf_corpus.record_data":"Record data & evidence","pdf_corpus.source_context":"Source context","pdf_corpus.extracted_source_text":"Extracted source text",
@@ -6345,7 +6365,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.bulk_confirm":"{action} {count} fiche(s) dans la file actuelle?"
 })
 
-# 0.42.0 — Bunny Rabbit: field-aware metadata and dedicated focus-review workflow.
+# 0.42.1 — Bunny Rabbit: field-aware metadata and dedicated focus-review workflow.
 DEFAULT_EN_US.update({
     "pdf_corpus.read_record":"Read the record",
     "pdf_corpus.unresolved_fields":"unresolved fields",
@@ -6477,7 +6497,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.status.awaiting_metadata": "en attente de métadonnées",
 })
 
-# 0.42.0 — Bunny Rabbit: explicit Finish Corpus, metadata-resolution, and publication-readiness workflow.
+# 0.42.1 — Bunny Rabbit: explicit Finish Corpus, metadata-resolution, and publication-readiness workflow.
 DEFAULT_EN_US.update({
     "pdf_corpus.metadata_resolution":"Metadata resolution",
     "pdf_corpus.metadata_resolution_intro":"Corpus construction and record review can be complete while required scholarly metadata remains unresolved. {records} record(s) contain {fields} required field issue(s).",

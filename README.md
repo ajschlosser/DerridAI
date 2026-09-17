@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
-**0.42.0 — Bunny Rabbit** completes a major Corpus Builder workflow pass: a dedicated record-first Focus Review, field-aware hybrid metadata inference, explicit enrichment/review/publication handoffs, metadata issue queues, auditable field provenance, and end-to-end workflow regression coverage.
-# DerridAI Corpus Viewer 0.42.0
+**0.42.1 — Bunny Rabbit - Again** completes a major Corpus Builder workflow pass: a dedicated record-first Focus Review, field-aware hybrid metadata inference, explicit enrichment/review/publication handoffs, metadata issue queues, auditable field provenance, and end-to-end workflow regression coverage.
+# DerridAI Corpus Viewer 0.42.1
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -67,13 +67,13 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
-## 0.42.0 — Bunny Rabbit
+## 0.42.1 — Bunny Rabbit - Again
 
 Bunny Rabbit finishes the post-construction workflow around six independently visible stages: **source extraction → corpus construction → scholarly enrichment → record review → final validation → publication**. Each stage now exposes an explicit state and the build carries a machine-readable `publication_readiness` object with blockers and a single next action. Completing record review hands the user into a dedicated **Finish corpus** workspace rather than leaving the review controls on screen.
 
 The Finish corpus workspace summarizes accepted/rejected/pending records, required metadata issues, source fidelity, extraction quality, final validation, and publication readiness. If publication is blocked, the primary action goes directly to the relevant queue. Once all required gates pass, publication becomes an explicit final action that creates an immutable JSONL snapshot.
 
-Metadata resolution is now field-level rather than a vague build-level retry. The active profile is `derrida-scholarly-v9` and metadata prompt contract is `derridai-record-metadata-v5`; `derrida-scholarly-v8` remains registered for existing builds. `region_type`, `primary_text`, and `discourse_role` remain publication-critical hybrid fields. Deterministic inference is retained when strong; otherwise the LLM performs constrained classification against the controlled enum/boolean schema. Python validates values and source evidence before accepting them. Each field records whether it is deterministic, LLM-inferred, human-confirmed, unresolved, or invalid.
+Metadata resolution is now field-level rather than a vague build-level retry. The active profile is `derrida-scholarly-v10` and metadata prompt contract is `derridai-record-metadata-v6`; `derrida-scholarly-v9` remains registered for existing builds. Record review now includes the LLM-proposed scholarly metadata itself: high-confidence evidence-bound proposals are shown for confirmation when the record is accepted, while uncertain fields such as `position_holder`, `stance`, and `proposition_status` are queued for explicit human resolution. `region_type`, `primary_text`, and `discourse_role` remain publication-critical hybrid fields. Deterministic inference is retained when strong; otherwise the LLM performs constrained classification against the controlled enum/boolean schema. Python validates values and source evidence before accepting them. Each field records whether it is deterministic, LLM-inferred, human-confirmed, unresolved, or invalid.
 
 The metadata issue summary now distinguishes operational failures, invalid values, evidence failures, ambiguity, source-quality problems, and fields that have not yet run. Automatically retryable issues are separated from fields requiring human judgment. **Retry metadata** targets only the affected records/fields, records its own operation ID/provider/model/progress, and does not rerun successful enrichment or corpus topology. Ambiguous fields open a dedicated metadata-resolution queue with the current value, provenance, confidence, source-evidence navigation, and constrained controls for confirming a replacement. Structural record acceptance remains separate from metadata resolution.
 
@@ -85,7 +85,7 @@ The review workspace remains reload-safe: build, queue, and selected record are 
 
 Storybook coverage now includes Finish corpus states, field-level metadata resolution, metadata retry progress, the six-stage lifecycle, Focus Review, and publication readiness. New interface text is localized in English and Canadian French. The controls continue to use semantic elements, visible state text in addition to color, deliberate focus movement, keyboard-compatible interactions, responsive layouts, and reduced-motion handling in support of the WCAG 2.2 AA target.
 
-Release validation includes the full Python regression suite, Python compilation, JavaScript syntax checks, Git whitespace checks, and explicit production Vue/Storybook build attempts. Any unavailable frontend toolchain is reported rather than treated as a successful build.
+Release validation includes the full Python regression suite, Python compilation, TypeScript/Vue script syntax checks, Git whitespace checks, and explicit production Vue/Storybook build attempts. A successful dependency-backed Vue/Storybook production build remains a mandatory release gate in environments where the npm dependency graph is available; this source archive does not represent an unavailable toolchain as a passing build.
 
 ## 0.40.10 — Corpus of Engineers
 

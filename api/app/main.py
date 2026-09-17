@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
@@ -82,7 +83,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.42.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.42.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,6 +92,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(_request: Request, exc: RequestValidationError):
+    # Keep Pydantic internals out of the product UI. The client gets a stable
+    # machine code and a concise field list; full details remain available to
+    # server logs for diagnosis.
+    errors = exc.errors()
+    fields = []
+    for error in errors:
+        loc = [str(part) for part in error.get("loc", ()) if str(part) not in {"body", "query", "path"}]
+        label = ".".join(loc) if loc else "request"
+        if label not in fields:
+            fields.append(label)
+    logger.warning("Request validation failed for %s: %s", getattr(_request, "url", "request"), errors)
+    message = "Some submitted data is invalid. Review the highlighted fields and try again."
+    if fields:
+        message += " Fields: " + ", ".join(fields[:8]) + ("…" if len(fields) > 8 else "")
+    return JSONResponse(status_code=422, content={"detail": message, "code": "request_validation_error", "fields": fields[:50]})
 
 
 def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
@@ -1170,7 +1190,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.42.0",
+            "app_version": "0.42.1",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),

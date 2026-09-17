@@ -13,10 +13,10 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_03610_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.42.0"
-    assert 'version="0.42.0"' in MAIN
-    assert '"app_version": "0.42.0"' in MAIN
-    assert "# DerridAI Corpus Viewer 0.42.0" in README
+    assert package["version"] == "0.42.1"
+    assert 'version="0.42.1"' in MAIN
+    assert '"app_version": "0.42.1"' in MAIN
+    assert "# DerridAI Corpus Viewer 0.42.1" in README
     assert "0.36.10 — In Search of Lost Time" in README
 
 
