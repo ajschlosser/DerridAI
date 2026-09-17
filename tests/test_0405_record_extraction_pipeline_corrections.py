@@ -9,17 +9,17 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.41.0"
-    assert 'version="0.41.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.41.0"' in text("api/app/config.py")
+    assert package["version"]=="0.42.0"
+    assert 'version="0.42.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.42.0"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
 def test_0405_new_semantic_pipeline_is_provenance_versioned():
     builder=text("api/app/corpus_builder.py")
     assert 'SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"' in builder
-    assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v4"' in builder
-    assert 'PROFILE_VERSION = "derrida-scholarly-v8"' in builder
+    assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v5"' in builder
+    assert 'PROFILE_VERSION = "derrida-scholarly-v9"' in builder
     assert '"derrida-scholarly-v2"' in builder  # old build compatibility
 
 
@@ -51,7 +51,7 @@ def test_metadata_is_split_into_small_typed_families_and_preserves_source_record
         assert token in enrich
     run=builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     assert "Metadata worker failed and requires review" in run
-    assert 'fallback["needs_review"] = True' in run
+    assert 'fallback["metadata_needs_attention"] = True' in run
 
 
 def test_build_level_provider_parameters_and_stage_budgets_are_exposed():

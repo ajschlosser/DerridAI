@@ -75,7 +75,16 @@ export interface CorpusBuild {
   metadata_completed?: number;
   metadata_total?: number;
   metadata_concurrency?: number;
-  metadata_issue_summary?: {records_incomplete?:number;fields_unresolved?:number;by_field?:Record<string,number>;invalid_by_field?:Record<string,number>;records?:Array<{record_id?:string;fields?:string[];page_start?:number|string|null;page_end?:number|string|null}>};
+  metadata_issue_summary?: {
+    records_incomplete?:number; fields_unresolved?:number; by_field?:Record<string,number>; by_reason?:Record<string,number>; invalid_by_field?:Record<string,number>;
+    auto_retry_records?:number; human_review_records?:number; auto_retry_fields?:number; human_review_fields?:number;
+    issues?:Array<{record_id?:string;field?:string;issue_type?:string;retryable?:boolean;status?:string;reason?:string;method?:string;confidence?:number|null;current_value?:unknown;page_start?:number|string|null;page_end?:number|string|null}>;
+    records?:Array<{record_id?:string;fields?:string[];issues?:Array<Record<string,unknown>>;page_start?:number|string|null;page_end?:number|string|null}>
+  };
+  metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null};
+  source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
+  pipeline_state?: {current?:string;stages?:Record<string,{state?:string;[key:string]:unknown}>};
+  publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean};
   build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
   request?: Record<string,unknown>;
   llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number};
@@ -94,6 +103,9 @@ export interface CorpusRecord {
   metadata_incomplete_fields?: string[];
   metadata_stage_status?: Record<string,string>;
   metadata_complete?: boolean;
+  metadata_needs_attention?: boolean;
+  metadata_attention_reasons?: string[];
+  source_quality_issues?: Array<{code?:string;pages?:number[]}>;
   needs_review?: boolean;
   review_reason?: string;
   accepted?: boolean;
@@ -134,6 +146,7 @@ export const pdfCorpusApi = {
   patchEvidence: (buildId:string, recordId:string, field:string, blockIds:string[], confidence=1, reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence`, {method:"PATCH",body:JSON.stringify({field,block_ids:blockIds,confidence,reason,expected_revision:expectedRevision})}),
   merge: (buildId:string, recordId:string, direction:"previous"|"next", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/merge`, {method:"POST",body:JSON.stringify({direction,expected_revision:expectedRevision})}),
   split: (buildId:string, recordId:string, afterBlockId:string, expectedRevision?:number) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId,expected_revision:expectedRevision})}),
+  retryMetadata: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/metadata/retry`, {method:"POST",body:JSON.stringify(payload)}),
   rerunMetadata: (buildId:string, recordId:string, payload:Record<string,unknown>) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`, {method:"POST",body:JSON.stringify(payload)}),
   confirmManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/confirm-manifest`, {method:"POST",body:JSON.stringify(payload)}),
   cancel: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/cancel`, {method:"POST"}),

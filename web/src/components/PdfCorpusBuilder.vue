@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock } from "../api/pdfCorpus";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
@@ -18,16 +18,19 @@ import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs, { type ReviewQueue } from "./CorpusReviewQueueTabs.vue";
 import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
 import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
-import CorpusReviewCompletionCard from "./CorpusReviewCompletionCard.vue";
 import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
+import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
+import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
 const route=useRoute();
+const router=useRouter();
 const assets=ref<PdfAsset[]>([]);
 const builds=ref<CorpusBuild[]>([]);
 const buildsTotal=ref(0);
 const providerProfiles=ref<ProviderProfile[]>([]);
+const corpusProfiles=ref<Array<Record<string,unknown>>>([]);
 const serverProviderIds=ref<Set<string>>(new Set());
 const selectedProviderId=ref("");
 const selectedReviewProviderId=ref("");
@@ -116,7 +119,7 @@ const visibleBlocks=computed(()=>{
   return sourceBlocks.value.filter(block=>ids.has(block.block_id));
 });
 const metadataComplete=computed(()=>Number(currentBuild.value?.metadata_total||0)===0||Number(currentBuild.value?.metadata_completed||0)>=Number(currentBuild.value?.metadata_total||0));
-const canPublish=computed(()=>Boolean(currentBuild.value && currentBuild.value.status==="ready" && currentBuild.value.needs_review_count===0 && Number(currentBuild.value.rejected_count||0)===0 && currentBuild.value.accepted_count===currentBuild.value.record_count && currentBuild.value.validation?.valid && metadataComplete.value));
+const canPublish=computed(()=>Boolean(currentBuild.value?.publication_readiness?.can_publish));
 const selectedRecordIndex=computed(()=>records.value.findIndex(row=>row.record_id===selectedRecordId.value));
 const canMergePrevious=computed(()=>Number(selectedRecord.value?.topology_index??-1)>0);
 const canMergeNext=computed(()=>{const index=Number(selectedRecord.value?.topology_index??-1),total=Number(selectedRecord.value?.topology_count??0);return index>=0&&index<total-1});
@@ -127,11 +130,11 @@ const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running
 const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
 const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
 const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
-const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.record_count||0)>0 && Number(currentBuild.value.metadata_completed||0)<Number(currentBuild.value.metadata_total||currentBuild.value.record_count||0)));
+const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.metadata_issue_summary?.auto_retry_fields||0)>0));
 const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete||Math.max(0,Number(currentBuild.value?.metadata_total||0)-Number(currentBuild.value?.metadata_completed||0))));
-const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="enriching"&&metadataIssueCount.value>0));
+const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
-const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (["awaiting_review","awaiting_metadata","ready"].includes(String(currentBuild.value.status))||Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||Number(currentBuild.value.metadata_total||0)>0||recordTotal.value>0)));
+const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (["awaiting_review","awaiting_metadata","ready","running"].includes(String(currentBuild.value.status))||Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||Number(currentBuild.value.metadata_total||0)>0||recordTotal.value>0)));
 const pageNumber=computed(()=>Math.floor(recordOffset.value/pageSize)+1);
 const pageCount=computed(()=>Math.max(1,Math.ceil(recordTotal.value/pageSize)));
 const sourcePdfUrl=computed(()=>selectedAssetId.value?pdfCorpusApi.assetContentUrl(selectedAssetId.value):"");
@@ -141,6 +144,12 @@ const selectedPageMeta=computed(()=>selectedAsset.value?.pages?.find(page=>Numbe
 const selectedPageBlocks=computed(()=>visibleBlocks.value.filter(block=>Number(block.page)===Number(selectedPdfPage.value)));
 const evidenceIdsArray=computed(()=>Array.from(evidenceBlockIds.value));
 const selectedProfile=computed(()=>providerProfiles.value.find(profile=>profile.id===selectedProviderId.value)||null);
+const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v9")||null);
+const regionTypes=computed(()=>Array.isArray(activeCorpusProfile.value?.region_types)?(activeCorpusProfile.value?.region_types as unknown[]).map(String):[]);
+const discourseRoles=computed(()=>Array.isArray(activeCorpusProfile.value?.discourse_roles)?(activeCorpusProfile.value?.discourse_roles as unknown[]).map(String):[]);
+const reviewComplete=computed(()=>Boolean(currentBuild.value&&Number(currentBuild.value.record_count||0)>0&&reviewRemaining.value===0));
+const finishPhase=computed(()=>Boolean(currentBuild.value&&(reviewComplete.value||currentBuild.value.publication)));
+const showReviewWorkspace=computed(()=>Boolean(hasRecordTopology.value&&(!finishPhase.value||reviewQueue.value==="metadata"||reviewQueue.value==="rejected")));
 const selectedProfileModel=computed(()=>String(selectedProfile.value?.model||""));
 const profileGeneration=computed<Record<string,unknown>>(()=>{
   if(!selectedProviderId.value)return {};
@@ -246,6 +255,7 @@ async function refreshProviders(){
     selectedProviderId.value=providerProfiles.value.find(profile=>profile.id===defaultId)?.id||providerProfiles.value[0]?.id||"";
   }
 }
+async function refreshCorpusProfiles(){try{corpusProfiles.value=(await pdfCorpusApi.profiles()).items||[]}catch{corpusProfiles.value=[]}}
 async function refreshAssets(){const result=await pdfCorpusApi.listAssets();assets.value=result.items;if(!selectedAssetId.value&&assets.value[0])selectedAssetId.value=assets.value[0].asset_id}
 async function refreshBuilds(){const result=await pdfCorpusApi.listBuilds(0,100);builds.value=result.items;buildsTotal.value=result.total;const requested=String(route.query.build||"");if(requested&&builds.value.some(build=>build.build_id===requested))selectedBuildId.value=requested;else if(!selectedBuildId.value&&builds.value[0])selectedBuildId.value=builds.value[0].build_id}
 function syncBuildInRail(build:CorpusBuild){const index=builds.value.findIndex(item=>item.build_id===build.build_id);if(index>=0)builds.value.splice(index,1,{...builds.value[index],...build});else builds.value.unshift(build)}
@@ -288,9 +298,11 @@ async function ensureReviewHydrated(preferredId=""){
   if(selectedRecord.value&&!sourceBlocks.value.length)await refreshBlocks();
 }
 async function refreshAll(){
-  await Promise.all([refreshProviders(),refreshAssets(),refreshBuilds()]);
+  await Promise.all([refreshProviders(),refreshCorpusProfiles(),refreshAssets(),refreshBuilds()]);
+  const requestedQueue=String(route.query.queue||"") as ReviewQueue;
+  if(["all","pending","attention","metadata","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
   await refreshBuild();
-  await ensureReviewHydrated();
+  await ensureReviewHydrated(String(route.query.record||""));
   // A second post-paint hydration closes the lifecycle race where build.json is
   // restored before the records route is available after a hard refresh. This is
   // deliberately independent of any form control interaction.
@@ -310,9 +322,15 @@ async function startBuild(){if(!selectedAssetId.value)return;busy.value="build";
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
 async function retryIncompleteMetadata(){
   if(!currentBuild.value||!canRetryMetadata.value)return;
-  const count=metadataIssueCount.value;
-  setMessage(i18n.tf("pdf_corpus.metadata_retry_start","Retrying metadata for {count} record(s). Completed metadata will not be rerun.",{count}));
-  await resumeBuild();
+  const fields=Number(currentBuild.value.metadata_issue_summary?.auto_retry_fields||0);
+  const recordsCount=Number(currentBuild.value.metadata_issue_summary?.auto_retry_records||metadataIssueCount.value);
+  if(fields<1){setMessage(i18n.t("pdf_corpus.no_retryable_metadata","No automatically retryable metadata remains. Open the metadata issue queue for human resolution."));return}
+  busy.value="metadata-retry";
+  try{
+    currentBuild.value=await pdfCorpusApi.retryMetadata(currentBuild.value.build_id,providerPayload.value);
+    syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();
+    setMessage(i18n.tf("pdf_corpus.metadata_retry_start_fields","Retrying {fields} unresolved field(s) across {records} record(s). Topology and completed metadata are preserved.",{fields,records:recordsCount}));
+  }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
 async function reviewMetadataRecord(recordId:string){
   reviewQueue.value="metadata";recordQuery.value=recordId;
@@ -320,9 +338,12 @@ async function reviewMetadataRecord(recordId:string){
   if(selectedRecord.value?.record_id===recordId)focusView.value=false;
 }
 async function openMetadataIssueQueue(){
+  reviewQueue.value="metadata";recordQuery.value="";
   const first=currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
-  if(first)await reviewMetadataRecord(String(first));
+  await nextTick();await refreshRecords(true,first?String(first):"");
+  await nextTick();recordListEl.value?.scrollIntoView({block:"start"});recordListEl.value?.focus({preventScroll:true});
 }
+async function openRejectedQueue(){reviewQueue.value="rejected";recordQuery.value="";await nextTick();await refreshRecords(true);await nextTick();recordListEl.value?.scrollIntoView({block:"start"});recordListEl.value?.focus({preventScroll:true})}
 async function confirmManifest(){if(!currentBuild.value)return;busy.value="manifest";try{currentBuild.value=await pdfCorpusApi.confirmManifest(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.manifest_confirmed","Document manifest confirmed. Semantic segmentation has started."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 function startPolling(){
   stopPolling();
@@ -385,6 +406,21 @@ async function toggleEvidenceBlock(blockId:string){
 }
 async function merge(direction:"previous"|"next"){if(!currentBuild.value||!selectedRecord.value)return;const id=selectedRecord.value.record_id;const scrollY=window.scrollY;busy.value="record";try{const row=await pdfCorpusApi.merge(currentBuild.value.build_id,id,direction,Number(selectedRecord.value.record_revision||1));await refreshBuild();await refreshRecords(false,row.record_id);await nextTick();window.scrollTo({top:scrollY});setMessage(i18n.tf("pdf_corpus.merged","Merged with {direction} record; the merged boundary now requires review.",{direction:i18n.t(`pdf_corpus.${direction}`,direction)}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function split(afterBlockId:string){if(!currentBuild.value||!selectedRecord.value)return;const id=selectedRecord.value.record_id;const scrollY=window.scrollY;busy.value="record";try{const result=await pdfCorpusApi.split(currentBuild.value.build_id,id,afterBlockId,Number(selectedRecord.value.record_revision||1));await refreshBuild();await refreshRecords(false,result.records[0]?.record_id||id);await nextTick();window.scrollTo({top:scrollY});setMessage(i18n.t("pdf_corpus.split_done","Record split at the selected semantic source boundary. Both records require review."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function resolveMetadataField(field:string,value:unknown){
+  if(!currentBuild.value||!selectedRecord.value)return;
+  busy.value="metadata-field";const recordId=selectedRecord.value.record_id;
+  try{
+    const row=await pdfCorpusApi.patchMetadata(currentBuild.value.build_id,recordId,{[field]:value},Number(selectedRecord.value.record_revision||1));
+    selectedRecord.value=row;metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);
+    await refreshBuild();
+    if((row.metadata_incomplete_fields||[]).length===0&&reviewQueue.value==="metadata"){
+      await refreshRecords(false);
+    }else{await refreshRecords(false,recordId)}
+    setMessage(i18n.tf("pdf_corpus.metadata_field_confirmed","Confirmed {field}. Publication readiness has been recalculated.",{field:i18n.t(`record.${field}`,field.replace(/_/g,' '))}));
+  }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
+function showMetadataSource(field:string){selectedEvidenceField.value=field;const ids=selectedRecord.value?.metadata_evidence?.[field]?.block_ids||[];const first=sourceBlocks.value.find(block=>ids.includes(block.block_id));if(first)selectedPdfPage.value=Number(first.page||selectedPdfPage.value)}
+
 async function rerunMetadata(){if(!currentBuild.value||!selectedRecord.value)return;busy.value="record";try{const row=await pdfCorpusApi.rerunMetadata(currentBuild.value.build_id,selectedRecord.value.record_id,providerPayload.value);selectedRecord.value=row;metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);await refreshBuild();await refreshRecords();setMessage(i18n.t("pdf_corpus.metadata_rerun","Interpretive metadata rerun. Primary source text remained unchanged."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function publish(options:{download?:boolean;automatic?:boolean}={}){
   if(!currentBuild.value)return null;busy.value="publish";
@@ -420,8 +456,19 @@ watch(()=>route.query.build,async value=>{
   const buildId=String(value||"");
   if(!buildId||buildId===selectedBuildId.value)return;
   selectedBuildId.value=buildId;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];
-  await refreshBuild();await refreshRecords(true);if(buildRunning.value)startPolling();
+  const requestedQueue=String(route.query.queue||"") as ReviewQueue;
+  if(["all","pending","attention","metadata","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
+  await refreshBuild();await refreshRecords(true,String(route.query.record||""));if(buildRunning.value)startPolling();
 });
+watch(()=>route.query.queue,value=>{const queue=String(value||"") as ReviewQueue;if(["all","pending","attention","metadata","accepted","rejected"].includes(queue)&&queue!==reviewQueue.value)reviewQueue.value=queue});
+watch(()=>route.query.record,async value=>{const id=String(value||"");if(!id||id===selectedRecordId.value)return;await refreshRecords(false,id)});
+watch([selectedBuildId,reviewQueue,selectedRecordId],()=>{
+  if(!selectedBuildId.value)return;
+  const query={...route.query,build:selectedBuildId.value,queue:reviewQueue.value} as Record<string,string|undefined>;
+  if(selectedRecordId.value)query.record=selectedRecordId.value;else delete query.record;
+  const same=String(route.query.build||"")===String(query.build||"")&&String(route.query.queue||"")===String(query.queue||"")&&String(route.query.record||"")===String(query.record||"");
+  if(!same)void router.replace({query});
+},{flush:"post"});
 watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,recordSizing,maxConcurrentRequests],persistBuilderDraft,{deep:true});
 watch(metadataDraft,(value)=>{if(!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(metadataDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
 onMounted(()=>{window.addEventListener("keydown",reviewShortcut);restoreBuilderDraft();void refreshAll().then(()=>{if(buildRunning.value)startPolling()}).catch(exc=>setMessage(exc instanceof Error?exc.message:String(exc),"error"))});
@@ -512,14 +559,13 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             <div class="summary-actions">
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">{{i18n.t('pdf_corpus.cancel','Cancel')}}</button>
               <button v-if="canResume" type="button" class="btn" @click="resumeBuild" :disabled="busy!==''">{{i18n.t('pdf_corpus.resume','Resume from checkpoint')}}</button>
-              <button v-if="canRetryMetadata" type="button" class="btn" @click="retryIncompleteMetadata" :disabled="busy!==''">{{metadataRetryRunning?i18n.t('pdf_corpus.retrying_metadata','Retrying metadata…'):i18n.t('pdf_corpus.retry_metadata_failures','Retry incomplete metadata')}}</button>
-              <a v-if="currentBuild.publication" class="btn primary" :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)">{{i18n.t('pdf_corpus.download_jsonl','Download JSONL')}}</a><button v-else-if="canPublish" type="button" class="btn primary" @click="publish({download:false})" :disabled="busy!==''">{{i18n.t('pdf_corpus.finalize_publish','Finalize & publish')}}</button>
+              <a v-if="currentBuild.publication" class="btn primary" :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)">{{i18n.t('pdf_corpus.download_jsonl','Download JSONL')}}</a>
             </div>
           </div>
           <CorpusBuildLifecycleCard :build="currentBuild" />
           <CorpusQualitySummary v-if="!awaitingManifestReview" :build="currentBuild" />
-          <CorpusMetadataIssues v-if="!awaitingManifestReview && metadataIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
-          <CorpusReviewCompletionCard v-if="!awaitingManifestReview" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @publish="publish({download:false})" />
+          <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @publish="publish({download:false})" />
+          <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
           <CorpusBuildTimeline v-if="!awaitingManifestReview" :build="currentBuild" />
           <details class="technical-details">
             <summary>{{i18n.t('pdf_corpus.technical_details','Technical build details')}}</summary>
@@ -548,7 +594,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <div class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{currentBuild.schema_version}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
         </section>
 
-        <template v-if="hasRecordTopology">
+        <template v-if="showReviewWorkspace">
           <section v-if="currentBuild" class="review-handoff" :data-state="currentBuild.status" role="status">
             <div><b>{{currentBuild.publication?i18n.t('pdf_corpus.flow_published_title','Published revision'):currentBuild.status==='ready'?i18n.t('pdf_corpus.flow_ready_title','Ready to publish'):currentBuild.status==='awaiting_metadata'?i18n.t('pdf_corpus.flow_metadata_title','Review complete — metadata needs attention'):i18n.t('pdf_corpus.flow_review_title','Review generated records')}}</b><span>{{currentBuild.publication?i18n.t('pdf_corpus.flow_published_help','This published snapshot is immutable. Editing the draft creates a new unpublished revision.'):currentBuild.status==='ready'?i18n.t('pdf_corpus.flow_ready_help','All quality gates have passed. Publish when you are ready.'):currentBuild.status==='awaiting_metadata'?i18n.t('pdf_corpus.flow_metadata_help','All records are accepted. Retry or resolve incomplete metadata before publication.'):i18n.t('pdf_corpus.flow_review_help','Work through the review queue. Accept and Reject update immediately and move to the next proposal.')}}</span></div>
             <strong>{{currentBuild.accepted_count||0}} / {{currentBuild.record_count||0}} {{i18n.t('pdf_corpus.accepted_label','accepted')}}</strong>
@@ -562,7 +608,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
 
           <section class="review-grid record-first-review" :aria-busy="recordsLoading">
-            <nav ref="recordListEl" class="records-pane" :aria-labelledby="'pdf-corpus-records-pane'">
+            <nav ref="recordListEl" class="records-pane" tabindex="-1" :aria-labelledby="'pdf-corpus-records-pane'">
               <div class="pane-head"><b id="pdf-corpus-records-pane">{{i18n.t('pdf_corpus.review_queue','Review queue')}}</b><span>{{recordTotal}}</span></div>
               <button v-for="record in records" :key="record.record_id" type="button" class="record-row" :class="{active:record.record_id===selectedRecordId}" :aria-current="record.record_id===selectedRecordId?'true':undefined" @click="selectRecord(record)">
                 <span class="record-state" :data-state="record.rejected?'rejected':record.needs_review?'review':record.accepted?'accepted':'ready'" aria-hidden="true"></span>
@@ -577,7 +623,8 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <header class="record-review-head"><div><span class="eyebrow">{{i18n.t('pdf_corpus.proposed_record','Proposed record')}}</span><h3 id="review-record-title">{{selectedRecord.record_id}}</h3><p>{{i18n.t('pdf_corpus.pages','pp.')}} {{selectedRecord.page_start}}–{{selectedRecord.page_end}} · {{selectedRecord.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</p></div><button type="button" class="btn small" @click="focusView=true">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></header>
                 <aside v-if="selectedRecord.review_reason" class="review-reason" role="note"><b>{{i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
                 <div class="record-primary-text">{{selectedRecord.text}}</div>
-                <div class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.reject','Reject')}}</button><button type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
+                <div v-if="reviewQueue!=='metadata'" class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.reject','Reject')}}</button><button type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
+                <CorpusMetadataResolutionPanel v-if="reviewQueue==='metadata'" :record="selectedRecord" :region-types="regionTypes" :discourse-roles="discourseRoles" :busy="busy!==''" @resolve="resolveMetadataField" @source="showMetadataSource" />
                 <details class="record-data"><summary>{{i18n.t('pdf_corpus.record_data','Record data & evidence')}}</summary><p class="help">{{i18n.t('pdf_corpus.metadata_help','Only model/human-owned metadata is editable here. Text, pages, source spans, and record IDs are protected server-side.')}}</p><label class="sr-only" for="pdf-corpus-metadata">{{i18n.t('pdf_corpus.interpretive_metadata','Interpretive metadata')}}</label><textarea id="pdf-corpus-metadata" v-model="metadataDraft" class="metadata-json" spellcheck="false"></textarea><div class="data-actions"><button type="button" class="btn small" @click="saveMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.save_metadata','Save metadata')}}</button><button type="button" class="btn small" @click="rerunMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.rerun_metadata','Rerun metadata')}}</button></div><FieldEvidenceList :evidence="selectedRecord.metadata_evidence||{}" :fields="evidenceCandidateFields" :selected-field="selectedEvidenceField" @select="selectedEvidenceField=$event" /></details>
               </template>
               <div v-else class="inspector-empty">{{i18n.t('pdf_corpus.select_record','Select a generated record to inspect its source binding and metadata.')}}</div>

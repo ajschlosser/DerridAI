@@ -27,16 +27,16 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
     asset=install_asset(repo,count)
-    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.41.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.42.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 
 def test_release_contract_is_v8_with_field_aware_metadata():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v8"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v4"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v8"
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v9"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v5"
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v9"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==8
+    assert profile["version"]==9
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]
@@ -138,15 +138,15 @@ def test_pipeline_hydration_and_completion_are_explicit_without_form_interaction
     assert "ensureReviewHydrated" in builder
     assert "window.setTimeout" in builder
     assert 'flush:"post"' in builder
-    assert "CorpusReviewCompletionCard" in builder
+    assert "CorpusFinishWorkspace" in builder and "CorpusMetadataResolutionPanel" in builder
     assert "CorpusMetadataIssues" in builder
     assert "metadataIncompleteOnly" in builder
-    for label in ["Extract source","Construct records","Enrich metadata","Validate records","Publish snapshot"]:
+    for label in ["Extract source","Construct records","Enrich metadata","Validate corpus","Publish snapshot"]:
         assert label in lifecycle
 
 
 def test_storybook_covers_aardvark_workflow_surfaces():
-    for name in ["CorpusMetadataIssues.stories.ts","CorpusReviewCompletionCard.stories.ts","CorpusBuildTimeline.stories.ts","CorpusRecordFocusReview.stories.ts"]:
+    for name in ["CorpusMetadataIssues.stories.ts","CorpusFinishWorkspace.stories.ts","CorpusMetadataResolutionPanel.stories.ts","CorpusBuildTimeline.stories.ts","CorpusRecordFocusReview.stories.ts"]:
         assert (ROOT/"web/src/components"/name).exists()
 
 

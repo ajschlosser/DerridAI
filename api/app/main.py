@@ -82,7 +82,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.41.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.42.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1170,7 +1170,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.41.0",
+            "app_version": "0.42.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1971,6 +1971,18 @@ def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
         return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/metadata/retry")
+def retry_pdf_corpus_metadata(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.retry_incomplete_metadata(
+            build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

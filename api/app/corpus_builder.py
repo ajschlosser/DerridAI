@@ -25,9 +25,10 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v4"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v5"
+PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v8"
+PROFILE_VERSION = "derrida-scholarly-v9"
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -859,11 +860,36 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_max_chars": 3500,
         "topology_review_chars": 6000,
     },
+    "derrida-scholarly-v8": {
+        "id": "derrida-scholarly-v8",
+        "name": "Derrida scholarly corpus v8 (legacy)",
+        "version": 8,
+        "description": "0.41.0 Aardvark profile retained for historical build compatibility.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": DISCOURSE_ROLES,
+        "region_types": REGION_TYPES,
+        "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "min_boundary_confidence": 0.72,
+        "candidate_llm_threshold": 0.30,
+        "deterministic_split_threshold": 0.92,
+        "review_risk_threshold": 0.90,
+        "max_llm_boundary_calls_per_100_atoms": 18,
+        "boundary_batch_size": 6,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "preferred_record_chars": 1750,
+        "record_length_tolerance": 200,
+        "long_record_chars": 3500,
+        "absolute_record_chars": 6000,
+        "soft_max_chars": 3500,
+        "topology_review_chars": 6000,
+    },
     PROFILE_VERSION: {
         "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v8",
-        "version": 8,
-        "description": "Aardvark profile: topology-quality segmentation plus field-aware hybrid metadata inference, constrained region/discourse classification, evidence-bound LLM fallback, and explicit publication eligibility.",
+        "name": "Derrida scholarly corpus v9",
+        "version": 9,
+        "description": "Bunny Rabbit profile: explicit staged workflow, field-level metadata issue resolution, publication-readiness validation, source-quality gating, and auditable retry operations.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -1145,6 +1171,126 @@ class PdfCorpusBuildManager:
         with self._lock:
             return build_id in self._cancel
 
+    @staticmethod
+    def _metadata_issue_type(status: dict[str, Any] | None, record: dict[str, Any]) -> str:
+        info = status or {}
+        explicit = str(info.get("reason_code") or "").strip()
+        if explicit:
+            return explicit
+        state = str(info.get("status") or "unresolved")
+        reason = str(info.get("reason") or "").casefold()
+        stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
+        if "source quality" in reason or "extraction" in reason:
+            return "source_quality"
+        if state == "invalid":
+            return "invalid_value"
+        if any(value == "needs_review" for value in stage_status.values()) and "model" in reason:
+            return "llm_failed"
+        if "evidence" in reason or "confidence" in reason:
+            return "evidence_failed"
+        if "ambiguous" in reason or "disagree" in reason:
+            return "ambiguous"
+        if not info:
+            return "not_run"
+        return "unresolved"
+
+    @classmethod
+    def _refresh_workflow_fields(cls, build: dict[str, Any]) -> dict[str, Any]:
+        """Persist one coherent, machine-readable corpus workflow/readiness model.
+
+        UI stages are derived from independent facts rather than one overloaded
+        status string. This keeps refreshes, retries, review completion and
+        publication snapshots consistent.
+        """
+        record_count = int(build.get("record_count") or 0)
+        accepted = int(build.get("accepted_count") or 0)
+        rejected = int(build.get("rejected_count") or 0)
+        reviewed = min(record_count, accepted + rejected)
+        pending = max(0, record_count - reviewed)
+        metadata_total = int(build.get("metadata_total") or record_count or 0)
+        metadata_completed = int(build.get("metadata_completed") or 0)
+        metadata_remaining = max(0, metadata_total - metadata_completed)
+        issue_summary = build.get("metadata_issue_summary") if isinstance(build.get("metadata_issue_summary"), dict) else {}
+        unresolved_fields = int(issue_summary.get("fields_unresolved") or 0)
+        validation = build.get("validation") if isinstance(build.get("validation"), dict) else {}
+        source_quality = build.get("source_quality") if isinstance(build.get("source_quality"), dict) else {}
+        publication = build.get("publication") if isinstance(build.get("publication"), dict) else None
+        running = str(build.get("status") or "") in {"queued", "running"}
+        stage = str(build.get("stage") or "")
+        profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES.get(PROFILE_VERSION, {}))
+        required_fields = list(profile.get("publication_required_metadata_fields") or profile.get("required_metadata_fields") or [])
+
+        blockers: list[dict[str, Any]] = []
+        if pending:
+            blockers.append({"code": "review_pending", "count": pending})
+        if rejected:
+            blockers.append({"code": "rejected_records", "count": rejected})
+        if int(build.get("needs_review_count") or 0):
+            blockers.append({"code": "record_attention", "count": int(build.get("needs_review_count") or 0)})
+        if int(build.get("boundary_review_count") or 0):
+            blockers.append({"code": "boundary_attention", "count": int(build.get("boundary_review_count") or 0)})
+        if metadata_remaining or unresolved_fields:
+            blockers.append({"code": "required_metadata", "count": max(metadata_remaining, int(issue_summary.get("records_incomplete") or 0)), "fields": required_fields})
+        if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
+            blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
+        if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
+            blockers.append({"code": "metadata_validation", "count": len(validation.get("metadata_evidence_errors") or []) + len(validation.get("metadata_schema_errors") or []) + len(validation.get("citation_errors") or [])})
+        if int(source_quality.get("blocking_page_count") or 0):
+            blockers.append({"code": "source_quality", "count": int(source_quality.get("blocking_page_count") or 0)})
+
+        can_publish = bool(record_count and not blockers and bool(validation.get("valid", True)) and accepted == record_count)
+        if publication:
+            next_action = "download_publication"
+        elif running:
+            next_action = "wait"
+        elif pending or int(build.get("needs_review_count") or 0) or int(build.get("boundary_review_count") or 0):
+            next_action = "review_records"
+        elif rejected:
+            next_action = "resolve_rejections"
+        elif metadata_remaining or unresolved_fields:
+            next_action = "resolve_metadata"
+        elif blockers:
+            next_action = "resolve_validation"
+        elif can_publish:
+            next_action = "publish"
+        else:
+            next_action = "inspect"
+
+        extraction_state = "complete" if int(build.get("source_block_count") or 0) else ("active" if running and stage in {"structure", "document_review"} else "waiting")
+        construction_state = "complete" if record_count else ("active" if running and stage in {"segmenting", "reconciling"} else "waiting")
+        enrichment_state = "complete" if metadata_total and metadata_remaining == 0 else ("active" if running and stage in {"enriching", "metadata_retry"} else "attention" if record_count else "waiting")
+        review_state = "complete" if record_count and pending == 0 else ("attention" if record_count else "waiting")
+        validation_state = "complete" if validation.get("valid") else ("blocked" if validation else "waiting")
+        publication_state = "complete" if publication else ("active" if can_publish else "blocked" if record_count else "waiting")
+        build["pipeline_state"] = {
+            "current": next_action,
+            "stages": {
+                "extraction": {"state": extraction_state},
+                "construction": {"state": construction_state},
+                "enrichment": {"state": enrichment_state, "remaining_records": metadata_remaining, "unresolved_fields": unresolved_fields},
+                "review": {"state": review_state, "reviewed": reviewed, "pending": pending, "accepted": accepted, "rejected": rejected},
+                "validation": {"state": validation_state},
+                "publication": {"state": publication_state},
+            },
+        }
+        build["publication_readiness"] = {
+            "can_publish": can_publish,
+            "next_action": next_action,
+            "blockers": blockers,
+            "required_metadata_fields": required_fields,
+            "records_total": record_count,
+            "records_reviewed": reviewed,
+            "records_accepted": accepted,
+            "records_rejected": rejected,
+            "records_pending": pending,
+            "metadata_records_remaining": metadata_remaining,
+            "metadata_fields_unresolved": unresolved_fields,
+            "source_valid": bool(validation.get("source_valid", validation.get("valid", False))) if validation else False,
+            "metadata_valid": bool(validation.get("metadata_valid", validation.get("valid", False))) if validation else False,
+            "published": bool(publication),
+        }
+        return build
+
     def _update(self, build_id: str, *, stage: str | None = None, progress: float | None = None, **changes: Any) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         prior_stage = str(build.get("stage") or "")
@@ -1165,6 +1311,7 @@ class PdfCorpusBuildManager:
                 "progress": round(float(build.get("progress") or 0.0), 4),
             })
             build["build_events"] = events[-120:]
+        self._refresh_workflow_fields(build)
         self.repo.save_build(build)
         return build
 
@@ -2690,6 +2837,30 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
         allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
+        # Do not ask a model to interpret source text that deterministic extraction
+        # quality checks have already identified as corrupted. Preserve any
+        # deterministic classifications and route only the unresolved fields to
+        # explicit human/source repair.
+        if record.get("source_quality_issues"):
+            field_status = record.setdefault("metadata_field_status", {})
+            for field in required_metadata_fields:
+                current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+                if current.get("status") == "deterministic":
+                    continue
+                field_status[field] = {
+                    "status": "unresolved", "method": "source_quality_gate",
+                    "confidence": 0.0, "reason_code": "source_quality",
+                    "reason": "Automatic enrichment was skipped because this record touches a source page with blocking extraction-quality findings.",
+                }
+            incomplete_fields = [field for field in required_metadata_fields if str((field_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or record.get(field) in (None, "", [])]
+            record["metadata_incomplete_fields"] = incomplete_fields
+            record["metadata_complete"] = not incomplete_fields
+            record["metadata_stage_status"] = {"source_quality": "needs_review"}
+            record["metadata_needs_attention"] = True
+            record["metadata_attention_reasons"] = ["Source extraction quality must be resolved before scholarly metadata enrichment."]
+            inline, full = _citation_strings(record)
+            record["inline_citation"] = inline; record["full_citation"] = full
+            return record
         limits = self._stage_limits(request)
         neighbor_context = {
             "previous_record_tail": previous_text[-1800:] if previous_text else "",
@@ -2787,13 +2958,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
-                    field_status[key] = {"status": "invalid", "method": "llm", "reason": f"Model returned an unsupported region type: {value}"}
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": f"Model returned an unsupported region type: {value}"}
                     continue
                 if key == "discourse_role" and value is not None and value not in allowed_discourse_roles:
-                    field_status[key] = {"status": "invalid", "method": "llm", "reason": f"Model returned an unsupported discourse role: {value}"}
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": f"Model returned an unsupported discourse role: {value}"}
                     continue
                 if key == "primary_text" and value is not None and not isinstance(value, bool):
-                    field_status[key] = {"status": "invalid", "method": "llm", "reason": "Model returned a non-boolean primary_text value."}
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": "Model returned a non-boolean primary_text value."}
                     continue
                 record[key] = value
             evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
@@ -2843,19 +3014,20 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             if value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": 0.0, "reason": "No validated deterministic or model classification was available."}
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": 0.0, "reason_code": "ambiguous", "reason": "No validated deterministic or model classification was available."}
             elif evidence_info.get("block_ids") and float(evidence_info.get("confidence") or 0) >= minimum:
-                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason": str(evidence_info.get("reason") or "Evidence-bound model classification.")}
+                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason_code": "resolved", "reason": str(evidence_info.get("reason") or "Evidence-bound model classification.")}
             else:
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason": "The model classification did not meet evidence or confidence requirements."}
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": float(evidence_info.get("confidence") or 0), "reason_code": "evidence_failed", "reason": "The model classification did not meet evidence or confidence requirements."}
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else 0.0
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
         if review_reasons:
-            record["needs_review"] = True
-            prior = str(record.get("review_reason") or "").strip()
-            combined = ([prior] if prior else []) + review_reasons
-            record["review_reason"] = "; ".join(dict.fromkeys(value for value in combined if value))[:2400]
+            record["metadata_needs_attention"] = True
+            record["metadata_attention_reasons"] = list(dict.fromkeys(value for value in review_reasons if value))[:50]
+        else:
+            record["metadata_needs_attention"] = False
+            record["metadata_attention_reasons"] = []
         incomplete_fields = [
             field for field in required_metadata_fields
             if (record.get(field) in (None, "", []) or str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"})
@@ -2874,6 +3046,63 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         record["inline_citation"] = inline
         record["full_citation"] = full
         return record
+
+    @staticmethod
+    def _source_quality_report(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+        """Detect extraction problems before asking an LLM to interpret damaged text.
+
+        This is intentionally conservative: sparse pages are warnings, while only
+        strong corruption signals (replacement/control characters) block automatic
+        scholarly enrichment for records touching the affected page.
+        """
+        by_page: dict[int, list[str]] = {}
+        methods: dict[int, Counter[str]] = {}
+        for block in blocks:
+            try:
+                page = int(block.get("page") or 0)
+            except (TypeError, ValueError):
+                continue
+            if page < 1:
+                continue
+            text = unicodedata.normalize("NFC", str(block.get("text") or ""))
+            by_page.setdefault(page, []).append(text)
+            methods.setdefault(page, Counter())[str(block.get("extraction_method") or "unknown")] += 1
+        issues: list[dict[str, Any]] = []
+        blocking_pages: list[int] = []
+        warning_pages: list[int] = []
+        for page, parts in sorted(by_page.items()):
+            text = "\n".join(parts)
+            chars = len(text)
+            replacement = text.count("\ufffd")
+            controls = sum(1 for ch in text if unicodedata.category(ch) == "Cc" and ch not in "\n\r\t")
+            printable = sum(1 for ch in text if not ch.isspace())
+            replacement_ratio = replacement / max(1, printable)
+            severity = "ok"
+            codes: list[str] = []
+            if replacement >= 2 and replacement_ratio >= 0.005:
+                severity = "blocking"; codes.append("replacement_characters")
+            if controls:
+                severity = "blocking"; codes.append("control_characters")
+            if chars < 20:
+                if severity != "blocking": severity = "warning"
+                codes.append("very_low_text_density")
+            if codes:
+                issue = {
+                    "page": page, "severity": severity, "codes": codes,
+                    "characters": chars, "replacement_characters": replacement,
+                    "control_characters": controls, "extraction_methods": dict(methods.get(page) or {}),
+                }
+                issues.append(issue)
+                (blocking_pages if severity == "blocking" else warning_pages).append(page)
+        return {
+            "valid_for_enrichment": not blocking_pages,
+            "page_count": len(by_page),
+            "blocking_page_count": len(blocking_pages),
+            "warning_page_count": len(warning_pages),
+            "blocking_pages": blocking_pages,
+            "warning_pages": warning_pages,
+            "issues": issues,
+        }
 
     @staticmethod
     def validate_records(blocks: list[dict[str, Any]], records: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
@@ -3031,6 +3260,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             # The reviewed manifest defines the semantic-analysis region. Source
             # blocks outside it remain in the persisted source asset for audit.
             source_blocks = self._manifest_main_text_blocks(blocks, manifest)
+            source_quality = self._source_quality_report(source_blocks)
+            self._update(build_id, source_quality=source_quality)
             semantic_blocks = self._semantic_atoms(source_blocks)
             if len(semantic_blocks) < 2:
                 semantic_blocks = source_blocks
@@ -3083,6 +3314,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 # Persist deterministic records before any metadata call. A provider
                 # failure can therefore never discard successful segmentation work.
                 self.repo.save_records(build_id, records)
+            blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
+            for record in records:
+                record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
+                affected = sorted(record_pages & blocking_pages)
+                if affected:
+                    record["source_quality_issues"] = [{"code": "source_quality_blocking", "pages": affected}]
+            self.repo.save_records(build_id, records)
             self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records))
 
             total = max(1, len(records))
@@ -3128,10 +3366,24 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             # source-derived record and route this item to review.
                             fallback = dict(records[index])
                             fallback["metadata_complete"] = False
-                            fallback["needs_review"] = True
-                            reasons = [str(fallback.get("review_reason") or "").strip()]
+                            fallback["metadata_needs_attention"] = True
+                            profile_for_failure = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+                            required_failure_fields = list(profile_for_failure.get("required_metadata_fields") or [])
+                            failure_status = fallback.setdefault("metadata_field_status", {})
+                            for field in required_failure_fields:
+                                current = failure_status.get(field) if isinstance(failure_status.get(field), dict) else {}
+                                if current.get("status") == "deterministic":
+                                    continue
+                                failure_status[field] = {
+                                    "status": "unresolved", "method": "llm", "confidence": 0.0,
+                                    "reason_code": "llm_failed",
+                                    "reason": f"Metadata worker failed before this field could be validated: {exc}",
+                                }
+                            fallback["metadata_incomplete_fields"] = [field for field in required_failure_fields if str((failure_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or fallback.get(field) in (None, "", [])]
+                            fallback["metadata_stage_status"] = {**(fallback.get("metadata_stage_status") or {}), "worker": "needs_review"}
+                            reasons = list(fallback.get("metadata_attention_reasons") or [])
                             reasons.append(f"Metadata worker failed and requires review: {exc}")
-                            fallback["review_reason"] = " ".join(reason for reason in reasons if reason).strip()
+                            fallback["metadata_attention_reasons"] = list(dict.fromkeys(reason for reason in reasons if reason))[:50]
                             records[index] = fallback
                             self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
                         completed += 1
@@ -3192,6 +3444,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             if not block.get("excluded_reason")
         ]
         blocks = self._manifest_main_text_blocks(blocks, build.get("manifest") or {})
+        build["source_quality"] = self._source_quality_report(blocks)
         profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
         validation = self.validate_records(blocks, records, profile)
         self.repo.save_records(build_id, records)
@@ -3206,19 +3459,44 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build["metadata_total"] = len(records)
         build["metadata_completed"] = sum(1 for record in records if bool(record.get("metadata_complete")))
         issue_records: list[dict[str, Any]] = []
+        issue_rows: list[dict[str, Any]] = []
         by_field: Counter[str] = Counter()
+        by_reason: Counter[str] = Counter()
         invalid_by_field: Counter[str] = Counter()
+        retryable_record_ids: set[str] = set()
+        human_record_ids: set[str] = set()
+        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
         for record in records:
             incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
             statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            record_issues: list[dict[str, Any]] = []
             for field in incomplete:
                 by_field[field] += 1
-                if isinstance(statuses.get(field), dict) and statuses[field].get("status") == "invalid":
+                status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
+                if status_info.get("status") == "invalid":
                     invalid_by_field[field] += 1
+                issue_type = self._metadata_issue_type(status_info, record)
+                by_reason[issue_type] += 1
+                retryable = issue_type in retryable_types
+                row = {
+                    "record_id": record.get("record_id"), "field": field,
+                    "issue_type": issue_type, "retryable": retryable,
+                    "status": status_info.get("status") or "unresolved",
+                    "reason": status_info.get("reason") or "",
+                    "method": status_info.get("method") or "",
+                    "confidence": status_info.get("confidence"),
+                    "current_value": record.get(field),
+                    "page_start": record.get("page_start"), "page_end": record.get("page_end"),
+                }
+                issue_rows.append(row); record_issues.append(row)
+                rid = str(record.get("record_id") or "")
+                if retryable: retryable_record_ids.add(rid)
+                else: human_record_ids.add(rid)
             if incomplete:
                 issue_records.append({
                     "record_id": record.get("record_id"),
                     "fields": incomplete,
+                    "issues": record_issues,
                     "page_start": record.get("page_start"),
                     "page_end": record.get("page_end"),
                 })
@@ -3226,7 +3504,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "records_incomplete": len(issue_records),
             "fields_unresolved": sum(by_field.values()),
             "by_field": dict(sorted(by_field.items())),
+            "by_reason": dict(sorted(by_reason.items())),
             "invalid_by_field": dict(sorted(invalid_by_field.items())),
+            "auto_retry_records": len(retryable_record_ids),
+            "human_review_records": len(human_record_ids),
+            "auto_retry_fields": sum(1 for row in issue_rows if row["retryable"]),
+            "human_review_fields": sum(1 for row in issue_rows if not row["retryable"]),
+            "issues": issue_rows[:1000],
             "records": issue_records[:250],
         }
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
@@ -3262,6 +3546,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build["progress"] = 0.90 + 0.06 * review_fraction
             build["status"] = "awaiting_review"
             build["stage"] = "review"
+        self._refresh_workflow_fields(build)
         self.repo.save_build(build)
         return build
 
@@ -3425,11 +3710,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 record["metadata_incomplete_fields"] = incomplete
                 if not incomplete:
                     record["metadata_complete"] = True
-                record["accepted"] = False
-                record["rejected"] = False
-                record["review_disposition"] = "pending"
-                record["needs_review"] = True
-                record["review_reason"] = "Metadata edited during human review."
+                record["metadata_needs_attention"] = bool(incomplete)
+                record["metadata_attention_reasons"] = (["Required metadata remains unresolved after human editing."] if incomplete else [])
                 record["record_revision"] = current_revision + 1
                 break
         if target is None:
@@ -3473,11 +3755,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         else:
             evidence.pop(field, None)
         target["metadata_evidence"] = evidence
-        target["accepted"] = False
-        target["rejected"] = False
-        target["review_disposition"] = "pending"
-        target["needs_review"] = True
-        target["review_reason"] = "Source evidence binding edited during human review."
+        target["metadata_needs_attention"] = True
+        target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         return target
@@ -3544,6 +3823,128 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return {"records": pieces}
 
+    def retry_incomplete_metadata(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Retry only automatically-retryable metadata issues.
+
+        This is deliberately separate from ``resume``: a metadata retry never
+        re-enters document analysis, segmentation, or topology construction.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            return build
+        records = self.repo.load_records(build_id)
+        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
+        target_indices: list[int] = []
+        target_fields: dict[str, list[str]] = {}
+        for index, record in enumerate(records):
+            incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
+            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            retry_fields = [field for field in incomplete if self._metadata_issue_type(statuses.get(field) if isinstance(statuses.get(field), dict) else {}, record) in retryable_types]
+            if retry_fields:
+                target_indices.append(index)
+                target_fields[str(record.get("record_id") or index)] = retry_fields
+        if not target_indices:
+            raise ValueError("No automatically retryable metadata fields remain. Review the human-resolution queue instead.")
+        self._validate_execution_budget(request)
+        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
+        build["provider"] = request.get("provider") or build.get("provider") or "ollama"
+        build["model"] = request.get("model") or build.get("model")
+        build["request"] = {**(build.get("request") or {}), **public_request}
+        operation_id = f"metadata-retry-{uuid.uuid4().hex[:10]}"
+        operation = {
+            "operation_id": operation_id, "kind": "metadata_retry", "state": "queued",
+            "started_at": iso_now(), "finished_at": None,
+            "records_total": len(target_indices), "records_processed": 0,
+            "fields_total": sum(len(fields) for fields in target_fields.values()),
+            "fields_resolved": 0, "fields_remaining": sum(len(fields) for fields in target_fields.values()),
+            "provider_profile_id": public_request.get("provider_profile_id"),
+            "provider": build.get("provider"), "model": build.get("model"),
+            "target_fields": target_fields,
+        }
+        build["metadata_operation"] = operation
+        self.repo.save_build(build)
+        self._update(build_id, status="running", stage="metadata_retry", progress=max(0.96, float(build.get("progress") or 0.0)), error=None, resumable=False, metadata_operation=operation)
+        self._executor.submit(self._retry_metadata_worker, build_id, request, operation_id, target_indices, target_fields)
+        return self.repo.get_build(build_id)
+
+    def _retry_metadata_worker(self, build_id: str, request: dict[str, Any], operation_id: str, target_indices: list[int], target_fields: dict[str, list[str]]) -> None:
+        try:
+            build = self.repo.get_build(build_id)
+            records = self.repo.load_records(build_id)
+            manifest = build.get("manifest") or {}
+            total = max(1, len(target_indices))
+            max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+            operation = dict(build.get("metadata_operation") or {})
+            operation["state"] = "running"
+            self._update(build_id, metadata_operation=operation)
+            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-retry") as pool:
+                futures = {}
+                for index in target_indices:
+                    record = dict(records[index])
+                    previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
+                    next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
+                    before = list(record.get("metadata_incomplete_fields") or [])
+                    future = pool.submit(self._enrich_record, record, manifest, request, previous_text=previous_text, next_text=next_text, build_id=build_id)
+                    futures[future] = (index, before)
+                processed = 0
+                resolved = 0
+                for future in as_completed(futures):
+                    index, before = futures[future]
+                    try:
+                        updated = future.result()
+                    except Exception as exc:
+                        updated = dict(records[index])
+                        statuses = updated.setdefault("metadata_field_status", {})
+                        for field in target_fields.get(str(updated.get("record_id") or index), []):
+                            statuses[field] = {"status": "unresolved", "method": "llm", "confidence": 0.0, "reason_code": "llm_failed", "reason": f"Metadata retry failed: {exc}"}
+                        updated["metadata_needs_attention"] = True
+                        updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
+                    records[index] = updated
+                    after = set(updated.get("metadata_incomplete_fields") or [])
+                    resolved += sum(1 for field in before if field not in after)
+                    processed += 1
+                    self.repo.save_records(build_id, records)
+                    op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
+                    op.update({
+                        "state": "running", "records_processed": processed,
+                        "fields_resolved": resolved,
+                        "fields_remaining": max(0, int(op.get("fields_total") or 0) - resolved),
+                    })
+                    self._update(build_id, status="running", stage="metadata_retry", progress=min(0.979, 0.96 + 0.019 * (processed / total)), metadata_operation=op)
+            final_build = self._rewrite_and_validate(build_id, records)
+            target_remaining = 0
+            for record in records:
+                rid = str(record.get("record_id") or "")
+                if rid not in target_fields:
+                    continue
+                incomplete_now = set(str(value) for value in record.get("metadata_incomplete_fields") or [])
+                target_remaining += sum(1 for field in target_fields[rid] if field in incomplete_now)
+            unresolved_after = int((final_build.get("metadata_issue_summary") or {}).get("fields_unresolved") or 0)
+            op = dict(final_build.get("metadata_operation") or {})
+            op.update({
+                "state": "completed", "finished_at": iso_now(),
+                "records_processed": len(target_indices),
+                "fields_remaining": target_remaining,
+                "fields_resolved": max(0, int(op.get("fields_total") or 0) - target_remaining),
+                "unresolved_fields_after": unresolved_after,
+            })
+            final_build["metadata_operation"] = op
+            self._refresh_workflow_fields(final_build)
+            self.repo.save_build(final_build)
+        except Exception as exc:
+            build = self.repo.get_build(build_id)
+            op = dict(build.get("metadata_operation") or {})
+            op.update({"state": "failed", "finished_at": iso_now(), "error": str(exc)})
+            build["metadata_operation"] = op
+            build["status"] = "awaiting_metadata"
+            build["stage"] = "metadata_review"
+            build["error"] = None
+            warnings = list(build.get("warnings") or [])
+            warnings.append(f"Metadata retry failed: {exc}")
+            build["warnings"] = warnings[-200:]
+            self._refresh_workflow_fields(build)
+            self.repo.save_build(build)
+
     def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
@@ -3563,11 +3964,38 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             next_text=str(records[index + 1].get("text") or "") if index + 1 < len(records) else "",
             build_id=build_id,
         )
-        target["accepted"] = False
-        target["rejected"] = False
-        target["review_disposition"] = "pending"
         self._rewrite_and_validate(build_id, records)
         return target
+
+    @staticmethod
+    def _validate_publication_record(record: dict[str, Any]) -> list[str]:
+        """Validate the stable public JSONL contract before bytes are written."""
+        errors: list[str] = []
+        record_id = str(record.get("record_id") or "").strip()
+        if not record_id:
+            errors.append("record_id is required")
+        if not isinstance(record.get("text"), str) or not str(record.get("text") or "").strip():
+            errors.append("text is required")
+        source_ids = record.get("source_block_ids")
+        if not isinstance(source_ids, list) or not source_ids or not all(isinstance(value, str) and value for value in source_ids):
+            errors.append("source_block_ids must be a non-empty string array")
+        details = record.get("corpus_build_details")
+        if not isinstance(details, dict):
+            errors.append("corpus_build_details is required")
+        else:
+            for field in ("build_id", "publication_id", "published_at", "app_version", "schema_version", "publication_schema_version", "profile_id", "source_sha256"):
+                if details.get(field) in (None, ""):
+                    errors.append(f"corpus_build_details.{field} is required")
+        region = record.get("region_type")
+        if region not in (None, "") and str(region) not in REGION_TYPES:
+            errors.append(f"region_type is not a supported enum value: {region}")
+        role = record.get("discourse_role")
+        if role not in (None, "") and str(role) not in DISCOURSE_ROLES:
+            errors.append(f"discourse_role is not a supported enum value: {role}")
+        primary = record.get("primary_text")
+        if primary is not None and not isinstance(primary, bool):
+            errors.append("primary_text must be boolean when present")
+        return errors
 
     def _publication_build_details(self, build: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
         """Return locale-neutral build provenance embedded in every public record.
@@ -3582,6 +4010,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "published_at": created_at,
             "app_version": build.get("app_version"),
             "schema_version": build.get("schema_version"),
+            "publication_schema_version": PUBLICATION_SCHEMA_VERSION,
             "profile_id": build.get("profile_id"),
             "profile_version": build.get("profile_version"),
             "source_asset_id": build.get("asset_id"),
@@ -3639,6 +4068,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 }
                 public = {k: v for k, v in record.items() if k not in build_only_fields}
                 public["corpus_build_details"] = build_details
+                schema_errors = self._validate_publication_record(public)
+                if schema_errors:
+                    joined = "; ".join(schema_errors[:8])
+                    raise ValueError(f"Publication schema validation failed for {public.get('record_id') or 'unknown record'}: {joined}")
                 line = (json.dumps(public, ensure_ascii=False) + "\n").encode("utf-8")
                 hasher.update(line)
                 handle.write(line)

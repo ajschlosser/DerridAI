@@ -124,9 +124,10 @@ def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch,
         {"provider": "ollama", "model": "test"},
         build_id=build["build_id"],
     )
-    assert result["needs_review"] is True
+    assert result["needs_review"] is False
+    assert result["metadata_needs_attention"] is True
     assert result["metadata_complete"] is False
-    assert "could not be validated" in result["review_reason"]
+    assert result["metadata_incomplete_fields"]
     assert "inline_citation" in result
 
 
