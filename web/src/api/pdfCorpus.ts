@@ -25,6 +25,7 @@ export interface CorpusBuild {
   started_at?: string | null;
   finished_at?: string | null;
   record_count: number;
+  source_block_count?: number;
   needs_review_count: number;
   accepted_count: number;
   rejected_count?: number;
