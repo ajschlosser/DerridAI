@@ -1,0 +1,893 @@
+{
+  "cases": [
+    {
+      "id": "prose",
+      "blocks": [
+        {
+          "block_id": "prose-b0",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b1",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b2",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            2,
+            1,
+            3
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b3",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            3,
+            1,
+            4
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b4",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            4,
+            1,
+            5
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b5",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            5,
+            1,
+            6
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b6",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            6,
+            1,
+            7
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b7",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            7,
+            1,
+            8
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b8",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            8,
+            1,
+            9
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b9",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            9,
+            1,
+            10
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b10",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            10,
+            1,
+            11
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b11",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            11,
+            1,
+            12
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b12",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            12,
+            1,
+            13
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b13",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            13,
+            1,
+            14
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b14",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            14,
+            1,
+            15
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b15",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            15,
+            1,
+            16
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b16",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            16,
+            1,
+            17
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b17",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            17,
+            1,
+            18
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b18",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            18,
+            1,
+            19
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b19",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            19,
+            1,
+            20
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b20",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            20,
+            1,
+            21
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b21",
+          "page": 4,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            21,
+            1,
+            22
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b22",
+          "page": 4,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            22,
+            1,
+            23
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "prose-b23",
+          "page": 4,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This par",
+          "bbox": [
+            0,
+            23,
+            1,
+            24
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        }
+      ],
+      "semantic_boundaries": [],
+      "max_expected_chars": 6000
+    },
+    {
+      "id": "dialogue",
+      "blocks": [
+        {
+          "block_id": "dialogue-b0",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b1",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b2",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            2,
+            1,
+            3
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b3",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            3,
+            1,
+            4
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b4",
+          "page": 1,
+          "type": "paragraph",
+          "text": "DERRIDA: This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in compl",
+          "bbox": [
+            0,
+            4,
+            1,
+            5
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b5",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            5,
+            1,
+            6
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b6",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            6,
+            1,
+            7
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b7",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            7,
+            1,
+            8
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b8",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            8,
+            1,
+            9
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b9",
+          "page": 2,
+          "type": "paragraph",
+          "text": "INTERVIEWER: This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in complete sentences. This response develops a bounded answer in compl",
+          "bbox": [
+            0,
+            9,
+            1,
+            10
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b10",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            10,
+            1,
+            11
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b11",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            11,
+            1,
+            12
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b12",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            12,
+            1,
+            13
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b13",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            13,
+            1,
+            14
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b14",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            14,
+            1,
+            15
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b15",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            15,
+            1,
+            16
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b16",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            16,
+            1,
+            17
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "dialogue-b17",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its loc",
+          "bbox": [
+            0,
+            17,
+            1,
+            18
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        }
+      ],
+      "semantic_boundaries": [],
+      "max_expected_chars": 6000
+    },
+    {
+      "id": "quotation",
+      "blocks": [
+        {
+          "block_id": "quotation-b0",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b1",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b2",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            2,
+            1,
+            3
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b3",
+          "page": 1,
+          "type": "paragraph",
+          "text": "“The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually",
+          "bbox": [
+            0,
+            3,
+            1,
+            4
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b4",
+          "page": 1,
+          "type": "paragraph",
+          "text": "The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually bound to its attribution and develops carefully. The quoted argument remains contextually”",
+          "bbox": [
+            0,
+            4,
+            1,
+            5
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b5",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            5,
+            1,
+            6
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b6",
+          "page": 1,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            6,
+            1,
+            7
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b7",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            7,
+            1,
+            8
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b8",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            8,
+            1,
+            9
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b9",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            9,
+            1,
+            10
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b10",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            10,
+            1,
+            11
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b11",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            11,
+            1,
+            12
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b12",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            12,
+            1,
+            13
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b13",
+          "page": 2,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            13,
+            1,
+            14
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b14",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            14,
+            1,
+            15
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b15",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            15,
+            1,
+            16
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b16",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            16,
+            1,
+            17
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b17",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            17,
+            1,
+            18
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b18",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            18,
+            1,
+            19
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        },
+        {
+          "block_id": "quotation-b19",
+          "page": 3,
+          "type": "paragraph",
+          "text": "This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context. This paragraph advances a philosophical argument in complete sentences and preserves its local context",
+          "bbox": [
+            0,
+            19,
+            1,
+            20
+          ],
+          "extraction_method": "text",
+          "confidence": 1.0
+        }
+      ],
+      "semantic_boundaries": [],
+      "max_expected_chars": 6000
+    }
+  ]
+}

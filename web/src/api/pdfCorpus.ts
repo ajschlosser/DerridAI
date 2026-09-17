@@ -63,7 +63,12 @@ export interface CorpusBuild {
   boundary_llm_keep_count?: number;
   boundary_budget_skipped_count?: number;
   boundary_classifier_failure_count?: number;
-  topology_validation?: {valid?:boolean;issues?:string[];record_count?:number;max_record_chars?:number;median_record_chars?:number};
+  topology_validation?: {valid?:boolean;issues?:string[];findings?:Array<{code:string;severity:string;record_id?:string|null;auto_repairable?:boolean;params?:Record<string,unknown>}>;record_count?:number;max_record_chars?:number;min_record_chars?:number;median_record_chars?:number;p10_record_chars?:number;p90_record_chars?:number;preferred_record_chars?:number;record_length_tolerance?:number;long_record_chars?:number;absolute_record_chars?:number;records_in_preferred_range?:number;records_over_preferred_range?:number;records_over_long_limit?:number;micro_record_count?:number};
+  topology_quality?: {valid?:boolean;source_block_count?:number;used_source_block_count?:number;source_coverage?:number;source_order_valid?:boolean;source_conservation_valid?:boolean;record_count?:number;median_record_chars?:number;p10_record_chars?:number;p90_record_chars?:number;max_record_chars?:number;records_in_preferred_range?:number;records_over_preferred_range?:number;records_over_long_limit?:number;micro_record_count?:number;policy?:Record<string,number>};
+  record_sizing_policy?: Record<string,number>;
+  size_optimized_boundary_count?: number;
+  absolute_safety_boundary_count?: number;
+  long_exception_record_count?: number;
   metadata_completed?: number;
   metadata_total?: number;
   metadata_concurrency?: number;

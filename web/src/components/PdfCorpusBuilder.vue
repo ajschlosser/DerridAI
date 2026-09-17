@@ -13,6 +13,7 @@ import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import CorpusExecutionSettings from "./CorpusExecutionSettings.vue";
 import CorpusWorkflowStepper from "./CorpusWorkflowStepper.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
+import CorpusRecordSizingSettings, { type RecordSizingPolicy } from "./CorpusRecordSizingSettings.vue";
 import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
@@ -55,6 +56,7 @@ const stageLimits=ref<Record<string,number>>({
   manifest_num_predict:1800,segmentation_num_predict:1200,reconciliation_num_predict:1000,
   discourse_num_predict:1600,quotation_num_predict:1500,indexing_num_predict:1200,segmentation_window_tokens:5000,
 });
+const recordSizing=ref<RecordSizingPolicy>({preferred_record_chars:1750,record_length_tolerance:200,long_record_chars:3500,absolute_record_chars:6000});
 const metadataDraft=ref("{}");
 let pollTimer:number|undefined;
 const DRAFT_KEY="derridai.pdf-corpus-builder.draft.v2";
@@ -71,13 +73,14 @@ function restoreBuilderDraft(){
     if(typeof draft.useProfileDefaults==="boolean")useProfileDefaults.value=draft.useProfileDefaults;
     if(draft.generationOverrides&&typeof draft.generationOverrides==="object")generationOverrides.value={...draft.generationOverrides};
     if(draft.stageLimits&&typeof draft.stageLimits==="object")stageLimits.value={...stageLimits.value,...draft.stageLimits};
+    if(draft.recordSizing&&typeof draft.recordSizing==="object")recordSizing.value={...recordSizing.value,...draft.recordSizing};
     if(Number.isFinite(Number(draft.maxConcurrentRequests)))maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(draft.maxConcurrentRequests)));
     if(typeof draft.recordQuery==="string")recordQuery.value=draft.recordQuery;
     if(typeof draft.reviewOnly==="boolean")reviewOnly.value=draft.reviewOnly;
   }catch{/* ignore stale browser drafts */}
 }
 function persistBuilderDraft(){
-  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedProviderId:selectedProviderId.value,selectedReviewProviderId:selectedReviewProviderId.value,selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,maxConcurrentRequests:maxConcurrentRequests.value,recordQuery:recordQuery.value,reviewOnly:reviewOnly.value}))}catch{/* storage may be unavailable */}
+  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedProviderId:selectedProviderId.value,selectedReviewProviderId:selectedReviewProviderId.value,selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value,recordQuery:recordQuery.value,reviewOnly:reviewOnly.value}))}catch{/* storage may be unavailable */}
 }
 function metadataDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`}
 
@@ -157,6 +160,7 @@ const providerPayload=computed<Record<string,unknown>>(()=>{
     }
     payload.max_concurrent_requests=maxConcurrentRequests.value;
     payload.stage_limits={...stageLimits.value};
+    payload.record_sizing={...recordSizing.value};
     if(selectedReviewProviderId.value&&selectedReviewProviderId.value!==selectedProviderId.value){
       payload.review_provider_profile_id=selectedReviewProviderId.value;
       if(!serverProviderIds.value.has(selectedReviewProviderId.value)){
@@ -169,7 +173,7 @@ const providerPayload=computed<Record<string,unknown>>(()=>{
     }
     return payload;
   }
-  const payload:Record<string,unknown>={provider:manualProvider.value,use_profile_defaults:false,max_concurrent_requests:maxConcurrentRequests.value,stage_limits:{...stageLimits.value}};
+  const payload:Record<string,unknown>={provider:manualProvider.value,use_profile_defaults:false,max_concurrent_requests:maxConcurrentRequests.value,stage_limits:{...stageLimits.value},record_sizing:{...recordSizing.value}};
   if(manualModel.value.trim())payload.model=manualModel.value.trim();
   if(manualBaseUrl.value.trim())payload.base_url=manualBaseUrl.value.trim();
   if(manualApiKey.value)payload.api_key=manualApiKey.value;
@@ -221,7 +225,7 @@ async function refreshProviders(){
 async function refreshAssets(){const result=await pdfCorpusApi.listAssets();assets.value=result.items;if(!selectedAssetId.value&&assets.value[0])selectedAssetId.value=assets.value[0].asset_id}
 async function refreshBuilds(){const result=await pdfCorpusApi.listBuilds(0,100);builds.value=result.items;buildsTotal.value=result.total;const requested=String(route.query.build||"");if(requested&&builds.value.some(build=>build.build_id===requested))selectedBuildId.value=requested;else if(!selectedBuildId.value&&builds.value[0])selectedBuildId.value=builds.value[0].build_id}
 function syncBuildInRail(build:CorpusBuild){const index=builds.value.findIndex(item=>item.build_id===build.build_id);if(index>=0)builds.value.splice(index,1,{...builds.value[index],...build});else builds.value.unshift(build)}
-async function refreshBuild(){if(!selectedBuildId.value){currentBuild.value=null;return}try{currentBuild.value=await pdfCorpusApi.build(selectedBuildId.value);syncBuildInRail(currentBuild.value)}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error");return}if(currentBuild.value?.asset_id)selectedAssetId.value=currentBuild.value.asset_id;const request=currentBuild.value?.request||{};if(typeof request.provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.provider_profile_id))selectedProviderId.value=request.provider_profile_id;if(typeof request.review_provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.review_provider_profile_id))selectedReviewProviderId.value=request.review_provider_profile_id;const requestGeneration=request.generation;if(requestGeneration&&typeof requestGeneration==="object")generationOverrides.value={...(requestGeneration as Record<string,unknown>)};useProfileDefaults.value=request.use_profile_defaults!==false;if(request.stage_limits&&typeof request.stage_limits==="object")stageLimits.value={...stageLimits.value,...(request.stage_limits as Record<string,number>)};if(request.max_concurrent_requests)maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(request.max_concurrent_requests)||1))}
+async function refreshBuild(){if(!selectedBuildId.value){currentBuild.value=null;return}try{currentBuild.value=await pdfCorpusApi.build(selectedBuildId.value);syncBuildInRail(currentBuild.value)}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error");return}if(currentBuild.value?.asset_id)selectedAssetId.value=currentBuild.value.asset_id;const request=currentBuild.value?.request||{};if(typeof request.provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.provider_profile_id))selectedProviderId.value=request.provider_profile_id;if(typeof request.review_provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.review_provider_profile_id))selectedReviewProviderId.value=request.review_provider_profile_id;const requestGeneration=request.generation;if(requestGeneration&&typeof requestGeneration==="object")generationOverrides.value={...(requestGeneration as Record<string,unknown>)};useProfileDefaults.value=request.use_profile_defaults!==false;if(request.stage_limits&&typeof request.stage_limits==="object")stageLimits.value={...stageLimits.value,...(request.stage_limits as Record<string,number>)};if(request.record_sizing&&typeof request.record_sizing==="object")recordSizing.value={...recordSizing.value,...(request.record_sizing as RecordSizingPolicy)};if(request.max_concurrent_requests)maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(request.max_concurrent_requests)||1))}
 async function refreshRecords(reset=false){if(reset)recordOffset.value=0;if(!selectedBuildId.value){records.value=[];recordTotal.value=0;return}const result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value);records.value=result.items;recordTotal.value=result.total;if(selectedRecordId.value)selectedRecord.value=records.value.find(row=>row.record_id===selectedRecordId.value)||null;if(!selectedRecord.value&&records.value[0])selectRecord(records.value[0])}
 async function refreshBlocks(){if(!selectedAssetId.value||!selectedRecord.value?.source_block_ids?.length){sourceBlocks.value=[];return}const result=await pdfCorpusApi.blocks(selectedAssetId.value,0,Math.min(1000,selectedRecord.value.source_block_ids.length),selectedRecord.value.source_block_ids);sourceBlocks.value=result.items}
 async function refreshAll(){await Promise.all([refreshProviders(),refreshAssets(),refreshBuilds()]);await refreshBuild();await refreshRecords(true)}
@@ -277,7 +281,7 @@ watch(()=>route.query.build,async value=>{
   selectedBuildId.value=buildId;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];
   await refreshBuild();await refreshRecords(true);if(buildRunning.value)startPolling();
 });
-watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,maxConcurrentRequests,recordQuery,reviewOnly],persistBuilderDraft,{deep:true});
+watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,recordSizing,maxConcurrentRequests,recordQuery,reviewOnly],persistBuilderDraft,{deep:true});
 watch(metadataDraft,(value)=>{if(!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(metadataDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
 onMounted(()=>{restoreBuilderDraft();void refreshAll().then(()=>{if(buildRunning.value)startPolling()}).catch(exc=>setMessage(exc instanceof Error?exc.message:String(exc),"error"))});
 onBeforeUnmount(stopPolling);
@@ -321,6 +325,8 @@ onBeforeUnmount(stopPolling);
         <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('pdf_corpus.provider_profile','Primary LLM provider')" :help="i18n.t('pdf_corpus.provider_profile_help','Use a centrally managed provider profile. Its model and generation defaults remain reusable across DerridAI workflows.')" :empty-title="i18n.t('pdf_corpus.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('pdf_corpus.no_provider_profiles_help','Create a provider profile or use the manual compatibility settings below.')" :manage-label="i18n.t('pdf_corpus.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('pdf_corpus.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('pdf_corpus.concurrent_requests','max concurrent request(s)')" :context-label="i18n.t('providers.context_tokens','context tokens')" @manage="manageProviders" />
         <label v-if="selectedProviderId&&providerProfiles.length>1" class="escalation-field" for="pdf-corpus-review-provider"><span><b>{{i18n.t('pdf_corpus.escalation_provider','Escalation provider')}}</b><small>{{i18n.t('pdf_corpus.escalation_provider_help','Optional fallback used only after the primary provider exhausts structured-output retries.')}}</small></span><select id="pdf-corpus-review-provider" v-model="selectedReviewProviderId" class="control"><option value="">{{i18n.t('pdf_corpus.no_escalation_provider','None — keep failures for human review')}}</option><option v-for="profile in providerProfiles" :key="profile.id" :value="profile.id" :disabled="profile.id===selectedProviderId">{{profile.name||profile.id}} · {{profile.model||i18n.t('pdf_corpus.model_not_set','model not set')}}</option></select></label>
       </div>
+
+      <CorpusRecordSizingSettings v-model="recordSizing" :disabled="buildRunning||busy!==''" />
 
       <CorpusExecutionSettings class="execution-config" :generation="effectiveGeneration" :stage-limits="stageLimits" :max-concurrent-requests="maxConcurrentRequests" :use-profile-defaults="useProfileDefaults" :disabled="buildRunning||busy!==''" @update:generation="generationOverrides=$event" @update:stage-limits="stageLimits=$event" @update:max-concurrent-requests="maxConcurrentRequests=$event" @update:use-profile-defaults="useProfileDefaults=$event" />
 
@@ -368,7 +374,7 @@ onBeforeUnmount(stopPolling);
               <button type="button" class="btn primary" @click="publish" :disabled="!canPublish||busy!==''">{{i18n.t('pdf_corpus.publish_jsonl','Publish JSONL')}}</button>
             </div>
           </div>
-          <CorpusBuildProgress :status="currentBuild.status" :stage="currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :warnings="currentBuild.warnings||[]" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
+          <CorpusBuildProgress :status="currentBuild.status" :stage="currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :warnings="currentBuild.warnings||[]" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,sizeOptimizedSplits:currentBuild.size_optimized_boundary_count||0,absoluteSafetySplits:currentBuild.absolute_safety_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
           <CorpusQualitySummary v-if="!awaitingManifestReview" :build="currentBuild" />
           <section v-if="awaitingManifestReview" class="manifest-gate" aria-labelledby="manifest-review-title">
             <div><h3 id="manifest-review-title">{{i18n.t('pdf_corpus.manifest_review_required','Review document structure')}}</h3><p>{{i18n.t('pdf_corpus.manifest_review_required_help','Confirm the detected work-level metadata and printed-page mapping before DerridAI lets those values propagate into semantic segmentation and generated records.')}}</p></div>

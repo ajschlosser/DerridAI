@@ -6182,10 +6182,6 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.metadata_calls": "enrichissement des notices",
 })
 
-# Instantiate only after every built-in dictionary extension above has loaded.
-system_store = SystemStore()
-
-
 # 0.40.9 — Enter Sandman: deterministic-first corpus topology telemetry.
 DEFAULT_EN_US.update({
     "pdf_corpus.segmentation_telemetry":"Segmentation decisions",
@@ -6219,3 +6215,48 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.stage_help.segmenting":"Évaluation locale des transitions structurelles. Les limites protégées ou faibles sont résolues sans inférence; seul un sous-ensemble ambigu et borné est soumis au LLM.",
     "pdf_corpus.stage_help.reconciling":"Finalisation de la topologie. Les classifications faibles, omises, incertaines ou en échec sont résolues par CONSERVER. Une scission de sécurité n’exige une révision que si toutes les limites proches présentent un risque de provenance.",
 })
+
+# 0.40.10 — Corpus of Engineers: retrieval sizing and topology quality.
+DEFAULT_EN_US.update({
+    "pdf_corpus.record_sizing.title":"Record sizing",
+    "pdf_corpus.record_sizing.help":"Length guides retrieval-sized topology but never overrides attribution or semantic integrity. The builder aims for the preferred range and permits longer coherent exceptions when needed.",
+    "pdf_corpus.record_sizing.preferred":"Preferred record length",
+    "pdf_corpus.record_sizing.preferred_range":"Target range: about {low}–{high} characters.",
+    "pdf_corpus.record_sizing.tolerance":"Preferred flexibility",
+    "pdf_corpus.record_sizing.tolerance_help":"Allows clean semantic seams slightly before or after the target.",
+    "pdf_corpus.record_sizing.advanced":"Advanced exception limits",
+    "pdf_corpus.record_sizing.long":"Long-record exception",
+    "pdf_corpus.record_sizing.long_help":"A coherent thought may run this long when no good seam exists near the preferred range.",
+    "pdf_corpus.record_sizing.absolute":"Absolute safety ceiling",
+    "pdf_corpus.record_sizing.absolute_help":"Only a safety ceiling. The builder may flag review if satisfying it would break a protected attribution or syntax transition.",
+    "pdf_corpus.quality.record_size":"Record size",
+    "pdf_corpus.quality.median_chars":"median chars",
+    "pdf_corpus.quality.target_range":"target {range} · P90 {p90}",
+    "pdf_corpus.quality.size_detail":"P10 {p10} · median {median} · P90 {p90} · max {max} · {over} above preferred range · {long} long exception(s)",
+    "pdf_corpus.size_optimized_splits":"Size-optimized boundaries",
+    "pdf_corpus.absolute_safety_splits":"Absolute safety splits",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.record_sizing.title":"Taille des notices",
+    "pdf_corpus.record_sizing.help":"La longueur guide une topologie adaptée à la recherche sans jamais primer sur l’attribution ni l’intégrité sémantique. Le générateur vise la plage préférée et permet des exceptions cohérentes plus longues au besoin.",
+    "pdf_corpus.record_sizing.preferred":"Longueur préférée d’une notice",
+    "pdf_corpus.record_sizing.preferred_range":"Plage cible : environ {low} à {high} caractères.",
+    "pdf_corpus.record_sizing.tolerance":"Souplesse préférée",
+    "pdf_corpus.record_sizing.tolerance_help":"Permet une limite sémantique nette légèrement avant ou après la cible.",
+    "pdf_corpus.record_sizing.advanced":"Limites avancées pour les exceptions",
+    "pdf_corpus.record_sizing.long":"Exception pour notice longue",
+    "pdf_corpus.record_sizing.long_help":"Une pensée cohérente peut atteindre cette longueur lorsqu’aucune bonne limite n’existe près de la plage préférée.",
+    "pdf_corpus.record_sizing.absolute":"Plafond absolu de sécurité",
+    "pdf_corpus.record_sizing.absolute_help":"Plafond de sécurité seulement. Le générateur peut demander une révision si son respect exige de rompre une transition protégée d’attribution ou de syntaxe.",
+    "pdf_corpus.quality.record_size":"Taille des notices",
+    "pdf_corpus.quality.median_chars":"caractères médians",
+    "pdf_corpus.quality.target_range":"cible {range} · P90 {p90}",
+    "pdf_corpus.quality.size_detail":"P10 {p10} · médiane {median} · P90 {p90} · max. {max} · {over} au-dessus de la plage préférée · {long} exception(s) longue(s)",
+    "pdf_corpus.size_optimized_splits":"Limites optimisées selon la taille",
+    "pdf_corpus.absolute_safety_splits":"Scissions au plafond absolu",
+})
+
+# Instantiate only after every built-in dictionary extension has loaded so fresh
+# and existing installations receive release-local i18n keys during synchronization.
+system_store = SystemStore()
+

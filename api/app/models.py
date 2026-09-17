@@ -407,9 +407,32 @@ class PdfCorpusStageLimits(BaseModel):
     indexing_num_predict: int = Field(default=1200, ge=256, le=8192)
     segmentation_window_tokens: int = Field(default=5000, ge=1024, le=24000)
 
+
+
+class PdfCorpusRecordSizing(BaseModel):
+    """Soft record-length policy for retrieval-oriented corpus topology.
+
+    Length is never semantic evidence. These values guide deterministic
+    post-segmentation normalization toward readable/retrievable records while
+    protected attribution and discourse structure remain higher priority.
+    """
+    preferred_record_chars: int = Field(default=1750, ge=600, le=12000)
+    record_length_tolerance: int = Field(default=200, ge=50, le=2000)
+    long_record_chars: int = Field(default=3500, ge=1200, le=24000)
+    absolute_record_chars: int = Field(default=6000, ge=1800, le=48000)
+
+    def model_post_init(self, __context: Any) -> None:
+        preferred = self.preferred_record_chars
+        tolerance = self.record_length_tolerance
+        if self.long_record_chars < preferred + tolerance:
+            raise ValueError("long_record_chars must be at least preferred_record_chars + record_length_tolerance")
+        if self.absolute_record_chars < self.long_record_chars:
+            raise ValueError("absolute_record_chars must be at least long_record_chars")
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v6", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v7", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None
@@ -421,6 +444,7 @@ class PdfCorpusBuildCreate(BaseModel):
     use_profile_defaults: bool = True
     max_concurrent_requests: int = Field(default=1, ge=1, le=16)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     review_manifest_before_segmentation: bool = False
     auto_enrich_work_metadata: bool = True
 
@@ -467,6 +491,7 @@ class PdfCorpusRecordRerun(BaseModel):
     use_profile_defaults: bool = True
     max_concurrent_requests: int = Field(default=1, ge=1, le=16)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
 
 
 class PdfCorpusPublishRequest(BaseModel):

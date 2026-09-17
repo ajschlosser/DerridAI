@@ -23,10 +23,10 @@ from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
-SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v6"
+SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
 METADATA_PROMPT_VERSION = "derridai-record-metadata-v3"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v6"
+PROFILE_VERSION = "derrida-scholarly-v7"
 
 
 class DocumentManifestModel(BaseModel):
@@ -787,11 +787,11 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_max_chars": 9000,
         "topology_review_chars": 12000,
     },
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v6",
+    "derrida-scholarly-v6": {
+        "id": "derrida-scholarly-v6",
+        "name": "Derrida scholarly corpus v6 (legacy)",
         "version": 6,
-        "description": "Conservative deterministic-first topology: obvious seams are handled locally, ambiguous high-value seams are batch-adjudicated, uncertainty defaults to KEEP, and human review is reserved for demonstrated provenance hazards.",
+        "description": "0.40.9 deterministic-first topology retained for resumability and audit compatibility.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
         "min_boundary_confidence": 0.72,
@@ -804,6 +804,28 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "soft_min_chars": 180,
         "soft_max_chars": 9000,
         "topology_review_chars": 12000,
+    },
+    PROFILE_VERSION: {
+        "id": PROFILE_VERSION,
+        "name": "Derrida scholarly corpus v7",
+        "version": 7,
+        "description": "Topology-quality profile with deterministic semantic segmentation, soft 1,750-character retrieval sizing, bounded exceptions, post-segmentation normalization/repair, and machine-readable quality validation.",
+        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
+        "min_boundary_confidence": 0.72,
+        "candidate_llm_threshold": 0.30,
+        "deterministic_split_threshold": 0.92,
+        "review_risk_threshold": 0.90,
+        "max_llm_boundary_calls_per_100_atoms": 18,
+        "boundary_batch_size": 6,
+        "min_metadata_confidence": 0.72,
+        "soft_min_chars": 180,
+        "preferred_record_chars": 1750,
+        "record_length_tolerance": 200,
+        "long_record_chars": 3500,
+        "absolute_record_chars": 6000,
+        "soft_max_chars": 3500,
+        "topology_review_chars": 6000,
     }
 }
 
@@ -1881,6 +1903,258 @@ Return one compact decision per transition using its exact left-hand block ID in
         return out,None
 
     @staticmethod
+    def _record_sizing_policy(request: dict[str, Any], profile: dict[str, Any]) -> dict[str, int]:
+        supplied = request.get("record_sizing") or {}
+        if hasattr(supplied, "model_dump"):
+            supplied = supplied.model_dump()
+        if not isinstance(supplied, dict):
+            supplied = {}
+        preferred = int(supplied.get("preferred_record_chars") or profile.get("preferred_record_chars") or 1750)
+        tolerance = int(supplied.get("record_length_tolerance") or profile.get("record_length_tolerance") or 200)
+        long_limit = int(supplied.get("long_record_chars") or profile.get("long_record_chars") or 3500)
+        absolute = int(supplied.get("absolute_record_chars") or profile.get("absolute_record_chars") or 6000)
+        preferred = max(600, min(12000, preferred))
+        tolerance = max(50, min(2000, tolerance))
+        long_limit = max(preferred + tolerance, min(24000, long_limit))
+        absolute = max(long_limit, min(48000, absolute))
+        return {
+            "preferred_record_chars": preferred,
+            "record_length_tolerance": tolerance,
+            "long_record_chars": long_limit,
+            "absolute_record_chars": absolute,
+        }
+
+    @staticmethod
+    def _seam_quality(left: dict[str, Any], right: dict[str, Any]) -> tuple[float, bool, list[str]]:
+        """Score a local retrieval seam without pretending length is semantic evidence."""
+        if PdfCorpusBuildManager._is_protected_transition(left, right):
+            return -10.0, True, ["protected_transition"]
+        left_text = str(left.get("text") or "").strip()
+        right_text = str(right.get("text") or "").strip()
+        left_type = str(left.get("type") or "body").casefold()
+        right_type = str(right.get("type") or "body").casefold()
+        heading_types = {"heading", "title", "subtitle", "section", "chapter"}
+        score = 0.0
+        signals: list[str] = []
+        if right_type in heading_types:
+            score += 1.2; signals.append("heading_start")
+        if re.search(r'[.!?][”"]?$', left_text):
+            score += 0.45; signals.append("sentence_end")
+        elif re.search(r'[:;][”"]?$', left_text):
+            score += 0.12; signals.append("clause_end")
+        if re.match(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+", str(right.get("text") or "")):
+            score += 0.85; signals.append("speaker_start")
+        if re.search(r'[”"]\s*$', left_text) and not re.match(r'^\s*[“"]', str(right.get("text") or "")):
+            score += 0.25; signals.append("quotation_exit")
+        if left_type != right_type and right_type not in {"body", "paragraph"}:
+            score += 0.18; signals.append("layout_role_change")
+        # Paragraph/source-atom seams are inherently safer than arbitrary character cuts.
+        score += 0.10
+        return score, False, signals
+
+    @classmethod
+    def _best_record_sizing_boundary(
+        cls,
+        span: list[dict[str, Any]],
+        policy: dict[str, int],
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        """Find the best safe source-atom seam for soft retrieval sizing.
+
+        Prefer a seam in the target band. If no good seam exists there, permit a
+        coherent exception up to long_record_chars. The absolute ceiling is a
+        safety constraint, not an ordinary target.
+        """
+        if len(span) < 2:
+            return None, {"reason": "single_atom", "forced": False}
+        preferred = policy["preferred_record_chars"]
+        tolerance = policy["record_length_tolerance"]
+        long_limit = policy["long_record_chars"]
+        absolute = policy["absolute_record_chars"]
+        cumulative = 0
+        seams: list[dict[str, Any]] = []
+        for left, right in zip(span, span[1:]):
+            cumulative += len(str(left.get("text") or "")) + 2
+            quality, protected, signals = cls._seam_quality(left, right)
+            seams.append({
+                "left": left, "right": right, "chars": cumulative,
+                "quality": quality, "protected": protected, "signals": signals,
+            })
+        target_low, target_high = preferred - tolerance, preferred + tolerance
+        target = [x for x in seams if target_low <= x["chars"] <= target_high and not x["protected"]]
+        if target:
+            best=max(target,key=lambda x:(x["quality"],-abs(x["chars"]-preferred)))
+            if best["quality"] >= 0.10:
+                return best["left"], {"reason":"preferred_band","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
+        # No clean target seam: allow the thought to run longer if a stronger seam appears.
+        extended=[x for x in seams if target_low <= x["chars"] <= long_limit and not x["protected"]]
+        if extended:
+            best=max(extended,key=lambda x:(x["quality"]-(abs(x["chars"]-preferred)/max(preferred,1))*0.18,x["quality"]))
+            if best["quality"] >= 0.30:
+                return best["left"], {"reason":"coherent_exception","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
+        # Above the long limit, prefer any safe seam before the absolute ceiling.
+        before_absolute=[x for x in seams if x["chars"] <= absolute and not x["protected"]]
+        if before_absolute and sum(len(str(b.get("text") or ""))+2 for b in span) > long_limit:
+            best=max(before_absolute,key=lambda x:(x["quality"]-(abs(x["chars"]-preferred)/max(preferred,1))*0.08,x["quality"]))
+            return best["left"], {"reason":"long_record_repair","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
+        # Only when the absolute ceiling is exceeded may a protected seam be forced.
+        total=sum(len(str(b.get("text") or ""))+2 for b in span)
+        if total > absolute and seams:
+            best=max((x for x in seams if x["chars"] <= absolute),key=lambda x:(-x["protected"],x["quality"],-abs(x["chars"]-preferred)),default=None)
+            if best:
+                return best["left"], {"reason":"absolute_safety","forced":bool(best["protected"]),"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
+        return None, {"reason":"coherent_exception","forced":False}
+
+    @classmethod
+    def _normalize_topology(
+        cls,
+        blocks: list[dict[str, Any]],
+        boundaries: list[dict[str, Any]],
+        policy: dict[str, int],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+        """Deterministically optimize semantic topology for retrieval-sized records."""
+        block_index={str(b.get("block_id") or ""):i for i,b in enumerate(blocks)}
+        boundary_map={}
+        for boundary in boundaries:
+            item=dict(boundary)
+            item.setdefault("semantic_boundary", True)
+            item.setdefault("boundary_kind", "semantic")
+            boundary_map[str(item.get("after_block_id") or "")]=item
+        reviews: list[dict[str, Any]]=[]
+        metrics={"size_optimized_splits":0,"long_exception_records":0,"absolute_safety_splits":0}
+
+        def groups() -> list[list[dict[str, Any]]]:
+            out=[]; current=[]
+            for block in blocks:
+                current.append(block)
+                if str(block.get("block_id") or "") in boundary_map:
+                    out.append(current); current=[]
+            if current: out.append(current)
+            return out
+
+        # Split one oversized group at a time so every new boundary immediately
+        # participates in the next pass. Existing semantic boundaries are never removed.
+        guard=0
+        while guard < max(10,len(blocks)*2):
+            guard+=1
+            changed=False
+            for span in groups():
+                size=sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2
+                if size <= policy["preferred_record_chars"] + policy["record_length_tolerance"]:
+                    continue
+                choice,info=cls._best_record_sizing_boundary(span,policy)
+                if choice is None:
+                    if size > policy["long_record_chars"]:
+                        metrics["long_exception_records"]+=1
+                    continue
+                bid=str(choice.get("block_id") or "")
+                if not bid or bid in boundary_map or bid==str(span[-1].get("block_id") or ""):
+                    continue
+                kind="retrieval_size_optimized"
+                if info.get("reason")=="absolute_safety":
+                    kind="absolute_size_safety"; metrics["absolute_safety_splits"]+=1
+                else:
+                    metrics["size_optimized_splits"]+=1
+                boundary_map[bid]={
+                    "after_block_id":bid,"decision":"split","confidence":1.0,
+                    "changes":[],"source":"deterministic_topology_normalizer",
+                    "boundary_kind":kind,"semantic_boundary":False,
+                    "size_policy":dict(policy),"size_decision":info,
+                }
+                if info.get("forced"):
+                    idx=block_index.get(bid,-1)
+                    reviews.append({
+                        "after_block_id":bid,
+                        "next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "",
+                        "kind":"forced_protected_absolute_split",
+                        "reason":"The absolute record-size safety ceiling required a split through an attribution/syntax-protected transition.",
+                    })
+                changed=True
+                break
+            if not changed:
+                break
+        ordered=sorted(boundary_map.values(),key=lambda item:block_index.get(str(item.get("after_block_id") or ""),10**9))
+        return ordered,reviews,metrics
+
+    @staticmethod
+    def _percentile(values: list[int], percentile: float) -> int:
+        if not values: return 0
+        ordered=sorted(values)
+        position=(len(ordered)-1)*max(0.0,min(1.0,percentile))
+        lo=int(position); hi=min(len(ordered)-1,lo+1)
+        if lo==hi: return ordered[lo]
+        fraction=position-lo
+        return int(round(ordered[lo]*(1-fraction)+ordered[hi]*fraction))
+
+    @classmethod
+    def _topology_sanity(cls, records: list[dict[str, Any]], policy: dict[str, int], source_blocks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        sizes=[int(r.get("text_length") or len(str(r.get("text") or ""))) for r in records]
+        findings=[]
+        def add(code:str,severity:str,*,record_id:str|None=None,auto_repairable:bool=False,**params:Any)->None:
+            findings.append({"code":code,"severity":severity,"record_id":record_id,"auto_repairable":auto_repairable,"params":params})
+        if not records: add("topology.no_records","error")
+        for record,size in zip(records,sizes):
+            rid=str(record.get("record_id") or "")
+            if size<=0: add("topology.empty_record","error",record_id=rid)
+            if size>policy["absolute_record_chars"]: add("topology.over_absolute_limit","error",record_id=rid,chars=size,limit=policy["absolute_record_chars"])
+            elif size>policy["long_record_chars"]: add("topology.long_exception","warning",record_id=rid,chars=size,limit=policy["long_record_chars"])
+            elif size>policy["preferred_record_chars"]+policy["record_length_tolerance"]: add("topology.over_preferred_range","info",record_id=rid,chars=size,preferred=policy["preferred_record_chars"])
+            if 0<size<180: add("topology.micro_record","warning",record_id=rid,chars=size,auto_repairable=True)
+        source_ids=[str(b.get("block_id") or "") for b in (source_blocks or [])]
+        used_ids=[str(x) for r in records for x in (r.get("source_block_ids") or [])]
+        if source_ids:
+            missing=[x for x in source_ids if x not in set(used_ids)]
+            duplicates=[x for x,count in Counter(used_ids).items() if count>1]
+            if missing: add("topology.source_gap","error",count=len(missing),block_ids=missing[:50])
+            if duplicates: add("topology.source_overlap","error",count=len(duplicates),block_ids=duplicates[:50])
+            ordered_used=[x for x in used_ids if x in set(source_ids)]
+            expected=[x for x in source_ids if x in set(used_ids)]
+            if ordered_used!=expected: add("topology.source_order","error")
+        blocking=[f for f in findings if f["severity"]=="error"]
+        return {
+            "valid":not blocking,
+            "issues":[f["code"] for f in blocking],
+            "findings":findings,
+            "record_count":len(records),
+            "max_record_chars":max(sizes,default=0),
+            "min_record_chars":min(sizes,default=0),
+            "median_record_chars":cls._percentile(sizes,0.5),
+            "p10_record_chars":cls._percentile(sizes,0.1),
+            "p90_record_chars":cls._percentile(sizes,0.9),
+            "preferred_record_chars":policy["preferred_record_chars"],
+            "record_length_tolerance":policy["record_length_tolerance"],
+            "long_record_chars":policy["long_record_chars"],
+            "absolute_record_chars":policy["absolute_record_chars"],
+            "records_in_preferred_range":sum(1 for x in sizes if policy["preferred_record_chars"]-policy["record_length_tolerance"] <= x <= policy["preferred_record_chars"]+policy["record_length_tolerance"]),
+            "records_over_preferred_range":sum(1 for x in sizes if x>policy["preferred_record_chars"]+policy["record_length_tolerance"]),
+            "records_over_long_limit":sum(1 for x in sizes if x>policy["long_record_chars"]),
+            "micro_record_count":sum(1 for x in sizes if 0<x<180),
+        }
+
+    @classmethod
+    def _topology_quality_report(cls, records:list[dict[str,Any]], source_blocks:list[dict[str,Any]], policy:dict[str,int], validation:dict[str,Any]) -> dict[str,Any]:
+        source_ids=[str(b.get("block_id") or "") for b in source_blocks]
+        used=[str(x) for r in records for x in (r.get("source_block_ids") or [])]
+        covered=len(set(source_ids)&set(used))
+        return {
+            "source_block_count":len(source_ids),
+            "used_source_block_count":len(set(used)),
+            "source_coverage":covered/len(source_ids) if source_ids else 1.0,
+            "source_order_valid":not any(f.get("code")=="topology.source_order" for f in validation.get("findings",[])),
+            "source_conservation_valid":not any(f.get("code") in {"topology.source_gap","topology.source_overlap"} for f in validation.get("findings",[])),
+            "record_count":len(records),
+            "median_record_chars":validation.get("median_record_chars",0),
+            "p10_record_chars":validation.get("p10_record_chars",0),
+            "p90_record_chars":validation.get("p90_record_chars",0),
+            "max_record_chars":validation.get("max_record_chars",0),
+            "records_in_preferred_range":validation.get("records_in_preferred_range",0),
+            "records_over_preferred_range":validation.get("records_over_preferred_range",0),
+            "records_over_long_limit":validation.get("records_over_long_limit",0),
+            "micro_record_count":validation.get("micro_record_count",0),
+            "policy":dict(policy),
+            "valid":bool(validation.get("valid")),
+        }
+
+    @staticmethod
     def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[dict[str, Any], bool]:
         """Choose the strongest safe seam near the preferred size target."""
         target=hard_max*0.72
@@ -1907,24 +2181,6 @@ Return one compact decision per transition using its exact left-hand block ID in
         # surface exactly this demonstrated provenance hazard for human review.
         return max(scored,key=lambda x:x[0])[2],True
 
-    @staticmethod
-    def _topology_sanity(records: list[dict[str, Any]], hard_max: int) -> dict[str, Any]:
-        sizes=[int(r.get("text_length") or len(str(r.get("text") or ""))) for r in records]
-        issues=[]
-        if not records:
-            issues.append("no_records")
-        if any(size <= 0 for size in sizes):
-            issues.append("empty_record")
-        if any(size > int(hard_max*1.15) for size in sizes):
-            issues.append("oversized_record")
-        return {
-            "valid":not issues,
-            "issues":issues,
-            "record_count":len(records),
-            "max_record_chars":max(sizes,default=0),
-            "median_record_chars":sorted(sizes)[len(sizes)//2] if sizes else 0,
-        }
-
     def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
         """Build topology with deterministic-first routing and bounded LLM work.
 
@@ -1935,7 +2191,8 @@ Return one compact decision per transition using its exact left-hand block ID in
         """
         profile=CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
         threshold=float(profile.get("min_boundary_confidence") or 0.72)
-        hard_max=max(12000,int(profile.get("topology_review_chars") or 36000))
+        sizing_policy=self._record_sizing_policy(request,profile)
+        hard_max=sizing_policy["absolute_record_chars"]
         index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
         candidates=self._deterministic_boundary_candidates(blocks,profile)
         state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
@@ -2019,19 +2276,15 @@ Return one compact decision per transition using its exact left-hand block ID in
             if current: out.append(current)
             return out
 
-        provisional=[]
-        while True:
-            span=next((g for g in grouped(accepted+provisional) if len(g)>1 and sum(len(str(b.get("text") or "")) for b in g)>hard_max),None)
-            if span is None: break
-            choice,forced_protected=self._best_safety_boundary(span,hard_max)
-            boundary={"after_block_id":str(choice.get("block_id") or ""),"decision":"split","confidence":0.0,"changes":[],"provisional":True,"source":"best_local_size_safety_split"}
-            if any(str(item.get("after_block_id") or "")==boundary["after_block_id"] for item in accepted+provisional): break
-            provisional.append(boundary)
-            if forced_protected:
-                idx=index_by_id.get(boundary["after_block_id"],-1)
-                boundary_reviews.append({"after_block_id":boundary["after_block_id"],"next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "","kind":"forced_protected_size_split","reason":"Every nearby seam was attribution/syntax-protected; a hard-size split was unavoidable and this exact provenance hazard requires human review."})
-
-        accepted.extend(provisional)
+        # Semantic topology is now normalized deterministically toward the soft
+        # retrieval-size policy. Existing semantic boundaries are preserved; new
+        # size-optimized boundaries record that they are retrieval boundaries, not
+        # claims that the argument itself ends there.
+        accepted, normalization_reviews, normalization_metrics = self._normalize_topology(
+            blocks, accepted, sizing_policy
+        )
+        boundary_reviews.extend(normalization_reviews)
+        provisional=[item for item in accepted if item.get("boundary_kind") in {"retrieval_size_optimized","absolute_size_safety"}]
         accepted.sort(key=lambda item:index_by_id.get(str(item.get("after_block_id") or ""),10**9))
         review_map={(str(i.get("after_block_id") or ""),str(i.get("next_block_id") or ""),str(i.get("kind") or "")):i for i in boundary_reviews}
         boundary_reviews=list(review_map.values())
@@ -2046,6 +2299,10 @@ Return one compact decision per transition using its exact left-hand block ID in
             "segmentation_degraded":bool(boundary_reviews),
             "boundary_candidate_count":len(candidates),"boundary_count":len(accepted),
             "provisional_boundary_count":len(provisional),
+            "size_optimized_boundary_count":int(normalization_metrics.get("size_optimized_splits") or 0),
+            "absolute_safety_boundary_count":int(normalization_metrics.get("absolute_safety_splits") or 0),
+            "long_exception_record_count":int(normalization_metrics.get("long_exception_records") or 0),
+            "record_sizing_policy":sizing_policy,
             "boundary_deterministic_split_count":deterministic_split_count,
             "boundary_deterministic_keep_count":deterministic_keep_count,
             "boundary_llm_adjudication_count":len(llm_candidates),
@@ -2678,10 +2935,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 # any failure is therefore an implementation/topology problem, not an
                 # invitation to burn more LLM calls and ask the user to clean it up.
                 active_profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
-                hard_max = max(12000, int(active_profile.get("topology_review_chars") or 36000))
-                topology_validation = self._topology_sanity(records, hard_max)
+                sizing_policy = self._record_sizing_policy(request, active_profile)
+                topology_validation = self._topology_sanity(records, sizing_policy, source_blocks)
+                topology_quality = self._topology_quality_report(records, source_blocks, sizing_policy, topology_validation)
                 current_build = self.repo.get_build(build_id)
                 current_build["topology_validation"] = topology_validation
+                current_build["topology_quality"] = topology_quality
+                current_build["record_sizing_policy"] = sizing_policy
                 self.repo.save_build(current_build)
                 if not topology_validation.get("valid"):
                     raise RuntimeError(

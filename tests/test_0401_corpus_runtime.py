@@ -91,7 +91,7 @@ def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build = _build(repo)
     boundaries = manager._segment(_blocks(), {}, {"provider": "ollama", "model": "test"}, build["build_id"])
-    assert boundaries == []
+    assert all(item.get("source")=="deterministic_topology_normalizer" for item in boundaries)
     refreshed = repo.get_build(build["build_id"])
     assert refreshed.get("segmentation_blocked") is False
     assert refreshed.get("segmentation_failed_windows", 0) == 0
@@ -169,7 +169,7 @@ def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_gua
     build=_build(repo,blocks=len(blocks))
     boundaries=manager._segment(blocks,{}, {"provider":"ollama","model":"test"}, build["build_id"])
     assert boundaries
-    assert all(item.get("provisional") for item in boundaries)
+    assert all(item.get("boundary_kind") in {"retrieval_size_optimized","absolute_size_safety"} for item in boundaries)
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["segmentation_blocked"] is False
     assert refreshed["segmentation_degraded"] is False
@@ -245,7 +245,7 @@ def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(
     build = _build(repo, blocks=len(blocks))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries
-    assert all(item.get("provisional") for item in boundaries)
+    assert all(item.get("boundary_kind") in {"retrieval_size_optimized","absolute_size_safety"} for item in boundaries)
     refreshed = repo.get_build(build["build_id"])
     assert refreshed["segmentation_blocked"] is False
     assert all(item.get("kind") == "provisional_size_split" for item in refreshed["segmentation_unresolved_regions"])

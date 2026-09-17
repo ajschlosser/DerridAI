@@ -1,20 +1,9 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import type { CorpusSegmentationTelemetry as CorpusSegmentationTelemetryData } from "../types/corpus";
 
-const props=defineProps<{
-  candidateCount?:number;
-  deterministicSplits?:number;
-  deterministicKeeps?:number;
-  llmAdjudications?:number;
-  llmBatchCalls?:number;
-  llmSplits?:number;
-  llmKeeps?:number;
-  provisionalSplits?:number;
-  budgetSkipped?:number;
-  classifierFailures?:number;
-  reviewCount?:number;
-}>();
+const props=defineProps<CorpusSegmentationTelemetryData>();
 const i18n=useI18nStore();
 const headingId=`segmentation-telemetry-${useId()}`;
 const helpId=`${headingId}-help`;
@@ -24,7 +13,8 @@ const items=computed(()=>[
   {key:"pdf_corpus.llm_adjudications",fallback:"LLM adjudications",value:Number(props.llmAdjudications||0)},
   {key:"pdf_corpus.llm_batch_calls",fallback:"LLM batch calls",value:Number(props.llmBatchCalls||0)},
   {key:"pdf_corpus.llm_splits",fallback:"LLM splits",value:Number(props.llmSplits||0)},
-  {key:"pdf_corpus.provisional_splits",fallback:"Safety splits",value:Number(props.provisionalSplits||0)},
+  {key:"pdf_corpus.size_optimized_splits",fallback:"Size-optimized boundaries",value:Number(props.sizeOptimizedSplits??props.provisionalSplits??0)},
+  {key:"pdf_corpus.absolute_safety_splits",fallback:"Absolute safety splits",value:Number(props.absoluteSafetySplits||0)},
   {key:"pdf_corpus.boundary_review_required",fallback:"Review-required boundaries",value:Number(props.reviewCount||0)},
 ]);
 const description=computed(()=>i18n.t("pdf_corpus.segmentation_telemetry_help","Most transitions are resolved deterministically. LLM work is limited to a small ambiguous subset; uncertainty, omission, and classifier failure resolve conservatively to KEEP."));

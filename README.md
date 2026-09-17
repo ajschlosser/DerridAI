@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.9
+# DerridAI Corpus Viewer 0.40.10
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -63,6 +63,16 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 ```
 
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
+
+## 0.40.10 — Corpus of Engineers
+
+Version 0.40.10 finishes the topology-quality phase of Corpus Builder. The current profile is `derrida-scholarly-v7` with segmentation provenance `derridai-local-boundaries-v7`. Semantic segmentation remains deterministic-first and conservative, but a separate deterministic normalization stage now optimizes the resulting topology for retrieval-sized records without pretending that record length is semantic evidence.
+
+The default sizing policy targets **1,750 characters with ±200 characters of flexibility**, allows coherent long-record exceptions to **3,500 characters**, and uses **6,000 characters as an absolute safety ceiling**. These values are configurable per build. Existing semantic boundaries are preserved; size-optimized boundaries are explicitly marked as retrieval boundaries (`semantic_boundary: false`) with the policy and local seam evidence recorded in provenance. Protected attribution/syntax seams outrank sizing, and only an unavoidable protected split at the absolute ceiling creates boundary review.
+
+Corpus Builder now runs deterministic topology normalization/repair before metadata enrichment, emits machine-readable topology findings, checks source-block coverage/overlap/order, reports P10/median/P90/max record sizes and preferred-range exceptions, and exposes the quality report in the UI. New Storybook states cover record-sizing controls and healthy/long-exception/source-failure quality summaries. The release also fixes release-local i18n synchronization so bundled English and Canadian French strings are installed before `SystemStore` initialization.
+
+Acceptance coverage now includes prose, dialogue/interview, and quotation-heavy extracted-layout fixtures, asserting source conservation, sane size ceilings, and zero ordinary boundary-review burden. Release validation: **266 Python tests pass** and all modified API modules compile. Frontend dependency installation was attempted in the release environment but timed out before `vue-tsc`/Vite became available, so this package does not claim a completed production frontend build.
 
 ## 0.40.9 — Enter Sandman
 

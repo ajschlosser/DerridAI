@@ -9157,7 +9157,7 @@ async function downloadFullBackup(){
   try{
     for(const file of state.files)await persistFileNow(file);
     const workspace={
-      backup_client_version:"0.40.9",
+      backup_client_version:"0.40.10",
       created_at:new Date().toISOString(),
       files:state.files.map(serializableFile),
       prefs:workspacePrefs(),

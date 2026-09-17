@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import CorpusSegmentationTelemetry from "./CorpusSegmentationTelemetry.vue";
+import type { CorpusSegmentationTelemetry as CorpusSegmentationTelemetryData } from "../types/corpus";
 
 const props=defineProps<{
   status:string;
@@ -15,7 +16,7 @@ const props=defineProps<{
   validation?:Record<string,any>|null;
   llmMetrics?:{calls?:number;manifest_calls?:number;segmentation_calls?:number;metadata_calls?:number;discourse_calls?:number;quotation_calls?:number;indexing_calls?:number;retries?:number;structured_output_failures?:number;escalations?:number}|null;
   unresolvedCount?:number;
-  segmentationTelemetry?:{candidateCount?:number;deterministicSplits?:number;deterministicKeeps?:number;llmAdjudications?:number;llmBatchCalls?:number;llmSplits?:number;llmKeeps?:number;provisionalSplits?:number;budgetSkipped?:number;classifierFailures?:number;reviewCount?:number}|null;
+  segmentationTelemetry?:CorpusSegmentationTelemetryData|null;
 }>();
 const i18n=useI18nStore();
 function statusLabel(){return i18n.t(`pdf_corpus.status.${props.status}`,String(props.status||"unknown").replace(/_/g," "))}
