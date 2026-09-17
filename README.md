@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
-**0.43.0 — Crocodile** makes record review the primary Corpus Builder task: metadata is reviewed alongside record text, blocked decisions are actionable rather than inert, source/evidence context moves behind focused inspector tabs, and review mutations preserve the user’s viewport.
-# DerridAI Corpus Viewer 0.43.0
+**0.43.5 — Dundee** consolidates Corpus Builder into a stage-driven workflow: review decisions are atomic, contradictory metadata/publication states are eliminated, build configuration collapses after launch, empty review workspaces are suppressed, and source-quality problems receive their own queue.
+# DerridAI Corpus Viewer 0.43.5
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -67,9 +67,9 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
-## 0.43.0 — Crocodile
+## 0.43.5 — Dundee
 
-Crocodile turns Corpus Builder review into a single record-first decision workspace. During active review, the large pipeline/quality dashboard collapses to a compact progress summary while full diagnostics remain available under Technical build details. The left rail is navigation, the center pane is the proposed record, and the right inspector is explicitly tabbed between **Metadata**, **Evidence**, and **Source** so the PDF no longer permanently competes with the text being judged.
+Dundee consolidates Corpus Builder review into a single authoritative workflow. Accept/reject decisions are handled as atomic server commands that return the next record and updated build state, so review actions no longer depend on chained refreshes. During active review, the large pipeline/quality dashboard collapses to a compact progress summary while full diagnostics remain available under Technical build details. The left rail is navigation, the center pane is the proposed record, and the right inspector is explicitly tabbed between **Metadata**, **Evidence**, and **Source** so the PDF no longer permanently competes with the text being judged.
 
 Record acceptance is now actionable even when metadata blocks it. **Accept & next** no longer looks broken: if required metadata is unresolved, the action opens the Metadata inspector, identifies the blocking fields, moves focus to the first decision without scrolling the page, and leaves the record pending. Once metadata is resolved, the same action accepts the record and advances to the next proposal. Review mutations preserve window/queue/inspector position rather than resetting the page. Bulk acceptance reports records blocked by metadata and routes them into the metadata-decision queue.
 
@@ -1165,19 +1165,16 @@ docker compose up -d --build
 
 ## Release validation
 
-The packaged 0.10.1 source was checked with:
+0.43.5 Dundee was checked with:
 
-- `node --check web/src/main.js`;
-- Python compilation of every `api/app/*.py` module;
-- FastAPI import/route smoke tests with a stub Chroma module;
-- background LLM provider-concurrency lifecycle tests;
-- background PDF/RAG-grade tool-job lifecycle tests;
-- RAG eight-stage lifecycle plus `_response_cache` persistence tests;
-- response-cache grade-history persistence tests;
-- Docker Compose YAML parsing;
-- CSS brace-balance and package/version checks.
+- the full Python regression suite (`319 passed` in the packaging environment, using a temporary Chroma import stub because the sandbox could not download the package);
+- Python bytecode compilation for `api/app` and `tests`;
+- `node --check web/src/legacy/runtime.js`;
+- TypeScript/Vue script syntax transpilation across 169 source blocks;
+- `git diff --check`;
+- explicit attempts to run `npm run build` and `npm run build-storybook`.
 
-A full `npm install` / Vite production build was attempted in the packaging sandbox but the dependency install timed out before completion. The JavaScript syntax check passed; build the web image normally through Docker on a networked development machine.
+The sandbox cannot currently reach the npm registry and contains no local `node_modules`, so the dependency-backed Vue/Vite and Storybook builds stop at `vue-tsc: not found` / `storybook: not found`. These commands were attempted and are not represented as successful production builds. On a networked development machine, `docker compose up -d --build` remains the authoritative integration build.
 
 ## Current limitations
 

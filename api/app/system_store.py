@@ -6762,4 +6762,26 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.bulk_done_metadata_blocked":"{count} fiche(s) admissible(s) acceptée(s); {blocked} fiche(s) exigent encore des décisions de métadonnées et sont maintenant affichées dans la file des métadonnées.",
 })
 
+# 0.43.5 — Dundee: workflow consolidation and atomic record review.
+DEFAULT_EN_US.update({
+    "pdf_corpus.build_settings_summary":"Build settings",
+    "pdf_corpus.configure_new_build":"Configure a new build",
+    "pdf_corpus.building_records":"Building records",
+    "pdf_corpus.building_records_title":"Corpus construction is in progress",
+    "pdf_corpus.building_records_help":"DerridAI is analyzing document structure and semantic boundaries. The review workspace will appear automatically when reviewable records are persisted.",
+    "pdf_corpus.queue_source":"Source problem",
+    "pdf_corpus.current_stage":"Current stage",
+    "pdf_corpus.accept_blocked_source":"Resolve or reject this source-extraction problem before accepting the record.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.build_settings_summary":"Paramètres de construction",
+    "pdf_corpus.configure_new_build":"Configurer une nouvelle construction",
+    "pdf_corpus.building_records":"Construction des fiches",
+    "pdf_corpus.building_records_title":"La construction du corpus est en cours",
+    "pdf_corpus.building_records_help":"DerridAI analyse la structure du document et les frontières sémantiques. L’espace de révision apparaîtra automatiquement dès que des fiches révisables seront enregistrées.",
+    "pdf_corpus.queue_source":"Problème de source",
+    "pdf_corpus.current_stage":"Étape actuelle",
+    "pdf_corpus.accept_blocked_source":"Résolvez ou rejetez ce problème d’extraction de la source avant d’accepter la fiche.",
+})
+
 system_store = SystemStore()

@@ -486,6 +486,12 @@ class PdfCorpusBulkDisposition(BaseModel):
     query: str = Field(default="", max_length=500)
 
 
+class PdfCorpusReviewDecision(BaseModel):
+    disposition: Literal["accepted", "rejected"]
+    reason: str = Field(default="", max_length=2000)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
 class PdfCorpusRecordMerge(BaseModel):
     direction: Literal["previous", "next"]
     expected_revision: int | None = Field(default=None, ge=1)

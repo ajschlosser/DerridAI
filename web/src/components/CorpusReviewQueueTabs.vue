@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { useI18nStore } from "../stores/i18n";
 
-export type ReviewQueue = "all"|"pending"|"attention"|"metadata"|"accepted"|"rejected";
-const props=defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;metadata:number;accepted:number;rejected:number;disabled?:boolean}>();
+export type ReviewQueue = "all"|"pending"|"attention"|"metadata"|"source"|"accepted"|"rejected";
+const props=defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;metadata:number;source?:number;accepted:number;rejected:number;disabled?:boolean}>();
 const emit=defineEmits<{"update:modelValue":[value:ReviewQueue]}>();
 const i18n=useI18nStore();
-const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typeof props,"total"|"pending"|"attention"|"metadata"|"accepted"|"rejected">}>=[
+const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typeof props,"total"|"pending"|"attention"|"metadata"|"source"|"accepted"|"rejected">}>=[
   {id:"all",key:"pdf_corpus.queue_all",fallback:"All",count:"total"},
   {id:"pending",key:"pdf_corpus.queue_pending",fallback:"Pending review",count:"pending"},
   {id:"attention",key:"pdf_corpus.queue_attention",fallback:"Topology attention",count:"attention"},
-  {id:"metadata",key:"pdf_corpus.queue_metadata",fallback:"Metadata decisions",count:"metadata"},
+  {id:"metadata",key:"pdf_corpus.queue_metadata",fallback:"Needs metadata",count:"metadata"},
+  {id:"source",key:"pdf_corpus.queue_source",fallback:"Source problem",count:"source"},
   {id:"accepted",key:"pdf_corpus.queue_accepted",fallback:"Accepted",count:"accepted"},
   {id:"rejected",key:"pdf_corpus.queue_rejected",fallback:"Rejected",count:"rejected"},
 ];

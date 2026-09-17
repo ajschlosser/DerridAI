@@ -743,7 +743,7 @@ class PdfCorpusRepository:
         with path.open("r", encoding="utf-8") as handle:
             return [json.loads(line) for line in handle if line.strip()]
 
-    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, query: str = "") -> dict[str, Any]:
+    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
         # browse request. Structural edits intentionally use load_records(); read
         # pagination remains bounded no matter how large the generated record set.
@@ -768,6 +768,8 @@ class PdfCorpusRepository:
                 if disposition is not None and record_disposition != disposition:
                     continue
                 if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
+                    continue
+                if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
                     continue
                 if q and q not in line.casefold():
                     continue
@@ -1251,9 +1253,12 @@ class PdfCorpusBuildManager:
         pending = max(0, record_count - reviewed)
         metadata_total = int(build.get("metadata_total") or record_count or 0)
         metadata_completed = int(build.get("metadata_completed") or 0)
-        metadata_remaining = max(0, metadata_total - metadata_completed)
-        issue_summary = build.get("metadata_issue_summary") if isinstance(build.get("metadata_issue_summary"), dict) else {}
+        issue_summary_present = isinstance(build.get("metadata_issue_summary"), dict)
+        issue_summary = build.get("metadata_issue_summary") if issue_summary_present else {}
         unresolved_fields = int(issue_summary.get("fields_unresolved") or 0)
+        # Once the issue summary exists it is the authoritative publication-facing
+        # metadata state. A stale worker counter must never manufacture blockers.
+        metadata_remaining = int(issue_summary.get("records_incomplete") or 0) if issue_summary_present else max(0, metadata_total - metadata_completed)
         validation = build.get("validation") if isinstance(build.get("validation"), dict) else {}
         source_quality = build.get("source_quality") if isinstance(build.get("source_quality"), dict) else {}
         publication = build.get("publication") if isinstance(build.get("publication"), dict) else None
@@ -3109,6 +3114,34 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return record
 
     @staticmethod
+    def _record_extraction_quality_issues(record: dict[str, Any]) -> list[dict[str, Any]]:
+        """Detect layout/glyph fragmentation that page-level corruption checks miss.
+
+        PDF text layers sometimes emit one glyph per line/position. Those records may
+        contain valid Unicode yet are still unusable as scholarly text. Route them to
+        the Source problem queue instead of presenting them as ready for acceptance.
+        """
+        text = unicodedata.normalize("NFC", str(record.get("text") or ""))
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 8:
+            return []
+        micro = sum(1 for line in lines if len(line) <= 2)
+        punctuation_only = sum(1 for line in lines if line and all((not ch.isalnum()) for ch in line))
+        alpha_chars = [ch for ch in text if ch.isalpha()]
+        separated_alpha = sum(1 for line in lines if len(line) == 1 and line.isalpha())
+        micro_ratio = micro / max(1, len(lines))
+        separated_ratio = separated_alpha / max(1, len(alpha_chars))
+        if micro_ratio >= 0.45 and (separated_alpha >= 5 or punctuation_only >= 5 or separated_ratio >= 0.12):
+            pages = [int(v) for v in (record.get("pdf_pages") or []) if isinstance(v, int)]
+            return [{
+                "code": "fragmented_glyph_layout",
+                "pages": sorted(set(pages)),
+                "micro_line_ratio": round(micro_ratio, 3),
+                "message": "Extracted text appears fragmented into individual glyphs or punctuation lines.",
+            }]
+        return []
+
+    @staticmethod
     def _source_quality_report(blocks: list[dict[str, Any]]) -> dict[str, Any]:
         """Detect extraction problems before asking an LLM to interpret damaged text.
 
@@ -3379,10 +3412,16 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             for record in records:
                 record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
                 affected = sorted(record_pages & blocking_pages)
+                issues = []
                 if affected:
-                    record["source_quality_issues"] = [{"code": "source_quality_blocking", "pages": affected}]
+                    issues.append({"code": "source_quality_blocking", "pages": affected})
+                issues.extend(self._record_extraction_quality_issues(record))
+                if issues:
+                    record["source_quality_issues"] = issues
+                    record["needs_review"] = True
+                    record["review_reason"] = "Source extraction requires attention before scholarly acceptance."
             self.repo.save_records(build_id, records)
-            self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records))
+            self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")))
 
             total = max(1, len(records))
             pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
@@ -3480,6 +3519,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 boundary_review_count=boundary_review_count,
                 accepted_count=sum(1 for record in records if record.get("accepted")),
                 rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
+                source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
                 validation=validation,
                 resumable=False,
                 retrying_segmentation=False,
@@ -3513,11 +3553,18 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
         build["accepted_count"] = sum(1 for record in records if record.get("accepted"))
         build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
+        build["source_problem_count"] = sum(1 for record in records if bool(record.get("source_quality_issues")))
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
         # stale worker counter. This makes retries, human edits, refreshes, and
         # publication gating agree on the same truth.
         build["metadata_total"] = len(records)
+        # Required-metadata completeness is derived from unresolved/review queues.
+        # This prevents stale worker booleans from contradicting an empty issue list.
+        for record in records:
+            unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
+            record["metadata_complete"] = len(unresolved) == 0
+        self.repo.save_records(build_id, records)
         build["metadata_completed"] = sum(1 for record in records if bool(record.get("metadata_complete")))
         issue_records: list[dict[str, Any]] = []
         issue_rows: list[dict[str, Any]] = []
@@ -3675,6 +3722,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if target is None:
             raise KeyError(record_id)
         current_revision = self._assert_record_revision(target, expected_revision)
+        if disposition == "accepted" and target.get("source_quality_issues"):
+            raise ValueError("Resolve the source extraction problem before accepting this record.")
         if disposition == "accepted" and (list(target.get("metadata_review_fields") or []) or list(target.get("metadata_incomplete_fields") or [])):
             raise ValueError("Resolve the queued record metadata before accepting this record.")
         if disposition == "accepted":
@@ -3702,6 +3751,57 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return target
 
+    def review_decision(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
+        """Apply one review decision and return the authoritative next step atomically.
+
+        This is the UI-facing review command. It avoids the previous client-side
+        accept -> refresh build -> refresh queue race that could look like a no-op.
+        """
+        if disposition not in {"accepted", "rejected"}:
+            raise ValueError("Unsupported review decision.")
+        records = self.repo.load_records(build_id)
+        index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
+        if index < 0:
+            raise KeyError(record_id)
+        target = records[index]
+        blocking_fields = list(dict.fromkeys([str(v) for v in (target.get("metadata_review_fields") or []) + (target.get("metadata_incomplete_fields") or [])]))
+        if disposition == "accepted" and target.get("source_quality_issues"):
+            return {
+                "applied": False, "blocked": True, "blocker": "source_problem",
+                "blocking_fields": [], "record": target, "next_record": None,
+                "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
+            }
+        if disposition == "accepted" and blocking_fields:
+            return {
+                "applied": False, "blocked": True, "blocker": "metadata_decision_required",
+                "blocking_fields": blocking_fields, "record": target, "next_record": None,
+                "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
+            }
+        self._assert_record_revision(target, expected_revision)
+        current_revision = int(target.get("record_revision") or 1)
+        if disposition == "accepted":
+            status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+            for field in REVIEW_METADATA_FIELDS:
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                if info and info.get("status") == "llm_inferred":
+                    info["status"] = "human_confirmed"
+                    info["method"] = "human_review_of_llm_proposal"
+            target["metadata_reviewed_at"] = iso_now()
+        target["review_disposition"] = disposition
+        target["accepted"] = disposition == "accepted"
+        target["rejected"] = disposition == "rejected"
+        target["needs_review"] = False
+        target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
+        target["record_revision"] = current_revision + 1
+        build = self._rewrite_and_validate(build_id, records)
+        # Prefer the next pending record in document order, then wrap once.
+        next_record = None
+        for candidate in records[index + 1:] + records[:index]:
+            if str(candidate.get("review_disposition") or "pending") == "pending":
+                next_record = candidate
+                break
+        return {"applied": True, "blocked": False, "record": target, "next_record": next_record, "build": build}
+
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
         return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
 
@@ -3721,7 +3821,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
-            if disposition == "accepted" and (list(record.get("metadata_review_fields") or []) or list(record.get("metadata_incomplete_fields") or [])):
+            if disposition == "accepted" and (record.get("source_quality_issues") or list(record.get("metadata_review_fields") or []) or list(record.get("metadata_incomplete_fields") or [])):
                 blocked_metadata += 1
                 if len(blocked_record_ids) < 100:
                     blocked_record_ids.append(str(record.get("record_id") or ""))

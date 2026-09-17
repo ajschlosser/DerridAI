@@ -21,6 +21,7 @@ import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
 import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
 import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
+import CorpusBuildStageNotice from "./CorpusBuildStageNotice.vue";
 import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
@@ -51,6 +52,7 @@ const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
 const reviewOnly=computed(()=>reviewQueue.value==="attention");
 const reviewDispositionFilter=computed<"pending"|"accepted"|"rejected"|"">(()=>["pending","accepted","rejected"].includes(reviewQueue.value)?reviewQueue.value as "pending"|"accepted"|"rejected":"");
 const metadataIncompleteOnly=computed(()=>reviewQueue.value==="metadata");
+const sourceProblemOnly=computed(()=>reviewQueue.value==="source");
 const recordQuery=ref("");
 const focusView=ref(false);
 const recordsLoading=ref(false);
@@ -134,10 +136,12 @@ const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunn
 const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
 const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
 const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.metadata_issue_summary?.auto_retry_fields||0)>0));
-const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete||Math.max(0,Number(currentBuild.value?.metadata_total||0)-Number(currentBuild.value?.metadata_completed||0))));
+const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete ?? 0));
+const metadataFieldIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.fields_unresolved ?? 0));
 const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
-const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (["awaiting_review","awaiting_metadata","ready","running"].includes(String(currentBuild.value.status))||Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||Number(currentBuild.value.metadata_total||0)>0||recordTotal.value>0)));
+const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
+const showBuildConfiguration=computed(()=>!currentBuild.value || (!buildRunning.value && !hasRecordTopology.value));
 const pageNumber=computed(()=>Math.floor(recordOffset.value/pageSize)+1);
 const pageCount=computed(()=>Math.max(1,Math.ceil(recordTotal.value/pageSize)));
 const sourcePdfUrl=computed(()=>selectedAssetId.value?pdfCorpusApi.assetContentUrl(selectedAssetId.value):"");
@@ -284,8 +288,8 @@ async function refreshRecords(reset=false, preferredId=""){
     // Hydrate independently of form interaction and retry the read while the build
     // explicitly advertises topology that should already exist.
     for(let attempt=0;attempt<5;attempt++){
-      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value,reviewDispositionFilter.value,metadataIncompleteOnly.value);
-      if(result.total>0||expected===0||reviewOnly.value||metadataIncompleteOnly.value||Boolean(reviewDispositionFilter.value)||Boolean(recordQuery.value))break;
+      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value,reviewDispositionFilter.value,metadataIncompleteOnly.value,sourceProblemOnly.value);
+      if(result.total>0||expected===0||reviewOnly.value||metadataIncompleteOnly.value||sourceProblemOnly.value||Boolean(reviewDispositionFilter.value)||Boolean(recordQuery.value))break;
       await new Promise(resolve=>window.setTimeout(resolve,120*(attempt+1)));
       if(requestId!==recordRequestSerial)return;
     }
@@ -312,7 +316,7 @@ async function ensureReviewHydrated(preferredId=""){
 async function refreshAll(){
   await Promise.all([refreshProviders(),refreshCorpusProfiles(),refreshAssets(),refreshBuilds()]);
   const requestedQueue=String(route.query.queue||"") as ReviewQueue;
-  if(["all","pending","attention","metadata","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
+  if(["all","pending","attention","metadata","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
   await refreshBuild();
   await ensureReviewHydrated(String(route.query.record||""));
   // A second post-paint hydration closes the lifecycle race where build.json is
@@ -374,18 +378,42 @@ async function chooseBuild(build:CorpusBuild){selectedBuildId.value=build.build_
 async function advanceFrom(recordId:string){const index=records.value.findIndex(row=>row.record_id===recordId);const next=records.value[index+1]||records.value[index-1];if(next){selectRecord(next);return}if(recordOffset.value+pageSize<recordTotal.value){recordOffset.value+=pageSize;await refreshRecords();return}await refreshRecords()}
 async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
   if(!currentBuild.value||!selectedRecord.value)return;
-  const viewport=captureReviewViewport();
-  const id=selectedRecord.value.record_id;const index=Math.max(0,selectedRecordIndex.value);busy.value="record";
+  const id=selectedRecord.value.record_id;const viewport=captureReviewViewport();busy.value="record";
   try{
-    const updated=await pdfCorpusApi.disposition(currentBuild.value.build_id,id,disposition,"",Number(selectedRecord.value.record_revision||1));
-    selectedRecord.value=updated;
-    const preferred=records.value[index+1]?.record_id||records.value[index-1]?.record_id||"";
-    await refreshBuild();await refreshRecords(false,preferred);
+    if(disposition==="pending"){
+      const updated=await pdfCorpusApi.disposition(currentBuild.value.build_id,id,"pending","",Number(selectedRecord.value.record_revision||1));
+      selectedRecord.value=updated;await refreshBuild();await refreshRecords(false,id);
+      setMessage(i18n.t("pdf_corpus.reopened_notice","Record reopened for review."));
+    }else{
+      const result=await pdfCorpusApi.reviewDecision(currentBuild.value.build_id,id,disposition,"",Number(selectedRecord.value.record_revision||1));
+      currentBuild.value=result.build;syncBuildInRail(result.build);
+      if(result.blocked){
+        selectedRecord.value=result.record;
+        if(result.blocker==="source_problem"){
+          reviewInspectorTab.value="source";reviewQueue.value="source";
+          setMessage(i18n.t("pdf_corpus.accept_blocked_source","Resolve or reject this source-extraction problem before accepting the record."),"error");
+        }else{
+          reviewInspectorTab.value="metadata";
+          const fields=(result.blocking_fields||[]).map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", ");
+          setMessage(i18n.tf("pdf_corpus.accept_blocked_metadata","Confirm the required metadata before accepting this record: {fields}.",{fields}));
+          await nextTick();focusFirstMetadataBlocker();
+        }
+      }else{
+        // Update the visible row immediately; do not wait for a full list reload.
+        const idx=records.value.findIndex(row=>row.record_id===id);
+        if(idx>=0){
+          if(reviewQueue.value==="pending"||reviewQueue.value==="accepted"||reviewQueue.value==="rejected") { records.value.splice(idx,1); recordTotal.value=Math.max(0,recordTotal.value-1); }
+          else records.value.splice(idx,1,result.record);
+        }
+        if(result.next_record){
+          const next=result.next_record;const existing=records.value.find(row=>row.record_id===next.record_id);selectRecord(existing||next);
+        }else{
+          await refreshRecords(false);
+        }
+        setMessage(disposition==="accepted"?i18n.t("pdf_corpus.accepted_notice","Record accepted. Advanced to the next record."):i18n.t("pdf_corpus.rejected_notice","Record rejected. Advanced to the next record."));
+      }
+    }
     await restoreReviewViewport(viewport,{record:true,inspector:true});
-    if(reviewPaneEl.value)reviewPaneEl.value.scrollTop=0;
-    if(reviewInspectorEl.value)reviewInspectorEl.value.scrollTop=0;
-    if(selectedMetadataBlocked.value)reviewInspectorTab.value="metadata";
-    setMessage(disposition==="accepted"?i18n.t("pdf_corpus.accepted_notice","Record accepted. Advanced to the next record."):disposition==="rejected"?i18n.t("pdf_corpus.rejected_notice","Record rejected. Advanced to the next record."):i18n.t("pdf_corpus.reopened_notice","Record reopened for review."));
   }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
 async function attemptAccept(){
@@ -494,10 +522,10 @@ watch(()=>route.query.build,async value=>{
   if(!buildId||buildId===selectedBuildId.value)return;
   selectedBuildId.value=buildId;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];
   const requestedQueue=String(route.query.queue||"") as ReviewQueue;
-  if(["all","pending","attention","metadata","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
+  if(["all","pending","attention","metadata","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
   await refreshBuild();await refreshRecords(true,String(route.query.record||""));if(buildRunning.value)startPolling();
 });
-watch(()=>route.query.queue,value=>{const queue=String(value||"") as ReviewQueue;if(["all","pending","attention","metadata","accepted","rejected"].includes(queue)&&queue!==reviewQueue.value)reviewQueue.value=queue});
+watch(()=>route.query.queue,value=>{const queue=String(value||"") as ReviewQueue;if(["all","pending","attention","metadata","source","accepted","rejected"].includes(queue)&&queue!==reviewQueue.value)reviewQueue.value=queue});
 watch(()=>route.query.record,async value=>{const id=String(value||"");if(!id||id===selectedRecordId.value)return;await refreshRecords(false,id)});
 watch([selectedBuildId,reviewQueue,selectedRecordId],()=>{
   if(!selectedBuildId.value)return;
@@ -534,7 +562,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
     <CorpusWorkflowStepper :stage="currentBuild?.stage||''" :status="currentBuild?.status||''" :published="Boolean(currentBuild?.publication)" :has-asset="Boolean(selectedAssetId)" :has-manifest="Boolean(currentBuild?.manifest&&Object.keys(currentBuild.manifest).length)" :accepted-count="currentBuild?.accepted_count||0" :record-count="currentBuild?.record_count||0" />
 
-    <section class="builder-setup" :aria-labelledby="'pdf-corpus-config-title'">
+    <section v-if="showBuildConfiguration" class="builder-setup" :aria-labelledby="'pdf-corpus-config-title'">
       <div class="setup-card setup-source">
         <h2 id="pdf-corpus-config-title" class="sr-only">{{i18n.t('pdf_corpus.build_configuration','Build configuration')}}</h2>
         <div class="setup-card-heading"><b>{{i18n.t('pdf_corpus.source_setup_title','Source PDF')}}</b><small>{{i18n.t('pdf_corpus.source_setup_help','Choose an extracted PDF, or add the PDF currently open in Explorer.')}}</small></div>
@@ -579,6 +607,11 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       </details>
     </section>
 
+    <details v-if="currentBuild && !showBuildConfiguration" class="active-build-settings">
+      <summary>{{i18n.t('pdf_corpus.build_settings_summary','Build settings')}}</summary>
+      <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{String((currentBuild.request||{}).provider_profile_id||currentBuild.provider||'—')}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{currentBuild.model||'—'}}</span><button type="button" class="btn small" @click="selectedBuildId='';currentBuild=null">{{i18n.t('pdf_corpus.configure_new_build','Configure a new build')}}</button></div>
+    </details>
+
     <div class="builder-workspace">
       <aside class="build-rail" :aria-label="i18n.t('pdf_corpus.builds','Corpus builds')">
         <div class="rail-title"><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><span>{{buildsTotal}} {{i18n.t('pdf_corpus.total','total')}}</span></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="refreshBuilds">↻</button></div>
@@ -602,8 +635,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusBuildLifecycleCard v-if="!showReviewWorkspace||finishPhase" :build="currentBuild" />
           <CorpusQualitySummary v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
           <section v-if="showReviewWorkspace&&!finishPhase" class="review-stage-summary" role="status" aria-live="polite"><div><span class="eyebrow">{{i18n.t('pdf_corpus.review_mode','Record review')}}</span><b>{{i18n.tf('pdf_corpus.review_progress_compact','{accepted} accepted · {pending} pending · {metadata} metadata decisions',{accepted:currentBuild.accepted_count||0,pending:pendingCount,metadata:metadataIssueCount})}}</b></div><span>{{i18n.t('pdf_corpus.review_mode_help','Review the proposed record and its metadata together. Build diagnostics remain available under Technical build details.')}}</span></section>
+          <CorpusBuildStageNotice v-if="buildRunning && !hasRecordTopology" :stage="currentBuild.stage" />
           <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @publish="publish({download:false})" />
-          <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
+          <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataFieldIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
           <CorpusBuildTimeline v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
           <details class="technical-details">
             <summary>{{i18n.t('pdf_corpus.technical_details','Technical build details')}}</summary>
@@ -639,7 +673,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
-            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
+            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :source="currentBuild.source_problem_count||0" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
             <div class="review-bulk"><button type="button" class="btn small" @click="bulkDisposition('accepted')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.accept_all_queue','Accept queue')}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.reject_all_queue','Reject queue')}}</button><button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div>
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>
@@ -707,6 +741,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 @media(max-width:1250px){.review-grid{grid-template-columns:1fr .72fr}.inspector-pane{grid-column:1/-1;border-top:1px solid var(--line);max-height:none}.source-pane,.records-pane{max-height:65vh}}
 @media(max-width:900px){.manifest-gate,.segmentation-blocked{grid-template-columns:1fr}.builder-header{align-items:flex-start;flex-direction:column}.builder-setup{grid-template-columns:1fr}.build-launch-row{grid-template-columns:1fr}.escalation-field{grid-template-columns:1fr}.advanced-grid{grid-template-columns:1fr}.advanced-config{grid-column:auto}.builder-workspace{grid-template-columns:1fr}.build-rail{border-inline-end:0;border-bottom:1px solid var(--line);max-height:220px}.review-toolbar{grid-template-columns:1fr 1fr}.review-grid{grid-template-columns:1fr}.source-pane,.records-pane{border-inline-end:0;border-bottom:1px solid var(--line);max-height:none}}
 
+.active-build-settings{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}.active-build-settings>summary{padding:10px 12px;cursor:pointer;font-size:10px;font-weight:800}.active-build-settings>div{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--line);font-size:9px;color:var(--muted)}
 .technical-details{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}.technical-details>summary{padding:9px 11px;cursor:pointer;font-size:10px;font-weight:800}.technical-details>div,.technical-details>section{border-top:1px solid var(--line)}
 .review-toolbar{grid-template-columns:minmax(0,1fr) minmax(220px,.7fr) auto auto}.record-first-review{grid-template-columns:minmax(220px,.52fr) minmax(500px,1.45fr) minmax(360px,.9fr)}.record-first-review>.records-pane{border-inline-end:1px solid var(--line)}.record-first-review>.source-pane{border-inline-start:1px solid var(--line);border-inline-end:0}.record-review-pane{min-width:0;max-height:76vh;overflow:auto;background:var(--card)}.record-review-head{position:sticky;top:0;z-index:4;background:var(--card);display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--line)}.record-review-head h3{margin:2px 0;font-size:15px}.record-review-head p{margin:0;font-size:9px;color:var(--muted)}.record-primary-text{max-width:80ch;margin:0 auto;padding:28px 32px;white-space:pre-wrap;font:17px/1.72 Georgia,serif}.review-reason{display:grid;gap:3px;margin:12px 16px 0;padding:10px 12px;border-radius:9px;background:#fff8e9;color:#604300;font-size:10px}.metadata-accept-blocker{margin:0;padding:9px 12px;border:1px solid #d9bf76;border-radius:8px;background:#fff8e9;color:#604300;font-size:10px}.decision-bar{position:sticky;bottom:0;z-index:4;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(6px)}.structural-actions,.decision-actions,.data-actions{display:flex;gap:7px;flex-wrap:wrap}.record-data{border-top:1px solid var(--line);padding:10px 14px}.record-data>summary,.source-text-details>summary{cursor:pointer;font-size:10px;font-weight:800}.source-text-details{border-top:1px solid var(--line);padding:8px}.source-pane,.records-pane{max-height:76vh;overflow:auto}.source-pane .pdf-evidence-viewer{max-width:100%}
 @media(max-width:1400px){.record-first-review{grid-template-columns:minmax(210px,.5fr) minmax(460px,1.35fr) minmax(320px,.8fr)}.record-primary-text{font-size:16px;padding:24px}}

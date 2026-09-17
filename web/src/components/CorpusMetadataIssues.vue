@@ -19,11 +19,12 @@ const progress=computed(()=>{
   return Math.max(0,Math.min(100,Math.round(Number(operation.value.fields_resolved||0)/total*100)));
 });
 const firstHumanRecord=computed(()=>String(human.value.find(issue=>issue.record_id)?.record_id||""));
+const totalIssues=computed(()=>Number(summary.value.fields_unresolved??issues.value.length));
 function reasonLabel(code?:string){return i18n.t(`pdf_corpus.metadata_reason.${code||'unresolved'}`,String(code||"unresolved").replace(/_/g," "))}
 </script>
 
 <template>
-  <section class="metadata-issues" aria-labelledby="metadata-resolution-title">
+  <section v-if="totalIssues>0" class="metadata-issues" aria-labelledby="metadata-resolution-title">
     <header class="resolution-head">
       <div>
         <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_resolution','Metadata resolution')}}</span>
