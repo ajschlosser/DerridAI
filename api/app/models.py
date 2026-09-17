@@ -482,6 +482,7 @@ class PdfCorpusBulkDisposition(BaseModel):
     disposition: Literal["pending", "accepted", "rejected"]
     reason: str = Field(default="", max_length=2000)
     needs_review: bool | None = None
+    filter_disposition: Literal["pending", "accepted", "rejected"] | None = None
     query: str = Field(default="", max_length=500)
 
 

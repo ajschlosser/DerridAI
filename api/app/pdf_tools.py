@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+import unicodedata
 
 import fitz
 
@@ -38,7 +39,7 @@ def extract_pdf_text(data: bytes, page: int | None = None) -> dict[str, Any]:
         has_text = False
         for index in indexes:
             text = document.load_page(index).get_text("text", sort=True)
-            text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+            text = unicodedata.normalize("NFC", text).replace("\r\n", "\n").replace("\r", "\n").strip()
             if text:
                 has_text = True
             pages.append({

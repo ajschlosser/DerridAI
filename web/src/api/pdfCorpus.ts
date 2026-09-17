@@ -41,6 +41,8 @@ export interface CorpusBuild {
   manifest_confirmed_at?: string | null;
   manifest_confirmed_revision?: number | null;
   publication?: {publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}|null;
+  publication_status?: "unpublished"|"published";
+  published_at?: string | null;
   error?: string | null;
   warnings?: string[];
   resumable?: boolean;
@@ -117,10 +119,10 @@ export const pdfCorpusApi = {
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
-  records: (buildId:string, offset=0, limit=50, reviewOnly=false, query="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewOnly?"&needs_review=true":""}${query?`&query=${encodeURIComponent(query)}`:""}`),
+  records: (buildId:string, offset=0, limit=50, reviewOnly=false, query="", disposition:"pending"|"accepted"|"rejected"|""="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewOnly?"&needs_review=true":""}${disposition?`&disposition=${encodeURIComponent(disposition)}`:""}${query?`&query=${encodeURIComponent(query)}`:""}`),
   accept: (buildId:string, recordId:string, accepted=true, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted,expected_revision:expectedRevision})}),
   disposition: (buildId:string, recordId:string, disposition:"pending"|"accepted"|"rejected", reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,expected_revision:expectedRevision})}),
-  bulkDisposition: (buildId:string, disposition:"pending"|"accepted"|"rejected", needsReview:boolean|null, query="", reason="") => apiRequest<{changed:number;disposition:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,needs_review:needsReview,query})}),
+  bulkDisposition: (buildId:string, disposition:"pending"|"accepted"|"rejected", needsReview:boolean|null, query="", reason="", filterDisposition:"pending"|"accepted"|"rejected"|null=null) => apiRequest<{changed:number;disposition:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,needs_review:needsReview,filter_disposition:filterDisposition,query})}),
   undoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/undo`, {method:"POST"}),
   patchMetadata: (buildId:string, recordId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   patchEvidence: (buildId:string, recordId:string, field:string, blockIds:string[], confidence=1, reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence`, {method:"PATCH",body:JSON.stringify({field,block_ids:blockIds,confidence,reason,expected_revision:expectedRevision})}),

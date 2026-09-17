@@ -82,7 +82,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.40.20")
+app = FastAPI(title="DerridAI Corpus API", version="0.40.25")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1170,7 +1170,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.40.20",
+            "app_version": "0.40.25",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1855,10 +1855,11 @@ def list_pdf_corpus_records(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     needs_review: bool | None = None,
+    disposition: str | None = Query(default=None, pattern="^(pending|accepted|rejected)$"),
     query: str = "",
 ):
     try:
-        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, query=query)
+        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, query=query)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
@@ -1936,7 +1937,7 @@ def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCo
 @app.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
 def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition):
     try:
-        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query)
+        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:

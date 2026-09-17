@@ -9,6 +9,7 @@ import re
 import threading
 import time
 import uuid
+import unicodedata
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -317,7 +318,13 @@ def _json_read(path: Path, default: Any = None) -> Any:
 
 
 def _normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", str(value or "").replace("\u00ad", "")).strip()
+    """Normalize whitespace without destroying non-ASCII scholarly text.
+
+    NFC keeps composed diacritics stable across PDF-native and OCR extraction
+    while retaining every Unicode letter/symbol in the source.
+    """
+    text = unicodedata.normalize("NFC", str(value or "").replace("\u00ad", ""))
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _block_text(block: dict[str, Any]) -> str:
@@ -325,11 +332,11 @@ def _block_text(block: dict[str, Any]) -> str:
         chunks: list[str] = []
         for line in block.get("lines") or []:
             spans = line.get("spans") or []
-            text = "".join(str(span.get("text") or "") for span in spans)
+            text = unicodedata.normalize("NFC", "".join(str(span.get("text") or "") for span in spans))
             if text.strip():
                 chunks.append(text.rstrip())
-        return "\n".join(chunks).strip()
-    return str(block.get("text") or "").strip()
+        return unicodedata.normalize("NFC", "\n".join(chunks).strip())
+    return unicodedata.normalize("NFC", str(block.get("text") or "").strip())
 
 
 def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None]:
@@ -663,6 +670,7 @@ class PdfCorpusRepository:
             "accepted_count": 0,
             "validation": None,
             "publication": None,
+            "publication_status": "unpublished",
             "error": None,
             **payload,
         }
@@ -705,7 +713,7 @@ class PdfCorpusRepository:
         with path.open("r", encoding="utf-8") as handle:
             return [json.loads(line) for line in handle if line.strip()]
 
-    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, query: str = "") -> dict[str, Any]:
+    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
         # browse request. Structural edits intentionally use load_records(); read
         # pagination remains bounded no matter how large the generated record set.
@@ -725,6 +733,9 @@ class PdfCorpusRepository:
                 topology_index = topology_count
                 topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
+                    continue
+                record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+                if disposition is not None and record_disposition != disposition:
                     continue
                 if q and q not in line.casefold():
                     continue
@@ -3083,17 +3094,30 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             history.append(build["publication"])
             build["publication_history"] = history[-20:]
             build["publication"] = None
+            build["publication_status"] = "unpublished"
         reviewed_count = min(build["record_count"], build["accepted_count"] + build["rejected_count"])
         review_fraction = reviewed_count / max(1, build["record_count"])
         blockers = bool(build["needs_review_count"] or build.get("rejected_count") or build["boundary_review_count"] or not validation.get("valid"))
-        all_accepted = bool(build["record_count"] and build["accepted_count"] == build["record_count"] and not blockers)
+        records_accepted = bool(build["record_count"] and build["accepted_count"] == build["record_count"] and not build["needs_review_count"] and not build.get("rejected_count") and not build["boundary_review_count"])
+        metadata_total = int(build.get("metadata_total") or 0)
+        metadata_completed = int(build.get("metadata_completed") or 0)
+        metadata_complete = metadata_total == 0 or metadata_completed >= metadata_total
+        all_ready = bool(records_accepted and metadata_complete and not blockers)
         # Automated construction owns the first 90% of lifecycle progress. Human
-        # review advances the build toward 98%; publication is the only 100% state.
-        # This prevents states such as "published · 43%" and makes progress
-        # describe the complete user-visible pipeline instead of only LLM work.
-        build["progress"] = 0.98 if all_accepted else 0.90 + 0.08 * review_fraction
-        build["status"] = "ready" if all_accepted else "awaiting_review"
-        build["stage"] = "ready" if all_accepted else "review"
+        # review advances toward 96%; metadata completion/validation reaches 98%;
+        # publishing an immutable snapshot is the only 100% lifecycle state.
+        if all_ready:
+            build["progress"] = 0.98
+            build["status"] = "ready"
+            build["stage"] = "ready"
+        elif records_accepted and not metadata_complete:
+            build["progress"] = max(0.96, 0.90 + 0.06 * review_fraction)
+            build["status"] = "awaiting_metadata"
+            build["stage"] = "metadata_review"
+        else:
+            build["progress"] = 0.90 + 0.06 * review_fraction
+            build["status"] = "awaiting_review"
+            build["stage"] = "review"
         self.repo.save_build(build)
         return build
 
@@ -3180,7 +3204,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
         return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
 
-    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "") -> dict[str, Any]:
+    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None) -> dict[str, Any]:
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
@@ -3188,6 +3212,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         changed = 0
         for record in records:
             if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
+                continue
+            current_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if filter_disposition is not None and current_disposition != filter_disposition:
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
@@ -3416,6 +3443,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
+        metadata_total = int(build.get("metadata_total") or 0)
+        metadata_completed = int(build.get("metadata_completed") or 0)
+        if metadata_total and metadata_completed < metadata_total:
+            raise ValueError(f"Publication is blocked: metadata is complete for {metadata_completed} of {metadata_total} record(s). Retry or resolve incomplete metadata first.")
         if not validation.get("valid"):
             raise ValueError("Publication is blocked until source coverage and text-fidelity validation pass.")
         unresolved = [record for record in records if record.get("needs_review")]
@@ -3451,9 +3482,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 handle.write(line)
         publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(records), "created_at": created_at}
         build["publication"] = publication
-        build["status"] = "published"
-        build["stage"] = "published"
+        # Build lifecycle and publication lifecycle are separate. A publication is
+        # an immutable snapshot of a ready build, not a new build-processing state.
+        build["publication_status"] = "published"
+        build["status"] = "ready"
+        build["stage"] = "ready"
         build["progress"] = 1.0
+        build["published_at"] = created_at
         build["finished_at"] = created_at
         self.repo.save_build(build)
         return publication

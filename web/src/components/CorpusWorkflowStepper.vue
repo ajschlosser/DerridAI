@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
-const props=defineProps<{stage?:string;status?:string;hasAsset?:boolean;hasManifest?:boolean;acceptedCount?:number;recordCount?:number}>();
+const props=defineProps<{stage?:string;status?:string;published?:boolean;hasAsset?:boolean;hasManifest?:boolean;acceptedCount?:number;recordCount?:number}>();
 const i18n=useI18nStore();
 const steps=computed(()=>{
   const stage=String(props.stage||"");const status=String(props.status||"");let current=props.hasAsset?1:0;
-  if(props.hasManifest||["segmenting","reconciling","enriching","review","ready","published"].includes(stage))current=2;
-  if(["enriching","review","ready","published"].includes(stage))current=3;
-  if(["review","ready","published"].includes(stage)||["awaiting_review","ready","published"].includes(status))current=4;
-  if(status==="published")current=5;
+  if(props.hasManifest||["segmenting","reconciling","enriching","review","metadata_review","ready","published"].includes(stage))current=2;
+  if(["enriching","review","metadata_review","ready","published"].includes(stage))current=3;
+  if(["review","metadata_review","ready","published"].includes(stage)||["awaiting_review","awaiting_metadata","ready","published"].includes(status))current=4;
+  if(props.published||status==="published")current=5;
   if(status==="blocked")current=2;
   const items=[[1,"pdf_corpus.workflow.source","Source"],[2,"pdf_corpus.workflow.analyze","Analyze"],[3,"pdf_corpus.workflow.build","Build records"],[4,"pdf_corpus.workflow.review","Review"],[5,"pdf_corpus.workflow.publish","Publish"]] as const;
   return items.map(([number,key,fallback])=>({number,label:i18n.t(key,fallback),state:number<current?"complete":number===current?"current":"upcoming"}));

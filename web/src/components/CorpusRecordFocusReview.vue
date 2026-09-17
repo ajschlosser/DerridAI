@@ -59,7 +59,7 @@ onMounted(()=>void nextTick(()=>dialog.value?.focus({preventScroll:true})));
 
     <footer class="focus-actions">
       <div class="structural-actions"><button class="btn" type="button" @click="emit('merge','previous')" :disabled="busy||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button class="btn" type="button" @click="emit('merge','next')" :disabled="busy||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button class="btn" type="button" @click="emit('undo')" :disabled="busy">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div>
-      <div class="decision-actions"><button class="btn" type="button" @click="emit('skip')" :disabled="busy">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button class="btn danger" type="button" @click="emit('reject')" :disabled="busy">{{i18n.t('pdf_corpus.reject','Reject')}}</button><button class="btn primary" type="button" @click="emit('accept')" :disabled="busy">{{i18n.t('pdf_corpus.accept','Accept')}}</button></div>
+      <div class="decision-actions"><button class="btn" type="button" @click="emit('skip')" :disabled="busy">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button class="btn danger" type="button" @click="emit('reject')" :disabled="busy">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button class="btn primary" type="button" @click="emit('accept')" :disabled="busy">{{i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div>
     </footer>
   </section>
 </template>

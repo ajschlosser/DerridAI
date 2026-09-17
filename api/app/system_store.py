@@ -6264,7 +6264,7 @@ DEFAULT_FR_CA.update({
 })
 
 
-# 0.40.20 — You're Probably Wondering How I Got Here: clarified corpus lifecycle.
+# 0.40.20 — prior lifecycle pass (superseded by Sensible Chuckles).
 DEFAULT_EN_US.update({
     "pdf_corpus.focus_record_title":"Review proposed record",
     "pdf_corpus.focus_record_help":"Judge the proposed record as a scholarly unit. The record text and its interpreted data are kept together so the decision can be made quickly.",
@@ -6320,6 +6320,35 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.stage_help.published":"Le corpus révisé a été finalisé au format JSONL. La provenance de construction est regroupée sous corpus_build_details dans chaque fiche publiée.",
 })
 
+
+# 0.40.25 — Sensible Chuckles: record-first corpus review and explicit lifecycle.
+DEFAULT_EN_US.update({
+    "pdf_corpus.review_queue":"Review queue","pdf_corpus.queue_all":"All","pdf_corpus.queue_pending":"Pending","pdf_corpus.queue_attention":"Needs attention","pdf_corpus.queue_accepted":"Accepted","pdf_corpus.queue_rejected":"Rejected",
+    "pdf_corpus.accept_all_queue":"Accept queue","pdf_corpus.reject_next":"Reject & next","pdf_corpus.reject_all_queue":"Reject queue","pdf_corpus.proposed_record":"Proposed record","pdf_corpus.accept_next":"Accept & next","pdf_corpus.record_decision":"Record decision","pdf_corpus.record_data":"Record data & evidence","pdf_corpus.source_context":"Source context","pdf_corpus.extracted_source_text":"Extracted source text",
+    "pdf_corpus.technical_details":"Technical build details","pdf_corpus.status.published_snapshot":"published","pdf_corpus.status.awaiting_metadata":"metadata attention","pdf_corpus.workflow":"Workflow","pdf_corpus.what_next":"What happens next?","pdf_corpus.reviewed":"reviewed","pdf_corpus.metadata_remaining":"metadata remaining",
+    "pdf_corpus.next_wait_build":"Corpus construction is running.","pdf_corpus.next_review_records":"Review the remaining proposed records.","pdf_corpus.next_resolve_rejections":"Resolve or reopen rejected records before publication.","pdf_corpus.next_finish_metadata":"Complete or retry incomplete metadata before publication.","pdf_corpus.next_published":"This revision is published. Download it or edit the draft to create a new revision.","pdf_corpus.next_publish":"Quality gates have passed. Review the publication summary and publish the JSONL.",
+    "pdf_corpus.flow_metadata_title":"Review complete — metadata needs attention","pdf_corpus.flow_metadata_help":"All records are accepted. Retry or resolve incomplete metadata before publication.","pdf_corpus.flow_review_help":"Work through the review queue. Accept and Reject update immediately and move to the next proposal.","pdf_corpus.flow_ready_title":"Ready to publish","pdf_corpus.flow_ready_help":"Record review is complete. Resolve any remaining metadata issue, then publish deliberately.","pdf_corpus.flow_published_title":"Published revision","pdf_corpus.flow_published_help":"This published snapshot is immutable. Editing the draft creates a new unpublished revision.",
+    "pdf_corpus.bulk_confirm":"{action} {count} record(s) in the current queue?"
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.review_queue":"File de révision","pdf_corpus.queue_all":"Toutes","pdf_corpus.queue_pending":"En attente","pdf_corpus.queue_attention":"À vérifier","pdf_corpus.queue_accepted":"Acceptées","pdf_corpus.queue_rejected":"Rejetées",
+    "pdf_corpus.accept_all_queue":"Accepter la file","pdf_corpus.reject_next":"Rejeter et suivante","pdf_corpus.reject_all_queue":"Rejeter la file","pdf_corpus.proposed_record":"Fiche proposée","pdf_corpus.accept_next":"Accepter et suivante","pdf_corpus.record_decision":"Décision sur la fiche","pdf_corpus.record_data":"Données et preuves de la fiche","pdf_corpus.source_context":"Contexte source","pdf_corpus.extracted_source_text":"Texte source extrait",
+    "pdf_corpus.technical_details":"Détails techniques de construction","pdf_corpus.status.published_snapshot":"publié","pdf_corpus.status.awaiting_metadata":"métadonnées à vérifier","pdf_corpus.workflow":"Flux de travail","pdf_corpus.what_next":"Quelle est la prochaine étape?","pdf_corpus.reviewed":"révisées","pdf_corpus.metadata_remaining":"métadonnées restantes",
+    "pdf_corpus.next_wait_build":"La construction du corpus est en cours.","pdf_corpus.next_review_records":"Révisez les fiches proposées restantes.","pdf_corpus.next_resolve_rejections":"Résolvez ou rouvrez les fiches rejetées avant la publication.","pdf_corpus.next_finish_metadata":"Terminez ou relancez les métadonnées incomplètes avant la publication.","pdf_corpus.next_published":"Cette révision est publiée. Téléchargez-la ou modifiez le brouillon pour créer une nouvelle révision.","pdf_corpus.next_publish":"Les contrôles de qualité sont réussis. Vérifiez le résumé de publication et publiez le JSONL.",
+    "pdf_corpus.flow_metadata_title":"Révision terminée — métadonnées à vérifier","pdf_corpus.flow_metadata_help":"Toutes les fiches sont acceptées. Relancez ou corrigez les métadonnées incomplètes avant la publication.","pdf_corpus.flow_review_help":"Parcourez la file de révision. Accepter et Rejeter s’appliquent immédiatement et passent à la proposition suivante.","pdf_corpus.flow_ready_title":"Prêt à publier","pdf_corpus.flow_ready_help":"La révision des fiches est terminée. Résolvez toute métadonnée restante, puis publiez explicitement.","pdf_corpus.flow_published_title":"Révision publiée","pdf_corpus.flow_published_help":"Cet instantané publié est immuable. La modification du brouillon crée une nouvelle révision non publiée.",
+    "pdf_corpus.bulk_confirm":"{action} {count} fiche(s) dans la file actuelle?"
+})
+
 # Instantiate only after every built-in dictionary extension has loaded so fresh
 # and existing installations receive release-local i18n keys during synchronization.
+
+DEFAULT_EN_US.update({
+    "pdf_corpus.stage.metadata_review": "metadata review",
+    "pdf_corpus.status.awaiting_metadata": "awaiting metadata",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.stage.metadata_review": "révision des métadonnées",
+    "pdf_corpus.status.awaiting_metadata": "en attente de métadonnées",
+})
+
 system_store = SystemStore()

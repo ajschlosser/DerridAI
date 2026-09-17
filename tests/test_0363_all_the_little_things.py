@@ -14,7 +14,7 @@ FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
 
 def test_0363_release_identity():
     assert "0.36.3 — All The Little Things" in README
-    assert "# DerridAI Corpus Viewer 0.40.20" in README
+    assert "# DerridAI Corpus Viewer 0.40.25" in README
 
 
 def test_export_still_has_shared_download_blob_support_for_subset_exports():

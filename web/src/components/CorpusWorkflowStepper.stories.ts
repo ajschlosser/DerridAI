@@ -7,4 +7,4 @@ export const DocumentReview:Story={args:{stage:"document_review",status:"awaitin
 export const Enriching:Story={};
 export const Review:Story={args:{stage:"review",status:"awaiting_review",acceptedCount:37}};
 export const Ready:Story={args:{stage:"ready",status:"ready",acceptedCount:84}};
-export const Published:Story={args:{stage:"published",status:"published",acceptedCount:84}};
+export const Published:Story={args:{stage:"ready",status:"ready",acceptedCount:84,published:true}};
