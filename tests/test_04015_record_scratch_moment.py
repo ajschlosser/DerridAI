@@ -3,10 +3,10 @@ import json
 ROOT=Path(__file__).resolve().parents[1]
 def text(p): return (ROOT/p).read_text(encoding="utf-8")
 def test_release_version():
-    assert json.loads(text("web/package.json"))["version"]=="0.40.15"
-    assert 'version="0.40.15"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.15"' in text("api/app/config.py")
-    assert "0.40.15 — The Record Scratch Moment" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"]=="0.40.20"
+    assert 'version="0.40.20"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.20"' in text("api/app/config.py")
+    assert "0.40.20 — You're Probably Wondering How I Got Here" in text("README.md")
 def test_review_workflow_contract():
     c=text("api/app/corpus_builder.py")
     assert "def set_disposition" in c and "def bulk_disposition" in c and "def undo_last_review_edit" in c

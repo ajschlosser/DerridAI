@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.15"
-    assert 'version="0.40.15"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.15"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.40.15" in text("README.md")
+    assert package["version"] == "0.40.20"
+    assert 'version="0.40.20"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.40.20"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.40.20" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
@@ -92,7 +92,7 @@ def test_native_vue_corpus_builder_has_history_review_and_three_pane_source_bind
         "Field evidence",
         "Merge previous",
         "Split after this block",
-        "Publish JSONL",
+        "Finalize & publish",
         "pageSize=50",
     ):
         assert token in component

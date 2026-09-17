@@ -1,5 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# DerridAI Corpus Viewer 0.40.15
+# DerridAI Corpus Viewer 0.40.20
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -65,9 +65,19 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
-## 0.40.15 — The Record Scratch Moment
+## 0.40.20 — You're Probably Wondering How I Got Here
 
-This release finishes the high-frequency record-review loop. Review state is explicit (`pending`, `accepted`, `rejected`), acceptance/rejection advances to the next matching record, bulk disposition actions operate on the active filter, merge/split preserve unrelated record identities and source-bound evidence, and one-level structural undo restores the previous topology. The new Focus view removes configuration/list clutter and presents source PDF, proposed record, review reason, topology actions, and disposition controls in a keyboard-friendly modal workspace. PDF.js document lifetime is now separated from page rendering so page navigation reuses one loaded document and teardown awaits render/loading destruction, eliminating the common worker-destroy race. Review-only/search filters are session-local rather than silently persisted between builds.
+This release simplifies Corpus Builder around one legible lifecycle: **Source → Analyze → Build records → Review → Publish**. Automated construction hands off to review at 90% rather than presenting a completed build before the human decision phase; review advances the lifecycle toward 98%, and publication is the only 100% state. Accepting the final pending record (or bulk-accepting the remaining records) now finalizes the JSONL automatically. Published builds always report 100% progress and expose a **Download JSONL** action instead of asking the user to perform a second, conceptually redundant publication step.
+
+The refresh-only review bug is fixed by decoupling review-workspace visibility from the persisted `record_count` alone: generated records returned by the records endpoint or a known metadata total make the workspace visible immediately. On a refreshed build that advertises generated records but momentarily returns an empty first page, the client performs one bounded retry rather than requiring the user to toggle **Needs review** to trigger a second fetch.
+
+**Focus view** is now record-first. It no longer duplicates the PDF review layout. The proposed record text is visually dominant, with review reason, disposition, page/character/source-block counts, interpretive fields, entity/topic lists, evidence-binding count, and expandable provenance beside it. Merge, undo, skip, reject, and accept remain available without configuration or navigation clutter. Storybook includes pending, rejected, and long-metadata Focus states plus review/ready/published workflow states.
+
+New builds default to the application's configured provider profile rather than restoring a stale provider choice from the Corpus Builder browser draft. The selected profile's model is shown explicitly, and the model remains part of the build request while server-owned credentials and endpoint details remain server-resolved. Historical builds still restore the provider profile recorded in their own request.
+
+Published records now namespace build/run provenance under a single top-level `corpus_build_details` object. It records the build/publication IDs, application/schema/profile versions, source asset hash, provider profile/model, prompt versions, record-sizing policy, and topology-quality report. UI-only acceptance/rejection state is omitted from publication output; scholarly record fields and source/evidence bindings remain in the main record namespace.
+
+Validation for this release includes **275 passing Python tests**, Python compilation of the modified API modules, and TypeScript syntax transpilation of the modified Vue script blocks. The production frontend command (`vue-tsc --noEmit && vite build`) was also invoked, but this isolated execution environment cannot resolve or reach the npm registry and contains no project `node_modules`; therefore the command cannot install/locate `vue-tsc`. The source package does not claim a successful production frontend build in this environment.
 
 ## 0.40.10 — Corpus of Engineers
 

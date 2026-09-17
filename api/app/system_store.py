@@ -6264,6 +6264,62 @@ DEFAULT_FR_CA.update({
 })
 
 
+# 0.40.20 — You're Probably Wondering How I Got Here: clarified corpus lifecycle.
+DEFAULT_EN_US.update({
+    "pdf_corpus.focus_record_title":"Review proposed record",
+    "pdf_corpus.focus_record_help":"Judge the proposed record as a scholarly unit. The record text and its interpreted data are kept together so the decision can be made quickly.",
+    "pdf_corpus.record_data":"Record data",
+    "pdf_corpus.interpretive_data":"Interpretive data",
+    "pdf_corpus.source_blocks":"source blocks",
+    "pdf_corpus.evidence_bindings":"evidence bindings",
+    "pdf_corpus.why_review":"Why review",
+    "pdf_corpus.provenance":"Provenance",
+    "pdf_corpus.record_revision":"Record revision",
+    "pdf_corpus.pdf_pages":"PDF pages",
+    "pdf_corpus.profile_model":"Profile model",
+    "pdf_corpus.profile_model_help":"New corpus builds use this provider profile model by default.",
+    "pdf_corpus.loading_records":"Loading generated records…",
+    "pdf_corpus.download_jsonl":"Download JSONL",
+    "pdf_corpus.finalize_publish":"Finalize & publish",
+    "pdf_corpus.auto_published":"Review complete. Published {count} records automatically.",
+    "pdf_corpus.flow_review_title":"Review generated records",
+    "pdf_corpus.flow_review_help":"Accept, reject, merge, or split records. Accepting the final pending record automatically finalizes the JSONL; there is no separate publish step.",
+    "pdf_corpus.flow_ready_title":"Review complete",
+    "pdf_corpus.flow_ready_help":"All records are accepted. DerridAI will finalize the publication automatically.",
+    "pdf_corpus.flow_published_title":"Corpus published",
+    "pdf_corpus.flow_published_help":"The reviewed JSONL is finalized and ready to download.",
+    "pdf_corpus.workflow.build":"Build records",
+    "pdf_corpus.workflow.publish":"Publish",
+    "pdf_corpus.stage_help.published":"The reviewed corpus has been finalized as JSONL. Build provenance is namespaced under corpus_build_details on each published record.",
+})
+DEFAULT_FR_CA.update({
+    "pdf_corpus.focus_record_title":"Réviser la fiche proposée",
+    "pdf_corpus.focus_record_help":"Évaluez la fiche proposée comme unité savante. Le texte et ses données interprétatives sont réunis afin de permettre une décision rapide.",
+    "pdf_corpus.record_data":"Données de la fiche",
+    "pdf_corpus.interpretive_data":"Données interprétatives",
+    "pdf_corpus.source_blocks":"blocs sources",
+    "pdf_corpus.evidence_bindings":"liens de preuve",
+    "pdf_corpus.why_review":"Pourquoi réviser",
+    "pdf_corpus.provenance":"Provenance",
+    "pdf_corpus.record_revision":"Révision de la fiche",
+    "pdf_corpus.pdf_pages":"Pages PDF",
+    "pdf_corpus.profile_model":"Modèle du profil",
+    "pdf_corpus.profile_model_help":"Les nouvelles constructions utilisent par défaut le modèle de ce profil fournisseur.",
+    "pdf_corpus.loading_records":"Chargement des fiches générées…",
+    "pdf_corpus.download_jsonl":"Télécharger le JSONL",
+    "pdf_corpus.finalize_publish":"Finaliser et publier",
+    "pdf_corpus.auto_published":"Révision terminée. {count} fiches ont été publiées automatiquement.",
+    "pdf_corpus.flow_review_title":"Réviser les fiches générées",
+    "pdf_corpus.flow_review_help":"Acceptez, rejetez, fusionnez ou divisez les fiches. L’acceptation de la dernière fiche en attente finalise automatiquement le JSONL; aucune étape de publication distincte n’est requise.",
+    "pdf_corpus.flow_ready_title":"Révision terminée",
+    "pdf_corpus.flow_ready_help":"Toutes les fiches sont acceptées. DerridAI finalisera automatiquement la publication.",
+    "pdf_corpus.flow_published_title":"Corpus publié",
+    "pdf_corpus.flow_published_help":"Le JSONL révisé est finalisé et prêt à être téléchargé.",
+    "pdf_corpus.workflow.build":"Construire les fiches",
+    "pdf_corpus.workflow.publish":"Publier",
+    "pdf_corpus.stage_help.published":"Le corpus révisé a été finalisé au format JSONL. La provenance de construction est regroupée sous corpus_build_details dans chaque fiche publiée.",
+})
+
 # Instantiate only after every built-in dictionary extension has loaded so fresh
 # and existing installations receive release-local i18n keys during synchronization.
 system_store = SystemStore()

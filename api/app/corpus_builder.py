@@ -3026,12 +3026,15 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             validation = self.validate_records(source_blocks, records, profile)
             needs_review = sum(1 for record in records if record.get("needs_review"))
             boundary_review_count = len(self.repo.get_build(build_id).get("segmentation_boundary_reviews") or [])
-            status = "awaiting_review" if needs_review or boundary_review_count or not validation.get("valid") else "ready"
+            # Construction is complete, but the corpus lifecycle is not complete
+            # until review/acceptance and publication finish. Keep a clear 90%
+            # handoff into human review instead of declaring 100% prematurely.
+            status = "awaiting_review"
             self._update(
                 build_id,
                 status=status,
-                stage="review" if status == "awaiting_review" else "ready",
-                progress=1.0,
+                stage="review",
+                progress=0.90,
                 finished_at=iso_now(),
                 record_count=len(records),
                 needs_review_count=needs_review,
@@ -3072,9 +3075,25 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
         build["validation"] = validation
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
-        requires_review = bool(build["needs_review_count"] or build.get("rejected_count") or build["boundary_review_count"] or not validation.get("valid"))
-        build["status"] = "awaiting_review" if requires_review else "ready"
-        build["stage"] = "review" if requires_review else "ready"
+        # Any human/topology edit after publication creates a new unpublished
+        # revision. Keep the old publication in history rather than presenting
+        # a stale JSONL as if it represented the edited records.
+        if build.get("publication"):
+            history = list(build.get("publication_history") or [])
+            history.append(build["publication"])
+            build["publication_history"] = history[-20:]
+            build["publication"] = None
+        reviewed_count = min(build["record_count"], build["accepted_count"] + build["rejected_count"])
+        review_fraction = reviewed_count / max(1, build["record_count"])
+        blockers = bool(build["needs_review_count"] or build.get("rejected_count") or build["boundary_review_count"] or not validation.get("valid"))
+        all_accepted = bool(build["record_count"] and build["accepted_count"] == build["record_count"] and not blockers)
+        # Automated construction owns the first 90% of lifecycle progress. Human
+        # review advances the build toward 98%; publication is the only 100% state.
+        # This prevents states such as "published · 43%" and makes progress
+        # describe the complete user-visible pipeline instead of only LLM work.
+        build["progress"] = 0.98 if all_accepted else 0.90 + 0.08 * review_fraction
+        build["status"] = "ready" if all_accepted else "awaiting_review"
+        build["stage"] = "ready" if all_accepted else "review"
         self.repo.save_build(build)
         return build
 
@@ -3365,6 +3384,34 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return target
 
+    def _publication_build_details(self, build: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
+        """Return locale-neutral build provenance embedded in every public record.
+
+        Publication metadata belongs under one stable object instead of leaking
+        build/runtime fields into the scholarly record namespace.
+        """
+        request = build.get("request") or {}
+        return {
+            "build_id": build.get("build_id"),
+            "publication_id": publication_id,
+            "published_at": created_at,
+            "app_version": build.get("app_version"),
+            "schema_version": build.get("schema_version"),
+            "profile_id": build.get("profile_id"),
+            "profile_version": build.get("profile_version"),
+            "source_asset_id": build.get("asset_id"),
+            "source_sha256": build.get("source_sha256"),
+            "source_filename": build.get("source_filename"),
+            "provider_profile_id": request.get("provider_profile_id"),
+            "provider": build.get("provider"),
+            "model": build.get("model"),
+            "document_prompt_version": build.get("document_prompt_version"),
+            "segmentation_prompt_version": build.get("segmentation_prompt_version"),
+            "metadata_prompt_version": build.get("metadata_prompt_version"),
+            "record_sizing_policy": build.get("record_sizing_policy") or request.get("record_sizing"),
+            "topology_quality": build.get("topology_quality"),
+        }
+
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
@@ -3382,22 +3429,35 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             if unaccepted:
                 raise ValueError(f"Publication is blocked: {len(unaccepted)} record(s) have not been accepted.")
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
+        created_at = iso_now()
+        build_details = self._publication_build_details(build, publication_id, created_at)
         path = self.repo.publication_path(publication_id)
         hasher = hashlib.sha256()
         with path.open("wb") as handle:
             for record in records:
-                # Internal review/provenance stays in the build; published JSONL keeps
-                # audit identifiers and source spans but drops UI-only acceptance state.
-                public = {k: v for k, v in record.items() if k not in {"accepted"}}
+                # UI-only review state is not published. Build/run provenance is
+                # namespaced so the main record remains a scholarly record schema.
+                build_only_fields = {
+                    "accepted", "rejected", "review_disposition", "build_id", "publication_id",
+                    "app_version", "schema_version", "profile_id", "profile_version",
+                    "provider_profile_id", "provider", "model", "document_prompt_version",
+                    "segmentation_prompt_version", "metadata_prompt_version",
+                    "record_sizing_policy", "topology_quality",
+                }
+                public = {k: v for k, v in record.items() if k not in build_only_fields}
+                public["corpus_build_details"] = build_details
                 line = (json.dumps(public, ensure_ascii=False) + "\n").encode("utf-8")
                 hasher.update(line)
                 handle.write(line)
-        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(records), "created_at": iso_now()}
+        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(records), "created_at": created_at}
         build["publication"] = publication
         build["status"] = "published"
         build["stage"] = "published"
+        build["progress"] = 1.0
+        build["finished_at"] = created_at
         self.repo.save_build(build)
         return publication
+
 
 
 pdf_corpus_repository = PdfCorpusRepository()

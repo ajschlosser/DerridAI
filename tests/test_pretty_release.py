@@ -36,9 +36,9 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
 
 def test_release_version_and_title_0310():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.40.15"
-    assert 'version="0.40.15"' in MAIN
-    assert "Corpus Viewer 0.40.15" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.40.20"
+    assert 'version="0.40.20"' in MAIN
+    assert "Corpus Viewer 0.40.20" in (ROOT / "web/index.html").read_text(encoding="utf-8")
     assert "0.31.0 — The Pretty Release" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
