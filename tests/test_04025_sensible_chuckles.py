@@ -10,8 +10,8 @@ def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_contract_and_review_refresh_fix():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.40.25"
-    assert "0.40.25 — Sensible Chuckles" in text("README.md")
+    assert package["version"]=="0.41.0"
+    assert "0.41.0 — Aardvark" in text("README.md")
     ui=text("web/src/components/PdfCorpusBuilder.vue")
     assert "reviewHydrated" in ui
     assert "for(let attempt=0;attempt<5;attempt++)" in ui
@@ -21,7 +21,9 @@ def test_release_contract_and_review_refresh_fix():
 def test_focus_view_is_record_first_and_not_pdf_viewer():
     focus=text("web/src/components/CorpusRecordFocusReview.vue")
     assert "record.text" in focus
-    assert "Interpretive data" in focus
+    assert "focus-record-text" in focus
+    assert "metadata_field_status" in focus
+    assert 'role="tablist"' in focus
     assert "metadata_evidence" in focus
     assert "PdfEvidenceViewer" not in focus
     assert "pdfUrl" not in focus
@@ -38,8 +40,8 @@ def _install_publishable(repo: cb.PdfCorpusRepository):
     asset={"asset_id":"pdf-test","sha256":"source-sha","filename":"test.pdf","page_count":1,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
     cb._json_write(repo.asset_meta_path("pdf-test"),asset)
     repo.asset_blocks_path("pdf-test").write_text(json.dumps({"block_id":"b1","page":1,"bbox":[0,0,1,1],"type":"paragraph","text":"Record text","extraction_method":"native","confidence":1.0})+"\n")
-    build=repo.create_build({"asset_id":"pdf-test","source_sha256":"source-sha","source_filename":"test.pdf","schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":7,"app_version":"0.40.25","document_prompt_version":cb.DOCUMENT_PROMPT_VERSION,"segmentation_prompt_version":cb.SEGMENTATION_PROMPT_VERSION,"metadata_prompt_version":cb.METADATA_PROMPT_VERSION,"provider":"ollama","model":"profile-model","request":{"provider_profile_id":"primary","record_sizing":{"preferred_record_chars":1750}},"manifest":{},"validation":{"valid":True}})
-    record={"record_id":"r1","record_revision":1,"text":"Record text","text_length":11,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"accepted":True,"review_disposition":"accepted","needs_review":False}
+    build=repo.create_build({"asset_id":"pdf-test","source_sha256":"source-sha","source_filename":"test.pdf","schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.41.0","document_prompt_version":cb.DOCUMENT_PROMPT_VERSION,"segmentation_prompt_version":cb.SEGMENTATION_PROMPT_VERSION,"metadata_prompt_version":cb.METADATA_PROMPT_VERSION,"provider":"ollama","model":"profile-model","request":{"provider_profile_id":"primary","record_sizing":{"preferred_record_chars":1750}},"manifest":{},"validation":{"valid":True}})
+    record={"record_id":"r1","record_revision":1,"text":"Record text","text_length":11,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"accepted":True,"review_disposition":"accepted","needs_review":False,"region_type":"main_text","primary_text":True,"discourse_role":"assertion","metadata_complete":True,"metadata_incomplete_fields":[],"metadata_field_status":{"region_type":{"status":"human_confirmed"},"primary_text":{"status":"human_confirmed"},"discourse_role":{"status":"human_confirmed"}}}
     repo.save_records(build["build_id"],[record])
     build.update({"record_count":1,"accepted_count":1,"rejected_count":0,"needs_review_count":0,"validation":{"valid":True},"status":"ready","stage":"ready","progress":.98})
     repo.save_build(build)
@@ -112,10 +114,11 @@ def test_metadata_incomplete_creates_explicit_attention_state_and_blocks_publish
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
     build=repo.get_build(build["build_id"])
-    build["metadata_total"]=1
-    build["metadata_completed"]=0
-    repo.save_build(build)
-    manager._rewrite_and_validate(build["build_id"],repo.load_records(build["build_id"]))
+    rows=repo.load_records(build["build_id"])
+    rows[0]["metadata_complete"]=False
+    rows[0]["metadata_incomplete_fields"]=["discourse_role"]
+    rows[0].pop("discourse_role",None)
+    manager._rewrite_and_validate(build["build_id"],rows)
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["status"]=="awaiting_metadata"
     assert refreshed["stage"]=="metadata_review"
@@ -143,7 +146,9 @@ def test_running_build_hydrates_intermediate_records_without_form_interaction():
     assert "hydratedTopologyCount" in ui
     assert "Number(currentBuild.value?.record_count||0)>hydratedTopologyCount.value" in ui
     assert "await refreshRecords(true)" in ui
-    assert "watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.status]" in ui
+    assert "ensureReviewHydrated" in ui
+    assert 'flush:"post"' in ui
+    assert "metadataIncompleteOnly" in ui
 
 def test_pdf_worker_lifecycle_uses_worker_src_and_awaited_single_teardown_path():
     viewer=text("web/src/components/PdfEvidenceViewer.vue")

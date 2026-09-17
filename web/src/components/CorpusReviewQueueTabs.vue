@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { useI18nStore } from "../stores/i18n";
 
-export type ReviewQueue = "all"|"pending"|"attention"|"accepted"|"rejected";
-const props=defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;accepted:number;rejected:number;disabled?:boolean}>();
+export type ReviewQueue = "all"|"pending"|"attention"|"metadata"|"accepted"|"rejected";
+const props=defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;metadata:number;accepted:number;rejected:number;disabled?:boolean}>();
 const emit=defineEmits<{"update:modelValue":[value:ReviewQueue]}>();
 const i18n=useI18nStore();
-const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typeof props,"total"|"pending"|"attention"|"accepted"|"rejected">}>=[
+const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typeof props,"total"|"pending"|"attention"|"metadata"|"accepted"|"rejected">}>=[
   {id:"all",key:"pdf_corpus.queue_all",fallback:"All",count:"total"},
   {id:"pending",key:"pdf_corpus.queue_pending",fallback:"Pending",count:"pending"},
   {id:"attention",key:"pdf_corpus.queue_attention",fallback:"Needs attention",count:"attention"},
+  {id:"metadata",key:"pdf_corpus.queue_metadata",fallback:"Metadata",count:"metadata"},
   {id:"accepted",key:"pdf_corpus.queue_accepted",fallback:"Accepted",count:"accepted"},
   {id:"rejected",key:"pdf_corpus.queue_rejected",fallback:"Rejected",count:"rejected"},
 ];

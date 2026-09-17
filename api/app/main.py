@@ -82,7 +82,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.40.25")
+app = FastAPI(title="DerridAI Corpus API", version="0.41.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1170,7 +1170,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.40.25",
+            "app_version": "0.41.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1856,10 +1856,11 @@ def list_pdf_corpus_records(
     limit: int = Query(default=50, ge=1, le=200),
     needs_review: bool | None = None,
     disposition: str | None = Query(default=None, pattern="^(pending|accepted|rejected)$"),
+    metadata_incomplete: bool | None = None,
     query: str = "",
 ):
     try:
-        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, query=query)
+        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, query=query)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 

@@ -75,6 +75,8 @@ export interface CorpusBuild {
   metadata_completed?: number;
   metadata_total?: number;
   metadata_concurrency?: number;
+  metadata_issue_summary?: {records_incomplete?:number;fields_unresolved?:number;by_field?:Record<string,number>;invalid_by_field?:Record<string,number>;records?:Array<{record_id?:string;fields?:string[];page_start?:number|string|null;page_end?:number|string|null}>};
+  build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
   request?: Record<string,unknown>;
   llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number};
 }
@@ -88,6 +90,10 @@ export interface CorpusRecord {
   source_block_ids: string[];
   source_spans: Array<{block_id:string;page:number;bbox?:number[];extraction_method?:string}>;
   metadata_evidence?: Record<string,{block_ids?:string[];confidence?:number;reason?:string;reviewed_by?:string;reviewed_at?:string}>;
+  metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number;reason?:string}>;
+  metadata_incomplete_fields?: string[];
+  metadata_stage_status?: Record<string,string>;
+  metadata_complete?: boolean;
   needs_review?: boolean;
   review_reason?: string;
   accepted?: boolean;
@@ -119,7 +125,7 @@ export const pdfCorpusApi = {
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
-  records: (buildId:string, offset=0, limit=50, reviewOnly=false, query="", disposition:"pending"|"accepted"|"rejected"|""="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewOnly?"&needs_review=true":""}${disposition?`&disposition=${encodeURIComponent(disposition)}`:""}${query?`&query=${encodeURIComponent(query)}`:""}`),
+  records: (buildId:string, offset=0, limit=50, reviewOnly=false, query="", disposition:"pending"|"accepted"|"rejected"|""="", metadataIncomplete=false) => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewOnly?"&needs_review=true":""}${disposition?`&disposition=${encodeURIComponent(disposition)}`:""}${metadataIncomplete?"&metadata_incomplete=true":""}${query?`&query=${encodeURIComponent(query)}`:""}`),
   accept: (buildId:string, recordId:string, accepted=true, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted,expected_revision:expectedRevision})}),
   disposition: (buildId:string, recordId:string, disposition:"pending"|"accepted"|"rejected", reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,expected_revision:expectedRevision})}),
   bulkDisposition: (buildId:string, disposition:"pending"|"accepted"|"rejected", needsReview:boolean|null, query="", reason="", filterDisposition:"pending"|"accepted"|"rejected"|null=null) => apiRequest<{changed:number;disposition:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,needs_review:needsReview,filter_disposition:filterDisposition,query})}),

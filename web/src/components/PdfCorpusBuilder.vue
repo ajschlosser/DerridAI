@@ -17,6 +17,9 @@ import CorpusRecordSizingSettings, { type RecordSizingPolicy } from "./CorpusRec
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs, { type ReviewQueue } from "./CorpusReviewQueueTabs.vue";
 import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
+import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
+import CorpusReviewCompletionCard from "./CorpusReviewCompletionCard.vue";
+import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
 import * as runtime from "../legacy/runtime.js";
 
 const i18n=useI18nStore();
@@ -43,6 +46,7 @@ const selectedPdfPage=ref(1);
 const reviewQueue=ref<ReviewQueue>("all");
 const reviewOnly=computed(()=>reviewQueue.value==="attention");
 const reviewDispositionFilter=computed<"pending"|"accepted"|"rejected"|"">(()=>["pending","accepted","rejected"].includes(reviewQueue.value)?reviewQueue.value as "pending"|"accepted"|"rejected":"");
+const metadataIncompleteOnly=computed(()=>reviewQueue.value==="metadata");
 const recordQuery=ref("");
 const focusView=ref(false);
 const recordsLoading=ref(false);
@@ -123,7 +127,9 @@ const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running
 const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
 const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
 const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
-const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.record_count||0)>0 && Number(currentBuild.value.metadata_completed||0)<Number(currentBuild.value.record_count||0)));
+const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.record_count||0)>0 && Number(currentBuild.value.metadata_completed||0)<Number(currentBuild.value.metadata_total||currentBuild.value.record_count||0)));
+const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete||Math.max(0,Number(currentBuild.value?.metadata_total||0)-Number(currentBuild.value?.metadata_completed||0))));
+const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="enriching"&&metadataIssueCount.value>0));
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
 const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (["awaiting_review","awaiting_metadata","ready"].includes(String(currentBuild.value.status))||Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||Number(currentBuild.value.metadata_total||0)>0||recordTotal.value>0)));
 const pageNumber=computed(()=>Math.floor(recordOffset.value/pageSize)+1);
@@ -256,8 +262,8 @@ async function refreshRecords(reset=false, preferredId=""){
     // Hydrate independently of form interaction and retry the read while the build
     // explicitly advertises topology that should already exist.
     for(let attempt=0;attempt<5;attempt++){
-      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value,reviewDispositionFilter.value);
-      if(result.total>0||expected===0||reviewOnly.value||Boolean(reviewDispositionFilter.value)||Boolean(recordQuery.value))break;
+      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value,reviewDispositionFilter.value,metadataIncompleteOnly.value);
+      if(result.total>0||expected===0||reviewOnly.value||metadataIncompleteOnly.value||Boolean(reviewDispositionFilter.value)||Boolean(recordQuery.value))break;
       await new Promise(resolve=>window.setTimeout(resolve,120*(attempt+1)));
       if(requestId!==recordRequestSerial)return;
     }
@@ -273,7 +279,23 @@ async function refreshRecords(reset=false, preferredId=""){
 }
 
 async function refreshBlocks(){if(!selectedAssetId.value||!selectedRecord.value?.source_block_ids?.length){sourceBlocks.value=[];return}const result=await pdfCorpusApi.blocks(selectedAssetId.value,0,Math.min(1000,selectedRecord.value.source_block_ids.length),selectedRecord.value.source_block_ids);sourceBlocks.value=result.items}
-async function refreshAll(){await Promise.all([refreshProviders(),refreshAssets(),refreshBuilds()]);await refreshBuild();await nextTick();await refreshRecords(true)}
+async function ensureReviewHydrated(preferredId=""){
+  if(!selectedBuildId.value||!currentBuild.value||awaitingManifestReview.value)return;
+  const expected=Number(currentBuild.value.record_count||currentBuild.value.metadata_total||0);
+  if(expected<1)return;
+  await nextTick();
+  await refreshRecords(true,preferredId);
+  if(selectedRecord.value&&!sourceBlocks.value.length)await refreshBlocks();
+}
+async function refreshAll(){
+  await Promise.all([refreshProviders(),refreshAssets(),refreshBuilds()]);
+  await refreshBuild();
+  await ensureReviewHydrated();
+  // A second post-paint hydration closes the lifecycle race where build.json is
+  // restored before the records route is available after a hard refresh. This is
+  // deliberately independent of any form control interaction.
+  window.setTimeout(()=>{if(hasRecordTopology.value&&!reviewHydrated.value)void ensureReviewHydrated()},250);
+}
 function selectRecord(record:CorpusRecord){selectedRecordId.value=record.record_id;selectedRecord.value=record;selectedEvidenceField.value="";selectedPdfPage.value=Number(record.pdf_pages?.[0]||1);const fallback=JSON.stringify(recordMetadata(record),null,2);try{metadataDraft.value=localStorage.getItem(metadataDraftKey(selectedBuildId.value,record.record_id))||fallback}catch{metadataDraft.value=fallback}void refreshBlocks()}
 
 
@@ -286,6 +308,21 @@ async function savePageLabels(labels:Record<number,string|null>){if(!selectedAss
 async function useCurrentPdf(){const file=(runtime.state as any)?.pdf?.file as File|undefined;if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
 async function startBuild(){if(!selectedAssetId.value)return;busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,review_manifest_before_segmentation:false,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
+async function retryIncompleteMetadata(){
+  if(!currentBuild.value||!canRetryMetadata.value)return;
+  const count=metadataIssueCount.value;
+  setMessage(i18n.tf("pdf_corpus.metadata_retry_start","Retrying metadata for {count} record(s). Completed metadata will not be rerun.",{count}));
+  await resumeBuild();
+}
+async function reviewMetadataRecord(recordId:string){
+  reviewQueue.value="metadata";recordQuery.value=recordId;
+  await nextTick();await refreshRecords(true,recordId);
+  if(selectedRecord.value?.record_id===recordId)focusView.value=false;
+}
+async function openMetadataIssueQueue(){
+  const first=currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
+  if(first)await reviewMetadataRecord(String(first));
+}
 async function confirmManifest(){if(!currentBuild.value)return;busy.value="manifest";try{currentBuild.value=await pdfCorpusApi.confirmManifest(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.manifest_confirmed","Document manifest confirmed. Semantic segmentation has started."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 function startPolling(){
   stopPolling();
@@ -365,10 +402,19 @@ async function nextPage(){if(recordOffset.value+pageSize>=recordTotal.value)retu
 function reviewShortcut(event:KeyboardEvent){if(!selectedRecord.value||busy.value)return;const target=event.target as HTMLElement|null;if(target&&["INPUT","TEXTAREA","SELECT"].includes(target.tagName))return;if(event.key.toLowerCase()==="a"){event.preventDefault();void setDisposition("accepted")}else if(event.key.toLowerCase()==="r"){event.preventDefault();void setDisposition("rejected")}else if(event.key.toLowerCase()==="z"){event.preventDefault();void undoReview()}else if(event.key.toLowerCase()==="j"||event.key==="ArrowDown"){event.preventDefault();void skipRecord()}else if(event.key.toLowerCase()==="f"){event.preventDefault();focusView.value=!focusView.value}}
 watch(selectedProviderId,(profileId)=>{if(!profileId)return;const payload=directProfilePayload(profileId);if(payload?.generation&&typeof payload.generation==="object")generationOverrides.value={...(payload.generation as Record<string,unknown>)};const profile=providerProfiles.value.find(item=>item.id===profileId);maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(profile?.max_concurrent_requests||payload?.max_concurrent_requests||1)))});
 watch([reviewQueue,recordQuery],()=>{void refreshRecords(true)});
-watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.status] as const,async ([buildId,count,status])=>{
-  if(!buildId||Number(count||0)<1||Number(count||0)<=hydratedTopologyCount.value)return;
-  if(["enriching","review","metadata_review","ready"].includes(String(currentBuild.value?.stage||""))||["awaiting_review","awaiting_metadata","ready"].includes(String(status||""))){await nextTick();await refreshRecords(true)}
+watch(selectedEvidenceField,(field)=>{
+  if(!field||!selectedRecord.value)return;
+  const ids=selectedRecord.value.metadata_evidence?.[field]?.block_ids||[];
+  const first=sourceBlocks.value.find(block=>ids.includes(block.block_id));
+  if(first)selectedPdfPage.value=Number(first.page||selectedPdfPage.value);
 });
+watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.metadata_total,currentBuild.value?.status,currentBuild.value?.stage] as const,async ([buildId,count,metadataTotal,status,stage])=>{
+  const expected=Math.max(Number(count||0),Number(metadataTotal||0));
+  if(!buildId||expected<1)return;
+  const visibleStage=["enriching","review","metadata_review","ready"].includes(String(stage||""))||["awaiting_review","awaiting_metadata","ready"].includes(String(status||""));
+  if(!visibleStage)return;
+  if(!reviewHydrated.value||expected>hydratedTopologyCount.value||!selectedRecord.value){await ensureReviewHydrated(selectedRecordId.value)}
+},{flush:"post"});
 watch(selectedAssetId,()=>{if(selectedAssetId.value)void refreshBuilds()});
 watch(()=>route.query.build,async value=>{
   const buildId=String(value||"");
@@ -466,12 +512,15 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             <div class="summary-actions">
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">{{i18n.t('pdf_corpus.cancel','Cancel')}}</button>
               <button v-if="canResume" type="button" class="btn" @click="resumeBuild" :disabled="busy!==''">{{i18n.t('pdf_corpus.resume','Resume from checkpoint')}}</button>
-              <button v-if="canRetryMetadata" type="button" class="btn" @click="resumeBuild" :disabled="busy!==''">{{i18n.t('pdf_corpus.retry_metadata_failures','Retry incomplete metadata')}}</button>
+              <button v-if="canRetryMetadata" type="button" class="btn" @click="retryIncompleteMetadata" :disabled="busy!==''">{{metadataRetryRunning?i18n.t('pdf_corpus.retrying_metadata','Retrying metadata…'):i18n.t('pdf_corpus.retry_metadata_failures','Retry incomplete metadata')}}</button>
               <a v-if="currentBuild.publication" class="btn primary" :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)">{{i18n.t('pdf_corpus.download_jsonl','Download JSONL')}}</a><button v-else-if="canPublish" type="button" class="btn primary" @click="publish({download:false})" :disabled="busy!==''">{{i18n.t('pdf_corpus.finalize_publish','Finalize & publish')}}</button>
             </div>
           </div>
           <CorpusBuildLifecycleCard :build="currentBuild" />
           <CorpusQualitySummary v-if="!awaitingManifestReview" :build="currentBuild" />
+          <CorpusMetadataIssues v-if="!awaitingManifestReview && metadataIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
+          <CorpusReviewCompletionCard v-if="!awaitingManifestReview" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @publish="publish({download:false})" />
+          <CorpusBuildTimeline v-if="!awaitingManifestReview" :build="currentBuild" />
           <details class="technical-details">
             <summary>{{i18n.t('pdf_corpus.technical_details','Technical build details')}}</summary>
             <CorpusBuildProgress :status="currentBuild.publication?'published':currentBuild.status" :stage="currentBuild.publication?'published':currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :warnings="currentBuild.warnings||[]" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,sizeOptimizedSplits:currentBuild.size_optimized_boundary_count||0,absoluteSafetySplits:currentBuild.absolute_safety_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
@@ -506,9 +555,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
-            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
+            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
-            <div class="review-bulk"><button type="button" class="btn small" @click="bulkDisposition('accepted')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.accept_all_queue','Accept queue')}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.reject_all_queue','Reject queue')}}</button><button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div>
+            <div class="review-bulk"><button type="button" class="btn small" @click="bulkDisposition('accepted')" :disabled="busy!==''||recordTotal===0||metadataIncompleteOnly">{{i18n.t('pdf_corpus.accept_all_queue','Accept queue')}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||recordTotal===0||metadataIncompleteOnly">{{i18n.t('pdf_corpus.reject_all_queue','Reject queue')}}</button><button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div>
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>
           </section>
 
@@ -547,7 +596,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       </main>
     </div>
 
-    <CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :busy="busy!==''" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" @close="focusView=false" @accept="setDisposition('accepted')" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" />
+    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" @close="focusView=false" @accept="setDisposition('accepted')" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
   </section>
 </template>
 

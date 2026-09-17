@@ -20,12 +20,12 @@ def _build(tmp_path, n=20):
     return repo,build,cb.PdfCorpusBuildManager(repo,max_workers=1)
 
 
-def test_current_release_keeps_v6_registered_and_uses_v7_contract():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v7"
+def test_current_release_keeps_v6_registered_and_uses_v8_contract():
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v8"
     assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v7"
     assert cb.CORPUS_PROFILES["derrida-scholarly-v6"]["version"]==6
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==7
+    assert profile["version"]==8
     assert profile["boundary_batch_size"]>=2
     assert profile["max_llm_boundary_calls_per_100_atoms"]<100
 
@@ -130,8 +130,8 @@ def test_v5_profile_remains_registered_for_0408_build_compatibility():
     assert cb.CORPUS_PROFILES["derrida-scholarly-v5"]["version"] == 5
 
 
-def test_new_build_default_and_ui_do_not_drift_from_v7_profile():
+def test_new_build_default_and_ui_do_not_drift_from_v8_profile():
     models=(ROOT/"api/app/models.py").read_text(encoding="utf-8")
     builder=(ROOT/"web/src/components/PdfCorpusBuilder.vue").read_text(encoding="utf-8")
-    assert 'default="derrida-scholarly-v7"' in models
+    assert 'default="derrida-scholarly-v8"' in models
     assert 'profile_id:"derrida-scholarly-v5"' not in builder

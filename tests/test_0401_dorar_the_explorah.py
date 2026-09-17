@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.25"
-    assert 'version="0.40.25"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.25"' in text("api/app/config.py")
+    assert package["version"] == "0.41.0"
+    assert 'version="0.41.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.41.0"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -41,7 +41,8 @@ def test_malformed_metadata_is_reviewable_instead_of_aborting_build():
     builder = text("api/app/corpus_builder.py")
     enrich = builder[builder.index("    def _enrich_record("):builder.index("    @staticmethod\n    def validate_records")]
     assert "metadata extraction could not be validated" in enrich
-    assert 'record["metadata_complete"] = successful_tasks == len(tasks)' in enrich
+    assert 'record["metadata_incomplete_fields"] = incomplete_fields' in enrich
+    assert 'record["metadata_complete"] = discourse_ok and not incomplete_fields' in enrich
     assert "return record" in enrich
     run = builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     assert "self.repo.save_records(build_id, records)" in run

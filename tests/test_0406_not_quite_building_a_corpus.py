@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.40.25"
-    assert 'version="0.40.25"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.40.25"' in text("api/app/config.py")
-    assert "0.40.25 — Sensible Chuckles" in text("README.md")
+    assert package["version"] == "0.41.0"
+    assert 'version="0.41.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.41.0"' in text("api/app/config.py")
+    assert "0.41.0 — Aardvark" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
@@ -70,7 +70,7 @@ def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     assert "provider-stat-group" in selector
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
     assert 'profile_id:"derrida-scholarly-v5"' not in builder
-    assert 'default="derrida-scholarly-v7"' in models
+    assert 'default="derrida-scholarly-v8"' in models
     assert '"pdf_corpus.provider_profile": "Primary LLM provider"' in dictionary
 
 
