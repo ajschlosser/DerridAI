@@ -2324,8 +2324,29 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         return atoms
 
     @staticmethod
-    def _manifest_main_text_blocks(blocks: list[dict[str, Any]], manifest: dict[str, Any]) -> list[dict[str, Any]]:
-        """Apply reviewed physical-page manifest bounds when they are plausible."""
+    def _manifest_main_text_blocks(
+        blocks: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        *,
+        bounds_confirmed: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Apply physical-page bounds only after explicit human confirmation.
+
+        The document-manifest LLM may *suggest* ``main_text_start_page`` and
+        ``main_text_end_page``, but an unreviewed suggestion is not allowed to
+        destructively narrow the source topology.  A plausible-looking bad range
+        can still contain many layout blocks (for example, the final three pages
+        of a dense PDF), so block-count heuristics are not a sufficient safety
+        guard.  Until the manifest has been explicitly confirmed, preserve every
+        extracted source block and let downstream region/discourse metadata mark
+        front matter, notes, bibliography, and other non-primary material.
+
+        Once a reviewer confirms the manifest, its page bounds become an explicit
+        structural decision and are honored.  Even then, an empty selection falls
+        back to the full source so a typo cannot erase the document.
+        """
+        if not bounds_confirmed:
+            return blocks
         try:
             start = int(manifest.get("main_text_start_page")) if manifest.get("main_text_start_page") is not None else None
             end = int(manifest.get("main_text_end_page")) if manifest.get("main_text_end_page") is not None else None
@@ -2333,13 +2354,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             return blocks
         if start is None and end is None:
             return blocks
+        if start is not None and end is not None and start > end:
+            return blocks
         selected = [
             block for block in blocks
             if (start is None or int(block.get("page") or 0) >= start)
             and (end is None or int(block.get("page") or 0) <= end)
         ]
-        # Refuse implausible manifest ranges rather than accidentally erasing the book.
-        return selected if len(selected) >= max(2, min(10, len(blocks) // 20)) else blocks
+        return selected or blocks
 
     @staticmethod
     def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> list[list[dict[str, Any]]]:
@@ -4391,6 +4413,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
 
             manifest_build = self.repo.get_build(build_id)
+            prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
             if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
                 self._update(
                     build_id,
@@ -4405,7 +4428,29 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
             # The reviewed manifest defines the semantic-analysis region. Source
             # blocks outside it remain in the persisted source asset for audit.
-            source_blocks = self._manifest_main_text_blocks(blocks, manifest)
+            manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
+            source_blocks = self._manifest_main_text_blocks(
+                blocks, manifest, bounds_confirmed=manifest_bounds_confirmed
+            )
+            # 0.56.0 hotfix: earlier automatic builds could accept an LLM-suggested
+            # main-text range before human confirmation.  Dense final pages could
+            # satisfy the old block-count plausibility guard and leave only the
+            # tail of the PDF in topology.  On resume, detect that persisted scope
+            # and rebuild segmentation/records from the full conserved source.
+            source_scope_repair = bool(
+                resume
+                and not manifest_bounds_confirmed
+                and prior_main_text_block_count > 0
+                and prior_main_text_block_count < len(source_blocks)
+            )
+            if source_scope_repair:
+                self.repo.save_checkpoint(build_id, "segmentation_state", {})
+                self.repo.save_checkpoint(build_id, "reconciliation_state", {})
+                self.repo.save_checkpoint(build_id, "boundaries_partial", [])
+                self._append_warning(
+                    build_id,
+                    "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
+                )
             source_quality = self._source_quality_report(source_blocks)
             self._update(build_id, source_quality=source_quality)
             semantic_blocks = self._semantic_atoms(source_blocks)
@@ -4421,7 +4466,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             # the currently selected provider/settings instead of reusing the
             # partial topology that caused the block.
             boundaries = None
-            if resume and not previous_build.get("segmentation_blocked"):
+            if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
                 boundaries = self.repo.load_checkpoint(build_id, "boundaries")
             if not isinstance(boundaries, list):
                 boundaries = self._segment(semantic_blocks, manifest, request, build_id)
@@ -4430,7 +4475,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             self._update(build_id, retrying_segmentation=False)
             self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
-            records = self.repo.load_records(build_id) if resume else []
+            records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
             if not records:
                 records = self._construct_records(asset, source_blocks, boundaries)
                 self._mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
@@ -4928,7 +4973,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             block for block in self.repo.load_blocks(build["asset_id"])
             if not block.get("excluded_reason")
         ]
-        blocks = self._manifest_main_text_blocks(blocks, build.get("manifest") or {})
+        blocks = self._manifest_main_text_blocks(
+            blocks, build.get("manifest") or {}, bounds_confirmed=bool(build.get("manifest_confirmed_at"))
+        )
         build["source_quality"] = self._source_quality_report(blocks)
         profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
         validation = self.validate_records(blocks, records, profile)

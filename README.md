@@ -13,6 +13,12 @@
 - Makes JSONL preview/export serialize only the scholarly corpus record; build, extraction, review, and runtime metadata stay server-side.
 - Adds repeatable metadata enrichment passes across accepted or pending records, preserving human decisions and reopening accepted records only for new metadata or substantive disagreements.
 - Adds English/Québec French i18n and Storybook coverage for the new LLM execution, enrichment, and combobox primitives.
+- Hotfix: unconfirmed LLM-suggested `main_text_start_page` / `main_text_end_page` values are now advisory only and can no longer truncate corpus topology to the tail of a PDF. Explicitly human-confirmed bounds are still honored, and resuming an affected build automatically discards the stale truncated topology and rebuilds from the full conserved source.
+
+### 0.56.0 hotfix validation
+
+- `pytest -q`: **438 passed**.
+- Python bytecode compilation and `git diff --check` pass.
 
 ## 0.54.0 — Neurotic Gnat
 
