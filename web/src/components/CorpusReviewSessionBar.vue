@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
-const props=withDefaults(defineProps<{sourceFilename?:string;model?:string;buildId?:string;accepted?:number;reviewable?:number;remaining?:number;issues?:number;focusDisabled?:boolean}>(),{sourceFilename:"",model:"",buildId:"",accepted:0,reviewable:0,remaining:0,issues:0,focusDisabled:false});
+const props=withDefaults(defineProps<{sourceFilename?:string;model?:string|null;buildId?:string;accepted?:number;reviewable?:number;remaining?:number;issues?:number;focusDisabled?:boolean}>(),{sourceFilename:"",model:"",buildId:"",accepted:0,reviewable:0,remaining:0,issues:0,focusDisabled:false});
 const emit=defineEmits<{focus:[]} >();const i18n=useI18nStore();
 </script>
 <template>

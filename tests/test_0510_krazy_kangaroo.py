@@ -53,3 +53,7 @@ def test_new_locale_keys_exist_in_both_builtins():
     ]:
         assert repr(key) in en
         assert repr(key) in fr
+
+def test_review_session_bar_accepts_nullable_model_from_build_contract():
+    component=text('web/src/components/CorpusReviewSessionBar.vue')
+    assert 'model?:string|null' in component
