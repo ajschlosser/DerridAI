@@ -12,20 +12,20 @@ ROOT = Path(__file__).resolve().parents[1]
 LANGUAGE_VIEW = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
 JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
 MODELS = (ROOT / "api/app/models.py").read_text(encoding="utf-8")
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 RESEARCH = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
 LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 
 
 def test_03516_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
     main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in main
-    assert '"app_version": "0.44.0"' in main
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.44.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in main
+    assert '"app_version": "0.47.1"' in main
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.47.1" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.16 — Tongue Tied Again" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -135,7 +135,7 @@ def test_research_empty_database_enters_creation_workflow_and_preserves_shell_na
     assert 'await router.replace(canOpenDatabase?"/databases":"/")' not in RESEARCH
     assert "function openDatabaseCreationFromResearch()" in RUNTIME
     assert "state.vectorAutoCreateRequested=true" in RUNTIME
-    assert 'detail:{path:"/databases",legacyView:"vector"}' in RUNTIME
+    assert 'detail:{path:"/databases",runtimeView:"vector"}' in RUNTIME
     assert "if(noCollections&&state.vectorAutoCreateRequested)" in RUNTIME
     assert "window.setTimeout(openCreateWizard,0)" in RUNTIME
 

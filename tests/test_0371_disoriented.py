@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0371_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in text("api/app/main.py")
-    assert "# DerridAI Corpus Viewer 0.44.0" in text("README.md")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in text("api/app/main.py")
+    assert "# DerridAI Corpus Viewer 0.47.1" in text("README.md")
     assert "0.37.1 — Disoriented" in text("README.md")
 
 
@@ -50,7 +50,7 @@ def test_auto_grade_retries_transient_provider_failures_and_degrades_gracefully(
 
 
 def test_vector_stores_uses_task_focused_workspace_and_progressive_disclosure():
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     css = text("web/src/style.css")
     for token in (
         "vectorCollectionFilter",

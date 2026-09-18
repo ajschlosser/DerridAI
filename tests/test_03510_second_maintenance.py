@@ -5,7 +5,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 APP=(ROOT/"web/src/App.vue").read_text(encoding="utf-8")
-RUNTIME=(ROOT/"web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME=(ROOT/"web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE=(ROOT/"web/src/style.css").read_text(encoding="utf-8")
 HEADER=(ROOT/"web/src/components/record/RecordWorkspaceHeader.vue").read_text(encoding="utf-8")
 INSPECTOR=(ROOT/"web/src/components/record/RecordInspector.vue").read_text(encoding="utf-8")

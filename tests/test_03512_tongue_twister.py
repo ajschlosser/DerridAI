@@ -15,16 +15,16 @@ APP = (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
 TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 
 
 def test_03512_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert '"app_version": "0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.44.0" in APP
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert '"app_version": "0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.47.1" in APP
     assert "0.35.12 — Tongue Twister" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -149,11 +149,11 @@ def test_bcp47_normalization_and_rtl_document_direction():
 def test_provider_navigation_warns_and_native_back_path_survives_legacy_destination():
     assert "manageProvidersConfirm" in LANGUAGE_VIEW
     assert "Leave language installation?" in LANGUAGE_VIEW
-    assert 'detail: { path: "/providers", legacyView: "providers" }' in LANGUAGE_VIEW
-    assert "function navigateNative(path:string,legacyView?:string)" in APP
+    assert 'detail: { path: "/providers", runtimeView: "providers" }' in LANGUAGE_VIEW
+    assert "function navigateNative(path:string,runtimeView?:string)" in APP
     assert "nativeBackPath.value=current" in APP
-    assert "runtime.navigateView(legacyView,path)" in APP
-    assert "detail.legacyView" in APP
+    assert "runtime.navigateView(runtimeView,path)" in APP
+    assert "detail.runtimeView" in APP
 
 
 def test_language_dialogs_have_focus_management_and_escape_support():

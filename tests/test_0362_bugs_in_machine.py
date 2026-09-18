@@ -1,9 +1,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -43,8 +43,8 @@ def test_single_work_insights_and_storybook_component():
     for field in ("persons", "concepts", "topics", "target", "discourse_role"):
         assert f'field:"{field}"' in RUNTIME
     assert "singleLoadedWork?workInsightMetrics" in RUNTIME
-    assert (ROOT / "web/src/components/WorkInsightsPanel.vue").exists()
-    assert (ROOT / "web/src/components/WorkInsightsPanel.stories.ts").exists()
+    assert not (ROOT / "web/src/components/WorkInsightsPanel.vue").exists()
+    assert not (ROOT / "web/src/components/WorkInsightsPanel.stories.ts").exists()
 
 
 def test_llm_review_uses_central_provider_connection_settings():
@@ -68,4 +68,4 @@ def test_new_ux_strings_exist_in_both_builtin_dictionaries():
         "dashboard.discourse_roles_share_work",
         "llm.connection_from_profile",
     ):
-        assert SYSTEM.count(f'"{key}"') >= 2
+        assert SYSTEM.count(repr(key)) >= 2

@@ -1,6 +1,6 @@
 # Search workspace contract — 0.36.10
 
-`/search` is a native Vue workspace. The legacy runtime remains the state/transport
+`/search` is a native Vue workspace. The runtime remains the state/transport
 owner for browser-local JSONL records, Chroma search, evidence selection, and URL
 serialization, but it exposes an operation-specific Search bridge rather than HTML.
 

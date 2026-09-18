@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import { authApi, type AuthUser, type RoleDefinition, type UserRole } from "../api/auth";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();

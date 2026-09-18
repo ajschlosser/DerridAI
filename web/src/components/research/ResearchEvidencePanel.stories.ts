@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 
-const meta:Meta<typeof ResearchEvidencePanel>={title:"Research/Evidence Panel 0.31",component:ResearchEvidencePanel,parameters:{layout:"padded"}};
+const meta:Meta<typeof ResearchEvidencePanel>={title:"Research/Evidence Panel",component:ResearchEvidencePanel,parameters:{layout:"padded"}};
 export default meta;
 type Story=StoryObj<typeof ResearchEvidencePanel>;
 export const SelectedEvidence:Story={args:{canRemove:true,selectedEvidence:[

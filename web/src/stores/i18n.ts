@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 
 let languageEventBridgeInstalled = false;
 

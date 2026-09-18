@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchAnswerWorkspace from "./ResearchAnswerWorkspace.vue";
 
-const meta:Meta<typeof ResearchAnswerWorkspace>={title:"Research/Answer Workspace 0.31",component:ResearchAnswerWorkspace,parameters:{layout:"padded"}};
+const meta:Meta<typeof ResearchAnswerWorkspace>={title:"Research/Answer Workspace",component:ResearchAnswerWorkspace,parameters:{layout:"padded"}};
 export default meta;
 type Story=StoryObj<typeof ResearchAnswerWorkspace>;
 export const Empty:Story={args:{job:null,result:null}};

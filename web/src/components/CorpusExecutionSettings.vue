@@ -5,18 +5,21 @@ import { useI18nStore } from "../stores/i18n";
 const props=withDefaults(defineProps<{
   generation?:Record<string,unknown>;
   stageLimits?:Record<string,number>;
+  stageTimeouts?:Record<string,number>;
   maxConcurrentRequests?:number;
   useProfileDefaults?:boolean;
   disabled?:boolean;
-}>(),{generation:()=>({}),stageLimits:()=>({}),maxConcurrentRequests:1,useProfileDefaults:true,disabled:false});
+}>(),{generation:()=>({}),stageLimits:()=>({}),stageTimeouts:()=>({}),maxConcurrentRequests:1,useProfileDefaults:true,disabled:false});
 const emit=defineEmits<{
   (event:"update:generation",value:Record<string,unknown>):void;
   (event:"update:stageLimits",value:Record<string,number>):void;
+  (event:"update:stageTimeouts",value:Record<string,number>):void;
   (event:"update:maxConcurrentRequests",value:number):void;
   (event:"update:useProfileDefaults",value:boolean):void;
 }>();
 const i18n=useI18nStore();
 const defaults={manifest_num_predict:1800,segmentation_num_predict:1200,reconciliation_num_predict:1000,discourse_num_predict:1600,quotation_num_predict:1500,indexing_num_predict:1200,segmentation_window_tokens:5000};
+const timeoutDefaults={manifest:300,segmentation:300,reconciliation:240,discourse:240,quotation:240,indexing:180};
 const numCtx=computed(()=>Number(props.generation?.num_ctx||0));
 const requiredContext=computed(()=>Number(props.stageLimits?.segmentation_window_tokens||defaults.segmentation_window_tokens)+Number(props.stageLimits?.segmentation_num_predict||defaults.segmentation_num_predict)+1536);
 const contextSafe=computed(()=>!numCtx.value||requiredContext.value<=numCtx.value);
@@ -33,6 +36,7 @@ function thinkingGeneration(event:Event){
   emit("update:generation",{...props.generation,think:value});
 }
 function stage(key:string,event:Event){const value=Math.trunc(Number((event.target as HTMLInputElement).value));if(!Number.isFinite(value))return;emit("update:stageLimits",{...defaults,...props.stageLimits,[key]:value})}
+function stageTimeout(key:string,event:Event){const value=Math.max(30,Math.min(1800,Math.trunc(Number((event.target as HTMLInputElement).value)||timeoutDefaults[key as keyof typeof timeoutDefaults])));emit("update:stageTimeouts",{...timeoutDefaults,...props.stageTimeouts,[key]:value})}
 function concurrent(event:Event){const value=Math.max(1,Math.min(16,Math.trunc(Number((event.target as HTMLInputElement).value)||1)));emit("update:maxConcurrentRequests",value)}
 </script>
 
@@ -80,6 +84,14 @@ function concurrent(event:Event){const value=Math.max(1,Math.min(16,Math.trunc(N
       </div>
     </details>
 
+    <details class="stage-budgets">
+      <summary>{{i18n.t('pdf_corpus.stage_timeouts','Stage deadlines')}}</summary>
+      <p class="help">{{i18n.t('pdf_corpus.stage_timeouts_help','Maximum wall-clock/read time for one LLM attempt. A timeout becomes a reviewable exception instead of blocking the whole build.')}}</p>
+      <div class="settings-grid stage-grid">
+        <label v-for="key in ['manifest','segmentation','reconciliation','discourse','quotation','indexing']" :key="key" class="field" :for="`corpus-timeout-${key}`"><span>{{i18n.t(`pdf_corpus.timeout.${key}`,key)}} · {{i18n.t('pdf_corpus.seconds','seconds')}}</span><input :id="`corpus-timeout-${key}`" class="control" type="number" min="30" max="1800" step="30" :value="props.stageTimeouts?.[key]??timeoutDefaults[key as keyof typeof timeoutDefaults]" @input="stageTimeout(key,$event)"></label>
+      </div>
+    </details>
+
     <div class="context-check" :class="{unsafe:!contextSafe}" :role="contextSafe?'status':'alert'">
       <b>{{contextSafe?i18n.t('pdf_corpus.context_safe','Context budget looks safe'):i18n.t('pdf_corpus.context_unsafe','Context budget is too small')}}</b>
       <span v-if="numCtx">{{i18n.tf('pdf_corpus.context_budget_detail','Largest segmentation turn needs about {required} tokens before provider overhead; context is {context}.',{required:requiredContext.toLocaleString(),context:numCtx.toLocaleString()})}}</span>
@@ -90,5 +102,5 @@ function concurrent(event:Event){const value=Math.max(1,Math.min(16,Math.trunc(N
 </template>
 
 <style scoped>
-.execution-settings-shell{border:1px solid var(--line);border-radius:10px;background:var(--card)}.execution-settings-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;cursor:pointer;font-size:10px;font-weight:800}.execution-settings-summary small{font-size:9px;font-weight:500;color:var(--muted)}.execution-settings{border:0;border-top:1px solid var(--line);padding:10px 12px;min-inline-size:0;display:grid;gap:10px}.execution-settings>legend{font-size:10px;font-weight:800;padding-inline:4px}.help,.field small{font-size:9px;color:var(--muted);line-height:1.4}.help{margin:0}.defaults-toggle{display:flex;gap:7px;align-items:center;font-size:10px;font-weight:700}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px}.field{display:grid;gap:4px;align-content:start;font-size:9px;font-weight:700}.field small{font-weight:400}.stage-budgets{border-top:1px solid var(--line);padding-top:8px}.stage-budgets summary{cursor:pointer;font-size:9px;font-weight:800}.stage-grid{margin-top:8px}.context-check{display:grid;gap:2px;padding:8px 10px;border-radius:8px;background:#edf8f1;font-size:9px}.context-check.unsafe{background:#fff2f2;color:#7d2222}.context-check span{color:inherit}.control:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:900px){.settings-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.settings-grid{grid-template-columns:1fr}}
+.execution-settings-shell{border:1px solid var(--line);border-radius:10px;background:var(--card)}.execution-settings-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;cursor:pointer;font-size:13px;font-weight:800}.execution-settings-summary small{font-size:.8125rem;font-weight:500;color:var(--muted)}.execution-settings{border:0;border-top:1px solid var(--line);padding:10px 12px;min-inline-size:0;display:grid;gap:10px}.execution-settings>legend{font-size:13px;font-weight:800;padding-inline:4px}.help,.field small{font-size:.8125rem;color:var(--muted);line-height:1.4}.help{margin:0}.defaults-toggle{display:flex;gap:7px;align-items:center;font-size:13px;font-weight:700}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px}.field{display:grid;gap:4px;align-content:start;font-size:.8125rem;font-weight:700}.field small{font-weight:400}.stage-budgets{border-top:1px solid var(--line);padding-top:8px}.stage-budgets summary{cursor:pointer;font-size:13px;font-weight:800}.stage-grid{margin-top:8px}.context-check{display:grid;gap:2px;padding:8px 10px;border-radius:8px;background:#edf8f1;font-size:.8125rem}.context-check.unsafe{background:#fff2f2;color:#7d2222}.context-check span{color:inherit}.control:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:900px){.settings-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.settings-grid{grid-template-columns:1fr}}
 </style>

@@ -1,9 +1,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 I18N = (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
 LANGUAGES = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
@@ -14,7 +14,7 @@ FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
 
 def test_0363_release_identity():
     assert "0.36.3 — All The Little Things" in README
-    assert "# DerridAI Corpus Viewer 0.44.0" in README
+    assert "# DerridAI Corpus Viewer 0.47.1" in README
 
 
 def test_export_still_has_shared_download_blob_support_for_subset_exports():
@@ -82,4 +82,4 @@ def test_new_strings_are_bilingual():
         "record.page",
         "annotations.remove_local_help",
     ):
-        assert SYSTEM.count(f'"{key}"') >= 2
+        assert SYSTEM.count(repr(key)) >= 2

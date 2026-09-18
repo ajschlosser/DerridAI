@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.44.0"' in text("api/app/config.py")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.47.1"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -74,7 +74,7 @@ def test_resume_checkpoint_api_provider_profiles_i18n_and_storybook_are_present(
     builder = text("api/app/corpus_builder.py")
     main = text("api/app/main.py")
     component = text("web/src/components/PdfCorpusBuilder.vue")
-    system_store = text("api/app/system_store.py")
+    system_store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     assert "save_checkpoint" in builder and "load_checkpoint" in builder
     assert '@app.post("/api/pdf/corpus-builds/{build_id}/resume")' in main
     assert "_resolve_pdf_corpus_provider" in main
@@ -82,7 +82,7 @@ def test_resume_checkpoint_api_provider_profiles_i18n_and_storybook_are_present(
     assert "CorpusBuildProgress" in component
     assert "FieldEvidenceList" in component
     assert "pdf_corpus.title" in system_store
-    assert "DEFAULT_FR_CA.update" in system_store
+    assert "FR_CA" in system_store
     assert (ROOT / "web/src/components/CorpusBuildProgress.stories.ts").exists()
     assert (ROOT / "web/src/components/FieldEvidenceList.stories.ts").exists()
 
@@ -187,7 +187,7 @@ def test_pdf_upload_is_bounded_and_metadata_edits_use_optimistic_revision():
 
 
 def test_0401_new_pdf_components_are_i18n_and_accessibility_aware():
-    system_store = text("api/app/system_store.py")
+    system_store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     for key in (
         "pdf_corpus.page_mapping",
         "pdf_corpus.document_manifest",
@@ -195,7 +195,7 @@ def test_0401_new_pdf_components_are_i18n_and_accessibility_aware():
         "pdf_corpus.escalation_provider",
     ):
         assert key in system_store
-    assert "DEFAULT_FR_CA.update" in system_store
+    assert "FR_CA" in system_store
     page_map = text("web/src/components/PdfPageLabelEditor.vue")
     manifest = text("web/src/components/DocumentManifestEditor.vue")
     viewer = text("web/src/components/PdfEvidenceViewer.vue")
@@ -254,7 +254,7 @@ def test_0401_build_observability_tracks_structured_output_retries_and_escalatio
 
 def test_0401_pdf_builder_uses_configured_admin_profiles_not_only_researcher_allowlist():
     component = text("web/src/components/PdfCorpusBuilder.vue")
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     main = text("api/app/main.py")
     models = text("api/app/models.py")
     assert "getProviderProfilesForUi" in component

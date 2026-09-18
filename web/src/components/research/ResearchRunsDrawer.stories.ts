@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchRunsDrawer from "./ResearchRunsDrawer.vue";
 
 const meta:Meta<typeof ResearchRunsDrawer>={
-  title:"Research/Runs Drawer 0.31",
+  title:"Research/Runs Drawer",
   component:ResearchRunsDrawer,
   parameters:{layout:"fullscreen"},
   args:{

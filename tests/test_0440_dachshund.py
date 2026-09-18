@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.44.0"
+    assert APP_VERSION == "0.47.1"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -143,11 +143,12 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
     assert result["applied"] is True
     assert repo.load_records(build["build_id"])[0]["accepted"] is True
 
-    try:
-        manager.review_decision(build["build_id"], "r2", "accepted", expected_revision=1)
-        assert False, "an in-flight record must remain read-only"
-    except ValueError as exc:
-        assert "still being prepared" in str(exc).lower()
+    # Gregarious Guinea Pig: once segmentation exists, reviewers may work on
+    # records while metadata enrichment continues. Human review freezes later
+    # automatic changes to that record.
+    result2=manager.review_decision(build["build_id"], "r2", "accepted", expected_revision=1)
+    assert result2["applied"] is True
+    assert "__review__" in repo.load_records(build["build_id"])[1].get("human_touched_fields", [])
 
     try:
         manager.merge(build["build_id"], "r1", "next", expected_revision=2)
@@ -199,14 +200,15 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
     assert result["queue_counts"]["issues"] == 3
 
 
-def test_review_ui_is_exception_oriented_and_read_only_during_enrichment():
+def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
     ui=text("web/src/components/PdfCorpusBuilder.vue")
     api=text("web/src/api/pdfCorpus.ts")
     panel=text("web/src/components/CorpusMetadataResolutionPanel.vue")
     assert "acceptCleanRecords" in ui
     assert "reviewQueueCounts" in ui
     assert "selectedRecordEnrichmentPending" in ui
-    assert 'currentBuild.value?.stage!=="enriching"' in ui
+    assert "collaborative_review_title" in ui
+    assert "textDraftKey" in ui
     assert "structuralReviewLocked=computed(()=>buildRunning.value)" in ui
     assert "review-readonly-banner" in ui
     assert "metadataDecision" in ui and "reviewDecision" in api
@@ -218,16 +220,16 @@ def test_review_ui_is_exception_oriented_and_read_only_during_enrichment():
     assert 'aria-controls="review-panel-metadata"' in ui
     assert 'aria-labelledby="review-tab-metadata"' in ui
     queue_tabs=text("web/src/components/CorpusReviewQueueTabs.vue")
-    assert 'role="toolbar"' in queue_tabs and ':aria-pressed="modelValue===tab.id"' in queue_tabs
+    assert 'role="toolbar"' in queue_tabs and ':aria-pressed="modelValue===tab.id||primaryModel===tab.id"' in queue_tabs
 
 
 def test_dachshund_i18n_and_storybook_cover_exception_review():
-    store=text("api/app/system_store.py")
+    store=text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     for key in (
         '"pdf_corpus.queue_ready"', '"pdf_corpus.accept_clean"',
         '"pdf_corpus.review_preparing_title"', '"pdf_corpus.decision_saved"', '"pdf_corpus.review_details"',
     ):
-        assert store.count(key) >= 2
+        assert store.count(key.strip('"')) >= 2
     stories=text("web/src/components/CorpusReviewQueueTabs.stories.ts")
     assert "ExceptionsRemain" in stories and "MetadataQueue" in stories and "LockedDuringEnrichment" in stories
     metadata_stories=text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")

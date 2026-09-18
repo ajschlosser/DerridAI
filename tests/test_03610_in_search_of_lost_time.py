@@ -2,21 +2,21 @@ from pathlib import Path
 import json
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 SEARCH = (ROOT / "web/src/views/SearchView.vue").read_text(encoding="utf-8")
 ROUTER = (ROOT / "web/src/router/index.ts").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 
 def test_03610_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert '"app_version": "0.44.0"' in MAIN
-    assert "# DerridAI Corpus Viewer 0.44.0" in README
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert '"app_version": "0.47.1"' in MAIN
+    assert "# DerridAI Corpus Viewer 0.47.1" in README
     assert "0.36.10 — In Search of Lost Time" in README
 
 

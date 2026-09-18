@@ -1,7 +1,52 @@
+# DerridAI Corpus Viewer 0.47.1
+
+**0.47.1 — Fatso** is a general UI/UX unification and accessibility pass. It introduces reusable foundation components, removes release-era CSS naming from the active shell and dashboard, raises dense-control readability and focus treatment, standardizes Storybook taxonomy, and refactors active components onto the shared design primitives without changing corpus semantics.
+
+## 0.47.1 — Fatso
+
+### UI/UX and component-system changes
+
+- Added reusable `UiButton`, `UiCard`, `UiField`, and `UiStatusBadge` foundation components with Storybook coverage.
+- Replaced the older `ActionButton` wrapper with the shared button primitive and refactored empty states, document metadata editing, and field-ownership badges to use current components.
+- Removed release-number (`v030`) naming from the active application shell and runtime dashboard CSS/markup.
+- Added shared spacing/focus tokens, consistent `:focus-visible` treatment, improved disabled states, a 40px default control target, reduced-motion support, higher-contrast support, and a 12px minimum explicit text floor for dense UI.
+- Normalized Storybook organization around Foundations, Shell, Corpus Builder, Record Workspace, Search, Research, Providers, System, and Internationalization.
+- Moved the role-permission story beside its component and added missing Brand Mark/foundation stories.
+- Kept English and Québec French localization architecture intact; no new user-facing copy bypasses i18n.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **372 passed**.
+- Python bytecode compilation succeeds.
+- `node --check web/src/runtime/runtime.js` succeeds.
+- Production frontend build was attempted and is blocked because frontend dependencies are not installed in this sandbox (`vue-tsc: not found`).
+- Storybook build was attempted and is blocked for the same reason (`storybook: not found`).
+- Docker is unavailable in this sandbox.
+
+### Release gate
+
+- Backend regression suite, Python compilation, JavaScript syntax checks, translation parity checks, and archive integrity must pass.
+- Production Vue/Vite, Storybook, and Docker/container builds remain mandatory before the release is considered ready.
+
+## 0.47.0 — Gregarious Guinea Pig
+
+### Gregarious Guinea Pig changes
+
+- Segmented records are editable as soon as topology is persisted; metadata enrichment no longer has to finish first.
+- Human edits establish field-level ownership. Background LLM results merge only into untouched fields and never overwrite human-confirmed values.
+- Human text edits or completed review freeze automatic enrichment for that record; queued/running metadata families settle as explicit skips.
+- Repeated human-confirmed values from at least two records become conservative build-local editorial context for later prompts without being propagated as truth.
+- Reviewed-text drafts are persisted locally and remain pinned while queues update in the background.
+- Added selected/all-record bulk metadata editing with PATCH semantics.
+- Reworked document metadata editing into grouped, change-only sections and permitted bibliographic corrections while enrichment runs.
+- Inherited metadata now appears after interactive record metadata.
+- Cancelling enrichment leaves the segmented workspace usable; cancelled builds can be resumed, and the user can explicitly start a new/concurrent build.
+- Added Storybook coverage for bulk record metadata editing and retained keyboard/focus/accessibility checks.
+
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
-**0.44.0 — Dachshund** consolidates Corpus Builder into a stage-driven workflow: review decisions are atomic, contradictory metadata/publication states are eliminated, build configuration collapses after launch, empty review workspaces are suppressed, and source-quality problems receive their own queue.
-# DerridAI Corpus Viewer 0.44.0
+**0.46.1 — Gray Fox** is a maintenance and interface-quality pass: canonical English and Québec French dictionaries are now first-class locale modules, obsolete migration/backward-compatibility shims and unused Vue components are removed, dense UI typography has an accessible 12px floor, and Storybook is pruned, renamed, reorganized, and wired to automated accessibility checks.
+# DerridAI Corpus Viewer 0.46.1
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -67,15 +112,70 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
-## 0.44.0 — Dachshund
+## 0.46.1 — Gray Fox
 
-Dachshund refactors Corpus Builder around an exception-oriented review contract: **extract source → construct records → enrich record metadata → human review → validate → publish**. Deterministic rules own obvious topology and metadata; the LLM is called only for ambiguous semantic boundaries and judgment-heavy scholarly metadata. The human approves the resulting records and resolves only concrete exceptions such as bad extraction, uncertain provenance, or low-confidence metadata.
+### Gray Fox changes
 
-Human metadata decisions are now durable server-side decisions rather than loosely coupled UI state. A decision writes the value, marks the field `human_confirmed`, records an audit entry, increments the record revision, recomputes the record's blockers and queue membership, persists the record set, and returns the authoritative record/build/queue state. `primary_text` retains true three-state semantics (`true`, `false`, `null`); `false` is never treated as missing. Background enrichment is read-only from the human review perspective: generated records may be previewed while enrichment is running, but review mutations unlock only when automatic enrichment has finished, preventing an in-flight enrichment snapshot from overwriting a human decision.
+- Consolidated the built-in interface dictionaries into canonical `en-US` and `fr-CA` locale modules instead of release-by-release mutation blocks.
+- English and Québec French now ship with exactly the same complete key set; literal UI translation keys and placeholder parity are regression-tested.
+- Québec French is explicitly treated as the `fr-CA` built-in locale, with Québec naming/terminology in the language UI.
+- Removed obsolete client-schema aliases, the deprecated full-record PUT update contract, the old bulk-upsert payload shape, stale-client numeric normalization, historical derived-language collection cleanup, persisted preference-version migrations, locale migration logic, and the old Chroma collection-create fallback.
+- Removed unused Vue/Storybook components and the stray Corpus Builder temporary file.
+- Renamed the actively used `LegacySurface` component to `RuntimeSurface`, moved the active monolithic frontend runtime from `src/legacy/` to `src/runtime/`, and renamed its translation namespace from `legacy.*` to `runtime.*`.
+- Storybook navigation is normalized by product area, version suffixes and placeholder story names are removed, and `@storybook/addon-a11y` is enabled with accessibility violations treated as errors.
+- Raised every explicit frontend font size below 12px to a scalable 0.75rem floor while retaining the existing global keyboard-focus, skip-link, and reduced-motion behavior.
+- Built-in language lookup now overlays stored administrator edits onto the complete canonical dictionary at read time, so no startup dictionary migration is required.
+- Added Gray Fox regression checks for release identity, i18n completeness/placeholder safety, Québec French locale identity, Storybook organization, accessibility typography, and removal of compatibility scaffolding.
+
+## 0.46.0 — Feral Fox
+
+### Feral Fox changes
+
+- Reviewed record text is editable while the immutable PDF extraction is retained as `source_extracted_text`, with revision history and explicit human-correction provenance.
+- Record-level source-quality diagnostics now show the concrete problem, severity, affected pages, and available resolution path instead of a generic acceptance warning.
+- Human-corrected text can explicitly resolve record-level extraction issues; downstream metadata may then be rerun against the reviewed text without destroying the source audit trail.
+- Editing reviewed text reopens any previously accepted record so changed corpus text cannot remain silently accepted without another scholarly review decision.
+- Metadata fields expose ownership/provenance (`Inherited`, `Source derived`, `LLM inferred`, `Human confirmed`, `Override`, `Needs review`) and legitimate record metadata can be edited deliberately.
+- Document-manifest metadata can be edited from the review workspace once global propagation is safe; settled records may use explicit record-level overrides without racing an active enrichment pass.
+- Metadata reruns can target only discourse, quotation, or indexing; rerunning one family preserves human decisions and settled output from the other families.
+- Bibliographic values inherited from the document manifest can be overridden at record scope without silently mutating the document manifest; later manifest inheritance does not overwrite human overrides.
+- Fast enrichment is deterministic-first and selectively routes discourse, quotation, and indexing work to the LLM. Deep scholarly enrichment remains available when broader semantic analysis is wanted.
+- Semantic indexing is optional in Fast mode. Quotation work is skipped when no quotation signal exists, and obvious apparatus can bypass unnecessary discourse calls.
+- Source-quality gating is severity-aware: only blocking extraction failures suppress automatic semantic enrichment, while human-corrected text can be enriched and still remain explicitly review-blocked until the source issue is resolved.
+- Corpus Builder reports what the LLM actually contributed: useful fields, fields still requiring review, inherited/deterministic/human fields, family calls, elapsed model time, and useful fields per minute.
+- Focus View now uses the same review concepts, ownership badges, source-issue diagnostics, editable reviewed text, accessible typography, and actions as the main review workspace.
+- Focus View detail tabs use linked tab/tabpanel semantics and keyboard Arrow/Home/End navigation in addition to the dialog focus trap.
+- Build configuration remains available during active builds only as an explicit concurrent-build workflow. The UI reports active builds and provider-profile capacity instead of implying accidental parallelism.
+- New/updated Storybook components cover metadata ownership and source-issue states, including French-length and accessibility-oriented variants.
+- All new UI copy is available through English and French Canadian i18n, and dense Corpus Builder controls retain a 12px minimum type floor plus keyboard/focus semantics.
+
+## 0.45.0 — Energized Elephant
+
+### Energized Elephant changes
+
+### Progressive review record-store hotfix
+
+A first live 0.45.0 review run exposed a concurrency defect: **Accept & next** could overlap a metadata-family checkpoint while both paths rewrote `records.jsonl`. The repository used one shared `records.jsonl.tmp` staging filename, so concurrent writers could truncate or interleave that file and leave the authoritative JSONL malformed, surfacing as HTTP 422 with a JSON decode error. The hotfix serializes record-store writes, uses unique same-directory temp files plus atomic `os.replace`, and serializes all manager-level record read/modify/write review transactions with metadata checkpoints. The completed-worker merge path now takes the same lock. This prevents both malformed JSONL and stale reviewer snapshots from overwriting newer progressive metadata checkpoints.
+
+- Metadata enrichment is durable at the discourse, quotation, and indexing family level; interrupted builds resume only unfinished families.
+- Corpus LLM stages now use bounded per-stage read deadlines and do not blindly repeat expensive hard timeouts.
+- Metadata task telemetry records queued/running/completed/failed/skipped counts, active tasks, execution timing, and last settled progress.
+- Failed or skipped metadata becomes an explicit human-review exception instead of blocking the entire corpus build.
+- A stalled enrichment run can be asked to continue with remaining automatic metadata settled as unresolved.
+- Corpus Builder status UI was refactored into reusable Storybook components with larger accessible typography, clearer progress hierarchy, scoped transient network warnings, elapsed/ETA and resume-safe checkpoint feedback, and progressive-review status.
+- Review navigation now keeps five primary queues (**All / Reviewable / Issues / Accepted / Rejected**) and moves Metadata/Topology/Source into an Issues filter; explicit record selection makes batch rejection safer.
+- The source inspector exposes full PDF page context and a one-click **Open in PDF Explorer** action; the review header keeps the build/model identity visible.
+- New interface copy is localized in English and French Canadian, and dense Corpus Builder controls use a 12px minimum text floor with visible focus and non-color state labels.
+- Release readiness requires Python tests, TypeScript/Vite production build, Storybook build, and container build checks.
+
+
+Energized Elephant retains Dachshund’s exception-oriented review contract: **extract source → construct records → enrich record metadata → human review → validate → publish**. Deterministic rules own obvious topology and metadata; the LLM is called only for ambiguous semantic boundaries and judgment-heavy scholarly metadata. The human approves the resulting records and resolves only concrete exceptions such as bad extraction, uncertain provenance, or low-confidence metadata.
+
+Human metadata decisions are now durable server-side decisions rather than loosely coupled UI state. A decision writes the value, marks the field `human_confirmed`, records an audit entry, increments the record revision, recomputes the record's blockers and queue membership, persists the record set, and returns the authoritative record/build/queue state. `primary_text` retains true three-state semantics (`true`, `false`, `null`); `false` is never treated as missing. Background enrichment is progressively reviewable: a record unlocks as soon as its own metadata families settle, while in-flight records remain read-only and structural edits remain locked until neighboring enrichment settles.
 
 The active scholarly profile is `derrida-scholarly-v11` and metadata prompt contract is `derridai-record-metadata-v7`; v10 remains registered for existing builds. Review-relevant metadata includes `region_type`, `primary_text`, `discourse_role`, `speaker`, `position_holder`, `target`, `stance`, `proposition_status`, and `claim_scope`. Deterministic classifications are preserved. LLM proposals are constrained to controlled enums/booleans where applicable, source-bound evidence is validated, and any proposal below the profile confidence threshold is routed to human review even if the model fails to request review itself. High-confidence supported proposals remain visible and become human-confirmed when the reviewer accepts the record.
 
-Review queues are derived from authoritative record state rather than independently persisted flags: **Ready**, **Needs attention**, **Metadata**, **Topology**, **Source problem**, **Accepted**, and **Rejected**. Clean pending records have no source/topology/metadata blockers and can be approved individually with **Accept & next** or safely in bulk with **Accept clean**. Source extraction problems (including fragmented-glyph/layout artifacts) and uncertain provenance remain exception records with explicit reasons. Queue membership, metadata completeness, and publication eligibility are recalculated from the same persisted records so a confirmed field cannot reappear merely because a stale counter or client filter disagrees.
+Review queues are derived from authoritative record state rather than independently persisted flags. The primary review navigation is **All**, **Reviewable**, **Issues**, **Accepted**, and **Rejected**; **Metadata**, **Topology**, and **Source problem** are issue-type filters rather than equally prominent tabs. Clean pending records have no source/topology/metadata blockers and can be approved individually with **Accept & next** or safely in bulk with **Accept clean**. Destructive batch rejection requires explicit record selection. Source extraction problems (including fragmented-glyph/layout artifacts) and uncertain provenance remain exception records with explicit reasons. Queue membership, metadata completeness, and publication eligibility are recalculated from the same persisted records so a confirmed field cannot reappear merely because a stale counter or client filter disagrees.
 
 The review workspace is now the primary surface once records exist. Build configuration and technical diagnostics collapse out of the way; a compact session header shows review progress, a narrow queue provides navigation, the proposed record receives the majority of readable space, and a secondary inspector switches between **Metadata**, **Evidence**, and **Source**. Metadata decisions use typed controls with explicit Confirm/Saving/Saved feedback. Record acceptance/rejection is an atomic backend command returning the updated build, queue counts, and next review target; the frontend no longer chains several refreshes to decide what happened. Review mutations preserve viewport position.
 
@@ -447,9 +547,9 @@ Version 0.21.0 focuses on frontend responsiveness and fixes regressions found af
 
 ## 0.20.0 — Vue 3 frontend migration
 
-Version 0.20.0 moves the application shell to Vue 3 with TypeScript, Pinia, and Vue Router while preserving the existing Python/FastAPI API and the validated corpus/RAG feature runtime. The migration is intentionally compatibility-first: routed Vue views and reusable shell components own navigation, top-level state, disabled-action tooltips, file tabs, and lifecycle; mature feature renderers remain behind `web/src/legacy/runtime.js` and can be converted view-by-view without changing backend contracts.
+Version 0.20.0 moves the application shell to Vue 3 with TypeScript, Pinia, and Vue Router while preserving the existing Python/FastAPI API and the validated corpus/RAG feature runtime. The migration is intentionally compatibility-first: routed Vue views and reusable shell components own navigation, top-level state, disabled-action tooltips, file tabs, and lifecycle; mature feature renderers remain behind `web/src/runtime/runtime.js` and can be converted view-by-view without changing backend contracts.
 
-Frontend structure now includes `components/`, `views/`, `stores/`, `router/`, `api/`, `composables/`, and `legacy/`. Routes use readable paths such as `/records`, `/works`, `/databases`, `/rag`, and `/settings`, while selected file/record/store state remains encoded in query parameters for deep links.
+Frontend structure now includes `components/`, `views/`, `stores/`, `router/`, `api/`, `composables/`, and `runtime/`. Routes use readable paths such as `/records`, `/works`, `/databases`, `/rag`, and `/settings`, while selected file/record/store state remains encoded in query parameters for deep links.
 
 The production build now runs `vue-tsc --noEmit` before Vite, and Vite separates Vue and PDF.js vendor chunks.
 
@@ -1170,16 +1270,15 @@ docker compose up -d --build
 
 ## Release validation
 
-0.44.0 Dachshund was checked with:
+0.47.1 Gregarious Guinea Pig validation in this packaging environment:
 
-- the full Python regression suite (`332 passed` in the packaging environment);
-- Python bytecode compilation for `api/app` and `tests`;
-- `node --check web/src/legacy/runtime.js`;
-- TypeScript/Vue script syntax transpilation across 167 source files;
-- `git diff --check`;
-- explicit attempts to run `npm run build` and `npm run build-storybook`.
+- **369 Python regression tests pass**;
+- Python bytecode compilation succeeds for `api` and `tests`;
+- `node --check web/src/runtime/runtime.js` succeeds;
+- the regression suite covers English/Québec French key parity, collaborative human/LLM field ownership, bulk metadata editing, cancellation recovery, durable text drafts, Storybook integration, and WCAG-oriented UI checks;
+- `npm run build` and `npm run build-storybook` were explicitly attempted.
 
-The sandbox cannot currently reach the npm registry and contains no local `node_modules`, so the dependency-backed Vue/Vite and Storybook builds stop at `vue-tsc: not found` / `storybook: not found`. These commands were attempted and are not represented as successful production builds. On a networked development machine, `docker compose up -d --build` remains the authoritative integration build.
+This sandbox has no frontend `node_modules`, so the dependency-backed Vue/Vite production build stops at `vue-tsc: not found`. Storybook likewise stops at `storybook: not found`, and Docker is unavailable in the sandbox. **Accordingly, this package is a 0.47.1 build candidate, not a release-ready build.** Per the project release gate, a development environment with the frontend dependencies and Docker available must still complete the production frontend, Storybook, and normal Docker/container builds successfully before 0.47.1 is declared ready.
 
 ## Current limitations
 

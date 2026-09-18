@@ -2,21 +2,20 @@ from pathlib import Path
 import json
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 INSPECTOR = (ROOT / "web/src/components/record/RecordInspector.vue").read_text(encoding="utf-8")
-WORK_INSIGHTS = (ROOT / "web/src/components/WorkInsightsPanel.vue").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 
 def test_0364_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert '"app_version": "0.44.0"' in MAIN
-    assert "# DerridAI Corpus Viewer 0.44.0" in README
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert '"app_version": "0.47.1"' in MAIN
+    assert "# DerridAI Corpus Viewer 0.47.1" in README
     assert "0.36.4 — Oops You Did It Again" in README
 
 
@@ -43,7 +42,7 @@ def test_work_insights_use_targets_and_role_share_not_speaker_position_holder():
     assert 'field:"position_holder"' not in block
     assert "topRecordFieldShare" in RUNTIME
     assert "work-insight-pie" in RUNTIME
-    assert "work-insights__pie" in WORK_INSIGHTS
+    assert not (ROOT / "web/src/components/WorkInsightsPanel.vue").exists()
 
 
 def test_record_actions_group_citations_under_submenu():
@@ -75,4 +74,7 @@ def test_new_strings_are_bilingual():
         "works.role_occurrences",
         "search.redirect_database",
     ):
-        assert SYSTEM.count(f'"{key}"') >= 2
+        en = (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8")
+        fr = (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8")
+        assert f"'{key}'" in en or f'"{key}"' in en
+        assert f"'{key}'" in fr or f'"{key}"' in fr

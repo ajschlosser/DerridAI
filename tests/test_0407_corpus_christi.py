@@ -13,9 +13,9 @@ def text(path: str) -> str:
 
 
 def test_0408_release_identity():
-    assert json.loads(text("web/package.json"))["version"] == "0.44.0"
-    assert 'APP_VERSION = "0.44.0"' in text("api/app/config.py")
-    assert "0.44.0 — Dachshund" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"] == "0.47.1"
+    assert 'APP_VERSION = "0.47.1"' in text("api/app/config.py")
+    assert "0.47.1 — Fatso" in text("README.md")
 
 
 def test_segmentation_uses_deterministic_candidates_and_boundary_level_review():
@@ -52,7 +52,7 @@ def test_mla_supports_books_journal_articles_and_chapters():
 
 def test_work_metadata_tries_multiple_catalogues_and_exposes_container_fields():
     llm = text("api/app/llm_tools.py")
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     assert "def _crossref_candidates" in llm
     assert "def _google_books_candidates" in llm
     assert "def _multi_catalog_candidates" in llm
@@ -66,7 +66,7 @@ def test_work_metadata_tries_multiple_catalogues_and_exposes_container_fields():
 
 
 def test_work_separation_and_saved_subset_profiles_are_first_class_ui_flows():
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     style = text("web/src/style.css")
     assert "function openSeparateWorksModal" in runtime
     assert 'id="separateWorks"' in runtime

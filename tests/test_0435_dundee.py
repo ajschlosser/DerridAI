@@ -51,9 +51,9 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.44.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.44.0"
-    assert "0.44.0 — Dachshund" in text("README.md")
+    assert APP_VERSION == "0.47.1"
+    assert json.loads(text("web/package.json"))["version"] == "0.47.1"
+    assert "0.47.1 — Fatso" in text("README.md")
 
 
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
@@ -111,9 +111,9 @@ def test_ui_suppresses_empty_review_and_zero_metadata_attention():
 
 
 def test_dundee_i18n_and_storybook_surface():
-    store = text("api/app/system_store.py")
+    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     for key in ('"pdf_corpus.building_records_title"','"pdf_corpus.queue_source"','"pdf_corpus.configure_new_build"'):
-        assert store.count(key) >= 2
+        assert store.count(key.strip('"')) >= 2
     # Existing review and resolution components stay independently testable in Storybook.
     assert (ROOT / "web/src/components/CorpusMetadataResolutionPanel.stories.ts").exists()
     assert (ROOT / "web/src/components/CorpusRecordFocusReview.stories.ts").exists()

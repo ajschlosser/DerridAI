@@ -5,35 +5,37 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 ROUTER = (ROOT / "web/src/router/index.ts").read_text(encoding="utf-8")
 RESEARCH = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
 FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
 PRESENTATION = (ROOT / "web/src/components/research/ResearchResultPresentation.vue").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 
-def _dictionaries():
-    tree=ast.parse(SYSTEM)
-    found={}
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id in {"DEFAULT_EN_US","DEFAULT_FR_CA"}:
-            found[node.target.id]=ast.literal_eval(node.value)
-        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-            call=node.value
-            if isinstance(call.func, ast.Attribute) and call.func.attr=="update" and isinstance(call.func.value, ast.Name) and call.func.value.id in {"DEFAULT_EN_US","DEFAULT_FR_CA"} and len(call.args)==1:
-                found.setdefault(call.func.value.id,{}).update(ast.literal_eval(call.args[0]))
-    return found
-
+def _dictionaries() -> dict[str, dict[str, str]]:
+    def load(path: Path, variable: str) -> dict[str, str]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                target = node.targets[0] if isinstance(node, ast.Assign) else node.target
+                value = node.value
+                if isinstance(target, ast.Name) and target.id == variable:
+                    return ast.literal_eval(value)
+        raise AssertionError(f"{variable} not found in {path}")
+    return {
+        "DEFAULT_EN_US": load(ROOT / "api/app/locales/en_us.py", "EN_US"),
+        "DEFAULT_FR_CA": load(ROOT / "api/app/locales/fr_ca.py", "FR_CA"),
+    }
 
 def test_release_version_0355_is_consistent():
     package=json.loads((ROOT/"web/package.json").read_text(encoding="utf-8"))
-    assert package["version"]=="0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT/"web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.44.0" in (ROOT/"web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"]=="0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT/"web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.47.1" in (ROOT/"web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.5 — RAGety Anne" in (ROOT/"README.md").read_text(encoding="utf-8")
 
 
@@ -68,7 +70,7 @@ def test_response_faq_retains_search_paging_rerun_grade_and_provenance():
 
 
 def test_toasts_and_operation_notifications_stack_above_sidebar():
-    assert '.v030-sidebar{z-index:500!important' in STYLE
+    assert '.shell-sidebar{z-index:500!important' in STYLE
     assert '#toast.toast{z-index:12000!important' in STYLE
     assert '.operation-progress-stack{z-index:11000!important' in STYLE
 

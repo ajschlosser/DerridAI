@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 
 const meta={
-  title:"Corpus Builder/Review Queue Tabs",
+  title:"Corpus Builder/Review/Queue Tabs",
   component:CorpusReviewQueueTabs,
   args:{modelValue:"ready",total:76,ready:9,issues:6,metadata:3,topology:1,sourceProblems:2,accepted:61,rejected:0},
 } satisfies Meta<typeof CorpusReviewQueueTabs>;

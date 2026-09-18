@@ -1,2 +1,2 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite"; import LanguageFlag from "./LanguageFlag.vue";
-const meta={title:"Internationalization/Language Flag",component:LanguageFlag,args:{code:"en-US",label:"English"}} satisfies Meta<typeof LanguageFlag>;export default meta;type Story=StoryObj<typeof meta>;export const UnitedStates:Story={};export const CanadaFrench:Story={args:{code:"fr-CA",label:"Français"}};
+const meta={title:"Internationalization/Visuals/Language Flag",component:LanguageFlag,args:{code:"en-US",label:"English"}} satisfies Meta<typeof LanguageFlag>;export default meta;type Story=StoryObj<typeof meta>;export const UnitedStates:Story={};export const CanadaFrench:Story={args:{code:"fr-CA",label:"Français"}};

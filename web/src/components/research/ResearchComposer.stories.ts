@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchComposer from "./ResearchComposer.vue";
 
 const meta:Meta<typeof ResearchComposer>={
-  title:"Research/Composer 0.31",
+  title:"Research/Composer",
   component:ResearchComposer,
   parameters:{layout:"padded"},
   args:{

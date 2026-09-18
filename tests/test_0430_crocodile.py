@@ -68,9 +68,9 @@ def install_repo(tmp_path: Path, record: dict):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.44.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.44.0"
-    assert "0.44.0 — Dachshund" in text("README.md")
+    assert APP_VERSION == "0.47.1"
+    assert json.loads(text("web/package.json"))["version"] == "0.47.1"
+    assert "0.47.1 — Fatso" in text("README.md")
 
 
 def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):
@@ -173,11 +173,11 @@ def test_primary_text_uses_boolean_radio_not_string_truthiness():
 
 
 def test_review_i18n_has_en_and_fr_keys():
-    store = text("api/app/system_store.py")
+    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     for key in (
         '"pdf_corpus.review_mode"',
         '"pdf_corpus.resolve_metadata_to_accept"',
         '"pdf_corpus.primary_text_help"',
         '"pdf_corpus.bulk_done_metadata_blocked"',
     ):
-        assert store.count(key) >= 2
+        assert store.count(key.strip('"')) >= 2
