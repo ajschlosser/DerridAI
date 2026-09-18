@@ -42,6 +42,7 @@ from .models import (
     PdfCorpusManifestPatch,
     PdfCorpusRecordPatch,
     PdfCorpusRecordTextPatch,
+    PdfCorpusTextTouchupRequest,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
     PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
@@ -84,7 +85,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.52.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.53.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1191,7 +1192,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.52.0",
+            "app_version": "0.53.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -2068,6 +2069,43 @@ def retry_pdf_corpus_metadata(build_id: str, body: PdfCorpusRecordRerun):
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}/editorial-memory")
+def get_pdf_corpus_editorial_memory(build_id: str):
+    try:
+        return pdf_corpus_builds.editorial_memory(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.delete("/api/pdf/corpus-builds/{build_id}/editorial-memory")
+def reset_pdf_corpus_editorial_memory(build_id: str):
+    try:
+        return pdf_corpus_builds.reset_editorial_memory(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview")
+def preview_pdf_corpus_record(build_id: str, record_id: str):
+    try:
+        return pdf_corpus_builds.preview_record(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup")
+def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusTextTouchupRequest):
+    try:
+        payload = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
+        instructions = str(payload.pop("instructions", "") or "")
+        text_override = payload.pop("text", None)
+        return pdf_corpus_builds.touchup_record_text(build_id, record_id, payload, instructions, text_override)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

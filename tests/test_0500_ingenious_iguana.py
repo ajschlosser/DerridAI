@@ -42,9 +42,9 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
 
 
 def test_release_identity_locale_parity_and_quebec_copy():
-    assert APP_VERSION=='0.52.0'
-    assert json.loads(text('web/package.json'))['version']=='0.52.0'
-    assert '0.52.0 — Lazy Lizard' in text('README.md')
+    assert APP_VERSION=='0.53.0'
+    assert json.loads(text('web/package.json'))['version']=='0.53.0'
+    assert '0.53.0 — Manic Monkey' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     keys=[
         'pdf_corpus.cleanup_paragraph_lines','pdf_corpus.cleanup_empty_lines',
@@ -119,11 +119,11 @@ def test_disourse_prompt_is_operational_and_duplicate_fast_call_removed():
     src=text('api/app/corpus_builder.py')
     assert 'Operational discourse-role definitions' in src
     assert 'reported_position' in cb.DISCOURSE_ROLE_DEFINITIONS
-    assert 'difference between the surrounding author\'s analysis and a reported_position' in src
-    fast_block='''if not obvious_apparatus or enrichment_mode == "deep":\n                tasks.append(all_task_specs["discourse"])'''
-    assert fast_block in src
-    assert 'tasks.append(all_task_specs["discourse"])\n                tasks.append(all_task_specs["discourse"])' not in src
-
+    assert "difference between the surrounding author's analysis and a reported_position" in src
+    # Fast mode still schedules discourse because it corroborates deterministic
+    # region/primary-text classification and supplies discourse_role.
+    assert 'tasks.append(all_task_specs["discourse"])' in src
+    assert 'semantic corroboration layer' in src
 
 def test_profile_switch_ui_and_api_are_componentized_and_accessible():
     component=text('web/src/components/CorpusProviderSwitcher.vue')

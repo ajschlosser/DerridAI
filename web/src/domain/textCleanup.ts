@@ -11,7 +11,7 @@ const OCR_BOILERPLATE_RE = /(?:downloaded\s+from|all\s+use\s+subject\s+to|digiti
 
 function looksLikePoetryOrQuotation(lines: string[]): boolean {
   const meaningful = lines.map(line=>line.trim()).filter(Boolean);
-  if (meaningful.length < 3) return false;
+  if (meaningful.length < 4) return false;
   const short = meaningful.filter(line=>line.length<=52).length;
   const quoted = meaningful.filter(line=>/^["“‘'>«]/u.test(line)).length;
   return short/meaningful.length>=0.72 || quoted/meaningful.length>=0.5;
@@ -56,11 +56,20 @@ function looksLikeOcrArtifact(line:string):boolean{
   return value.length>=5 && printable/Math.max(1,value.length)<0.55;
 }
 
-export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurringLines: string[] = []): TextCleanupPreview {
+export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurringLines: string[] = [], documentTerms: string[] = []): TextCleanupPreview {
   let text = String(input || "");
   const removed: string[] = [];
   let changes = 0;
   const recurring = new Set(recurringLines.map(v => v.trim().toLocaleLowerCase()).filter(Boolean));
+  const terms = new Set(documentTerms.map(v => v.trim().toLocaleLowerCase()).filter(v => v.length >= 3));
+
+  if (rules.has("ocr_artifacts")) {
+    const next = text
+      .replace(/[\u00ad\u200b\u200c\u200d\ufeff]/gu, "")
+      .replace(/ﬁ/gu, "fi").replace(/ﬂ/gu, "fl").replace(/ﬀ/gu, "ff").replace(/ﬃ/gu, "ffi").replace(/ﬄ/gu, "ffl")
+      .replace(/\f/gu, "\n");
+    if (next !== text) { changes++; text = next; }
+  }
 
   if (rules.has("line_hyphenation")) {
     const next = text.replace(/(?<=\p{L})-\s*\n\s*(?=\p{L})/gu, "");
@@ -75,7 +84,7 @@ export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurrin
     for (const [index,line] of lines.entries()) {
       const normalized = line.trim().toLocaleLowerCase();
       const pageNumber = rules.has("page_numbers") && boundaryIndexes.has(index) && PAGE_NUMBER_RE.test(line);
-      const recurringLine = rules.has("repeated_short_lines") && boundaryIndexes.has(index) && normalized.length > 0 && normalized.length <= 120 && recurring.has(normalized);
+      const recurringLine = rules.has("repeated_short_lines") && boundaryIndexes.has(index) && normalized.length > 0 && normalized.length <= 120 && (recurring.has(normalized) || terms.has(normalized));
       const ocrArtifact = rules.has("ocr_artifacts") && looksLikeOcrArtifact(line);
       if (pageNumber || recurringLine || ocrArtifact) { removed.push(line.trim()); changes++; }
       else kept.push(line);

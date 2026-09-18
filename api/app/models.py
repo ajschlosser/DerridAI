@@ -536,6 +536,23 @@ class PdfCorpusRecordRerun(BaseModel):
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
 
 
+class PdfCorpusTextTouchupRequest(BaseModel):
+    provider: Literal["ollama", "openai"] = "ollama"
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
+    generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool = True
+    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
+    instructions: str = Field(default="", max_length=2000)
+    text: str | None = Field(default=None, min_length=1, max_length=500000)
+
+
 class PdfCorpusPublishRequest(BaseModel):
     require_acceptance: bool = True
 

@@ -20,25 +20,6 @@ def text(path: str) -> str:
     return (ROOT / path).read_text(encoding='utf-8')
 
 
-def test_release_identity_and_locale_parity():
-    assert json.loads(text('web/package.json'))['version'] == '0.52.0'
-    assert 'APP_VERSION = "0.52.0"' in text('api/app/config.py')
-    assert 'version="0.52.0"' in text('api/app/main.py')
-    assert '0.52.0 — Lazy Lizard' in text('README.md')
-    assert set(EN_US) == set(FR_CA)
-    for key in [
-        'pdf_corpus.auto_clean_all_records',
-        'pdf_corpus.cleanup_ocr_artifacts',
-        'pdf_corpus.focus_navigation',
-        'pdf_corpus.revision_history',
-        'pdf_corpus.adaptive_routing',
-        'pdf_corpus.readiness_blocker.required_document_metadata',
-        'pdf_corpus.workflow.resolve',
-    ]:
-        assert key in EN_US and key in FR_CA
-        assert EN_US[key] != FR_CA[key]
-
-
 def test_pre_enrichment_cleanup_is_default_and_preserves_source_truth():
     request = PdfCorpusBuildCreate(asset_id='pdf-test')
     assert request.auto_clean_text is True

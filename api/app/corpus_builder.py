@@ -75,6 +75,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
 
     primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
     human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
+    semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
     desired_primary: bool | None = None
     primary_reason = ""
     primary_hard = False
@@ -89,10 +90,11 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
         if record.get("primary_text") is not desired_primary:
             changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
         record["primary_text"] = desired_primary
-        status["primary_text"] = {
-            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-            "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
-        }
+        if not semantic_disagreement:
+            status["primary_text"] = {
+                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+                "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
+            }
 
     role_status = status.get("discourse_role") if isinstance(status.get("discourse_role"), dict) else {}
     human_role = str(role_status.get("status") or "") in {"human_confirmed", "human_override"}
@@ -130,7 +132,7 @@ _OCR_BOILERPLATE_RE = re.compile(r"(?:downloaded\s+from|all\s+use\s+subject\s+to
 
 def _looks_like_poetry_or_quotation(lines: list[str]) -> bool:
     meaningful = [line.strip() for line in lines if line.strip()]
-    if len(meaningful) < 3:
+    if len(meaningful) < 4:
         return False
     short = sum(1 for line in meaningful if len(line) <= 52)
     quoted = sum(1 for line in meaningful if line.startswith(("\"", "“", "‘", "'", ">", "«")))
@@ -191,6 +193,18 @@ def _clean_text_value(text: str, rules: set[str], recurring_lines: set[str], doc
     document_terms = {term.casefold().strip() for term in (document_terms or set()) if term and len(term.strip()) >= 3}
     removed: list[str] = []
     changes = 0
+    if "ocr_artifacts" in rules:
+        # Repair only extraction artefacts with unambiguous typographic meaning.
+        # Do not guess at lexical errata here; uncertain corrections belong in
+        # the opt-in LLM touch-up workflow.
+        translation = str.maketrans({
+            "\u00ad": "", "\u200b": "", "\u200c": "", "\u200d": "", "\ufeff": "",
+            "ﬁ": "fi", "ﬂ": "fl", "ﬀ": "ff", "ﬃ": "ffi", "ﬄ": "ffl",
+        })
+        updated = value.translate(translation).replace("\f", "\n")
+        if updated != value:
+            changes += 1
+            value = updated
     if "line_hyphenation" in rules:
         updated = re.sub(r"(?<=[A-Za-zÀ-ÖØ-öø-ÿ])-\s*\n\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])", "", value)
         if updated != value:
@@ -223,8 +237,13 @@ def _clean_text_value(text: str, rules: set[str], recurring_lines: set[str], doc
                 kept.append(line)
         value = "\n".join(kept)
     if "paragraph_lines" in rules:
-        value, count = _clean_wrapped_lines(value)
-        changes += count
+        # A wrapped paragraph can span many physical PDF lines. Iterate a few
+        # conservative passes so joining line 1→2 does not leave 2→3 behind.
+        for _ in range(4):
+            value, count = _clean_wrapped_lines(value)
+            changes += count
+            if not count:
+                break
     if "empty_lines" in rules:
         updated = re.sub(r"^[ \t]+$", "", value, flags=re.M)
         updated = re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+", "\n\n", updated)
@@ -532,6 +551,13 @@ class IndexMetadataModel(BaseModel):
     concepts: list[str] = Field(default_factory=list, max_length=24)
     persons: list[str] = Field(default_factory=list, max_length=24)
     works_referenced: list[str] = Field(default_factory=list, max_length=24)
+
+
+class TextTouchupResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1)
+    changes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class IndexMetadataResponseModel(BaseModel):
@@ -1547,7 +1573,7 @@ class PdfCorpusBuildManager:
             return True, f"Adaptive Fast-mode routing paused {family}: reviewers usually corrected or rejected its suggestions."
         return False, ""
 
-    def _record_family_effectiveness(self, build_id: str | None, family: str, result: dict[str, Any] | None, *, elapsed_ms: int = 0) -> None:
+    def _record_family_effectiveness(self, build_id: str | None, family: str, result: dict[str, Any] | None, *, elapsed_ms: int = 0, provider_profile_id: str = "", provider: str = "", model: str = "") -> None:
         if not build_id:
             return
         metadata = result.get("metadata") if isinstance(result, dict) and isinstance(result.get("metadata"), dict) else {}
@@ -1565,11 +1591,24 @@ class PdfCorpusBuildManager:
             family_stats["last_updated_at"] = iso_now()
             stats[family] = family_stats
             build["llm_family_effectiveness"] = stats
+            model_stats = build.get("llm_model_effectiveness") if isinstance(build.get("llm_model_effectiveness"), dict) else {}
+            model_key = "::".join(value for value in (str(provider_profile_id or ""), str(provider or ""), str(model or "")) if value) or "unknown"
+            model_row = model_stats.get(model_key) if isinstance(model_stats.get(model_key), dict) else {}
+            model_row["provider_profile_id"] = provider_profile_id or None
+            model_row["provider"] = provider or None
+            model_row["model"] = model or None
+            model_row["calls"] = int(model_row.get("calls") or 0) + 1
+            model_row["proposed_fields"] = int(model_row.get("proposed_fields") or 0) + proposed
+            model_row["elapsed_ms"] = int(model_row.get("elapsed_ms") or 0) + int(elapsed_ms or 0)
+            model_stats[model_key] = model_row
+            build["llm_model_effectiveness"] = model_stats
             self.repo.save_build(build)
 
     def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None) -> None:
         info = prior_status or {}
-        if str(info.get("status") or "") != "llm_inferred":
+        method = str(info.get("method") or "")
+        state = str(info.get("status") or "")
+        if "llm" not in method and state != "llm_inferred":
             return
         family = next((name for name, fields in METADATA_FAMILY_FIELDS.items() if field in fields), None)
         if not family:
@@ -1586,6 +1625,22 @@ class PdfCorpusBuildManager:
             family_stats["last_human_feedback_at"] = iso_now()
             stats[family] = family_stats
             build["llm_family_effectiveness"] = stats
+            confidence = info.get("confidence") if isinstance(info.get("confidence"), (int, float)) else None
+            calibration = build.get("llm_confidence_calibration") if isinstance(build.get("llm_confidence_calibration"), dict) else {}
+            field_stats = calibration.get(field) if isinstance(calibration.get(field), dict) else {}
+            if confidence is not None:
+                pct = max(0.0, min(1.0, float(confidence)))
+                band = "high" if pct >= 0.85 else "medium" if pct >= 0.65 else "low"
+                band_stats = field_stats.get(band) if isinstance(field_stats.get(band), dict) else {}
+                band_stats["reviewed"] = int(band_stats.get("reviewed") or 0) + 1
+                if prior_value == new_value:
+                    band_stats["accepted"] = int(band_stats.get("accepted") or 0) + 1
+                else:
+                    band_stats["corrected"] = int(band_stats.get("corrected") or 0) + 1
+                band_stats["acceptance_rate"] = round(int(band_stats.get("accepted") or 0) / max(1, int(band_stats.get("reviewed") or 0)), 4)
+                field_stats[band] = band_stats
+                calibration[field] = field_stats
+                build["llm_confidence_calibration"] = calibration
             self.repo.save_build(build)
 
     @staticmethod
@@ -1644,15 +1699,20 @@ class PdfCorpusBuildManager:
         missing_document_fields = [field for field in required_document_fields if manifest.get(field) in (None, "", [])]
 
         blockers: list[dict[str, Any]] = []
+        no_publishable_records = bool(record_count and rejected == record_count and accepted == 0 and pending == 0)
+        if no_publishable_records:
+            blockers.append({"code": "no_publishable_records", "count": rejected})
         if pending:
             blockers.append({"code": "review_pending", "count": pending})
-        if rejected:
-            blockers.append({"code": "rejected_records", "count": rejected})
+        # Rejected records are intentionally excluded from the publishable corpus.
+        # They remain recoverable in review, but do not block publication of
+        # accepted records. An all-rejected build is handled as a terminal
+        # "no publishable records" outcome above.
         if int(build.get("needs_review_count") or 0):
             blockers.append({"code": "record_attention", "count": int(build.get("needs_review_count") or 0)})
         if int(build.get("boundary_review_count") or 0):
             blockers.append({"code": "boundary_attention", "count": int(build.get("boundary_review_count") or 0)})
-        if metadata_remaining or unresolved_fields:
+        if (metadata_remaining or unresolved_fields) and not no_publishable_records:
             blockers.append({"code": "required_metadata", "count": max(metadata_remaining, int(issue_summary.get("records_incomplete") or 0)), "fields": required_fields})
         if missing_document_fields:
             blockers.append({"code": "required_document_metadata", "count": len(missing_document_fields), "fields": missing_document_fields})
@@ -1668,15 +1728,15 @@ class PdfCorpusBuildManager:
         if int(build.get("source_problem_count") or 0):
             blockers.append({"code": "source_quality", "count": int(build.get("source_problem_count") or 0)})
 
-        can_publish = bool(record_count and not blockers and bool(validation.get("valid", True)) and accepted == record_count)
+        can_publish = bool(accepted > 0 and pending == 0 and not blockers and bool(validation.get("valid", True)) and accepted + rejected == record_count)
         if publication:
             next_action = "download_publication"
+        elif no_publishable_records:
+            next_action = "no_publishable_records"
         elif running:
             next_action = "wait"
         elif pending or int(build.get("needs_review_count") or 0) or int(build.get("boundary_review_count") or 0) or metadata_remaining or unresolved_fields:
             next_action = "review_records"
-        elif rejected:
-            next_action = "resolve_rejections"
         elif missing_document_fields:
             next_action = "resolve_document_metadata"
         elif blockers:
@@ -1720,6 +1780,7 @@ class PdfCorpusBuildManager:
             "source_valid": bool(validation.get("source_valid", validation.get("valid", False))) if validation else False,
             "metadata_valid": bool(validation.get("metadata_valid", validation.get("valid", False))) if validation else False,
             "published": bool(publication),
+            "no_publishable_records": no_publishable_records,
         }
         return build
 
@@ -3480,8 +3541,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             tasks = [all_task_specs[name] for name in ("discourse", "quotation", "indexing") if name in requested]
         else:
             tasks = []
-            if not obvious_apparatus or enrichment_mode == "deep":
-                tasks.append(all_task_specs["discourse"])
+            # Discourse classification is the semantic corroboration layer for
+            # deterministic region/primary-text rules and is therefore always
+            # scheduled unless the family is already human-owned. This catches
+            # bad or unreviewed main-text page ranges while also supplying the
+            # high-value discourse_role proposal.
+            tasks.append(all_task_specs["discourse"])
             if enrichment_mode == "deep" or quote_signal:
                 tasks.append(all_task_specs["quotation"])
             if semantic_indexing:
@@ -3583,7 +3648,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             started_clock = time.monotonic()
             try:
                 result = self._chat_json(
-                    request,
+                    active_request,
                     prompt,
                     response_model=response_model,
                     max_tokens=max_tokens,
@@ -3597,7 +3662,11 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
-                self._record_family_effectiveness(build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0))
+                self._record_family_effectiveness(
+                    build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
+                    provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
+                    provider=str(ledger_context.get("provider") or ""), model=str(ledger_context.get("model") or ""),
+                )
                 if stage_callback:
                     stage_callback(record, task_name, "complete", None)
             except InterruptedError:
@@ -3643,6 +3712,21 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if existing_status.get("status") in {"human_confirmed", "human_override"}:
                     continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
+                    # Deterministic structure is fast and useful, but page-range
+                    # decisions can be imperfect. Preserve the deterministic value
+                    # while recording a semantic LLM corroboration/disagreement.
+                    if value is not None:
+                        corroborates = value == record.get(key)
+                        existing_status = dict(existing_status)
+                        existing_status["llm_corroboration"] = value
+                        existing_status["llm_corroborates"] = corroborates
+                        existing_status["corroboration_method"] = "llm"
+                        if not corroborates:
+                            existing_status["status"] = "unresolved"
+                            existing_status["method"] = "deterministic+llm"
+                            existing_status["reason_code"] = "deterministic_llm_disagreement"
+                            existing_status["reason"] = f"Deterministic {key} inference and semantic LLM check disagree; reviewer confirmation is required."
+                    field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": f"Model returned an unsupported region type: {value}"}
@@ -3708,7 +3792,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # outside REVIEW_METADATA_FIELDS.
         for field in sorted(llm_populated_fields):
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"}:
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") == "deterministic_llm_disagreement":
                 continue
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
@@ -3727,7 +3811,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"}:
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") == "deterministic_llm_disagreement":
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -3931,6 +4015,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if record.get("page_start") != expected_start or record.get("page_end") != expected_end:
                 page_errors.append(record_id)
             source_labels = [str(block.get("printed_page_label") or "").strip() for block in group]
+            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if disposition == "rejected":
+                # Keep rejected records in topology/source validation so the workspace
+                # remains auditable, but exclude them from publication-facing
+                # metadata/content requirements.
+                continue
             if ids and not any(source_labels):
                 printed_page_errors.append(record_id)
 
@@ -4591,6 +4681,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         human_record_ids: set[str] = set()
         retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
         for record in records:
+            if str(record.get("review_disposition") or "") == "rejected" or record.get("rejected"):
+                # Rejected records remain recoverable but are outside the publishable
+                # corpus, so their unresolved metadata must not block publication.
+                continue
             if automation_running and not self._metadata_enrichment_finished(record):
                 continue
             incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
@@ -4687,8 +4781,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             build["publication_status"] = "unpublished"
         reviewed_count = min(build["record_count"], build["accepted_count"] + build["rejected_count"])
         review_fraction = reviewed_count / max(1, build["record_count"])
-        blockers = bool(build["needs_review_count"] or build.get("rejected_count") or build["boundary_review_count"] or not validation.get("valid"))
-        records_accepted = bool(build["record_count"] and build["accepted_count"] == build["record_count"] and not build["needs_review_count"] and not build.get("rejected_count") and not build["boundary_review_count"])
+        blockers = bool(build["needs_review_count"] or build["boundary_review_count"] or not validation.get("valid"))
+        records_accepted = bool(build["accepted_count"] > 0 and build["accepted_count"] + build.get("rejected_count", 0) == build["record_count"] and not build["needs_review_count"] and not build["boundary_review_count"])
         metadata_total = int(build.get("metadata_total") or 0)
         metadata_completed = int(build.get("metadata_completed") or 0)
         metadata_complete = metadata_total == 0 or metadata_completed >= metadata_total
@@ -4797,12 +4891,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         """
         try:
             rows = self.repo.load_records(build_id)
+            build = self.repo.get_build(build_id)
         except Exception:
             return {"conventions": {}, "examples": {}}
+        reset_at = str(build.get("editorial_memory_reset_at") or "")
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
         eligible: list[tuple[dict[str, Any], str, Any]] = []
         for row in rows:
             if exclude_record_id and str(row.get("record_id") or "") == exclude_record_id:
+                continue
+            if reset_at and str(row.get("human_touched_at") or "") <= reset_at:
                 continue
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
@@ -4855,6 +4953,23 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # Retained as the small conventions-only API used by older internal tests;
         # new enrichment calls use _editorial_memory for retrieved examples too.
         return self._editorial_memory(build_id, None, exclude_record_id=exclude_record_id).get("conventions", {})
+
+    def editorial_memory(self, build_id: str) -> dict[str, Any]:
+        build = self.repo.get_build(build_id)
+        memory = self._editorial_memory(build_id, None)
+        return {
+            **memory,
+            "reset_at": build.get("editorial_memory_reset_at"),
+            "convention_count": len(memory.get("conventions") or {}),
+            "example_count": sum(len(items) for items in (memory.get("examples") or {}).values() if isinstance(items, list)),
+        }
+
+    def reset_editorial_memory(self, build_id: str) -> dict[str, Any]:
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            build["editorial_memory_reset_at"] = iso_now()
+            self.repo.save_build(build)
+        return self.editorial_memory(build_id)
 
     @classmethod
     def _merge_enrichment_snapshot(cls, live: dict[str, Any], worker: dict[str, Any]) -> dict[str, Any]:
@@ -5664,6 +5779,79 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             "topology_quality": build.get("topology_quality"),
         }
 
+    def _serialize_public_record(self, build: dict[str, Any], record: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
+        build_only_fields = {
+            "accepted", "rejected", "review_disposition", "build_id", "publication_id",
+            "app_version", "schema_version", "profile_id", "profile_version",
+            "provider_profile_id", "provider", "model", "document_prompt_version",
+            "segmentation_prompt_version", "metadata_prompt_version",
+            "record_sizing_policy", "topology_quality",
+        }
+        public = {k: v for k, v in record.items() if k not in build_only_fields}
+        public["corpus_build_details"] = self._publication_build_details(build, publication_id, created_at)
+        return public
+
+    def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
+        build = self.repo.get_build(build_id)
+        records = self.repo.load_records(build_id)
+        record = next((row for row in records if row.get("record_id") == record_id), None)
+        if record is None:
+            raise KeyError(record_id)
+        preview_id = f"preview-{build_id.removeprefix('build-')}"
+        created_at = iso_now()
+        public = self._serialize_public_record(build, record, preview_id, created_at)
+        errors = self._validate_publication_record(public)
+        unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
+        return {
+            "record": public,
+            "jsonl": json.dumps(public, ensure_ascii=False),
+            "validation_errors": errors,
+            "unresolved_fields": unresolved,
+            "would_publish": str(record.get("review_disposition") or "pending") == "accepted" and not errors and not unresolved,
+        }
+
+    def touchup_record_text(self, build_id: str, record_id: str, request: dict[str, Any], instructions: str = "", text_override: str | None = None) -> dict[str, Any]:
+        records = self.repo.load_records(build_id)
+        record = next((row for row in records if row.get("record_id") == record_id), None)
+        if record is None:
+            raise KeyError(record_id)
+        current_text = str(text_override if text_override is not None else record.get("text") or "")
+        if not current_text.strip():
+            raise ValueError("Record text is empty.")
+        fallback = self.repo.get_build(build_id).get("request") or {}
+        active_request = self._latest_runtime_request(build_id, request or fallback)
+        prompt = f"""You are performing a conservative scholarly text touch-up on OCR/PDF extracted text.
+
+RULES:
+- Preserve wording, meaning, quotations, terminology, paragraph order, and authorial style.
+- Do NOT paraphrase, summarize, modernize, translate, or add content.
+- Correct only obvious OCR artifacts, broken words, spacing, punctuation, accidental line wrapping, duplicated running headers/footers/page numbers, and clear textual errata caused by extraction.
+- Preserve poetry, verse, block quotations, lists, footnotes, and deliberate typographic/orthographic oddities unless the artifact is unambiguous.
+- When uncertain, leave the source text unchanged and mention the uncertainty in warnings.
+- Return the COMPLETE touched-up text.
+
+Optional reviewer instruction: {instructions or 'None'}
+
+TEXT:
+---
+{current_text}
+---
+"""
+        result = self._chat_json(active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=min(8192, max(2048, len(current_text)//3)), schema_name="record_text_touchup", attempts=2, build_id=build_id)
+        proposed = str(result.get("text") or "").strip()
+        if not proposed:
+            raise ValueError("LLM text touch-up returned empty text.")
+        provider, model, _, _, _ = self._llm_config(active_request)
+        return {
+            "record_id": record_id,
+            "source_text": current_text,
+            "proposed_text": proposed,
+            "changes": list(result.get("changes") or []),
+            "warnings": list(result.get("warnings") or []),
+            "provider": provider,
+            "model": model,
+        }
+
     @_serialize_record_mutation
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -5686,34 +5874,26 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError(f"Publication is blocked: metadata is complete for {metadata_completed} of {metadata_total} record(s).{suffix} Resolve the metadata issue queue before publishing.")
         if not validation.get("valid"):
             raise ValueError("Publication is blocked until source coverage and text-fidelity validation pass.")
-        unresolved = [record for record in records if record.get("needs_review")]
+        publishable_records = [record for record in records if str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "pending")) != "rejected" and not record.get("rejected")]
+        if not publishable_records:
+            raise ValueError("Publication is unavailable because every record is rejected. Restore at least one record or discard this build.")
+        unresolved = [record for record in publishable_records if record.get("needs_review")]
         if unresolved:
-            raise ValueError(f"Publication is blocked: {len(unresolved)} record(s) still need review.")
-        rejected = [record for record in records if str(record.get("review_disposition") or "") == "rejected" or record.get("rejected")]
-        if rejected:
-            raise ValueError(f"Publication is blocked: {len(rejected)} record(s) were rejected and require correction or removal through topology review.")
+            raise ValueError(f"Publication is blocked: {len(unresolved)} publishable record(s) still need review.")
         if require_acceptance:
-            unaccepted = [record for record in records if not record.get("accepted")]
+            unaccepted = [record for record in publishable_records if not record.get("accepted")]
             if unaccepted:
-                raise ValueError(f"Publication is blocked: {len(unaccepted)} record(s) have not been accepted.")
+                raise ValueError(f"Publication is blocked: {len(unaccepted)} publishable record(s) have not been accepted.")
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
         build_details = self._publication_build_details(build, publication_id, created_at)
         path = self.repo.publication_path(publication_id)
         hasher = hashlib.sha256()
         with path.open("wb") as handle:
-            for record in records:
-                # UI-only review state is not published. Build/run provenance is
-                # namespaced so the main record remains a scholarly record schema.
-                build_only_fields = {
-                    "accepted", "rejected", "review_disposition", "build_id", "publication_id",
-                    "app_version", "schema_version", "profile_id", "profile_version",
-                    "provider_profile_id", "provider", "model", "document_prompt_version",
-                    "segmentation_prompt_version", "metadata_prompt_version",
-                    "record_sizing_policy", "topology_quality",
-                }
-                public = {k: v for k, v in record.items() if k not in build_only_fields}
-                public["corpus_build_details"] = build_details
+            for record in publishable_records:
+                # Use the same serializer as the per-record JSONL preview so the
+                # reviewer sees the exact eventual public record shape.
+                public = self._serialize_public_record(build, record, publication_id, created_at)
                 schema_errors = self._validate_publication_record(public)
                 if schema_errors:
                     joined = "; ".join(schema_errors[:8])
@@ -5721,7 +5901,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 line = (json.dumps(public, ensure_ascii=False) + "\n").encode("utf-8")
                 hasher.update(line)
                 handle.write(line)
-        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(records), "created_at": created_at}
+        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(publishable_records), "excluded_rejected_count": len(records) - len(publishable_records), "created_at": created_at}
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is
         # an immutable snapshot of a ready build, not a new build-processing state.

@@ -64,9 +64,9 @@ def install_review_build(tmp_path: Path, record: dict):
 
 
 def test_release_identity_and_feral_fox_documentation():
-    assert APP_VERSION == "0.52.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.52.0"
-    assert "0.52.0 — Lazy Lizard" in text("README.md")
+    assert APP_VERSION == "0.53.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.53.0"
+    assert "0.53.0 — Manic Monkey" in text("README.md")
 
 
 def test_human_text_correction_preserves_immutable_extraction_and_can_resolve_source_issue(tmp_path: Path):
