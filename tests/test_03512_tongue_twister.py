@@ -20,11 +20,11 @@ SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" 
 
 def test_03512_release_version_is_consistent():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.50.1"
-    assert 'version="0.50.1"' in MAIN
-    assert '"app_version": "0.50.1"' in MAIN
-    assert "Corpus Viewer 0.50.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.50.1" in APP
+    assert package["version"] == "0.51.0"
+    assert 'version="0.51.0"' in MAIN
+    assert '"app_version": "0.51.0"' in MAIN
+    assert "Corpus Viewer 0.51.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert "DerridAI 0.51.0" in APP
     assert "0.35.12 — Tongue Twister" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 

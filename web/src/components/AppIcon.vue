@@ -27,6 +27,7 @@ const paths: Record<string,string> = {
   check:'<path d="m5 12 4 4L19 6"/>',
   lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
+  close:'<path d="M6 6l12 12M18 6 6 18"/>',
 };
 </script>
 <template>

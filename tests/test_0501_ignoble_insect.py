@@ -9,10 +9,10 @@ def text(path: str) -> str:
 
 
 def test_0501_release_identity_and_provider_payload_typing():
-    assert json.loads(text("web/package.json"))["version"] == "0.50.1"
-    assert 'APP_VERSION = "0.50.1"' in text("api/app/config.py")
-    assert 'version="0.50.1"' in text("api/app/main.py")
-    assert "0.50.1 — Ignoble Insect" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"] == "0.51.0"
+    assert 'APP_VERSION = "0.51.0"' in text("api/app/config.py")
+    assert 'version="0.51.0"' in text("api/app/main.py")
+    assert "0.51.0 — Krazy Kangaroo" in text("README.md")
 
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     assert "function directProfilePayload(profileId:string): Record<string,unknown>|null{" in builder

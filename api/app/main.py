@@ -84,7 +84,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.50.1")
+app = FastAPI(title="DerridAI Corpus API", version="0.51.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1191,7 +1191,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.50.1",
+            "app_version": "0.51.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),

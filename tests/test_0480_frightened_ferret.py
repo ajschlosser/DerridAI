@@ -39,8 +39,8 @@ def install(tmp_path:Path):
 
 
 def test_release_identity_and_quebec_i18n_parity():
-    assert APP_VERSION=='0.50.1'
-    assert '0.50.1 — Ignoble Insect' in text('README.md')
+    assert APP_VERSION=='0.51.0'
+    assert '0.51.0 — Krazy Kangaroo' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.initialization_title','pdf_corpus.source_issue_help_v48','pdf_corpus.confidence_not_reported','pdf_corpus.accept_clean_none_changed']:
         assert key in EN_US and key in FR_CA and FR_CA[key] != EN_US[key]
@@ -78,9 +78,12 @@ def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path
 
 
 def test_new_dialogs_and_bulk_editor_have_accessible_modal_semantics_and_stories():
-    for path in ['web/src/components/DocumentManifestDialog.vue','web/src/components/CorpusBulkMetadataEditor.vue']:
-        source=text(path)
-        assert 'role="dialog"' in source and 'aria-modal="true"' in source
+    manifest_dialog=text('web/src/components/DocumentManifestDialog.vue')
+    shared_dialog=text('web/src/components/ui/UiDialog.vue')
+    assert 'UiDialog' in manifest_dialog
+    assert 'role="dialog"' in shared_dialog and 'aria-modal="true"' in shared_dialog
+    source=text('web/src/components/CorpusBulkMetadataEditor.vue')
+    assert 'role="dialog"' in source and 'aria-modal="true"' in source
     assert 'Initialization Dialog' in text('web/src/components/CorpusInitializationDialog.stories.ts')
     assert 'Document Metadata Dialog' in text('web/src/components/DocumentManifestDialog.stories.ts')
 
