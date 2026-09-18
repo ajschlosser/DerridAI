@@ -52,7 +52,7 @@ const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
 const reviewOnly=computed(()=>reviewQueue.value==="attention");
 const reviewDispositionFilter=computed<"pending"|"accepted"|"rejected"|"">(()=>["pending","accepted","rejected"].includes(reviewQueue.value)?reviewQueue.value as "pending"|"accepted"|"rejected":"");
 const metadataIncompleteOnly=computed(()=>reviewQueue.value==="metadata");
-const sourceProblemOnly=computed(()=>reviewQueue.value==="source");
+const sourceProblemOnly=computed<boolean>(()=>reviewQueue.value==="source");
 const recordQuery=ref("");
 const focusView=ref(false);
 const recordsLoading=ref(false);
@@ -142,6 +142,14 @@ const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
 const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
 const showBuildConfiguration=computed(()=>!currentBuild.value || (!buildRunning.value && !hasRecordTopology.value));
+const activeProviderProfileLabel=computed<string>(()=>{
+  const build=currentBuild.value;
+  if(!build)return "—";
+  const request=build.request;
+  const profile=request && typeof request.provider_profile_id==="string" ? request.provider_profile_id : "";
+  return profile || String(build.provider||"—");
+});
+const activeModelLabel=computed<string>(()=>String(currentBuild.value?.model||"—"));
 const pageNumber=computed(()=>Math.floor(recordOffset.value/pageSize)+1);
 const pageCount=computed(()=>Math.max(1,Math.ceil(recordTotal.value/pageSize)));
 const sourcePdfUrl=computed(()=>selectedAssetId.value?pdfCorpusApi.assetContentUrl(selectedAssetId.value):"");
@@ -609,7 +617,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
     <details v-if="currentBuild && !showBuildConfiguration" class="active-build-settings">
       <summary>{{i18n.t('pdf_corpus.build_settings_summary','Build settings')}}</summary>
-      <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{String((currentBuild.request||{}).provider_profile_id||currentBuild.provider||'—')}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{currentBuild.model||'—'}}</span><button type="button" class="btn small" @click="selectedBuildId='';currentBuild=null">{{i18n.t('pdf_corpus.configure_new_build','Configure a new build')}}</button></div>
+      <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{activeProviderProfileLabel}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{activeModelLabel}}</span><button type="button" class="btn small" @click="selectedBuildId='';currentBuild=null">{{i18n.t('pdf_corpus.configure_new_build','Configure a new build')}}</button></div>
     </details>
 
     <div class="builder-workspace">
@@ -673,7 +681,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
-            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :source="currentBuild.source_problem_count||0" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
+            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :source-problems="currentBuild.source_problem_count||0" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
             <div class="review-bulk"><button type="button" class="btn small" @click="bulkDisposition('accepted')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.accept_all_queue','Accept queue')}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.reject_all_queue','Reject queue')}}</button><button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div>
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>

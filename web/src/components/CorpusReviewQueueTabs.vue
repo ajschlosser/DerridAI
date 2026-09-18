@@ -2,18 +2,29 @@
 import { useI18nStore } from "../stores/i18n";
 
 export type ReviewQueue = "all"|"pending"|"attention"|"metadata"|"source"|"accepted"|"rejected";
-const props=defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;metadata:number;source?:number;accepted:number;rejected:number;disabled?:boolean}>();
+const props=withDefaults(defineProps<{modelValue:ReviewQueue;total:number;pending:number;attention:number;metadata:number;sourceProblems?:number;accepted:number;rejected:number;disabled?:boolean}>(),{sourceProblems:0,disabled:false});
 const emit=defineEmits<{"update:modelValue":[value:ReviewQueue]}>();
 const i18n=useI18nStore();
-const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typeof props,"total"|"pending"|"attention"|"metadata"|"source"|"accepted"|"rejected">}>=[
-  {id:"all",key:"pdf_corpus.queue_all",fallback:"All",count:"total"},
-  {id:"pending",key:"pdf_corpus.queue_pending",fallback:"Pending review",count:"pending"},
-  {id:"attention",key:"pdf_corpus.queue_attention",fallback:"Topology attention",count:"attention"},
-  {id:"metadata",key:"pdf_corpus.queue_metadata",fallback:"Needs metadata",count:"metadata"},
-  {id:"source",key:"pdf_corpus.queue_source",fallback:"Source problem",count:"source"},
-  {id:"accepted",key:"pdf_corpus.queue_accepted",fallback:"Accepted",count:"accepted"},
-  {id:"rejected",key:"pdf_corpus.queue_rejected",fallback:"Rejected",count:"rejected"},
+const tabs:Array<{id:ReviewQueue;key:string;fallback:string}>=[
+  {id:"all",key:"pdf_corpus.queue_all",fallback:"All"},
+  {id:"pending",key:"pdf_corpus.queue_pending",fallback:"Pending review"},
+  {id:"attention",key:"pdf_corpus.queue_attention",fallback:"Topology attention"},
+  {id:"metadata",key:"pdf_corpus.queue_metadata",fallback:"Needs metadata"},
+  {id:"source",key:"pdf_corpus.queue_source",fallback:"Source problem"},
+  {id:"accepted",key:"pdf_corpus.queue_accepted",fallback:"Accepted"},
+  {id:"rejected",key:"pdf_corpus.queue_rejected",fallback:"Rejected"},
 ];
+function tabCount(id:ReviewQueue):number{
+  switch(id){
+    case "all": return props.total;
+    case "pending": return props.pending;
+    case "attention": return props.attention;
+    case "metadata": return props.metadata;
+    case "source": return props.sourceProblems;
+    case "accepted": return props.accepted;
+    case "rejected": return props.rejected;
+  }
+}
 </script>
 
 <template>
@@ -21,7 +32,7 @@ const tabs:Array<{id:ReviewQueue;key:string;fallback:string;count:keyof Pick<typ
     <button v-for="tab in tabs" :key="tab.id" type="button" role="tab" class="queue-tab"
       :aria-selected="modelValue===tab.id" :tabindex="modelValue===tab.id?0:-1" :disabled="disabled"
       @click="emit('update:modelValue',tab.id)">
-      <span>{{i18n.t(tab.key,tab.fallback)}}</span><strong>{{props[tab.count]}}</strong>
+      <span>{{i18n.t(tab.key,tab.fallback)}}</span><strong>{{tabCount(tab.id)}}</strong>
     </button>
   </div>
 </template>
