@@ -87,7 +87,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.55.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.56.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1194,7 +1194,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.55.0",
+            "app_version": "0.56.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1963,7 +1963,7 @@ def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusR
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision")
 def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision):
     try:
-        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision)
+        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -2080,7 +2080,9 @@ def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication")
 def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpusBoundaryAdjudication):
     try:
-        return pdf_corpus_builds.adjudicate_record_boundary(build_id, record_id, body.direction)
+        payload = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
+        direction = str(payload.pop("direction"))
+        return pdf_corpus_builds.adjudicate_record_boundary(build_id, record_id, direction, payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -2142,6 +2144,16 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
         return pdf_corpus_builds.touchup_record_text(build_id, record_id, payload, instructions, text_override)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")
+def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.rerun_metadata_enrichment(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

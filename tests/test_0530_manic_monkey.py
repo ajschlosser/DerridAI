@@ -17,10 +17,10 @@ from app.locales.fr_ca import FR_CA
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_i18n_parity():
-    assert json.loads(text('web/package.json'))['version']=='0.55.0'
-    assert 'APP_VERSION = "0.55.0"' in text('api/app/config.py')
-    assert 'version="0.55.0"' in text('api/app/main.py')
-    assert '0.55.0 — Outrageous Orangutan' in text('README.md')
+    assert json.loads(text('web/package.json'))['version']=='0.56.0'
+    assert 'APP_VERSION = "0.56.0"' in text('api/app/config.py')
+    assert 'version="0.56.0"' in text('api/app/main.py')
+    assert '0.56.0 — Perilous Penguins' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.llm_touchup','pdf_corpus.preview_jsonl','pdf_corpus.editorial_memory_title','pdf_corpus.confidence_calibration']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
@@ -57,7 +57,8 @@ def test_review_workspace_has_non_destructive_drafts_json_preview_touchup_and_pi
 
 def test_llm_values_prefill_and_calibration_does_not_mark_initial_value_dirty():
     editor=text('web/src/components/CorpusMetadataFieldEditor.vue')
-    assert 'watch(isLlm,value=>{if(value)editing.value=true}' in editor
+    assert 'watch(isLlm,value=>{if(value)editing.value=true}' not in editor
+    assert 'llm_suggestion_autofilled' in editor
     assert 'draft.value=editableValue()' in editor
     assert 'watch(draft' not in editor
     assert 'calibratedAcceptance' in editor

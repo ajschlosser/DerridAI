@@ -1,0 +1,15 @@
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
+const props=withDefaults(defineProps<{modelValue:string;options?:string[];label:string;placeholder?:string;disabled?:boolean;allowCustom?:boolean}>(),{options:()=>[],placeholder:"",disabled:false,allowCustom:true});
+const emit=defineEmits<{"update:modelValue":[value:string];change:[value:string]}>();
+const open=ref(false);const active=ref(-1);const input=ref<HTMLInputElement|null>(null);
+const unique=computed(()=>Array.from(new Set(props.options.map(v=>String(v).trim()).filter(Boolean))));
+const filtered=computed(()=>{const q=props.modelValue.trim().toLocaleLowerCase();return unique.value.filter(v=>!q||v.toLocaleLowerCase().includes(q)).slice(0,40)});
+watch(()=>props.modelValue,()=>{active.value=-1});
+function commit(value:string){emit('update:modelValue',value);emit('change',value);open.value=false;active.value=-1;void nextTick(()=>input.value?.focus())}
+function onInput(event:Event){emit('update:modelValue',(event.target as HTMLInputElement).value);open.value=true}
+function keydown(event:KeyboardEvent){if(event.key==='ArrowDown'){event.preventDefault();open.value=true;active.value=Math.min(filtered.value.length-1,active.value+1)}else if(event.key==='ArrowUp'){event.preventDefault();open.value=true;active.value=Math.max(0,active.value-1)}else if(event.key==='Enter'&&open.value&&active.value>=0){event.preventDefault();commit(filtered.value[active.value])}else if(event.key==='Escape'){open.value=false;active.value=-1}}
+function blur(){window.setTimeout(()=>{open.value=false;active.value=-1},120)}
+</script>
+<template><div class="ui-combobox"><input ref="input" class="control" role="combobox" :aria-label="label" aria-autocomplete="list" :aria-expanded="open&&filtered.length>0" :aria-controls="`${$attrs.id||'combobox'}-listbox`" :value="modelValue" :placeholder="placeholder" :disabled="disabled" @input="onInput" @focus="open=true" @keydown="keydown" @blur="blur"><ul v-if="open&&filtered.length" :id="`${$attrs.id||'combobox'}-listbox`" class="combo-list" role="listbox"><li v-for="(option,index) in filtered" :key="option" role="option" :aria-selected="option===modelValue" :data-active="index===active?'true':'false'" @mousedown.prevent="commit(option)">{{option}}</li></ul></div></template>
+<style scoped>.ui-combobox{position:relative;min-width:min(320px,100%)}.control{width:100%;min-height:42px}.combo-list{position:absolute;z-index:30;inset-inline:0;top:calc(100% + 4px);max-height:240px;overflow:auto;margin:0;padding:4px;list-style:none;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:0 12px 30px rgba(15,23,42,.16)}.combo-list li{padding:8px 10px;border-radius:7px;cursor:pointer;font-size:.875rem}.combo-list li:hover,.combo-list li[data-active="true"]{background:var(--soft)}.control:focus-visible{outline:3px solid var(--accent);outline-offset:2px}</style>

@@ -1183,7 +1183,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "id": PROFILE_VERSION,
         "name": "Derrida scholarly corpus v11",
         "version": 11,
-        "description": "Outrageous Orangutan: deterministic-first segmentation with bounded LLM boundary adjudication, human boundary examples, editable reviewed text, and auditable enrichment.",
+        "description": "Perilous Penguins: confidence-driven metadata review, explicit LLM profile choice, clean scholarly publication records, and repeatable metadata second-reader enrichment.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -1197,7 +1197,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "review_risk_threshold": 0.90,
         "max_llm_boundary_calls_per_100_atoms": 18,
         "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.72,
+        "min_metadata_confidence": 0.65,
         "soft_min_chars": 180,
         "preferred_record_chars": 1750,
         "record_length_tolerance": 200,
@@ -4024,7 +4024,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if reason:
                 model_review_reasons.append(reason)
 
-        minimum = float(profile.get("min_metadata_confidence") or 0.72)
+        minimum = float(profile.get("min_metadata_confidence") or 0.65)
         for field in sorted(EVIDENCE_REQUIRED_FIELDS):
             value = record.get(field)
             if value in (None, "", []):
@@ -4041,7 +4041,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             evidence_confidence = info.get("confidence")
             if not isinstance(evidence_confidence, (int, float)):
                 review_reasons.append(f"{field} evidence confidence was not reported")
-            elif float(evidence_confidence) < minimum:
+            elif float(evidence_confidence) <= minimum:
                 review_reasons.append(f"{field} evidence confidence is below {minimum:.2f}")
 
         record["metadata_evidence"] = clean_evidence
@@ -4088,12 +4088,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 continue
             if field in required_metadata_fields and value in (None, "", []):
                 field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "reason_code": "ambiguous", "reason": reason}
-            elif (confidence is None or confidence < minimum) and value not in (None, "", []):
+            elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # Model self-confidence is never publication authority. Any LLM
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
-            elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) < minimum)):
+            elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
                 field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "reason_code": "resolved", "reason": reason}
@@ -4242,7 +4242,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         record_content_errors: list[dict[str, str]] = []
         suspicious: list[dict[str, Any]] = []
         previous_last = -1
-        min_conf = float(profile.get("min_metadata_confidence") or 0.72)
+        min_conf = float(profile.get("min_metadata_confidence") or 0.65)
 
         for record in records:
             record_id = str(record.get("record_id") or "")
@@ -4773,6 +4773,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         for field in required:
             info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
             state = str(info.get("status") or "")
+            if state == "human_confirmed_absent":
+                continue
             if cls._metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
                 incomplete.append(field)
         for field in reviewable:
@@ -5741,7 +5743,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": self._queue_counts(persisted)}
 
     @_serialize_record_mutation
-    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None) -> dict[str, Any]:
+    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
         This endpoint is deliberately transactional from the UI's perspective:
@@ -5750,7 +5752,26 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         """
         if field not in HUMAN_EDITABLE_METADATA_FIELDS or field in {"needs_review", "review_reason"}:
             raise ValueError(f"Unsupported review metadata field: {field}")
-        record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
+        if confirm_no_supported_value:
+            records = self.repo.load_records(build_id)
+            target = next((row for row in records if row.get("record_id") == record_id), None)
+            if target is None: raise KeyError(record_id)
+            self._assert_human_review_available(build_id, target)
+            current_revision = self._assert_record_revision(target, expected_revision)
+            self._push_review_history(build_id, records, action="metadata_confirm_absent", selected_record_id=record_id)
+            prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
+            self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status)
+            target[field] = None
+            target.setdefault("metadata_field_status", {})[field] = {"status":"human_confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
+            target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"human_confirmed_absent"})
+            target["metadata_decisions"] = target["metadata_decisions"][-100:]
+            target["metadata_reviewed_at"] = iso_now(); self._mark_human_touch(target,[field])
+            profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+            self._sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
+            self._rewrite_and_validate(build_id, records)
+            record = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+        else:
+            record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         records = self.repo.load_records(build_id)
         for row in records:
             self._decorate_review_state(row)
@@ -5889,7 +5910,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         return {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
 
     @_serialize_record_mutation
-    def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str) -> dict[str, Any]:
+    def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str, request_override: dict[str, Any] | None = None) -> dict[str, Any]:
         if direction not in {"previous", "next"}:
             raise ValueError("Boundary direction must be previous or next.")
         records = self.repo.load_records(build_id)
@@ -5901,7 +5922,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError(f"No {direction} record is available for boundary adjudication.")
         left, right = (records[neighbor_index], records[index]) if direction == "previous" else (records[index], records[neighbor_index])
         build = self.repo.get_build(build_id)
-        request = self._latest_runtime_request(build_id, dict(build.get("request") or {}))
+        request = self._latest_runtime_request(build_id, request_override or dict(build.get("request") or {}))
         if not request.get("provider") and not request.get("provider_profile_id"):
             raise ValueError("No LLM provider is available for boundary adjudication.")
         decision = self._adjudicate_record_boundary_pair(left, right, build.get("manifest") or {}, request, build_id)
@@ -6103,6 +6124,60 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             self._refresh_workflow_fields(build)
             self.repo.save_build(build)
 
+    def rerun_metadata_enrichment(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        build=self.repo.get_build(build_id)
+        if build.get("status") in {"queued","running"}: raise ValueError("Wait for the active corpus operation to finish before starting metadata enrichment.")
+        self._validate_execution_budget(request); records=self.repo.load_records(build_id); scope=str(request.get("scope") or "all")
+        families=[str(v) for v in request.get("families") or [] if str(v) in METADATA_FAMILY_FIELDS] or ["discourse","quotation","indexing"]
+        indices=[]
+        for i,record in enumerate(records):
+            disposition=str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if disposition=="rejected" or (scope=="accepted" and disposition!="accepted") or (scope=="pending" and disposition!="pending"): continue
+            indices.append(i)
+        if not indices: raise ValueError("No records match the selected metadata enrichment scope.")
+        public_request={k:v for k,v in request.items() if k not in {"api_key","_review_provider"}}; operation_id=f"metadata-enrichment-{uuid.uuid4().hex[:10]}"
+        run={"operation_id":operation_id,"kind":"metadata_enrichment_rerun","state":"queued","started_at":iso_now(),"finished_at":None,"records_total":len(indices),"records_processed":0,"records_unchanged":0,"records_enriched":0,"records_disputed":0,"records_reopened":0,"provider_profile_id":public_request.get("provider_profile_id"),"provider":request.get("provider") or build.get("provider"),"model":request.get("model") or build.get("model"),"families":families,"scope":scope}
+        build.setdefault("metadata_enrichment_runs",[]).append(run.copy());build["metadata_enrichment_runs"]=build["metadata_enrichment_runs"][-30:];build["metadata_operation"]=run.copy();self.repo.save_build(build);self._update(build_id,status="running",stage="metadata_enrichment_rerun",error=None,resumable=False,metadata_operation=run);self._executor.submit(self._metadata_enrichment_rerun_worker,build_id,request,operation_id,indices,families);return self.repo.get_build(build_id)
+
+    def _metadata_enrichment_rerun_worker(self, build_id: str, request: dict[str, Any], operation_id: str, indices: list[int], families: list[str]) -> None:
+        try:
+            build=self.repo.get_build(build_id);records=self.repo.load_records(build_id);manifest=build.get("manifest") or {};total=max(1,len(indices));counts=Counter();max_workers=max(1,min(16,int(request.get("max_concurrent_requests") or 1)))
+            def candidate_for(index:int):
+                candidate=json.loads(json.dumps(records[index]));status=candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"),dict) else {}
+                for family in families:
+                    for field in METADATA_FAMILY_FIELDS[family]: candidate.pop(field,None);status.pop(field,None)
+                    candidate.setdefault("metadata_stage_status",{}).pop(family,None);candidate.setdefault("metadata_execution_ledger",{}).pop(family,None)
+                candidate["metadata_field_status"]=status
+                return self._enrich_record(candidate,manifest,{**request,"families":families},previous_text=str(records[index-1].get("text") or "") if index>0 else "",next_text=str(records[index+1].get("text") or "") if index+1<len(records) else "",build_id=build_id)
+            with ThreadPoolExecutor(max_workers=max_workers,thread_name_prefix="pdf-corpus-meta-enrich") as pool:
+                futures={pool.submit(candidate_for,index):index for index in indices};processed=0
+                for future in as_completed(futures):
+                    index=futures[future];original=records[index]
+                    try:candidate=future.result()
+                    except Exception as exc:candidate=None;original.setdefault("metadata_enrichment_history",[]).append({"run_id":operation_id,"at":iso_now(),"state":"failed","error":str(exc)})
+                    changed=[];disputes=[]
+                    if candidate is not None:
+                        ostatus=original.get("metadata_field_status") if isinstance(original.get("metadata_field_status"),dict) else {};cstatus=candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"),dict) else {};cevidence=candidate.get("metadata_evidence") if isinstance(candidate.get("metadata_evidence"),dict) else {};oevidence=original.setdefault("metadata_evidence",{})
+                        for family in families:
+                            for field in METADATA_FAMILY_FIELDS[family]:
+                                new=candidate.get(field);old=original.get(field);new_info=cstatus.get(field) if isinstance(cstatus.get(field),dict) else {};old_info=ostatus.get(field) if isinstance(ostatus.get(field),dict) else {}
+                                if new in (None,"",[]):continue
+                                if old in (None,"",[]): original[field]=new;original.setdefault("metadata_field_status",{})[field]=new_info;changed.append(field);oevidence.update({field:cevidence[field]} if field in cevidence else {});continue
+                                if new!=old: disputes.append({"field":field,"existing":old,"proposed":new,"confidence":new_info.get("confidence"),"reason":new_info.get("reason"),"run_id":operation_id});continue
+                                if field in cevidence:oevidence[field]=cevidence[field]
+                        original["metadata_disputes"]=(list(original.get("metadata_disputes") or [])+disputes)[-100:];outcome="enriched" if changed else "disputed" if disputes else "unchanged";original.setdefault("metadata_enrichment_history",[]).append({"run_id":operation_id,"at":iso_now(),"state":"complete","outcome":outcome,"added_fields":changed,"disputes":disputes,"provider_profile_id":request.get("provider_profile_id"),"model":request.get("model")});original["metadata_enrichment_history"]=original["metadata_enrichment_history"][-30:];counts[f"records_{outcome}"]+=1
+                        if changed or disputes:
+                            if str(original.get("review_disposition") or "pending")=="accepted":counts["records_reopened"]+=1
+                            original["review_disposition"]="pending";original["accepted"]=False;original["rejected"]=False;original["needs_review"]=True;original["review_reason"]="Metadata enrichment added or disputed metadata; review the highlighted changes."
+                            for dispute in disputes:
+                                field=dispute["field"];existing=original.setdefault("metadata_field_status",{}).get(field) if isinstance(original.setdefault("metadata_field_status",{}).get(field),dict) else {}
+                                if str(existing.get("status") or "") not in {"human_confirmed","human_override","human_confirmed_absent"}: original["metadata_field_status"][field]={**existing,"status":"unresolved","reason_code":"llm_disagreement","reason":"A later metadata enrichment pass proposed a different value."}
+                        profile=CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION),CORPUS_PROFILES[PROFILE_VERSION]);self._sync_record_metadata_state(original,profile)
+                    records[index]=original;processed+=1;self.repo.save_records(build_id,records);op=dict(self.repo.get_build(build_id).get("metadata_operation") or {});op.update({"state":"running","records_processed":processed,**counts});self._update(build_id,metadata_operation=op,progress=min(.995,.97+.025*(processed/total)))
+            final=self._rewrite_and_validate(build_id,records);op=dict(final.get("metadata_operation") or {});op.update({"state":"completed","finished_at":iso_now(),"records_processed":len(indices),**counts});final["metadata_operation"]=op;runs=list(final.get("metadata_enrichment_runs") or []);final["metadata_enrichment_runs"]=[({**r,**op} if r.get("operation_id")==operation_id else r) for r in runs];final["status"]="awaiting_review";final["stage"]="review";final["progress"]=1.0;self._refresh_workflow_fields(final);self.repo.save_build(final)
+        except Exception as exc:
+            build=self.repo.get_build(build_id);op=dict(build.get("metadata_operation") or {});op.update({"state":"failed","finished_at":iso_now(),"error":str(exc)});build["metadata_operation"]=op;build["status"]="awaiting_review";build["stage"]="review";self.repo.save_build(build)
+
     @_serialize_record_mutation
     def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -6146,74 +6221,18 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
     @staticmethod
     def _validate_publication_record(record: dict[str, Any]) -> list[str]:
-        """Validate the stable public JSONL contract before bytes are written."""
         errors: list[str] = []
-        record_id = str(record.get("record_id") or "").strip()
-        if not record_id:
-            errors.append("record_id is required")
-        if not isinstance(record.get("text"), str) or not str(record.get("text") or "").strip():
-            errors.append("text is required")
-        source_ids = record.get("source_block_ids")
-        if not isinstance(source_ids, list) or not source_ids or not all(isinstance(value, str) and value for value in source_ids):
-            errors.append("source_block_ids must be a non-empty string array")
-        details = record.get("corpus_build_details")
-        if not isinstance(details, dict):
-            errors.append("corpus_build_details is required")
-        else:
-            for field in ("build_id", "publication_id", "published_at", "app_version", "schema_version", "publication_schema_version", "profile_id", "source_sha256"):
-                if details.get(field) in (None, ""):
-                    errors.append(f"corpus_build_details.{field} is required")
-        region = record.get("region_type")
-        if region not in (None, "") and str(region) not in REGION_TYPES:
-            errors.append(f"region_type is not a supported enum value: {region}")
-        role = record.get("discourse_role")
-        if role not in (None, "") and str(role) not in DISCOURSE_ROLES:
-            errors.append(f"discourse_role is not a supported enum value: {role}")
-        primary = record.get("primary_text")
-        if primary is not None and not isinstance(primary, bool):
-            errors.append("primary_text must be boolean when present")
+        if not str(record.get("record_id") or "").strip(): errors.append("record_id is required")
+        if not isinstance(record.get("text"), str) or not str(record.get("text") or "").strip(): errors.append("text is required")
+        region=record.get("region_type"); role=record.get("discourse_role"); primary=record.get("primary_text")
+        if region not in (None,"") and str(region) not in REGION_TYPES: errors.append(f"region_type is not a supported enum value: {region}")
+        if role not in (None,"") and str(role) not in DISCOURSE_ROLES: errors.append(f"discourse_role is not a supported enum value: {role}")
+        if primary is not None and not isinstance(primary,bool): errors.append("primary_text must be boolean when present")
         return errors
 
-    def _publication_build_details(self, build: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
-        """Return locale-neutral build provenance embedded in every public record.
-
-        Publication metadata belongs under one stable object instead of leaking
-        build/runtime fields into the scholarly record namespace.
-        """
-        request = build.get("request") or {}
-        return {
-            "build_id": build.get("build_id"),
-            "publication_id": publication_id,
-            "published_at": created_at,
-            "app_version": build.get("app_version"),
-            "schema_version": build.get("schema_version"),
-            "publication_schema_version": PUBLICATION_SCHEMA_VERSION,
-            "profile_id": build.get("profile_id"),
-            "profile_version": build.get("profile_version"),
-            "source_asset_id": build.get("asset_id"),
-            "source_sha256": build.get("source_sha256"),
-            "source_filename": build.get("source_filename"),
-            "provider_profile_id": request.get("provider_profile_id"),
-            "provider": build.get("provider"),
-            "model": build.get("model"),
-            "document_prompt_version": build.get("document_prompt_version"),
-            "segmentation_prompt_version": build.get("segmentation_prompt_version"),
-            "metadata_prompt_version": build.get("metadata_prompt_version"),
-            "record_sizing_policy": build.get("record_sizing_policy") or request.get("record_sizing"),
-            "topology_quality": build.get("topology_quality"),
-        }
-
     def _serialize_public_record(self, build: dict[str, Any], record: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
-        build_only_fields = {
-            "accepted", "rejected", "review_disposition", "build_id", "publication_id",
-            "app_version", "schema_version", "profile_id", "profile_version",
-            "provider_profile_id", "provider", "model", "document_prompt_version",
-            "segmentation_prompt_version", "metadata_prompt_version",
-            "record_sizing_policy", "topology_quality",
-        }
-        public = {k: v for k, v in record.items() if k not in build_only_fields}
-        public["corpus_build_details"] = self._publication_build_details(build, publication_id, created_at)
-        return public
+        internal_fields={"accepted","rejected","review_disposition","build_id","publication_id","app_version","schema_version","profile_id","profile_version","provider_profile_id","provider","model","document_prompt_version","segmentation_prompt_version","metadata_prompt_version","record_sizing_policy","topology_quality","source_asset_id","source_block_ids","source_spans","source_extracted_text","pdf_pages","topology_index","topology_count","boundary_review","boundary_suspicion","metadata_field_status","metadata_evidence","metadata_decisions","metadata_stage_status","metadata_execution_ledger","metadata_incomplete_fields","metadata_review_fields","metadata_attention_reasons","metadata_needs_attention","metadata_complete","metadata_enrichment_state","metadata_enrichment_history","metadata_disputes","record_revision","review_state","can_accept","text_review_status","text_revision_history","source_quality_issues","resolved_source_quality_issues","inline_citation","full_citation","text_length","corpus_build_details"}
+        return {k:v for k,v in record.items() if k not in internal_fields and not k.startswith("_")}
 
     def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -6310,7 +6329,6 @@ TEXT:
                 raise ValueError(f"Publication is blocked: {len(unaccepted)} publishable record(s) have not been accepted.")
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
-        build_details = self._publication_build_details(build, publication_id, created_at)
         path = self.repo.publication_path(publication_id)
         hasher = hashlib.sha256()
         with path.open("wb") as handle:

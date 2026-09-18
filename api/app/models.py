@@ -449,6 +449,7 @@ class PdfCorpusRecordTextPatch(BaseModel):
 class PdfCorpusMetadataDecision(BaseModel):
     field: str = Field(min_length=1, max_length=120)
     value: Any = None
+    confirm_no_supported_value: bool = False
     expected_revision: int | None = Field(default=None, ge=1)
 
 
@@ -513,6 +514,13 @@ class PdfCorpusRecordSlice(BaseModel):
 
 class PdfCorpusBoundaryAdjudication(BaseModel):
     direction: Literal["previous", "next"]
+    provider: Literal["ollama", "openai"] = "ollama"
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool = True
 
 
 class PdfCorpusProviderSwitch(BaseModel):
@@ -543,6 +551,7 @@ class PdfCorpusRecordRerun(BaseModel):
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
+    scope: Literal["all", "accepted", "pending"] = "all"
 
 
 class PdfCorpusTextTouchupRequest(BaseModel):
