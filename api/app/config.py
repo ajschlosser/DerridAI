@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-APP_VERSION = "0.48.1"
+APP_VERSION = "0.49.0"
 
 
 def _float_env(name: str, default: float) -> float:

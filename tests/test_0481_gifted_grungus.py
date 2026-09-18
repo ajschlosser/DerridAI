@@ -5,9 +5,9 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_identity():
-    assert json.loads(text("web/package.json"))["version"]=="0.48.1"
-    assert 'APP_VERSION = "0.48.1"' in text("api/app/config.py")
-    assert '0.48.1 — Gifted Grungus' in text("README.md")
+    assert json.loads(text("web/package.json"))["version"]=="0.49.0"
+    assert 'APP_VERSION = "0.49.0"' in text("api/app/config.py")
+    assert '0.49.0 — Hungry Hippo' in text("README.md")
 
 def test_source_issue_is_not_duplicated_in_record_and_source_panel():
     ui=text("web/src/components/PdfCorpusBuilder.vue")
@@ -27,7 +27,8 @@ def test_metadata_proposals_have_family_assessments_and_pending_feedback():
     panel=text("web/src/components/CorpusMetadataResolutionPanel.vue")
     assert backend.count("field_assessments: dict[str, RecordFieldAssessmentModel]") >= 3
     assert "metadata_enrichment_pending" in panel
-    assert "llm_suggestion_selected_short" in panel
+    field=text('web/src/components/CorpusMetadataFieldEditor.vue')
+    assert "llm_suggestion_prefilled" in field
 
 def test_bulk_editor_is_opaque_and_supports_enum_and_existing_value_autocomplete():
     bulk=text("web/src/components/CorpusBulkMetadataEditor.vue")

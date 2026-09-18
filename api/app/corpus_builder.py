@@ -44,6 +44,40 @@ DISCOURSE_ROLES = [
 HYBRID_REQUIRED_FIELDS = ("region_type", "primary_text", "discourse_role")
 REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "speaker", "position_holder", "target", "stance", "proposition_status", "claim_scope")
 
+NON_PRIMARY_REGION_TYPES = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
+
+def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Apply deterministic record-metadata relationships.
+
+    Apparatus/non-primary region types are hard invariants. ``main_text`` strongly
+    defaults to primary text, but an explicit human decision may override that
+    default for unusual records.
+    """
+    region = str(record.get("region_type") or "")
+    status = record.setdefault("metadata_field_status", {})
+    primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
+    human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
+    desired: bool | None = None
+    reason = ""
+    hard = False
+    if region in NON_PRIMARY_REGION_TYPES:
+        desired = False
+        hard = True
+        reason = f"{region} cannot be primary text."
+    elif region == "main_text" and not human_primary:
+        desired = True
+        reason = "main_text is deterministically suggested as primary text unless a reviewer overrides it."
+    if desired is None:
+        return []
+    changed = record.get("primary_text") is not desired
+    if hard or not human_primary:
+        record["primary_text"] = desired
+        status["primary_text"] = {
+            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+            "reason_code": "semantic_invariant" if hard else "deterministic_default", "reason": reason,
+        }
+    return [{"field": "primary_text", "value": desired, "reason": reason}] if changed else []
+
 
 class DocumentManifestModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -3321,23 +3355,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             else:
                 field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "reason_code": "resolved", "reason": reason}
 
-        # Semantic consistency rules are deterministic publication invariants, not
-        # questions for an LLM. Apparatus cannot simultaneously be primary text.
-        apparatus_regions = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
-        region_value = str(record.get("region_type") or "")
-        primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
-        if region_value in apparatus_regions and str(primary_status.get("status") or "") not in {"human_confirmed", "human_override"}:
-            record["primary_text"] = False
-            field_status["primary_text"] = {
-                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-                "reason_code": "semantic_invariant", "reason": f"{region_value} cannot be primary text.",
-            }
-        elif region_value == "main_text" and str(primary_status.get("status") or "") not in {"human_confirmed", "human_override"}:
-            record["primary_text"] = True
-            field_status["primary_text"] = {
-                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-                "reason_code": "semantic_invariant", "reason": "main_text is deterministically primary text.",
-            }
+        apply_metadata_constraints(record)
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
@@ -4722,6 +4740,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "reason": "Human record-level override of inherited document metadata." if is_override else "Confirmed during record review.",
                 }
                 decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_override else "human"})
+        constraint_changes = apply_metadata_constraints(target)
+        for item in constraint_changes:
+            decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
         self._mark_human_touch(target, list(changes))
@@ -4779,6 +4800,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "reason": "Applied through bulk record metadata editing.",
                 }
                 decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
+            constraint_changes = apply_metadata_constraints(record)
+            for item in constraint_changes:
+                decisions.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
             record["metadata_decisions"] = decisions[-100:]
             record["metadata_reviewed_at"] = iso_now()
             self._mark_human_touch(record, list(changes))

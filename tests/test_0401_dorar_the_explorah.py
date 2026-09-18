@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.48.1"
-    assert 'version="0.48.1"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.48.1"' in text("api/app/config.py")
+    assert package["version"] == "0.49.0"
+    assert 'version="0.49.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.49.0"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 

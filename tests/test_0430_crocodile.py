@@ -68,9 +68,9 @@ def install_repo(tmp_path: Path, record: dict):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.48.1"
-    assert json.loads(text("web/package.json"))["version"] == "0.48.1"
-    assert "0.48.1 — Gifted Grungus" in text("README.md")
+    assert APP_VERSION == "0.49.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.49.0"
+    assert "0.49.0 — Hungry Hippo" in text("README.md")
 
 
 def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):
@@ -161,12 +161,12 @@ def test_review_ui_accept_is_actionable_and_preserves_viewport():
 
 
 def test_primary_text_uses_boolean_radio_not_string_truthiness():
-    panel = text("web/src/components/CorpusMetadataResolutionPanel.vue")
+    panel = text("web/src/components/CorpusMetadataFieldEditor.vue")
     assert ":value=\"true\"" in panel
     assert ":value=\"false\"" in panel
-    assert '@click="save(field)"' in panel
+    assert '@click="save"' in panel
     assert 'value==="true"' not in panel
-    assert "requiredFields.has(field)&&draft[field]===null" in panel
+    assert "required&&draft===null" in panel
     assert ":value=\"false\"" in panel
     stories = text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")
     assert "PrimaryTextHumanDecisionNo" in stories

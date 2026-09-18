@@ -1,6 +1,24 @@
-# DerridAI Corpus Viewer 0.48.1
+# DerridAI Corpus Viewer 0.49.0
 
-**0.48.1 — Gifted Grungus** tightens the Corpus Builder review experience: initialization is visually isolated, source repair guidance appears once, text review has an explicit completion action, LLM enrichment state/confidence is clearer and more consistent across records, and bulk metadata editing now uses a focused autocomplete-driven workspace.
+**0.49.0 — Hungry Hippo** streamlines Corpus Builder review around a simple rule: deterministic constraints resolve obvious facts, valid LLM proposals arrive as editable defaults, and reviewers spend their time on genuine exceptions. It also adds reversible extracted-text cleanup for recurring headers, page numbers, hyphenation, and whitespace while preserving immutable source text.
+
+## 0.49.0 — Hungry Hippo
+
+- Valid LLM proposals now prefill review controls regardless of confidence; confidence changes the warning treatment, not whether the reviewer must reselect the model's value.
+- Added a reusable metadata-field editor and a one-click **Save all suggestions** workflow for unresolved LLM-proposed fields.
+- Centralized deterministic metadata constraints. Front matter, back matter, bibliography, index, and paratext cannot be primary text; main text is primary text. The same rule is enforced after LLM, individual human, and bulk edits.
+- Added a reversible **Clean text** workflow with side-by-side preview for isolated page numbers, recurring short headers/footers, line-break hyphenation, and extraction whitespace. The immutable extracted source is never changed.
+- Recurring header/footer candidates are inferred from repeated short lines across loaded records.
+- Decomposed Corpus Builder review further into reusable `CorpusMetadataFieldEditor` and `CorpusTextCleanupDialog` Storybook components.
+- New and changed UI is localized in English and Québec French and retains WCAG 2.0 AA-oriented keyboard focus, semantic dialog/status markup, readable typography, and responsive layouts.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **389 passed**.
+- Python bytecode compilation, locale-key/placeholder parity, runtime JavaScript syntax, TypeScript/Vue script parsing, WCAG typography-floor audit, and `git diff --check` pass.
+- `npm run build` was attempted but frontend dependencies are unavailable in this sandbox (`vue-tsc: not found`).
+- `npm run build-storybook` was attempted but Storybook is unavailable in this sandbox (`storybook: not found`).
+- Docker is unavailable in this sandbox. The archive therefore remains a build candidate until the normal production frontend, Storybook, and container build gates pass.
 
 ## 0.48.1 — Gifted Grungus
 
