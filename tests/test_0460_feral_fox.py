@@ -64,9 +64,9 @@ def install_review_build(tmp_path: Path, record: dict):
 
 
 def test_release_identity_and_feral_fox_documentation():
-    assert APP_VERSION == "0.51.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.51.0"
-    assert "0.51.0 — Krazy Kangaroo" in text("README.md")
+    assert APP_VERSION == "0.52.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.52.0"
+    assert "0.52.0 — Lazy Lizard" in text("README.md")
 
 
 def test_human_text_correction_preserves_immutable_extraction_and_can_resolve_source_issue(tmp_path: Path):
@@ -223,6 +223,7 @@ def test_resolved_record_source_issue_unblocks_raw_page_quality_for_publication_
         "metadata_total": 1, "metadata_completed": 1, "metadata_issue_summary": {"fields_unresolved": 0, "records_incomplete": 0},
         "boundary_review_count": 0, "validation": {"valid": True, "source_valid": True, "metadata_valid": True},
         "source_quality": {"blocking_page_count": 1, "blocking_pages": [1]},
+        "manifest": {"title": "Test Book", "document_author": "Test Author"},
         "source_problem_count": 0, "status": "awaiting_review", "stage": "review", "profile_id": cb.PROFILE_VERSION,
     }
     cb.PdfCorpusBuildManager._refresh_workflow_fields(build)

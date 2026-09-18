@@ -4,7 +4,7 @@ import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 
 const props=defineProps<{build:CorpusBuild;busy?:boolean}>();
-const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];publish:[]}>();
+const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];editDocumentMetadata:[];publish:[]}>();
 const i18n=useI18nStore();
 const readiness=computed(()=>props.build.publication_readiness||{});
 const summary=computed(()=>props.build.metadata_issue_summary||{});
@@ -17,6 +17,7 @@ const primaryLabel=computed(()=>{
   if(publication.value)return i18n.t('pdf_corpus.download_jsonl','Download JSONL');
   if(next.value==='resolve_metadata')return i18n.t('pdf_corpus.resolve_metadata_issues','Resolve metadata issues');
   if(next.value==='resolve_rejections')return i18n.t('pdf_corpus.review_rejected_records','Review rejected records');
+  if(next.value==='resolve_document_metadata')return i18n.t('pdf_corpus.edit_document_metadata','Edit document metadata');
   if(next.value==='resolve_validation')return i18n.t('pdf_corpus.review_validation_issues','Review validation issues');
   if(next.value==='publish')return i18n.t('pdf_corpus.publish_corpus','Publish corpus');
   return i18n.t('pdf_corpus.inspect_remaining_work','Inspect remaining work');
@@ -24,6 +25,7 @@ const primaryLabel=computed(()=>{
 function act(){
   if(next.value==='resolve_metadata')emit('reviewMetadata');
   else if(next.value==='resolve_rejections')emit('reviewRejected');
+  else if(next.value==='resolve_document_metadata')emit('editDocumentMetadata');
   else if(next.value==='publish')emit('publish');
 }
 function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.${code||'unknown'}`,String(code||'unknown').replace(/_/g,' '))}
@@ -39,9 +41,11 @@ function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.
       </div>
       <div class="finish-primary">
         <a v-if="publication" class="btn primary" :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`">{{primaryLabel}}</a>
-        <button v-else type="button" class="btn primary" :disabled="busy||!['resolve_metadata','resolve_rejections','publish'].includes(next)" @click="act">{{primaryLabel}}</button>
+        <button v-else type="button" class="btn primary" :disabled="busy||!['resolve_metadata','resolve_rejections','resolve_document_metadata','publish'].includes(next)" @click="act">{{primaryLabel}}</button>
       </div>
     </header>
+
+    <div v-if="readiness.missing_document_fields?.length" class="document-blocker" role="alert"><b>{{i18n.t('pdf_corpus.readiness_blocker.required_document_metadata','Required document metadata is missing')}}</b><span>{{readiness.missing_document_fields.map(field=>i18n.t(`record.${field}`,field.replace(/_/g,' '))).join(', ')}}</span></div>
 
     <div class="finish-grid">
       <article class="finish-card" data-state="complete">
@@ -83,5 +87,5 @@ function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.
 </template>
 
 <style scoped>
-.finish-workspace{display:grid;gap:16px;padding:18px;border:1px solid var(--line);border-radius:13px;background:var(--card)}.finish-head{display:flex;justify-content:space-between;gap:22px;align-items:flex-start}.finish-head h2{margin:3px 0 6px;font-size:20px}.finish-head p{margin:0;max-width:78ch;font-size:.8125rem;line-height:1.55;color:var(--muted)}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.finish-primary{display:flex;align-items:center}.finish-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.finish-card{display:grid;align-content:start;gap:9px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.finish-card[data-state="attention"]{background:#fffaf0;border-color:#d9bf76}.finish-card[data-state="ready"],.finish-card[data-state="complete"]{background:#edf8f1}.card-state{font-size:.8125rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800}.finish-card h3{margin:0;font-size:13px}.finish-card p{margin:0;font-size:.8125rem;line-height:1.48;color:var(--muted)}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}dl div{padding-inline-start:8px;border-inline-start:2px solid var(--line)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:2px 0 0;font-size:.8125rem;font-weight:800}.card-actions{display:flex;gap:7px;flex-wrap:wrap}.link-action{justify-self:start;border:0;background:transparent;color:var(--accent);padding:0;text-decoration:underline;font-size:.8125rem;cursor:pointer}.blockers{font-size:.8125rem}.blockers summary{cursor:pointer;font-weight:800}.blockers ul{margin:8px 0 0;padding-inline-start:20px;color:var(--muted)}@media(max-width:760px){.finish-head{display:grid}.finish-grid{grid-template-columns:1fr}.finish-primary .btn{width:100%}}
+.finish-workspace{display:grid;gap:16px;padding:18px;border:1px solid var(--line);border-radius:13px;background:var(--card)}.finish-head{display:flex;justify-content:space-between;gap:22px;align-items:flex-start}.finish-head h2{margin:3px 0 6px;font-size:20px}.finish-head p{margin:0;max-width:78ch;font-size:.8125rem;line-height:1.55;color:var(--muted)}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.finish-primary{display:flex;align-items:center}.document-blocker{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:11px 13px;border:1px solid #d9bf76;border-radius:9px;background:#fffaf0;color:#604300;font-size:.8125rem}.document-blocker span{color:var(--muted)}.finish-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.finish-card{display:grid;align-content:start;gap:9px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.finish-card[data-state="attention"]{background:#fffaf0;border-color:#d9bf76}.finish-card[data-state="ready"],.finish-card[data-state="complete"]{background:#edf8f1}.card-state{font-size:.8125rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800}.finish-card h3{margin:0;font-size:13px}.finish-card p{margin:0;font-size:.8125rem;line-height:1.48;color:var(--muted)}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}dl div{padding-inline-start:8px;border-inline-start:2px solid var(--line)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:2px 0 0;font-size:.8125rem;font-weight:800}.card-actions{display:flex;gap:7px;flex-wrap:wrap}.link-action{justify-self:start;border:0;background:transparent;color:var(--accent);padding:0;text-decoration:underline;font-size:.8125rem;cursor:pointer}.blockers{font-size:.8125rem}.blockers summary{cursor:pointer;font-weight:800}.blockers ul{margin:8px 0 0;padding-inline-start:20px;color:var(--muted)}@media(max-width:760px){.finish-head{display:grid}.finish-grid{grid-template-columns:1fr}.finish-primary .btn{width:100%}}
 </style>

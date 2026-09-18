@@ -1,4 +1,26 @@
-# DerridAI Corpus Viewer 0.51.0
+# DerridAI Corpus Viewer 0.52.0
+
+**0.52.0 — Lazy Lizard** turns Corpus Builder into a more complete, measurable, recoverable, and publication-safe collaborative corpus workspace. It adds pre-enrichment document cleanup, adaptive LLM-family routing, stronger publication gates, visible revision history, and queue/history navigation in Focus View while continuing the Storybook, i18n, and WCAG 2.0 AA hardening work.
+
+## 0.52.0 — Lazy Lizard
+
+- Cleans record text before metadata enrichment by default while preserving immutable extracted source text and a revision diff. Cleanup repairs prose line wraps, removes page furniture and repeated headers/footers, trims excess blank lines, and removes high-confidence OCR/repository artifacts without flattening likely poetry or quotations.
+- Adds Focus View breadcrumb/history navigation plus previous/next queue navigation.
+- Adds record revision/audit history to normal and Focus review.
+- Adds build-level text-cleanup reporting and per-family LLM effectiveness metrics. Fast mode can stop repeatedly low-yield LLM families while explicit reruns remain available.
+- Adds publication-required document metadata and additional semantic/ownership/content validation gates.
+- Keeps automation secondary to the editorial workspace: human-confirmed values remain authoritative, and stale automation cannot replace them.
+- Extends Storybook coverage and English/Québec French i18n for the new review and cleanup surfaces.
+- Consolidates the obsolete 0.50.1 hotfix regression into the 0.52.0 suite instead of carrying a redundant release-specific test file forward.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **413 passed**.
+- Python bytecode compilation, English/Québec French key parity, runtime JavaScript syntax, frontend relative-import regression coverage, the WCAG typography-floor checks, and `git diff --check` pass.
+- `npm install --no-audit --no-fund` was attempted but dependency retrieval timed out in this sandbox.
+- `npm run build` was attempted and cannot run without the missing frontend dependencies (`vue-tsc: not found`).
+- `npm run build-storybook` was attempted and cannot run without the missing frontend dependencies (`storybook: not found`).
+- Docker is unavailable in this sandbox. The archive therefore remains a build candidate until the normal production frontend, Storybook, and container build gates pass.
 
 **0.51.0 — Krazy Kangaroo** is a Corpus Builder product-hardening release. It consolidates the review workspace around reusable design-system components, rebuilds document metadata editing as an accessible, predictable dialog, and makes automation effectiveness secondary but measurable rather than visually competing with editorial work.
 

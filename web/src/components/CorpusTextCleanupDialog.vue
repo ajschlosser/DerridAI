@@ -6,7 +6,7 @@ import UiButton from './ui/UiButton.vue';
 const props=defineProps<{text:string;recurringLines?:string[]} >();
 const emit=defineEmits<{apply:[text:string];close:[]}>();
 const i18n=useI18nStore();
-const selected=ref<Set<TextCleanupRule>>(new Set(['page_numbers','repeated_short_lines','line_hyphenation','paragraph_lines','empty_lines','whitespace']));
+const selected=ref<Set<TextCleanupRule>>(new Set(['page_numbers','repeated_short_lines','line_hyphenation','paragraph_lines','empty_lines','ocr_artifacts','whitespace']));
 const title=ref<HTMLElement|null>(null);
 const dialog=ref<HTMLElement|null>(null);
 const priorActive=ref<HTMLElement|null>(null);
@@ -17,6 +17,7 @@ const rules:Array<{key:TextCleanupRule;label:string;help:string}>=[
  {key:'line_hyphenation',label:'pdf_corpus.cleanup_hyphenation',help:'pdf_corpus.cleanup_hyphenation_help'},
  {key:'paragraph_lines',label:'pdf_corpus.cleanup_paragraph_lines',help:'pdf_corpus.cleanup_paragraph_lines_help'},
  {key:'empty_lines',label:'pdf_corpus.cleanup_empty_lines',help:'pdf_corpus.cleanup_empty_lines_help'},
+ {key:'ocr_artifacts',label:'pdf_corpus.cleanup_ocr_artifacts',help:'pdf_corpus.cleanup_ocr_artifacts_help'},
  {key:'whitespace',label:'pdf_corpus.cleanup_whitespace',help:'pdf_corpus.cleanup_whitespace_help'},
 ];
 function toggle(key:TextCleanupRule,checked:boolean){const next=new Set(selected.value);checked?next.add(key):next.delete(key);selected.value=next}

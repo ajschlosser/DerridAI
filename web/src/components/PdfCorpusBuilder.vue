@@ -32,6 +32,8 @@ import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusProviderSwitcher from "./CorpusProviderSwitcher.vue";
 import CorpusLlmEffectivenessPanel from "./CorpusLlmEffectivenessPanel.vue";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
+import CorpusTextCleanupSummary from "./CorpusTextCleanupSummary.vue";
+import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -65,6 +67,9 @@ const recordQuery=ref("");
 const selectedReviewIds=ref<Set<string>>(new Set());
 const selectedReviewCount=computed(()=>selectedReviewIds.value.size);
 const focusView=ref(false);
+const focusHistory=ref<string[]>([]);
+const focusHistoryOffsets=ref<number[]>([]);
+const focusHistoryIndex=ref(-1);
 const recordsLoading=ref(false);
 const reviewHydrated=ref(false);
 const hydratedTopologyCount=ref(0);
@@ -105,6 +110,7 @@ const bulkActionFeedback=ref("");
 const resolveSourceOnTextSave=ref(false);
 const enrichmentMode=ref<"fast"|"deep">("fast");
 const semanticIndexing=ref(true);
+const autoCleanText=ref(true);
 const metadataRerunFamily=ref<"all"|"discourse"|"quotation"|"indexing">("all");
 let pollTimer:number|undefined;
 const DRAFT_KEY="derridai.pdf-corpus-builder.draft.v2";
@@ -124,10 +130,11 @@ function restoreBuilderDraft(){
     if(Number.isFinite(Number(draft.maxConcurrentRequests)))maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(draft.maxConcurrentRequests)));
     if(draft.enrichmentMode==="fast"||draft.enrichmentMode==="deep")enrichmentMode.value=draft.enrichmentMode;
     if(typeof draft.semanticIndexing==="boolean")semanticIndexing.value=draft.semanticIndexing;
+    if(typeof draft.autoCleanText==="boolean")autoCleanText.value=draft.autoCleanText;
   }catch{/* ignore stale browser drafts */}
 }
 function persistBuilderDraft(){
-  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,stageTimeouts:stageTimeouts.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value,enrichmentMode:enrichmentMode.value,semanticIndexing:semanticIndexing.value}))}catch{/* storage may be unavailable */}
+  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,stageTimeouts:stageTimeouts.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value,enrichmentMode:enrichmentMode.value,semanticIndexing:semanticIndexing.value,autoCleanText:autoCleanText.value}))}catch{/* storage may be unavailable */}
 }
 function metadataDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`}
 function textDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`}
@@ -274,6 +281,8 @@ const providerPayload=computed<Record<string,unknown>>(()=>{
     payload.record_sizing={...recordSizing.value};
     payload.enrichment_mode=enrichmentMode.value;
     payload.semantic_indexing=semanticIndexing.value;
+    payload.auto_clean_text=autoCleanText.value;
+    payload.text_cleanup_rules=["page_numbers","repeated_short_lines","line_hyphenation","paragraph_lines","empty_lines","ocr_artifacts","whitespace"];
     if(selectedReviewProviderId.value&&selectedReviewProviderId.value!==selectedProviderId.value){
       payload.review_provider_profile_id=selectedReviewProviderId.value;
       if(!serverProviderIds.value.has(selectedReviewProviderId.value)){
@@ -286,7 +295,7 @@ const providerPayload=computed<Record<string,unknown>>(()=>{
     }
     return payload;
   }
-  const payload:Record<string,unknown>={provider:manualProvider.value,use_profile_defaults:false,max_concurrent_requests:maxConcurrentRequests.value,stage_limits:{...stageLimits.value},stage_timeouts:{...stageTimeouts.value},record_sizing:{...recordSizing.value},enrichment_mode:enrichmentMode.value,semantic_indexing:semanticIndexing.value};
+  const payload:Record<string,unknown>={provider:manualProvider.value,use_profile_defaults:false,max_concurrent_requests:maxConcurrentRequests.value,stage_limits:{...stageLimits.value},stage_timeouts:{...stageTimeouts.value},record_sizing:{...recordSizing.value},enrichment_mode:enrichmentMode.value,semantic_indexing:semanticIndexing.value,auto_clean_text:autoCleanText.value,text_cleanup_rules:["page_numbers","repeated_short_lines","line_hyphenation","paragraph_lines","empty_lines","ocr_artifacts","whitespace"]};
   if(manualModel.value.trim())payload.model=manualModel.value.trim();
   if(manualBaseUrl.value.trim())payload.base_url=manualBaseUrl.value.trim();
   if(manualApiKey.value)payload.api_key=manualApiKey.value;
@@ -431,6 +440,38 @@ async function refreshAll(){
   // restored before the records route is available after a hard refresh. This is
   // deliberately independent of any form control interaction.
   window.setTimeout(()=>{if(hasRecordTopology.value&&!reviewHydrated.value)void ensureReviewHydrated()},250);
+}
+function openFocusView(){
+  if(!selectedRecord.value)return;
+  focusView.value=true;
+  const id=selectedRecord.value.record_id;
+  if(focusHistory.value[focusHistoryIndex.value]!==id){
+    focusHistory.value=focusHistory.value.slice(0,focusHistoryIndex.value+1);
+    focusHistoryOffsets.value=focusHistoryOffsets.value.slice(0,focusHistoryIndex.value+1);
+    focusHistory.value.push(id);focusHistoryOffsets.value.push(recordOffset.value);
+    focusHistoryIndex.value=focusHistory.value.length-1;
+  }
+}
+function pushFocusHistory(id:string){
+  if(!id||focusHistory.value[focusHistoryIndex.value]===id)return;
+  focusHistory.value=focusHistory.value.slice(0,focusHistoryIndex.value+1);
+  focusHistoryOffsets.value=focusHistoryOffsets.value.slice(0,focusHistoryIndex.value+1);
+  focusHistory.value.push(id);focusHistoryOffsets.value.push(recordOffset.value);
+  focusHistoryIndex.value=focusHistory.value.length-1;
+}
+async function focusHistoryMove(delta:number){
+  const next=focusHistoryIndex.value+delta;if(next<0||next>=focusHistory.value.length)return;
+  focusHistoryIndex.value=next;const id=focusHistory.value[next];
+  const targetOffset=focusHistoryOffsets.value[next]??recordOffset.value;
+  const local=targetOffset===recordOffset.value?records.value.find(row=>row.record_id===id):undefined;
+  if(local){selectRecord(local);return}
+  recordOffset.value=targetOffset;await refreshRecords(false,id);
+}
+async function focusQueueMove(delta:number){
+  const index=selectedRecordIndex.value;
+  if(index>=0){const next=records.value[index+delta];if(next){selectRecord(next);pushFocusHistory(next.record_id);return}}
+  if(delta>0&&recordOffset.value+pageSize<recordTotal.value){recordOffset.value+=pageSize;await refreshRecords(false);const next=records.value[0];if(next){selectRecord(next);pushFocusHistory(next.record_id)};return}
+  if(delta<0&&recordOffset.value>0){recordOffset.value=Math.max(0,recordOffset.value-pageSize);await refreshRecords(false);const next=records.value[records.value.length-1];if(next){selectRecord(next);pushFocusHistory(next.record_id)}}
 }
 function selectRecord(record:CorpusRecord){
   const viewport=captureReviewViewport();
@@ -760,7 +801,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       <div v-else-if="notice" class="builder-message" role="status">{{notice}}</div>
     </div>
 
-    <CorpusWorkflowStepper :stage="currentBuild?.stage||''" :status="currentBuild?.status||''" :published="Boolean(currentBuild?.publication)" :has-asset="Boolean(selectedAsset)" :has-manifest="Boolean(currentBuild?.manifest&&Object.keys(currentBuild.manifest).length)" :accepted-count="currentBuild?.accepted_count||0" :record-count="currentBuild?.record_count||0" />
+    <CorpusWorkflowStepper :stage="currentBuild?.stage||''" :status="currentBuild?.status||''" :published="Boolean(currentBuild?.publication)" :has-asset="Boolean(selectedAsset)" :has-manifest="Boolean(currentBuild?.manifest&&Object.keys(currentBuild.manifest).length)" :accepted-count="currentBuild?.accepted_count||0" :record-count="currentBuild?.record_count||0" :blocker-count="currentBuild?.publication_readiness?.blockers?.length||0" :can-publish="Boolean(currentBuild?.publication_readiness?.can_publish)" />
     <CorpusInitializationDialog v-if="currentBuild&&buildRunning&&!hasRecordTopology" :build="currentBuild" :disabled="busy!==''" @cancel="cancelBuild" />
 
     <section v-if="showBuildConfiguration" class="builder-setup" :aria-labelledby="'pdf-corpus-config-title'">
@@ -788,6 +829,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <label><input v-model="enrichmentMode" type="radio" value="deep"><span><b>{{i18n.t('pdf_corpus.enrichment_deep','Deep scholarly enrichment')}}</b><small>{{i18n.t('pdf_corpus.enrichment_deep_help','Runs discourse, quotation, and semantic indexing more broadly. Slower and intended for deliberate enrichment work.')}}</small></span></label>
         </div>
         <label class="semantic-index-toggle"><input v-model="semanticIndexing" type="checkbox" :disabled="enrichmentMode==='deep'"><span><b>{{i18n.t('pdf_corpus.semantic_indexing','Semantic indexing')}}</b><small>{{i18n.t('pdf_corpus.semantic_indexing_help','Generate topics, concepts, persons, and referenced works. Deep mode always includes indexing.')}}</small></span></label>
+        <label class="semantic-index-toggle"><input v-model="autoCleanText" type="checkbox"><span><b>{{i18n.t('pdf_corpus.auto_clean_all_records','Clean all record text before enrichment')}}</b><small>{{i18n.t('pdf_corpus.auto_clean_all_records_help','Recommended. Removes repeated headers and page numbers, repairs prose line wrapping, trims blank-line noise and obvious OCR artifacts while preserving immutable extracted text for audit.')}}</small></span></label>
       </section>
 
       <CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy!==''" />
@@ -846,7 +888,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusQualitySummary v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
 
           <CorpusBuildStageNotice v-if="buildRunning && !hasRecordTopology" :stage="currentBuild.stage" />
-          <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @publish="publish({download:false})" />
+          <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @edit-document-metadata="documentMetadataOpen=true" @publish="publish({download:false})" />
           <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataFieldIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
           <CorpusBuildTimeline v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
           <details v-if="!showReviewWorkspace||finishPhase" class="technical-details">
@@ -879,9 +921,10 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         <template v-if="showReviewWorkspace">
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
-          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" />
+          <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
+          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" />
 
-          <CorpusReviewSessionBar v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="focusView=true" />
+          <CorpusReviewSessionBar v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="openFocusView" />
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
             <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :ready="readyCount" :issues="issueCount" :metadata="Number(reviewQueueCounts.metadata??metadataIssueCount)" :topology="topologyIssueCount" :source-problems="Number(reviewQueueCounts.source??currentBuild.source_problem_count??0)" :accepted="Number(reviewQueueCounts.accepted??currentBuild.accepted_count??0)" :rejected="Number(reviewQueueCounts.rejected??currentBuild.rejected_count??0)" :disabled="busy!==''" />
@@ -908,7 +951,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
             <article ref="reviewPaneEl" class="record-review-pane" :aria-labelledby="selectedRecord?'review-record-title':undefined">
               <template v-if="selectedRecord">
-                <header class="record-review-head"><div><span class="eyebrow">{{i18n.t('pdf_corpus.proposed_record','Proposed record')}}</span><h3 id="review-record-title">{{selectedRecord.record_id}}</h3><p>{{i18n.t('pdf_corpus.pages','pp.')}} {{selectedRecord.page_start}}–{{selectedRecord.page_end}} · {{selectedRecord.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</p></div><button type="button" class="btn small" @click="focusView=true">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></header>
+                <header class="record-review-head"><div><span class="eyebrow">{{i18n.t('pdf_corpus.proposed_record','Proposed record')}}</span><h3 id="review-record-title">{{selectedRecord.record_id}}</h3><p>{{i18n.t('pdf_corpus.pages','pp.')}} {{selectedRecord.page_start}}–{{selectedRecord.page_end}} · {{selectedRecord.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</p></div><button type="button" class="btn small" @click="openFocusView">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></header>
                 <CorpusSourceIssuePanel v-if="selectedRecord.source_quality_issues?.length" :issues="selectedRecord.source_quality_issues" interactive @edit-text="beginTextEdit" @open-source="reviewInspectorTab='source'" />
                 <aside v-else-if="selectedRecord.review_reason&&selectedRecord.review_reason.toLowerCase()!=='pending human review.'" class="review-reason" role="note"><b>{{recordIssueKinds(selectedRecord).length?recordIssueKinds(selectedRecord).map(kind=>i18n.t(`pdf_corpus.record_state.${kind}`,kind)).join(' · '):i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
                 <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label><div><span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span><button type="button" class="btn" @click="cancelTextEdit">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" @click="saveReviewedText()" :disabled="busy!==''||!textDraft.trim()">{{busy==='text'?i18n.t('ui.saving','Saving…'):i18n.t('pdf_corpus.save_and_mark_reviewed','Save & mark reviewed')}}</button></div></div></section>
@@ -938,7 +981,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <div class="pane-head source-inspector-head"><b>{{i18n.t('pdf_corpus.source_context','Source context')}}</b><div class="source-head-actions"><span>{{selectedAsset?.page_count?i18n.tf('pdf_corpus.pdf_page_of','PDF page {page} of {total}',{page:selectedPdfPage||'—',total:selectedAsset.page_count}):`PDF ${selectedPdfPage||'—'}`}}</span><button type="button" class="btn small" @click="openPdfExplorer">{{i18n.t('pdf_corpus.open_pdf_explorer','Open in PDF Explorer')}}</button></div></div>
                 <div v-if="recordPdfPages.length>1" class="source-page-nav" :aria-label="i18n.t('pdf_corpus.source_page_navigation','Source page navigation')"><button type="button" class="btn small" @click="previousSourcePage" :disabled="selectedPdfPageIndex===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{selectedPdfPageIndex+1}} / {{recordPdfPages.length}}</span><button type="button" class="btn small" @click="nextSourcePage" :disabled="selectedPdfPageIndex>=recordPdfPages.length-1">{{i18n.t('ui.next','Next')}}</button></div>
                 <PdfEvidenceViewer v-if="sourcePdfUrl" :pdf-url="sourcePdfUrl" :page="selectedPdfPage" :page-width="selectedPageMeta?.width||0" :page-height="selectedPageMeta?.height||0" :blocks="selectedPageBlocks" :evidence-block-ids="evidenceIdsArray" />
-                <details class="source-text-details"><summary>{{i18n.t('pdf_corpus.extracted_source_text','Immutable extracted source')}}</summary><p class="inspector-help">{{i18n.t('pdf_corpus.extracted_source_text_help','This is the audit reference produced by PDF extraction. Human corrections change the reviewed record text, never these source blocks.')}}</p><pre v-if="selectedRecord.source_extracted_text" class="original-extraction-snapshot">{{selectedRecord.source_extracted_text}}</pre><div class="source-blocks"><article v-for="(block,index) in visibleBlocks" :key="block.block_id" class="source-block" :class="{'evidence-block':evidenceBlockIds.has(block.block_id)}"><header><span>{{block.block_id}}</span><span>PDF {{block.page}} · {{block.type}}</span></header><p>{{block.text}}</p><button v-if="selectedEvidenceField" type="button" class="evidence-toggle" :aria-pressed="evidenceBlockIds.has(block.block_id)" @click="toggleEvidenceBlock(block.block_id)" :disabled="busy!==''">{{evidenceBlockIds.has(block.block_id)?i18n.t('pdf_corpus.remove_evidence','Remove as evidence'):i18n.t('pdf_corpus.add_evidence','Add as evidence')}} · {{selectedEvidenceField}}</button><button v-if="index<visibleBlocks.length-1" type="button" class="split-button" @click="split(block.block_id)" :disabled="busy!==''">{{i18n.t('pdf_corpus.split_after','Split after this block')}}</button></article></div></details>
+                <details class="source-text-details"><summary>{{i18n.t('pdf_corpus.extracted_source_text','Immutable extracted source')}}</summary><p class="inspector-help">{{i18n.t('pdf_corpus.extracted_source_text_help','This is the audit reference produced by PDF extraction. Human corrections change the reviewed record text, never these source blocks.')}}</p><pre v-if="selectedRecord.source_extracted_text" class="original-extraction-snapshot">{{selectedRecord.source_extracted_text}}</pre><div class="source-blocks"><article v-for="(block,index) in visibleBlocks" :key="block.block_id" class="source-block" :class="{'evidence-block':evidenceBlockIds.has(block.block_id)}"><header><span>{{block.block_id}}</span><span>PDF {{block.page}} · {{block.type}}</span></header><p>{{block.text}}</p><button v-if="selectedEvidenceField" type="button" class="evidence-toggle" :aria-pressed="evidenceBlockIds.has(block.block_id)" @click="toggleEvidenceBlock(block.block_id)" :disabled="busy!==''">{{evidenceBlockIds.has(block.block_id)?i18n.t('pdf_corpus.remove_evidence','Remove as evidence'):i18n.t('pdf_corpus.add_evidence','Add as evidence')}} · {{selectedEvidenceField}}</button><button v-if="index<visibleBlocks.length-1" type="button" class="split-button" @click="split(block.block_id)" :disabled="busy!==''">{{i18n.t('pdf_corpus.split_after','Split after this block')}}</button></article></div></details><CorpusRevisionHistory :record="selectedRecord" />
               </section>
               <div v-else class="inspector-empty">{{i18n.t('pdf_corpus.select_record','Select a generated record to inspect its source binding and metadata.')}}</div>
             </aside>
@@ -952,7 +995,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" :affected-records="Number(currentBuild.record_count||0)" @save="saveManifest" @close="documentMetadataOpen=false" />
 
     <CorpusTextCleanupDialog v-if="textCleanupOpen&&selectedRecord" :text="textDraft" :recurring-lines="recurringCleanupLines" @close="textCleanupOpen=false" @apply="value=>{textDraft=value;textCleanupOpen=false;setMessage(i18n.t('pdf_corpus.cleanup_applied_draft','Cleanup applied to the reviewed-text draft. Save to persist it.'))}" />
-    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" @close="focusView=false" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
+    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" :can-history-back="focusHistoryIndex>0" :can-history-forward="focusHistoryIndex>=0&&focusHistoryIndex<focusHistory.length-1" :can-previous-record="selectedRecordIndex>0||recordOffset>0" :can-next-record="selectedRecordIndex>=0&&(selectedRecordIndex<records.length-1||recordOffset+pageSize<recordTotal)" @close="focusView=false" @history-back="focusHistoryMove(-1)" @history-forward="focusHistoryMove(1)" @previous-record="focusQueueMove(-1)" @next-record="focusQueueMove(1)" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
   </section>
 </template>
 

@@ -5,10 +5,10 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity():
-    assert json.loads(text('web/package.json'))['version']=='0.51.0'
-    assert 'APP_VERSION = "0.51.0"' in text('api/app/config.py')
-    assert 'version="0.51.0"' in text('api/app/main.py')
-    assert '0.51.0 — Krazy Kangaroo' in text('README.md')
+    assert json.loads(text('web/package.json'))['version']=='0.52.0'
+    assert 'APP_VERSION = "0.52.0"' in text('api/app/config.py')
+    assert 'version="0.52.0"' in text('api/app/main.py')
+    assert '0.52.0 — Lazy Lizard' in text('README.md')
 
 def test_document_metadata_uses_shared_dialog_and_impact_summary():
     dialog=text('web/src/components/DocumentManifestDialog.vue')

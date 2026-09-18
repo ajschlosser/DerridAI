@@ -115,6 +115,197 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
     return changes
 
 
+TEXT_CLEANUP_RULES = {
+    "page_numbers", "repeated_short_lines", "line_hyphenation",
+    "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
+}
+_PAGE_NUMBER_LINE_RE = re.compile(r"^\s*(?:page\s+)?(?:[ivxlcdm]+|\d{1,4})\s*$", re.I)
+_QUOTE_OR_LIST_LINE_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)]|[a-z][.)]|[ivxlcdm]+[.)]|[>»«“”\"'])\s*", re.I)
+_SENTENCE_END_LINE_RE = re.compile(r"[.!?…:;][\]\)\}\"'»”’]*\s*$")
+_HEADINGISH_LINE_RE = re.compile(r"^\s*(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 '\u2019\-–—:;,.]{3,}|.{0,80}:)\s*$")
+_OCR_GARBAGE_RE = re.compile(r"(?:\ufffd|[|¦]{3,}|[_~^]{4,}|(?:[^\w\s.,;:!?()'\"–—-]){5,})")
+
+
+_OCR_BOILERPLATE_RE = re.compile(r"(?:downloaded\s+from|all\s+use\s+subject\s+to|digitized\s+by\s+the\s+internet\s+archive|created\s+from\s+.+ebooks|ebook\s+central|jstor\.org|proquest\s+ebook)", re.I)
+
+def _looks_like_poetry_or_quotation(lines: list[str]) -> bool:
+    meaningful = [line.strip() for line in lines if line.strip()]
+    if len(meaningful) < 3:
+        return False
+    short = sum(1 for line in meaningful if len(line) <= 52)
+    quoted = sum(1 for line in meaningful if line.startswith(("\"", "“", "‘", "'", ">", "«")))
+    # Poetry tends to be consistently short-lined; block quotations often keep
+    # an explicit quotation marker. Preserve both rather than flattening them.
+    return (short / len(meaningful) >= 0.72) or (quoted / len(meaningful) >= 0.5)
+
+
+def _clean_wrapped_lines(text: str) -> tuple[str, int]:
+    """Repair layout line wraps conservatively without flattening poetry/quotes."""
+    paragraphs = re.split(r"(\n\s*\n)", text)
+    out: list[str] = []
+    changes = 0
+    for part in paragraphs:
+        if not part or re.fullmatch(r"\n\s*\n", part):
+            out.append(part)
+            continue
+        lines = part.splitlines()
+        if _looks_like_poetry_or_quotation(lines):
+            out.append(part)
+            continue
+        joined: list[str] = []
+        i = 0
+        while i < len(lines):
+            current = lines[i].rstrip()
+            if i + 1 >= len(lines):
+                joined.append(current)
+                break
+            nxt = lines[i + 1].lstrip()
+            can_join = bool(
+                current.strip() and nxt.strip()
+                and not _SENTENCE_END_LINE_RE.search(current)
+                and not _QUOTE_OR_LIST_LINE_RE.match(current)
+                and not _QUOTE_OR_LIST_LINE_RE.match(nxt)
+                and not _HEADINGISH_LINE_RE.match(current)
+                and not _HEADINGISH_LINE_RE.match(nxt)
+                and (re.match(r"^[a-zà-öø-ÿ]", nxt) or len(current) >= 45)
+            )
+            if can_join:
+                # Preserve hyphenated lexical compounds, but repair obvious
+                # PDF line-break hyphenation when the next line starts lowercase.
+                if current.endswith("-") and re.match(r"^[a-zà-öø-ÿ]", nxt):
+                    joined.append(current[:-1] + nxt)
+                else:
+                    joined.append(current + " " + nxt)
+                changes += 1
+                i += 2
+            else:
+                joined.append(current)
+                i += 1
+        out.append("\n".join(joined))
+    return "".join(out), changes
+
+
+def _clean_text_value(text: str, rules: set[str], recurring_lines: set[str], document_terms: set[str] | None = None) -> tuple[str, dict[str, Any]]:
+    original = str(text or "")
+    value = original
+    document_terms = {term.casefold().strip() for term in (document_terms or set()) if term and len(term.strip()) >= 3}
+    removed: list[str] = []
+    changes = 0
+    if "line_hyphenation" in rules:
+        updated = re.sub(r"(?<=[A-Za-zÀ-ÖØ-öø-ÿ])-\s*\n\s*(?=[A-Za-zÀ-ÖØ-öø-ÿ])", "", value)
+        if updated != value:
+            changes += 1
+            value = updated
+    if rules & {"page_numbers", "repeated_short_lines", "ocr_artifacts"}:
+        kept: list[str] = []
+        raw_lines = value.splitlines()
+        meaningful_indexes = [index for index, line in enumerate(raw_lines) if line.strip()]
+        boundary_indexes = set(meaningful_indexes[:3] + meaningful_indexes[-3:])
+        for index, line in enumerate(raw_lines):
+            stripped = line.strip()
+            normalized = stripped.casefold()
+            remove = False
+            if "page_numbers" in rules and index in boundary_indexes and _PAGE_NUMBER_LINE_RE.match(stripped):
+                remove = True
+            elif "repeated_short_lines" in rules and index in boundary_indexes and normalized and len(normalized) <= 120 and (normalized in recurring_lines or normalized in document_terms):
+                remove = True
+            elif "ocr_artifacts" in rules:
+                control_count = sum(1 for ch in stripped if unicodedata.category(ch) == "Cc" and ch not in "\t\n\r")
+                printable = sum(1 for ch in stripped if ch.isalnum() or ch.isspace() or ch in ".,;:!?()[]{}'\"-–—")
+                ratio = printable / max(1, len(stripped))
+                if stripped and (_OCR_GARBAGE_RE.search(stripped) or _OCR_BOILERPLATE_RE.search(stripped) or "\ufffd" in stripped or control_count or (len(stripped) >= 5 and ratio < 0.55)):
+                    remove = True
+            if remove:
+                if stripped:
+                    removed.append(stripped)
+                changes += 1
+            else:
+                kept.append(line)
+        value = "\n".join(kept)
+    if "paragraph_lines" in rules:
+        value, count = _clean_wrapped_lines(value)
+        changes += count
+    if "empty_lines" in rules:
+        updated = re.sub(r"^[ \t]+$", "", value, flags=re.M)
+        updated = re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+", "\n\n", updated)
+        if updated != value:
+            changes += 1
+            value = updated
+    if "whitespace" in rules:
+        updated = re.sub(r"[ \t]+\n", "\n", value)
+        updated = re.sub(r"[ \t]{2,}", " ", updated).strip()
+        if updated != value:
+            changes += 1
+            value = updated
+    return value, {"changed": value != original, "changes": changes, "removed_lines": removed[:200]}
+
+
+def _recurring_cleanup_lines(records: list[dict[str, Any]], minimum_occurrences: int = 2) -> set[str]:
+    """Detect running headers/footers only at record boundaries.
+
+    Restricting detection to the first/last meaningful lines prevents recurring
+    philosophical phrases inside the body from being mistaken for page furniture.
+    """
+    counts: Counter[str] = Counter()
+    for record in records:
+        meaningful = [line.strip() for line in str(record.get("text") or "").splitlines() if line.strip()]
+        seen: set[str] = set()
+        for stripped in meaningful[:3] + meaningful[-3:]:
+            key = stripped.casefold()
+            if not key or len(key) > 120 or _PAGE_NUMBER_LINE_RE.match(stripped) or key in seen:
+                continue
+            seen.add(key)
+            counts[key] += 1
+    return {key for key, count in counts.items() if count >= minimum_occurrences}
+
+
+def apply_automatic_text_cleanup(records: list[dict[str, Any]], rules: list[str] | tuple[str, ...] | set[str], document_terms: list[str] | tuple[str, ...] | set[str] | None = None) -> dict[str, Any]:
+    """Clean reviewed corpus text before LLM enrichment while preserving source truth."""
+    enabled = {str(rule) for rule in rules if str(rule) in TEXT_CLEANUP_RULES}
+    recurring = _recurring_cleanup_lines(records)
+    document_term_set = {str(term).strip() for term in (document_terms or []) if str(term).strip()}
+    changed_records = 0
+    total_changes = 0
+    removed_lines = 0
+    for record in records:
+        original = str(record.get("text") or "")
+        cleaned, report = _clean_text_value(original, enabled, recurring, document_term_set)
+        if not report["changed"]:
+            continue
+        record.setdefault("source_extracted_text", original)
+        record["text"] = cleaned
+        record["text_length"] = len(cleaned)
+        record["text_cleanup_status"] = "automatic"
+        record["text_cleanup_report"] = {
+            "source": "automatic_pre_enrichment",
+            "rules": sorted(enabled),
+            "changes": int(report["changes"]),
+            "removed_lines": list(report["removed_lines"]),
+            "at": iso_now(),
+        }
+        history = list(record.get("text_revision_history") or [])
+        history.append({
+            "at": iso_now(), "source": "automatic_cleanup",
+            "previous_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest(),
+            "text_sha256": hashlib.sha256(cleaned.encode("utf-8")).hexdigest(),
+            "previous_length": len(original), "text_length": len(cleaned),
+            "diff": "".join(difflib.unified_diff(original.splitlines(True), cleaned.splitlines(True), fromfile="source_extracted_text", tofile="cleaned_text"))[:20000],
+            "resolved_source_issues": False,
+        })
+        record["text_revision_history"] = history[-50:]
+        changed_records += 1
+        total_changes += int(report["changes"])
+        removed_lines += len(report["removed_lines"])
+    return {
+        "enabled": True,
+        "rules": sorted(enabled),
+        "records_changed": changed_records,
+        "changes": total_changes,
+        "removed_lines": removed_lines,
+        "recurring_line_patterns": len(recurring),
+    }
+
+
 class DocumentManifestModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str | None = None
@@ -930,6 +1121,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "region_types": REGION_TYPES,
         "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
         "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
+        "publication_required_document_fields": ["title", "document_author"],
         "review_metadata_fields": list(REVIEW_METADATA_FIELDS),
         "min_boundary_confidence": 0.72,
         "candidate_llm_threshold": 0.30,
@@ -1330,6 +1522,72 @@ class PdfCorpusBuildManager:
         with self._lock:
             return build_id in self._cancel
 
+    def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]:
+        # A selective user-requested rerun is an explicit instruction and must
+        # bypass the build's automatic low-yield routing policy.
+        if not build_id or request.get("families") or str(request.get("enrichment_mode") or "fast") != "fast":
+            return False, ""
+        try:
+            build = self.repo.get_build(build_id)
+        except Exception:
+            return False, ""
+        stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
+        family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
+        calls = int(family_stats.get("calls") or 0)
+        proposed = int(family_stats.get("proposed_fields") or 0)
+        human_accepted = int(family_stats.get("human_accepted_fields") or 0)
+        human_corrected = int(family_stats.get("human_corrected_fields") or 0)
+        # Do not learn from tiny samples. Once a family has repeatedly produced
+        # almost no usable material, Fast mode defers it instead of continuing
+        # to spend provider time. A human can always explicitly rerun that family.
+        if calls >= 5 and proposed / max(1, calls) < 0.25:
+            return True, f"Adaptive Fast-mode routing paused {family}: only {proposed} proposed field(s) across {calls} completed call(s)."
+        reviewed = human_accepted + human_corrected
+        if calls >= 8 and reviewed >= 4 and human_accepted / max(1, reviewed) < 0.20:
+            return True, f"Adaptive Fast-mode routing paused {family}: reviewers usually corrected or rejected its suggestions."
+        return False, ""
+
+    def _record_family_effectiveness(self, build_id: str | None, family: str, result: dict[str, Any] | None, *, elapsed_ms: int = 0) -> None:
+        if not build_id:
+            return
+        metadata = result.get("metadata") if isinstance(result, dict) and isinstance(result.get("metadata"), dict) else {}
+        proposed = sum(1 for value in metadata.values() if value not in (None, "", []))
+        with self._lock:
+            try:
+                build = self.repo.get_build(build_id)
+            except Exception:
+                return
+            stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
+            family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
+            family_stats["calls"] = int(family_stats.get("calls") or 0) + 1
+            family_stats["proposed_fields"] = int(family_stats.get("proposed_fields") or 0) + proposed
+            family_stats["elapsed_ms"] = int(family_stats.get("elapsed_ms") or 0) + int(elapsed_ms or 0)
+            family_stats["last_updated_at"] = iso_now()
+            stats[family] = family_stats
+            build["llm_family_effectiveness"] = stats
+            self.repo.save_build(build)
+
+    def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None) -> None:
+        info = prior_status or {}
+        if str(info.get("status") or "") != "llm_inferred":
+            return
+        family = next((name for name, fields in METADATA_FAMILY_FIELDS.items() if field in fields), None)
+        if not family:
+            return
+        key = "human_accepted_fields" if prior_value == new_value else "human_corrected_fields"
+        with self._lock:
+            try:
+                build = self.repo.get_build(build_id)
+            except Exception:
+                return
+            stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
+            family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
+            family_stats[key] = int(family_stats.get(key) or 0) + 1
+            family_stats["last_human_feedback_at"] = iso_now()
+            stats[family] = family_stats
+            build["llm_family_effectiveness"] = stats
+            self.repo.save_build(build)
+
     @staticmethod
     def _metadata_issue_type(status: dict[str, Any] | None, record: dict[str, Any]) -> str:
         info = status or {}
@@ -1381,6 +1639,9 @@ class PdfCorpusBuildManager:
         stage = str(build.get("stage") or "")
         profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES.get(PROFILE_VERSION, {}))
         required_fields = list(profile.get("publication_required_metadata_fields") or profile.get("required_metadata_fields") or [])
+        required_document_fields = list(profile.get("publication_required_document_fields") or [])
+        manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
+        missing_document_fields = [field for field in required_document_fields if manifest.get(field) in (None, "", [])]
 
         blockers: list[dict[str, Any]] = []
         if pending:
@@ -1393,10 +1654,12 @@ class PdfCorpusBuildManager:
             blockers.append({"code": "boundary_attention", "count": int(build.get("boundary_review_count") or 0)})
         if metadata_remaining or unresolved_fields:
             blockers.append({"code": "required_metadata", "count": max(metadata_remaining, int(issue_summary.get("records_incomplete") or 0)), "fields": required_fields})
+        if missing_document_fields:
+            blockers.append({"code": "required_document_metadata", "count": len(missing_document_fields), "fields": missing_document_fields})
         if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
             blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
         if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
-            blockers.append({"code": "metadata_validation", "count": len(validation.get("metadata_evidence_errors") or []) + len(validation.get("metadata_schema_errors") or []) + len(validation.get("citation_errors") or [])})
+            blockers.append({"code": "metadata_validation", "count": sum(len(validation.get(key) or []) for key in ("metadata_evidence_errors", "metadata_schema_errors", "citation_errors", "relationship_errors", "human_ownership_errors", "record_content_errors"))})
         # Raw PDF extraction findings remain in build.source_quality for audit,
         # but a reviewer may resolve a record-level extraction problem by
         # correcting the reviewed text while preserving source_extracted_text.
@@ -1414,6 +1677,8 @@ class PdfCorpusBuildManager:
             next_action = "review_records"
         elif rejected:
             next_action = "resolve_rejections"
+        elif missing_document_fields:
+            next_action = "resolve_document_metadata"
         elif blockers:
             next_action = "resolve_validation"
         elif can_publish:
@@ -1443,6 +1708,8 @@ class PdfCorpusBuildManager:
             "next_action": next_action,
             "blockers": blockers,
             "required_metadata_fields": required_fields,
+            "required_document_fields": required_document_fields,
+            "missing_document_fields": missing_document_fields,
             "records_total": record_count,
             "records_reviewed": reviewed,
             "records_accepted": accepted,
@@ -3258,6 +3525,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         if stage_callback:
                             stage_callback(record, task_name, "skipped", reason)
                         continue
+            adaptive_skip, adaptive_reason = self._adaptive_family_should_skip(build_id, task_name, request)
+            if adaptive_skip and not (isinstance(requested_families, list) and requested_families):
+                stage_status[task_name] = "skipped"
+                stage_ledger[task_name] = {"state": "skipped", "finished_at": iso_now(), "error": adaptive_reason, "reason_code": "adaptive_low_yield"}
+                stage_results.append((task_name, {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None))
+                if stage_callback:
+                    stage_callback(record, task_name, "skipped", adaptive_reason)
+                continue
             prior = persisted_stage_results.get(task_name)
             prior_state = str(stage_status.get(task_name) or "")
             if isinstance(prior, dict):
@@ -3322,6 +3597,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
+                self._record_family_effectiveness(build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0))
                 if stage_callback:
                     stage_callback(record, task_name, "complete", None)
             except InterruptedError:
@@ -3616,6 +3892,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         evidence_errors: list[dict[str, str]] = []
         citation_errors: list[str] = []
         metadata_schema_errors: list[dict[str, str]] = []
+        relationship_errors: list[dict[str, str]] = []
+        human_ownership_errors: list[dict[str, str]] = []
+        record_content_errors: list[dict[str, str]] = []
         suspicious: list[dict[str, Any]] = []
         previous_last = -1
         min_conf = float(profile.get("min_metadata_confidence") or 0.72)
@@ -3628,7 +3907,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 for block_id in ids
                 if block_id in block_map and block_map[block_id]["text"].strip()
             )
-            fidelity_text = record.get("source_extracted_text") if record.get("text_review_status") == "human_corrected" else record.get("text")
+            # Reviewed/cleaned text is allowed to differ from the immutable PDF
+            # extraction. Source fidelity validates the preserved extraction, not
+            # the editorial layer that intentionally repairs layout/OCR noise.
+            fidelity_text = record.get("source_extracted_text") if record.get("source_extracted_text") is not None else record.get("text")
             if _normalize_text(expected) != _normalize_text(fidelity_text or ""):
                 fidelity_errors.append(record_id)
 
@@ -3660,6 +3942,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 })
             except ValidationError as exc:
                 metadata_schema_errors.append({"record_id": record_id, "reason": str(exc)[:1200]})
+
+            if not str(record.get("text") or "").strip():
+                record_content_errors.append({"record_id": record_id, "reason": "record text is empty"})
+            if str(record.get("discourse_role") or "") == "reported_position" and not record.get("position_holder"):
+                relationship_errors.append({"record_id": record_id, "reason": "reported_position requires a position_holder"})
+            touched = {str(value) for value in (record.get("human_touched_fields") or [])}
+            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            for field in touched:
+                if field.startswith("__"):
+                    continue
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
+                if str(info.get("status") or "") == "llm_inferred":
+                    human_ownership_errors.append({"record_id": record_id, "reason": f"{field} is human-touched but still marked llm_inferred"})
 
             evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
             valid_ids = set(ids)
@@ -3694,7 +3989,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 })
 
         source_valid = not missing and not duplicates and not fidelity_errors and not order_errors and not page_errors
-        metadata_valid = not evidence_errors and not citation_errors and not printed_page_errors and not metadata_schema_errors
+        metadata_valid = not evidence_errors and not citation_errors and not printed_page_errors and not metadata_schema_errors and not relationship_errors and not human_ownership_errors and not record_content_errors
         return {
             "source_block_count": len(source_ids),
             "used_block_count": len(used_ids),
@@ -3707,6 +4002,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             "printed_page_label_errors": sorted(set(printed_page_errors)),
             "metadata_evidence_errors": evidence_errors,
             "metadata_schema_errors": metadata_schema_errors,
+            "relationship_errors": relationship_errors,
+            "human_ownership_errors": human_ownership_errors,
+            "record_content_errors": record_content_errors,
             "citation_errors": sorted(set(citation_errors)),
             "suspicious_record_sizes": suspicious,
             "source_valid": source_valid,
@@ -3808,6 +4106,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         "Deterministic topology sanity check failed before metadata enrichment: "
                         + ", ".join(topology_validation.get("issues") or ["unknown topology error"])
                     )
+                # Optionally clean obvious extraction/layout noise before metadata
+                # enrichment. The immutable extracted text remains bound in
+                # source_extracted_text and the transformation is revisioned.
+                if bool(request.get("auto_clean_text", True)):
+                    cleanup_rules = request.get("text_cleanup_rules") or sorted(TEXT_CLEANUP_RULES)
+                    cleanup_report = apply_automatic_text_cleanup(records, cleanup_rules, [current_build.get("manifest", {}).get(key) for key in ("title", "short_title", "original_title")])
+                    current_build = self.repo.get_build(build_id)
+                    current_build["text_cleanup"] = cleanup_report
+                    self.repo.save_build(current_build)
+                else:
+                    current_build = self.repo.get_build(build_id)
+                    current_build["text_cleanup"] = {"enabled": False, "rules": [], "records_changed": 0, "changes": 0, "removed_lines": 0}
+                    self.repo.save_build(current_build)
                 # Persist deterministic records before any metadata call. A provider
                 # failure can therefore never discard successful segmentation work.
                 self.repo.save_records(build_id, records)
@@ -4896,8 +5207,11 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
         decision_log = list(target.get("metadata_decisions") or [])
         for key, value in changes.items():
-            target[key] = value
             status = target.setdefault("metadata_field_status", {})
+            prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
+            prior_value = target.get(key)
+            self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status)
+            target[key] = value
             if key in HUMAN_EDITABLE_METADATA_FIELDS:
                 is_override = key in MANIFEST_INHERITED_FIELDS
                 status[key] = {
@@ -4959,6 +5273,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             decisions = list(record.get("metadata_decisions") or [])
             statuses = record.setdefault("metadata_field_status", {})
             for key, value in changes.items():
+                prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
+                prior_value = record.get(key)
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status)
                 record[key] = value
                 override = key in MANIFEST_INHERITED_FIELDS
                 statuses[key] = {
@@ -5352,6 +5669,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
+        self._refresh_workflow_fields(build)
+        readiness = build.get("publication_readiness") if isinstance(build.get("publication_readiness"), dict) else {}
+        readiness_blockers = readiness.get("blockers") if isinstance(readiness.get("blockers"), list) else []
+        missing_document = [item for item in readiness_blockers if isinstance(item, dict) and item.get("code") == "required_document_metadata"]
+        if missing_document:
+            fields = ", ".join(str(value) for value in (missing_document[0].get("fields") or []))
+            raise ValueError(f"Publication is blocked: required document metadata is missing ({fields}).")
         metadata_total = int(build.get("metadata_total") or 0)
         metadata_completed = int(build.get("metadata_completed") or 0)
         if metadata_total and metadata_completed < metadata_total:
