@@ -6,7 +6,7 @@ import UiCombobox from "./ui/UiCombobox.vue";
 
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
-  boolean?:boolean; number?:boolean; array?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
+  control?:"enum"|"combobox"|"multi-combobox"|"boolean"|"number"|"text"; allowCustom?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
   constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
 }>();
 const emit=defineEmits<{save:[value:unknown];noValue:[];source:[];dirty:[dirty:boolean]}>();
@@ -19,13 +19,13 @@ function editableValue(){const value=props.constraint?.value ?? props.value;retu
 watch(()=>[props.field,props.value,props.constraint?.value],()=>{draft.value=editableValue()},{immediate:true});
 watch(()=>props.open,value=>{if(value)editing.value=true});
 
-function normalized(){if(props.array)return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);if(props.number&&draft.value!=="")return Number(draft.value);return draft.value}
+function normalized(){if(props.control==='multi-combobox')return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);if(props.control==='number'&&draft.value!=="")return Number(draft.value);return draft.value}
 function save(){emit('save',normalized());emit('dirty',false);editing.value=true}
 function markDirty(){emit('dirty',true)}
 function selectFromText(){
   const selected=String(window.getSelection()?.toString()||'').trim();
   if(!selected)return;
-  if(props.array){
+  if(props.control==='multi-combobox'){
     const current=String(draft.value||'').split(/[,\n]/).map(v=>v.trim()).filter(Boolean);
     if(!current.includes(selected))current.push(selected);
     draft.value=current.join(', ');
@@ -44,17 +44,17 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
   </div>
   <div v-if="!editing" class="field-current">{{display(value)}}</div>
   <div v-else class="field-editor">
-    <p v-if="status?.reason" class="field-reason">{{status.reason}}</p>
+    <div v-if="status?.reason_code==='deterministic_llm_disagreement'" class="disagreement" role="status"><b>{{i18n.t('pdf_corpus.metadata_disagreement','Deterministic and LLM suggestions disagree')}}</b><span>{{i18n.tf('pdf_corpus.deterministic_value','Deterministic: {value}',{value:String(status?.deterministic_value??'—')})}}</span><span>{{i18n.tf('pdf_corpus.llm_value','LLM: {value}',{value:String(status?.llm_value??value??'—')})}}<template v-if="typeof status?.llm_confidence==='number'"> · {{Math.round(Number(status.llm_confidence)*100)}}%</template></span><small v-if="status?.deterministic_reason">{{status.deterministic_reason}}</small><small v-if="status?.llm_reason">{{status.llm_reason}}</small></div><p v-else-if="status?.reason" class="field-reason">{{status.reason}}</p>
     <div v-if="constraint" class="constraint" role="status"><b>{{i18n.t('pdf_corpus.deterministic_suggestion','Deterministic rule')}}</b><span>{{constraint.reason}}</span></div>
     <div class="editor-row">
-      <select v-if="options?.length" v-model="draft" class="control" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
-      <fieldset v-else-if="boolean" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
-      <UiCombobox v-else-if="!number&&!array" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" @update:model-value="value=>{draft=value;markDirty()}"/><input v-else v-model="draft" class="control" :type="number?'number':'text'" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty">
-      <button v-if="!options?.length&&!boolean&&!number" type="button" class="btn" :disabled="busy" @click="selectFromText">{{i18n.t('pdf_corpus.select_from_text','Select from text')}}</button>
+      <select v-if="control==='enum'" v-model="draft" class="control" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options||[]" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
+      <fieldset v-else-if="control==='boolean'" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
+      <UiCombobox v-else-if="control==='combobox'" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" @update:model-value="value=>{draft=value;markDirty()}"/><input v-else v-model="draft" class="control" :type="control==='number'?'number':'text'" :list="control==='multi-combobox'&&options?.length?`${field}-suggestions`:undefined" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty"><datalist v-if="control==='multi-combobox'&&options?.length" :id="`${field}-suggestions`"><option v-for="option in options" :key="option" :value="option"/></datalist>
+      <button v-if="control==='combobox'||control==='multi-combobox'||control==='text'" type="button" class="btn" :disabled="busy" @click="selectFromText">{{i18n.t('pdf_corpus.select_from_text','Select from text')}}</button>
       <button type="button" class="btn primary" :disabled="busy||draft===''||draft===undefined||(required&&draft===null)" @click="save">{{saving?i18n.t('pdf_corpus.saving_decision','Saving…'):i18n.t('pdf_corpus.save_field_value','Save value')}}</button>
       <button type="button" class="btn" :disabled="busy" @click="emit('noValue')">{{i18n.t('pdf_corpus.confirm_no_value','No supported value')}}</button>
     </div>
-    <p v-if="!options?.length&&!boolean&&!number" class="selection-help">{{i18n.t('pdf_corpus.select_from_text_help','Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.')}}</p>
+    <p v-if="control==='combobox'||control==='multi-combobox'||control==='text'" class="selection-help">{{i18n.t('pdf_corpus.select_from_text_help','Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.')}}</p>
     <div class="field-meta">
       <span v-if="isLlm" class="proposal">{{confidence!==null&&confidence>0.65?i18n.t('pdf_corpus.llm_suggestion_autofilled','LLM value auto-filled from a >65% confidence suggestion'):i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
       <span>{{confidenceLabel}}</span>
@@ -66,5 +66,5 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
 </template>
 
 <style scoped>
-.metadata-field{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px;display:grid;gap:10px}.metadata-field[data-attention="true"]{border-inline-start:4px solid var(--warning,#a16207)}.field-topline{display:flex;justify-content:space-between;gap:12px;align-items:center}.field-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap;text-transform:none}.field-current{font-size:.9375rem;line-height:1.5;overflow-wrap:anywhere}.field-actions,.editor-row,.field-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field-editor{display:grid;gap:10px;padding-top:10px;border-top:1px solid var(--line)}.selection-help{margin:0;color:var(--muted);font-size:.8125rem;line-height:1.4}.field-reason{margin:0;color:var(--muted);font-size:.875rem;line-height:1.5}.constraint{display:grid;gap:2px;padding:9px 10px;border-radius:9px;background:var(--soft);font-size:.875rem}.constraint b{font-size:.8125rem}.control{min-width:min(280px,100%);min-height:42px}.boolean-choice{display:flex;gap:12px;border:0;padding:0;margin:0}.boolean-choice label{display:flex;gap:6px;align-items:center;min-height:40px}.field-meta{font-size:.8125rem;color:var(--muted)}.proposal{font-weight:750;color:var(--text)}.saved{color:var(--success,#166534);font-weight:700}.link-button{border:0;background:none;color:var(--accent);font:inherit;font-weight:700;min-height:36px;cursor:pointer}:is(button,input,select):focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:680px){.field-topline{align-items:flex-start;flex-direction:column}.field-actions{width:100%}.editor-row{align-items:stretch;flex-direction:column}.control{width:100%}}
+.metadata-field{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px;display:grid;gap:10px}.metadata-field[data-attention="true"]{border-inline-start:4px solid var(--warning,#a16207)}.field-topline{display:flex;justify-content:space-between;gap:12px;align-items:center}.field-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap;text-transform:none}.field-current{font-size:.9375rem;line-height:1.5;overflow-wrap:anywhere}.field-actions,.editor-row,.field-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field-editor{display:grid;gap:10px;padding-top:10px;border-top:1px solid var(--line)}.selection-help{margin:0;color:var(--muted);font-size:.8125rem;line-height:1.4}.field-reason{margin:0;color:var(--muted);font-size:.875rem;line-height:1.5}.disagreement{display:grid;gap:3px;padding:10px;border:1px solid var(--warning,#a16207);border-radius:9px;background:var(--soft);font-size:.875rem}.disagreement small{color:var(--muted);line-height:1.4}.constraint{display:grid;gap:2px;padding:9px 10px;border-radius:9px;background:var(--soft);font-size:.875rem}.constraint b{font-size:.8125rem}.control{min-width:min(280px,100%);min-height:42px}.boolean-choice{display:flex;gap:12px;border:0;padding:0;margin:0}.boolean-choice label{display:flex;gap:6px;align-items:center;min-height:40px}.field-meta{font-size:.8125rem;color:var(--muted)}.proposal{font-weight:750;color:var(--text)}.saved{color:var(--success,#166534);font-weight:700}.link-button{border:0;background:none;color:var(--accent);font:inherit;font-weight:700;min-height:36px;cursor:pointer}:is(button,input,select):focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:680px){.field-topline{align-items:flex-start;flex-direction:column}.field-actions{width:100%}.editor-row{align-items:stretch;flex-direction:column}.control{width:100%}}
 </style>

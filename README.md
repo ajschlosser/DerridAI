@@ -1,6 +1,17 @@
-# DerridAI Corpus Viewer 0.56.0
+# DerridAI Corpus Viewer 0.57.0
 
-**0.56.0 — Perilous Penguins** adds a bounded LLM “second reader” for record boundaries without giving the model authority to rewrite source topology. Deterministic segmentation remains primary; suspicious or demonstrated-risk seams receive semantic adjudication, human boundary corrections become build-local editorial examples, and reviewers can request an explicit previous/next boundary check in both standard and Focus review. Source-span conservation, auditable decisions, English/Québec French i18n, and WCAG-oriented interaction patterns remain mandatory.
+**0.57.0 — Quiet Camel** repairs metadata-field control typing, boundary slicing adjacency, and interactive LLM execution. Free-form scholarly fields now use autocomplete rather than accidental closed dropdowns; deterministic/LLM conflicts expose both candidates and prefill the LLM proposal for review; interactive LLM actions honor the provider and per-operation model selected by the reviewer; touch-up explains built-in instructions and warns about redundant custom instructions; Ollama contention is surfaced before launching competing work. English/Québec French i18n and WCAG-oriented interaction remain release requirements.
+
+## 0.57.0 — Quiet Camel
+
+- Typed metadata field registry separates true enums from open autocomplete suggestions.
+- `position_holder`, speaker/target/quotation relations, and similar scholarly fields remain custom-editable.
+- Deterministic/LLM disagreements retain both candidates, reasons, and confidence; the semantic LLM proposal is prefilled while human confirmation remains required.
+- Slice-to-previous/next availability now falls back to authoritative global record position when topology indices are absent.
+- Interactive touch-up, boundary adjudication, record metadata rerun, and enrichment honor the selected profile/model instead of being replaced by build-runtime provider state.
+- Shared LLM execution controls expose per-operation model choice and warn about Ollama concurrency contention.
+- Touch-up no longer uses an unexplained black AI badge, exposes operation status, documents its built-in prompt policy, and warns when optional instructions substantially repeat that policy.
+- Storybook/regression coverage expanded for enum vs autocomplete controls, conflicts, provider/model selection, concurrency warnings, and boundary slicing.
 
 ## 0.56.0 — Perilous Penguins
 

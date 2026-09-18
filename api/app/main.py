@@ -87,7 +87,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.56.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.57.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -836,7 +836,7 @@ def create_rag_job(body: RAGRunRequest, request: Request):
             payload = body.model_dump()
             payload.update({
                 "provider": profile.get("type") or "ollama",
-                "model": profile.get("model"),
+                "model": requested_model or profile.get("model"),
                 "base_url": profile.get("base_url"),
                 "api_key": profile.get("api_key"),
                 "max_concurrent_requests": max(1, min(64, int(profile.get("max_concurrent_requests") or 1))),
@@ -1194,7 +1194,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.56.0",
+            "app_version": "0.57.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1798,6 +1798,7 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     if hasattr(direct_review, "model_dump"):
         direct_review = direct_review.model_dump(exclude_none=True)
 
+    requested_model = str(resolved.get("model") or "").strip() or None
     profile_id = str(resolved.get("provider_profile_id") or "").strip()
     if profile_id:
         profile = system_store.researcher_profile(profile_id)
