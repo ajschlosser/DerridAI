@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.47.1"
+    assert APP_VERSION == "0.48.0"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -154,7 +154,7 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
         manager.merge(build["build_id"], "r1", "next", expected_revision=2)
         assert False, "topology edits must remain locked while neighboring metadata is in flight"
     except ValueError as exc:
-        assert "still being prepared" in str(exc).lower()
+        assert "not editable until segmentation is complete" in str(exc).lower()
 
 
 
@@ -238,5 +238,5 @@ def test_dachshund_i18n_and_storybook_cover_exception_review():
 
 def test_low_confidence_llm_review_metadata_is_forced_to_human_review():
     source = text("api/app/corpus_builder.py")
-    assert 'elif confidence < minimum and value not in (None, "", []):' in source
+    assert 'elif (confidence is None or confidence < minimum) and value not in (None, "", []):' in source
     assert '"reason_code": "low_confidence"' in source
