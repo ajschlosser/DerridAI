@@ -22,9 +22,9 @@ def text(path:str)->str:
 
 
 def test_release_identity_and_documentation():
-    assert APP_VERSION=='0.53.0'
-    assert json.loads(text('web/package.json'))['version']=='0.53.0'
-    assert '0.53.0 — Manic Monkey' in text('README.md')
+    assert APP_VERSION=='0.54.0'
+    assert json.loads(text('web/package.json'))['version']=='0.54.0'
+    assert '0.54.0 — Neurotic Gnat' in text('README.md')
 
 
 def test_metadata_enrichment_is_family_checkpointed_and_bounded():

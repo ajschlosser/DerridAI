@@ -13,6 +13,10 @@ const items=computed(()=>{
     const field=String(entry.field||"");
     rows.push({at:entry.at,kind:"metadata",label:i18n.tf("pdf_corpus.history_metadata_change","Metadata: {field}",{field:i18n.t(`record.${field}`,field.replace(/_/g," "))}),detail:entry.source?i18n.t(`pdf_corpus.history_source.${entry.source}`,String(entry.source).replace(/_/g," ")):undefined});
   }
+  for(const entry of props.record.review_events||[]){
+    const event=String(entry.event||'review_change');
+    rows.push({at:entry.at,kind:'review',label:i18n.t(`pdf_corpus.history_event.${event}`,event.replace(/_/g,' ')),detail:entry.transaction_id?String(entry.transaction_id):undefined});
+  }
   return rows.sort((a,b)=>String(b.at||"").localeCompare(String(a.at||""))).slice(0,50);
 });
 function formatDate(value?:string){if(!value)return "—";try{return new Intl.DateTimeFormat(i18n.locale||undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(value))}catch{return value}}
