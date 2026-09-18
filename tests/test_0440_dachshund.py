@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.48.0"
+    assert APP_VERSION == "0.48.1"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -206,8 +206,8 @@ def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
     panel=text("web/src/components/CorpusMetadataResolutionPanel.vue")
     assert "acceptCleanRecords" in ui
     assert "reviewQueueCounts" in ui
-    assert "selectedRecordEnrichmentPending" in ui
-    assert "collaborative_review_title" in ui
+    assert "CorpusMetadataLiveStatus" in ui
+    assert "collaborative_review_settled" not in ui
     assert "textDraftKey" in ui
     assert "structuralReviewLocked=computed(()=>buildRunning.value)" in ui
     assert "review-readonly-banner" in ui

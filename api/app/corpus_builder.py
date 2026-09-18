@@ -261,6 +261,7 @@ class QuotationMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metadata: QuotationMetadataModel = Field(default_factory=QuotationMetadataModel)
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
+    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -275,6 +276,7 @@ class IndexMetadataModel(BaseModel):
 class IndexMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metadata: IndexMetadataModel = Field(default_factory=IndexMetadataModel)
+    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -3032,11 +3034,13 @@ Determine whether there is direct quotation and, only when source-supported, ide
 
 {base_context}
 For every populated quoted_* or quotation_chain field, include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use [] when unsupported.
+Also return field_assessments for is_direct_quote and every quotation field you populate. Each assessment must include confidence 0..1, needs_review, and a concise reason.
 """
         indexing_prompt = f"""Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.
 Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage.
 
 {base_context}
+Return field_assessments for topics, concepts, persons, and works_referenced whenever you populate those fields. Each assessment must include confidence 0..1, needs_review, and a concise reason.
 """
 
         enrichment_mode = str(request.get("enrichment_mode") if "enrichment_mode" in request else "deep")
@@ -3185,6 +3189,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         attribution_confidences: list[float] = []
         model_review_reasons: list[str] = []
         field_assessments: dict[str, dict[str, Any]] = {}
+        llm_populated_fields: set[str] = set()
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -3193,7 +3198,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
-            if task_name == "discourse" and isinstance(result.get("field_assessments"), dict):
+            if isinstance(result.get("field_assessments"), dict):
                 field_assessments.update({str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)})
             field_status = record.setdefault("metadata_field_status", {})
             for key, value in metadata.items():
@@ -3217,6 +3222,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": "Model returned a non-boolean primary_text value."}
                     continue
                 record[key] = value
+                if value not in (None, "", []):
+                    llm_populated_fields.add(key)
             evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
             for field, info in evidence.items():
                 if field not in ALLOWED_METADATA_FIELDS or not isinstance(info, dict):
@@ -3262,6 +3269,28 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
         record["metadata_evidence"] = clean_evidence
         field_status = record.setdefault("metadata_field_status", {})
+        # Every model-populated field gets explicit provenance/confidence, not only
+        # the publication-critical discourse fields. This keeps quotation/indexing
+        # suggestions reviewable and prevents later records from appearing as if the
+        # LLM suddenly stopped supplying metadata merely because those fields were
+        # outside REVIEW_METADATA_FIELDS.
+        for field in sorted(llm_populated_fields):
+            current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"}:
+                continue
+            assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
+            assessment_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
+            evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
+            confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
+            needs_human = bool(assessment.get("needs_review"))
+            field_status[field] = {
+                "status": "unresolved" if needs_human else "llm_inferred",
+                "method": "llm",
+                "confidence": confidence,
+                "reason_code": "ambiguous" if needs_human else "resolved",
+                "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal."),
+            }
         review_metadata_fields = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
         for field in review_metadata_fields:
             value = record.get(field)
@@ -4599,8 +4628,18 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if "source_extracted_text" not in target:
             target["source_extracted_text"] = str(target.get("text") or "")
         previous = str(target.get("text") or "")
-        if cleaned == previous and not resolve_source_issues:
-            return target
+        unchanged = cleaned == previous
+        if unchanged and not resolve_source_issues:
+            target["text_review_status"] = "human_reviewed"
+            target["text_reviewed_at"] = iso_now()
+            target["text_review_source"] = "human"
+            self._mark_human_touch(target, ["__text_reviewed__"])
+            review_events = list(target.get("review_events") or [])
+            review_events.append({"at": iso_now(), "event": "text_reviewed", "changed": False})
+            target["review_events"] = review_events[-100:]
+            target["record_revision"] = current_revision + 1
+            self._rewrite_and_validate(build_id, records)
+            return next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
         history = list(target.get("text_revision_history") or [])
         history.append({
             "at": iso_now(), "source": "human",
