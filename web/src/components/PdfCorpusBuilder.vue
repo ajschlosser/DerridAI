@@ -13,9 +13,10 @@ import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import CorpusExecutionSettings from "./CorpusExecutionSettings.vue";
 import CorpusWorkflowStepper from "./CorpusWorkflowStepper.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
-import CorpusRecordSizingSettings, { type RecordSizingPolicy } from "./CorpusRecordSizingSettings.vue";
+import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
-import CorpusReviewQueueTabs, { type ReviewQueue } from "./CorpusReviewQueueTabs.vue";
+import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
+import type { RecordSizingPolicy, ReviewQueue } from "../types/corpus";
 import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
 import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
 import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
@@ -49,10 +50,7 @@ const selectedEvidenceField=ref("");
 const selectedPdfPage=ref(1);
 const reviewQueue=ref<ReviewQueue>("all");
 const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
-const reviewOnly=computed(()=>reviewQueue.value==="attention");
-const reviewDispositionFilter=computed<"pending"|"accepted"|"rejected"|"">(()=>["pending","accepted","rejected"].includes(reviewQueue.value)?reviewQueue.value as "pending"|"accepted"|"rejected":"");
-const metadataIncompleteOnly=computed(()=>reviewQueue.value==="metadata");
-const sourceProblemOnly=computed<boolean>(()=>reviewQueue.value==="source");
+const reviewQueueCounts=computed(()=>currentBuild.value?.review_queue_counts||{});
 const recordQuery=ref("");
 const focusView=ref(false);
 const recordsLoading=ref(false);
@@ -63,10 +61,13 @@ const recordListEl=ref<HTMLElement|null>(null);
 const reviewPaneEl=ref<HTMLElement|null>(null);
 const reviewInspectorEl=ref<HTMLElement|null>(null);
 const busy=ref("");
+const metadataSavingField=ref("");
+const metadataSavedField=ref("");
 const error=ref("");
 const notice=ref("");
 const uploadInput=ref<HTMLInputElement|null>(null);
 const statusRegion=ref<HTMLElement|null>(null);
+const acceptButtonEl=ref<HTMLButtonElement|null>(null);
 const manualProvider=ref<"ollama"|"openai">("ollama");
 const manualModel=ref("");
 const manualBaseUrl=ref("");
@@ -102,6 +103,21 @@ function persistBuilderDraft(){
   try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value}))}catch{/* storage may be unavailable */}
 }
 function metadataDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`}
+function recordIssueKinds(record:CorpusRecord){
+  if(Array.isArray(record.review_issue_codes))return record.review_issue_codes.filter(code=>["source","metadata","topology"].includes(String(code)));
+  const issues:string[]=[];
+  if(record.source_quality_issues?.length)issues.push("source");
+  if((record.metadata_incomplete_fields||[]).length||(record.metadata_review_fields||[]).length)issues.push("metadata");
+  const reason=String(record.review_reason||"").toLowerCase();
+  if(record.needs_review&&["boundary","merge","split","topology"].some(token=>reason.includes(token)))issues.push("topology");
+  return issues;
+}
+function recordState(record:CorpusRecord){
+  const authoritative=String(record.review_state||"");
+  if(["ready","metadata","topology","source","accepted","rejected"].includes(authoritative))return authoritative;
+  if(record.accepted)return "accepted";if(record.rejected)return "rejected";const issues=recordIssueKinds(record);return issues[0]||"ready"
+}
+function recordStateLabel(record:CorpusRecord){const state=recordState(record);return i18n.t(`pdf_corpus.record_state.${state}`,state==="ready"?"Ready":state.replace(/_/g," "))}
 
 
 const selectedAsset=computed(()=>assets.value.find(item=>item.asset_id===selectedAssetId.value)||null);
@@ -129,9 +145,12 @@ const selectedRecordIndex=computed(()=>records.value.findIndex(row=>row.record_i
 const canMergePrevious=computed(()=>Number(selectedRecord.value?.topology_index??-1)>0);
 const canMergeNext=computed(()=>{const index=Number(selectedRecord.value?.topology_index??-1),total=Number(selectedRecord.value?.topology_count??0);return index>=0&&index<total-1});
 const reviewRemaining=computed(()=>Math.max(0,Number(currentBuild.value?.record_count||0)-Number(currentBuild.value?.accepted_count||0)-Number(currentBuild.value?.rejected_count||0)));
-const pendingCount=computed(()=>reviewRemaining.value);
-const attentionCount=computed(()=>Number(currentBuild.value?.needs_review_count||0));
+const pendingCount=computed(()=>Number(reviewQueueCounts.value.pending??reviewRemaining.value));
+const issueCount=computed(()=>Number(reviewQueueCounts.value.issues??currentBuild.value?.needs_review_count??0));
+const readyCount=computed(()=>Number(reviewQueueCounts.value.ready??Math.max(0,pendingCount.value-issueCount.value)));
+const topologyIssueCount=computed(()=>Number(reviewQueueCounts.value.topology??0));
 const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
+const reviewLocked=computed(()=>buildRunning.value);
 const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
 const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
 const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
@@ -159,7 +178,7 @@ const selectedPageMeta=computed(()=>selectedAsset.value?.pages?.find(page=>Numbe
 const selectedPageBlocks=computed(()=>visibleBlocks.value.filter(block=>Number(block.page)===Number(selectedPdfPage.value)));
 const evidenceIdsArray=computed(()=>Array.from(evidenceBlockIds.value));
 const selectedProfile=computed(()=>providerProfiles.value.find(profile=>profile.id===selectedProviderId.value)||null);
-const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v10")||null);
+const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v11")||null);
 const regionTypes=computed(()=>Array.isArray(activeCorpusProfile.value?.region_types)?(activeCorpusProfile.value?.region_types as unknown[]).map(String):[]);
 const discourseRoles=computed(()=>Array.isArray(activeCorpusProfile.value?.discourse_roles)?(activeCorpusProfile.value?.discourse_roles as unknown[]).map(String):[]);
 const selectedMetadataBlocked=computed(()=>Boolean((selectedRecord.value?.metadata_review_fields||[]).length||(selectedRecord.value?.metadata_incomplete_fields||[]).length));
@@ -296,8 +315,8 @@ async function refreshRecords(reset=false, preferredId=""){
     // Hydrate independently of form interaction and retry the read while the build
     // explicitly advertises topology that should already exist.
     for(let attempt=0;attempt<5;attempt++){
-      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewOnly.value,recordQuery.value,reviewDispositionFilter.value,metadataIncompleteOnly.value,sourceProblemOnly.value);
-      if(result.total>0||expected===0||reviewOnly.value||metadataIncompleteOnly.value||sourceProblemOnly.value||Boolean(reviewDispositionFilter.value)||Boolean(recordQuery.value))break;
+      result=await pdfCorpusApi.records(selectedBuildId.value,recordOffset.value,pageSize,reviewQueue.value,recordQuery.value);
+      if(result.total>0||expected===0||reviewQueue.value!=="all"||Boolean(recordQuery.value))break;
       await new Promise(resolve=>window.setTimeout(resolve,120*(attempt+1)));
       if(requestId!==recordRequestSerial)return;
     }
@@ -324,7 +343,7 @@ async function ensureReviewHydrated(preferredId=""){
 async function refreshAll(){
   await Promise.all([refreshProviders(),refreshCorpusProfiles(),refreshAssets(),refreshBuilds()]);
   const requestedQueue=String(route.query.queue||"") as ReviewQueue;
-  if(["all","pending","attention","metadata","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
+  if(["all","ready","issues","metadata","topology","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
   await refreshBuild();
   await ensureReviewHydrated(String(route.query.record||""));
   // A second post-paint hydration closes the lifecycle race where build.json is
@@ -385,6 +404,7 @@ function stopPolling(){if(pollTimer!==undefined){clearInterval(pollTimer);pollTi
 async function chooseBuild(build:CorpusBuild){selectedBuildId.value=build.build_id;selectedAssetId.value=build.asset_id;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];reviewHydrated.value=false;hydratedTopologyCount.value=0;reviewQueue.value="all";await refreshBuild();await nextTick();await refreshRecords(true);if(buildRunning.value)startPolling()}
 async function advanceFrom(recordId:string){const index=records.value.findIndex(row=>row.record_id===recordId);const next=records.value[index+1]||records.value[index-1];if(next){selectRecord(next);return}if(recordOffset.value+pageSize<recordTotal.value){recordOffset.value+=pageSize;await refreshRecords();return}await refreshRecords()}
 async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
   if(!currentBuild.value||!selectedRecord.value)return;
   const id=selectedRecord.value.record_id;const viewport=captureReviewViewport();busy.value="record";
   try{
@@ -393,13 +413,14 @@ async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
       selectedRecord.value=updated;await refreshBuild();await refreshRecords(false,id);
       setMessage(i18n.t("pdf_corpus.reopened_notice","Record reopened for review."));
     }else{
-      const result=await pdfCorpusApi.reviewDecision(currentBuild.value.build_id,id,disposition,"",Number(selectedRecord.value.record_revision||1));
+      const result=await pdfCorpusApi.reviewDecision(currentBuild.value.build_id,id,disposition,"",Number(selectedRecord.value.record_revision||1),reviewQueue.value);
       currentBuild.value=result.build;syncBuildInRail(result.build);
       if(result.blocked){
         selectedRecord.value=result.record;
+        const idx=records.value.findIndex(row=>row.record_id===id);if(idx>=0)records.value.splice(idx,1,result.record);
         if(result.blocker==="source_problem"){
           reviewInspectorTab.value="source";reviewQueue.value="source";
-          setMessage(i18n.t("pdf_corpus.accept_blocked_source","Resolve or reject this source-extraction problem before accepting the record."),"error");
+          setMessage(i18n.t("pdf_corpus.accept_blocked_source","This record has a source-extraction problem. Inspect the source, repair/rebuild, or reject the proposal."),"error");
         }else{
           reviewInspectorTab.value="metadata";
           const fields=(result.blocking_fields||[]).map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", ");
@@ -407,14 +428,18 @@ async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
           await nextTick();focusFirstMetadataBlocker();
         }
       }else{
-        // Update the visible row immediately; do not wait for a full list reload.
         const idx=records.value.findIndex(row=>row.record_id===id);
-        if(idx>=0){
-          if(reviewQueue.value==="pending"||reviewQueue.value==="accepted"||reviewQueue.value==="rejected") { records.value.splice(idx,1); recordTotal.value=Math.max(0,recordTotal.value-1); }
-          else records.value.splice(idx,1,result.record);
+        if(reviewQueue.value==="all"||reviewQueue.value===disposition){
+          if(idx>=0)records.value.splice(idx,1,result.record);
+        }else if(idx>=0){
+          records.value.splice(idx,1);recordTotal.value=Math.max(0,recordTotal.value-1);
         }
         if(result.next_record){
-          const next=result.next_record;const existing=records.value.find(row=>row.record_id===next.record_id);selectRecord(existing||next);
+          const existing=records.value.find(row=>row.record_id===result.next_record?.record_id);
+          if(existing){selectRecord(existing);await nextTick();if(reviewPaneEl.value)reviewPaneEl.value.scrollTop=0}
+          else if(reviewQueue.value!=="all"){
+            reviewQueue.value="all";await nextTick();await refreshRecords(true,result.next_record.record_id);
+          }else{selectRecord(result.next_record)}
         }else{
           await refreshRecords(false);
         }
@@ -424,27 +449,39 @@ async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
     await restoreReviewViewport(viewport,{record:true,inspector:true});
   }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
+
 async function attemptAccept(){
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
   if(!selectedRecord.value)return;
   if(selectedRecord.value.accepted){await setDisposition("pending");return}
-  if(selectedMetadataBlocked.value){
-    const labels=selectedMetadataBlockingFields.value.map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", ");
-    setMessage(i18n.tf("pdf_corpus.accept_blocked_metadata","Confirm the required metadata before accepting this record: {fields}.",{fields:labels}));
-    focusFirstMetadataBlocker();
-    return;
-  }
+  // The server owns acceptance eligibility. Do not let stale client metadata
+  // state turn the primary action into a no-op.
   await setDisposition("accepted");
 }
 async function toggleAccept(){await attemptAccept()}
 async function acceptFromFocus(){if(selectedMetadataBlocked.value){focusView.value=false;await nextTick()}await attemptAccept()}
 async function rejectRecord(){await setDisposition("rejected")}
 async function skipRecord(){if(!selectedRecord.value)return;await advanceFrom(selectedRecord.value.record_id)}
+async function acceptCleanRecords(){
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
+  if(!currentBuild.value)return;
+  const clean=readyCount.value;
+  if(clean<1){setMessage(i18n.t("pdf_corpus.no_clean_records","No clean records are waiting for approval."));return}
+  const viewport=captureReviewViewport();
+  if(!window.confirm(i18n.tf("pdf_corpus.accept_clean_confirm","Accept {count} clean record(s)? Records with metadata, topology, or source problems will remain for review.",{count:clean})))return;
+  busy.value="bulk";
+  try{
+    const result=await pdfCorpusApi.bulkDisposition(currentBuild.value.build_id,"accepted","ready","");
+    await refreshBuild();reviewQueue.value=issueCount.value>0?"issues":"all";await nextTick();await refreshRecords(true);
+    await restoreReviewViewport(viewport,{record:true,inspector:true});
+    setMessage(i18n.tf("pdf_corpus.accept_clean_done","Accepted {count} clean record(s). Only exceptions remain.",{count:result.changed}));
+  }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
 async function bulkDisposition(disposition:"accepted"|"rejected"){
   if(!currentBuild.value)return;const count=recordTotal.value;if(!count)return;const viewport=captureReviewViewport();const verb=disposition==="accepted"?i18n.t("pdf_corpus.accept_all","Accept all"):i18n.t("pdf_corpus.reject_all","Reject all");
   if(!window.confirm(i18n.tf("pdf_corpus.bulk_confirm","{action} {count} record(s) in the current queue?",{action:verb,count})))return;busy.value="bulk";
   try{
-    const filterDisposition=reviewDispositionFilter.value||null;
-    const result=await pdfCorpusApi.bulkDisposition(currentBuild.value.build_id,disposition,reviewOnly.value?true:null,recordQuery.value,"",filterDisposition);
+    const result=await pdfCorpusApi.bulkDisposition(currentBuild.value.build_id,disposition,reviewQueue.value,recordQuery.value);
     await refreshBuild();
     if(disposition==="accepted"&&Number(result.blocked_metadata||0)>0){
       reviewQueue.value="metadata";recordQuery.value="";await nextTick();await refreshRecords(true,result.blocked_record_ids?.[0]||"");reviewInspectorTab.value="metadata";
@@ -479,19 +516,29 @@ async function split(afterBlockId:string){if(!currentBuild.value||!selectedRecor
 async function resolveMetadataField(field:string,value:unknown){
   if(!currentBuild.value||!selectedRecord.value)return;
   const viewport=captureReviewViewport();
-  busy.value="metadata-field";const recordId=selectedRecord.value.record_id;
+  metadataSavingField.value=field;metadataSavedField.value="";busy.value="metadata-field";const recordId=selectedRecord.value.record_id;
   try{
-    const row=await pdfCorpusApi.patchMetadata(currentBuild.value.build_id,recordId,{[field]:value},Number(selectedRecord.value.record_revision||1));
-    selectedRecord.value=row;metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);
-    await refreshBuild();
-    const fullyResolved=(row.metadata_incomplete_fields||[]).length===0&&(row.metadata_review_fields||[]).length===0;
-    if(fullyResolved&&reviewQueue.value==="metadata"){
-      await refreshRecords(false);
-    }else{await refreshRecords(false,recordId)}
+    const result=await pdfCorpusApi.metadataDecision(currentBuild.value.build_id,recordId,field,value,Number(selectedRecord.value.record_revision||1));
+    selectedRecord.value=result.record;currentBuild.value=result.build;syncBuildInRail(result.build);
+    if(result.queue_counts)currentBuild.value.review_queue_counts=result.queue_counts;
+    metadataDraft.value=JSON.stringify(recordMetadata(result.record),null,2);
+    const idx=records.value.findIndex(row=>row.record_id===recordId);if(idx>=0)records.value.splice(idx,1,result.record);
+    metadataSavedField.value=field;
+    const remaining=result.remaining_fields||[];
+    if(remaining.length===0){
+      // Keep the resolved record on screen even if the active exception queue no
+      // longer contains it. The reviewer should make one final record-level
+      // decision instead of hunting for the same record in another queue.
+      setMessage(i18n.t("pdf_corpus.metadata_resolved_ready","Metadata confirmed. Review the record, then choose Accept & next or Reject & next."));
+      await nextTick();
+      acceptButtonEl.value?.focus({preventScroll:true});
+    }else{
+      setMessage(i18n.tf("pdf_corpus.metadata_field_confirmed","Confirmed {field}. {count} metadata decision(s) remain for this record.",{field:i18n.t(`record.${field}`,field.replace(/_/g,' ')),count:remaining.length}));
+    }
     await restoreReviewViewport(viewport,{inspector:true});
-    setMessage(i18n.tf("pdf_corpus.metadata_field_confirmed","Confirmed {field}. The record is ready for the next review decision when no required fields remain.",{field:i18n.t(`record.${field}`,field.replace(/_/g,' '))}));
-  }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+  }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value="";metadataSavingField.value=""}
 }
+
 function showMetadataSource(field:string){selectedEvidenceField.value=field;reviewInspectorTab.value="source";const ids=selectedRecord.value?.metadata_evidence?.[field]?.block_ids||[];const first=sourceBlocks.value.find(block=>ids.includes(block.block_id));if(first)selectedPdfPage.value=Number(first.page||selectedPdfPage.value)}
 
 async function rerunMetadata(){if(!currentBuild.value||!selectedRecord.value)return;const viewport=captureReviewViewport();busy.value="record";try{const row=await pdfCorpusApi.rerunMetadata(currentBuild.value.build_id,selectedRecord.value.record_id,providerPayload.value);selectedRecord.value=row;metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);await refreshBuild();await refreshRecords(false,row.record_id);await restoreReviewViewport(viewport);reviewInspectorTab.value="metadata";setMessage(i18n.t("pdf_corpus.metadata_rerun","Interpretive metadata rerun. Primary source text remained unchanged."))}catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
@@ -520,7 +567,7 @@ watch(selectedEvidenceField,(field)=>{
 watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.metadata_total,currentBuild.value?.status,currentBuild.value?.stage] as const,async ([buildId,count,metadataTotal,status,stage])=>{
   const expected=Math.max(Number(count||0),Number(metadataTotal||0));
   if(!buildId||expected<1)return;
-  const visibleStage=["enriching","review","metadata_review","ready"].includes(String(stage||""))||["awaiting_review","awaiting_metadata","ready"].includes(String(status||""));
+  const visibleStage=["enriching","review","ready"].includes(String(stage||""))||["awaiting_review","ready"].includes(String(status||""));
   if(!visibleStage)return;
   if(!reviewHydrated.value||expected>hydratedTopologyCount.value||!selectedRecord.value){await ensureReviewHydrated(selectedRecordId.value)}
 },{flush:"post"});
@@ -530,10 +577,10 @@ watch(()=>route.query.build,async value=>{
   if(!buildId||buildId===selectedBuildId.value)return;
   selectedBuildId.value=buildId;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];
   const requestedQueue=String(route.query.queue||"") as ReviewQueue;
-  if(["all","pending","attention","metadata","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
+  if(["all","ready","issues","metadata","topology","source","accepted","rejected"].includes(requestedQueue))reviewQueue.value=requestedQueue;
   await refreshBuild();await refreshRecords(true,String(route.query.record||""));if(buildRunning.value)startPolling();
 });
-watch(()=>route.query.queue,value=>{const queue=String(value||"") as ReviewQueue;if(["all","pending","attention","metadata","source","accepted","rejected"].includes(queue)&&queue!==reviewQueue.value)reviewQueue.value=queue});
+watch(()=>route.query.queue,value=>{const queue=String(value||"") as ReviewQueue;if(["all","ready","issues","metadata","topology","source","accepted","rejected"].includes(queue)&&queue!==reviewQueue.value)reviewQueue.value=queue});
 watch(()=>route.query.record,async value=>{const id=String(value||"");if(!id||id===selectedRecordId.value)return;await refreshRecords(false,id)});
 watch([selectedBuildId,reviewQueue,selectedRecordId],()=>{
   if(!selectedBuildId.value)return;
@@ -620,8 +667,8 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{activeProviderProfileLabel}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{activeModelLabel}}</span><button type="button" class="btn small" @click="selectedBuildId='';currentBuild=null">{{i18n.t('pdf_corpus.configure_new_build','Configure a new build')}}</button></div>
     </details>
 
-    <div class="builder-workspace">
-      <aside class="build-rail" :aria-label="i18n.t('pdf_corpus.builds','Corpus builds')">
+    <div class="builder-workspace" :class="{'review-mode':showReviewWorkspace&&!finishPhase}">
+      <aside v-if="!showReviewWorkspace||finishPhase" class="build-rail" :aria-label="i18n.t('pdf_corpus.builds','Corpus builds')">
         <div class="rail-title"><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><span>{{buildsTotal}} {{i18n.t('pdf_corpus.total','total')}}</span></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="refreshBuilds">↻</button></div>
         <button v-for="build in builds" :key="build.build_id" type="button" class="build-row" :class="{active:build.build_id===selectedBuildId}" :aria-current="build.build_id===selectedBuildId?'true':undefined" @click="chooseBuild(build)">
           <span class="status-dot" :data-status="build.status" aria-hidden="true"></span>
@@ -632,7 +679,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
       <main class="build-main">
         <section v-if="currentBuild" class="build-summary" :aria-labelledby="'pdf-corpus-current-build'">
-          <div class="summary-top">
+          <div v-if="!showReviewWorkspace||finishPhase" class="summary-top">
             <div><span class="eyebrow">{{currentBuild.profile_id}}</span><h2 id="pdf-corpus-current-build">{{currentBuild.source_filename}}</h2><p>{{currentBuild.build_id}}</p></div>
             <div class="summary-actions">
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">{{i18n.t('pdf_corpus.cancel','Cancel')}}</button>
@@ -642,12 +689,12 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </div>
           <CorpusBuildLifecycleCard v-if="!showReviewWorkspace||finishPhase" :build="currentBuild" />
           <CorpusQualitySummary v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
-          <section v-if="showReviewWorkspace&&!finishPhase" class="review-stage-summary" role="status" aria-live="polite"><div><span class="eyebrow">{{i18n.t('pdf_corpus.review_mode','Record review')}}</span><b>{{i18n.tf('pdf_corpus.review_progress_compact','{accepted} accepted · {pending} pending · {metadata} metadata decisions',{accepted:currentBuild.accepted_count||0,pending:pendingCount,metadata:metadataIssueCount})}}</b></div><span>{{i18n.t('pdf_corpus.review_mode_help','Review the proposed record and its metadata together. Build diagnostics remain available under Technical build details.')}}</span></section>
+
           <CorpusBuildStageNotice v-if="buildRunning && !hasRecordTopology" :stage="currentBuild.stage" />
           <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @publish="publish({download:false})" />
           <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataFieldIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
           <CorpusBuildTimeline v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
-          <details class="technical-details">
+          <details v-if="!showReviewWorkspace||finishPhase" class="technical-details">
             <summary>{{i18n.t('pdf_corpus.technical_details','Technical build details')}}</summary>
             <CorpusBuildProgress :status="currentBuild.publication?'published':currentBuild.status" :stage="currentBuild.publication?'published':currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :warnings="currentBuild.warnings||[]" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,sizeOptimizedSplits:currentBuild.size_optimized_boundary_count||0,absoluteSafetySplits:currentBuild.absolute_safety_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
           </details>
@@ -663,27 +710,32 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             <span class="guidance-icon" aria-hidden="true">!</span>
             <div><h3>{{i18n.t('pdf_corpus.build_stopped_title','Build stopped before completion')}}</h3><p>{{currentBuild.error||i18n.t('pdf_corpus.build_stopped_help','Completed checkpoints were preserved. Review the provider and execution settings above, then resume from the last safe checkpoint.')}}</p><small>{{i18n.t('pdf_corpus.build_stopped_checkpoint','Resuming does not restart completed stages or discard validated records.')}}</small></div>
           </section>
-          <section v-if="segmentationNeedsReview" class="segmentation-blocked segmentation-review-localized" role="status" aria-labelledby="segmentation-review-title">
+          <section v-if="segmentationNeedsReview&&(!showReviewWorkspace||finishPhase)" class="segmentation-blocked segmentation-review-localized" role="status" aria-labelledby="segmentation-review-title">
             <div><h3 id="segmentation-review-title">{{i18n.t('pdf_corpus.segmentation_review_title','Localized segmentation review')}}</h3><p>{{i18n.t('pdf_corpus.segmentation_review_help','The corpus was constructed successfully. A small number of boundary decisions may still need review; these are boundary-level questions and do not mark the neighboring records as failed. Metadata enrichment continues normally.')}}</p></div>
             <details v-if="currentBuild.segmentation_unresolved_regions?.length"><summary>{{i18n.tf('pdf_corpus.unresolved_count','{count} boundary decision(s) to review',{count:currentBuild.segmentation_unresolved_regions.length})}}</summary><ul><li v-for="(region,index) in currentBuild.segmentation_unresolved_regions.slice(0,20)" :key="index"><code>{{region.after_block_id||region.left_block_id||region.start_block_id||'?'}}</code> → <code>{{region.next_block_id||region.right_block_id||region.end_block_id||'?'}}</code><span v-if="region.reason"> · {{region.reason}}</span></li></ul></details>
           </section>
-          <details v-if="currentBuild.manifest&&Object.keys(currentBuild.manifest).length" class="manifest-details" :open="awaitingManifestReview">
+          <details v-if="currentBuild.manifest&&Object.keys(currentBuild.manifest).length&&(!showReviewWorkspace||finishPhase)" class="manifest-details" :open="awaitingManifestReview">
             <summary>{{i18n.t('pdf_corpus.document_manifest','Document manifest')}} · {{i18n.t('pdf_corpus.revision','revision')}} {{currentBuild.manifest_revision||1}}</summary>
             <DocumentManifestEditor :manifest="currentBuild.manifest||{}" :disabled="buildRunning||busy!==''" @save="saveManifest" />
           </details>
-          <div class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{currentBuild.schema_version}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
+          <div v-if="!showReviewWorkspace||finishPhase" class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{currentBuild.schema_version}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
         </section>
 
         <template v-if="showReviewWorkspace">
-          <section v-if="currentBuild" class="review-handoff" :data-state="currentBuild.status" role="status">
-            <div><b>{{currentBuild.publication?i18n.t('pdf_corpus.flow_published_title','Published revision'):currentBuild.status==='ready'?i18n.t('pdf_corpus.flow_ready_title','Ready to publish'):currentBuild.status==='awaiting_metadata'?i18n.t('pdf_corpus.flow_metadata_title','Review complete — metadata needs attention'):i18n.t('pdf_corpus.flow_review_title','Review generated records')}}</b><span>{{currentBuild.publication?i18n.t('pdf_corpus.flow_published_help','This published snapshot is immutable. Editing the draft creates a new unpublished revision.'):currentBuild.status==='ready'?i18n.t('pdf_corpus.flow_ready_help','All quality gates have passed. Publish when you are ready.'):currentBuild.status==='awaiting_metadata'?i18n.t('pdf_corpus.flow_metadata_help','All records are accepted. Retry or resolve incomplete metadata before publication.'):i18n.t('pdf_corpus.flow_review_help','Work through the review queue. Accept and Reject update immediately and move to the next proposal.')}}</span></div>
-            <strong>{{currentBuild.accepted_count||0}} / {{currentBuild.record_count||0}} {{i18n.t('pdf_corpus.accepted_label','accepted')}}</strong>
+          <section v-if="reviewLocked" class="review-readonly-banner" role="status" aria-live="polite">
+            <div><b>{{i18n.t('pdf_corpus.review_preparing_title','Preparing records for review')}}</b><span>{{i18n.t('pdf_corpus.review_preparing_help','You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions.')}}</span></div>
+          </section>
+
+          <section v-if="currentBuild" class="review-session-bar" role="status" aria-live="polite">
+            <div class="review-session-title"><span class="eyebrow">{{i18n.t('pdf_corpus.review_mode','Record review')}}</span><b>{{currentBuild.source_filename}}</b></div>
+            <div class="review-session-stats"><strong>{{currentBuild.accepted_count||0}}</strong><span>{{i18n.t('pdf_corpus.accepted_label','accepted')}}</span><strong>{{pendingCount}}</strong><span>{{i18n.t('pdf_corpus.remaining','remaining')}}</span><strong>{{issueCount}}</strong><span>{{i18n.t('pdf_corpus.need_attention','need attention')}}</span></div>
+            <button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button>
           </section>
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
-            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :pending="pendingCount" :attention="attentionCount" :metadata="metadataIssueCount" :source-problems="currentBuild.source_problem_count||0" :accepted="currentBuild.accepted_count||0" :rejected="currentBuild.rejected_count||0" :disabled="busy!==''" />
+            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :ready="readyCount" :issues="issueCount" :metadata="Number(reviewQueueCounts.metadata??metadataIssueCount)" :topology="topologyIssueCount" :source-problems="Number(reviewQueueCounts.source??currentBuild.source_problem_count??0)" :accepted="Number(reviewQueueCounts.accepted??currentBuild.accepted_count??0)" :rejected="Number(reviewQueueCounts.rejected??currentBuild.rejected_count??0)" :disabled="busy!==''||reviewLocked" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
-            <div class="review-bulk"><button type="button" class="btn small" @click="bulkDisposition('accepted')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.accept_all_queue','Accept queue')}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||recordTotal===0">{{i18n.t('pdf_corpus.reject_all_queue','Reject queue')}}</button><button type="button" class="btn small" @click="focusView=true" :disabled="!selectedRecord">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div>
+            <div class="review-bulk"><button type="button" class="btn small primary" @click="acceptCleanRecords" :disabled="busy!==''||reviewLocked||readyCount===0">{{i18n.tf('pdf_corpus.accept_clean','Accept clean ({count})',{count:readyCount})}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||reviewLocked||recordTotal===0||reviewQueue==='all'">{{i18n.t('pdf_corpus.reject_queue','Reject this queue')}}</button></div>
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>
           </section>
 
@@ -691,8 +743,8 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             <nav ref="recordListEl" class="records-pane" tabindex="-1" :aria-labelledby="'pdf-corpus-records-pane'">
               <div class="pane-head"><b id="pdf-corpus-records-pane">{{i18n.t('pdf_corpus.review_queue','Review queue')}}</b><span>{{recordTotal}}</span></div>
               <button v-for="record in records" :key="record.record_id" type="button" class="record-row" :class="{active:record.record_id===selectedRecordId}" :aria-current="record.record_id===selectedRecordId?'true':undefined" @click="selectRecord(record)">
-                <span class="record-state" :data-state="record.rejected?'rejected':record.needs_review?'review':record.accepted?'accepted':'ready'" aria-hidden="true"></span>
-                <span><b>{{record.record_id}}</b><small>{{i18n.t('pdf_corpus.pages','pp.')}} {{record.page_start}}–{{record.page_end}} · {{record.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</small><small v-if="(record.metadata_review_fields||[]).length" class="metadata-row-warning">{{i18n.tf('pdf_corpus.metadata_decisions_count','{count} metadata decision(s)',{count:(record.metadata_review_fields||[]).length})}}</small><small>{{record.rejected?i18n.t('pdf_corpus.rejected','Rejected'):record.needs_review?(record.review_reason||i18n.t('pdf_corpus.needs_review','Needs review')):record.accepted?i18n.t('pdf_corpus.accepted_label','Accepted'):i18n.t('pdf_corpus.ready_acceptance','Ready for acceptance')}}</small></span>
+                <span class="record-state" :data-state="recordState(record)" aria-hidden="true"></span>
+                <span><b>{{record.record_id}}</b><small>{{i18n.t('pdf_corpus.pages','pp.')}} {{record.page_start}}–{{record.page_end}} · {{record.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</small><span class="record-row-status" :data-state="recordState(record)">{{recordStateLabel(record)}}</span><small v-if="recordIssueKinds(record).length" class="record-issue-summary">{{recordIssueKinds(record).map(kind=>i18n.t(`pdf_corpus.record_state.${kind}`,kind)).join(' · ')}}</small></span>
               </button>
               <div v-if="recordsLoading&&!reviewHydrated" class="rail-empty" role="status">{{i18n.t('pdf_corpus.loading_records','Loading generated records…')}}</div>
               <div v-else-if="!records.length" class="rail-empty">{{i18n.t('pdf_corpus.no_records_filter','No records match this queue.')}} <button type="button" class="btn small" @click="reviewQueue='all';recordQuery=''">{{i18n.t('pdf_corpus.show_all_records','Show all records')}}</button></div>
@@ -704,27 +756,27 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <aside v-if="selectedRecord.review_reason" class="review-reason" role="note"><b>{{i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
                 <div class="record-primary-text">{{selectedRecord.text}}</div>
                 <p v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker" role="status"><b>{{i18n.t('pdf_corpus.metadata_decision_required','Metadata decision required')}}</b> {{i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields','Confirm {fields} before accepting this record.',{fields:selectedMetadataBlockingLabel})}}</p>
-                <div v-if="reviewQueue!=='metadata'" class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):selectedMetadataBlocked?i18n.t('pdf_corpus.resolve_metadata_to_accept','Resolve metadata to accept'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
+                <div class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||reviewLocked||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||reviewLocked||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button ref="acceptButtonEl" type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''||reviewLocked" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
               </template>
               <div v-else class="inspector-empty">{{i18n.t('pdf_corpus.select_record','Select a generated record to inspect its source binding and metadata.')}}</div>
             </article>
 
-            <aside ref="reviewInspectorEl" class="review-inspector" :aria-labelledby="'pdf-corpus-review-inspector'">
+            <aside ref="reviewInspectorEl" class="review-inspector" :aria-label="i18n.t('pdf_corpus.review_details','Review details')">
               <div class="review-inspector-tabs" role="tablist" :aria-label="i18n.t('pdf_corpus.review_detail_views','Review detail views')">
-                <button id="pdf-corpus-review-inspector" data-review-tab="metadata" type="button" role="tab" :aria-selected="reviewInspectorTab==='metadata'" :tabindex="reviewInspectorTab==='metadata'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='metadata'">{{i18n.t('pdf_corpus.metadata_tab','Metadata')}}<span v-if="selectedMetadataBlockingFields.length">{{selectedMetadataBlockingFields.length}}</span></button>
-                <button data-review-tab="evidence" type="button" role="tab" :aria-selected="reviewInspectorTab==='evidence'" :tabindex="reviewInspectorTab==='evidence'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='evidence'">{{i18n.t('pdf_corpus.evidence_tab','Evidence')}}</button>
-                <button data-review-tab="source" type="button" role="tab" :aria-selected="reviewInspectorTab==='source'" :tabindex="reviewInspectorTab==='source'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='source'">{{i18n.t('pdf_corpus.source_tab','Source')}}</button>
+                <button id="review-tab-metadata" data-review-tab="metadata" type="button" role="tab" aria-controls="review-panel-metadata" :aria-selected="reviewInspectorTab==='metadata'" :tabindex="reviewInspectorTab==='metadata'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='metadata'">{{i18n.t('pdf_corpus.metadata_tab','Metadata')}}<span v-if="selectedMetadataBlockingFields.length">{{selectedMetadataBlockingFields.length}}</span></button>
+                <button id="review-tab-evidence" data-review-tab="evidence" type="button" role="tab" aria-controls="review-panel-evidence" :aria-selected="reviewInspectorTab==='evidence'" :tabindex="reviewInspectorTab==='evidence'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='evidence'">{{i18n.t('pdf_corpus.evidence_tab','Evidence')}}</button>
+                <button id="review-tab-source" data-review-tab="source" type="button" role="tab" aria-controls="review-panel-source" :aria-selected="reviewInspectorTab==='source'" :tabindex="reviewInspectorTab==='source'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='source'">{{i18n.t('pdf_corpus.source_tab','Source')}}</button>
               </div>
-              <section v-if="selectedRecord&&reviewInspectorTab==='metadata'" class="review-inspector-panel" role="tabpanel">
-                <CorpusMetadataResolutionPanel :record="selectedRecord" :region-types="regionTypes" :discourse-roles="discourseRoles" :busy="busy!==''" @resolve="resolveMetadataField" @source="showMetadataSource" />
+              <section v-if="selectedRecord&&reviewInspectorTab==='metadata'" id="review-panel-metadata" class="review-inspector-panel" role="tabpanel" aria-labelledby="review-tab-metadata" tabindex="0">
+                <CorpusMetadataResolutionPanel :record="selectedRecord" :region-types="regionTypes" :discourse-roles="discourseRoles" :busy="busy!==''||reviewLocked" :saving-field="metadataSavingField" :saved-field="metadataSavedField" @resolve="resolveMetadataField" @source="showMetadataSource" />
                 <details class="record-data"><summary>{{i18n.t('pdf_corpus.advanced_metadata','Advanced metadata')}}</summary><p class="help">{{i18n.t('pdf_corpus.metadata_help','Typed controls above are preferred. This advanced editor is for supported interpretive metadata only; source-bound fields remain protected.')}}</p><label class="sr-only" for="pdf-corpus-metadata">{{i18n.t('pdf_corpus.interpretive_metadata','Interpretive metadata')}}</label><textarea id="pdf-corpus-metadata" v-model="metadataDraft" class="metadata-json" spellcheck="false"></textarea><div class="data-actions"><button type="button" class="btn small" @click="saveMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.save_metadata','Save metadata')}}</button><button type="button" class="btn small" @click="rerunMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.rerun_metadata','Rerun metadata')}}</button></div></details>
               </section>
-              <section v-else-if="selectedRecord&&reviewInspectorTab==='evidence'" class="review-inspector-panel" role="tabpanel">
+              <section v-else-if="selectedRecord&&reviewInspectorTab==='evidence'" id="review-panel-evidence" class="review-inspector-panel" role="tabpanel" aria-labelledby="review-tab-evidence" tabindex="0">
                 <p class="inspector-help">{{i18n.t('pdf_corpus.evidence_review_help','Select a metadata field to inspect or adjust its source-block evidence.')}}</p>
                 <FieldEvidenceList :evidence="selectedRecord.metadata_evidence||{}" :fields="evidenceCandidateFields" :selected-field="selectedEvidenceField" @select="selectedEvidenceField=$event" />
                 <div v-if="selectedEvidenceField" class="source-blocks compact-source-blocks"><article v-for="block in visibleBlocks" :key="block.block_id" class="source-block" :class="{'evidence-block':evidenceBlockIds.has(block.block_id)}"><header><span>{{block.block_id}}</span><span>PDF {{block.page}} · {{block.type}}</span></header><p>{{block.text}}</p><button type="button" class="evidence-toggle" :aria-pressed="evidenceBlockIds.has(block.block_id)" @click="toggleEvidenceBlock(block.block_id)" :disabled="busy!==''">{{evidenceBlockIds.has(block.block_id)?i18n.t('pdf_corpus.remove_evidence','Remove as evidence'):i18n.t('pdf_corpus.add_evidence','Add as evidence')}} · {{selectedEvidenceField}}</button></article></div>
               </section>
-              <section v-else-if="selectedRecord" class="review-inspector-panel source-review-panel" role="tabpanel">
+              <section v-else-if="selectedRecord" id="review-panel-source" class="review-inspector-panel source-review-panel" role="tabpanel" aria-labelledby="review-tab-source" tabindex="0">
                 <div class="pane-head source-inspector-head"><b>{{i18n.t('pdf_corpus.source_context','Source context')}}</b><span>PDF {{selectedPdfPage||'—'}}</span></div>
                 <div v-if="recordPdfPages.length>1" class="source-page-nav" :aria-label="i18n.t('pdf_corpus.source_page_navigation','Source page navigation')"><button type="button" class="btn small" @click="previousSourcePage" :disabled="selectedPdfPageIndex===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{selectedPdfPageIndex+1}} / {{recordPdfPages.length}}</span><button type="button" class="btn small" @click="nextSourcePage" :disabled="selectedPdfPageIndex>=recordPdfPages.length-1">{{i18n.t('ui.next','Next')}}</button></div>
                 <PdfEvidenceViewer v-if="sourcePdfUrl" :pdf-url="sourcePdfUrl" :page="selectedPdfPage" :page-width="selectedPageMeta?.width||0" :page-height="selectedPageMeta?.height||0" :blocks="selectedPageBlocks" :evidence-block-ids="evidenceIdsArray" />
@@ -739,7 +791,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       </main>
     </div>
 
-    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked" @close="focusView=false" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
+    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked" @close="focusView=false" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
   </section>
 </template>
 
@@ -760,4 +812,25 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 @media(max-width:1300px){.record-first-review{grid-template-columns:minmax(200px,.48fr) minmax(460px,1.4fr) minmax(330px,.9fr)}}
 @media(max-width:1050px){.record-first-review{grid-template-columns:minmax(200px,.48fr) minmax(0,1.5fr)}.review-inspector{grid-column:1/-1;border-inline-start:0;border-top:1px solid var(--line);max-height:60vh}.review-stage-summary{grid-template-columns:1fr}.review-toolbar{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.record-first-review{grid-template-columns:1fr}.review-inspector{max-height:none}.review-toolbar{grid-template-columns:1fr}.review-stage-summary{grid-template-columns:1fr}.review-inspector-tabs{top:0}}
+
+/* 0.44.0 Dachshund — exception-oriented review workspace. */
+.review-readonly-banner{display:flex;align-items:center;padding:10px 14px;border:1px solid #d9bf76;border-radius:10px;background:#fff8e9;color:#604300}.review-readonly-banner>div{display:grid;gap:3px}.review-readonly-banner b{font-size:13px}.review-readonly-banner span{font-size:11px;line-height:1.45}
+.builder-workspace.review-mode{grid-template-columns:minmax(0,1fr)}
+.builder-workspace.review-mode .build-main{max-width:none;width:100%}
+.review-session-bar{position:sticky;top:0;z-index:12;display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:18px;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(8px);box-shadow:0 4px 16px rgb(0 0 0/.04)}
+.review-session-title{display:grid;gap:2px}.review-session-title b{font-size:15px}.review-session-stats{display:flex;align-items:baseline;gap:6px 10px;color:var(--muted);font-size:12px}.review-session-stats strong{font-size:16px;color:var(--text)}
+.review-toolbar{position:sticky;top:66px;z-index:11;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.review-toolbar .control{min-height:40px;font-size:12px}.review-bulk{display:flex;gap:8px;justify-content:flex-end}.pager{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;font-size:11px;color:var(--muted)}
+.record-first-review{display:grid;grid-template-columns:minmax(220px,260px) minmax(560px,1.8fr) minmax(340px,.9fr);min-height:620px;height:calc(100vh - 235px);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+.records-pane,.record-review-pane,.review-inspector{max-height:none;height:100%;overflow:auto}
+.records-pane{background:var(--soft);border-inline-end:1px solid var(--line)}.records-pane .pane-head{position:sticky;top:0;z-index:4;background:var(--soft);min-height:46px;padding:12px;font-size:12px}
+.record-row{min-height:76px;padding:10px 11px;gap:9px}.record-row span> b{font-size:12px}.record-row small{font-size:10px;line-height:1.35}.record-row-status{display:inline-flex;width:max-content;margin-top:5px;padding:2px 7px;border-radius:999px;background:#eef4ef;color:#315843;font-size:10px;font-weight:800}.record-row-status[data-state="metadata"],.record-row-status[data-state="topology"],.record-row-status[data-state="source"]{background:#fff2cf;color:#684d00}.record-row-status[data-state="rejected"]{background:#fdeaea;color:#7b2424}.record-row-status[data-state="accepted"]{background:#e9f7ee;color:#28623a}.record-issue-summary{margin-top:3px;color:var(--muted)}
+.record-state[data-state="metadata"],.record-state[data-state="topology"],.record-state[data-state="source"]{background:#b58400}.record-state[data-state="ready"]{background:#46765b}
+.record-review-pane{display:flex;flex-direction:column;background:var(--card)}.record-review-head{padding:14px 20px}.record-review-head h3{font-size:17px}.record-review-head p{font-size:11px}.record-primary-text{flex:1;max-width:76ch;width:100%;padding:30px 38px;font:17px/1.72 Georgia,serif}.review-reason{margin:14px 20px 0;font-size:12px;line-height:1.45}.metadata-accept-blocker{margin:0 20px 14px;font-size:12px;line-height:1.45}
+.decision-bar{min-height:64px;padding:11px 14px}.decision-bar .btn{min-height:40px;font-size:12px}.decision-actions .primary{min-width:132px;font-weight:800}
+.review-inspector{background:var(--card);border-inline-start:1px solid var(--line)}.review-inspector-tabs button{min-height:48px;font-size:12px}.review-inspector-tabs button span{font-size:10px}.inspector-help{font-size:11px}.source-inspector-head{font-size:12px}.source-block p{font-size:12px;line-height:1.5}.source-block header{font-size:10px}
+.build-summary:has(+ .review-session-bar){padding-bottom:4px}
+@media(max-width:1350px){.record-first-review{grid-template-columns:minmax(210px,240px) minmax(500px,1.55fr) minmax(320px,.85fr)}}
+@media(max-width:1100px){.review-session-bar{grid-template-columns:1fr auto}.review-session-stats{grid-column:1/-1}.review-toolbar{top:92px;grid-template-columns:1fr 1fr}.review-bulk{justify-content:flex-start}.record-first-review{height:auto;min-height:0;grid-template-columns:220px minmax(0,1fr)}.review-inspector{grid-column:1/-1;min-height:420px;height:auto;max-height:70vh}.record-review-pane,.records-pane{height:68vh}}
+@media(max-width:760px){.review-session-bar,.review-toolbar{position:static;grid-template-columns:1fr}.review-session-stats{flex-wrap:wrap}.record-first-review{grid-template-columns:1fr}.records-pane{height:260px}.record-review-pane{height:auto}.record-primary-text{padding:22px 18px;font-size:16px}.review-inspector{max-height:none}.decision-bar{position:sticky;bottom:0;flex-direction:column;align-items:stretch}.structural-actions,.decision-actions{justify-content:stretch}.decision-bar .btn{flex:1}}
 </style>

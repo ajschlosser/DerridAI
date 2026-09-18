@@ -10,12 +10,12 @@ def text(path:str)->str:
     return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_profile():
-    assert cb.PROFILE_VERSION=='derrida-scholarly-v10'
-    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v6'
-    assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v10'
-    assert cb.CORPUS_PROFILES['derrida-scholarly-v9']['version']==9
+    assert cb.PROFILE_VERSION=='derrida-scholarly-v11'
+    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v7'
+    assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v11'
+    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)
-    assert json.loads(text('web/package.json'))['version']=='0.43.5'
+    assert json.loads(text('web/package.json'))['version']=='0.44.0'
     assert 'Bunny Rabbit - Again' in text('README.md')
 
 def test_manifest_nullable_notes_are_normalized_not_rejected():
@@ -53,7 +53,8 @@ def test_record_review_surfaces_metadata_panel_and_bulk_reports_blocked_metadata
     assert 'bulk_done_metadata_blocked' in builder
     panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
     assert 'metadata_review_fields' in panel
-    assert 'confirmed_on_accept' in panel
+    assert 'metadata_field_status' in panel
+    assert 'human_confirmed' in text('web/src/components/CorpusRecordFocusReview.vue') or 'human_confirmed' in text('web/src/components/CorpusMetadataResolutionPanel.stories.ts')
 
 
 def test_request_validation_is_product_safe_and_optional_absence_is_reviewable():

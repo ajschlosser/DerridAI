@@ -51,9 +51,9 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.43.5"
-    assert json.loads(text("web/package.json"))["version"] == "0.43.5"
-    assert "0.43.5 — Dundee" in text("README.md")
+    assert APP_VERSION == "0.44.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.44.0"
+    assert "0.44.0 — Dachshund" in text("README.md")
 
 
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
@@ -106,7 +106,7 @@ def test_ui_suppresses_empty_review_and_zero_metadata_attention():
     assert "buildRunning && !hasRecordTopology" in builder
     assert "metadataFieldIssueCount>0" in builder
     assert 'v-if="totalIssues>0"' in issues
-    assert "sourceProblemOnly" in builder
+    assert 'reviewQueue.value="source"' in builder or "reviewQueue==='source'" in builder
     assert "showBuildConfiguration" in builder
 
 

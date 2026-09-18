@@ -25,10 +25,10 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v6"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v7"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v10"
+PROFILE_VERSION = "derrida-scholarly-v11"
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -743,7 +743,7 @@ class PdfCorpusRepository:
         with path.open("r", encoding="utf-8") as handle:
             return [json.loads(line) for line in handle if line.strip()]
 
-    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, query: str = "") -> dict[str, Any]:
+    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
         # browse request. Structural edits intentionally use load_records(); read
         # pagination remains bounded no matter how large the generated record set.
@@ -771,10 +771,13 @@ class PdfCorpusRepository:
                     continue
                 if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
                     continue
+                if review_queue and not PdfCorpusBuildManager._matches_review_queue(record, review_queue):
+                    continue
                 if q and q not in line.casefold():
                     continue
                 if total >= offset and len(items) < limit:
                     record["topology_index"] = topology_index
+                    PdfCorpusBuildManager._decorate_review_state(record)
                     items.append(record)
                 total += 1
         for record in items:
@@ -786,153 +789,11 @@ class PdfCorpusRepository:
 
 
 CORPUS_PROFILES: dict[str, dict[str, Any]] = {
-    "derrida-scholarly-v1": {
-        "id": "derrida-scholarly-v1",
-        "name": "Derrida scholarly corpus v1 (legacy)",
-        "version": 1,
-        "description": "Legacy 0.40.0 semantic/discourse profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "soft_max_chars": 18000,
-        "topology_review_chars": 36000,
-    },
-    "derrida-scholarly-v2": {
-        "id": "derrida-scholarly-v2",
-        "name": "Derrida scholarly corpus v2 (legacy)",
-        "version": 2,
-        "description": "0.40.1 typed semantic/discourse profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "soft_max_chars": 18000,
-        "topology_review_chars": 36000,
-    },
-    "derrida-scholarly-v3": {
-        "id": "derrida-scholarly-v3",
-        "name": "Derrida scholarly corpus v3 (legacy)",
-        "version": 3,
-        "description": "0.40.5/0.40.6 compact semantic segmentation profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "soft_max_chars": 18000,
-        "topology_review_chars": 36000,
-    },
-    "derrida-scholarly-v5": {
-        "id": "derrida-scholarly-v5",
-        "name": "Derrida scholarly corpus v5 (legacy)",
-        "version": 5,
-        "description": "0.40.8 deterministic topology with local LLM boundary classification, retained so existing 0.40.8 builds remain resumable and auditable.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "soft_max_chars": 9000,
-        "topology_review_chars": 12000,
-    },
-    "derrida-scholarly-v6": {
-        "id": "derrida-scholarly-v6",
-        "name": "Derrida scholarly corpus v6 (legacy)",
-        "version": 6,
-        "description": "0.40.9 deterministic-first topology retained for resumability and audit compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "candidate_llm_threshold": 0.30,
-        "deterministic_split_threshold": 0.92,
-        "review_risk_threshold": 0.90,
-        "max_llm_boundary_calls_per_100_atoms": 18,
-        "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "soft_max_chars": 9000,
-        "topology_review_chars": 12000,
-    },
-    "derrida-scholarly-v7": {
-        "id": "derrida-scholarly-v7",
-        "name": "Derrida scholarly corpus v7 (legacy)",
-        "version": 7,
-        "description": "0.40.10–0.40.25 topology-quality profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": ["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary"],
-        "min_boundary_confidence": 0.72,
-        "candidate_llm_threshold": 0.30,
-        "deterministic_split_threshold": 0.92,
-        "review_risk_threshold": 0.90,
-        "max_llm_boundary_calls_per_100_atoms": 18,
-        "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "preferred_record_chars": 1750,
-        "record_length_tolerance": 200,
-        "long_record_chars": 3500,
-        "absolute_record_chars": 6000,
-        "soft_max_chars": 3500,
-        "topology_review_chars": 6000,
-    },
-    "derrida-scholarly-v8": {
-        "id": "derrida-scholarly-v8",
-        "name": "Derrida scholarly corpus v8 (legacy)",
-        "version": 8,
-        "description": "0.41.0 Aardvark profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": DISCOURSE_ROLES,
-        "region_types": REGION_TYPES,
-        "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "min_boundary_confidence": 0.72,
-        "candidate_llm_threshold": 0.30,
-        "deterministic_split_threshold": 0.92,
-        "review_risk_threshold": 0.90,
-        "max_llm_boundary_calls_per_100_atoms": 18,
-        "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "preferred_record_chars": 1750,
-        "record_length_tolerance": 200,
-        "long_record_chars": 3500,
-        "absolute_record_chars": 6000,
-        "soft_max_chars": 3500,
-        "topology_review_chars": 6000,
-    },
-    "derrida-scholarly-v9": {
-        "id": "derrida-scholarly-v9",
-        "name": "Derrida scholarly corpus v9 (legacy)",
-        "version": 9,
-        "description": "0.42.0 Bunny Rabbit profile retained for historical build compatibility.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": DISCOURSE_ROLES,
-        "region_types": REGION_TYPES,
-        "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "min_boundary_confidence": 0.72,
-        "candidate_llm_threshold": 0.30,
-        "deterministic_split_threshold": 0.92,
-        "review_risk_threshold": 0.90,
-        "max_llm_boundary_calls_per_100_atoms": 18,
-        "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.72,
-        "soft_min_chars": 180,
-        "preferred_record_chars": 1750,
-        "record_length_tolerance": 200,
-        "long_record_chars": 3500,
-        "absolute_record_chars": 6000,
-        "soft_max_chars": 3500,
-        "topology_review_chars": 6000,
-    },
     PROFILE_VERSION: {
         "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v10",
-        "version": 10,
-        "description": "Bunny Rabbit - Again: integrated record/metadata review, evidence-bound LLM proposals, human confirmation of uncertain fields, and normalized workflow errors.",
+        "name": "Derrida scholarly corpus v11",
+        "version": 11,
+        "description": "Dachshund: exception-oriented review, durable human metadata decisions, authoritative review queues, and atomic accept/advance commands.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -955,6 +816,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "topology_review_chars": 6000,
     }
 }
+
 
 
 class PdfCorpusBuildManager:
@@ -1290,12 +1152,10 @@ class PdfCorpusBuildManager:
             next_action = "download_publication"
         elif running:
             next_action = "wait"
-        elif pending or int(build.get("needs_review_count") or 0) or int(build.get("boundary_review_count") or 0):
+        elif pending or int(build.get("needs_review_count") or 0) or int(build.get("boundary_review_count") or 0) or metadata_remaining or unresolved_fields:
             next_action = "review_records"
         elif rejected:
             next_action = "resolve_rejections"
-        elif metadata_remaining or unresolved_fields:
-            next_action = "resolve_metadata"
         elif blockers:
             next_action = "resolve_validation"
         elif can_publish:
@@ -2833,14 +2693,19 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         pdf_pages = [int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int)]
         if pdf_pages and isinstance(start_page, int):
             inside = min(pdf_pages) >= start_page and (not isinstance(end_page, int) or max(pdf_pages) <= end_page)
-            record["primary_text"] = inside
-            field_status["primary_text"] = {
-                "status": "deterministic",
-                "method": "manifest_page_range",
-                "confidence": 1.0,
-                "reason": "Classified from the reviewed document main-text page range.",
-            }
-            if inside:
+            primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
+            region_status = field_status.get("region_type") if isinstance(field_status.get("region_type"), dict) else {}
+            # A human decision always outranks deterministic re-enrichment. This
+            # prevents a retry/background pass from resurrecting a resolved issue.
+            if primary_status.get("status") != "human_confirmed":
+                record["primary_text"] = inside
+                field_status["primary_text"] = {
+                    "status": "deterministic",
+                    "method": "manifest_page_range",
+                    "confidence": 1.0,
+                    "reason": "Classified from the reviewed document main-text page range.",
+                }
+            if inside and region_status.get("status") != "human_confirmed":
                 record["region_type"] = "main_text"
                 field_status["region_type"] = {
                     "status": "deterministic",
@@ -2892,7 +2757,7 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             field_status = record.setdefault("metadata_field_status", {})
             for field in required_metadata_fields:
                 current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-                if current.get("status") == "deterministic":
+                if current.get("status") in {"deterministic", "human_confirmed"}:
                     continue
                 field_status[field] = {
                     "status": "unresolved", "method": "source_quality_gate",
@@ -3006,6 +2871,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
                     continue
                 existing_status = field_status.get(key) if isinstance(field_status.get(key), dict) else {}
+                # Human decisions are authoritative. Background/retry enrichment
+                # may add evidence, but it must never resurrect an already
+                # confirmed review issue or overwrite a human value.
+                if existing_status.get("status") == "human_confirmed":
+                    continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
@@ -3062,7 +2932,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") == "deterministic":
+            if current.get("status") in {"deterministic", "human_confirmed"}:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -3076,6 +2946,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if field in required_metadata_fields and value in (None, "", []):
                 field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "reason_code": "ambiguous", "reason": reason}
+            elif confidence < minimum and value not in (None, "", []):
+                # Model self-confidence is never publication authority. Any LLM
+                # proposal below the profile threshold is routed to the human
+                # exception queue even when the model forgot to set needs_review.
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
             elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or float(evidence_info.get("confidence") or 0) < minimum)):
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
@@ -3089,21 +2964,14 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         else:
             record["metadata_needs_attention"] = False
             record["metadata_attention_reasons"] = []
-        incomplete_fields = [
-            field for field in required_metadata_fields
-            if (record.get(field) in (None, "", []) or str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"})
-        ]
-        record["metadata_incomplete_fields"] = incomplete_fields
-        review_fields = [field for field in review_metadata_fields if str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"}]
-        record["metadata_review_fields"] = review_fields
-        if review_fields:
-            record["metadata_needs_attention"] = True
-            record["metadata_attention_reasons"] = list(dict.fromkeys((record.get("metadata_attention_reasons") or []) + ["Record metadata requires human review before acceptance."]))[:50]
+        self._sync_record_metadata_state(record, profile)
+        incomplete_fields = list(record.get("metadata_incomplete_fields") or [])
+        review_fields = list(record.get("metadata_review_fields") or [])
         # Optional indexing/quotation failures remain visible but do not make a structurally
         # valid record permanently unpublishable. Required hybrid classifications and
         # the discourse task are the publication-critical metadata gate.
         discourse_ok = any(name == "discourse" and failure is None for name, _result, failure in stage_results)
-        record["metadata_complete"] = discourse_ok and not incomplete_fields
+        record["metadata_complete"] = discourse_ok and not incomplete_fields and not review_fields
         record["metadata_stage_status"] = {
             task_name: ("complete" if failure is None else "needs_review")
             for task_name, _result, failure in stage_results
@@ -3534,6 +3402,150 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             with self._lock:
                 self._cancel.discard(build_id)
 
+    @staticmethod
+    def _metadata_value_missing(field: str, value: Any) -> bool:
+        # Booleans are three-state in review: True, False, None. False is a
+        # deliberate human decision and must never be treated as missing.
+        if field == "primary_text":
+            return value is None
+        return value is None or value == "" or value == []
+
+    @classmethod
+    def _sync_record_metadata_state(cls, record: dict[str, Any], profile: dict[str, Any]) -> None:
+        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        required = list(profile.get("required_metadata_fields") or [])
+        reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
+        incomplete: list[str] = []
+        review_fields: list[str] = []
+        for field in required:
+            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
+            state = str(info.get("status") or "")
+            if cls._metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
+                incomplete.append(field)
+        for field in reviewable:
+            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
+            if str(info.get("status") or "") in {"unresolved", "invalid"}:
+                review_fields.append(field)
+        record["metadata_incomplete_fields"] = list(dict.fromkeys(incomplete))
+        record["metadata_review_fields"] = list(dict.fromkeys(review_fields))
+        record["metadata_complete"] = not record["metadata_incomplete_fields"] and not record["metadata_review_fields"]
+        record["metadata_needs_attention"] = not record["metadata_complete"]
+        if record["metadata_needs_attention"]:
+            record["metadata_attention_reasons"] = ["Record metadata requires a human decision before acceptance."]
+        else:
+            record["metadata_attention_reasons"] = []
+
+    @classmethod
+    def _review_issue_codes(cls, record: dict[str, Any]) -> list[str]:
+        issues: list[str] = []
+        if record.get("source_quality_issues"):
+            issues.append("source")
+        if record.get("metadata_incomplete_fields") or record.get("metadata_review_fields"):
+            issues.append("metadata")
+        if record.get("needs_review") and str(record.get("review_reason") or "").strip():
+            reason = str(record.get("review_reason") or "").casefold().strip()
+            # Any concrete human-review reason is an exception. Generic pending
+            # status is not: clean records remain in the Ready queue.
+            if reason not in {"pending human review.", "pending human review"}:
+                issues.append("topology")
+        return list(dict.fromkeys(issues))
+
+    @classmethod
+    def _matches_review_queue(cls, record: dict[str, Any], queue: str | None) -> bool:
+        if not queue or queue == "all":
+            return True
+        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+        if queue in {"accepted", "rejected"}:
+            return disposition == queue
+        if disposition != "pending":
+            return False
+        codes = cls._review_issue_codes(record)
+        if queue == "ready":
+            return not codes
+        if queue == "issues":
+            return bool(codes)
+        if queue in {"metadata", "topology", "source"}:
+            return queue in codes
+        return True
+
+    @classmethod
+    def _queue_counts(cls, records: list[dict[str, Any]]) -> dict[str, int]:
+        result = {"all": len(records), "ready": 0, "issues": 0, "metadata": 0, "topology": 0, "source": 0, "accepted": 0, "rejected": 0, "pending": 0}
+        for record in records:
+            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if disposition == "accepted":
+                result["accepted"] += 1
+                continue
+            if disposition == "rejected":
+                result["rejected"] += 1
+                continue
+            result["pending"] += 1
+            codes = cls._review_issue_codes(record)
+            if not codes:
+                result["ready"] += 1
+            else:
+                result["issues"] += 1
+                for code in ("metadata", "topology", "source"):
+                    if code in codes:
+                        result[code] += 1
+        return result
+
+    @classmethod
+    def _decorate_review_state(cls, record: dict[str, Any]) -> dict[str, Any]:
+        """Attach the one authoritative human-review state consumed by the UI.
+
+        Queue membership is derived rather than independently persisted. This
+        prevents a saved metadata decision from leaving behind a stale review
+        flag that can resurrect the record in a later refresh.
+        """
+        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+        issue_codes = cls._review_issue_codes(record)
+        blocking_fields = list(dict.fromkeys([
+            str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
+        ]))
+        if disposition in {"accepted", "rejected"}:
+            state = disposition
+        elif "source" in issue_codes:
+            state = "source"
+        elif "metadata" in issue_codes:
+            state = "metadata"
+        elif "topology" in issue_codes:
+            state = "topology"
+        else:
+            state = "ready"
+        record["review_state"] = state
+        record["review_issue_codes"] = issue_codes
+        record["acceptance_blocking_fields"] = blocking_fields
+        record["can_accept"] = bool(disposition == "pending" and not issue_codes)
+        return record
+
+
+    @classmethod
+    def _enforce_review_invariants(cls, record: dict[str, Any]) -> None:
+        """Keep persisted disposition consistent with authoritative blockers.
+
+        Human approval is the last step for a record.  An accepted record may
+        therefore never simultaneously carry source, metadata, or topology
+        blockers.  If later deterministic validation discovers a blocker, reopen
+        the record instead of letting contradictory state leak into queues or
+        publication readiness.
+        """
+        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+        if disposition != "accepted":
+            return
+        issues = cls._review_issue_codes(record)
+        if not issues:
+            return
+        record["review_disposition"] = "pending"
+        record["accepted"] = False
+        record["rejected"] = False
+        record["needs_review"] = True
+        labels = ", ".join(issues)
+        record["review_reason"] = f"Record reopened because validation found unresolved {labels} review work."
+        audit = list(record.get("review_events") or [])
+        audit.append({"at": iso_now(), "event": "acceptance_reopened", "issues": issues})
+        record["review_events"] = audit[-100:]
+
     def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         for record in records:
@@ -3550,10 +3562,6 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         validation = self.validate_records(blocks, records, profile)
         self.repo.save_records(build_id, records)
         build["record_count"] = len(records)
-        build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
-        build["accepted_count"] = sum(1 for record in records if record.get("accepted"))
-        build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
-        build["source_problem_count"] = sum(1 for record in records if bool(record.get("source_quality_issues")))
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
         # stale worker counter. This makes retries, human edits, refreshes, and
@@ -3562,9 +3570,19 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # Required-metadata completeness is derived from unresolved/review queues.
         # This prevents stale worker booleans from contradicting an empty issue list.
         for record in records:
-            unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
-            record["metadata_complete"] = len(unresolved) == 0
+            self._sync_record_metadata_state(record, profile)
+            self._decorate_review_state(record)
+            self._enforce_review_invariants(record)
+            self._decorate_review_state(record)
         self.repo.save_records(build_id, records)
+        # Review counts are derived only after metadata state and review invariants
+        # have been synchronized. Otherwise a record reopened by validation could
+        # still be reported as accepted until the next request, which is exactly
+        # the kind of stale state that makes review appear to "come back."
+        build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
+        build["accepted_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "accepted")
+        build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
+        build["source_problem_count"] = sum(1 for record in records if bool(record.get("source_quality_issues")))
         build["metadata_completed"] = sum(1 for record in records if bool(record.get("metadata_complete")))
         issue_records: list[dict[str, Any]] = []
         issue_rows: list[dict[str, Any]] = []
@@ -3621,6 +3639,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "issues": issue_rows[:1000],
             "records": issue_records[:250],
         }
+        build["review_queue_counts"] = self._queue_counts(records)
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
         # Any human/topology edit after publication creates a new unpublished
         # revision. Keep the old publication in history rather than presenting
@@ -3646,11 +3665,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build["progress"] = 0.98
             build["status"] = "ready"
             build["stage"] = "ready"
-        elif records_accepted and not metadata_complete:
-            build["progress"] = max(0.96, 0.90 + 0.06 * review_fraction)
-            build["status"] = "awaiting_metadata"
-            build["stage"] = "metadata_review"
         else:
+            # Metadata decisions are part of record review in v11; there is no
+            # second, opaque post-review metadata phase.
             build["progress"] = 0.90 + 0.06 * review_fraction
             build["status"] = "awaiting_review"
             build["stage"] = "review"
@@ -3698,6 +3715,12 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build = self.repo.get_build(build_id)
         return build
 
+    def _assert_human_review_available(self, build_id: str) -> dict[str, Any]:
+        build = self.repo.get_build(build_id)
+        if str(build.get("status") or "") in {"queued", "running"}:
+            raise ValueError("Automatic corpus construction is still running. Review unlocks when metadata enrichment finishes.")
+        return build
+
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
         current_revision = int(record.get("record_revision") or 1)
         if expected_revision is not None and current_revision != int(expected_revision):
@@ -3715,6 +3738,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         })
 
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
@@ -3722,6 +3746,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if target is None:
             raise KeyError(record_id)
         current_revision = self._assert_record_revision(target, expected_revision)
+        profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._sync_record_metadata_state(target, profile)
         if disposition == "accepted" and target.get("source_quality_issues"):
             raise ValueError("Resolve the source extraction problem before accepting this record.")
         if disposition == "accepted" and (list(target.get("metadata_review_fields") or []) or list(target.get("metadata_incomplete_fields") or [])):
@@ -3751,12 +3777,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return target
 
-    def review_decision(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
+    def review_decision(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None, review_queue: str | None = None) -> dict[str, Any]:
         """Apply one review decision and return the authoritative next step atomically.
 
         This is the UI-facing review command. It avoids the previous client-side
         accept -> refresh build -> refresh queue race that could look like a no-op.
         """
+        self._assert_human_review_available(build_id)
         if disposition not in {"accepted", "rejected"}:
             raise ValueError("Unsupported review decision.")
         records = self.repo.load_records(build_id)
@@ -3764,18 +3791,22 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if index < 0:
             raise KeyError(record_id)
         target = records[index]
+        profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._sync_record_metadata_state(target, profile)
         blocking_fields = list(dict.fromkeys([str(v) for v in (target.get("metadata_review_fields") or []) + (target.get("metadata_incomplete_fields") or [])]))
         if disposition == "accepted" and target.get("source_quality_issues"):
             return {
                 "applied": False, "blocked": True, "blocker": "source_problem",
                 "blocking_fields": [], "record": target, "next_record": None,
                 "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
+                "queue_counts": self._queue_counts(records),
             }
         if disposition == "accepted" and blocking_fields:
             return {
                 "applied": False, "blocked": True, "blocker": "metadata_decision_required",
                 "blocking_fields": blocking_fields, "record": target, "next_record": None,
                 "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
+                "queue_counts": self._queue_counts(records),
             }
         self._assert_record_revision(target, expected_revision)
         current_revision = int(target.get("record_revision") or 1)
@@ -3794,18 +3825,26 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
-        # Prefer the next pending record in document order, then wrap once.
-        next_record = None
-        for candidate in records[index + 1:] + records[:index]:
-            if str(candidate.get("review_disposition") or "pending") == "pending":
-                next_record = candidate
-                break
-        return {"applied": True, "blocked": False, "record": target, "next_record": next_record, "build": build}
+        # Prefer the next *pending* record in the active review queue.  `all` is
+        # intentionally special: `_matches_review_queue(..., "all")` includes
+        # already-reviewed records, which previously let Accept & next advance to
+        # an accepted/rejected row and made the primary action look like a no-op.
+        ordered = records[index + 1:] + records[:index]
+        def pending(candidate: dict[str, Any]) -> bool:
+            return str(candidate.get("review_disposition") or "pending") == "pending"
+        if review_queue and review_queue != "all":
+            next_record = next((candidate for candidate in ordered if pending(candidate) and self._matches_review_queue(candidate, review_queue)), None)
+        else:
+            next_record = next((candidate for candidate in ordered if pending(candidate)), None)
+        if next_record is None:
+            next_record = next((candidate for candidate in ordered if pending(candidate)), None)
+        return {"applied": True, "blocked": False, "record": target, "next_record": next_record, "build": build, "queue_counts": self._queue_counts(records)}
 
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
         return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
 
-    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None) -> dict[str, Any]:
+    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None, review_queue: str | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
@@ -3817,7 +3856,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
                 continue
             current_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+            self._sync_record_metadata_state(record, profile)
             if filter_disposition is not None and current_disposition != filter_disposition:
+                continue
+            if review_queue and not self._matches_review_queue(record, review_queue):
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
@@ -3847,7 +3890,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids}
+        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": self._queue_counts(records)}
 
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
         checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)
@@ -3860,6 +3903,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return {"restored": True, "action": checkpoint.get("action"), "selected_record_id": checkpoint.get("selected_record_id"), "record_count": len(records)}
 
     def patch_metadata(self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         forbidden = sorted(set(changes) - HUMAN_EDITABLE_METADATA_FIELDS)
         if forbidden:
             raise ValueError(
@@ -3881,6 +3925,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 current_revision = int(record.get("record_revision") or 1)
                 if expected_revision is not None and current_revision != int(expected_revision):
                     raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
+                decision_log = list(record.get("metadata_decisions") or [])
                 for key, value in changes.items():
                     record[key] = value
                     if key in REVIEW_METADATA_FIELDS:
@@ -3889,24 +3934,52 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             "status": "human_confirmed",
                             "method": "human",
                             "confidence": 1.0,
+                            "reason_code": "human_confirmed",
                             "reason": "Confirmed during record review.",
                         }
+                        decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human"})
+                record["metadata_decisions"] = decision_log[-100:]
+                record["metadata_reviewed_at"] = iso_now()
                 profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
-                required = list(profile.get("required_metadata_fields") or [])
-                incomplete = [field for field in required if record.get(field) in (None, "", [])]
-                record["metadata_incomplete_fields"] = incomplete
-                review_fields = [field for field in profile.get("review_metadata_fields", REVIEW_METADATA_FIELDS) if str((record.get("metadata_field_status") or {}).get(field, {}).get("status") or "") in {"unresolved", "invalid"}]
-                record["metadata_review_fields"] = review_fields
-                if not incomplete:
-                    record["metadata_complete"] = True
-                record["metadata_needs_attention"] = bool(incomplete or review_fields)
-                record["metadata_attention_reasons"] = (["Record metadata remains unresolved after human editing."] if (incomplete or review_fields) else [])
+                self._sync_record_metadata_state(record, profile)
                 record["record_revision"] = current_revision + 1
                 break
         if target is None:
             raise KeyError(record_id)
-        self._rewrite_and_validate(build_id, records)
-        return target
+        build = self._rewrite_and_validate(build_id, records)
+        # Return the record as persisted after authoritative state derivation.
+        persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+        self._decorate_review_state(persisted)
+        return persisted
+
+    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None) -> dict[str, Any]:
+        """Persist one human metadata decision and return authoritative review state.
+
+        This endpoint is deliberately transactional from the UI's perspective:
+        one call saves the value, marks the field human-confirmed, recomputes all
+        derived metadata/queue state, and returns the updated record and build.
+        """
+        if field not in HUMAN_EDITABLE_METADATA_FIELDS or field in {"needs_review", "review_reason"}:
+            raise ValueError(f"Unsupported review metadata field: {field}")
+        record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
+        records = self.repo.load_records(build_id)
+        for row in records:
+            self._decorate_review_state(row)
+        build = self.repo.get_build(build_id)
+        self._refresh_workflow_fields(build)
+        self.repo.save_build(build)
+        remaining_fields = list(dict.fromkeys([
+            str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
+        ]))
+        return {
+            "applied": True,
+            "record": record,
+            "build": build,
+            "queue_counts": self._queue_counts(records),
+            "remaining_fields": remaining_fields,
+            "ready_for_acceptance": bool(record.get("can_accept")),
+            "review_state": str(record.get("review_state") or "ready"),
+        }
 
     def patch_evidence(
         self,
@@ -3918,6 +3991,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         reason: str = "",
         expected_revision: int | None = None,
     ) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         if field not in ATTRIBUTION_EVIDENCE_FIELDS and field not in RecordMetadataModel.model_fields:
             raise ValueError(f"Unsupported metadata evidence field: {field}")
         records = self.repo.load_records(build_id)
@@ -3951,6 +4025,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return target
 
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
@@ -3982,6 +4057,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return merged
 
     def split(self, build_id: str, record_id: str, after_block_id: str, expected_revision: int | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
@@ -4125,8 +4201,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             op = dict(build.get("metadata_operation") or {})
             op.update({"state": "failed", "finished_at": iso_now(), "error": str(exc)})
             build["metadata_operation"] = op
-            build["status"] = "awaiting_metadata"
-            build["stage"] = "metadata_review"
+            build["status"] = "awaiting_review"
+            build["stage"] = "review"
             build["error"] = None
             warnings = list(build.get("warnings") or [])
             warnings.append(f"Metadata retry failed: {exc}")

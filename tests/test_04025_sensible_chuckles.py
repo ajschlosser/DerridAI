@@ -10,8 +10,8 @@ def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_contract_and_review_refresh_fix():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.43.5"
-    assert "0.43.5 — Dundee" in text("README.md")
+    assert package["version"]=="0.44.0"
+    assert "0.44.0 — Dachshund" in text("README.md")
     ui=text("web/src/components/PdfCorpusBuilder.vue")
     assert "reviewHydrated" in ui
     assert "for(let attempt=0;attempt<5;attempt++)" in ui
@@ -40,7 +40,7 @@ def _install_publishable(repo: cb.PdfCorpusRepository):
     asset={"asset_id":"pdf-test","sha256":"source-sha","filename":"test.pdf","page_count":1,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
     cb._json_write(repo.asset_meta_path("pdf-test"),asset)
     repo.asset_blocks_path("pdf-test").write_text(json.dumps({"block_id":"b1","page":1,"bbox":[0,0,1,1],"type":"paragraph","text":"Record text","extraction_method":"native","confidence":1.0})+"\n")
-    build=repo.create_build({"asset_id":"pdf-test","source_sha256":"source-sha","source_filename":"test.pdf","schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.43.5","document_prompt_version":cb.DOCUMENT_PROMPT_VERSION,"segmentation_prompt_version":cb.SEGMENTATION_PROMPT_VERSION,"metadata_prompt_version":cb.METADATA_PROMPT_VERSION,"provider":"ollama","model":"profile-model","request":{"provider_profile_id":"primary","record_sizing":{"preferred_record_chars":1750}},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":"pdf-test","source_sha256":"source-sha","source_filename":"test.pdf","schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.44.0","document_prompt_version":cb.DOCUMENT_PROMPT_VERSION,"segmentation_prompt_version":cb.SEGMENTATION_PROMPT_VERSION,"metadata_prompt_version":cb.METADATA_PROMPT_VERSION,"provider":"ollama","model":"profile-model","request":{"provider_profile_id":"primary","record_sizing":{"preferred_record_chars":1750}},"manifest":{},"validation":{"valid":True}})
     record={"record_id":"r1","record_revision":1,"text":"Record text","text_length":11,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"accepted":True,"review_disposition":"accepted","needs_review":False,"region_type":"main_text","primary_text":True,"discourse_role":"assertion","metadata_complete":True,"metadata_incomplete_fields":[],"metadata_field_status":{"region_type":{"status":"human_confirmed"},"primary_text":{"status":"human_confirmed"},"discourse_role":{"status":"human_confirmed"}}}
     repo.save_records(build["build_id"],[record])
     build.update({"record_count":1,"accepted_count":1,"rejected_count":0,"needs_review_count":0,"validation":{"valid":True},"status":"ready","stage":"ready","progress":.98})
@@ -86,8 +86,8 @@ def test_review_queue_filter_and_bulk_disposition_are_consistent(tmp_path:Path):
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
     records=[
-        {"record_id":"r1","record_revision":1,"text":"Édouard Glissant","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"accepted":False,"rejected":False,"review_disposition":"pending","needs_review":True},
-        {"record_id":"r2","record_revision":1,"text":"Jacques Derrida","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"accepted":True,"rejected":False,"review_disposition":"accepted","needs_review":False},
+        {"record_id":"r1","record_revision":1,"text":"Édouard Glissant","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"region_type":"main_text","primary_text":True,"discourse_role":"analysis","metadata_field_status":{"region_type":{"status":"deterministic"},"primary_text":{"status":"deterministic"},"discourse_role":{"status":"deterministic"}},"accepted":False,"rejected":False,"review_disposition":"pending","needs_review":False},
+        {"record_id":"r2","record_revision":1,"text":"Jacques Derrida","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"region_type":"main_text","primary_text":True,"discourse_role":"analysis","metadata_field_status":{"region_type":{"status":"deterministic"},"primary_text":{"status":"deterministic"},"discourse_role":{"status":"deterministic"}},"accepted":True,"rejected":False,"review_disposition":"accepted","needs_review":False},
     ]
     repo.save_records(build["build_id"],records)
     page=repo.page_records(build["build_id"],disposition="pending")
@@ -120,8 +120,9 @@ def test_metadata_incomplete_creates_explicit_attention_state_and_blocks_publish
     rows[0].pop("discourse_role",None)
     manager._rewrite_and_validate(build["build_id"],rows)
     refreshed=repo.get_build(build["build_id"])
-    assert refreshed["status"]=="awaiting_metadata"
-    assert refreshed["stage"]=="metadata_review"
+    assert refreshed["status"]=="awaiting_review"
+    assert refreshed["stage"]=="review"
+    assert refreshed["metadata_issue_summary"]["fields_unresolved"] == 1
     try:
         manager.publish(build["build_id"])
     except ValueError as exc:
@@ -148,7 +149,8 @@ def test_running_build_hydrates_intermediate_records_without_form_interaction():
     assert "await refreshRecords(true)" in ui
     assert "ensureReviewHydrated" in ui
     assert 'flush:"post"' in ui
-    assert "metadataIncompleteOnly" in ui
+    assert 'reviewQueue=ref<ReviewQueue>("all")' in ui
+    assert 'reviewQueue.value="metadata"' in ui
 
 def test_pdf_worker_lifecycle_uses_worker_src_and_awaited_single_teardown_path():
     viewer=text("web/src/components/PdfEvidenceViewer.vue")

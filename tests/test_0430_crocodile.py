@@ -68,9 +68,9 @@ def install_repo(tmp_path: Path, record: dict):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.43.5"
-    assert json.loads(text("web/package.json"))["version"] == "0.43.5"
-    assert "0.43.5 — Dundee" in text("README.md")
+    assert APP_VERSION == "0.44.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.44.0"
+    assert "0.44.0 — Dachshund" in text("README.md")
 
 
 def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):
@@ -153,7 +153,8 @@ def test_review_ui_accept_is_actionable_and_preserves_viewport():
     assert "captureReviewViewport" in builder and "restoreReviewViewport" in builder
     assert "@click=\"toggleAccept\"" in builder
     assert ":disabled=\"busy!==''\"" in builder
-    assert "selectedMetadataBlocked?i18n.t('pdf_corpus.resolve_metadata_to_accept'" in builder
+    assert 'metadata_decision_required' in builder
+    assert 'reviewDecision' in builder
     assert "scrollIntoView(" not in builder
     assert "reviewInspectorTab" in builder
     assert "selectedMetadataBlockingLabel" in builder
@@ -163,9 +164,10 @@ def test_primary_text_uses_boolean_radio_not_string_truthiness():
     panel = text("web/src/components/CorpusMetadataResolutionPanel.vue")
     assert ":value=\"true\"" in panel
     assert ":value=\"false\"" in panel
-    assert '@change="save(field)"' in panel
+    assert '@click="save(field)"' in panel
     assert 'value==="true"' not in panel
-    assert "draft[field]===''||draft[field]===null||draft[field]===undefined" in panel
+    assert "requiredFields.has(field)&&draft[field]===null" in panel
+    assert ":value=\"false\"" in panel
     stories = text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")
     assert "PrimaryTextHumanDecisionNo" in stories
 

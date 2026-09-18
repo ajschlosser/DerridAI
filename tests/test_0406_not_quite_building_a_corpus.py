@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.43.5"
-    assert 'version="0.43.5"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.43.5"' in text("api/app/config.py")
-    assert "0.43.5 — Dundee" in text("README.md")
+    assert package["version"] == "0.44.0"
+    assert 'version="0.44.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.44.0"' in text("api/app/config.py")
+    assert "0.44.0 — Dachshund" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
@@ -70,7 +70,7 @@ def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     assert "provider-stat-group" in selector
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
     assert 'profile_id:"derrida-scholarly-v5"' not in builder
-    assert 'default="derrida-scholarly-v10"' in models
+    assert 'default="derrida-scholarly-v11"' in models
     assert '"pdf_corpus.provider_profile": "Primary LLM provider"' in dictionary
 
 
@@ -81,7 +81,7 @@ def test_retry_ui_hides_blocked_action_while_build_is_running_and_syncs_rail():
     assert "const segmentationNeedsReview=computed" in builder
     assert "const retryingSegmentation=computed(()=>Boolean(buildRunning.value" in builder
     assert 'v-if="retryingSegmentation"' in builder
-    assert 'v-if="segmentationNeedsReview"' in builder
+    assert 'v-if="segmentationNeedsReview&&(!showReviewWorkspace||finishPhase)"' in builder
     assert "boundary decision(s) to review" in text("web/src/components/CorpusBuildProgress.vue")
     assert "function syncBuildInRail(build:CorpusBuild)" in builder
     assert "syncBuildInRail(currentBuild.value)" in builder

@@ -43,7 +43,7 @@ from .models import (
     PdfCorpusRecordPatch,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
-    PdfCorpusRecordDisposition, PdfCorpusReviewDecision,
+    PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
     PdfCorpusBulkDisposition,
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
@@ -83,7 +83,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.43.5")
+app = FastAPI(title="DerridAI Corpus API", version="0.44.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1190,7 +1190,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.43.5",
+            "app_version": "0.44.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1878,10 +1878,11 @@ def list_pdf_corpus_records(
     disposition: str | None = Query(default=None, pattern="^(pending|accepted|rejected)$"),
     metadata_incomplete: bool | None = None,
     source_problem: bool | None = None,
+    review_queue: str | None = Query(default=None, pattern="^(ready|issues|metadata|source|topology|accepted|rejected)$"),
     query: str = "",
 ):
     try:
-        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, source_problem=source_problem, query=query)
+        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, source_problem=source_problem, review_queue=review_queue, query=query)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
@@ -1926,6 +1927,16 @@ def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision")
+def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision):
+    try:
+        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")
 def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCorpusEvidencePatch):
     try:
@@ -1959,7 +1970,7 @@ def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCo
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision")
 def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusReviewDecision):
     try:
-        return pdf_corpus_builds.review_decision(build_id, record_id, body.disposition, body.reason, body.expected_revision)
+        return pdf_corpus_builds.review_decision(build_id, record_id, body.disposition, body.reason, body.expected_revision, body.review_queue)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -1969,7 +1980,7 @@ def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRevie
 @app.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
 def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition):
     try:
-        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition)
+        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition, body.review_queue)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:

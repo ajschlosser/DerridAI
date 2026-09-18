@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
-**0.43.5 — Dundee** consolidates Corpus Builder into a stage-driven workflow: review decisions are atomic, contradictory metadata/publication states are eliminated, build configuration collapses after launch, empty review workspaces are suppressed, and source-quality problems receive their own queue.
-# DerridAI Corpus Viewer 0.43.5
+**0.44.0 — Dachshund** consolidates Corpus Builder into a stage-driven workflow: review decisions are atomic, contradictory metadata/publication states are eliminated, build configuration collapses after launch, empty review workspaces are suppressed, and source-quality problems receive their own queue.
+# DerridAI Corpus Viewer 0.44.0
 
 DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
@@ -67,15 +67,20 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 The default LLM review preset remains **OCR / text cleanup**. The default review run mode is now **Interactive foreground**.
 
 
-## 0.43.5 — Dundee
+## 0.44.0 — Dachshund
 
-Dundee consolidates Corpus Builder review into a single authoritative workflow. Accept/reject decisions are handled as atomic server commands that return the next record and updated build state, so review actions no longer depend on chained refreshes. During active review, the large pipeline/quality dashboard collapses to a compact progress summary while full diagnostics remain available under Technical build details. The left rail is navigation, the center pane is the proposed record, and the right inspector is explicitly tabbed between **Metadata**, **Evidence**, and **Source** so the PDF no longer permanently competes with the text being judged.
+Dachshund refactors Corpus Builder around an exception-oriented review contract: **extract source → construct records → enrich record metadata → human review → validate → publish**. Deterministic rules own obvious topology and metadata; the LLM is called only for ambiguous semantic boundaries and judgment-heavy scholarly metadata. The human approves the resulting records and resolves only concrete exceptions such as bad extraction, uncertain provenance, or low-confidence metadata.
 
-Record acceptance is now actionable even when metadata blocks it. **Accept & next** no longer looks broken: if required metadata is unresolved, the action opens the Metadata inspector, identifies the blocking fields, moves focus to the first decision without scrolling the page, and leaves the record pending. Once metadata is resolved, the same action accepts the record and advances to the next proposal. Review mutations preserve window/queue/inspector position rather than resetting the page. Bulk acceptance reports records blocked by metadata and routes them into the metadata-decision queue.
+Human metadata decisions are now durable server-side decisions rather than loosely coupled UI state. A decision writes the value, marks the field `human_confirmed`, records an audit entry, increments the record revision, recomputes the record's blockers and queue membership, persists the record set, and returns the authoritative record/build/queue state. `primary_text` retains true three-state semantics (`true`, `false`, `null`); `false` is never treated as missing. Background enrichment is read-only from the human review perspective: generated records may be previewed while enrichment is running, but review mutations unlock only when automatic enrichment has finished, preventing an in-flight enrichment snapshot from overwriting a human decision.
 
-`primary_text` is now a genuinely human-reviewable record field. It uses an explicit Yes/No control, preserves `false` as a valid value, is accepted by the server-side human-edit schema, records human-confirmed provenance, and is covered by a regression test that saves `false`, reloads the record, and verifies that the value remains false. High-confidence LLM metadata proposals remain inspectable and are human-confirmed when the record is accepted; uncertain `region_type`, `primary_text`, `discourse_role`, attribution, stance, proposition-status, and scope fields remain explicit review decisions.
+The active scholarly profile is `derrida-scholarly-v11` and metadata prompt contract is `derridai-record-metadata-v7`; v10 remains registered for existing builds. Review-relevant metadata includes `region_type`, `primary_text`, `discourse_role`, `speaker`, `position_holder`, `target`, `stance`, `proposition_status`, and `claim_scope`. Deterministic classifications are preserved. LLM proposals are constrained to controlled enums/booleans where applicable, source-bound evidence is validated, and any proposal below the profile confidence threshold is routed to human review even if the model fails to request review itself. High-confidence supported proposals remain visible and become human-confirmed when the reviewer accepts the record.
 
-The review queues use clearer task language (pending review, topology attention, metadata decisions). Queue rows surface metadata-decision counts, evidence selection synchronizes the Source tab, and the full-screen Focus Review uses the same non-dead-end acceptance behavior. New strings are localized in English and Canadian French, and Storybook includes the false/secondary-text human-decision state.
+Review queues are derived from authoritative record state rather than independently persisted flags: **Ready**, **Needs attention**, **Metadata**, **Topology**, **Source problem**, **Accepted**, and **Rejected**. Clean pending records have no source/topology/metadata blockers and can be approved individually with **Accept & next** or safely in bulk with **Accept clean**. Source extraction problems (including fragmented-glyph/layout artifacts) and uncertain provenance remain exception records with explicit reasons. Queue membership, metadata completeness, and publication eligibility are recalculated from the same persisted records so a confirmed field cannot reappear merely because a stale counter or client filter disagrees.
+
+The review workspace is now the primary surface once records exist. Build configuration and technical diagnostics collapse out of the way; a compact session header shows review progress, a narrow queue provides navigation, the proposed record receives the majority of readable space, and a secondary inspector switches between **Metadata**, **Evidence**, and **Source**. Metadata decisions use typed controls with explicit Confirm/Saving/Saved feedback. Record acceptance/rejection is an atomic backend command returning the updated build, queue counts, and next review target; the frontend no longer chains several refreshes to decide what happened. Review mutations preserve viewport position.
+
+The UI remains English/fr-CA localized, uses semantic native controls and visible text states rather than color-only signaling, preserves keyboard focus, supports reduced motion, and expands the Storybook review/queue/metadata states. Regression tests cover durable human metadata, `primary_text=false`, low-confidence LLM routing, automatic-enrichment review locking, atomic accept/advance, clean-vs-exception queues, source-problem routing, bilingual strings, and Storybook surfaces.
+
 
 ## 0.42.1 — Bunny Rabbit - Again
 
@@ -1165,12 +1170,12 @@ docker compose up -d --build
 
 ## Release validation
 
-0.43.5 Dundee was checked with:
+0.44.0 Dachshund was checked with:
 
-- the full Python regression suite (`319 passed` in the packaging environment, using a temporary Chroma import stub because the sandbox could not download the package);
+- the full Python regression suite (`332 passed` in the packaging environment);
 - Python bytecode compilation for `api/app` and `tests`;
 - `node --check web/src/legacy/runtime.js`;
-- TypeScript/Vue script syntax transpilation across 169 source blocks;
+- TypeScript/Vue script syntax transpilation across 167 source files;
 - `git diff --check`;
 - explicit attempts to run `npm run build` and `npm run build-storybook`.
 

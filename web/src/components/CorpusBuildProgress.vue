@@ -21,7 +21,7 @@ const props=defineProps<{
 const i18n=useI18nStore();
 function statusLabel(){return i18n.t(`pdf_corpus.status.${props.status}`,String(props.status||"unknown").replace(/_/g," "))}
 function stageLabel(){return i18n.t(`pdf_corpus.stage.${props.stage}`,String(props.stage||"unknown").replace(/_/g," "))}
-const validationReady=computed(()=>Boolean(props.validation&&typeof props.validation.valid==="boolean"&&["review","metadata_review","ready","published"].includes(String(props.stage||""))));
+const validationReady=computed(()=>Boolean(props.validation&&typeof props.validation.valid==="boolean"&&["review","ready","published"].includes(String(props.stage||""))));
 const validationValid=computed(()=>props.validation?.valid===true);
 const validationCoverage=computed(()=>Math.round(Number(props.validation?.coverage||0)*100));
 const validationEvidenceIssues=computed(()=>Number(props.validation?.metadata_evidence_errors?.length||0));
@@ -33,10 +33,10 @@ const validationPageMappingIssues=computed(()=>Number(props.validation?.page_map
 const validationCitationIssues=computed(()=>Number(props.validation?.citation_errors?.length||0));
 const stageExplanation=computed(()=>{
   const stage=String(props.stage||"");
-  const map:Record<string,string>={structure:"Reading the PDF and identifying document-level structure and bibliography.",document_review:"Finalizing document-level metadata automatically before segmentation.",segmenting:"Generating plausible boundary candidates deterministically and asking the LLM only small local split/keep questions.",reconciling:"Finalizing topology. Weak, omitted, uncertain, or failed classifications resolve to KEEP. Safety splits are selected locally and require review only when every nearby seam is provenance-sensitive.",enriching:"Enriching each constructed record with discourse, quotation, and indexing metadata. Source text and boundaries are already preserved.",review:"Automated processing is complete. Review the proposed records.",metadata_review:"Record review is complete. Resolve incomplete metadata before publication.",ready:"All quality gates have passed. The corpus is ready to publish.",published:"The reviewed corpus has been finalized as JSONL and is ready to download."};
+  const map:Record<string,string>={structure:"Reading the PDF and identifying document-level structure and bibliography.",document_review:"Finalizing document-level metadata automatically before segmentation.",segmenting:"Generating plausible boundary candidates deterministically and asking the LLM only small local split/keep questions.",reconciling:"Finalizing topology. Weak, omitted, uncertain, or failed classifications resolve to KEEP. Safety splits are selected locally and require review only when every nearby seam is provenance-sensitive.",enriching:"Enriching each constructed record with discourse, quotation, and indexing metadata. Source text and boundaries are already preserved.",review:"Automated processing is complete. Review the proposed records.",ready:"All quality gates have passed. The corpus is ready to publish.",published:"The reviewed corpus has been finalized as JSONL and is ready to download."};
   return i18n.t(`pdf_corpus.stage_help.${stage}`,map[stage]||"Processing the current corpus-build stage.");
 });
-const nextStage=computed(()=>{const order=["structure","segmenting","reconciling","enriching","review","metadata_review","ready","published"];const i=order.indexOf(String(props.stage||""));return i>=0&&i<order.length-1?i18n.t(`pdf_corpus.stage.${order[i+1]}`,order[i+1].replace(/_/g," ")):""});
+const nextStage=computed(()=>{const order=["structure","segmenting","reconciling","enriching","review","ready","published"];const i=order.indexOf(String(props.stage||""));return i>=0&&i<order.length-1?i18n.t(`pdf_corpus.stage.${order[i+1]}`,order[i+1].replace(/_/g," ")):""});
 </script>
 
 <template>

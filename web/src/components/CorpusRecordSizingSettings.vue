@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
-
-export interface RecordSizingPolicy {
-  preferred_record_chars:number;
-  record_length_tolerance:number;
-  long_record_chars:number;
-  absolute_record_chars:number;
-}
+import type { RecordSizingPolicy } from "../types/corpus";
 const props=defineProps<{modelValue:RecordSizingPolicy;disabled?:boolean}>();
 const emit=defineEmits<{(event:"update:modelValue",value:RecordSizingPolicy):void}>();
 const i18n=useI18nStore();

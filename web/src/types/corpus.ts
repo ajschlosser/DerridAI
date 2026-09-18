@@ -13,3 +13,21 @@ export interface CorpusSegmentationTelemetry {
   classifierFailures?: number;
   reviewCount?: number;
 }
+
+
+export interface RecordSizingPolicy {
+  preferred_record_chars: number;
+  record_length_tolerance: number;
+  long_record_chars: number;
+  absolute_record_chars: number;
+}
+
+export type ReviewQueue =
+  | "all"
+  | "ready"
+  | "issues"
+  | "metadata"
+  | "topology"
+  | "source"
+  | "accepted"
+  | "rejected";

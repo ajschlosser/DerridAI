@@ -432,7 +432,7 @@ class PdfCorpusRecordSizing(BaseModel):
 
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v10", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v11", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None
@@ -456,6 +456,12 @@ class PdfCorpusManifestPatch(BaseModel):
 
 class PdfCorpusRecordPatch(BaseModel):
     changes: dict[str, Any] = Field(default_factory=dict)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusMetadataDecision(BaseModel):
+    field: str = Field(min_length=1, max_length=120)
+    value: Any = None
     expected_revision: int | None = Field(default=None, ge=1)
 
 
@@ -483,6 +489,7 @@ class PdfCorpusBulkDisposition(BaseModel):
     reason: str = Field(default="", max_length=2000)
     needs_review: bool | None = None
     filter_disposition: Literal["pending", "accepted", "rejected"] | None = None
+    review_queue: Literal["ready", "issues", "metadata", "source", "topology"] | None = None
     query: str = Field(default="", max_length=500)
 
 
@@ -490,6 +497,7 @@ class PdfCorpusReviewDecision(BaseModel):
     disposition: Literal["accepted", "rejected"]
     reason: str = Field(default="", max_length=2000)
     expected_revision: int | None = Field(default=None, ge=1)
+    review_queue: Literal["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"] | None = None
 
 
 class PdfCorpusRecordMerge(BaseModel):
