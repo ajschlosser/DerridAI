@@ -27,7 +27,7 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v7"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v8"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
 PROFILE_VERSION = "derrida-scholarly-v11"
@@ -41,6 +41,21 @@ DISCOURSE_ROLES = [
     "qualification", "transition", "question", "definition", "example",
     "commentary", "paratext", "bibliographic",
 ]
+DISCOURSE_ROLE_DEFINITIONS = {
+    "assertion": "The speaker directly advances a proposition as part of the argument.",
+    "analysis": "The passage examines, interprets, or explicates a claim, text, concept, or distinction.",
+    "quotation": "The record primarily functions as direct quoted material rather than the surrounding author's own proposition.",
+    "reported_position": "The passage presents a proposition held or advanced by another position holder without necessarily endorsing it.",
+    "critique": "The passage explicitly challenges, rejects, problematizes, or exposes a limitation in a position.",
+    "qualification": "The passage limits, modifies, complicates, or adds a condition to another proposition.",
+    "transition": "The passage primarily moves between argumentative stages rather than advancing a substantive proposition.",
+    "question": "The passage primarily poses a question or problem rather than asserting an answer.",
+    "definition": "The passage explicitly defines, specifies, or characterizes a term or concept.",
+    "example": "The passage primarily provides an illustration, case, or example for another point.",
+    "commentary": "The passage offers explanatory commentary that is not itself the principal argumentative move.",
+    "paratext": "Editorial, publishing, prefatory, front/back matter, or other apparatus rather than substantive argument.",
+    "bibliographic": "Bibliographic citation, reference-list, or works-cited material.",
+}
 HYBRID_REQUIRED_FIELDS = ("region_type", "primary_text", "discourse_role")
 REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "speaker", "position_holder", "target", "stance", "proposition_status", "claim_scope")
 
@@ -49,34 +64,55 @@ NON_PRIMARY_REGION_TYPES = {"front_matter", "back_matter", "bibliography", "inde
 def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
     """Apply deterministic record-metadata relationships.
 
-    Apparatus/non-primary region types are hard invariants. ``main_text`` strongly
-    defaults to primary text, but an explicit human decision may override that
-    default for unusual records.
+    Hard semantic invariants are applied consistently in single-record editing,
+    bulk editing, and automatic enrichment. Human decisions remain authoritative
+    for soft defaults, but impossible apparatus/primary-text combinations are not
+    offered as scholarly choices.
     """
     region = str(record.get("region_type") or "")
     status = record.setdefault("metadata_field_status", {})
+    changes: list[dict[str, Any]] = []
+
     primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
     human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
-    desired: bool | None = None
-    reason = ""
-    hard = False
+    desired_primary: bool | None = None
+    primary_reason = ""
+    primary_hard = False
     if region in NON_PRIMARY_REGION_TYPES:
-        desired = False
-        hard = True
-        reason = f"{region} cannot be primary text."
+        desired_primary = False
+        primary_hard = True
+        primary_reason = f"{region} cannot be primary text."
     elif region == "main_text" and not human_primary:
-        desired = True
-        reason = "main_text is deterministically suggested as primary text unless a reviewer overrides it."
-    if desired is None:
-        return []
-    changed = record.get("primary_text") is not desired
-    if hard or not human_primary:
-        record["primary_text"] = desired
+        desired_primary = True
+        primary_reason = "main_text is deterministically suggested as primary text unless a reviewer overrides it."
+    if desired_primary is not None and (primary_hard or not human_primary):
+        if record.get("primary_text") is not desired_primary:
+            changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
+        record["primary_text"] = desired_primary
         status["primary_text"] = {
             "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-            "reason_code": "semantic_invariant" if hard else "deterministic_default", "reason": reason,
+            "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
         }
-    return [{"field": "primary_text", "value": desired, "reason": reason}] if changed else []
+
+    role_status = status.get("discourse_role") if isinstance(status.get("discourse_role"), dict) else {}
+    human_role = str(role_status.get("status") or "") in {"human_confirmed", "human_override"}
+    desired_role: str | None = None
+    role_reason = ""
+    if region == "bibliography":
+        desired_role = "bibliographic"
+        role_reason = "Bibliography regions are deterministically bibliographic discourse."
+    elif region in {"front_matter", "back_matter", "paratext"}:
+        desired_role = "paratext"
+        role_reason = f"{region} is deterministically classified as paratext unless a reviewer explicitly overrides it."
+    if desired_role is not None and not human_role:
+        if record.get("discourse_role") != desired_role:
+            changes.append({"field": "discourse_role", "value": desired_role, "reason": role_reason})
+        record["discourse_role"] = desired_role
+        status["discourse_role"] = {
+            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+            "reason_code": "semantic_invariant", "reason": role_reason,
+        }
+    return changes
 
 
 class DocumentManifestModel(BaseModel):
@@ -935,6 +971,11 @@ class PdfCorpusBuildManager:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
         self._cancel: set[str] = set()
+        # Resolved provider requests may contain server-owned credentials and must
+        # never be serialized into build.json. Keep the current execution contract
+        # in memory so a reviewer can hot-swap profiles for subsequently scheduled
+        # metadata work while the public build manifest remains secret-free.
+        self._runtime_requests: dict[str, dict[str, Any]] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         self._mark_interrupted()
 
@@ -987,6 +1028,59 @@ class PdfCorpusBuildManager:
                 "or reduce the segmentation input/output budgets."
             )
 
+    def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]:
+        if not build_id:
+            return dict(fallback)
+        with self._lock:
+            current = self._runtime_requests.get(build_id)
+            return dict(current) if isinstance(current, dict) and current else dict(fallback)
+
+    def switch_provider_profile(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Change the provider used by metadata tasks scheduled after this point.
+
+        In-flight requests are intentionally not interrupted. The execution ledger
+        records the actual provider/model for every family, so mixed-model builds
+        remain auditable. Resolved credentials are kept only in memory.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") == "published":
+            raise ValueError("Published builds are immutable; create a new build instead.")
+        profile_id = str(request.get("provider_profile_id") or "").strip()
+        if not profile_id:
+            raise ValueError("Choose an LLM provider profile.")
+        with self._lock:
+            prior = dict(self._runtime_requests.get(build_id) or {})
+            # Preserve corpus-build policy/budgets while replacing only provider
+            # configuration and optional escalation provider.
+            merged = dict(prior) if prior else dict(build.get("request") or {})
+            for key in ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider"):
+                if key in request:
+                    merged[key] = request[key]
+                elif key in {"review_provider_profile_id", "_review_provider"} and key in merged and key not in request:
+                    merged.pop(key, None)
+            self._runtime_requests[build_id] = merged
+            public = dict(build.get("request") or {})
+            for key in ("provider", "model", "base_url", "generation", "provider_profile_id", "review_provider_profile_id"):
+                if key in merged:
+                    public[key] = merged[key]
+                elif key in {"review_provider_profile_id"} and key in public:
+                    public.pop(key, None)
+            public.pop("api_key", None)
+            public.pop("_review_provider", None)
+            build["request"] = public
+            build["provider"] = merged.get("provider") or build.get("provider")
+            build["model"] = merged.get("model") or build.get("model")
+            history = list(build.get("provider_profile_history") or [])
+            history.append({
+                "at": iso_now(), "provider_profile_id": profile_id,
+                "provider": build.get("provider"), "model": build.get("model"),
+                "metadata_completed": int(build.get("metadata_completed") or 0),
+                "note": "Applies to newly scheduled metadata tasks; in-flight requests continue unchanged.",
+            })
+            build["provider_profile_history"] = history[-50:]
+            self.repo.save_build(build)
+        return build
+
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         asset = self.repo.get_asset(str(request["asset_id"]))
         profile_id = str(request.get("profile_id") or PROFILE_VERSION)
@@ -1012,6 +1106,8 @@ class PdfCorpusBuildManager:
             "request": public_request,
             "manifest": {},
         })
+        with self._lock:
+            self._runtime_requests[build["build_id"]] = dict(request)
         self._executor.submit(self._run, build["build_id"], request, False)
         return build
 
@@ -1055,6 +1151,8 @@ class PdfCorpusBuildManager:
             self.repo.save_checkpoint(build_id, "reconciliation_state", {})
             self.repo.save_checkpoint(build_id, "boundaries_partial", [])
         self.repo.save_build(build)
+        with self._lock:
+            self._runtime_requests[build_id] = dict(request)
         self._executor.submit(self._run, build_id, request, True)
         return build
 
@@ -2692,7 +2790,7 @@ Return one compact decision for every supplied candidate using exact `after` IDs
 """
             try:
                 result = self._chat_json(
-                    request,
+                    active_request,
                     prompt,
                     response_model=CompactReconciliationResponseModel,
                     max_tokens=limits["reconciliation_num_predict"],
@@ -2963,13 +3061,26 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         """
         if build_id:
             try:
-                current_manifest = self.repo.get_build(build_id).get("manifest")
+                current_build = self.repo.get_build(build_id)
+                current_manifest = current_build.get("manifest")
                 if isinstance(current_manifest, dict) and current_manifest:
                     manifest = current_manifest
+                request = self._latest_runtime_request(build_id, request)
             except Exception:
                 pass
         self._apply_manifest_metadata(record, manifest)
-        editorial_context = self._editorial_context(build_id, exclude_record_id=str(record.get("record_id") or "")) if build_id else {}
+        apply_metadata_constraints(record)
+        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or "")) if build_id else {"conventions": {}, "examples": {}}
+        editorial_context = editorial_memory.get("conventions", {}) if isinstance(editorial_memory, dict) else {}
+        editorial_examples = editorial_memory.get("examples", {}) if isinstance(editorial_memory, dict) else {}
+        record["editorial_memory_used"] = {
+            "convention_fields": sorted(editorial_context.keys()),
+            "example_record_ids": sorted({str(item.get("record_id") or "") for values in editorial_examples.values() if isinstance(values, list) for item in values if isinstance(item, dict) and item.get("record_id")}),
+        }
+        if build_id:
+            example_count = sum(len(values) for values in editorial_examples.values() if isinstance(values, list))
+            if example_count:
+                self._increment_metric(build_id, "editorial_examples_used", example_count)
         profile_id = PROFILE_VERSION
         if build_id:
             try:
@@ -3042,6 +3153,7 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         )
         base_context = f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
+Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(editorial_examples, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 Current source block IDs: {source_id_json}
@@ -3057,6 +3169,11 @@ Hybrid classification fields are constrained:
 - region_type MUST be one of: {json.dumps(allowed_region_types, ensure_ascii=False)}
 - discourse_role MUST be one of: {json.dumps(allowed_discourse_roles, ensure_ascii=False)}
 - primary_text MUST be true or false. It means the record belongs to the substantive work rather than front/back matter, bibliography, index, publishing paratext, or other apparatus.
+
+Operational discourse-role definitions:
+{json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
+
+For discourse_role, explicitly discriminate among the two or three closest plausible roles before choosing. In the discourse_role field assessment reason, briefly state why the selected role fits better than its nearest alternative. Pay special attention to the difference between the surrounding author's analysis and a reported_position held by someone else, and between critique, qualification, and commentary. Human-confirmed examples above are style/taxonomy guidance, not evidence.
 If a field is genuinely unsupported, return null rather than inventing a value.
 
 {base_context}
@@ -3170,14 +3287,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         continue
                 except KeyError:
                     pass
+            # Resolve the active build profile at task start. A profile switch does
+            # not interrupt an in-flight request, but the next family/record picks
+            # up the newly selected profile.
+            active_request = self._latest_runtime_request(build_id, request) if build_id else request
             started_at = iso_now()
             ledger_context = {
-                "provider": request.get("provider"),
-                "model": request.get("model"),
+                "provider_profile_id": active_request.get("provider_profile_id"),
+                "provider": active_request.get("provider"),
+                "model": active_request.get("model"),
                 "attempts_allowed": 2,
                 "input_chars": len(prompt),
                 "max_output_tokens": max_tokens,
-                "timeout_seconds": self._stage_timeouts(request).get(task_name),
+                "timeout_seconds": self._stage_timeouts(active_request).get(task_name),
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
@@ -4345,18 +4467,29 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         record["human_touched_at"] = iso_now()
         record["human_touched_revision"] = int(record.get("record_revision") or 1) + 1
 
-    def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
-        """Return conservative build-local conventions derived from repeated human decisions.
+    @staticmethod
+    def _editorial_tokens(value: str) -> set[str]:
+        stop = {"the", "and", "for", "that", "this", "with", "from", "into", "dans", "les", "des", "une", "pour", "que", "qui", "sur", "est", "pas", "aux"}
+        return {
+            token for token in re.findall(r"[\wÀ-ÖØ-öø-ÿ]{3,}", str(value or "").casefold(), flags=re.UNICODE)
+            if token not in stop
+        }
 
-        A one-off record correction is never generalized. A value becomes prompt context
-        only after at least two distinct records have received the same human-confirmed
-        value. The context is advisory for untouched fields and is never applied directly.
+    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "") -> dict[str, Any]:
+        """Build an auditable, build-local few-shot memory from human decisions.
+
+        Only human-confirmed/overridden fields are eligible. Repeated values become
+        advisory conventions after two confirmations; record-level examples are
+        retrieved by lightweight lexical similarity and never copied as truth. This
+        gives local models useful corpus-specific examples without hidden online
+        training or propagation of one-off mistakes.
         """
         try:
             rows = self.repo.load_records(build_id)
         except Exception:
-            return {}
+            return {"conventions": {}, "examples": {}}
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
+        eligible: list[tuple[dict[str, Any], str, Any]] = []
         for row in rows:
             if exclude_record_id and str(row.get("record_id") or "") == exclude_record_id:
                 continue
@@ -4370,12 +4503,47 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 key = json.dumps(value, ensure_ascii=False, sort_keys=True)
                 prior = counts.setdefault(str(field), {}).get(key)
                 counts[str(field)][key] = (value, (prior[1] if prior else 0) + 1)
+                if str(field) in {"discourse_role", "region_type", "primary_text", "speaker", "position_holder", "stance"}:
+                    eligible.append((row, str(field), value))
         conventions: dict[str, Any] = {}
         for field, values in counts.items():
             ranked = sorted(values.values(), key=lambda item: item[1], reverse=True)
             if ranked and ranked[0][1] >= 2:
                 conventions[field] = {"value": ranked[0][0], "confirmed_records": ranked[0][1]}
-        return conventions
+
+        current_text = str((current_record or {}).get("text") or "")
+        current_tokens = self._editorial_tokens(current_text)
+        by_field: dict[str, list[dict[str, Any]]] = {}
+        for row, field, value in eligible:
+            row_tokens = self._editorial_tokens(str(row.get("text") or ""))
+            union = current_tokens | row_tokens
+            similarity = (len(current_tokens & row_tokens) / len(union)) if union else 0.0
+            # Region agreement is a useful but non-authoritative tie breaker.
+            if current_record and row.get("region_type") and row.get("region_type") == current_record.get("region_type"):
+                similarity += 0.08
+            by_field.setdefault(field, []).append({
+                "record_id": str(row.get("record_id") or ""),
+                "value": value,
+                "similarity": round(min(1.0, similarity), 4),
+                "excerpt": re.sub(r"\s+", " ", str(row.get("text") or "")).strip()[:420],
+            })
+        examples: dict[str, list[dict[str, Any]]] = {}
+        for field, items in by_field.items():
+            ranked = sorted(items, key=lambda item: float(item.get("similarity") or 0), reverse=True)
+            # Keep prompts compact. Include up to four field-specific examples;
+            # zero-overlap examples are still useful only for discourse role when
+            # a repeated build convention exists.
+            kept = [item for item in ranked if float(item.get("similarity") or 0) > 0][:4]
+            if not kept and field == "discourse_role" and conventions.get(field):
+                kept = ranked[:2]
+            if kept:
+                examples[field] = kept
+        return {"conventions": conventions, "examples": examples}
+
+    def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
+        # Retained as the small conventions-only API used by older internal tests;
+        # new enrichment calls use _editorial_memory for retrieved examples too.
+        return self._editorial_memory(build_id, None, exclude_record_id=exclude_record_id).get("conventions", {})
 
     @classmethod
     def _merge_enrichment_snapshot(cls, live: dict[str, Any], worker: dict[str, Any]) -> dict[str, Any]:
@@ -4408,7 +4576,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             "metadata_stage_status", "metadata_execution_ledger", "metadata_incomplete_fields",
             "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
             "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
-            "semantic_classification_confidence", "attribution_confidence",
+            "semantic_classification_confidence", "attribution_confidence", "editorial_memory_used",
         ):
             if key in worker:
                 merged[key] = worker[key]

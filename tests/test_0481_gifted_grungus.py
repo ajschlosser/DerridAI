@@ -5,9 +5,9 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_identity():
-    assert json.loads(text("web/package.json"))["version"]=="0.49.0"
-    assert 'APP_VERSION = "0.49.0"' in text("api/app/config.py")
-    assert '0.49.0 — Hungry Hippo' in text("README.md")
+    assert json.loads(text("web/package.json"))["version"]=="0.50.0"
+    assert 'APP_VERSION = "0.50.0"' in text("api/app/config.py")
+    assert '0.50.0 — Ingenious Iguana' in text("README.md")
 
 def test_source_issue_is_not_duplicated_in_record_and_source_panel():
     ui=text("web/src/components/PdfCorpusBuilder.vue")

@@ -49,6 +49,7 @@ from .models import (
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
     PdfCorpusRecordRerun,
+    PdfCorpusProviderSwitch,
     PdfCorpusPublishRequest,
     RAGRunRequest,
     RAGGradeRequest,
@@ -83,7 +84,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.49.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.50.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1190,7 +1191,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.49.0",
+            "app_version": "0.50.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1855,6 +1856,16 @@ def get_pdf_corpus_build(build_id: str):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")
+def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwitch):
+    try:
+        resolved = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
+        return pdf_corpus_builds.switch_provider_profile(build_id, resolved)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 

@@ -17,11 +17,11 @@ def text(path: str) -> str:
 
 def test_release_identity_and_legacy_profile_contract():
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v7"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v8"
     assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
     assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v11"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert "0.49.0 — Hungry Hippo" in text("README.md")
+    assert "0.50.0 — Ingenious Iguana" in text("README.md")
 
 
 def test_source_quality_blocks_corruption_not_unicode():
@@ -45,7 +45,7 @@ def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
         "primary_text": True,
         "corpus_build_details": {
             "build_id": "build-1", "publication_id": "publication-1", "published_at": "2026-09-17T00:00:00Z",
-            "app_version": "0.49.0", "schema_version": cb.SCHEMA_VERSION,
+            "app_version": "0.50.0", "schema_version": cb.SCHEMA_VERSION,
             "publication_schema_version": cb.PUBLICATION_SCHEMA_VERSION,
             "profile_id": cb.PROFILE_VERSION, "source_sha256": "abc",
         },

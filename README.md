@@ -1,6 +1,22 @@
-# DerridAI Corpus Viewer 0.49.0
+# DerridAI Corpus Viewer 0.50.0
 
-**0.49.0 — Hungry Hippo** streamlines Corpus Builder review around a simple rule: deterministic constraints resolve obvious facts, valid LLM proposals arrive as editable defaults, and reviewers spend their time on genuine exceptions. It also adds reversible extracted-text cleanup for recurring headers, page numbers, hyphenation, and whitespace while preserving immutable source text.
+**0.50.0 — Ingenious Iguana** turns Corpus Builder's build-local human decisions into explicit, auditable editorial memory for later LLM enrichment, adds hot-swappable enrichment profiles, improves discourse-role inference, and brings the reversible Clean text workflow into Focus View with conservative line-break and empty-line cleanup.
+
+## 0.50.0 — Ingenious Iguana
+
+- Added build-local **Editorial Memory**. Only human-confirmed or human-overridden values are eligible. Repeated decisions become advisory conventions, while the most relevant confirmed examples are retrieved as compact few-shot guidance for later metadata calls. Each record records which conventions/examples were supplied to its enrichment prompt.
+- Strengthened discourse-role inference with operational definitions for every supported role, explicit discrimination among nearby roles, emphasis on speaker versus position holder, and relevant human-confirmed examples from the current corpus build.
+- Removed an accidental duplicate discourse-enrichment scheduling call in Fast mode, reducing unnecessary LLM work.
+- Added a live **Enrichment profile** switcher. Changing profiles affects newly scheduled metadata tasks; already-running requests finish with their original model. Per-task execution ledgers and build-level profile history preserve mixed-model provenance.
+- Added **Clean text** to Focus View using the same reusable cleanup component as standard Record Review.
+- Expanded text cleanup with conservative removal of unnecessary intra-paragraph line breaks and repeated empty lines, while preserving headings, lists, quotations, paragraph boundaries, and immutable extracted-source provenance.
+- Extended deterministic metadata constraints so bibliography regions deterministically use the bibliographic discourse role, while front matter, back matter, and paratext default to paratext alongside the existing primary-text invariants.
+- Added reusable Storybook coverage for the enrichment-profile switcher and retained English / Québec French parity, keyboard focus, semantic dialog/status markup, readable typography, and WCAG 2.0 AA-oriented interaction states.
+
+### Validation in this packaging environment
+
+- Backend regression tests, Python bytecode compilation, locale parity, frontend relative-import validation, TypeScript/Vue syntax checks, and archive integrity are run before packaging.
+- Production Vue/Vite, Storybook, and Docker/container builds remain mandatory release gates; if the sandbox lacks their dependencies, the archive is labeled a build candidate rather than release-ready.
 
 ## 0.49.0 — Hungry Hippo
 

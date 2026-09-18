@@ -1,7 +1,43 @@
-export type TextCleanupRule = "page_numbers" | "repeated_short_lines" | "line_hyphenation" | "whitespace";
+export type TextCleanupRule = "page_numbers" | "repeated_short_lines" | "line_hyphenation" | "paragraph_lines" | "empty_lines" | "whitespace";
 export type TextCleanupPreview = { text: string; removed: string[]; changes: number };
 
 const PAGE_NUMBER_RE = /^\s*(?:page\s+)?(?:[ivxlcdm]+|\d{1,4})\s*$/i;
+const LIST_OR_QUOTE_RE = /^\s*(?:[-*•]|\d+[.)]|[a-z][.)]|[ivxlcdm]+[.)]|[>»«“”\"'])\s*/i;
+const HEADINGISH_RE = /^\s*(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 '\u2019\-–—:;,.]{3,}|.{0,80}:)\s*$/u;
+const SENTENCE_END_RE = /[.!?…:;][\]\)\}"'»”’]*\s*$/u;
+const LOWERCASE_START_RE = /^\s*[a-zà-öø-ÿ]/u;
+
+/** Join line wraps that look like PDF layout artifacts while preserving semantic breaks.
+ *
+ * This intentionally errs on the side of keeping a line break. Lists, short headings,
+ * quotations, already blank-separated paragraphs, and lines ending in sentence punctuation
+ * remain separate. The immutable extracted source is never modified by this utility.
+ */
+function joinWrappedParagraphLines(text: string): {text:string; changes:number} {
+  const lines=text.split(/\r?\n/);
+  const out:string[]=[];
+  let changes=0;
+  for(let i=0;i<lines.length;i++){
+    const current=lines[i];
+    const next=lines[i+1];
+    if(next===undefined){out.push(current);continue}
+    const a=current.trimEnd();
+    const b=next.trimStart();
+    const shouldJoin=Boolean(
+      a.trim() && b.trim() &&
+      !SENTENCE_END_RE.test(a) &&
+      !LIST_OR_QUOTE_RE.test(a) && !LIST_OR_QUOTE_RE.test(b) &&
+      !HEADINGISH_RE.test(a) && !HEADINGISH_RE.test(b) &&
+      (LOWERCASE_START_RE.test(b) || a.length >= 45)
+    );
+    if(shouldJoin){
+      out.push(`${a} ${b}`);
+      i += 1;
+      changes += 1;
+    }else out.push(current);
+  }
+  return {text:out.join("\n"),changes};
+}
 
 export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurringLines: string[] = []): TextCleanupPreview {
   let text = String(input || "");
@@ -29,8 +65,23 @@ export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurrin
     text = kept.join("\n");
   }
 
+  if(rules.has("paragraph_lines")){
+    // Run twice because PDF line wraps can create pairs after the first join. Two passes
+    // are enough for ordinary book prose while remaining intentionally conservative.
+    for(let pass=0;pass<2;pass++){
+      const result=joinWrappedParagraphLines(text);
+      text=result.text; changes+=result.changes;
+      if(!result.changes)break;
+    }
+  }
+
+  if(rules.has("empty_lines")){
+    const next=text.replace(/^[ \t]+$/gm, "").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,"\n\n");
+    if(next!==text){changes++;text=next}
+  }
+
   if (rules.has("whitespace")) {
-    const next = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
+    const next = text.replace(/[ \t]+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
     if (next !== text) { changes++; text = next; }
   }
   return { text, removed, changes };
