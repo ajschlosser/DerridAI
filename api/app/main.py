@@ -50,6 +50,7 @@ from .models import (
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
     PdfCorpusRecordSlice,
+    PdfCorpusBoundaryAdjudication,
     PdfCorpusRecordRerun,
     PdfCorpusProviderSwitch,
     PdfCorpusPublishRequest,
@@ -86,7 +87,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.54.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.55.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1193,7 +1194,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.54.0",
+            "app_version": "0.55.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -2070,6 +2071,16 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice):
     try:
         return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication")
+def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpusBoundaryAdjudication):
+    try:
+        return pdf_corpus_builds.adjudicate_record_boundary(build_id, record_id, body.direction)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

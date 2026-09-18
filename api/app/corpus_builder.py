@@ -475,6 +475,21 @@ class BoundaryBatchResponseModel(BaseModel):
     decisions: list[BatchBoundaryDecisionModel] = Field(default_factory=list, max_length=12)
 
 
+class BoundaryAuditDecisionModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    boundary_id: str = Field(min_length=1, max_length=240)
+    decision: Literal["keep", "move_earlier", "move_later", "uncertain"] = "uncertain"
+    suggested_after_block_id: str | None = Field(default=None, max_length=200)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    signals: list[str] = Field(default_factory=list, max_length=8)
+    reason: str = Field(default="", max_length=500)
+
+
+class BoundaryAuditResponseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decisions: list[BoundaryAuditDecisionModel] = Field(default_factory=list, max_length=12)
+
+
 class CompactSegmentationResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=96)
@@ -1168,7 +1183,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "id": PROFILE_VERSION,
         "name": "Derrida scholarly corpus v11",
         "version": 11,
-        "description": "Feral Fox: editable reviewed text, explicit metadata ownership, selective LLM enrichment, measurable automation contribution, and concurrent-build clarity.",
+        "description": "Outrageous Orangutan: deterministic-first segmentation with bounded LLM boundary adjudication, human boundary examples, editable reviewed text, and auditable enrichment.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -2682,6 +2697,225 @@ Return one compact decision per transition using its exact left-hand block ID in
                 "source":"local_batch_classifier",
             }
         return out,None
+
+    def _boundary_editorial_examples(self, build_id: str, limit: int = 3) -> list[dict[str, Any]]:
+        checkpoint = self.repo.load_checkpoint(build_id, "boundary_editorial_memory", {})
+        if not isinstance(checkpoint, dict):
+            return []
+        examples = checkpoint.get("examples") if isinstance(checkpoint.get("examples"), list) else []
+        return [dict(item) for item in examples[-max(0, limit):] if isinstance(item, dict)]
+
+    def _record_boundary_editorial_example(
+        self,
+        build_id: str,
+        *,
+        left: dict[str, Any],
+        right: dict[str, Any],
+        action: str,
+        transaction_id: str,
+    ) -> None:
+        checkpoint = self.repo.load_checkpoint(build_id, "boundary_editorial_memory", {})
+        if not isinstance(checkpoint, dict):
+            checkpoint = {}
+        examples = list(checkpoint.get("examples") or [])
+        examples.append({
+            "at": iso_now(),
+            "action": action,
+            "transaction_id": transaction_id,
+            "left_record_id": left.get("record_id"),
+            "right_record_id": right.get("record_id"),
+            "left_excerpt": str(left.get("text") or "")[-900:],
+            "right_excerpt": str(right.get("text") or "")[:900],
+            "source": "human_confirmed_boundary",
+        })
+        self.repo.save_checkpoint(build_id, "boundary_editorial_memory", {"examples": examples[-40:]})
+
+    @staticmethod
+    def _boundary_audit_candidates(left: dict[str, Any], right: dict[str, Any]) -> list[str]:
+        left_ids = [str(value) for value in (left.get("source_block_ids") or []) if value]
+        right_ids = [str(value) for value in (right.get("source_block_ids") or []) if value]
+        # Candidate seams stay close to the current boundary.  The LLM never
+        # invents a free-text cut point; deterministic code validates one of
+        # these exact source-block IDs before exposing a recommendation.
+        candidates = left_ids[-3:] + right_ids[:2]
+        return list(dict.fromkeys(candidates))
+
+    def _adjudicate_record_boundary_pair(
+        self,
+        left: dict[str, Any],
+        right: dict[str, Any],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+        build_id: str,
+    ) -> dict[str, Any]:
+        left_ids = [str(value) for value in (left.get("source_block_ids") or []) if value]
+        right_ids = [str(value) for value in (right.get("source_block_ids") or []) if value]
+        if not left_ids or not right_ids:
+            return {
+                "decision": "uncertain", "confidence": 0.0,
+                "reason": "The adjacent records do not expose source-block boundaries for adjudication.",
+                "source": "llm_boundary_audit",
+            }
+        current_after = left_ids[-1]
+        boundary_id = f"{left.get('record_id')}->{right.get('record_id')}"
+        candidates = self._boundary_audit_candidates(left, right)
+        examples = self._boundary_editorial_examples(build_id, 3)
+        examples_text = ""
+        if examples:
+            rendered=[]
+            for example in examples:
+                rendered.append(
+                    f"HUMAN-CONFIRMED EXAMPLE ({example.get('action','boundary edit')}):\n"
+                    f"LEFT END: {str(example.get('left_excerpt') or '')[-700:]}\n"
+                    f"RIGHT START: {str(example.get('right_excerpt') or '')[:700]}"
+                )
+            examples_text = "\n\nRelevant editorial examples from this build:\n" + "\n---\n".join(rendered)
+        context = {k: manifest.get(k) for k in ("title", "document_author", "language", "document_type") if manifest.get(k) not in (None, "")}
+        prompt = f"""You are the second-reader boundary adjudicator for an auditable Derrida corpus.
+A deterministic segmentation system has already created two adjacent records. Decide whether the current boundary is semantically coherent.
+
+Use KEEP when the left record ends a coherent discourse unit and the right record begins another.
+Use MOVE_EARLIER only when material at the end of the left record clearly belongs with the right record.
+Use MOVE_LATER only when material at the start of the right record clearly belongs with the left record.
+Use UNCERTAIN when the evidence is genuinely ambiguous.
+
+Strong signals include sentence/paragraph continuation, unfinished quotation framing, speaker or position-holder continuation, a heading stranded with the wrong unit, or an argumentative move that is visibly cut in half. Page boundaries and record length are never semantic evidence. Never rewrite, summarize, or invent text. If recommending a move, choose `suggested_after_block_id` only from the allowed seam IDs.
+
+Document context: {json.dumps(context, ensure_ascii=False)}
+Boundary id: {boundary_id}
+Current seam after block: {current_after}
+Allowed seam IDs: {json.dumps(candidates, ensure_ascii=False)}
+
+LEFT RECORD END:
+{str(left.get('text') or '')[-4200:]}
+
+RIGHT RECORD START:
+{str(right.get('text') or '')[:4200]}
+{examples_text}
+
+Return one decision for the exact boundary id. `signals` should contain compact labels such as sentence_continuation, quotation_continuation, heading_attachment, attribution_continuation, argumentative_transition, or coherent_boundary."""
+        limits = self._stage_limits(request)
+        try:
+            result = self._chat_json(
+                request, prompt, response_model=BoundaryAuditResponseModel,
+                max_tokens=min(int(limits.get("reconciliation_num_predict") or 1000), 1200),
+                schema_name="derridai_boundary_second_reader_v1", attempts=2, build_id=build_id,
+            )
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            return {
+                "boundary_id": boundary_id, "decision": "uncertain", "confidence": 0.0,
+                "reason": f"Boundary second-reader call failed: {exc}",
+                "source": "llm_boundary_audit", "error": str(exc),
+            }
+        item = next((row for row in (result.get("decisions") or []) if str(row.get("boundary_id") or "") == boundary_id), None)
+        if not isinstance(item, dict):
+            return {
+                "boundary_id": boundary_id, "decision": "uncertain", "confidence": 0.0,
+                "reason": "The boundary second reader returned no usable decision.",
+                "source": "llm_boundary_audit",
+            }
+        decision = str(item.get("decision") or "uncertain")
+        suggested = str(item.get("suggested_after_block_id") or "").strip() or None
+        if decision == "move_earlier":
+            valid = [value for value in candidates if value in left_ids and value != current_after]
+            if suggested not in valid:
+                decision, suggested = "uncertain", None
+        elif decision == "move_later":
+            valid = [value for value in candidates if value in right_ids[:-1] or value in right_ids[:2]]
+            if suggested not in valid:
+                decision, suggested = "uncertain", None
+        else:
+            suggested = current_after if decision == "keep" else None
+        return {
+            "boundary_id": boundary_id,
+            "left_record_id": left.get("record_id"),
+            "right_record_id": right.get("record_id"),
+            "decision": decision,
+            "suggested_after_block_id": suggested,
+            "current_after_block_id": current_after,
+            "confidence": max(0.0, min(1.0, float(item.get("confidence") or 0.0))),
+            "signals": list(item.get("signals") or []),
+            "reason": str(item.get("reason") or "").strip(),
+            "source": "llm_boundary_audit",
+            "editorial_examples_used": len(examples),
+            "adjudicated_at": iso_now(),
+        }
+
+    @staticmethod
+    def _apply_boundary_adjudication_to_records(
+        left: dict[str, Any], right: dict[str, Any], decision: dict[str, Any], *, threshold: float,
+    ) -> None:
+        left["boundary_llm_after"] = decision
+        right["boundary_llm_before"] = decision
+        choice = str(decision.get("decision") or "uncertain")
+        confidence = float(decision.get("confidence") or 0.0)
+        if choice == "keep" and confidence >= threshold:
+            # The deterministic heuristic asked for a second reader and the LLM
+            # corroborated the current seam.  Remove only that heuristic flag;
+            # unrelated topology/source issues remain untouched.
+            for row, edge in ((left, "end"), (right, "start")):
+                row["boundary_quality_issues"] = [
+                    item for item in (row.get("boundary_quality_issues") or [])
+                    if not (str(item.get("code") or "") == "boundary_suspect" and str(item.get("edge") or "") == edge)
+                ]
+                if not row["boundary_quality_issues"]:
+                    row.pop("boundary_quality_issues", None)
+                if str(row.get("review_reason") or "").startswith("Possible sentence/quotation continuation"):
+                    row["review_reason"] = "Pending human review."
+            return
+        reason = str(decision.get("reason") or "Boundary second-reader review is unresolved.")
+        label = "LLM recommends moving this boundary" if choice in {"move_earlier", "move_later"} else "LLM could not confidently verify this boundary"
+        for row in (left, right):
+            row["needs_review"] = True
+            row["review_reason"] = f"Boundary review required: {label}. {reason}".strip()
+            flags = list(row.get("boundary_quality_issues") or [])
+            flags.append({
+                "code": "llm_boundary_review",
+                "edge": "end" if row is left else "start",
+                "reason": reason,
+                "decision": choice,
+                "confidence": confidence,
+                "suggested_after_block_id": decision.get("suggested_after_block_id"),
+            })
+            row["boundary_quality_issues"] = flags
+
+    def _audit_suspicious_record_boundaries(
+        self, records: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str,
+    ) -> dict[str, int]:
+        threshold = float(CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION]).get("min_boundary_confidence") or 0.72)
+        pairs=[]
+        for index, (left, right) in enumerate(zip(records, records[1:])):
+            left_flags = list(left.get("boundary_quality_issues") or [])
+            right_flags = list(right.get("boundary_quality_issues") or [])
+            heuristic = any(str(item.get("code") or "") == "boundary_suspect" and str(item.get("edge") or "") == "end" for item in left_flags) or any(str(item.get("code") or "") == "boundary_suspect" and str(item.get("edge") or "") == "start" for item in right_flags)
+            unresolved = bool(left.get("boundary_review_after") or right.get("boundary_review_before"))
+            if heuristic or unresolved:
+                pairs.append((index, left, right))
+        # This is a second-reader pass, not another book-scale segmentation pass.
+        # Keep it bounded even on pathologically noisy extraction.
+        pairs = pairs[:24]
+        metrics = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0}
+        decisions=[]
+        for _, left, right in pairs:
+            if self._cancelled(build_id):
+                raise InterruptedError("Corpus build cancelled")
+            decision = self._adjudicate_record_boundary_pair(left, right, manifest, request, build_id)
+            decisions.append(decision)
+            metrics["audited"] += 1
+            choice = str(decision.get("decision") or "uncertain")
+            if decision.get("error"):
+                metrics["failed"] += 1
+            if choice == "keep":
+                metrics["keep"] += 1
+            elif choice in {"move_earlier", "move_later"}:
+                metrics["move"] += 1
+            else:
+                metrics["uncertain"] += 1
+            self._apply_boundary_adjudication_to_records(left, right, decision, threshold=threshold)
+        self.repo.save_checkpoint(build_id, "boundary_second_reader", {"decisions": decisions, "metrics": metrics, "completed_at": iso_now()})
+        return metrics
 
     @staticmethod
     def _record_sizing_policy(request: dict[str, Any], profile: dict[str, Any]) -> dict[str, int]:
@@ -4205,6 +4439,22 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     current_build = self.repo.get_build(build_id)
                     current_build["boundary_suspect_count"] = boundary_suspect_count
                     self.repo.save_build(current_build)
+                # A bounded second-reader pass checks only heuristically suspicious
+                # or already-demonstrated risky seams. It never rewrites source
+                # topology on its own; it corroborates KEEP or creates an explicit
+                # human-review recommendation with an exact source-block seam.
+                second_reader = ({"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0}
+                    if not (request.get("model") or request.get("provider_profile_id"))
+                    else self._audit_suspicious_record_boundaries(records, manifest, request, build_id))
+                current_build = self.repo.get_build(build_id)
+                current_build.update({
+                    "boundary_second_reader_count": int(second_reader.get("audited") or 0),
+                    "boundary_second_reader_keep_count": int(second_reader.get("keep") or 0),
+                    "boundary_second_reader_move_count": int(second_reader.get("move") or 0),
+                    "boundary_second_reader_uncertain_count": int(second_reader.get("uncertain") or 0),
+                    "boundary_second_reader_failure_count": int(second_reader.get("failed") or 0),
+                })
+                self.repo.save_build(current_build)
                 for record in records:
                     self._apply_manifest_metadata(record, manifest)
                     inline, full = _citation_strings(record)
@@ -5630,8 +5880,40 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             events = list(row.get("review_events") or [])
             events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id})
             row["review_events"] = events[-100:]
+        left_row, right_row = (neighbor, target) if direction == "previous" else (target, neighbor)
+        self._record_boundary_editorial_example(
+            build_id, left=left_row, right=right_row,
+            action=f"human_slice_{direction}", transaction_id=transaction_id,
+        )
         self._rewrite_and_validate(build_id, records)
         return {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
+
+    @_serialize_record_mutation
+    def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str) -> dict[str, Any]:
+        if direction not in {"previous", "next"}:
+            raise ValueError("Boundary direction must be previous or next.")
+        records = self.repo.load_records(build_id)
+        index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
+        if index < 0:
+            raise KeyError(record_id)
+        neighbor_index = index - 1 if direction == "previous" else index + 1
+        if neighbor_index < 0 or neighbor_index >= len(records):
+            raise ValueError(f"No {direction} record is available for boundary adjudication.")
+        left, right = (records[neighbor_index], records[index]) if direction == "previous" else (records[index], records[neighbor_index])
+        build = self.repo.get_build(build_id)
+        request = self._latest_runtime_request(build_id, dict(build.get("request") or {}))
+        if not request.get("provider") and not request.get("provider_profile_id"):
+            raise ValueError("No LLM provider is available for boundary adjudication.")
+        decision = self._adjudicate_record_boundary_pair(left, right, build.get("manifest") or {}, request, build_id)
+        profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._apply_boundary_adjudication_to_records(left, right, decision, threshold=float(profile.get("min_boundary_confidence") or 0.72))
+        self._rewrite_and_validate(build_id, records)
+        current_build = self.repo.get_build(build_id)
+        history = list(current_build.get("boundary_second_reader_history") or [])
+        history.append({**decision, "requested_by": "human", "direction": direction})
+        current_build["boundary_second_reader_history"] = history[-100:]
+        self.repo.save_build(current_build)
+        return {"decision": decision, "left_record": left, "right_record": right, "build": current_build}
 
     @_serialize_record_mutation
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:

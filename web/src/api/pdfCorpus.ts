@@ -70,6 +70,11 @@ export interface CorpusBuild {
   boundary_llm_keep_count?: number;
   boundary_budget_skipped_count?: number;
   boundary_classifier_failure_count?: number;
+  boundary_second_reader_count?: number;
+  boundary_second_reader_keep_count?: number;
+  boundary_second_reader_move_count?: number;
+  boundary_second_reader_uncertain_count?: number;
+  boundary_second_reader_failure_count?: number;
   topology_validation?: {valid?:boolean;issues?:string[];findings?:Array<{code:string;severity:string;record_id?:string|null;auto_repairable?:boolean;params?:Record<string,unknown>}>;record_count?:number;max_record_chars?:number;min_record_chars?:number;median_record_chars?:number;p10_record_chars?:number;p90_record_chars?:number;preferred_record_chars?:number;record_length_tolerance?:number;long_record_chars?:number;absolute_record_chars?:number;records_in_preferred_range?:number;records_over_preferred_range?:number;records_over_long_limit?:number;micro_record_count?:number};
   topology_quality?: {valid?:boolean;source_block_count?:number;used_source_block_count?:number;source_coverage?:number;source_order_valid?:boolean;source_conservation_valid?:boolean;record_count?:number;median_record_chars?:number;p10_record_chars?:number;p90_record_chars?:number;max_record_chars?:number;records_in_preferred_range?:number;records_over_preferred_range?:number;records_over_long_limit?:number;micro_record_count?:number;policy?:Record<string,number>};
   record_sizing_policy?: Record<string,number>;
@@ -142,7 +147,9 @@ export interface CorpusRecord {
   text_reviewed_at?: string;
   text_revision_history?: Array<{at?:string;source?:string;previous_sha256?:string;text_sha256?:string;previous_length?:number;text_length?:number;diff?:string;resolved_source_issues?:boolean}>;
   review_events?: Array<{at?:string;event?:string;transaction_id?:string;direction?:string;source_record_id?:string;[key:string]:unknown}>;
-  boundary_quality_issues?: Array<{code?:string;edge?:string;reason?:string}>;
+  boundary_quality_issues?: Array<{code?:string;edge?:string;reason?:string;decision?:string;confidence?:number;suggested_after_block_id?:string|null}>;
+  boundary_llm_before?: {boundary_id?:string;decision?:"keep"|"move_earlier"|"move_later"|"uncertain";suggested_after_block_id?:string|null;current_after_block_id?:string|null;confidence?:number;signals?:string[];reason?:string;source?:string;editorial_examples_used?:number;adjudicated_at?:string};
+  boundary_llm_after?: {boundary_id?:string;decision?:"keep"|"move_earlier"|"move_later"|"uncertain";suggested_after_block_id?:string|null;current_after_block_id?:string|null;confidence?:number;signals?:string[];reason?:string;source?:string;editorial_examples_used?:number;adjudicated_at?:string};
   needs_review?: boolean;
   review_reason?: string;
   accepted?: boolean;
@@ -189,6 +196,7 @@ export const pdfCorpusApi = {
   undoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number;can_undo?:boolean;can_redo?:boolean}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/undo`, {method:"POST"}),
   redoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number;can_undo?:boolean;can_redo?:boolean}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/redo`, {method:"POST"}),
   sliceRecord: (buildId:string, recordId:string, direction:"previous"|"next", offset:number, expectedRevision?:number) => apiRequest<{record:CorpusRecord;neighbor:CorpusRecord;direction:string;transaction_id:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/slice`, {method:"POST",body:JSON.stringify({direction,offset,expected_revision:expectedRevision})}),
+  adjudicateBoundary: (buildId:string, recordId:string, direction:"previous"|"next") => apiRequest<{decision:Record<string,unknown>;left_record:CorpusRecord;right_record:CorpusRecord;build:CorpusBuild}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/boundary-adjudication`, {method:"POST",body:JSON.stringify({direction})}),
   patchText: (buildId:string, recordId:string, text:string, expectedRevision?:number, resolveSourceIssues=false) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/text`, {method:"PATCH",body:JSON.stringify({text,expected_revision:expectedRevision,resolve_source_issues:resolveSourceIssues})}),
   patchMetadata: (buildId:string, recordId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   patchEvidence: (buildId:string, recordId:string, field:string, blockIds:string[], confidence=1, reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence`, {method:"PATCH",body:JSON.stringify({field,block_ids:blockIds,confidence,reason,expected_revision:expectedRevision})}),
