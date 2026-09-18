@@ -240,7 +240,7 @@ const effectiveNumCtx=computed(()=>Number(effectiveGeneration.value.num_ctx||0))
 const requiredContext=computed(()=>Number(stageLimits.value.segmentation_window_tokens||5000)+Number(stageLimits.value.segmentation_num_predict||1200)+1536);
 const contextSafe=computed(()=>!effectiveNumCtx.value||requiredContext.value<=effectiveNumCtx.value);
 
-function directProfilePayload(profileId:string){
+function directProfilePayload(profileId:string): Record<string,unknown>|null{
   const config=(runtime as any).getProviderRequestConfigForUi?.(profileId,{textReview:false}) as Record<string,unknown>|null;
   if(!config)return null;
   const ollama=config.ollama;

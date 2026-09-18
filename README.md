@@ -1,6 +1,11 @@
-# DerridAI Corpus Viewer 0.50.0
+# DerridAI Corpus Viewer 0.50.1
 
-**0.50.0 — Ingenious Iguana** turns Corpus Builder's build-local human decisions into explicit, auditable editorial memory for later LLM enrichment, adds hot-swappable enrichment profiles, improves discourse-role inference, and brings the reversible Clean text workflow into Focus View with conservative line-break and empty-line cleanup.
+**0.50.1 — Ignoble Insect** is a build hotfix for Ingenious Iguana. It corrects the typed runtime-provider payload used when switching LLM profiles mid-pipeline so Vue/TypeScript can safely index the provider configuration during production compilation.
+
+## 0.50.1 — Ignoble Insect
+
+- Fixed `PdfCorpusBuilder.vue` TypeScript errors (`TS7053`) in the mid-pipeline provider-profile switcher by explicitly typing direct provider payloads as string-keyed request objects.
+- No workflow or schema behavior changed; this release exists to restore a clean production frontend build.
 
 ## 0.50.0 — Ingenious Iguana
 
