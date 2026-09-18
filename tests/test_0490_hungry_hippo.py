@@ -63,3 +63,32 @@ def test_new_components_keep_wcag_basics():
     cleanup=text('web/src/components/CorpusTextCleanupDialog.vue')
     assert 'aria-labelledby="cleanup-title"' in cleanup
     assert 'aria-live="polite"' in cleanup
+
+def test_frontend_relative_imports_resolve_to_existing_source_files():
+    import re
+    source_root = ROOT / 'web' / 'src'
+    pattern = re.compile(r'''(?:from\s+|import\s*\(|require\s*\()\s*[\"']([^\"']+)[\"']''')
+    missing = []
+    for path in source_root.rglob('*'):
+        if path.suffix not in {'.ts', '.js', '.vue', '.tsx', '.jsx'}:
+            continue
+        source = path.read_text(encoding='utf-8')
+        for match in pattern.finditer(source):
+            specifier = match.group(1)
+            if not specifier.startswith('.'):
+                continue
+            base = path.parent / specifier
+            candidates = [
+                base,
+                Path(f'{base}.ts'),
+                Path(f'{base}.js'),
+                Path(f'{base}.vue'),
+                Path(f'{base}.tsx'),
+                Path(f'{base}.jsx'),
+                base / 'index.ts',
+                base / 'index.js',
+                base / 'index.vue',
+            ]
+            if not any(candidate.exists() for candidate in candidates):
+                missing.append(f'{path.relative_to(ROOT)} -> {specifier}')
+    assert not missing, 'Unresolved relative frontend imports:\n' + '\n'.join(missing)
