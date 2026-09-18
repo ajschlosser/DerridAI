@@ -6797,6 +6797,7 @@ DEFAULT_EN_US.update({
     "pdf_corpus.remaining":"remaining",
     "pdf_corpus.need_attention":"need attention",
     "pdf_corpus.record_state.ready":"Ready",
+    "pdf_corpus.record_state.preparing":"Preparing",
     "pdf_corpus.record_state.metadata":"Metadata",
     "pdf_corpus.record_state.topology":"Topology",
     "pdf_corpus.record_state.source":"Source problem",
@@ -6808,8 +6809,10 @@ DEFAULT_EN_US.update({
     "pdf_corpus.saving_decision":"Saving decision…",
     "pdf_corpus.decision_saved":"Decision saved",
     "pdf_corpus.metadata_resolved_ready":"Metadata confirmed. This record is ready for approval.",
-    "pdf_corpus.review_preparing_title":"Preparing records for review",
-    "pdf_corpus.review_preparing_help":"You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions.",
+    "pdf_corpus.review_preparing_title":"Enriching record metadata",
+    "pdf_corpus.review_preparing_help":"Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book.",
+    "pdf_corpus.review_preparing_progress":"{done} of {total} records have finished metadata enrichment. Completed records are available for review now.",
+    "pdf_corpus.review_selected_preparing":"The selected record is still being enriched. Choose a completed record to begin reviewing while the remaining records continue in the background.",
     "pdf_corpus.review_details":"Review details",
 })
 DEFAULT_FR_CA.update({
@@ -6824,6 +6827,7 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.remaining":"restantes",
     "pdf_corpus.need_attention":"à vérifier",
     "pdf_corpus.record_state.ready":"Prête",
+    "pdf_corpus.record_state.preparing":"Préparation",
     "pdf_corpus.record_state.metadata":"Métadonnées",
     "pdf_corpus.record_state.topology":"Topologie",
     "pdf_corpus.record_state.source":"Problème de source",
@@ -6835,8 +6839,10 @@ DEFAULT_FR_CA.update({
     "pdf_corpus.saving_decision":"Enregistrement de la décision…",
     "pdf_corpus.decision_saved":"Décision enregistrée",
     "pdf_corpus.metadata_resolved_ready":"Métadonnées confirmées. Cette fiche est prête à être approuvée.",
-    "pdf_corpus.review_preparing_title":"Préparation des fiches pour la révision",
-    "pdf_corpus.review_preparing_help":"Vous pouvez prévisualiser les fiches générées pendant la fin de l’enrichissement automatique des métadonnées. Les actions de révision seront activées ensuite afin qu’un traitement automatique ne puisse pas écraser les décisions humaines.",
+    "pdf_corpus.review_preparing_title":"Enrichissement des métadonnées des fiches",
+    "pdf_corpus.review_preparing_help":"L’enrichissement des métadonnées est toujours en cours. Chaque fiche devient révisable dès que son propre enrichissement est terminé; vous pouvez donc commencer sans attendre la fin du livre entier.",
+    "pdf_corpus.review_preparing_progress":"{done} fiche(s) sur {total} ont terminé l’enrichissement des métadonnées. Les fiches terminées peuvent être révisées immédiatement.",
+    "pdf_corpus.review_selected_preparing":"La fiche sélectionnée est encore en cours d’enrichissement. Choisissez une fiche terminée pour commencer la révision pendant que les autres continuent en arrière-plan.",
     "pdf_corpus.review_details":"Détails de la révision",
 })
 

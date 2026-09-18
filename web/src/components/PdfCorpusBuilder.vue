@@ -56,6 +56,7 @@ const focusView=ref(false);
 const recordsLoading=ref(false);
 const reviewHydrated=ref(false);
 const hydratedTopologyCount=ref(0);
+const hydratedMetadataCount=ref(0);
 let recordRequestSerial=0;
 const recordListEl=ref<HTMLElement|null>(null);
 const reviewPaneEl=ref<HTMLElement|null>(null);
@@ -150,7 +151,18 @@ const issueCount=computed(()=>Number(reviewQueueCounts.value.issues??currentBuil
 const readyCount=computed(()=>Number(reviewQueueCounts.value.ready??Math.max(0,pendingCount.value-issueCount.value)));
 const topologyIssueCount=computed(()=>Number(reviewQueueCounts.value.topology??0));
 const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
-const reviewLocked=computed(()=>buildRunning.value);
+const selectedRecordEnrichmentPending=computed(()=>{
+  if(!selectedRecord.value)return false;
+  const state=String(selectedRecord.value.metadata_enrichment_state||"").toLowerCase();
+  if(state)return !["complete","failed"].includes(state);
+  return buildRunning.value&&currentBuild.value?.stage==="enriching"&&!selectedRecord.value.metadata_stage_status;
+});
+// Book-level enrichment may continue for minutes. Only the selected record is
+// read-only until its own metadata worker finishes; completed records can be
+// reviewed immediately while later records continue enriching. Structural edits
+// remain separately guarded because they can invalidate neighboring in-flight work.
+const reviewLocked=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage!=="enriching")||selectedRecordEnrichmentPending.value);
+const structuralReviewLocked=computed(()=>buildRunning.value);
 const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
 const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
 const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
@@ -158,6 +170,8 @@ const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.
 const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete ?? 0));
 const metadataFieldIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.fields_unresolved ?? 0));
 const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
+const metadataEnrichedCount=computed(()=>Number(currentBuild.value?.metadata_enriched_count||0));
+const metadataEnrichmentTotal=computed(()=>Number(currentBuild.value?.metadata_enrichment_total||currentBuild.value?.record_count||0));
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
 const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
 const showBuildConfiguration=computed(()=>!currentBuild.value || (!buildRunning.value && !hasRecordTopology.value));
@@ -361,7 +375,7 @@ async function upload(file?:File|null){if(!file)return;busy.value="upload";setMe
 async function savePageLabels(labels:Record<number,string|null>){if(!selectedAssetId.value||!Object.keys(labels).length)return;busy.value="page-labels";try{const asset=await pdfCorpusApi.updatePageLabels(selectedAssetId.value,labels);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);setMessage(i18n.t("pdf_corpus.page_mapping_saved","Printed-page overrides saved. New corpus builds will use the corrected labels."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 
 async function useCurrentPdf(){const file=(runtime.state as any)?.pdf?.file as File|undefined;if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
-async function startBuild(){if(!selectedAssetId.value)return;busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,review_manifest_before_segmentation:false,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function startBuild(){if(!selectedAssetId.value)return;busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,review_manifest_before_segmentation:false,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
 async function retryIncompleteMetadata(){
   if(!currentBuild.value||!canRetryMetadata.value)return;
@@ -397,14 +411,19 @@ function startPolling(){
     // review workspace as soon as topology exists instead of waiting for a form
     // interaction or for the entire build to stop.
     if(Number(currentBuild.value?.record_count||0)>hydratedTopologyCount.value){await nextTick();await refreshRecords(true)}
+    const enriched=Number(currentBuild.value?.metadata_enriched_count||0);
+    if(currentBuild.value?.stage==="enriching"&&enriched>hydratedMetadataCount.value){
+      hydratedMetadataCount.value=enriched;
+      await nextTick();await refreshRecords(false,selectedRecordId.value);
+    }
     if(!buildRunning.value){stopPolling();await refreshBuilds();await refreshRecords(true)}
   },1400)
 }
 function stopPolling(){if(pollTimer!==undefined){clearInterval(pollTimer);pollTimer=undefined}}
-async function chooseBuild(build:CorpusBuild){selectedBuildId.value=build.build_id;selectedAssetId.value=build.asset_id;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];reviewHydrated.value=false;hydratedTopologyCount.value=0;reviewQueue.value="all";await refreshBuild();await nextTick();await refreshRecords(true);if(buildRunning.value)startPolling()}
+async function chooseBuild(build:CorpusBuild){selectedBuildId.value=build.build_id;selectedAssetId.value=build.asset_id;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;reviewQueue.value="all";await refreshBuild();await nextTick();await refreshRecords(true);if(buildRunning.value)startPolling()}
 async function advanceFrom(recordId:string){const index=records.value.findIndex(row=>row.record_id===recordId);const next=records.value[index+1]||records.value[index-1];if(next){selectRecord(next);return}if(recordOffset.value+pageSize<recordTotal.value){recordOffset.value+=pageSize;await refreshRecords();return}await refreshRecords()}
 async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
-  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book."));return}
   if(!currentBuild.value||!selectedRecord.value)return;
   const id=selectedRecord.value.record_id;const viewport=captureReviewViewport();busy.value="record";
   try{
@@ -451,7 +470,7 @@ async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
 }
 
 async function attemptAccept(){
-  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book."));return}
   if(!selectedRecord.value)return;
   if(selectedRecord.value.accepted){await setDisposition("pending");return}
   // The server owns acceptance eligibility. Do not let stale client metadata
@@ -463,7 +482,7 @@ async function acceptFromFocus(){if(selectedMetadataBlocked.value){focusView.val
 async function rejectRecord(){await setDisposition("rejected")}
 async function skipRecord(){if(!selectedRecord.value)return;await advanceFrom(selectedRecord.value.record_id)}
 async function acceptCleanRecords(){
-  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions."));return}
+  if(reviewLocked.value){setMessage(i18n.t("pdf_corpus.review_preparing_help","Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book."));return}
   if(!currentBuild.value)return;
   const clean=readyCount.value;
   if(clean<1){setMessage(i18n.t("pdf_corpus.no_clean_records","No clean records are waiting for approval."));return}
@@ -564,8 +583,10 @@ watch(selectedEvidenceField,(field)=>{
   const first=sourceBlocks.value.find(block=>ids.includes(block.block_id));
   if(first)selectedPdfPage.value=Number(first.page||selectedPdfPage.value);
 });
-watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.metadata_total,currentBuild.value?.status,currentBuild.value?.stage] as const,async ([buildId,count,metadataTotal,status,stage])=>{
+watch(()=>[currentBuild.value?.build_id,currentBuild.value?.record_count,currentBuild.value?.metadata_total,currentBuild.value?.metadata_enriched_count,currentBuild.value?.status,currentBuild.value?.stage] as const,async ([buildId,count,metadataTotal,metadataEnriched,status,stage])=>{
   const expected=Math.max(Number(count||0),Number(metadataTotal||0));
+  const enriched=Number(metadataEnriched||0);
+  if(enriched>hydratedMetadataCount.value){hydratedMetadataCount.value=enriched;await ensureReviewHydrated(selectedRecordId.value)}
   if(!buildId||expected<1)return;
   const visibleStage=["enriching","review","ready"].includes(String(stage||""))||["awaiting_review","ready"].includes(String(status||""));
   if(!visibleStage)return;
@@ -722,8 +743,12 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         </section>
 
         <template v-if="showReviewWorkspace">
-          <section v-if="reviewLocked" class="review-readonly-banner" role="status" aria-live="polite">
-            <div><b>{{i18n.t('pdf_corpus.review_preparing_title','Preparing records for review')}}</b><span>{{i18n.t('pdf_corpus.review_preparing_help','You can preview generated records while automatic metadata enrichment finishes. Review actions unlock when enrichment is complete so automated work cannot overwrite human decisions.')}}</span></div>
+          <section v-if="buildRunning&&currentBuild?.stage==='enriching'" class="review-readonly-banner" role="status" aria-live="polite">
+            <div>
+              <b>{{i18n.t('pdf_corpus.review_preparing_title','Enriching record metadata')}}</b>
+              <span>{{i18n.tf('pdf_corpus.review_preparing_progress','{done} of {total} records have finished metadata enrichment. Completed records are available for review now.',{done:metadataEnrichedCount,total:metadataEnrichmentTotal})}}</span>
+              <span v-if="reviewLocked">{{i18n.t('pdf_corpus.review_selected_preparing','The selected record is still being enriched. Choose a completed record to begin reviewing while the remaining records continue in the background.')}}</span>
+            </div>
           </section>
 
           <section v-if="currentBuild" class="review-session-bar" role="status" aria-live="polite">
@@ -733,9 +758,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
 
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
-            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :ready="readyCount" :issues="issueCount" :metadata="Number(reviewQueueCounts.metadata??metadataIssueCount)" :topology="topologyIssueCount" :source-problems="Number(reviewQueueCounts.source??currentBuild.source_problem_count??0)" :accepted="Number(reviewQueueCounts.accepted??currentBuild.accepted_count??0)" :rejected="Number(reviewQueueCounts.rejected??currentBuild.rejected_count??0)" :disabled="busy!==''||reviewLocked" />
+            <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :ready="readyCount" :issues="issueCount" :metadata="Number(reviewQueueCounts.metadata??metadataIssueCount)" :topology="topologyIssueCount" :source-problems="Number(reviewQueueCounts.source??currentBuild.source_problem_count??0)" :accepted="Number(reviewQueueCounts.accepted??currentBuild.accepted_count??0)" :rejected="Number(reviewQueueCounts.rejected??currentBuild.rejected_count??0)" :disabled="busy!==''" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
-            <div class="review-bulk"><button type="button" class="btn small primary" @click="acceptCleanRecords" :disabled="busy!==''||reviewLocked||readyCount===0">{{i18n.tf('pdf_corpus.accept_clean','Accept clean ({count})',{count:readyCount})}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||reviewLocked||recordTotal===0||reviewQueue==='all'">{{i18n.t('pdf_corpus.reject_queue','Reject this queue')}}</button></div>
+            <div class="review-bulk"><button type="button" class="btn small primary" @click="acceptCleanRecords" :disabled="busy!==''||buildRunning||readyCount===0">{{i18n.tf('pdf_corpus.accept_clean','Accept clean ({count})',{count:readyCount})}}</button><button type="button" class="btn small" @click="bulkDisposition('rejected')" :disabled="busy!==''||reviewLocked||recordTotal===0||reviewQueue==='all'">{{i18n.t('pdf_corpus.reject_queue','Reject this queue')}}</button></div>
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>
           </section>
 
@@ -756,7 +781,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <aside v-if="selectedRecord.review_reason" class="review-reason" role="note"><b>{{i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
                 <div class="record-primary-text">{{selectedRecord.text}}</div>
                 <p v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker" role="status"><b>{{i18n.t('pdf_corpus.metadata_decision_required','Metadata decision required')}}</b> {{i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields','Confirm {fields} before accepting this record.',{fields:selectedMetadataBlockingLabel})}}</p>
-                <div class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||reviewLocked||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||reviewLocked||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button ref="acceptButtonEl" type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''||reviewLocked" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
+                <div class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||structuralReviewLocked||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||structuralReviewLocked||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''||structuralReviewLocked">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button ref="acceptButtonEl" type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''||reviewLocked" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
               </template>
               <div v-else class="inspector-empty">{{i18n.t('pdf_corpus.select_record','Select a generated record to inspect its source binding and metadata.')}}</div>
             </article>

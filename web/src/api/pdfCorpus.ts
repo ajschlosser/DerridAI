@@ -30,7 +30,7 @@ export interface CorpusBuild {
   accepted_count: number;
   rejected_count?: number;
   source_problem_count?: number;
-  review_queue_counts?: {all?:number;ready?:number;issues?:number;metadata?:number;topology?:number;source?:number;accepted?:number;rejected?:number;pending?:number};
+  review_queue_counts?: {all?:number;ready?:number;preparing?:number;issues?:number;metadata?:number;topology?:number;source?:number;accepted?:number;rejected?:number;pending?:number};
   model?: string | null;
   provider?: string | null;
   profile_id: string;
@@ -77,6 +77,8 @@ export interface CorpusBuild {
   long_exception_record_count?: number;
   metadata_completed?: number;
   metadata_total?: number;
+  metadata_enriched_count?: number;
+  metadata_enrichment_total?: number;
   metadata_concurrency?: number;
   metadata_issue_summary?: {
     records_incomplete?:number; fields_unresolved?:number; by_field?:Record<string,number>; by_reason?:Record<string,number>; invalid_by_field?:Record<string,number>;
@@ -108,6 +110,8 @@ export interface CorpusRecord {
   metadata_reviewed_at?: string;
   metadata_decisions?: Array<{field?:string;value?:unknown;at?:string;source?:string}>;
   metadata_stage_status?: Record<string,string>;
+  metadata_enrichment_state?: "queued"|"running"|"complete"|"failed"|string;
+  metadata_enrichment_finished?: boolean;
   metadata_complete?: boolean;
   metadata_needs_attention?: boolean;
   metadata_attention_reasons?: string[];

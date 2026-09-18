@@ -54,7 +54,7 @@ def ready_record(rid: str, bid: str) -> dict:
             "primary_text":{"status":"deterministic","method":"test"},
             "discourse_role":{"status":"llm_inferred","method":"llm","confidence":.96},
         },
-        "metadata_incomplete_fields":[],"metadata_review_fields":[],"metadata_complete":True,
+        "metadata_incomplete_fields":[],"metadata_review_fields":[],"metadata_complete":True,"metadata_enrichment_state":"complete",
         "review_disposition":"pending","accepted":False,"rejected":False,"needs_review":False,"review_reason":"",
     }
 
@@ -130,20 +130,30 @@ def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Pat
     assert result["queue_counts"]["accepted"] == 2
     assert result["queue_counts"]["pending"] == 1
 
-def test_human_review_is_read_only_while_automatic_enrichment_runs(tmp_path: Path):
-    repo, build = install_repo(tmp_path, [ready_record("r1","b1")], status="running")
+def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_path: Path):
+    complete=ready_record("r1","b1")
+    complete["metadata_enrichment_state"]="complete"
+    queued=ready_record("r2","b2")
+    queued.update({"metadata_enrichment_state":"queued","metadata_complete":False})
+    repo, build = install_repo(tmp_path, [complete, queued], status="running")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     running=repo.get_build(build["build_id"]); running["status"]="running"; running["stage"]="enriching"; repo.save_build(running)
+
+    result=manager.review_decision(build["build_id"], "r1", "accepted", expected_revision=1)
+    assert result["applied"] is True
+    assert repo.load_records(build["build_id"])[0]["accepted"] is True
+
     try:
-        manager.review_decision(build["build_id"], "r1", "accepted", expected_revision=1)
-        assert False, "review mutation must not race automatic enrichment"
+        manager.review_decision(build["build_id"], "r2", "accepted", expected_revision=1)
+        assert False, "an in-flight record must remain read-only"
     except ValueError as exc:
-        assert "review unlocks" in str(exc).lower()
+        assert "still being prepared" in str(exc).lower()
+
     try:
-        manager.patch_metadata(build["build_id"], "r1", {"primary_text":False}, expected_revision=1)
-        assert False, "metadata decisions must not race automatic enrichment"
+        manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+        assert False, "topology edits must remain locked while neighboring metadata is in flight"
     except ValueError as exc:
-        assert "review unlocks" in str(exc).lower()
+        assert "still being prepared" in str(exc).lower()
 
 
 
@@ -195,7 +205,9 @@ def test_review_ui_is_exception_oriented_and_read_only_during_enrichment():
     panel=text("web/src/components/CorpusMetadataResolutionPanel.vue")
     assert "acceptCleanRecords" in ui
     assert "reviewQueueCounts" in ui
-    assert "reviewLocked=computed(()=>buildRunning.value)" in ui
+    assert "selectedRecordEnrichmentPending" in ui
+    assert 'currentBuild.value?.stage!=="enriching"' in ui
+    assert "structuralReviewLocked=computed(()=>buildRunning.value)" in ui
     assert "review-readonly-banner" in ui
     assert "metadataDecision" in ui and "reviewDecision" in api
     assert 'reviewQueue.value="ready"' not in ui[ui.index("async function resolveMetadataField"):ui.index("function showMetadataSource")]

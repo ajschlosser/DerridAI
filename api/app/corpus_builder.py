@@ -3294,6 +3294,22 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             total = max(1, len(records))
             pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
             already_complete = len(records) - len(pending)
+            self._update(
+                build_id,
+                metadata_enriched_count=already_complete,
+                metadata_enrichment_total=len(records),
+                metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
+            )
+            # Metadata enrichment is book-length work and may take minutes on a
+            # local model. Track readiness per record so completed records can be
+            # reviewed immediately instead of locking the entire book until the
+            # final LLM call finishes.
+            for index, record in enumerate(records):
+                if index in pending:
+                    record["metadata_enrichment_state"] = "queued"
+                else:
+                    record["metadata_enrichment_state"] = "complete"
+            self.repo.save_records(build_id, records)
             max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
             if pending:
                 # Parallelism is a build-level execution concern. Each worker performs
@@ -3326,7 +3342,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             raise InterruptedError("Corpus build cancelled")
                         index = futures[future]
                         try:
-                            records[index] = future.result()
+                            completed_record = future.result()
+                            completed_record["metadata_enrichment_state"] = "complete"
+                            records[index] = completed_record
                         except Exception as exc:
                             # A programming/provider failure in one metadata worker
                             # must never discard the other successfully enriched
@@ -3352,22 +3370,38 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             reasons = list(fallback.get("metadata_attention_reasons") or [])
                             reasons.append(f"Metadata worker failed and requires review: {exc}")
                             fallback["metadata_attention_reasons"] = list(dict.fromkeys(reason for reason in reasons if reason))[:50]
+                            fallback["metadata_enrichment_state"] = "failed"
                             records[index] = fallback
                             self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
                         completed += 1
-                        # Persist each finished record in the coordinator thread. A
-                        # provider/API restart therefore loses at most the calls that
-                        # were actively in flight, never the completed book so far.
+                        # Persist one completed worker result without overwriting
+                        # human review decisions already made on other completed
+                        # records while enrichment continues. The disk copy is the
+                        # authoritative live review state; replace only this record.
+                        live_records = self.repo.load_records(build_id)
+                        completed_id = str(records[index].get("record_id") or "")
+                        live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
+                        if live_index is None:
+                            live_records = records
+                        else:
+                            live_records[live_index] = records[index]
+                        records = live_records
                         self.repo.save_records(build_id, records)
                         self._update(
                             build_id,
                             stage="enriching",
                             progress=0.42 + 0.43 * (completed / total),
-                            metadata_completed=completed,
+                            metadata_enriched_count=completed,
+                            metadata_enrichment_total=len(records),
                             metadata_total=len(records),
                             metadata_concurrency=max_workers,
                         )
 
+            # All automatic workers have now settled. Recompute the authoritative
+            # record/metadata queues once before handing control to human review so
+            # the first review screen is already internally consistent.
+            self._rewrite_and_validate(build_id, records)
+            records = self.repo.load_records(build_id)
             profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
             validation = self.validate_records(source_blocks, records, profile)
             needs_review = sum(1 for record in records if record.get("needs_review"))
@@ -3450,6 +3484,15 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 issues.append("topology")
         return list(dict.fromkeys(issues))
 
+    @staticmethod
+    def _metadata_enrichment_finished(record: dict[str, Any]) -> bool:
+        state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
+        # Records produced before the progressive-review marker existed are
+        # considered finished only when they already carry metadata stage output.
+        if not state:
+            return bool(record.get("metadata_stage_status") or record.get("metadata_complete"))
+        return state in {"complete", "failed"}
+
     @classmethod
     def _matches_review_queue(cls, record: dict[str, Any], queue: str | None) -> bool:
         if not queue or queue == "all":
@@ -3461,7 +3504,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             return False
         codes = cls._review_issue_codes(record)
         if queue == "ready":
-            return not codes
+            return cls._metadata_enrichment_finished(record) and not codes
         if queue == "issues":
             return bool(codes)
         if queue in {"metadata", "topology", "source"}:
@@ -3470,7 +3513,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
     @classmethod
     def _queue_counts(cls, records: list[dict[str, Any]]) -> dict[str, int]:
-        result = {"all": len(records), "ready": 0, "issues": 0, "metadata": 0, "topology": 0, "source": 0, "accepted": 0, "rejected": 0, "pending": 0}
+        result = {"all": len(records), "ready": 0, "preparing": 0, "issues": 0, "metadata": 0, "topology": 0, "source": 0, "accepted": 0, "rejected": 0, "pending": 0}
         for record in records:
             disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
             if disposition == "accepted":
@@ -3480,6 +3523,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 result["rejected"] += 1
                 continue
             result["pending"] += 1
+            if not cls._metadata_enrichment_finished(record):
+                result["preparing"] += 1
+                continue
             codes = cls._review_issue_codes(record)
             if not codes:
                 result["ready"] += 1
@@ -3503,8 +3549,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         blocking_fields = list(dict.fromkeys([
             str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
         ]))
+        enrichment_finished = cls._metadata_enrichment_finished(record)
         if disposition in {"accepted", "rejected"}:
             state = disposition
+        elif not enrichment_finished:
+            state = "preparing"
         elif "source" in issue_codes:
             state = "source"
         elif "metadata" in issue_codes:
@@ -3516,7 +3565,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         record["review_state"] = state
         record["review_issue_codes"] = issue_codes
         record["acceptance_blocking_fields"] = blocking_fields
-        record["can_accept"] = bool(disposition == "pending" and not issue_codes)
+        record["metadata_enrichment_finished"] = enrichment_finished
+        record["can_accept"] = bool(disposition == "pending" and enrichment_finished and not issue_codes)
         return record
 
 
@@ -3548,6 +3598,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
     def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
+        automation_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") in {"enriching", "metadata_retry"}
         for record in records:
             if not record.get("review_disposition"):
                 record["review_disposition"] = "accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"
@@ -3570,9 +3621,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # Required-metadata completeness is derived from unresolved/review queues.
         # This prevents stale worker booleans from contradicting an empty issue list.
         for record in records:
-            self._sync_record_metadata_state(record, profile)
-            self._decorate_review_state(record)
-            self._enforce_review_invariants(record)
+            if not (automation_running and not self._metadata_enrichment_finished(record)):
+                self._sync_record_metadata_state(record, profile)
+                self._enforce_review_invariants(record)
             self._decorate_review_state(record)
         self.repo.save_records(build_id, records)
         # Review counts are derived only after metadata state and review invariants
@@ -3593,6 +3644,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         human_record_ids: set[str] = set()
         retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
         for record in records:
+            if automation_running and not self._metadata_enrichment_finished(record):
+                continue
             incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
             statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             record_issues: list[dict[str, Any]] = []
@@ -3659,9 +3712,15 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         metadata_complete = metadata_total == 0 or metadata_completed >= metadata_total
         all_ready = bool(records_accepted and metadata_complete and not blockers)
         # Automated construction owns the first 90% of lifecycle progress. Human
-        # review advances toward 96%; metadata completion/validation reaches 98%;
-        # publishing an immutable snapshot is the only 100% lifecycle state.
-        if all_ready:
+        # review may begin progressively during book-length metadata enrichment,
+        # but a review mutation must never make the build look as though the
+        # background enrichment job has stopped. Preserve the running stage until
+        # the coordinator itself performs the final handoff to review.
+        if automation_running:
+            build["status"] = "running"
+            build["stage"] = str(build.get("stage") or "enriching")
+            build["progress"] = max(float(build.get("progress") or 0.42), 0.42)
+        elif all_ready:
             build["progress"] = 0.98
             build["status"] = "ready"
             build["stage"] = "ready"
@@ -3715,10 +3774,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build = self.repo.get_build(build_id)
         return build
 
-    def _assert_human_review_available(self, build_id: str) -> dict[str, Any]:
+    def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if str(build.get("status") or "") in {"queued", "running"}:
-            raise ValueError("Automatic corpus construction is still running. Review unlocks when metadata enrichment finishes.")
+            stage = str(build.get("stage") or "")
+            if stage == "enriching" and record is not None and not structural and self._metadata_enrichment_finished(record):
+                return build
+            raise ValueError("This record is still being prepared. Review becomes available for each record as soon as its metadata enrichment finishes.")
         return build
 
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
@@ -3738,13 +3800,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         })
 
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
         target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
+        self._assert_human_review_available(build_id, target)
         current_revision = self._assert_record_revision(target, expected_revision)
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
         self._sync_record_metadata_state(target, profile)
@@ -3783,7 +3845,6 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         This is the UI-facing review command. It avoids the previous client-side
         accept -> refresh build -> refresh queue race that could look like a no-op.
         """
-        self._assert_human_review_available(build_id)
         if disposition not in {"accepted", "rejected"}:
             raise ValueError("Unsupported review decision.")
         records = self.repo.load_records(build_id)
@@ -3791,6 +3852,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         if index < 0:
             raise KeyError(record_id)
         target = records[index]
+        self._assert_human_review_available(build_id, target)
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
         self._sync_record_metadata_state(target, profile)
         blocking_fields = list(dict.fromkeys([str(v) for v in (target.get("metadata_review_fields") or []) + (target.get("metadata_incomplete_fields") or [])]))
@@ -3831,7 +3893,12 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # an accepted/rejected row and made the primary action look like a no-op.
         ordered = records[index + 1:] + records[:index]
         def pending(candidate: dict[str, Any]) -> bool:
-            return str(candidate.get("review_disposition") or "pending") == "pending"
+            if str(candidate.get("review_disposition") or "pending") != "pending":
+                return False
+            build_now = self.repo.get_build(build_id)
+            if str(build_now.get("status") or "") in {"queued", "running"} and str(build_now.get("stage") or "") == "enriching":
+                return self._metadata_enrichment_finished(candidate)
+            return True
         if review_queue and review_queue != "all":
             next_record = next((candidate for candidate in ordered if pending(candidate) and self._matches_review_queue(candidate, review_queue)), None)
         else:
@@ -3903,7 +3970,6 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return {"restored": True, "action": checkpoint.get("action"), "selected_record_id": checkpoint.get("selected_record_id"), "record_count": len(records)}
 
     def patch_metadata(self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
         forbidden = sorted(set(changes) - HUMAN_EDITABLE_METADATA_FIELDS)
         if forbidden:
             raise ValueError(
@@ -3918,34 +3984,31 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             raise ValueError(f"Invalid interpretive metadata: {exc}") from exc
 
         records = self.repo.load_records(build_id)
-        target = None
-        for record in records:
-            if record.get("record_id") == record_id:
-                target = record
-                current_revision = int(record.get("record_revision") or 1)
-                if expected_revision is not None and current_revision != int(expected_revision):
-                    raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
-                decision_log = list(record.get("metadata_decisions") or [])
-                for key, value in changes.items():
-                    record[key] = value
-                    if key in REVIEW_METADATA_FIELDS:
-                        status = record.setdefault("metadata_field_status", {})
-                        status[key] = {
-                            "status": "human_confirmed",
-                            "method": "human",
-                            "confidence": 1.0,
-                            "reason_code": "human_confirmed",
-                            "reason": "Confirmed during record review.",
-                        }
-                        decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human"})
-                record["metadata_decisions"] = decision_log[-100:]
-                record["metadata_reviewed_at"] = iso_now()
-                profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
-                self._sync_record_metadata_state(record, profile)
-                record["record_revision"] = current_revision + 1
-                break
+        target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
+        self._assert_human_review_available(build_id, target)
+        current_revision = int(target.get("record_revision") or 1)
+        if expected_revision is not None and current_revision != int(expected_revision):
+            raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
+        decision_log = list(target.get("metadata_decisions") or [])
+        for key, value in changes.items():
+            target[key] = value
+            if key in REVIEW_METADATA_FIELDS:
+                status = target.setdefault("metadata_field_status", {})
+                status[key] = {
+                    "status": "human_confirmed",
+                    "method": "human",
+                    "confidence": 1.0,
+                    "reason_code": "human_confirmed",
+                    "reason": "Confirmed during record review.",
+                }
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human"})
+        target["metadata_decisions"] = decision_log[-100:]
+        target["metadata_reviewed_at"] = iso_now()
+        profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._sync_record_metadata_state(target, profile)
+        target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
@@ -3991,13 +4054,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         reason: str = "",
         expected_revision: int | None = None,
     ) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
         if field not in ATTRIBUTION_EVIDENCE_FIELDS and field not in RecordMetadataModel.model_fields:
             raise ValueError(f"Unsupported metadata evidence field: {field}")
         records = self.repo.load_records(build_id)
         target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
+        self._assert_human_review_available(build_id, target)
         current_revision = int(target.get("record_revision") or 1)
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before editing evidence.")
@@ -4025,7 +4088,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return target
 
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
+        self._assert_human_review_available(build_id, structural=True)
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
@@ -4057,7 +4120,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         return merged
 
     def split(self, build_id: str, record_id: str, after_block_id: str, expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
+        self._assert_human_review_available(build_id, structural=True)
         records = self.repo.load_records(build_id)
         index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
         if index < 0:
