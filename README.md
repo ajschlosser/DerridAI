@@ -1,6 +1,23 @@
-# DerridAI 0.59.0
+# DerridAI 0.60.0
 
-**0.59.0 — Serious Sandpipers** reorganizes Corpus Builder around a modern, progressive scholarly workflow: source selection and document structure precede LLM/enrichment choices, record construction and advanced execution are progressively disclosed, build readiness is summarized at the point of action, and complex metadata/source review can expand into full working-width modes. The application name is now consistently **DerridAI**; Corpus Viewer remains a major workspace within the application. English/Québec French i18n, keyboard accessibility, and WCAG 2.0 AA-oriented composition remain release requirements.
+**0.60.0 — Testy Titmouse** stabilizes the 0.59.0 Corpus Builder redesign around explicit surface opacity, reviewer-owned document structure, sanitized LLM text proposals, reliable semantic-field auto-population, and a real frontend test foundation. English/Québec French i18n, keyboard accessibility, visible focus, semantic status communication, and WCAG 2.0 AA-oriented testing remain release requirements.
+
+## 0.60.0 — Testy Titmouse
+
+A correctness-and-testability release for Corpus Builder.
+
+- Establishes explicit solid, raised, overlay, and glass surface tokens. Floating panels no longer depend on undefined/translucent component variables; overlay surfaces are opaque and glass surfaces use at least 90% opacity.
+- Fixes the **Corpus builds** popover and sticky **Build summary** so underlying text/content cannot bleed through them.
+- Sanitizes LLM text-touch-up output at the backend boundary. Model-added outer triple-hyphen or Markdown-fence wrappers are removed only when they were not present in the source; legitimate internal separators, em dashes, and source punctuation remain untouched.
+- Strengthens the touch-up prompt so the returned JSON text field contains only the corrected passage, without separators, labels, fences, or commentary.
+- Makes reviewer-confirmed document structure authoritative over manifest and semantic inference. A record classified as main text by reviewed document layout can no longer be silently changed to front matter by a later manifest or LLM pass.
+- Retains LLM disagreement as auditable field provenance: deterministic value, LLM value, confidence, reason, whether the field was actually checked, and why a semantic check was skipped/failed when applicable.
+- Requires the discourse reader to independently assess region type and primary-text status even when deterministic structure exists, so corroboration and disagreement are observable rather than inferred.
+- Normalizes direct grammatical stance aliases (for example, `affirmed → affirm`) before closed-vocabulary validation while retaining the raw LLM value. High-confidence normalized stance values materialize into the record and appear selected in the editor.
+- Adds frontend defensive normalization so existing/stale records containing an inflectional stance alias still select the canonical enum value.
+- Introduces **Vitest + Vue Test Utils + happy-dom** component tests and **Playwright + axe-core** composed UI tests. Initial coverage verifies progressive stance auto-selection, structural conflict selection, floating-surface opacity, keyboard focus, overflow, and WCAG 2.0 A/AA rules.
+- Adds a frontend GitHub Actions quality gate for typechecking, component tests, production build, Storybook build, Playwright/Chromium layout tests, and accessibility checks.
+- Bumps the auditable corpus contract to `derrida-scholarly-v12`, metadata prompt to `derridai-record-metadata-v9`, and document-manifest prompt to `derridai-document-manifest-v3`.
 
 ## 0.59.0 — Serious Sandpipers
 
