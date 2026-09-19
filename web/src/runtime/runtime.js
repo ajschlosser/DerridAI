@@ -12,6 +12,7 @@ import {
   statusBadgeTone,
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
+import { formatDuration } from "../domain/operationsPanel";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -2704,7 +2705,11 @@ function updateOperationStackCount(){
   const stats=operationDockCardStats(stack);
   const summary=dockCollapsedSummary(stats);
   const label=stack.querySelector("#operationStackCount");
-  if(label)label.textContent=trf(summary.key,summary.fallback,summary.values);
+  if(label){
+    label.textContent=trf(summary.key,summary.fallback,summary.values);
+    // When there is nothing more specific to say, the summary falls back to the dock's own title; do not say it twice.
+    label.hidden=label.textContent===tr("operations.title","Operations");
+  }
   stack.dataset.tone=summary.tone;
   if(summary.percent==null)stack.style.removeProperty("--operation-dock-progress");
   else stack.style.setProperty("--operation-dock-progress",`${summary.percent}%`);
@@ -2884,11 +2889,21 @@ async function refreshJobs({rerender=false}={}){
   }
 }
 function jobLabel(job){
-  if(job.type==="rag")return "RAG pipeline";
-  if(job.type==="upsert")return "Chroma upsert";
+  if(job.type==="rag")return tr("operations.job.rag","RAG pipeline");
+  if(job.type==="upsert")return tr("operations.job.upsert","Chroma upsert");
   if(job.type==="pdf_corpus")return tr("pdf_corpus.operation_label","PDF corpus build");
-  if(job.type==="llm_tool")return job.label||({pdf_clean_text:"PDF · clean text",pdf_draft_record:"PDF · draft record",pdf_link_record:"PDF · link record",rag_grade:"RAG · grade response",rag_grade_batch:"RAG · grade response cache",work_metadata:tr("works.populate_metadata_llm","Populate metadata with LLM")}[job.tool||job.mode]||"LLM operation");
-  return job.mode==="auto"?"Auto-improve":"LLM review";
+  if(job.type==="llm_tool"){
+    const known={
+      pdf_clean_text:tr("operations.job.pdf_clean_text","PDF · clean text"),
+      pdf_draft_record:tr("operations.job.pdf_draft_record","PDF · draft record"),
+      pdf_link_record:tr("operations.job.pdf_link_record","PDF · link record"),
+      rag_grade:tr("operations.job.rag_grade","RAG · grade response"),
+      rag_grade_batch:tr("operations.job.rag_grade_batch","RAG · grade response cache"),
+      work_metadata:tr("works.populate_metadata_llm","Populate metadata with LLM"),
+    };
+    return job.label||known[job.tool||job.mode]||tr("operations.job.llm_tool","LLM operation");
+  }
+  return job.mode==="auto"?tr("operations.job.auto","Auto-improve"):tr("operations.job.review","LLM review");
 }
 function jobProviderSummary(job){
   if(job.type==="upsert")return [job.label,job.store_name||"collection"].filter(Boolean).join(" · ");
@@ -2904,46 +2919,81 @@ function jobElapsedSeconds(job){
   return Math.max(0,(end-start)/1000);
 }
 function humanDuration(seconds){
-  const total=Math.max(0,Math.round(Number(seconds)||0));
-  const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;
-  if(h)return `${h}h ${m}m ${s}s`;
-  if(m)return `${m}m ${s}s`;
-  return `${s}s`;
+  return formatDuration(seconds,state.translations?.locale||"en-US");
+}
+// Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
+const OPERATION_FACT_NAMES={
+  started_by:["operations.fact.started_by","Started by"],
+  model:["operations.fact.model","Model"],
+  fields:["operations.fact.fields","Fields"],
+  current_record:["operations.fact.current_record","Current record"],
+  pending_results:["operations.fact.pending_results","Pending results"],
+  pending_changes:["operations.fact.pending_changes","Pending changes"],
+  unprocessed_records:["operations.fact.unprocessed_records","Unprocessed records"],
+  accepted:["operations.fact.accepted","Accepted"],
+  rejected:["operations.fact.rejected","Rejected"],
+  decision:["operations.fact.decision","Decision"],
+  generation:["operations.fact.generation","Generation"],
+  embedding:["operations.fact.embedding","Embedding"],
+  reranker:["operations.fact.reranker","Reranker"],
+  collection:["operations.fact.collection","Collection"],
+  stage:["operations.fact.stage","Stage"],
+  languages:["operations.fact.languages","Languages"],
+  retrieval:["operations.fact.retrieval","Retrieval"],
+  auto_grade:["operations.fact.auto_grade","Auto-grade"],
+  operation:["operations.fact.operation","Operation"],
+  provider:["operations.fact.provider","Provider"],
+  max_concurrent:["operations.fact.max_concurrent","Max concurrent"],
+  top_n:["operations.fact.top_n","Top N"],
+  pdf:["operations.fact.pdf","PDF"],
+  page:["operations.fact.page","Page"],
+  cached_response:["operations.fact.cached_response","Cached response"],
+  scope:["operations.fact.scope","Scope"],
+  records:["operations.fact.records","Records"],
+  committed:["operations.fact.committed","Committed"],
+  language_mirrors:["operations.fact.language_mirrors","Language mirrors"],
+  total_time:["operations.fact.total_time","Total time"],
+  elapsed:["operations.fact.elapsed","Elapsed"],
+};
+function fact(id){const [key,fallback]=OPERATION_FACT_NAMES[id];return tr(key,fallback)}
+function decisionLabel(state){
+  const id=String(state||"pending");
+  return tr(`operations.decision.${id}`,id.replaceAll("_"," "));
 }
 function operationDetailPairs(job){
   const request=job.request||{};
   const pairs=[];
-  if(job.owner)pairs.push(["Started by",job.owner]);
+  if(job.owner)pairs.push([fact("started_by"),job.owner]);
   if(job.type==="llm"){
     pairs.push(
-      ["Model",job.model||job.provider||"—"],
-      ["Fields",(job.fields||[]).join(", ")||"—"],
-      ["Current record",job.current_record_id||"—"],
-      ["Pending results",job.pending_result_count??0],
-      ["Pending changes",job.pending_change_count??0],
-      ["Unprocessed records",job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0))],
-      ["Accepted",`${job.accepted_results||0} result(s) · ${job.accepted_fields||0} field(s)`],
-      ["Rejected",`${job.rejected_results||0} result(s) · ${job.rejected_fields||0} field(s)`],
-      ["Decision",job.resolution_state||"pending"]
+      [fact("model"),job.model||job.provider||"—"],
+      [fact("fields"),(job.fields||[]).join(", ")||"—"],
+      [fact("current_record"),job.current_record_id||"—"],
+      [fact("pending_results"),job.pending_result_count??0],
+      [fact("pending_changes"),job.pending_change_count??0],
+      [fact("unprocessed_records"),job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0))],
+      [fact("accepted"),trf("operations.fact.result_field_counts","{results} result(s) · {fields} field(s)",{results:job.accepted_results||0,fields:job.accepted_fields||0})],
+      [fact("rejected"),trf("operations.fact.result_field_counts","{results} result(s) · {fields} field(s)",{results:job.rejected_results||0,fields:job.rejected_fields||0})],
+      [fact("decision"),decisionLabel(job.resolution_state||"pending")]
     );
-    if(request.generation&&Object.keys(request.generation).length)pairs.push(["Generation",JSON.stringify(request.generation)]);
+    if(request.generation&&Object.keys(request.generation).length)pairs.push([fact("generation"),JSON.stringify(request.generation)]);
   }else if(job.type==="rag"){
     const sourceStore=state.stores.find(store=>store.name===job.source_collection);
     pairs.push(
-      ["Generation",job.model||job.provider||"—"],
-      ["Embedding",sourceStore?.embedding_model||sourceStore?.embedding_provider||"—"],
-      ["Reranker",request.cross_encoder_model||request.reranker||"—"],
-      ["Collection",job.source_collection||"—"],
-      ["Stage",job.stage||"—"],
-      ["Languages",(request.locales||[]).join(", ")||"—"],
-      ["Retrieval",(request.search_types||[]).join(" + ")||"—"],
+      [fact("generation"),job.model||job.provider||"—"],
+      [fact("embedding"),sourceStore?.embedding_model||sourceStore?.embedding_provider||"—"],
+      [fact("reranker"),request.cross_encoder_model||request.reranker||"—"],
+      [fact("collection"),job.source_collection||"—"],
+      [fact("stage"),job.stage||"—"],
+      [fact("languages"),(request.locales||[]).join(", ")||"—"],
+      [fact("retrieval"),(request.search_types||[]).join(" + ")||"—"],
       ["k / fetch_k",`${request.k??"—"} / ${request.fetch_k??"—"}`],
       ["RRF k",request.rrf_k??"—"],
-      ["Top N",request.rerank_top_n??"—"]
+      [fact("top_n"),request.rerank_top_n??"—"]
     );
     if(request.auto_grade){
       const gradeProfile=request.auto_grade_provider_profile_id?providerProfiles().find(item=>item.id===request.auto_grade_provider_profile_id):null;
-      pairs.push(["Auto-grade",`${gradeProfile?providerDisplayName(gradeProfile):(request.auto_grade_provider||job.provider||"grader")} · ${request.auto_grade_model||job.model||"model"}`]);
+      pairs.push([fact("auto_grade"),`${gradeProfile?providerDisplayName(gradeProfile):(request.auto_grade_provider||job.provider||"grader")} · ${request.auto_grade_model||job.model||"model"}`]);
     }
   }else if(job.type==="pdf_corpus"){
     pairs.push(
@@ -2955,15 +3005,15 @@ function operationDetailPairs(job){
       [tr("pdf_corpus.concurrent_requests","max concurrent request(s)"),job.max_concurrent_requests??1]
     );
   }else if(job.type==="llm_tool"){
-    pairs.push(["Operation",job.label||job.tool||job.mode||"LLM tool"],["Provider",job.provider||"—"],["Model",job.model||"—"],["Stage",job.stage||"—"],["Max concurrent",job.max_concurrent_requests??"—"]);
-    if(request.pdf_file)pairs.push(["PDF",request.pdf_file],["Page",request.pdf_page??"—"]);
-    if(request.response_record_id)pairs.push(["Cached response",request.response_record_id]);
+    pairs.push([fact("operation"),job.label||job.tool||job.mode||"LLM tool"],[fact("provider"),job.provider||"—"],[fact("model"),job.model||"—"],[fact("stage"),job.stage||"—"],[fact("max_concurrent"),job.max_concurrent_requests??"—"]);
+    if(request.pdf_file)pairs.push([fact("pdf"),request.pdf_file],[fact("page"),request.pdf_page??"—"]);
+    if(request.response_record_id)pairs.push([fact("cached_response"),request.response_record_id]);
   }else if(job.type==="upsert"){
-    pairs.push(["Collection",job.store_name||"—"],["Scope",job.label||request.label||"records"],["Records",job.total??0],["Committed",job.completed??0],["Current record",job.current_record_id||"—"]);
+    pairs.push([fact("collection"),job.store_name||"—"],[fact("scope"),job.label||request.label||tr("operations.sub.records","records")],[fact("records"),job.total??0],[fact("committed"),job.completed??0],[fact("current_record"),job.current_record_id||"—"]);
     const mirrors=Object.entries(job.mirrored||{}).map(([name,count])=>`${name}: ${count}`).join(" · ");
-    if(mirrors)pairs.push(["Language mirrors",mirrors]);
+    if(mirrors)pairs.push([fact("language_mirrors"),mirrors]);
   }
-  pairs.push([job.finished_at?"Total time":"Elapsed",humanDuration(jobElapsedSeconds(job))]);
+  pairs.push([fact(job.finished_at?"total_time":"elapsed"),humanDuration(jobElapsedSeconds(job))]);
   return pairs;
 }
 async function cancelBackgroundJob(jobId,{refresh=true}={}){
@@ -3073,7 +3123,7 @@ function jobProgressText(job,style){
     if(job.status==="completed")return tr("operations.progress_build_complete","Build complete · ready for review");
     return trf("operations.progress_overall","{percent}% overall",{percent:pct});
   }
-  return style==="of"?`${done.toLocaleString()} of ${total.toLocaleString()} (${pct}%)`:`${done}/${total} (${pct}%)`;
+  return style==="of"?trf("operations.progress_of","{done} of {total} ({percent}%)",{done:done.toLocaleString(),total:total.toLocaleString(),percent:pct}):`${done}/${total} (${pct}%)`;
 }
 function maybeDesktopNotify(job){
   if(!state.appConfig.desktop_notifications)return;
@@ -3793,13 +3843,13 @@ function operationIcon(job){
   return "edit";
 }
 function operationSubtitle(job){
-  if(job.status==="cancelling"||job.cancel_requested)return "Cancellation requested · current call/batch is reaching a safe stopping point";
-  if(job.type==="rag")return String(job.stage_detail||job.stage||"queued");
-  if(job.type==="upsert")return `${job.store_name||"collection"} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`;
-  if(job.type==="pdf_corpus")return `${job.source_filename||tr("pdf_corpus.source_pdf","Source PDF")} · ${job.stage_detail||job.stage||job.raw_status||"queued"}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)")}`:""}`;
+  if(job.status==="cancelling"||job.cancel_requested)return tr("operations.sub.cancelling","Cancellation requested · current call/batch is reaching a safe stopping point");
+  if(job.type==="rag")return String(job.stage_detail||job.stage||tr("operations.sub.queued","queued"));
+  if(job.type==="upsert")return `${job.store_name||tr("operations.sub.collection","collection")} · ${job.completed}/${job.total} ${tr("operations.sub.committed","committed")}${Object.keys(job.mirrored||{}).length?` · ${tr("operations.sub.mirrors_active","language mirrors active")}`:""}`;
+  if(job.type==="pdf_corpus")return `${job.source_filename||tr("pdf_corpus.source_pdf","Source PDF")} · ${job.stage_detail||job.stage||job.raw_status||tr("operations.sub.queued","queued")}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)")}`:""}`;
   // Provider and model appear in the facts, and the label is the row title: say only what is new.
   if(job.type==="llm_tool"){const detail=String(job.stage_detail||"");return detail&&detail!==jobLabel(job)?detail:""}
-  return `${job.completed}/${job.total} records${job.current_record_id?` · current: ${job.current_record_id}`:""}${job.failed?` · ${job.failed} failed`:""}`;
+  return `${job.completed}/${job.total} ${tr("operations.sub.records","records")}${job.current_record_id?` · ${tr("operations.sub.current","current:")} ${job.current_record_id}`:""}${job.failed?` · ${job.failed} ${tr("operations.sub.failed","failed")}`:""}`;
 }
 function operationResultKind(job){
   const active=isActiveJobStatus(job.status);
@@ -3810,7 +3860,7 @@ function operationResultKind(job){
 }
 function operationViewModel(job){
   // Facts already shown elsewhere in the row (owner, operation name, stage) are left out.
-  const skip=new Set(["Started by","Operation","Stage","Total time",tr("pdf_corpus.stage","Stage")]);
+  const skip=new Set([fact("started_by"),fact("operation"),fact("stage"),fact("total_time"),tr("pdf_corpus.stage","Stage")]);
   const facts=operationDetailPairs(job)
     .filter(([name,value])=>!skip.has(String(name))&&String(value??"").trim()!==""&&String(value).trim()!=="—")
     .slice(0,4)
@@ -10865,6 +10915,8 @@ function navigateRecordWorkspace(destination){if(["global","works","pdf"].includ
 
 export {
   getNavItems,
+  operationViewModel,
+  operationDetailPairs,
   jobProgressText,
   state,
   viewConfig,
