@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_VERSION = "0.62.2"
+APP_VERSION = "0.62.3"
 
 
 _GIT_COMMIT_FILE = Path("/app/git-commit")
@@ -79,6 +79,13 @@ def _bool_env(name: str, default: bool) -> bool:
 class Settings:
     chroma_path: str = os.getenv("CHROMA_PATH", "/data/chroma")
     chroma_data_root: str = os.getenv("CHROMA_DATA_ROOT", "/data")
+    chroma_mode: str = os.getenv("CHROMA_MODE", "embedded").strip().lower()
+    chroma_base_url: str = os.getenv("CHROMA_BASE_URL", "http://chroma:8000").rstrip("/")
+    chroma_token: str = os.getenv("CHROMA_TOKEN", "").strip()
+    chroma_tenant: str = os.getenv("CHROMA_TENANT", "default_tenant").strip() or "default_tenant"
+    chroma_database: str = os.getenv(
+        "CHROMA_DATABASE", "default_database"
+    ).strip() or "default_database"
     embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "ollama").strip().lower()
     auth_db_path: str = os.getenv("AUTH_DB_PATH", "/data/.home/derridai-auth.sqlite3")
     session_cookie_secure: bool = _bool_env("SESSION_COOKIE_SECURE", False)

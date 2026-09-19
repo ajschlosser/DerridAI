@@ -3,14 +3,14 @@
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
-Current version: **0.62.2 — Vexing Vixen** ([release notes](docs/notes/0.62.2.md)).
+Current version: **0.62.3 — Vigilant Viper** ([release notes](docs/notes/0.62.3.md)).
 
 ## Features
 
 - **Corpus Builder** — a sequenced Source → Document structure → LLM & enrichment → Record construction → Build workflow that extracts, segments, and enriches records from PDFs, with reviewer-owned document structure and auditable field provenance.
 - **Record review** — JSONL workspaces with full audit history, bulk and work-level metadata editing, red/green diffs, source-PDF linking, and human/LLM field ownership (high-confidence LLM proposals populate fields; lower-confidence ones stay as suggestions).
 - **LLM review and tools** — foreground, background, and background Auto-improve runs against named Ollama or OpenAI-compatible provider profiles, each with its own concurrency limit and warmup state.
-- **Vector stores** — persistent ChromaDB collections with English/French language mirrors, background upserts, and JSONL round-tripping.
+- **Vector stores** — persistent ChromaDB collections on the local filesystem or a running Chroma server, with English/French language mirrors, background upserts, and JSONL round-tripping.
 - **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, streamed and cancellable generation, a cached Response Library, and LLM grading of answers.
 - **Roles** — Admin and Researcher accounts; researchers see summarized evidence text and cannot mutate corpora.
 - **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, PDFs, and every Chroma collection with its embeddings.

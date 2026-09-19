@@ -26,7 +26,7 @@ File names describe the behavior under test (for example `test_review_queues.py`
 | Corpus Builder: text, layout, publication | `test_semantic_atoms_and_mla_citations`, `test_source_quality_and_publication_schema`, `test_publication_lifecycle`, `test_text_cleanup_and_adaptive_enrichment`, `test_verse_cleanup_and_rejected_records`, `test_document_layout` |
 | Failure handling | `test_failure_visibility` |
 | Authentication, roles, researcher policy | `test_roles_and_rag_request_validation`, `test_researcher_profile_generation_options`, `test_auth_hardening`, `test_researcher_rag_profile`, `test_researcher_text_policy`, `test_content_filter_false_positives`, `test_language_content_policy`, `test_researcher_route_policy` |
-| Persistence and vector store | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction` |
+| Persistence and vector store | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction`, `test_chroma_connection` |
 | Languages and translation | `test_locale_dictionaries`, `test_language_translation_validation`, `test_language_translation_resume`, `test_language_translation_repair`, `test_locale_and_accessibility_floor` |
 | Release housekeeping | `test_release_consistency` |
 

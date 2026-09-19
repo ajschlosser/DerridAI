@@ -28,6 +28,7 @@ from .models import (
     AnnotationCreateRequest,
     ResearcherProviderStatusRequest,
     BulkUpsert,
+    ChromaConnectionUpdate,
     ChromaPathUpdate,
     EmbeddingPreflightRequest,
     DeriveLanguageStoresRequest,
@@ -675,6 +676,7 @@ def health():
         "git_commit": APP_GIT_COMMIT or None,
         "chroma": chroma,
         "chroma_path": settings.chroma_path,
+        "chroma_mode": chroma.get("mode") or settings.chroma_mode,
         "embedding_provider": settings.embedding_provider,
         "ollama": ollama,
         "ollama_model": settings.ollama_model,
@@ -1102,6 +1104,41 @@ def set_chroma_path(body: ChromaPathUpdate):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/chroma/connection")
+def get_chroma_connection():
+    return store.health()
+
+
+@app.post("/api/chroma/connection/probe")
+def probe_chroma_connection(body: ChromaConnectionUpdate):
+    try:
+        return store.probe_connection(
+            mode=body.mode,
+            path=body.path,
+            url=body.url,
+            token=body.token,
+            tenant=body.tenant,
+            database=body.database,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/chroma/connection")
+def set_chroma_connection(body: ChromaConnectionUpdate):
+    try:
+        return store.set_connection(
+            mode=body.mode,
+            path=body.path,
+            url=body.url,
+            token=body.token,
+            tenant=body.tenant,
+            database=body.database,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _background_jobs_active() -> bool:
     return bool(
         llm_jobs.active_count()
@@ -1288,6 +1325,7 @@ async def create_full_backup(
             if isinstance(profile, dict)
         )
 
+        chroma_health = store.health()
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
@@ -1302,8 +1340,11 @@ async def create_full_backup(
                 ),
             },
             "chroma": {
-                "source_path": store.path,
-                "host_path_hint": store.health().get("host_path_hint"),
+                "mode": store.mode,
+                "source_path": store.path if store.mode == "embedded" else None,
+                "url": None if store.mode == "embedded" else chroma_health.get("url"),
+                "host_path_hint": chroma_health.get("host_path_hint"),
+                "identity": chroma_health.get("identity"),
                 "collections": collections,
                 "collection_count": len(collections),
                 "record_count": sum(
@@ -1337,7 +1378,9 @@ async def create_full_backup(
             "notes": [
                 (
                     "Stored Chroma vectors are backed up and restored "
-                    "without re-embedding."
+                    "without re-embedding. HTTP Chroma servers are snapshotted "
+                    "through the client API; NUKE in HTTP mode deletes "
+                    "collections on that server and does not wipe a local directory."
                 ),
                 (
                     "Provider API keys are included when present in "

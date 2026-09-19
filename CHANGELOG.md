@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.3 — Vigilant Viper
+
+Vector Stores can use a running Chroma server as well as the local filesystem, and the workspace is a Vue page. See [0.62.3](docs/notes/0.62.3.md).
+
 ## 0.62.2 — Vexing Vixen
 
 The sidebar is complete as soon as you sign in, researcher text policies are generated in the language they are for, and the language and policy screens lose their regional special cases. See [0.62.2](docs/notes/0.62.2.md).

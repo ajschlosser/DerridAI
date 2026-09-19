@@ -1,7 +1,7 @@
 {
   "name": "derridai",
   "private": true,
-  "version": "0.62.2",
+  "version": "0.62.3",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -14,7 +14,9 @@
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
     "test:frontend": "npm run typecheck && npm run test:unit && npm run build && npm run build-storybook && npm run test:e2e",
-    "lint": "eslint src --max-warnings 0"
+    "lint": "eslint src --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "diff": "^7.0.0",
@@ -35,6 +37,7 @@
     "eslint-plugin-vue": "^10.11.0",
     "globals": "^16.5.0",
     "happy-dom": "^18.0.1",
+    "prettier": "3.6.2",
     "storybook": "^10.0.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.70.0",
