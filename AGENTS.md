@@ -63,4 +63,4 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Add a regression test for each behavior change, in a new or existing `tests/test_*.py` (and Vitest/Playwright tests for frontend behavior).
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
 - Run the relevant checks before reporting done, and report honestly which checks could not run.
-- Commit as the repository owner: Aaron John Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
+- Commit as the repository owner: Aaron Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
