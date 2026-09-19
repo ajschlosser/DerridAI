@@ -27,10 +27,10 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v8"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v9"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
-DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v11"
+DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
+PROFILE_VERSION = "derrida-scholarly-v12"
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -46,6 +46,59 @@ PROPOSITION_STATUS_VALUES = [
     "hypothetical", "attributed", "reported", "conceded", "suspended",
 ]
 STANCE_VALUES = ["affirm", "reject", "criticize", "question", "qualify", "suspend", "neutral", "describe"]
+
+STANCE_ALIASES = {
+    "affirmed": "affirm",
+    "rejected": "reject",
+    "criticized": "criticize",
+    "questioned": "question",
+    "qualified": "qualify",
+    "suspended": "suspend",
+    "descriptive": "describe",
+}
+STRONG_STRUCTURAL_METHODS = {
+    "human_document_layout",
+    "document_layout_rule",
+    "confirmed_manifest_page_range",
+}
+
+
+def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
+    """Canonicalize only closed-vocabulary grammatical aliases.
+
+    The raw model value is returned separately for audit. We deliberately avoid
+    semantic synonym expansion: only direct inflectional variants are normalized.
+    """
+    if field != "stance" or not isinstance(value, str):
+        return value, None
+    raw = value
+    token = value.strip().casefold()
+    if token in STANCE_VALUES:
+        return token, None
+    normalized = STANCE_ALIASES.get(token)
+    return (normalized, raw) if normalized else (value, None)
+
+
+def _sanitize_touchup_output(proposed: str, source: str) -> str:
+    """Remove model-added outer wrappers without touching source punctuation."""
+    value = str(proposed or "").strip()
+    source_value = str(source or "").strip()
+    lines = value.splitlines()
+    source_lines = source_value.splitlines()
+    if len(lines) >= 3:
+        first, last = lines[0].strip(), lines[-1].strip()
+        source_first = source_lines[0].strip() if source_lines else ""
+        source_last = source_lines[-1].strip() if source_lines else ""
+        if first == "---" and last == "---" and not (source_first == "---" and source_last == "---"):
+            value = "\n".join(lines[1:-1]).strip()
+            lines = value.splitlines()
+        if len(lines) >= 3 and lines[0].strip().startswith("~~~") and lines[-1].strip() == "~~~":
+            if not (source_first.startswith("~~~") and source_last == "~~~"):
+                value = "\n".join(lines[1:-1]).strip()
+        if len(lines) >= 3 and lines[0].strip().startswith("```") and lines[-1].strip() == "```":
+            if not (source_first.startswith("```") and source_last == "```"):
+                value = "\n".join(lines[1:-1]).strip()
+    return value
 
 DISCOURSE_ROLE_DEFINITIONS = {
     "assertion": "The speaker directly advances a proposition as part of the argument.",
