@@ -2,8 +2,17 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 async function expectWcag2AA(page:any,include:string){
-  const results=await new AxeBuilder({page}).include(include).withTags(["wcag2a","wcag2aa"]).analyze();
-  expect(results.violations,JSON.stringify(results.violations,null,2)).toEqual([]);
+  await page.waitForTimeout(100);
+  for(let attempt=0;attempt<3;attempt+=1){
+    try{
+      const results=await new AxeBuilder({page}).include(include).withTags(["wcag2a","wcag2aa"]).analyze();
+      expect(results.violations,JSON.stringify(results.violations,null,2)).toEqual([]);
+      return;
+    }catch(error){
+      if(!String(error).includes("Axe is already running")||attempt===2)throw error;
+      await page.waitForTimeout(250);
+    }
+  }
 }
 async function expectNoHorizontalOverflow(locator:any){
   const metrics=await locator.evaluate((el:HTMLElement)=>({scrollWidth:el.scrollWidth,clientWidth:el.clientWidth}));
