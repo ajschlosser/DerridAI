@@ -22,7 +22,7 @@ mkdir -p .test-data/.home
 
 ## CI gates
 
-`.github/workflows/frontend.yml` runs six jobs; all must pass. Run them locally from the repository root unless noted.
+`.github/workflows/frontend.yml` runs five jobs (backend lint, backend types, frontend lint, backend, frontend); all must pass. Run them locally from the repository root unless noted.
 
 | Job | Command |
 | --- | --- |
