@@ -12,7 +12,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 - `api/app/` — FastAPI backend (Python 3.12). Key modules: `main.py` (routes), `corpus_builder.py` (PDF → records pipeline, very large), `chroma_store.py`, `rag.py`, `jobs.py` (background operations), `llm.py` / `llm_tools.py` (Ollama and OpenAI-compatible providers), `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py` (SQLite), `locales/` (`en_us.py`, `fr_ca.py`), `config.py` (env-driven settings).
 - `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (each with a `.stories.ts`), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (legacy feature renderers being migrated view by view), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
-- `tests/` — Python regression suite; one `test_NNNN_<release_name>.py` per release plus topical files, and `tests/fixtures/`.
+- `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
 - `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
 - `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics), `.github/workflows/frontend.yml` (CI).
