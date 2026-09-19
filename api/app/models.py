@@ -511,6 +511,9 @@ class PdfCorpusRecordSlice(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+class PdfCorpusBoundaryAdjudication(BaseModel):
+    direction: Literal["previous", "next"]
+
 
 class PdfCorpusProviderSwitch(BaseModel):
     provider_profile_id: str = Field(min_length=1, max_length=200)

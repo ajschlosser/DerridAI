@@ -10,9 +10,9 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 def test_release_version_and_name():
     package=json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.54.0"
-    assert 'version="0.54.0"' in (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert "# DerridAI Corpus Viewer 0.54.0" in README
+    assert package["version"] == "0.55.0"
+    assert 'version="0.55.0"' in (ROOT / "api/app/main.py").read_text(encoding="utf-8")
+    assert "# DerridAI Corpus Viewer 0.55.0" in README
     assert "0.36.11 — Peekaboo" in README
 
 def test_loaded_search_has_fixed_requested_columns_and_no_column_button():
