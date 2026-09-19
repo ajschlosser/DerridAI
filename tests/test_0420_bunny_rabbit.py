@@ -16,10 +16,10 @@ def text(path: str) -> str:
 
 
 def test_release_identity_and_legacy_profile_contract():
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v8"
+    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
-    assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v11"
+    assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v12"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert "0.59.0 — Serious Sandpipers" in text("README.md")
 
