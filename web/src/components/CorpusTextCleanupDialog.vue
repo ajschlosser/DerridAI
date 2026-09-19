@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { cleanupText, type TextCleanupRule } from '../domain/textCleanup';
 import { useI18nStore } from '../stores/i18n';
-import UiButton from './UiButton.vue';
+import UiButton from './ui/UiButton.vue';
 const props=defineProps<{text:string;recurringLines?:string[]} >();
 const emit=defineEmits<{apply:[text:string];close:[]}>();
 const i18n=useI18nStore();
