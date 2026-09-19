@@ -232,7 +232,7 @@ def _session_cookie(response: Response, token: str) -> None:
         token,
         max_age=14 * 24 * 60 * 60,
         httponly=True,
-        secure=False,
+        secure=settings.session_cookie_secure,
         samesite="lax",
         path="/",
     )

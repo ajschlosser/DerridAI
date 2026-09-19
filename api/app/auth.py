@@ -71,6 +71,8 @@ ADMIN_ONLY_CAPABILITIES = frozenset({
 SESSION_COOKIE = "derridai_session"
 PBKDF2_ITERATIONS = 600_000
 SESSION_DAYS = 14
+_DUMMY_PASSWORD_SALT = "00" * 24
+_DUMMY_PASSWORD_HASH = "00" * 32
 
 
 def _iso_now() -> str:
@@ -172,6 +174,14 @@ class AuthStore:
                     expires_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+                CREATE TABLE IF NOT EXISTS login_failures (
+                    username_key TEXT PRIMARY KEY,
+                    failures INTEGER NOT NULL DEFAULT 0,
+                    locked_until TEXT,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_login_failures_locked_until
+                    ON login_failures(locked_until);
                 CREATE TABLE IF NOT EXISTS role_permissions (
                     role TEXT NOT NULL,
                     capability TEXT NOT NULL,
@@ -353,14 +363,91 @@ class AuthStore:
         assert row is not None
         return self._row_user(row)
 
+    @staticmethod
+    def _login_key(username: str) -> str:
+        return username.strip().casefold()
+
+    @staticmethod
+    def _parse_auth_time(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _login_throttle_settings() -> tuple[int, int]:
+        limit = max(1, int(getattr(settings, "auth_login_max_failures", 5)))
+        seconds = max(1, int(getattr(settings, "auth_login_lockout_seconds", 300)))
+        return limit, seconds
+
     def authenticate(self, username: str, password: str) -> AuthUser | None:
-        with self._connect() as conn:
-            row = conn.execute(self._user_select("WHERE u.username=? COLLATE NOCASE"), (username.strip(),)).fetchone()
-            if row is None or not bool(row["active"]):
+        username_clean = username.strip()
+        username_key = self._login_key(username_clean)
+        limit, lockout_seconds = self._login_throttle_settings()
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        with self._lock, self._connect() as conn:
+            # Serialize failure-counter updates across AuthStore instances, not
+            # merely threads sharing this Python object.
+            conn.execute("BEGIN IMMEDIATE")
+            throttle = conn.execute(
+                "SELECT failures,locked_until FROM login_failures WHERE username_key=?",
+                (username_key,),
+            ).fetchone()
+            row = conn.execute(
+                self._user_select("WHERE u.username=? COLLATE NOCASE"),
+                (username_clean,),
+            ).fetchone()
+
+            # Spend the same PBKDF2 work for an unknown username as for a known
+            # account, avoiding a cheap username-existence timing distinction.
+            if row is None:
+                password_valid = _verify_password(
+                    password, _DUMMY_PASSWORD_SALT, _DUMMY_PASSWORD_HASH
+                )
+                password_valid = False
+            else:
+                password_valid = _verify_password(
+                    password, str(row["password_salt"]), str(row["password_hash"])
+                )
+                password_valid = password_valid and bool(row["active"])
+
+            locked_until = self._parse_auth_time(
+                str(throttle["locked_until"]) if throttle and throttle["locked_until"] else None
+            )
+            if locked_until is not None and locked_until > now_dt:
                 return None
-            if not _verify_password(password, str(row["password_salt"]), str(row["password_hash"])):
+
+            if not password_valid or row is None:
+                prior_failures = int(throttle["failures"] or 0) if throttle else 0
+                # An expired lock begins a fresh failure window.
+                if locked_until is not None and locked_until <= now_dt:
+                    prior_failures = 0
+                failures = prior_failures + 1
+                next_locked_until = (
+                    (now_dt + timedelta(seconds=lockout_seconds)).isoformat()
+                    if failures >= limit
+                    else None
+                )
+                conn.execute(
+                    """
+                    INSERT INTO login_failures(username_key,failures,locked_until,updated_at)
+                    VALUES(?,?,?,?)
+                    ON CONFLICT(username_key) DO UPDATE SET
+                        failures=excluded.failures,
+                        locked_until=excluded.locked_until,
+                        updated_at=excluded.updated_at
+                    """,
+                    (username_key, failures, next_locked_until, now),
+                )
                 return None
-            now = _iso_now()
+
+            conn.execute("DELETE FROM login_failures WHERE username_key=?", (username_key,))
             conn.execute(
                 "UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE id=?",
                 (now, int(row["id"])),
