@@ -32,11 +32,11 @@ def make_build(repo:cb.PdfCorpusRepository,count:int=2):
 
 
 def test_release_contract_is_v8_with_field_aware_metadata():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v11"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v8"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v11"
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==11
+    assert profile["version"]==12
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]
@@ -81,17 +81,18 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
         return {"metadata":{},"review_reason":""}
     monkeypatch.setattr(manager,"_chat_json",fake_chat)
     manager._enrich_record(record,{"main_text_start_page":1,"main_text_end_page":1},{"provider":"ollama","model":"test-model"},build_id=build["build_id"])
-    # Quizzical Quacker preserves both candidates but prefills the semantic LLM
-    # proposal for interpretive review. Region-type constraints then keep
-    # primary_text internally consistent with that proposed region.
-    assert record["region_type"]=="front_matter"
-    assert record["primary_text"] is False
+    # Testy Titmouse preserves reviewer-defined structure as the selected value
+    # while retaining the semantic reader's disagreement for explicit review.
+    assert record["region_type"]=="main_text"
+    assert record["primary_text"] is True
     assert record["metadata_field_status"]["primary_text"]["status"]=="unresolved"
     assert record["metadata_field_status"]["primary_text"]["reason_code"]=="deterministic_llm_disagreement"
     assert record["metadata_field_status"]["region_type"]["status"]=="unresolved"
     assert record["metadata_field_status"]["region_type"]["llm_corroborates"] is False
     assert record["metadata_field_status"]["region_type"]["deterministic_value"]=="main_text"
     assert record["metadata_field_status"]["region_type"]["llm_value"]=="front_matter"
+    assert record["metadata_field_status"]["region_type"]["prefilled_candidate"]=="deterministic"
+    assert record["metadata_field_status"]["region_type"]["llm_checked"] is True
 
 
 def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_path:Path):
