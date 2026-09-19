@@ -4,7 +4,7 @@ import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 
 const props=defineProps<{build:CorpusBuild;busy?:boolean}>();
-const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];editDocumentMetadata:[];publish:[]}>();
+const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];reviewRecords:[];reviewSource:[];restoreRejected:[];startNew:[];editDocumentMetadata:[];publish:[]}>();
 const i18n=useI18nStore();
 const readiness=computed(()=>props.build.publication_readiness||{});
 const summary=computed(()=>props.build.metadata_issue_summary||{});
@@ -13,22 +13,32 @@ const next=computed(()=>String(readiness.value.next_action||"inspect"));
 const blockers=computed(()=>readiness.value.blockers||[]);
 const validation=computed(()=>props.build.validation||{});
 const sourceQuality=computed(()=>props.build.source_quality||{});
+const noPublishable=computed(()=>Boolean(readiness.value.no_publishable_records));
 const primaryLabel=computed(()=>{
   if(publication.value)return i18n.t('pdf_corpus.download_jsonl','Download JSONL');
-  if(next.value==='resolve_metadata')return i18n.t('pdf_corpus.resolve_metadata_issues','Resolve metadata issues');
-  if(next.value==='resolve_rejections')return i18n.t('pdf_corpus.review_rejected_records','Review rejected records');
+  if(noPublishable.value)return i18n.t('pdf_corpus.return_to_review','Return to review');
+  if(next.value==='review_records')return i18n.t('pdf_corpus.continue_review','Continue review');
   if(next.value==='resolve_document_metadata')return i18n.t('pdf_corpus.edit_document_metadata','Edit document metadata');
   if(next.value==='resolve_validation')return i18n.t('pdf_corpus.review_validation_issues','Review validation issues');
   if(next.value==='publish')return i18n.t('pdf_corpus.publish_corpus','Publish corpus');
   return i18n.t('pdf_corpus.inspect_remaining_work','Inspect remaining work');
 });
 function act(){
-  if(next.value==='resolve_metadata')emit('reviewMetadata');
-  else if(next.value==='resolve_rejections')emit('reviewRejected');
+  if(noPublishable.value){emit('reviewRejected');return}
+  if(next.value==='review_records')emit('reviewRecords');
   else if(next.value==='resolve_document_metadata')emit('editDocumentMetadata');
+  else if(next.value==='resolve_validation')emit('reviewRecords');
   else if(next.value==='publish')emit('publish');
 }
 function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.${code||'unknown'}`,String(code||'unknown').replace(/_/g,' '))}
+
+function fixBlocker(code?:string){
+  const value=String(code||'');
+  if(value==='required_document_metadata')emit('editDocumentMetadata');
+  else if(value==='required_metadata'||value==='metadata_validation')emit('reviewMetadata');
+  else if(value==='source_quality'||value==='source_validation')emit('reviewSource');
+  else emit('reviewRecords');
+}
 </script>
 
 <template>
@@ -41,13 +51,15 @@ function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.
       </div>
       <div class="finish-primary">
         <a v-if="publication" class="btn primary" :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`">{{primaryLabel}}</a>
-        <button v-else type="button" class="btn primary" :disabled="busy||!['resolve_metadata','resolve_rejections','resolve_document_metadata','publish'].includes(next)" @click="act">{{primaryLabel}}</button>
+        <button v-else type="button" class="btn primary" :disabled="busy||(!noPublishable&&!['review_records','resolve_document_metadata','resolve_validation','publish'].includes(next))" @click="act">{{primaryLabel}}</button>
       </div>
     </header>
 
+    <section v-if="noPublishable" class="no-publishable" role="status" aria-labelledby="no-publishable-title"><div><span class="card-state">{{i18n.t('pdf_corpus.no_publishable_status','No publishable records')}}</span><h3 id="no-publishable-title">{{i18n.t('pdf_corpus.no_publishable_title','All records are currently rejected')}}</h3><p>{{i18n.t('pdf_corpus.no_publishable_help','Rejected records are excluded from metadata and publication requirements. Restore records to continue editing, or start a new build.')}}</p></div><div class="card-actions"><button type="button" class="btn primary" @click="emit('reviewRejected')">{{i18n.t('pdf_corpus.return_to_review','Return to review')}}</button><button type="button" class="btn" :disabled="busy" @click="emit('restoreRejected')">{{i18n.t('pdf_corpus.restore_all_rejected','Restore all rejected')}}</button><button type="button" class="btn" @click="emit('startNew')">{{i18n.t('pdf_corpus.start_new_build','Start another build')}}</button></div></section>
+
     <div v-if="readiness.missing_document_fields?.length" class="document-blocker" role="alert"><b>{{i18n.t('pdf_corpus.readiness_blocker.required_document_metadata','Required document metadata is missing')}}</b><span>{{readiness.missing_document_fields.map(field=>i18n.t(`record.${field}`,field.replace(/_/g,' '))).join(', ')}}</span></div>
 
-    <div class="finish-grid">
+    <div v-if="!noPublishable" class="finish-grid">
       <article class="finish-card" data-state="complete">
         <span class="card-state">{{i18n.t('pdf_corpus.complete','Complete')}}</span>
         <h3>{{i18n.t('pdf_corpus.record_review','Record review')}}</h3>
@@ -79,13 +91,13 @@ function blockerLabel(code?:string){return i18n.t(`pdf_corpus.readiness_blocker.
       </article>
     </div>
 
-    <details v-if="blockers.length" class="blockers">
+    <details v-if="blockers.length&&!noPublishable" class="blockers">
       <summary>{{i18n.tf('pdf_corpus.view_publication_blockers','View {count} publication blocker(s)',{count:blockers.length})}}</summary>
-      <ul><li v-for="(blocker,index) in blockers" :key="`${blocker.code}-${index}`"><b>{{blockerLabel(blocker.code)}}</b><span v-if="blocker.count"> · {{blocker.count}}</span></li></ul>
+      <ul><li v-for="(blocker,index) in blockers" :key="`${blocker.code}-${index}`"><span><b>{{blockerLabel(blocker.code)}}</b><span v-if="blocker.count"> · {{blocker.count}}</span></span><button type="button" class="link-action" @click="fixBlocker(blocker.code)">{{i18n.t('pdf_corpus.go_fix','Go fix')}}</button></li></ul>
     </details>
   </section>
 </template>
 
 <style scoped>
-.finish-workspace{display:grid;gap:16px;padding:18px;border:1px solid var(--line);border-radius:13px;background:var(--card)}.finish-head{display:flex;justify-content:space-between;gap:22px;align-items:flex-start}.finish-head h2{margin:3px 0 6px;font-size:20px}.finish-head p{margin:0;max-width:78ch;font-size:.8125rem;line-height:1.55;color:var(--muted)}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.finish-primary{display:flex;align-items:center}.document-blocker{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:11px 13px;border:1px solid #d9bf76;border-radius:9px;background:#fffaf0;color:#604300;font-size:.8125rem}.document-blocker span{color:var(--muted)}.finish-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.finish-card{display:grid;align-content:start;gap:9px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.finish-card[data-state="attention"]{background:#fffaf0;border-color:#d9bf76}.finish-card[data-state="ready"],.finish-card[data-state="complete"]{background:#edf8f1}.card-state{font-size:.8125rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800}.finish-card h3{margin:0;font-size:13px}.finish-card p{margin:0;font-size:.8125rem;line-height:1.48;color:var(--muted)}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}dl div{padding-inline-start:8px;border-inline-start:2px solid var(--line)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:2px 0 0;font-size:.8125rem;font-weight:800}.card-actions{display:flex;gap:7px;flex-wrap:wrap}.link-action{justify-self:start;border:0;background:transparent;color:var(--accent);padding:0;text-decoration:underline;font-size:.8125rem;cursor:pointer}.blockers{font-size:.8125rem}.blockers summary{cursor:pointer;font-weight:800}.blockers ul{margin:8px 0 0;padding-inline-start:20px;color:var(--muted)}@media(max-width:760px){.finish-head{display:grid}.finish-grid{grid-template-columns:1fr}.finish-primary .btn{width:100%}}
+.finish-workspace{display:grid;gap:16px;padding:18px;border:1px solid var(--line);border-radius:13px;background:var(--card)}.finish-head{display:flex;justify-content:space-between;gap:22px;align-items:flex-start}.finish-head h2{margin:3px 0 6px;font-size:20px}.finish-head p{margin:0;max-width:78ch;font-size:.8125rem;line-height:1.55;color:var(--muted)}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.finish-primary{display:flex;align-items:center}.no-publishable{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:16px;border:1px solid #d9bf76;border-radius:11px;background:#fffaf0}.no-publishable h3{margin:3px 0 5px;font-size:1rem}.no-publishable p{margin:0;max-width:72ch;font-size:.875rem;line-height:1.5;color:var(--muted)}.document-blocker{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:11px 13px;border:1px solid #d9bf76;border-radius:9px;background:#fffaf0;color:#604300;font-size:.8125rem}.document-blocker span{color:var(--muted)}.finish-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.finish-card{display:grid;align-content:start;gap:9px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.finish-card[data-state="attention"]{background:#fffaf0;border-color:#d9bf76}.finish-card[data-state="ready"],.finish-card[data-state="complete"]{background:#edf8f1}.card-state{font-size:.8125rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800}.finish-card h3{margin:0;font-size:13px}.finish-card p{margin:0;font-size:.8125rem;line-height:1.48;color:var(--muted)}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}dl div{padding-inline-start:8px;border-inline-start:2px solid var(--line)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:2px 0 0;font-size:.8125rem;font-weight:800}.card-actions{display:flex;gap:7px;flex-wrap:wrap}.link-action{justify-self:start;border:0;background:transparent;color:var(--accent);padding:0;text-decoration:underline;font-size:.8125rem;cursor:pointer}.blockers{font-size:.8125rem}.blockers summary{cursor:pointer;font-weight:800}.blockers ul{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:7px;color:var(--muted)}.blockers li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}@media(max-width:760px){.finish-head{display:grid}.finish-grid{grid-template-columns:1fr}.finish-primary .btn{width:100%}}
 </style>

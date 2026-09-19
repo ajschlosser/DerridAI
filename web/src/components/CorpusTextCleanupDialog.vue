@@ -3,14 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { cleanupText, type TextCleanupRule } from '../domain/textCleanup';
 import { useI18nStore } from '../stores/i18n';
 import UiButton from './ui/UiButton.vue';
-const props=defineProps<{text:string;recurringLines?:string[]} >();
+const props=defineProps<{text:string;recurringLines?:string[];documentTerms?:string[]} >();
 const emit=defineEmits<{apply:[text:string];close:[]}>();
 const i18n=useI18nStore();
 const selected=ref<Set<TextCleanupRule>>(new Set(['page_numbers','repeated_short_lines','line_hyphenation','paragraph_lines','empty_lines','ocr_artifacts','whitespace']));
 const title=ref<HTMLElement|null>(null);
 const dialog=ref<HTMLElement|null>(null);
 const priorActive=ref<HTMLElement|null>(null);
-const result=computed(()=>cleanupText(props.text,selected.value,props.recurringLines||[]));
+const result=computed(()=>cleanupText(props.text,selected.value,props.recurringLines||[],props.documentTerms||[]));
 const rules:Array<{key:TextCleanupRule;label:string;help:string}>=[
  {key:'page_numbers',label:'pdf_corpus.cleanup_page_numbers',help:'pdf_corpus.cleanup_page_numbers_help'},
  {key:'repeated_short_lines',label:'pdf_corpus.cleanup_repeated_lines',help:'pdf_corpus.cleanup_repeated_lines_help'},

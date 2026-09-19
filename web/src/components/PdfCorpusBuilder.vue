@@ -31,9 +31,12 @@ import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusProviderSwitcher from "./CorpusProviderSwitcher.vue";
 import CorpusLlmEffectivenessPanel from "./CorpusLlmEffectivenessPanel.vue";
+import CorpusEditorialMemoryDialog from "./CorpusEditorialMemoryDialog.vue";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
 import CorpusTextCleanupSummary from "./CorpusTextCleanupSummary.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
+import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
+import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -106,6 +109,13 @@ const editingText=ref(false);
 const bulkMetadataOpen=ref(false);
 const documentMetadataOpen=ref(false);
 const textCleanupOpen=ref(false);
+const jsonlPreviewOpen=ref(false);
+const jsonlPreview=ref<{jsonl:string;validation_errors:string[];unresolved_fields:string[];would_publish:boolean}>({jsonl:"",validation_errors:[],unresolved_fields:[],would_publish:false});
+const llmTouchupOpen=ref(false);
+const llmTouchupResult=ref<{source_text:string;proposed_text:string;changes:string[];warnings:string[];model:string}>({source_text:"",proposed_text:"",changes:[],warnings:[],model:""});
+const metadataEditorDirty=ref(false);
+const editorialMemoryOpen=ref(false);
+const editorialMemory=ref<{conventions:Record<string,{value:unknown;confirmed_records:number}>;examples:Record<string,Array<{record_id:string;value:unknown;similarity:number;excerpt:string}>>;reset_at?:string|null;convention_count:number;example_count:number}>({conventions:{},examples:{},convention_count:0,example_count:0});
 const bulkActionFeedback=ref("");
 const resolveSourceOnTextSave=ref(false);
 const enrichmentMode=ref<"fast"|"deep">("fast");
@@ -175,6 +185,7 @@ const visibleBlocks=computed(()=>{
   return sourceBlocks.value.filter(block=>ids.has(block.block_id));
 });
 const recurringCleanupLines=computed(()=>recurringShortLines(records.value.map(row=>String(row.text||"")),3));
+const cleanupDocumentTerms=computed(()=>[currentBuild.value?.manifest?.title,currentBuild.value?.manifest?.short_title,currentBuild.value?.manifest?.original_title].map(value=>String(value||"").trim()).filter(Boolean));
 const metadataComplete=computed(()=>Number(currentBuild.value?.metadata_total||0)===0||Number(currentBuild.value?.metadata_completed||0)>=Number(currentBuild.value?.metadata_total||0));
 const canPublish=computed(()=>Boolean(currentBuild.value?.publication_readiness?.can_publish));
 const selectedRecordIndex=computed(()=>records.value.findIndex(row=>row.record_id===selectedRecordId.value));
@@ -412,10 +423,15 @@ async function refreshRecords(reset=false, preferredId=""){
     if(requestId!==recordRequestSerial)return;
     records.value=result.items;recordTotal.value=result.total;reviewHydrated.value=true;if(result.total>0||expected===0)hydratedTopologyCount.value=Math.max(hydratedTopologyCount.value,expected,result.total);
     const wanted=preferredId||selectedRecordId.value;const match=wanted?records.value.find(row=>row.record_id===wanted):undefined;
-    if(match){selectRecord(match);return}
-    if(editingText.value&&selectedRecord.value&&selectedRecordId.value===wanted){return}
-    if(records.value[0]){selectRecord(records.value[0]);return}
-    if(!editingText.value){selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[]}
+    const preserveDraft=Boolean(selectedRecord.value&&selectedRecordId.value===wanted&&(editingText.value||metadataEditorDirty.value));
+    if(match&&!preserveDraft){selectRecord(match);return}
+    if(match&&preserveDraft){return}
+    // Background queue growth/filter churn must never replace the record the
+    // reviewer is actively working on. Explicit queue/search navigation clears
+    // selectedRecordId before calling refreshRecords.
+    if(selectedRecord.value&&selectedRecordId.value===wanted){return}
+    if(records.value[0]&&!selectedRecordId.value){selectRecord(records.value[0]);return}
+    if(!editingText.value&&!metadataEditorDirty.value&&!selectedRecordId.value){selectedRecord.value=null;sourceBlocks.value=[]}
   }catch(exc){
     reviewHydrated.value=true;setMessage(exc instanceof Error?exc.message:String(exc),"error");
   }finally{if(requestId===recordRequestSerial)recordsLoading.value=false}
@@ -477,6 +493,7 @@ function selectRecord(record:CorpusRecord){
   const viewport=captureReviewViewport();
   const sameRecord=selectedRecordId.value===record.record_id;
   const preserveActiveDraft=sameRecord&&editingText.value;
+  if(!sameRecord)metadataEditorDirty.value=false;
   selectedRecordId.value=record.record_id;selectedRecord.value=record;selectedEvidenceField.value="";selectedPdfPage.value=Number(record.pdf_pages?.[0]||1);reviewInspectorTab.value=selectedMetadataBlocked.value?"metadata":reviewInspectorTab.value;
   if(!preserveActiveDraft){
     let saved="";try{saved=localStorage.getItem(textDraftKey(selectedBuildId.value,record.record_id))||""}catch{}
@@ -524,6 +541,9 @@ async function openMetadataIssueQueue(){
   await nextTick();recordListEl.value?.focus({preventScroll:true});
 }
 async function openRejectedQueue(){reviewQueue.value="rejected";recordQuery.value="";await nextTick();await refreshRecords(true);await nextTick();recordListEl.value?.focus({preventScroll:true})}
+async function openAllReviewQueue(){reviewQueue.value="all";recordQuery.value="";await nextTick();await refreshRecords(true);await nextTick();recordListEl.value?.focus({preventScroll:true})}
+async function openSourceIssueQueue(){reviewQueue.value="source";recordQuery.value="";await nextTick();await refreshRecords(true);await nextTick();recordListEl.value?.focus({preventScroll:true})}
+async function restoreAllRejected(){if(!currentBuild.value)return;busy.value="bulk-restore";try{const result=await pdfCorpusApi.bulkDisposition(currentBuild.value.build_id,"pending","rejected","");await refreshBuild();reviewQueue.value="all";recordQuery.value="";selectedRecordId.value="";selectedRecord.value=null;await nextTick();await refreshRecords(true);setMessage(i18n.tf("pdf_corpus.restored_rejected_count","Restored {count} rejected record(s) to review.",{count:result.changed}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function confirmManifest(){if(!currentBuild.value)return;busy.value="manifest";try{currentBuild.value=await pdfCorpusApi.confirmManifest(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.manifest_confirmed","Document manifest confirmed. Semantic segmentation has started."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 function startPolling(){
   stopPolling();
@@ -533,13 +553,13 @@ function startPolling(){
     // Deterministic records are persisted before metadata enrichment. Hydrate the
     // review workspace as soon as topology exists instead of waiting for a form
     // interaction or for the entire build to stop.
-    if(Number(currentBuild.value?.record_count||0)>hydratedTopologyCount.value){await nextTick();await refreshRecords(true)}
+    if(Number(currentBuild.value?.record_count||0)>hydratedTopologyCount.value){await nextTick();await refreshRecords(false,selectedRecordId.value)}
     const enriched=Number(currentBuild.value?.metadata_enriched_count||0);
     if(currentBuild.value?.stage==="enriching"&&enriched>hydratedMetadataCount.value){
       hydratedMetadataCount.value=enriched;
       await nextTick();await refreshRecords(false,selectedRecordId.value);
     }
-    if(!buildRunning.value){stopPolling();await refreshBuilds();await refreshRecords(true)}
+    if(!buildRunning.value){stopPolling();await refreshBuilds();await refreshRecords(false,selectedRecordId.value)}
   },1400)
 }
 function stopPolling(){if(pollTimer!==undefined){clearInterval(pollTimer);pollTimer=undefined}}
@@ -685,7 +705,7 @@ async function resolveMetadataField(field:string,value:unknown){
     if(result.queue_counts)currentBuild.value.review_queue_counts=result.queue_counts;
     metadataDraft.value=JSON.stringify(recordMetadata(result.record),null,2);
     const idx=records.value.findIndex(row=>row.record_id===recordId);if(idx>=0)records.value.splice(idx,1,result.record);
-    metadataSavedField.value=field;
+    metadataSavedField.value=field;metadataEditorDirty.value=false;
     const remaining=result.remaining_fields||[];
     if(remaining.length===0){
       // Keep the resolved record on screen even if the active exception queue no
@@ -707,10 +727,28 @@ async function resolveMetadataSuggestions(changes:Record<string,unknown>){
   try{
     const row=await pdfCorpusApi.patchMetadata(currentBuild.value.build_id,selectedRecord.value.record_id,changes,Number(selectedRecord.value.record_revision||1));
     selectedRecord.value=row;const idx=records.value.findIndex(item=>item.record_id===row.record_id);if(idx>=0)records.value.splice(idx,1,row);
-    metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);await refreshBuild();await restoreReviewViewport(viewport,{inspector:true});
+    metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);metadataEditorDirty.value=false;await refreshBuild();await restoreReviewViewport(viewport,{inspector:true});
     setMessage(i18n.tf("pdf_corpus.llm_suggestions_saved","Saved {count} LLM suggestion(s) as human-confirmed metadata.",{count:Object.keys(changes).length}));
   }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
+
+async function openEditorialMemory(){if(!currentBuild.value)return;busy.value="editorial-memory";try{editorialMemory.value=await pdfCorpusApi.editorialMemory(currentBuild.value.build_id);editorialMemoryOpen.value=true}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function resetEditorialMemory(){if(!currentBuild.value)return;busy.value="editorial-memory";try{editorialMemory.value=await pdfCorpusApi.resetEditorialMemory(currentBuild.value.build_id);setMessage(i18n.t('pdf_corpus.editorial_memory_reset_done','Editorial memory reset. Existing human decisions remain authoritative, but only later decisions will guide future LLM calls.'))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+
+async function openJsonlPreview(){
+  if(!currentBuild.value||!selectedRecord.value)return;
+  busy.value="preview";
+  try{const result=await pdfCorpusApi.previewRecord(currentBuild.value.build_id,selectedRecord.value.record_id);jsonlPreview.value={jsonl:result.jsonl,validation_errors:result.validation_errors||[],unresolved_fields:result.unresolved_fields||[],would_publish:Boolean(result.would_publish)};jsonlPreviewOpen.value=true}
+  catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
+async function runLlmTouchup(instructions=""){
+  if(!currentBuild.value||!selectedRecord.value)return;
+  busy.value="text-touchup";llmTouchupOpen.value=true;
+  try{const result=await pdfCorpusApi.touchupText(currentBuild.value.build_id,selectedRecord.value.record_id,{...providerPayload.value,instructions,text:textDraft.value||selectedRecord.value.text});llmTouchupResult.value={source_text:result.source_text,proposed_text:result.proposed_text,changes:result.changes||[],warnings:result.warnings||[],model:result.model||""}}
+  catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
+function applyLlmTouchup(text:string){textDraft.value=text;editingText.value=true;llmTouchupOpen.value=false;setMessage(i18n.t("pdf_corpus.llm_touchup_applied","LLM touch-up applied to the local draft. Review it, then save to make it authoritative."))}
+function handleMetadataDirty(value:boolean){metadataEditorDirty.value=value}
 
 function showMetadataSource(field:string){selectedEvidenceField.value=field;reviewInspectorTab.value="source";const ids=selectedRecord.value?.metadata_evidence?.[field]?.block_ids||[];const first=sourceBlocks.value.find(block=>ids.includes(block.block_id));if(first)selectedPdfPage.value=Number(first.page||selectedPdfPage.value)}
 
@@ -738,7 +776,7 @@ async function nextPage(){if(recordOffset.value+pageSize>=recordTotal.value)retu
 
 function reviewShortcut(event:KeyboardEvent){if(!selectedRecord.value||busy.value)return;const target=event.target as HTMLElement|null;if(target&&["INPUT","TEXTAREA","SELECT"].includes(target.tagName))return;if(event.key.toLowerCase()==="a"){event.preventDefault();void attemptAccept()}else if(event.key.toLowerCase()==="r"){event.preventDefault();void setDisposition("rejected")}else if(event.key.toLowerCase()==="z"){event.preventDefault();void undoReview()}else if(event.key.toLowerCase()==="j"||event.key==="ArrowDown"){event.preventDefault();void skipRecord()}else if(event.key.toLowerCase()==="f"){event.preventDefault();focusView.value=!focusView.value}}
 watch(selectedProviderId,(profileId)=>{if(!profileId)return;const payload=directProfilePayload(profileId);if(payload?.generation&&typeof payload.generation==="object")generationOverrides.value={...(payload.generation as Record<string,unknown>)};const profile=providerProfiles.value.find(item=>item.id===profileId);maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(profile?.max_concurrent_requests||payload?.max_concurrent_requests||1)))});
-watch([reviewQueue,recordQuery],()=>{void refreshRecords(true)});
+watch([reviewQueue,recordQuery],()=>{selectedRecordId.value="";selectedRecord.value=null;metadataEditorDirty.value=false;editingText.value=false;void refreshRecords(true)});
 watch(selectedEvidenceField,(field)=>{
   if(!field||!selectedRecord.value)return;
   const ids=selectedRecord.value.metadata_evidence?.[field]?.block_ids||[];
@@ -888,7 +926,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusQualitySummary v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
 
           <CorpusBuildStageNotice v-if="buildRunning && !hasRecordTopology" :stage="currentBuild.stage" />
-          <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @edit-document-metadata="documentMetadataOpen=true" @publish="publish({download:false})" />
+          <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @review-records="openAllReviewQueue" @review-source="openSourceIssueQueue" @restore-rejected="restoreAllRejected" @start-new="startNewBuildSetup" @edit-document-metadata="documentMetadataOpen=true" @publish="publish({download:false})" />
           <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataFieldIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
           <CorpusBuildTimeline v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
           <details v-if="!showReviewWorkspace||finishPhase" class="technical-details">
@@ -922,7 +960,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
-          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" />
+          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
 
           <CorpusReviewSessionBar v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="openFocusView" />
 
@@ -954,7 +992,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <header class="record-review-head"><div><span class="eyebrow">{{i18n.t('pdf_corpus.proposed_record','Proposed record')}}</span><h3 id="review-record-title">{{selectedRecord.record_id}}</h3><p>{{i18n.t('pdf_corpus.pages','pp.')}} {{selectedRecord.page_start}}–{{selectedRecord.page_end}} · {{selectedRecord.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</p></div><button type="button" class="btn small" @click="openFocusView">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></header>
                 <CorpusSourceIssuePanel v-if="selectedRecord.source_quality_issues?.length" :issues="selectedRecord.source_quality_issues" interactive @edit-text="beginTextEdit" @open-source="reviewInspectorTab='source'" />
                 <aside v-else-if="selectedRecord.review_reason&&selectedRecord.review_reason.toLowerCase()!=='pending human review.'" class="review-reason" role="note"><b>{{recordIssueKinds(selectedRecord).length?recordIssueKinds(selectedRecord).map(kind=>i18n.t(`pdf_corpus.record_state.${kind}`,kind)).join(' · '):i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
-                <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label><div><span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span><button type="button" class="btn" @click="cancelTextEdit">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" @click="saveReviewedText()" :disabled="busy!==''||!textDraft.trim()">{{busy==='text'?i18n.t('ui.saving','Saving…'):i18n.t('pdf_corpus.save_and_mark_reviewed','Save & mark reviewed')}}</button></div></div></section>
+                <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button type="button" class="btn small" @click="openJsonlPreview" :disabled="busy!==''">{{i18n.t('pdf_corpus.preview_jsonl','Preview JSONL')}}</button><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="editingText" type="button" class="btn small" @click="llmTouchupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.llm_touchup','LLM touch-up')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label><div><span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span><button type="button" class="btn" @click="cancelTextEdit">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" @click="saveReviewedText()" :disabled="busy!==''||!textDraft.trim()">{{busy==='text'?i18n.t('ui.saving','Saving…'):i18n.t('pdf_corpus.save_and_mark_reviewed','Save & mark reviewed')}}</button></div></div></section>
                 <p v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker" role="status"><b>{{i18n.t('pdf_corpus.metadata_decision_required','Metadata decision required')}}</b> {{i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields','Confirm {fields} before accepting this record.',{fields:selectedMetadataBlockingLabel})}}</p>
                 <div class="decision-bar" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')"><div class="structural-actions"><button type="button" class="btn small" @click="merge('previous')" :disabled="busy!==''||structuralReviewLocked||!canMergePrevious">{{i18n.t('pdf_corpus.merge_previous','Merge previous')}}</button><button type="button" class="btn small" @click="merge('next')" :disabled="busy!==''||structuralReviewLocked||!canMergeNext">{{i18n.t('pdf_corpus.merge_next','Merge next')}}</button><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''||structuralReviewLocked">{{i18n.t('pdf_corpus.undo','Undo')}}</button></div><div class="decision-actions"><button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button><button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button><button ref="acceptButtonEl" type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''||reviewLocked" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button></div></div>
               </template>
@@ -968,9 +1006,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <button id="review-tab-source" data-review-tab="source" type="button" role="tab" aria-controls="review-panel-source" :aria-selected="reviewInspectorTab==='source'" :tabindex="reviewInspectorTab==='source'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='source'">{{i18n.t('pdf_corpus.source_tab','Source')}}</button>
               </div>
               <section v-if="selectedRecord&&reviewInspectorTab==='metadata'" id="review-panel-metadata" class="review-inspector-panel" role="tabpanel" aria-labelledby="review-tab-metadata" tabindex="0">
-                <CorpusMetadataResolutionPanel :record="selectedRecord" :region-types="regionTypes" :discourse-roles="discourseRoles" :busy="busy!==''||reviewLocked" :saving-field="metadataSavingField" :saved-field="metadataSavedField" @resolve="resolveMetadataField" @resolve-many="resolveMetadataSuggestions" @source="showMetadataSource" />
+                <CorpusMetadataResolutionPanel :record="selectedRecord" :region-types="regionTypes" :discourse-roles="discourseRoles" :busy="busy!==''||reviewLocked" :saving-field="metadataSavingField" :saved-field="metadataSavedField" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" @resolve="resolveMetadataField" @resolve-many="resolveMetadataSuggestions" @source="showMetadataSource" @dirty="handleMetadataDirty" />
                 <section v-if="currentBuild?.manifest" class="document-metadata-launch"><div><b>{{i18n.t('pdf_corpus.document_metadata_defaults','Document metadata defaults')}}</b><span>{{i18n.t('pdf_corpus.document_metadata_defaults_help','Edit inherited bibliographic defaults in a dedicated workspace. Record-level overrides remain untouched.')}}</span></div><button type="button" class="btn" :disabled="busy!==''" @click="documentMetadataOpen=true">{{i18n.t('pdf_corpus.edit_document_metadata','Edit document metadata')}}</button></section>
-                <details class="record-data"><summary>{{i18n.t('pdf_corpus.advanced_metadata','Advanced metadata')}}</summary><p class="help">{{i18n.t('pdf_corpus.metadata_help','Typed controls above are preferred. This advanced editor is for supported interpretive metadata only; source-bound fields remain protected.')}}</p><label class="sr-only" for="pdf-corpus-metadata">{{i18n.t('pdf_corpus.interpretive_metadata','Interpretive metadata')}}</label><textarea id="pdf-corpus-metadata" v-model="metadataDraft" class="metadata-json" spellcheck="false"></textarea><div class="data-actions"><button type="button" class="btn small" @click="saveMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.save_metadata','Save metadata')}}</button><label class="rerun-family"><span>{{i18n.t('pdf_corpus.rerun_family','Rerun')}}</span><select v-model="metadataRerunFamily" class="control small"><option value="all">{{i18n.t('pdf_corpus.metadata_family.all','All metadata families')}}</option><option value="discourse">{{i18n.t('pdf_corpus.metadata_family.discourse','Discourse / attribution')}}</option><option value="quotation">{{i18n.t('pdf_corpus.metadata_family.quotation','Quotation relations')}}</option><option value="indexing">{{i18n.t('pdf_corpus.metadata_family.indexing','Semantic indexing')}}</option></select></label><button type="button" class="btn small" @click="rerunMetadata()" :disabled="busy!==''">{{i18n.t('pdf_corpus.rerun_metadata','Rerun metadata')}}</button></div></details>
+                <details class="record-data"><summary>{{i18n.t('pdf_corpus.advanced_metadata','Advanced metadata')}}</summary><p class="help">{{i18n.t('pdf_corpus.metadata_help','Typed controls above are preferred. This advanced editor is for supported interpretive metadata only; source-bound fields remain protected.')}}</p><label class="sr-only" for="pdf-corpus-metadata">{{i18n.t('pdf_corpus.interpretive_metadata','Interpretive metadata')}}</label><textarea id="pdf-corpus-metadata" v-model="metadataDraft" class="metadata-json" spellcheck="false" @input="metadataEditorDirty=true"></textarea><div class="data-actions"><button type="button" class="btn small" @click="saveMetadata" :disabled="busy!==''">{{i18n.t('pdf_corpus.save_metadata','Save metadata')}}</button><label class="rerun-family"><span>{{i18n.t('pdf_corpus.rerun_family','Rerun')}}</span><select v-model="metadataRerunFamily" class="control small"><option value="all">{{i18n.t('pdf_corpus.metadata_family.all','All metadata families')}}</option><option value="discourse">{{i18n.t('pdf_corpus.metadata_family.discourse','Discourse / attribution')}}</option><option value="quotation">{{i18n.t('pdf_corpus.metadata_family.quotation','Quotation relations')}}</option><option value="indexing">{{i18n.t('pdf_corpus.metadata_family.indexing','Semantic indexing')}}</option></select></label><button type="button" class="btn small" @click="rerunMetadata()" :disabled="busy!==''">{{i18n.t('pdf_corpus.rerun_metadata','Rerun metadata')}}</button></div></details>
               </section>
               <section v-else-if="selectedRecord&&reviewInspectorTab==='evidence'" id="review-panel-evidence" class="review-inspector-panel" role="tabpanel" aria-labelledby="review-tab-evidence" tabindex="0">
                 <p class="inspector-help">{{i18n.t('pdf_corpus.evidence_review_help','Select a metadata field to inspect or adjust its source-block evidence.')}}</p>
@@ -994,8 +1032,11 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
     <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" :affected-records="Number(currentBuild.record_count||0)" @save="saveManifest" @close="documentMetadataOpen=false" />
 
-    <CorpusTextCleanupDialog v-if="textCleanupOpen&&selectedRecord" :text="textDraft" :recurring-lines="recurringCleanupLines" @close="textCleanupOpen=false" @apply="value=>{textDraft=value;textCleanupOpen=false;setMessage(i18n.t('pdf_corpus.cleanup_applied_draft','Cleanup applied to the reviewed-text draft. Save to persist it.'))}" />
-    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" :can-history-back="focusHistoryIndex>0" :can-history-forward="focusHistoryIndex>=0&&focusHistoryIndex<focusHistory.length-1" :can-previous-record="selectedRecordIndex>0||recordOffset>0" :can-next-record="selectedRecordIndex>=0&&(selectedRecordIndex<records.length-1||recordOffset+pageSize<recordTotal)" @close="focusView=false" @history-back="focusHistoryMove(-1)" @history-forward="focusHistoryMove(1)" @previous-record="focusQueueMove(-1)" @next-record="focusQueueMove(1)" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
+    <CorpusTextCleanupDialog v-if="textCleanupOpen&&selectedRecord" :text="textDraft" :recurring-lines="recurringCleanupLines" :document-terms="cleanupDocumentTerms" @close="textCleanupOpen=false" @apply="value=>{textDraft=value;textCleanupOpen=false;setMessage(i18n.t('pdf_corpus.cleanup_applied_draft','Cleanup applied to the reviewed-text draft. Save to persist it.'))}" />
+    <CorpusEditorialMemoryDialog :open="editorialMemoryOpen" :memory="editorialMemory" :busy="busy==='editorial-memory'" @close="editorialMemoryOpen=false" @reset="resetEditorialMemory" />
+    <CorpusJsonlPreviewDialog :open="jsonlPreviewOpen" :jsonl="jsonlPreview.jsonl" :validation-errors="jsonlPreview.validation_errors" :unresolved-fields="jsonlPreview.unresolved_fields" :would-publish="jsonlPreview.would_publish" :busy="busy!==''" @close="jsonlPreviewOpen=false" />
+    <CorpusLlmTextTouchupDialog :open="llmTouchupOpen" :source-text="textDraft||selectedRecord?.text||''" :proposed-text="llmTouchupResult.proposed_text" :changes="llmTouchupResult.changes" :warnings="llmTouchupResult.warnings" :model="llmTouchupResult.model" :busy="busy==='text-touchup'" @close="llmTouchupOpen=false" @run="runLlmTouchup" @apply="applyLlmTouchup" />
+    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" :document-terms="cleanupDocumentTerms" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :can-history-back="focusHistoryIndex>0" :can-history-forward="focusHistoryIndex>=0&&focusHistoryIndex<focusHistory.length-1" :can-previous-record="selectedRecordIndex>0||recordOffset>0" :can-next-record="selectedRecordIndex>=0&&(selectedRecordIndex<records.length-1||recordOffset+pageSize<recordTotal)" @close="focusView=false" @history-back="focusHistoryMove(-1)" @history-forward="focusHistoryMove(1)" @previous-record="focusQueueMove(-1)" @next-record="focusQueueMove(1)" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @metadata-dirty="handleMetadataDirty" @preview-jsonl="openJsonlPreview" @llm-touchup="text=>{textDraft=text;editingText=true;llmTouchupOpen=true}" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
   </section>
 </template>
 

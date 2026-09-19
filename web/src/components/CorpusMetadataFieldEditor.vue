@@ -6,9 +6,9 @@ import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
   boolean?:boolean; number?:boolean; array?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
-  constraint?:{value:unknown;reason:string}|null;
+  constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
 }>();
-const emit=defineEmits<{save:[value:unknown];source:[]}>();
+const emit=defineEmits<{save:[value:unknown];source:[];dirty:[dirty:boolean]}>();
 const i18n=useI18nStore();
 const editing=ref(Boolean(props.open));
 const draft=ref<unknown>("");
@@ -17,8 +17,10 @@ const isLlm=computed(()=>String(props.status?.method||'').includes('llm')&&props
 function editableValue(){const value=props.constraint?.value ?? props.value;return Array.isArray(value)?value.join(', '):value??''}
 watch(()=>[props.field,props.value,props.constraint?.value],()=>{draft.value=editableValue()},{immediate:true});
 watch(()=>props.open,value=>{if(value)editing.value=true});
+watch(isLlm,value=>{if(value)editing.value=true},{immediate:true});
 function normalized(){if(props.array)return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);if(props.number&&draft.value!=="")return Number(draft.value);return draft.value}
-function save(){emit('save',normalized());editing.value=true}
+function save(){emit('save',normalized());emit('dirty',false);editing.value=true}
+function markDirty(){emit('dirty',true)}
 function display(value:unknown){if(value===true)return i18n.t('ui.yes','Yes');if(value===false)return i18n.t('ui.no','No');if(Array.isArray(value))return value.join(', ')||'—';return value===null||value===undefined||value===''?'—':String(value)}
 const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.confidence_not_reported','Confidence not reported'):i18n.tf('pdf_corpus.confidence_percent','Confidence: {percent}%',{percent:Math.round(confidence.value*100)}));
 </script>
@@ -27,22 +29,23 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
 <article class="metadata-field" :data-attention="status?.status==='unresolved'||status?.status==='invalid'?'true':'false'">
   <div class="field-topline">
     <div class="field-name"><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')"/></div>
-    <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
+    <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing;if(!editing)emit('dirty',false)">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
   </div>
   <div v-if="!editing" class="field-current">{{display(value)}}</div>
   <div v-else class="field-editor">
     <p v-if="status?.reason" class="field-reason">{{status.reason}}</p>
     <div v-if="constraint" class="constraint" role="status"><b>{{i18n.t('pdf_corpus.deterministic_suggestion','Deterministic rule')}}</b><span>{{constraint.reason}}</span></div>
     <div class="editor-row">
-      <select v-if="options?.length" v-model="draft" class="control"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
-      <fieldset v-else-if="boolean" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
-      <input v-else v-model="draft" class="control" :type="number?'number':'text'" :aria-label="i18n.t(`record.${field}`,field)">
+      <select v-if="options?.length" v-model="draft" class="control" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
+      <fieldset v-else-if="boolean" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
+      <input v-else v-model="draft" class="control" :type="number?'number':'text'" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty">
       <button type="button" class="btn primary" :disabled="busy||draft===''||draft===undefined||(required&&draft===null)" @click="save">{{saving?i18n.t('pdf_corpus.saving_decision','Saving…'):i18n.t('pdf_corpus.save_field_value','Save value')}}</button>
       <button v-if="!required" type="button" class="btn" :disabled="busy" @click="emit('save',null)">{{i18n.t('pdf_corpus.confirm_no_value','No supported value')}}</button>
     </div>
     <div class="field-meta">
       <span v-if="isLlm" class="proposal">{{i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
       <span>{{confidenceLabel}}</span>
+      <span v-if="calibratedAcceptance&&calibratedAcceptance.reviewed>=3">{{i18n.tf('pdf_corpus.calibrated_acceptance','Historically accepted {percent}% of the time ({count} reviews)',{percent:Math.round(calibratedAcceptance.acceptanceRate*100),count:calibratedAcceptance.reviewed})}}</span>
       <span v-if="saved" class="saved" role="status">{{i18n.t('pdf_corpus.decision_saved_editable','Saved — you can keep editing this value')}}</span>
     </div>
   </div>

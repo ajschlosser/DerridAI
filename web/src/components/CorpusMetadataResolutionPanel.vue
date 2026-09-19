@@ -6,8 +6,8 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 
-const props=defineProps<{record:CorpusRecord;regionTypes:string[];discourseRoles:string[];busy?:boolean;savingField?:string;savedField?:string}>();
-const emit=defineEmits<{resolve:[field:string,value:unknown];resolveMany:[changes:Record<string,unknown>];source:[field:string]}>
+const props=defineProps<{record:CorpusRecord;regionTypes:string[];discourseRoles:string[];busy?:boolean;savingField?:string;savedField?:string;confidenceCalibration?:Record<string,Record<string,Record<string,number>>>}>();
+const emit=defineEmits<{resolve:[field:string,value:unknown];resolveMany:[changes:Record<string,unknown>];source:[field:string];dirty:[dirty:boolean]}>
 ();
 const i18n=useI18nStore();
 const requiredFields=new Set(["region_type","primary_text","discourse_role"]);
@@ -28,6 +28,12 @@ const llmSuggestionCount=computed(()=>Object.keys(llmSuggestions.value).length);
 function status(field:string){return (props.record.metadata_field_status?.[field]||{}) as Record<string,unknown>}
 function options(field:string){if(field==='region_type')return props.regionTypes;if(field==='discourse_role')return props.discourseRoles;return []}
 function constraint(field:string){const item=constraints.value.find(row=>row.field===field);return item?{value:item.value,reason:i18n.t(item.reasonKey,item.reasonKey)}:null}
+
+function calibrated(field:string){
+  const info=status(field); const confidence=typeof info.confidence==='number'?Number(info.confidence):null; if(confidence===null)return null;
+  const band=confidence>=0.85?'high':confidence>=0.65?'medium':'low'; const row=props.confidenceCalibration?.[field]?.[band];
+  return row&&Number(row.reviewed||0)>0?{reviewed:Number(row.reviewed||0),acceptanceRate:Number(row.acceptance_rate||0)}:null;
+}
 function displayValue(field:string){const value=props.record[field];if(value===true)return i18n.t('ui.yes','Yes');if(value===false)return i18n.t('ui.no','No');if(Array.isArray(value))return value.join(', ')||'—';return value===null||value===undefined||value===''?'—':String(value)}
 </script>
 
@@ -38,7 +44,7 @@ function displayValue(field:string){const value=props.record[field];if(value===t
   <div v-if="llmSuggestionCount" class="suggestion-toolbar"><div><b>{{i18n.tf('pdf_corpus.llm_suggestions_ready','{count} LLM suggestion(s) ready',{count:llmSuggestionCount})}}</b><span>{{i18n.t('pdf_corpus.llm_suggestions_ready_help','Suggestions are already filled into their controls. Confirm them individually or save all current suggestions at once.')}}</span></div><button type="button" class="btn primary" :disabled="busy" @click="emit('resolveMany',llmSuggestions)">{{i18n.t('pdf_corpus.accept_all_suggestions','Save all suggestions')}}</button></div>
 
   <div v-if="activeFields.length" class="metadata-grid" role="list">
-    <CorpusMetadataFieldEditor v-for="field in activeFields" :key="field" :field="field" :value="record[field]" :status="status(field)" :options="options(field)" :required="requiredFields.has(field)" :boolean="booleanFields.has(field)" :number="numberFields.has(field)" :array="arrayFields.has(field)" :busy="busy" :saving="savingField===field" :saved="savedField===field" :constraint="constraint(field)" :open="unresolved.has(field)" @save="value=>emit('resolve',field,value)" @source="emit('source',field)"/>
+    <CorpusMetadataFieldEditor v-for="field in activeFields" :key="field" :field="field" :value="record[field]" :status="status(field)" :options="options(field)" :required="requiredFields.has(field)" :boolean="booleanFields.has(field)" :number="numberFields.has(field)" :array="arrayFields.has(field)" :busy="busy" :saving="savingField===field" :saved="savedField===field" :constraint="constraint(field)" :calibrated-acceptance="calibrated(field)" :open="unresolved.has(field)" @save="value=>emit('resolve',field,value)" @source="emit('source',field)" @dirty="value=>emit('dirty',value)"/>
   </div>
 
   <details v-if="inheritedFields.length" class="inherited-metadata"><summary>{{i18n.t('pdf_corpus.inherited_metadata_section','Inherited document metadata')}} <span>{{inheritedFields.length}}</span></summary><p>{{i18n.t('pdf_corpus.inherited_metadata_help','These values come from the document manifest. Override only when this record legitimately differs from the document default.')}}</p><div class="inherited-grid" role="list"><article v-for="field in inheritedFields" :key="field" class="inherited-row" role="listitem"><div><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status(field).status||'inherited')" :method="String(status(field).method||'manifest')"/></div><span>{{displayValue(field)}}</span><button type="button" class="link-button" @click="emit('source',field)">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button></article></div></details>
