@@ -22,6 +22,7 @@ import fitz
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .config import APP_VERSION, settings
+from .corpus_pipeline import BuildScope
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
     ALLOWED_METADATA_FIELDS as ALLOWED_METADATA_FIELDS,
@@ -4505,414 +4506,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         }
 
     def _run(self, build_id: str, request: dict[str, Any], resume: bool = False) -> None:
+        """Coordinate checkpointed stages; retain failure/cancellation recovery at one boundary."""
         try:
-            build = self._update(
-                build_id,
-                status="running",
-                stage="resuming" if resume else "structure",
-                progress=max(float(self.repo.get_build(build_id).get("progress") or 0.0), 0.03),
-                started_at=self.repo.get_build(build_id).get("started_at") or iso_now(),
-                finished_at=None,
-                error=None,
-                resumable=True,
-            )
-            asset = self.repo.get_asset(build["asset_id"])
-            all_blocks = self.repo.load_blocks(build["asset_id"])
-            blocks = [block for block in all_blocks if not block.get("excluded_reason")]
-            if not blocks:
-                raise ValueError("No source text blocks were extracted from the PDF. Check OCR support and extraction warnings.")
-
-            manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
-            if not isinstance(manifest, dict):
-                manifest = self._document_manifest(asset, blocks, request, build_id)
-                if bool(request.get("auto_enrich_work_metadata", True)):
-                    manifest = self._catalog_enrich_manifest(manifest, request, build_id)
-                self.repo.save_checkpoint(build_id, "manifest", manifest)
-            current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
-            self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
-
-            manifest_build = self.repo.get_build(build_id)
-            prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
-            if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
-                self._update(
-                    build_id,
-                    status="awaiting_manifest_review",
-                    stage="document_review",
-                    progress=0.12,
-                    finished_at=iso_now(),
-                    resumable=True,
-                    error=None,
-                )
+            scope = self._prepare_build_scope(build_id, request, resume)
+            if scope is None:
                 return
-
-            # The reviewed manifest defines the semantic-analysis region. Source
-            # blocks outside it remain in the persisted source asset for audit.
-            manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
-            source_blocks = self._manifest_main_text_blocks(
-                blocks, manifest, bounds_confirmed=manifest_bounds_confirmed
-            )
-            # 0.56.0 hotfix: earlier automatic builds could accept an LLM-suggested
-            # main-text range before human confirmation.  Dense final pages could
-            # satisfy the old block-count plausibility guard and leave only the
-            # tail of the PDF in topology.  On resume, detect that persisted scope
-            # and rebuild segmentation/records from the full conserved source.
-            source_scope_repair = bool(
-                resume
-                and not manifest_bounds_confirmed
-                and prior_main_text_block_count > 0
-                and prior_main_text_block_count < len(source_blocks)
-            )
-            if source_scope_repair:
-                self.repo.save_checkpoint(build_id, "segmentation_state", {})
-                self.repo.save_checkpoint(build_id, "reconciliation_state", {})
-                self.repo.save_checkpoint(build_id, "boundaries_partial", [])
-                self._append_warning(
-                    build_id,
-                    "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
-                )
-            source_quality = self._source_quality_report(source_blocks)
-            self._update(build_id, source_quality=source_quality)
-            semantic_blocks = self._semantic_atoms(source_blocks)
-            if len(semantic_blocks) < 2:
-                semantic_blocks = source_blocks
-            self._update(
-                build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12),
-                semantic_atom_count=len(semantic_blocks), main_text_block_count=len(source_blocks),
-            )
-            previous_build = self.repo.get_build(build_id)
-            # A segmentation-blocked build intentionally has no authoritative final
-            # boundary checkpoint. Resume retries unresolved semantic regions using
-            # the currently selected provider/settings instead of reusing the
-            # partial topology that caused the block.
-            boundaries = None
-            if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
-                boundaries = self.repo.load_checkpoint(build_id, "boundaries")
-            if not isinstance(boundaries, list):
-                segmentation_clock = time.monotonic()
-                boundaries = self._segment(semantic_blocks, manifest, request, build_id)
-                self._update(build_id, segmentation_elapsed_ms=int((time.monotonic()-segmentation_clock)*1000))
-            if self._cancelled(build_id):
-                raise InterruptedError("Corpus build cancelled")
-            self._update(build_id, retrying_segmentation=False)
-            self.repo.save_checkpoint(build_id, "boundaries", boundaries)
-
-            self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
-            records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
-            if not records:
-                records = self._construct_records(asset, source_blocks, boundaries)
-                self._mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
-                boundary_suspect_count = annotate_boundary_suspects(records)
-                if boundary_suspect_count:
-                    current_build = self.repo.get_build(build_id)
-                    current_build["boundary_suspect_count"] = boundary_suspect_count
-                    self.repo.save_build(current_build)
-                # A bounded second-reader pass checks only heuristically suspicious
-                # or already-demonstrated risky seams. It never rewrites source
-                # topology on its own; it corroborates KEEP or creates an explicit
-                # human-review recommendation with an exact source-block seam.
-                # Suspicious-boundary second reading is advisory and must not delay first
-                # record availability. Reviewers can invoke the boundary adjudicator on demand.
-                second_reader = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0, "deferred": boundary_suspect_count}
-                current_build = self.repo.get_build(build_id)
-                current_build.update({
-                    "boundary_second_reader_count": int(second_reader.get("audited") or 0),
-                    "boundary_second_reader_keep_count": int(second_reader.get("keep") or 0),
-                    "boundary_second_reader_move_count": int(second_reader.get("move") or 0),
-                    "boundary_second_reader_uncertain_count": int(second_reader.get("uncertain") or 0),
-                    "boundary_second_reader_failure_count": int(second_reader.get("failed") or 0),
-                    "boundary_second_reader_deferred_count": int(second_reader.get("deferred") or 0),
-                })
-                self.repo.save_build(current_build)
-                for record in records:
-                    self._apply_manifest_metadata(record, manifest)
-                    inline, full = _citation_strings(record)
-                    record["inline_citation"] = inline
-                    record["full_citation"] = full
-                # Validate topology before spending time on metadata enrichment.
-                # At this point all source-derived text and boundaries are deterministic;
-                # any failure is therefore an implementation/topology problem, not an
-                # invitation to burn more LLM calls and ask the user to clean it up.
-                active_profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
-                sizing_policy = self._record_sizing_policy(request, active_profile)
-                topology_validation = self._topology_sanity(records, sizing_policy, source_blocks)
-                topology_quality = self._topology_quality_report(records, source_blocks, sizing_policy, topology_validation)
-                current_build = self.repo.get_build(build_id)
-                current_build["topology_validation"] = topology_validation
-                current_build["topology_quality"] = topology_quality
-                current_build["record_sizing_policy"] = sizing_policy
-                self.repo.save_build(current_build)
-                if not topology_validation.get("valid"):
-                    raise RuntimeError(
-                        "Deterministic topology sanity check failed before metadata enrichment: "
-                        + ", ".join(topology_validation.get("issues") or ["unknown topology error"])
-                    )
-                # Optionally clean obvious extraction/layout noise before metadata
-                # enrichment. The immutable extracted text remains bound in
-                # source_extracted_text and the transformation is revisioned.
-                if bool(request.get("auto_clean_text", True)):
-                    cleanup_rules = request.get("text_cleanup_rules") or sorted(TEXT_CLEANUP_RULES)
-                    cleanup_report = apply_automatic_text_cleanup(records, cleanup_rules, [current_build.get("manifest", {}).get(key) for key in ("title", "short_title", "original_title")])
-                    current_build = self.repo.get_build(build_id)
-                    current_build["text_cleanup"] = cleanup_report
-                    self.repo.save_build(current_build)
-                else:
-                    current_build = self.repo.get_build(build_id)
-                    current_build["text_cleanup"] = {"enabled": False, "rules": [], "records_changed": 0, "changes": 0, "removed_lines": 0}
-                    self.repo.save_build(current_build)
-                # Persist deterministic records before any metadata call. A provider
-                # failure can therefore never discard successful segmentation work.
-                self.repo.save_records(build_id, records)
-            blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
-            for record in records:
-                record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
-                affected = sorted(record_pages & blocking_pages)
-                issues = []
-                if affected:
-                    page_findings = [item for item in (source_quality.get("issues") or []) if int(item.get("page") or 0) in affected]
-                    issues.append({
-                        "code": "source_quality_blocking", "severity": "blocking", "pages": affected,
-                        "message": "The PDF text layer contains replacement or control characters on one or more pages.",
-                        "page_findings": page_findings,
-                    })
-                glyph_issues = self._record_extraction_quality_issues(record)
-                for item in glyph_issues:
-                    item.setdefault("severity", "blocking")
-                issues.extend(glyph_issues)
-                if issues:
-                    record["source_quality_issues"] = issues
-                    record["needs_review"] = True
-                    record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
-            self.repo.save_records(build_id, records)
-            self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")))
-
-            total = max(1, len(records))
-            pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
-            already_complete = len(records) - len(pending)
-            metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
-            self._update(
-                build_id,
-                metadata_enriched_count=already_complete,
-                metadata_enrichment_total=len(records),
-                metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
-                metadata_started_at=metadata_started_at,
-                metadata_last_progress_at=iso_now(),
-                metadata_settle_requested=False,
-            )
-            # Metadata enrichment is book-length work and may take minutes on a
-            # local model. Track readiness per record so completed records can be
-            # reviewed immediately instead of locking the entire book until the
-            # final LLM call finishes.
-            for index, record in enumerate(records):
-                if index in pending:
-                    # A process restart may leave a record marked running. No worker
-                    # survives the restart, so it safely returns to the queue while
-                    # per-family checkpoints determine where enrichment resumes.
-                    record["metadata_enrichment_state"] = "queued"
-                    record.setdefault("metadata_stage_status", {})
-                else:
-                    record["metadata_enrichment_state"] = "complete"
-            self.repo.save_records(build_id, records)
-            max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
-            metadata_families = ("discourse", "quotation", "indexing")
-            # Fast mode still exposes all three family states, but deliberately
-            # skipped families settle immediately and do not consume provider time.
-            metadata_task_total = len(records) * len(metadata_families)
-
-            def family_states_for(rows: list[dict[str, Any]]) -> list[str]:
-                states: list[str] = []
-                for row in rows:
-                    row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
-                    for family in metadata_families:
-                        fallback = "complete" if row.get("metadata_complete") else "queued"
-                        states.append(str(row_status.get(family) or fallback))
-                return states
-
-            initial_states = family_states_for(records)
-            self._update(
-                build_id, metadata_tasks_total=metadata_task_total,
-                metadata_tasks_completed=sum(1 for value in initial_states if value == "complete"),
-                metadata_tasks_failed=sum(1 for value in initial_states if value in {"failed", "needs_review"}),
-                metadata_tasks_skipped=sum(1 for value in initial_states if value == "skipped"),
-                metadata_tasks_running=0,
-                metadata_tasks_queued=sum(1 for value in initial_states if value == "queued"),
-                metadata_active_tasks=[],
-            )
-
-            def persist_metadata_stage(snapshot: dict[str, Any], task_name: str, state: str, error_text: str | None) -> None:
-                """Atomically checkpoint one family and refresh live task telemetry."""
-                record_id = str(snapshot.get("record_id") or "")
-                with self._lock:
-                    live_records = self.repo.load_records(build_id)
-                    live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == record_id), None)
-                    if live_index is None:
-                        return
-                    copy = json.loads(json.dumps(snapshot))
-                    copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
-                    live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], copy)
-                    self.repo.save_records(build_id, live_records)
-                    states: list[str] = []
-                    active: list[dict[str, Any]] = []
-                    for row in live_records:
-                        row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
-                        ledger = row.get("metadata_execution_ledger") if isinstance(row.get("metadata_execution_ledger"), dict) else {}
-                        for family in metadata_families:
-                            fallback = "complete" if row.get("metadata_complete") else "queued"
-                            family_state = str(row_status.get(family) or fallback)
-                            states.append(family_state)
-                            if family_state == "running":
-                                entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
-                                active.append({
-                                    "record_id": row.get("record_id"), "task": family,
-                                    "started_at": entry.get("started_at"),
-                                })
-                    completed_tasks = sum(1 for value in states if value == "complete")
-                    failed_tasks = sum(1 for value in states if value in {"failed", "needs_review"})
-                    skipped_tasks = sum(1 for value in states if value == "skipped")
-                    running_tasks = sum(1 for value in states if value == "running")
-                    queued_tasks = max(0, metadata_task_total - completed_tasks - failed_tasks - skipped_tasks - running_tasks)
-                    updates = {
-                        "metadata_tasks_total": metadata_task_total,
-                        "metadata_tasks_completed": completed_tasks,
-                        "metadata_tasks_failed": failed_tasks,
-                        "metadata_tasks_skipped": skipped_tasks,
-                        "metadata_tasks_running": running_tasks,
-                        "metadata_tasks_queued": queued_tasks,
-                        "metadata_active_tasks": active[:32],
-                        "metadata_last_progress_at": iso_now() if state in {"complete", "failed", "skipped"} else self.repo.get_build(build_id).get("metadata_last_progress_at"),
-                    }
-                    self._update(build_id, **updates)
-
-            if pending:
-                # Parallelism is a build-level execution concern. Each worker performs
-                # the three small metadata families serially for one record, while the
-                # main thread alone updates/checkpoints the shared JSONL. This avoids
-                # corrupting restart state and respects provider-profile concurrency.
-                with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta") as pool:
-                    futures = {}
-                    for index in pending:
-                        if self._cancelled(build_id):
-                            raise InterruptedError("Corpus build cancelled")
-                        record = dict(records[index])
-                        previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
-                        next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
-                        future = pool.submit(
-                            self._enrich_record,
-                            record,
-                            manifest,
-                            request,
-                            previous_text=previous_text,
-                            next_text=next_text,
-                            build_id=build_id,
-                            stage_callback=persist_metadata_stage,
-                        )
-                        futures[future] = index
-                    completed = already_complete
-                    for future in as_completed(futures):
-                        if self._cancelled(build_id):
-                            for outstanding in futures:
-                                outstanding.cancel()
-                            raise InterruptedError("Corpus build cancelled")
-                        index = futures[future]
-                        try:
-                            completed_record = future.result()
-                            completed_record["metadata_enrichment_state"] = "complete"
-                            records[index] = completed_record
-                        except Exception as exc:
-                            # A programming/provider failure in one metadata worker
-                            # must never discard the other successfully enriched
-                            # records in a book-length build. Preserve the immutable
-                            # source-derived record and route this item to review.
-                            fallback = dict(records[index])
-                            fallback["metadata_complete"] = False
-                            fallback["metadata_needs_attention"] = True
-                            profile_for_failure = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
-                            required_failure_fields = list(profile_for_failure.get("required_metadata_fields") or [])
-                            failure_status = fallback.setdefault("metadata_field_status", {})
-                            for field in required_failure_fields:
-                                current = failure_status.get(field) if isinstance(failure_status.get(field), dict) else {}
-                                if current.get("status") == "deterministic":
-                                    continue
-                                failure_status[field] = {
-                                    "status": "unresolved", "method": "llm", "confidence": None,
-                                    "reason_code": "llm_failed",
-                                    "reason": f"Metadata worker failed before this field could be validated: {exc}",
-                                }
-                            fallback["metadata_incomplete_fields"] = [field for field in required_failure_fields if str((failure_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or fallback.get(field) in (None, "", [])]
-                            fallback["metadata_stage_status"] = {**(fallback.get("metadata_stage_status") or {}), "worker": "needs_review"}
-                            reasons = list(fallback.get("metadata_attention_reasons") or [])
-                            reasons.append(f"Metadata worker failed and requires review: {exc}")
-                            fallback["metadata_attention_reasons"] = list(dict.fromkeys(reason for reason in reasons if reason))[:50]
-                            fallback["metadata_enrichment_state"] = "failed"
-                            records[index] = fallback
-                            self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
-                        completed += 1
-                        # Persist one completed worker result without overwriting
-                        # human review decisions already made on other completed
-                        # records while enrichment continues. The disk copy is the
-                        # authoritative live review state; replace only this record.
-                        with self._lock:
-                            live_records = self.repo.load_records(build_id)
-                            completed_id = str(records[index].get("record_id") or "")
-                            live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
-                            if live_index is None:
-                                live_records = records
-                            else:
-                                live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], records[index])
-                            records = live_records
-                            self.repo.save_records(build_id, records)
-                        self._update(
-                            build_id,
-                            stage="enriching",
-                            progress=0.42 + 0.43 * (completed / total),
-                            metadata_enriched_count=completed,
-                            metadata_enrichment_total=len(records),
-                            metadata_total=len(records),
-                            metadata_concurrency=max_workers,
-                        )
-
-            settled_records = self.repo.load_records(build_id)
-            settled_states = family_states_for(settled_records)
-            self._update(
-                build_id,
-                metadata_tasks_total=metadata_task_total,
-                metadata_tasks_completed=sum(1 for value in settled_states if value == "complete"),
-                metadata_tasks_failed=sum(1 for value in settled_states if value in {"failed", "needs_review"}),
-                metadata_tasks_skipped=sum(1 for value in settled_states if value == "skipped"),
-                metadata_tasks_running=0,
-                metadata_tasks_queued=0,
-                metadata_active_tasks=[],
-                metadata_last_progress_at=iso_now(),
-            )
-
-            # All automatic workers have now settled. Recompute the authoritative
-            # record/metadata queues once before handing control to human review so
-            # the first review screen is already internally consistent.
-            self._rewrite_and_validate(build_id, records)
-            records = self.repo.load_records(build_id)
-            profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
-            validation = self.validate_records(source_blocks, records, profile)
-            needs_review = sum(1 for record in records if record.get("needs_review"))
-            boundary_review_count = len(self.repo.get_build(build_id).get("segmentation_boundary_reviews") or [])
-            # Construction is complete, but the corpus lifecycle is not complete
-            # until review/acceptance and publication finish. Keep a clear 90%
-            # handoff into human review instead of declaring 100% prematurely.
-            status = "awaiting_review"
-            self._update(
-                build_id,
-                status=status,
-                stage="review",
-                progress=0.90,
-                finished_at=iso_now(),
-                record_count=len(records),
-                needs_review_count=needs_review,
-                boundary_review_count=boundary_review_count,
-                accepted_count=sum(1 for record in records if record.get("accepted")),
-                rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
-                source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
-                validation=validation,
-                resumable=False,
-                retrying_segmentation=False,
-            )
+            records = self._construct_build_topology(build_id, request, resume, scope)
+            records = self._schedule_build_enrichment(build_id, request, scope.manifest, records)
+            self._finalize_build_review(build_id, scope, records)
         except InterruptedError as exc:
             self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
         except Exception as exc:
@@ -4922,6 +4523,445 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         finally:
             with self._lock:
                 self._cancel.discard(build_id)
+
+    def _prepare_build_scope(self, build_id: str, request: dict[str, Any], resume: bool) -> BuildScope | None:
+        """Restore/review the manifest and conserve the authoritative source scope."""
+        build = self._update(
+            build_id,
+            status="running",
+            stage="resuming" if resume else "structure",
+            progress=max(float(self.repo.get_build(build_id).get("progress") or 0.0), 0.03),
+            started_at=self.repo.get_build(build_id).get("started_at") or iso_now(),
+            finished_at=None,
+            error=None,
+            resumable=True,
+        )
+        asset = self.repo.get_asset(build["asset_id"])
+        all_blocks = self.repo.load_blocks(build["asset_id"])
+        blocks = [block for block in all_blocks if not block.get("excluded_reason")]
+        if not blocks:
+            raise ValueError("No source text blocks were extracted from the PDF. Check OCR support and extraction warnings.")
+
+        manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
+        if not isinstance(manifest, dict):
+            manifest = self._document_manifest(asset, blocks, request, build_id)
+            if bool(request.get("auto_enrich_work_metadata", True)):
+                manifest = self._catalog_enrich_manifest(manifest, request, build_id)
+            self.repo.save_checkpoint(build_id, "manifest", manifest)
+        current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
+        self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
+
+        manifest_build = self.repo.get_build(build_id)
+        prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
+        if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
+            self._update(
+                build_id,
+                status="awaiting_manifest_review",
+                stage="document_review",
+                progress=0.12,
+                finished_at=iso_now(),
+                resumable=True,
+                error=None,
+            )
+            return None
+
+        # The reviewed manifest defines the semantic-analysis region. Source
+        # blocks outside it remain in the persisted source asset for audit.
+        manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
+        source_blocks = self._manifest_main_text_blocks(
+            blocks, manifest, bounds_confirmed=manifest_bounds_confirmed
+        )
+        # 0.56.0 hotfix: earlier automatic builds could accept an LLM-suggested
+        # main-text range before human confirmation.  Dense final pages could
+        # satisfy the old block-count plausibility guard and leave only the
+        # tail of the PDF in topology.  On resume, detect that persisted scope
+        # and rebuild segmentation/records from the full conserved source.
+        source_scope_repair = bool(
+            resume
+            and not manifest_bounds_confirmed
+            and prior_main_text_block_count > 0
+            and prior_main_text_block_count < len(source_blocks)
+        )
+        if source_scope_repair:
+            self.repo.save_checkpoint(build_id, "segmentation_state", {})
+            self.repo.save_checkpoint(build_id, "reconciliation_state", {})
+            self.repo.save_checkpoint(build_id, "boundaries_partial", [])
+            self._append_warning(
+                build_id,
+                "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
+            )
+        source_quality = self._source_quality_report(source_blocks)
+        self._update(build_id, source_quality=source_quality)
+        semantic_blocks = self._semantic_atoms(source_blocks)
+        if len(semantic_blocks) < 2:
+            semantic_blocks = source_blocks
+        self._update(
+            build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12),
+            semantic_atom_count=len(semantic_blocks), main_text_block_count=len(source_blocks),
+        )
+        return BuildScope(build, asset, manifest, source_blocks, semantic_blocks, source_quality, source_scope_repair)
+
+    def _construct_build_topology(
+        self, build_id: str, request: dict[str, Any], resume: bool, scope: BuildScope,
+    ) -> list[dict[str, Any]]:
+        """Recover semantic boundaries, construct source-bound records, and checkpoint them."""
+        asset, manifest = scope.asset, scope.manifest
+        source_blocks, semantic_blocks = scope.source_blocks, scope.semantic_blocks
+        source_quality, source_scope_repair = scope.source_quality, scope.source_scope_repair
+        previous_build = self.repo.get_build(build_id)
+        # A segmentation-blocked build intentionally has no authoritative final
+        # boundary checkpoint. Resume retries unresolved semantic regions using
+        # the currently selected provider/settings instead of reusing the
+        # partial topology that caused the block.
+        boundaries = None
+        if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
+            boundaries = self.repo.load_checkpoint(build_id, "boundaries")
+        if not isinstance(boundaries, list):
+            segmentation_clock = time.monotonic()
+            boundaries = self._segment(semantic_blocks, manifest, request, build_id)
+            self._update(build_id, segmentation_elapsed_ms=int((time.monotonic()-segmentation_clock)*1000))
+        if self._cancelled(build_id):
+            raise InterruptedError("Corpus build cancelled")
+        self._update(build_id, retrying_segmentation=False)
+        self.repo.save_checkpoint(build_id, "boundaries", boundaries)
+
+        self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
+        records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
+        if not records:
+            records = self._construct_records(asset, source_blocks, boundaries)
+            self._mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
+            boundary_suspect_count = annotate_boundary_suspects(records)
+            if boundary_suspect_count:
+                current_build = self.repo.get_build(build_id)
+                current_build["boundary_suspect_count"] = boundary_suspect_count
+                self.repo.save_build(current_build)
+            # A bounded second-reader pass checks only heuristically suspicious
+            # or already-demonstrated risky seams. It never rewrites source
+            # topology on its own; it corroborates KEEP or creates an explicit
+            # human-review recommendation with an exact source-block seam.
+            # Suspicious-boundary second reading is advisory and must not delay first
+            # record availability. Reviewers can invoke the boundary adjudicator on demand.
+            second_reader = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0, "deferred": boundary_suspect_count}
+            current_build = self.repo.get_build(build_id)
+            current_build.update({
+                "boundary_second_reader_count": int(second_reader.get("audited") or 0),
+                "boundary_second_reader_keep_count": int(second_reader.get("keep") or 0),
+                "boundary_second_reader_move_count": int(second_reader.get("move") or 0),
+                "boundary_second_reader_uncertain_count": int(second_reader.get("uncertain") or 0),
+                "boundary_second_reader_failure_count": int(second_reader.get("failed") or 0),
+                "boundary_second_reader_deferred_count": int(second_reader.get("deferred") or 0),
+            })
+            self.repo.save_build(current_build)
+            for record in records:
+                self._apply_manifest_metadata(record, manifest)
+                inline, full = _citation_strings(record)
+                record["inline_citation"] = inline
+                record["full_citation"] = full
+            # Validate topology before spending time on metadata enrichment.
+            # At this point all source-derived text and boundaries are deterministic;
+            # any failure is therefore an implementation/topology problem, not an
+            # invitation to burn more LLM calls and ask the user to clean it up.
+            active_profile = CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
+            sizing_policy = self._record_sizing_policy(request, active_profile)
+            topology_validation = self._topology_sanity(records, sizing_policy, source_blocks)
+            topology_quality = self._topology_quality_report(records, source_blocks, sizing_policy, topology_validation)
+            current_build = self.repo.get_build(build_id)
+            current_build["topology_validation"] = topology_validation
+            current_build["topology_quality"] = topology_quality
+            current_build["record_sizing_policy"] = sizing_policy
+            self.repo.save_build(current_build)
+            if not topology_validation.get("valid"):
+                raise RuntimeError(
+                    "Deterministic topology sanity check failed before metadata enrichment: "
+                    + ", ".join(topology_validation.get("issues") or ["unknown topology error"])
+                )
+            # Optionally clean obvious extraction/layout noise before metadata
+            # enrichment. The immutable extracted text remains bound in
+            # source_extracted_text and the transformation is revisioned.
+            if bool(request.get("auto_clean_text", True)):
+                cleanup_rules = request.get("text_cleanup_rules") or sorted(TEXT_CLEANUP_RULES)
+                cleanup_report = apply_automatic_text_cleanup(records, cleanup_rules, [current_build.get("manifest", {}).get(key) for key in ("title", "short_title", "original_title")])
+                current_build = self.repo.get_build(build_id)
+                current_build["text_cleanup"] = cleanup_report
+                self.repo.save_build(current_build)
+            else:
+                current_build = self.repo.get_build(build_id)
+                current_build["text_cleanup"] = {"enabled": False, "rules": [], "records_changed": 0, "changes": 0, "removed_lines": 0}
+                self.repo.save_build(current_build)
+            # Persist deterministic records before any metadata call. A provider
+            # failure can therefore never discard successful segmentation work.
+            self.repo.save_records(build_id, records)
+        blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
+        for record in records:
+            record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
+            affected = sorted(record_pages & blocking_pages)
+            issues = []
+            if affected:
+                page_findings = [item for item in (source_quality.get("issues") or []) if int(item.get("page") or 0) in affected]
+                issues.append({
+                    "code": "source_quality_blocking", "severity": "blocking", "pages": affected,
+                    "message": "The PDF text layer contains replacement or control characters on one or more pages.",
+                    "page_findings": page_findings,
+                })
+            glyph_issues = self._record_extraction_quality_issues(record)
+            for item in glyph_issues:
+                item.setdefault("severity", "blocking")
+            issues.extend(glyph_issues)
+            if issues:
+                record["source_quality_issues"] = issues
+                record["needs_review"] = True
+                record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
+        self.repo.save_records(build_id, records)
+        self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")))
+
+        return records
+
+    @staticmethod
+    def _metadata_family_states(rows: list[dict[str, Any]]) -> list[str]:
+        metadata_families = ("discourse", "quotation", "indexing")
+        states: list[str] = []
+        for row in rows:
+            row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
+            for family in metadata_families:
+                fallback = "complete" if row.get("metadata_complete") else "queued"
+                states.append(str(row_status.get(family) or fallback))
+        return states
+
+    def _persist_build_metadata_stage(
+        self, build_id: str, metadata_task_total: int, snapshot: dict[str, Any],
+        task_name: str, state: str, error_text: str | None,
+    ) -> None:
+        """Atomically checkpoint one family and refresh live task telemetry."""
+        metadata_families = ("discourse", "quotation", "indexing")
+        record_id = str(snapshot.get("record_id") or "")
+        with self._lock:
+            live_records = self.repo.load_records(build_id)
+            live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == record_id), None)
+            if live_index is None:
+                return
+            copy = json.loads(json.dumps(snapshot))
+            copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
+            live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], copy)
+            self.repo.save_records(build_id, live_records)
+            states: list[str] = []
+            active: list[dict[str, Any]] = []
+            for row in live_records:
+                row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
+                ledger = row.get("metadata_execution_ledger") if isinstance(row.get("metadata_execution_ledger"), dict) else {}
+                for family in metadata_families:
+                    fallback = "complete" if row.get("metadata_complete") else "queued"
+                    family_state = str(row_status.get(family) or fallback)
+                    states.append(family_state)
+                    if family_state == "running":
+                        entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
+                        active.append({
+                            "record_id": row.get("record_id"), "task": family,
+                            "started_at": entry.get("started_at"),
+                        })
+            completed_tasks = sum(1 for value in states if value == "complete")
+            failed_tasks = sum(1 for value in states if value in {"failed", "needs_review"})
+            skipped_tasks = sum(1 for value in states if value == "skipped")
+            running_tasks = sum(1 for value in states if value == "running")
+            queued_tasks = max(0, metadata_task_total - completed_tasks - failed_tasks - skipped_tasks - running_tasks)
+            updates = {
+                "metadata_tasks_total": metadata_task_total,
+                "metadata_tasks_completed": completed_tasks,
+                "metadata_tasks_failed": failed_tasks,
+                "metadata_tasks_skipped": skipped_tasks,
+                "metadata_tasks_running": running_tasks,
+                "metadata_tasks_queued": queued_tasks,
+                "metadata_active_tasks": active[:32],
+                "metadata_last_progress_at": iso_now() if state in {"complete", "failed", "skipped"} else self.repo.get_build(build_id).get("metadata_last_progress_at"),
+            }
+            self._update(build_id, **updates)
+
+    def _schedule_build_enrichment(
+        self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Schedule incomplete records and merge worker checkpoints with live human edits."""
+        total = max(1, len(records))
+        pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
+        already_complete = len(records) - len(pending)
+        metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
+        self._update(
+            build_id,
+            metadata_enriched_count=already_complete,
+            metadata_enrichment_total=len(records),
+            metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
+            metadata_started_at=metadata_started_at,
+            metadata_last_progress_at=iso_now(),
+            metadata_settle_requested=False,
+        )
+        # Metadata enrichment is book-length work and may take minutes on a
+        # local model. Track readiness per record so completed records can be
+        # reviewed immediately instead of locking the entire book until the
+        # final LLM call finishes.
+        for index, record in enumerate(records):
+            if index in pending:
+                # A process restart may leave a record marked running. No worker
+                # survives the restart, so it safely returns to the queue while
+                # per-family checkpoints determine where enrichment resumes.
+                record["metadata_enrichment_state"] = "queued"
+                record.setdefault("metadata_stage_status", {})
+            else:
+                record["metadata_enrichment_state"] = "complete"
+        self.repo.save_records(build_id, records)
+        max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+        metadata_families = ("discourse", "quotation", "indexing")
+        # Fast mode still exposes all three family states, but deliberately
+        # skipped families settle immediately and do not consume provider time.
+        metadata_task_total = len(records) * len(metadata_families)
+
+        initial_states = self._metadata_family_states(records)
+        self._update(
+            build_id, metadata_tasks_total=metadata_task_total,
+            metadata_tasks_completed=sum(1 for value in initial_states if value == "complete"),
+            metadata_tasks_failed=sum(1 for value in initial_states if value in {"failed", "needs_review"}),
+            metadata_tasks_skipped=sum(1 for value in initial_states if value == "skipped"),
+            metadata_tasks_running=0,
+            metadata_tasks_queued=sum(1 for value in initial_states if value == "queued"),
+            metadata_active_tasks=[],
+        )
+
+        def persist_metadata_stage(snapshot: dict[str, Any], task_name: str, state: str, error_text: str | None) -> None:
+            self._persist_build_metadata_stage(build_id, metadata_task_total, snapshot, task_name, state, error_text)
+
+        if pending:
+            # Parallelism is a build-level execution concern. Each worker performs
+            # the three small metadata families serially for one record, while the
+            # main thread alone updates/checkpoints the shared JSONL. This avoids
+            # corrupting restart state and respects provider-profile concurrency.
+            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta") as pool:
+                futures = {}
+                for index in pending:
+                    if self._cancelled(build_id):
+                        raise InterruptedError("Corpus build cancelled")
+                    record = dict(records[index])
+                    previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
+                    next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
+                    future = pool.submit(
+                        self._enrich_record,
+                        record,
+                        manifest,
+                        request,
+                        previous_text=previous_text,
+                        next_text=next_text,
+                        build_id=build_id,
+                        stage_callback=persist_metadata_stage,
+                    )
+                    futures[future] = index
+                completed = already_complete
+                for future in as_completed(futures):
+                    if self._cancelled(build_id):
+                        for outstanding in futures:
+                            outstanding.cancel()
+                        raise InterruptedError("Corpus build cancelled")
+                    index = futures[future]
+                    try:
+                        completed_record = future.result()
+                        completed_record["metadata_enrichment_state"] = "complete"
+                        records[index] = completed_record
+                    except Exception as exc:
+                        # A programming/provider failure in one metadata worker
+                        # must never discard the other successfully enriched
+                        # records in a book-length build. Preserve the immutable
+                        # source-derived record and route this item to review.
+                        fallback = dict(records[index])
+                        fallback["metadata_complete"] = False
+                        fallback["metadata_needs_attention"] = True
+                        profile_for_failure = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+                        required_failure_fields = list(profile_for_failure.get("required_metadata_fields") or [])
+                        failure_status = fallback.setdefault("metadata_field_status", {})
+                        for field in required_failure_fields:
+                            current = failure_status.get(field) if isinstance(failure_status.get(field), dict) else {}
+                            if current.get("status") == "deterministic":
+                                continue
+                            failure_status[field] = {
+                                "status": "unresolved", "method": "llm", "confidence": None,
+                                "reason_code": "llm_failed",
+                                "reason": f"Metadata worker failed before this field could be validated: {exc}",
+                            }
+                        fallback["metadata_incomplete_fields"] = [field for field in required_failure_fields if str((failure_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or fallback.get(field) in (None, "", [])]
+                        fallback["metadata_stage_status"] = {**(fallback.get("metadata_stage_status") or {}), "worker": "needs_review"}
+                        reasons = list(fallback.get("metadata_attention_reasons") or [])
+                        reasons.append(f"Metadata worker failed and requires review: {exc}")
+                        fallback["metadata_attention_reasons"] = list(dict.fromkeys(reason for reason in reasons if reason))[:50]
+                        fallback["metadata_enrichment_state"] = "failed"
+                        records[index] = fallback
+                        self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
+                    completed += 1
+                    # Persist one completed worker result without overwriting
+                    # human review decisions already made on other completed
+                    # records while enrichment continues. The disk copy is the
+                    # authoritative live review state; replace only this record.
+                    with self._lock:
+                        live_records = self.repo.load_records(build_id)
+                        completed_id = str(records[index].get("record_id") or "")
+                        live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
+                        if live_index is None:
+                            live_records = records
+                        else:
+                            live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], records[index])
+                        records = live_records
+                        self.repo.save_records(build_id, records)
+                    self._update(
+                        build_id,
+                        stage="enriching",
+                        progress=0.42 + 0.43 * (completed / total),
+                        metadata_enriched_count=completed,
+                        metadata_enrichment_total=len(records),
+                        metadata_total=len(records),
+                        metadata_concurrency=max_workers,
+                    )
+
+        settled_records = self.repo.load_records(build_id)
+        settled_states = self._metadata_family_states(settled_records)
+        self._update(
+            build_id,
+            metadata_tasks_total=metadata_task_total,
+            metadata_tasks_completed=sum(1 for value in settled_states if value == "complete"),
+            metadata_tasks_failed=sum(1 for value in settled_states if value in {"failed", "needs_review"}),
+            metadata_tasks_skipped=sum(1 for value in settled_states if value == "skipped"),
+            metadata_tasks_running=0,
+            metadata_tasks_queued=0,
+            metadata_active_tasks=[],
+            metadata_last_progress_at=iso_now(),
+        )
+
+        return records
+
+    def _finalize_build_review(self, build_id: str, scope: BuildScope, records: list[dict[str, Any]]) -> None:
+        """Revalidate settled records and publish the authoritative handoff to review."""
+        build, source_blocks = scope.build, scope.source_blocks
+        # All automatic workers have now settled. Recompute the authoritative
+        # record/metadata queues once before handing control to human review so
+        # the first review screen is already internally consistent.
+        self._rewrite_and_validate(build_id, records)
+        records = self.repo.load_records(build_id)
+        profile = CORPUS_PROFILES[str(build.get("profile_id") or PROFILE_VERSION)]
+        validation = self.validate_records(source_blocks, records, profile)
+        needs_review = sum(1 for record in records if record.get("needs_review"))
+        boundary_review_count = len(self.repo.get_build(build_id).get("segmentation_boundary_reviews") or [])
+        # Construction is complete, but the corpus lifecycle is not complete
+        # until review/acceptance and publication finish. Keep a clear 90%
+        # handoff into human review instead of declaring 100% prematurely.
+        status = "awaiting_review"
+        self._update(
+            build_id,
+            status=status,
+            stage="review",
+            progress=0.90,
+            finished_at=iso_now(),
+            record_count=len(records),
+            needs_review_count=needs_review,
+            boundary_review_count=boundary_review_count,
+            accepted_count=sum(1 for record in records if record.get("accepted")),
+            rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
+            source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
+            validation=validation,
+            resumable=False,
+            retrying_segmentation=False,
+        )
 
     @staticmethod
     def _metadata_value_missing(field: str, value: Any) -> bool:

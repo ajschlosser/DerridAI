@@ -206,5 +206,7 @@ def test_progressive_review_mutations_are_serialized_with_metadata_checkpoints()
         assert method.__name__ == name
     source = (ROOT / "api/app/corpus_builder.py").read_text(encoding="utf-8")
     assert "def _serialize_record_mutation" in source
-    assert "with self._lock:\n                            live_records = self.repo.load_records(build_id)" in source
+    # Stage extraction changes indentation, not the atomic load/merge boundary.
+    import re
+    assert re.search(r"with self\._lock:\n\s+live_records = self\.repo\.load_records\(build_id\)", source)
     assert "tempfile.mkstemp(prefix=f\".{path.name}.\"" in source
