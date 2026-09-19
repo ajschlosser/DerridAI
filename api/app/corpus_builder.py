@@ -3679,9 +3679,22 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             except Exception:
                 pass
         profile = CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION])
-        allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
-        allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
+        if self._metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
+            return record
+        tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
+            record, manifest, request, profile, editorial_context, editorial_examples,
+            previous_text, next_text, stage_callback,
+        )
+        stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
+        return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus)
+
+    @staticmethod
+    def _metadata_source_quality_gate(
+        record: dict[str, Any], required_metadata_fields: list[str],
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+    ) -> bool:
+        """Settle unsafe source records without asking a model to interpret corruption."""
         # Do not ask a model to interpret source text that deterministic extraction
         # quality checks have already identified as corrupted. Preserve any
         # deterministic classifications and route only the unresolved fields to
@@ -3716,7 +3729,18 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             record["metadata_attention_reasons"] = ["Source extraction quality must be resolved before scholarly metadata enrichment."]
             inline, full = _citation_strings(record)
             record["inline_citation"] = inline; record["full_citation"] = full
-            return record
+            return True
+        return False
+
+    def _prepare_metadata_tasks(
+        self, record: dict[str, Any], manifest: dict[str, Any], request: dict[str, Any],
+        profile: dict[str, Any], editorial_context: dict[str, Any], editorial_examples: dict[str, Any],
+        previous_text: str, next_text: str,
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+    ) -> tuple[list[tuple[str, str, type[BaseModel], int, str]], list[str], bool]:
+        """Bound source context and select structured tasks without invoking a provider."""
+        allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
+        allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
         limits = self._stage_limits(request)
         neighbor_context = {
             "previous_record_tail": previous_text[-1800:] if previous_text else "",
@@ -3751,7 +3775,6 @@ Current source block IDs: {source_id_json}
 CURRENT REVIEWED RECORD TEXT:
 {source_text}
 """
-        stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
 
         discourse_prompt = f"""Infer ONLY discourse/attribution metadata for one immutable DerridAI record.
 Distinguish the grammatical/textual speaker from the POSITION HOLDER whose proposition is being presented. A named person is not automatically a speaker or position holder. Preserve modality, negation, uncertainty, and stance. Do not return quotation relations, topical indexing, bibliographic metadata, summaries, or source text.
@@ -3793,7 +3816,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         region_type = str(record.get("region_type") or "")
         obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
         quote_signal = any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’')) or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
-        all_task_specs = {
+        all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {
             "discourse": ("discourse", discourse_prompt, DiscourseMetadataResponseModel, limits["discourse_num_predict"], "derridai_record_discourse"),
             "quotation": ("quotation", quotation_prompt, QuotationMetadataResponseModel, limits["quotation_num_predict"], "derridai_record_quotation"),
             "indexing": ("indexing", indexing_prompt, IndexMetadataResponseModel, limits["indexing_num_predict"], "derridai_record_indexing"),
@@ -3830,6 +3853,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 }
                 if stage_callback:
                     stage_callback(record, skipped_family, "skipped", "Fast enrichment routing")
+        return tasks, source_ids, obvious_apparatus
+
+    def _execute_metadata_tasks(
+        self, record: dict[str, Any], request: dict[str, Any],
+        tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+    ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
+        """Run unsettled families with live ownership checks and durable stage callbacks."""
+        requested_families = request.get("families")
+        stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
         persisted_stage_results = record.setdefault("metadata_stage_results", {})
         stage_status = record.setdefault("metadata_stage_status", {})
         stage_ledger = record.setdefault("metadata_execution_ledger", {})
@@ -3949,6 +3982,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if build_id:
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
+        return stage_results
+
+    def _reconcile_metadata_results(
+        self, record: dict[str, Any], profile: dict[str, Any], source_ids: list[str],
+        stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]],
+        obvious_apparatus: bool,
+    ) -> dict[str, Any]:
+        """Bind proposals to source evidence while retaining reviewer-owned values."""
+        allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
+        allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
+        required_metadata_fields = list(profile.get("required_metadata_fields") or [])
+        stage_status = record.setdefault("metadata_stage_status", {})
+        stage_ledger = record.setdefault("metadata_execution_ledger", {})
         # Expose whether the semantic reader actually evaluated deterministic
         # structural fields. A final value alone must never imply corroboration.
         discourse_state = str(stage_status.get("discourse") or "")
