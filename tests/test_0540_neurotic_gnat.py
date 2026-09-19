@@ -34,9 +34,9 @@ def install(tmp_path:Path):
     return repo,build
 
 def test_release_and_i18n_parity():
-    assert APP_VERSION=='0.57.0'
-    assert json.loads(text('web/package.json'))['version']=='0.57.0'
-    assert '0.57.0 — Quiet Camel' in text('README.md')
+    assert APP_VERSION=='0.57.5'
+    assert json.loads(text('web/package.json'))['version']=='0.57.5'
+    assert '0.57.5 — Quizzical Quacker' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.slice_record','pdf_corpus.select_from_text','pdf_corpus.redo','pdf_corpus.pdf_source']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
@@ -63,7 +63,8 @@ def test_review_ui_has_slice_select_from_text_focus_pdf_and_undo_redo():
     assert '<CorpusBoundarySliceDialog' in builder and 'sliceRecord:' in api
     assert 'redoReview:' in api and '@redo="redoReview"' in builder
     assert 'selectFromText' in field and "window.getSelection()" in field
-    assert 'sourcePdfUrl' in focus and '<iframe' in focus
+    assert 'sourcePdfUrl' in focus and '<iframe' not in focus and 'openSourceViewer' in focus
+    assert 'SourceTranscriptionDialog' in builder
     assert '<CorpusBoundarySliceDialog' in focus
 
 def test_boundary_slice_storybook_component_is_accessible_and_reusable():

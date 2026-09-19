@@ -1,17 +1,28 @@
-# DerridAI Corpus Viewer 0.57.0
+# DerridAI Corpus Viewer 0.57.5
 
-**0.57.0 — Quiet Camel** repairs metadata-field control typing, boundary slicing adjacency, and interactive LLM execution. Free-form scholarly fields now use autocomplete rather than accidental closed dropdowns; deterministic/LLM conflicts expose both candidates and prefill the LLM proposal for review; interactive LLM actions honor the provider and per-operation model selected by the reviewer; touch-up explains built-in instructions and warns about redundant custom instructions; Ollama contention is surfaced before launching competing work. English/Québec French i18n and WCAG-oriented interaction remain release requirements.
+**0.57.5 — Quizzical Quacker** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
 
-## 0.57.0 — Quiet Camel
+## 0.57.5 — Quizzical Quacker
 
-- Typed metadata field registry separates true enums from open autocomplete suggestions.
-- `position_holder`, speaker/target/quotation relations, and similar scholarly fields remain custom-editable.
-- Deterministic/LLM disagreements retain both candidates, reasons, and confidence; the semantic LLM proposal is prefilled while human confirmation remains required.
-- Slice-to-previous/next availability now falls back to authoritative global record position when topology indices are absent.
-- Interactive touch-up, boundary adjudication, record metadata rerun, and enrichment honor the selected profile/model instead of being replaced by build-runtime provider state.
-- Shared LLM execution controls expose per-operation model choice and warn about Ollama concurrency contention.
-- Touch-up no longer uses an unexplained black AI badge, exposes operation status, documents its built-in prompt policy, and warns when optional instructions substantially repeat that policy.
-- Storybook/regression coverage expanded for enum vs autocomplete controls, conflicts, provider/model selection, concurrency warnings, and boundary slicing.
+- Replaces the narrow Focus View PDF iframe with a compact source navigator and a shared full-size **Source Viewer / transcription workspace** available from normal and Focus review. The original PDF is served inline, while PDF.js rendering avoids browser download behavior and supports manual transcription against immutable source blocks.
+- Promotes **Document structure & pagination** to a first-class build workspace with live PDF browsing, one-up/two-up layout, left/right reading order, main-text and bibliography anchors, printed-page anchors, and alternating thread patterns.
+- Derives printed-page labels, deterministic region types, logical-page slots, thread identities, and optional thread languages from reviewer-owned document-layout rules while preserving per-page human overrides as exceptions.
+- Uses strong reviewer-defined structural evidence to arbitrate `region_type` conflicts instead of blindly replacing it with a record-local semantic LLM suggestion.
+- Reduces the initial semantic boundary budget and defers advisory suspicious-boundary second-reader calls so reviewable records become available sooner; segmentation timing is retained for diagnostics.
+- Lets **live enrichment** select both provider profile and model for newly scheduled work while in-flight requests retain the model that actually launched them. Model override remains free-entry when provider model discovery is incomplete.
+- Fixes stored-profile model resolution so OpenAI/FreeLLM and Ollama interactive actions honor the explicitly selected per-operation model.
+- Aggregates Ollama contention by normalized shared endpoint rather than profile ID, so profiles pointing at the same server contribute to the same concurrency warning.
+- Makes >65% LLM metadata population explicit in field status, preserves visible candidate/conflict provenance, and moves autocomplete popovers to a body-level overlay so suggestions are not clipped by inspector panels.
+- Keeps true enums constrained while scholarly free-text metadata remains custom-editable with autocomplete suggestions.
+- Expands Storybook with accessible Document Structure, two-up/thread, Source Transcription, provider/model, metadata, and overlay states, with English and Québec French copy and keyboard/focus semantics.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **449 passed**.
+- Python bytecode compilation, English/Québec French locale parity, frontend relative-import checks (**0 missing imports**), and `git diff --check` pass.
+- `npm run build` was attempted but frontend dependencies are not installed (`vue-tsc: not found`).
+- `npm run build-storybook` was attempted but Storybook dependencies are not installed (`storybook: not found`).
+- Production Vue/Vite, Storybook, and Docker/container builds remain mandatory release gates; the archive therefore remains a build candidate until those normal environment gates pass.
 
 ## 0.56.0 — Perilous Penguins
 

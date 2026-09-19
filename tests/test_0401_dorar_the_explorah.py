@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.57.0"
-    assert 'version="0.57.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.57.0"' in text("api/app/config.py")
+    assert package["version"] == "0.57.5"
+    assert 'version="0.57.5"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.57.5"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -51,10 +51,11 @@ def test_malformed_metadata_is_reviewable_instead_of_aborting_build():
 
 def test_segmentation_is_confidence_gated_and_semantically_reconciled():
     builder = text("api/app/corpus_builder.py")
-    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    @staticmethod\n    def _construct_records")]
-    assert 'pair.get("decision") == "split"' in segmentation
+    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    def _apply_manifest_metadata") ]
+    assert 'pair.get("decision")=="split"' in builder or 'pair.get("decision") == "split"' in builder
     assert '>= threshold' in segmentation
-    assert "_reconcile_boundaries" in segmentation
+    assert "_reconcile_boundaries" not in builder
+    assert "_normalize_topology" in builder
     assert "Judge only genuine discourse boundaries" in segmentation
     assert "NEVER split because a page changes" in segmentation
 
@@ -132,7 +133,7 @@ def test_structured_output_escalation_and_streaming_schema_fallbacks_are_resilie
 
 def test_segmentation_checkpoints_degraded_mode_and_resume_do_not_discard_work():
     builder = text("api/app/corpus_builder.py")
-    segment = builder[builder.index("    def _segment("):builder.index("    def _reconcile_boundaries")]
+    segment = builder[builder.index("    def _segment("):builder.index("    def _mark_segmentation_review") ]
     run = builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
     assert 'load_checkpoint(build_id,"local_boundary_state"' in segment
     assert 'save_checkpoint(build_id,"local_boundary_state"' in segment
@@ -155,7 +156,8 @@ def test_document_manifest_and_printed_page_mapping_are_human_correctable():
     assert "def patch_manifest" in builder
     assert '@app.patch("/api/pdf/assets/{asset_id}/page-labels")' in main
     assert '@app.patch("/api/pdf/corpus-builds/{build_id}/manifest")' in main
-    assert "PdfPageLabelEditor" in component
+    assert "DocumentStructureConfigurator" in component
+    assert "PdfPageLabelEditor" in text("web/src/components/DocumentStructureConfigurator.vue")
     assert "DocumentManifestEditor" in component
     assert (ROOT / "web/src/components/PdfPageLabelEditor.stories.ts").exists()
     assert (ROOT / "web/src/components/DocumentManifestEditor.stories.ts").exists()

@@ -39,6 +39,7 @@ from .models import (
     PdfLlmRequest,
     PdfCorpusBuildCreate,
     PdfPageLabelsPatch,
+    PdfDocumentLayoutPatch,
     PdfCorpusManifestPatch,
     PdfCorpusRecordPatch,
     PdfCorpusRecordTextPatch,
@@ -87,7 +88,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.57.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.57.5")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1194,7 +1195,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.57.0",
+            "app_version": "0.57.5",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1743,12 +1744,22 @@ def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.patch("/api/pdf/assets/{asset_id}/document-layout")
+def patch_pdf_asset_document_layout(asset_id: str, body: PdfDocumentLayoutPatch):
+    try:
+        return pdf_corpus_repository.update_document_layout(asset_id, body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.get("/api/pdf/assets/{asset_id}/content")
 def get_pdf_asset_content(asset_id: str):
     try:
         asset = pdf_corpus_repository.get_asset(asset_id)
         path = pdf_corpus_repository.asset_pdf_path(asset_id)
-        return FileResponse(path, media_type="application/pdf", filename=asset.get("filename") or "source.pdf")
+        return FileResponse(path, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{asset.get("filename") or "source.pdf"}"'})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
 
@@ -1807,7 +1818,7 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
             profile_generation.update({key: value for key, value in generation_override.items() if value is not None})
             resolved.update({
                 "provider": profile.get("type") or "ollama",
-                "model": profile.get("model"),
+                "model": requested_model or profile.get("model"),
                 "base_url": profile.get("base_url"),
                 "api_key": profile.get("api_key"),
                 "generation": profile_generation or None,

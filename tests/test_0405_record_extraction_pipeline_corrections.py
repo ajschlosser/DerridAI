@@ -9,9 +9,9 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.57.0"
-    assert 'version="0.57.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.57.0"' in text("api/app/config.py")
+    assert package["version"]=="0.57.5"
+    assert 'version="0.57.5"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.57.5"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
@@ -26,7 +26,7 @@ def test_0405_new_semantic_pipeline_is_provenance_versioned():
 def test_segmentation_never_fabricates_one_giant_fallback_record():
     builder=text("api/app/corpus_builder.py")
     run=builder[builder.index("    def _run("):builder.index("    def _rewrite_and_validate")]
-    segment=builder[builder.index("    def _segment("):builder.index("    def _reconcile_boundaries")]
+    segment=builder[builder.index("    def _segment("):builder.index("    def _mark_segmentation_review") ]
     assert "self._normalize_topology(" in segment
     assert "normalization_reviews" in segment
     assert '"segmentation_blocked":False' in segment or '"segmentation_blocked": False' in segment
@@ -105,11 +105,9 @@ def test_document_manifest_is_a_review_checkpoint_before_segmentation():
     assert "Confirm document & continue" in component
 
 
-def test_reconciliation_failures_cannot_silently_undersegment():
+def test_advisory_boundary_second_reader_is_deferred_from_initial_build():
     builder=text("api/app/corpus_builder.py")
-    reconcile=builder[builder.index("    def _reconcile_boundaries("):builder.index("    @staticmethod\n    def _scholarly_page_range")]
-    assert "could not be automatically reconciled" in reconcile
-    assert '"kind": "reconciliation"' in reconcile
-    assert "remained uncertain after pairwise fallback" in reconcile
-    assert "if not batch_unresolved" in reconcile
-    assert "return accepted, unresolved" in reconcile
+    run=builder[builder.index("    def _run("):builder.index("    def _metadata_enrichment_finished", builder.index("    def _run("))]
+    assert 'boundary_second_reader_deferred_count' in run
+    assert '_audit_suspicious_record_boundaries(records' not in run
+    assert 'annotate_boundary_suspects(records)' in run

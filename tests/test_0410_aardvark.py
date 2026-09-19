@@ -27,7 +27,7 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
     asset=install_asset(repo,count)
-    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.57.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.57.5","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 
@@ -81,7 +81,7 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
         return {"metadata":{},"review_reason":""}
     monkeypatch.setattr(manager,"_chat_json",fake_chat)
     manager._enrich_record(record,{"main_text_start_page":1,"main_text_end_page":1},{"provider":"ollama","model":"test-model"},build_id=build["build_id"])
-    # Quiet Camel preserves both candidates but prefills the semantic LLM
+    # Quizzical Quacker preserves both candidates but prefills the semantic LLM
     # proposal for interpretive review. Region-type constraints then keep
     # primary_text internally consistent with that proposed region.
     assert record["region_type"]=="front_matter"

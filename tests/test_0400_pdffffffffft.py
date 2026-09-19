@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.57.0"
-    assert 'version="0.57.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.57.0"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.57.0" in text("README.md")
+    assert package["version"] == "0.57.5"
+    assert 'version="0.57.5"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.57.5"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.57.5" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
@@ -34,7 +34,7 @@ def test_pdf_sources_are_content_addressed_layout_aware_and_ocr_capable():
 
 def test_semantic_segmentation_does_not_use_page_or_character_boundaries():
     builder = text("api/app/corpus_builder.py")
-    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    def _reconcile_boundaries")]
+    segmentation = builder[builder.index("    def _compact_segment_prompt("):builder.index("    def _apply_manifest_metadata") ]
     assert "speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move" in segmentation
     assert "NEVER split because a page changes" in segmentation
     assert "execution window ends" in segmentation

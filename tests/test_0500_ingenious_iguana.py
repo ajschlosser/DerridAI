@@ -42,9 +42,9 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
 
 
 def test_release_identity_locale_parity_and_quebec_copy():
-    assert APP_VERSION=='0.57.0'
-    assert json.loads(text('web/package.json'))['version']=='0.57.0'
-    assert '0.57.0 — Quiet Camel' in text('README.md')
+    assert APP_VERSION=='0.57.5'
+    assert json.loads(text('web/package.json'))['version']=='0.57.5'
+    assert '0.57.5 — Quizzical Quacker' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     keys=[
         'pdf_corpus.cleanup_paragraph_lines','pdf_corpus.cleanup_empty_lines',

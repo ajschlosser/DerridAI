@@ -6,8 +6,8 @@ const i18n=useI18nStore();
 const steps=computed(()=>{
   const stage=String(props.stage||"");const status=String(props.status||"");
   let current=props.hasAsset?2:1;
-  if(props.hasManifest||["analyzing","extracting","manifest","segmenting","reconciling","enriching","review","ready","published"].includes(stage))current=3;
-  if(["segmenting","reconciling"].includes(stage))current=4;
+  if(props.hasManifest||["analyzing","extracting","manifest","segmenting","constructing_records","reconciling","enriching","review","ready","published"].includes(stage))current=3;
+  if(["segmenting","constructing_records","reconciling"].includes(stage))current=4;
   if(["enriching","review"].includes(stage)||["awaiting_review"].includes(status))current=5;
   if(stage==="ready"||status==="ready")current=Number(props.blockerCount||0)>0?6:7;
   if(props.canPublish&&status!=="published")current=7;
