@@ -640,6 +640,7 @@ class LLMToolJobCreate(BaseModel):
         "rag_grade_batch",
         "work_metadata",
         "language_dictionary",
+        "language_content_policy",
     ]
     pdf: PdfLlmRequest | None = None
     grade: RAGGradeRequest | None = None
@@ -681,6 +682,11 @@ class LanguageDictionaryUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     flag: str = Field(default="🌐", max_length=32)
     dictionary: dict[str, str] = Field(default_factory=dict)
+
+
+class LanguageContentPolicyUpdate(BaseModel):
+    blocked_terms: list[str] = Field(default_factory=list, max_length=150)
+    contextual_terms: list[dict[str, Any]] = Field(default_factory=list, max_length=24)
 
 
 class LanguageInstallRequest(BaseModel):

@@ -126,6 +126,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                    'espace Comparer que les comptes administrateur. Les commandes de modification '
                                    'n’apparaissent que lorsque votre rôle les autorise.',
  'compare.workspace_records': 'Fiches de l’espace de travail',
+ 'content_filter.unconfigured': 'Le texte chercheur est bloqué jusqu’à ce qu’un administrateur génère une politique de '
+                                 'texte pour au moins une langue.',
  'content_filter.warning': 'Ce langage n’est pas permis dans les comptes chercheurs. Le terme signalé a été supprimé.',
  'context.global_search': 'Recherche globale',
  'dashboard.advanced_filters': 'Filtres avancés',
@@ -417,6 +419,38 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'language.checking_provider': 'Vérification du fournisseur…',
  'language.choose_flag': 'Choisir un drapeau de pays',
  'language.concurrent_requests': 'nombre maximal de requêtes simultanées',
+ 'language.content_policy': 'Politique de texte chercheur',
+ 'language.content_policy_add': 'Ajouter un terme',
+ 'language.content_policy_add_placeholder': 'Ajouter un terme interdit',
+ 'language.content_policy_blocked': 'Termes interdits',
+ 'language.content_policy_contextual': 'Termes sensibles au contexte',
+ 'language.content_policy_contextual_help': 'Ces jetons sont bloqués sauf lorsque les exemptions savantes ou de nom '
+                                             'énumérées s’appliquent.',
+ 'language.content_policy_count': '{count} termes',
+ 'language.content_policy_generate': 'Générer la politique',
+ 'language.content_policy_generate_help': 'Le fournisseur choisi compile les termes interdits pour ce paramètre '
+                                           'régional. L’anglais et le français québécois intégrés doivent l’être une '
+                                           'fois après la création du premier compte administrateur. L’installation '
+                                           'd’une nouvelle langue génère une politique automatiquement.',
+ 'language.content_policy_generated': 'Politique de texte chercheur générée.',
+ 'language.content_policy_generating': 'Génération de la politique de texte chercheur…',
+ 'language.content_policy_help': 'Les requêtes, notes et filtres rédigés par les chercheurs sont vérifiés à partir de '
+                                 'chaque politique de langue générée. Les termes sont stockés avec la langue, et non '
+                                 'dans le code source.',
+ 'language.content_policy_missing': 'Non générée',
+ 'language.content_policy_missing_banner': '{count} langue(s) n’ont pas encore de politique de texte chercheur. Générez '
+                                           'les termes pour chaque langue avant que les chercheurs puissent envoyer du '
+                                           'texte.',
+ 'language.content_policy_missing_help': 'Cette langue n’a pas encore de liste de termes interdits. Générez-en une '
+                                         'avec un profil fournisseur.',
+ 'language.content_policy_needed': 'Politique requise',
+ 'language.content_policy_ready': 'Politique prête',
+ 'language.content_policy_regenerate': 'Régénérer la politique',
+ 'language.content_policy_remove': 'Retirer le terme',
+ 'language.content_policy_save': 'Enregistrer la politique',
+ 'language.content_policy_saved': 'Politique de texte chercheur enregistrée.',
+ 'language.content_policy_term': 'Terme',
+ 'language.content_policy_title': 'Politique de texte chercheur',
  'language.coverage': 'Couverture',
  'language.custom': 'Personnalisé',
  'language.description_app': 'Texte d’identité de l’application',

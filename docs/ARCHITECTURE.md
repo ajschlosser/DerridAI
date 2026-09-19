@@ -19,7 +19,7 @@ This describes the code as it exists in 0.61.0. For feature behavior see the [Us
 | `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. |
 | `rag.py` | Retrieval, reranking (cross-encoder with lexical fallback that reports a warning), generation, evidence assembly. |
 | `jobs.py` | In-memory job managers for LLM review, RAG, LLM tools/translation, and Chroma upserts, mirrored to the `jobs` table. |
-| `llm.py`, `llm_tools.py`, `i18n_translation.py`, `bibliography.py` | Provider calls, tool workflows (catalog lookup, grading), locale translation, bibliographic helpers. |
+| `llm.py`, `llm_tools.py`, `i18n_translation.py`, `content_policy_generation.py`, `bibliography.py` | Provider calls, tool workflows (catalog lookup, grading), locale translation, researcher text-policy generation, bibliographic helpers. |
 | `corpus_builder.py` | PDF → records pipeline: `PdfCorpusRepository` (file persistence) and `PdfCorpusBuildManager` (stages, checkpoints, enrichment, review mutation). |
 | `corpus_metadata.py` | Pure metadata vocabularies, normalization, and human/LLM ownership rules. |
 | `corpus_pipeline.py` | `BuildScope` and related explicit stage context. |
