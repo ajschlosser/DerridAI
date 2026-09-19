@@ -36,9 +36,9 @@ def install(tmp_path:Path):
     return repo,build
 
 def test_release_identity_and_quebec_i18n():
-    assert APP_VERSION=='0.57.5'
-    assert json.loads(text('web/package.json'))['version']=='0.57.5'
-    assert '0.57.5 — Quizzical Quacker' in text('README.md')
+    assert APP_VERSION=='0.57.6'
+    assert json.loads(text('web/package.json'))['version']=='0.57.6'
+    assert '0.57.6 — Quippy Quokka' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.boundary_second_reader','pdf_corpus.check_with_llm','pdf_corpus.boundary_llm.move_later']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]

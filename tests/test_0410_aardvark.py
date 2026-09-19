@@ -27,7 +27,7 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
     asset=install_asset(repo,count)
-    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.57.5","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.57.6","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 

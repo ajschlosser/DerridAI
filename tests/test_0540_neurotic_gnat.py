@@ -34,9 +34,9 @@ def install(tmp_path:Path):
     return repo,build
 
 def test_release_and_i18n_parity():
-    assert APP_VERSION=='0.57.5'
-    assert json.loads(text('web/package.json'))['version']=='0.57.5'
-    assert '0.57.5 — Quizzical Quacker' in text('README.md')
+    assert APP_VERSION=='0.57.6'
+    assert json.loads(text('web/package.json'))['version']=='0.57.6'
+    assert '0.57.6 — Quippy Quokka' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.slice_record','pdf_corpus.select_from_text','pdf_corpus.redo','pdf_corpus.pdf_source']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
