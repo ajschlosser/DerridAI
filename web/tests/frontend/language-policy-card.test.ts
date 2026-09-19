@@ -68,6 +68,27 @@ describe("researcher text policy card", () => {
     expect(wrapper.get(".language-policy-copy").find("button.btn.primary").exists()).toBe(false);
   });
 
+  it("reports how the policy was generated, so a wrong-language cleanup is visible", async () => {
+    api.system.languageContentPolicy.mockResolvedValue({
+      status: "ready", blocked_terms: TERMS, contextual_terms: [],
+      generation_report: { attempts: 2, removed_as_wrong_language: 7 },
+    });
+    const wrapper = await mountView();
+    expect(wrapper.get(".language-policy-report").text()).toContain("2 attempt(s)");
+    expect(wrapper.get(".language-policy-report").text()).toContain("removed 7 term(s)");
+  });
+
+  it("says which categories are still short so an administrator can top them up", async () => {
+    api.system.languageContentPolicy.mockResolvedValue({
+      status: "ready", blocked_terms: TERMS, contextual_terms: [],
+      generation_report: { attempts: 3, removed_as_wrong_language: 0, short_categories: ["ableist_slurs"] },
+    });
+    const wrapper = await mountView();
+    expect(wrapper.get(".language-policy-gap").text()).toMatch(/ableist slurs/i);
+    api.system.languageContentPolicy.mockResolvedValue({ status: "ready", blocked_terms: TERMS, contextual_terms: [], generation_report: { attempts: 1, removed_as_wrong_language: 0, short_categories: [] } });
+    expect((await mountView()).find(".language-policy-gap").exists()).toBe(false);
+  });
+
   it("shows no badge block before a policy exists", async () => {
     api.system.languageContentPolicy.mockResolvedValue({ status: "missing", blocked_terms: [], contextual_terms: [] });
     const wrapper = await mountView();
