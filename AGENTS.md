@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 # AGENTS.md
 
-Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior.
+Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview, [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) for the scholarly rationale and which capabilities are implemented versus intended.
 
 ## What this project is
 
@@ -46,19 +46,31 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - **Internationalization:** English (`en-US`) and Québec French (`fr-CA`) are first-class. Any new user-facing string must be added to both `api/app/locales` / frontend locale modules with identical key sets and placeholders; parity is regression-tested. No hard-coded UI strings.
 - **Accessibility:** keyboard operability, visible focus, semantic status communication, a 12px minimum type size, and WCAG 2.0 AA. Add or update Storybook stories for new components; the a11y addon and axe tests are gates.
 - **Surfaces:** floating panels use the solid/raised/overlay/glass surface tokens; overlays must be opaque and glass at least 90% opaque. No text may bleed through popovers.
+- **Scholarly provenance is the core requirement.** The chain is source → passage → speaker → position holder → stance → proposition → exact evidence → citation → claim. Preserve it.
+  - Never flatten `speaker`, `quoted_speaker`, and `position_holder` into "Derrida says". A passage Derrida wrote often states another philosopher's position, and editors' or translators' text is not Derrida's.
+  - Never invent evidence, quotations, or citations. Citations and page numbers come from record IDs and metadata through deterministic code, not from the LLM.
+  - Treat wrong attribution, fabricated quotes, wrong work or page, dropped negation, and editorial text taken as Derrida's as high-severity failures, not minor quality issues.
+  - Preserve edition, translation, and page information. Keep the corpus authoritative; vector stores are derived data.
 - **Provenance and LLM output:**
   - Keep deterministic and LLM values both, with confidence, reason, and whether the field was actually checked.
   - LLM values above the 65% confidence threshold and schema-valid populate fields; lower-confidence values stay as `proposed_value` suggestions.
   - Reviewer-confirmed document structure is authoritative over manifest and LLM inference.
   - Validate LLM output against closed vocabularies at the backend boundary, and sanitize model wrappers (fences, separators) only when absent from the source.
+  - LLM output is untrusted until validated. Deterministic code owns IDs, citations, page lookup, exact-quote checks, schema checks, dedup, and embedding compatibility; prefer it over another LLM prompt.
+  - Unresolved or uncertain results (segmentation, metadata, attribution, thin evidence) stay visible and marked for review. Never manufacture certainty, and never silently swallow errors that can affect correctness.
+  - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
+  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (*not, without, if, only*) can carry the proposition.
   - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
 - **Roles:** Researcher accounts must never receive full corpus text or mutate data; enforce this in the API, not just the UI.
+- **Only send what is needed** in API requests, LLM prompts, and updates (for example, a PATCH carries only the changed field). Use operation-specific schemas rather than one giant record payload.
+- **Reproducibility:** RAG runs keep enough state to inspect and rerun them. Grades stay attached to their run and record the grader model; warn on self-grading.
 - **Background work:** long operations are cancellable jobs (`jobs.py`) with visible progress; respect per-provider concurrency limits. Job state is process-local.
 - **Chroma:** one writer per persistence path. The logical `_response_cache` collection is stored physically as `derridai_response_cache` and is a system cache, not a corpus store.
 - **Secrets:** `.env` is git-ignored. Backups and provider profiles can contain API keys; never log or commit them.
 
 ## Working style
 
+- Inspect the actual code before asserting how something works. `docs/PROJECT_CONTEXT.md` mixes implemented and intended design; when the code and a description disagree, say so and do not treat intended design as implemented.
 - Make focused changes; do not refactor or add abstractions beyond the task. Prefer editing existing files.
 - Add a regression test for each behavior change, in a new or existing `tests/test_*.py` (and Vitest/Playwright tests for frontend behavior).
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
