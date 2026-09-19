@@ -256,7 +256,7 @@ const selectedPageMeta=computed(()=>selectedAsset.value?.pages?.find(page=>Numbe
 const selectedPageBlocks=computed(()=>visibleBlocks.value.filter(block=>Number(block.page)===Number(selectedPdfPage.value)));
 const evidenceIdsArray=computed(()=>Array.from(evidenceBlockIds.value));
 const selectedProfile=computed(()=>providerProfiles.value.find(profile=>profile.id===selectedProviderId.value)||null);
-const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v11")||null);
+const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v12")||null);
 const regionTypes=computed(()=>Array.isArray(activeCorpusProfile.value?.region_types)?(activeCorpusProfile.value?.region_types as unknown[]).map(String):[]);
 const discourseRoles=computed(()=>Array.isArray(activeCorpusProfile.value?.discourse_roles)?(activeCorpusProfile.value?.discourse_roles as unknown[]).map(String):[]);
 const metadataKnownValues=computed<Record<string,string[]>>(()=>{const out:Record<string,Set<string>>={};for(const row of records.value){for(const [field,value] of Object.entries(row as Record<string,unknown>)){const values=Array.isArray(value)?value:[value];for(const item of values){if(typeof item!=='string'||!item.trim())continue;(out[field]??=new Set()).add(item.trim())}}}return Object.fromEntries(Object.entries(out).map(([field,values])=>[field,[...values].sort((a,b)=>a.localeCompare(b))]))});
