@@ -3,6 +3,13 @@
   --bg: #f4f2ee;
   --panel: #fffdf9;
   --panel-2: #faf8f4;
+  /* Surface contract: floating/raised UI must never inherit transparency by accident. */
+  --card: #fffdf9;
+  --soft: #faf8f4;
+  --surface-solid: #fffdf9;
+  --surface-raised: #fffefa;
+  --surface-overlay: #fffdf9;
+  --surface-glass: rgba(255, 253, 249, .96);
   --text: #202320;
   --muted: #71766f;
   --line: #dedfd9;
@@ -3724,7 +3731,7 @@ button:disabled[data-disabled-reason],input:disabled[data-disabled-reason],selec
    Corrected 0.30.5 lineage — preserves the 0.30.3 light research workspace
    while layering the 0.30.5 metadata/annotation workflows on top.
    ======================================================================== */
-:root,[data-ui-theme="green"]{--ui-accent:#355f52;--ui-accent-dark:#294c41;--ui-accent-soft:#e8f0ec;--ui-accent-soft-2:#dce9e3;--ui-accent-border:#c9ddd4;--ui-accent-focus:rgba(53,95,82,.13);--ref-sidebar:214px;--ref-topbar:60px;--ref-bg:#f5f7fa;--ref-card:#fff;--ref-line:#e2e8f0;--ref-line-strong:#d4dde8;--ref-text:#17233b;--ref-muted:#64748b;--accent:var(--ui-accent);--accent-2:var(--ui-accent-dark);--accent-soft:var(--ui-accent-soft);--accent-soft-2:var(--ui-accent-soft-2)}
+:root,[data-ui-theme="green"]{--ui-accent:#355f52;--ui-accent-dark:#294c41;--ui-accent-soft:#e8f0ec;--ui-accent-soft-2:#dce9e3;--ui-accent-border:#c9ddd4;--ui-accent-focus:rgba(53,95,82,.13);--ref-sidebar:214px;--ref-topbar:60px;--ref-bg:#f5f7fa;--ref-card:#fff;--ref-line:#e2e8f0;--ref-line-strong:#d4dde8;--ref-text:#17233b;--ref-muted:#64748b;--accent:var(--ui-accent);--accent-2:var(--ui-accent-dark);--accent-soft:var(--ui-accent-soft);--accent-soft-2:var(--ui-accent-soft-2);--bg:var(--ref-bg);--card:var(--ref-card);--soft:#f7f9fc;--text:var(--ref-text);--muted:var(--ref-muted);--line:var(--ref-line);--line-strong:var(--ref-line-strong);--surface-solid:#fff;--surface-raised:#fff;--surface-overlay:#fff;--surface-glass:rgba(255,255,255,.96)}
 [data-ui-theme="blue"]{--ui-accent:#0b67e8;--ui-accent-dark:#074fba;--ui-accent-soft:#eaf3ff;--ui-accent-soft-2:#dbeafe;--ui-accent-border:#cbdff7;--ui-accent-focus:rgba(11,103,232,.11)}
 [data-ui-theme="slate"]{--ui-accent:#4d6076;--ui-accent-dark:#354559;--ui-accent-soft:#edf1f5;--ui-accent-soft-2:#dfe6ed;--ui-accent-border:#d1dbe5;--ui-accent-focus:rgba(77,96,118,.12)}
 html,body,#app{background:var(--ref-bg);color:var(--ref-text)}body{font-size:15px;line-height:1.5;background:linear-gradient(180deg,#f8fafc 0,#f5f7fa 100%)}
