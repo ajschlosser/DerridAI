@@ -27,7 +27,7 @@ const preview: Preview = {
         icon: "globe",
         items: [
           { value: "en-US", title: "English (United States)" },
-          { value: "fr-CA", title: "Français (Québec)" },
+          { value: "fr-CA", title: "Français" },
         ],
         dynamicTitle: true,
       },

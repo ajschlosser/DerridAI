@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.4 — Whimsical Wombat
+
+The Home Operations panel is rebuilt for keyboard and screen-reader use and to be easier to read, and the remaining accessibility problems on the Home page and sign-in screen are fixed. See [0.62.4](docs/notes/0.62.4.md).
+
 ## 0.62.3 — Vigilant Viper
 
 Vector Stores can use a running Chroma server as well as the local filesystem, and the workspace is a Vue page. See [0.62.3](docs/notes/0.62.3.md).

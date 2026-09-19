@@ -60,6 +60,20 @@ Background operations are managed from Dashboard and also appear in a floating o
 
 The dock appears only while there is something to show. It sits at the bottom-center of the page; drag it anywhere, and double-click the handle to recenter it. Collapse it to a status pill, or expand it to cancel work, open a result, or dismiss a finished item. Dismissing a finished operation — or using **Clear finished** on Dashboard or in the dock — removes it from both surfaces. While the dock is shown, the page keeps extra scroll room beneath the content so it does not permanently cover controls. Progress for a PDF corpus build is shown as "N% overall" because its overall progress blends several stages and has no meaningful item count. The Corpus Builder's metadata card shows its real count as "settled / total tasks".
 
+### The Operations panel
+
+The Dashboard's **Background operations** panel groups work by what needs you:
+
+- **Needs attention**: failed or blocked operations, and finished ones whose results still await a decision. A failure shows what went wrong right on the row.
+- **In progress**: running and queued operations, with a progress bar, elapsed time, and an estimated time remaining when the rate is steady (not shown for PDF corpus builds, whose progress blends several stages).
+- **History**: everything else, grouped by day and capped to the most recent few; **Show all** reveals the rest.
+
+The filter chips (**All**, **Running**, **Needs attention**, **Finished**) show live counts and narrow the list. Each row offers one primary action for its outcome (**Open result**, **Open corpus build**, **Review results**), plus **Details** and **Cancel** or **Remove**.
+
+**Remove** and **Clear finished** are undoable instead of asking for confirmation: the rows disappear at once, an **Undo** button stays for a few seconds, and the deletion is only sent to the server afterwards (or immediately if you leave the page). **Clear finished** never removes running operations.
+
+The panel is built for keyboard and screen-reader use: real headings and lists, a labelled progress bar per operation, buttons named after their row ("Cancel PDF corpus build"), status shown as text plus an icon, and one polite announcement when an operation completes, fails, or is cancelled. Updates never move keyboard focus. Motion follows the "reduce motion" system setting, and the panel adapts to high-contrast (forced colors) modes.
+
 Supported operation types:
 
 - LLM review
