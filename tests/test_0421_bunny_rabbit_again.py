@@ -1,3 +1,11 @@
+"""Release identity, manifest normalization, and metadata-gated acceptance (release 0.42.1).
+
+Why: the profile and prompt version strings are part of a build's provenance; they
+must change deliberately when semantics change. Acceptance must not bypass
+unresolved metadata.
+How: exercises PdfCorpusRepository / PdfCorpusBuildManager on a temporary directory.
+"""
+
 from __future__ import annotations
 from pathlib import Path
 import json, sys
@@ -10,6 +18,13 @@ def text(path:str)->str:
     return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_profile():
+    """Pin the active corpus profile and prompt version identifiers.
+
+    What: profile "derrida-scholarly-v12", metadata prompt "derridai-record-metadata-v9",
+    exactly one registered profile, and review_metadata_fields matching the constant.
+    Why: AGENTS.md requires bumping these when their semantics change; this test fails
+    until the change is made on purpose (update the strings when you bump them).
+    """
     assert cb.PROFILE_VERSION=='derrida-scholarly-v12'
     assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v9'
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
@@ -17,10 +32,23 @@ def test_release_identity_and_profile():
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)
 
 def test_manifest_nullable_notes_are_normalized_not_rejected():
+    """A null "notes" value from an LLM becomes an empty string instead of failing validation.
+
+    Why: models often emit null for empty optional fields; rejecting the whole manifest
+    for that would waste a paid/slow LLM call.
+    """
     manifest=cb.DocumentManifestModel.model_validate({'title':'Book','notes':None})
     assert manifest.notes==''
 
 def test_accept_requires_uncertain_metadata_resolution_and_confirms_llm_fields(tmp_path:Path):
+    """Accepting a record needs its unresolved metadata decided, then confirms LLM fields.
+
+    What: r1 has an unresolved position_holder (52% confidence). Accepting must raise
+    ValueError mentioning metadata. After a human patches position_holder, the review
+    list is empty and acceptance succeeds.
+    Also checks: the confident LLM-inferred discourse_role becomes "human_confirmed"
+    on acceptance, so an accepted record has reviewer-owned provenance.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     cb._json_write(repo.asset_meta_path('a'), {'asset_id':'a','sha256':'x','filename':'x.pdf','page_count':1,'block_count':1,'ocr_pages':0,'warnings':[],'metadata':{},'pages':[]})
     repo.asset_blocks_path('a').write_text(json.dumps({'block_id':'b1','page':1,'bbox':[0,0,1,1],'type':'paragraph','text':'text','extraction_method':'native','confidence':1.0})+'\n',encoding='utf-8')

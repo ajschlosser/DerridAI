@@ -1,4 +1,12 @@
-"""Exercise endpoint policy without starting global database/job workers."""
+"""Researcher RAG must use the approved server-side provider profile (release 0.61.0).
+
+Why: researchers may not choose models or endpoints. The API must ignore whatever
+model/base URL/generation options the browser sends and use the administrator's
+approved profile instead.
+How: importing app.main would start global database and job workers, so the test
+extracts just the two functions it needs from main.py with `ast`, compiles them
+into an isolated namespace, and substitutes mocks for the job manager and stores.
+"""
 from __future__ import annotations
 
 import ast
@@ -13,6 +21,13 @@ from app.models import RAGRunRequest
 
 
 def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
+    """Browser-supplied model, base_url and temperature are overridden by the profile.
+
+    What: the request asks for "browser-model" at http://browser:11434 with
+    temperature 1.5, but the approved profile says "approved-model" at
+    http://approved:11434 with temperature 0.2. The job that gets created must carry
+    the approved values and be owned by the requesting researcher.
+    """
     path = Path(__file__).resolve().parents[1] / "api/app/main.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
