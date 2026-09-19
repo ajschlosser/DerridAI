@@ -25,7 +25,7 @@ def test_current_release_keeps_v6_registered_and_uses_v8_contract():
     assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==11
+    assert profile["version"]==12
     assert profile["boundary_batch_size"]>=2
     assert profile["max_llm_boundary_calls_per_100_atoms"]<100
 
