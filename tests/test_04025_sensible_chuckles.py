@@ -15,7 +15,13 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
 
-def text(path): return (ROOT/path).read_text(encoding="utf-8")
+def text(path):
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
+    return (ROOT/path).read_text(encoding="utf-8")
 
 
 

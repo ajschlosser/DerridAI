@@ -1,3 +1,12 @@
+"""Vector-store upsert payload reduction and audit-history handling (release 0.30.11, "Big Packet Reduction").
+
+Why: sending each record's full audit history on every update made requests huge. The client now
+omits history and the server keeps, appends to, or replaces it. Compaction must not touch
+unrelated "updates" keys elsewhere in a payload.
+How: a fake in-memory collection and embeddings stand in for ChromaDB (a stub `chromadb` module is
+installed if the package is absent), and the real ChromaStore.upsert_many logic runs on top.
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -21,11 +30,13 @@ compact_nested_record_payloads = store_module.compact_nested_record_payloads
 
 
 class FakeEmbeddings:
+    """Returns a constant vector per document so no embedding model is needed."""
     def embed(self, docs, records, embedding_field, *, provider=None, model=None):
         return [[1.0, 0.0] for _ in docs]
 
 
 class FakeCollection:
+    """In-memory stand-in for a Chroma collection that remembers the last upsert."""
     def __init__(self, existing=None):
         self.existing = existing or {}
         self.last_upsert = None
@@ -53,6 +64,7 @@ class FakeCollection:
 
 
 class FakeStore(ChromaStore):
+    """ChromaStore wired to the fake collection with a fixed "precomputed" embedding spec."""
     def __init__(self, collection):
         self.collection = collection
         self.embeddings = FakeEmbeddings()
@@ -65,16 +77,19 @@ class FakeStore(ChromaStore):
 
 
 def encoded_updates(entries):
+    """Encode an audit-history list the way ChromaStore stores it in metadata."""
     return _JSON_PREFIX + json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
 
 
 def decoded_updates(metadata):
+    """Decode the stored audit-history metadata back into a list."""
     raw = metadata.get("updates", "")
     assert raw.startswith(_JSON_PREFIX)
     return json.loads(raw[len(_JSON_PREFIX):])
 
 
 def test_compact_record_omits_history_but_keeps_count():
+    """Compact records drop the "updates" list but keep _updates_count."""
     record = {"record_id": "r1", "text": "x", "updates": [{"field_name": "text"}] * 4}
     compact = compact_record_payload(record)
     assert "updates" not in compact
@@ -83,6 +98,7 @@ def test_compact_record_omits_history_but_keeps_count():
 
 
 def test_nested_rag_record_compaction_does_not_delete_unrelated_updates_key():
+    """Only real record payloads lose "updates"; an unrelated "updates" key in a RAG payload stays."""
     payload = {
         "evidence": [{"record": {"record_id": "r1", "updates": [{"x": 1}]}}],
         "pipeline": {"updates": ["this is not record audit history"]},
@@ -94,6 +110,7 @@ def test_nested_rag_record_compaction_does_not_delete_unrelated_updates_key():
 
 
 def test_upsert_without_history_preserves_existing_history_server_side():
+    """Upserting a record with no history leaves the stored history and count unchanged."""
     old = [{"field_name": "speaker", "new_value": "Derrida"}]
     collection = FakeCollection({
         "r1": {
@@ -110,6 +127,7 @@ def test_upsert_without_history_preserves_existing_history_server_side():
 
 
 def test_upsert_appends_only_audit_delta_server_side():
+    """Sending only the new audit entries appends them to the stored history (count 1 -> 2)."""
     old = [{"field_name": "speaker", "new_value": "Derrida"}]
     delta = [{"field_name": "stance", "new_value": "questions"}]
     collection = FakeCollection({
@@ -131,6 +149,7 @@ def test_upsert_appends_only_audit_delta_server_side():
 
 
 def test_explicit_history_replacement_is_possible_without_record_round_trip():
+    """An explicit empty replacement clears the history (count 0) without resending the record."""
     old = [{"field_name": "a"}, {"field_name": "b"}]
     collection = FakeCollection({
         "r1": {

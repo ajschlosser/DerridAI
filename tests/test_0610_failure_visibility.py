@@ -1,4 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
+"""Failures that could affect scholarship must be surfaced, not swallowed (release 0.61.0).
+
+Why: AGENTS.md forbids silently swallowing errors that can affect segmentation, metadata,
+attribution, citation, evidence, or durable operation state. Each test injects a specific failure
+and asserts it surfaces as an error or a build warning.
+How: monkeypatches the failing dependency (repository read, Chroma client, job database) and calls
+the real code path; small fake classes stand in for storage.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,6 +28,7 @@ from app.models import UpsertJobCreate
 
 
 def make_build(repo: cb.PdfCorpusRepository) -> dict:
+    """Create a temp asset and a one-block build for the tests below."""
     asset_id = "asset-0610-failure"
     asset = {
         "asset_id": asset_id,
@@ -55,6 +65,7 @@ def make_build(repo: cb.PdfCorpusRepository) -> dict:
 
 
 def test_metadata_enrichment_propagates_build_state_refresh_failure(tmp_path: Path, monkeypatch):
+    """If the current build state cannot be read, enrichment raises instead of using stale state."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = make_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -71,6 +82,10 @@ def test_metadata_enrichment_propagates_build_state_refresh_failure(tmp_path: Pa
 
 
 def test_metadata_family_stops_when_live_reviewer_ownership_cannot_be_read(tmp_path: Path, monkeypatch):
+    """If human ownership of fields cannot be checked, the LLM family is not run.
+
+    Why: without that check the model could overwrite a reviewer's decision.
+    """
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = make_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -96,10 +111,12 @@ def test_metadata_family_stops_when_live_reviewer_ownership_cannot_be_read(tmp_p
 
 
 class NotFoundError(Exception):
+    """Stands in for Chroma's "collection does not exist" exception."""
     pass
 
 
 class FakeCacheClient:
+    """Chroma client whose get_collection always raises the given error."""
     def __init__(self, exc: Exception):
         self.exc = exc
 
@@ -108,12 +125,14 @@ class FakeCacheClient:
 
 
 def bare_store(client) -> cs.ChromaStore:
+    """Build a ChromaStore without running __init__, wired to a fake client."""
     store = object.__new__(cs.ChromaStore)
     store._client = client
     return store
 
 
 def test_response_cache_distinguishes_absence_from_storage_failure():
+    """A missing response-cache collection means "empty"; any other error is raised."""
     missing = bare_store(FakeCacheClient(NotFoundError("collection does not exist")))
     result = missing.get_response_cache_records()
     assert result["exists"] is False
@@ -124,11 +143,13 @@ def test_response_cache_distinguishes_absence_from_storage_failure():
 
 
 class BrokenSearchCollection:
+    """Collection whose reads always fail."""
     def get(self, **_kwargs):
         raise RuntimeError("storage read failed")
 
 
 def test_keyword_search_does_not_hide_storage_failure(monkeypatch):
+    """Keyword search raises the storage error instead of returning "no results"."""
     store = object.__new__(cs.ChromaStore)
     monkeypatch.setattr(store, "_collection", lambda _name: BrokenSearchCollection())
     with pytest.raises(RuntimeError, match="storage read failed"):
@@ -136,6 +157,7 @@ def test_keyword_search_does_not_hide_storage_failure(monkeypatch):
 
 
 class FailingQueueStore:
+    """Store where marking the collection failed also fails (secondary failure)."""
     def set_build_status(self, _name: str, _status: str):
         return None
 
@@ -144,11 +166,16 @@ class FailingQueueStore:
 
 
 class NoopExecutor:
+    """Executor that fails the test if any work is queued."""
     def submit(self, *_args, **_kwargs):
         raise AssertionError("worker must not be queued when persistence fails")
 
 
 def test_vector_queue_surfaces_secondary_failure_status_persistence_error(tmp_path: Path):
+    """If queuing fails and recording the failure also fails, both errors are reported.
+
+    No worker may be queued and no spool file may be left behind.
+    """
     manager = object.__new__(jobs.UpsertJobManager)
     manager._store = FailingQueueStore()
     manager._jobs = {}
@@ -167,6 +194,7 @@ def test_vector_queue_surfaces_secondary_failure_status_persistence_error(tmp_pa
 
 
 def test_editorial_memory_failure_is_recorded_as_build_warning(tmp_path: Path, monkeypatch):
+    """If editorial memory cannot be read, enrichment continues but the build shows a warning."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = make_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)

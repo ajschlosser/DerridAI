@@ -1,3 +1,14 @@
+"""Corpus Builder runtime resilience: bad LLM output, segmentation guards, resume (release 0.40.1, "Dorar the Explorah").
+
+Why: local LLMs return malformed, truncated, or non-JSON answers. A book-length build must
+degrade safely: never invent a record, never collapse a book into one giant record, never
+lose text, and always leave a state a human can review or resume.
+How: replaces `chat_complete` so the "LLM" returns broken or empty replies on demand, then runs
+the manager's segmentation/enrichment/run steps on synthetic blocks in a temp repository.
+Note: at import this file installs a stub `app.rag` module (via setdefault) so these tests do not
+need vector-store dependencies; `_blocks` and `_build` are shared helpers below.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,6 +35,7 @@ from app import corpus_builder as cb
 
 
 def _blocks(count: int = 30):
+    """Build `count` synthetic paragraph blocks (ten per page) with printed page labels."""
     return [
         {
             "block_id": f"p001-b{i:03d}",
@@ -40,6 +52,7 @@ def _blocks(count: int = 30):
 
 
 def _build(repo: cb.PdfCorpusRepository, *, blocks: int = 30):
+    """Create a temp build referring to pdf-test with the given block count."""
     return repo.create_build({
         "asset_id": "pdf-test",
         "source_sha256": "abc",
@@ -57,12 +70,18 @@ def _build(repo: cb.PdfCorpusRepository, *, blocks: int = 30):
 
 
 def test_parse_json_robust_handles_common_model_wrappers_and_trailing_commas():
+    """Extract the JSON object from a fenced reply with trailing commas and extra text."""
     raw = '''Here is the requested object:\n```json\n{"boundaries": [{"after_block_id": "p001-b001", "decision": "keep", "confidence": 0.9, "reason": "continuous", "change": {},},],}\n```\nextra'''
     parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
     assert parsed["boundaries"][0]["after_block_id"] == "p001-b001"
 
 
 def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path: Path):
+    """Malformed replies are retried with a correction note and a larger token budget.
+
+    Two invalid answers then a valid one: three calls total, the second prompt says the previous
+    response could not be validated, and max_tokens grows on retry.
+    """
     calls = []
 
     def fake_chat_complete(**kwargs):
@@ -86,6 +105,11 @@ def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path
 
 
 def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is_invalid(monkeypatch, tmp_path: Path):
+    """Even if every LLM answer is unusable, segmentation stays sound and unblocked.
+
+    Boundaries then come only from the deterministic normalizer; the build is not blocked and has no
+    failed windows or review items.
+    """
     monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "LLM did not return a valid JSON object.")
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -99,6 +123,11 @@ def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is
 
 
 def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch, tmp_path: Path):
+    """An HTML/garbage reply during enrichment yields a flagged record, not a crash.
+
+    The record comes back with metadata_needs_attention, incomplete metadata, and still has citation
+    strings, so a reviewer can finish it by hand.
+    """
     monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "<html>502 but rendered as text</html>")
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -132,12 +161,14 @@ def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch,
 
 
 def test_parse_json_robust_accepts_safe_python_literal_objects_from_local_models():
+    """Accept a Python-style dict ('single quotes', True, None) from a local model."""
     raw = "{'boundaries': [], 'ok': True, 'note': None}"
     parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
     assert parsed == {"boundaries": [], "ok": True, "note": None}
 
 
 def _install_asset(repo: cb.PdfCorpusRepository, blocks: list[dict]):
+    """Write an asset and its blocks to the temp repository."""
     asset={
         "asset_id":"pdf-test","sha256":"abc","filename":"test.pdf","page_count":max(int(b["page"]) for b in blocks),
         "block_count":len(blocks),"ocr_pages":0,"warnings":[],"metadata":{},"pages":[],
@@ -149,6 +180,11 @@ def _install_asset(repo: cb.PdfCorpusRepository, blocks: list[dict]):
 
 
 def test_run_stops_before_record_construction_when_segmentation_is_unresolved(monkeypatch, tmp_path: Path):
+    """A run with truncated LLM output still reaches review with records.
+
+    30 blocks and a model that returns "truncated {" leave the build "awaiting_review" with
+    records written (deterministic size splitting), rather than failing outright.
+    """
     monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "truncated {")
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     blocks=_blocks(30)
@@ -163,6 +199,11 @@ def test_run_stops_before_record_construction_when_segmentation_is_unresolved(mo
 
 
 def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_guard(monkeypatch,tmp_path:Path):
+    """A long source where the LLM finds no boundaries is still split by size.
+
+    80 long blocks and an always-empty boundary list produce size-based boundaries only, marked
+    provisional, with no blocking and no review items.
+    """
     monkeypatch.setattr(cb,"chat_complete",lambda **kwargs:'{"boundaries": []}')
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -180,6 +221,10 @@ def test_long_source_with_valid_empty_boundary_arrays_is_blocked_by_topology_gua
 
 
 def test_execution_budget_rejects_impossible_context_before_build():
+    """A context window smaller than the requested prompt plus output fails up front.
+
+    Why: better a clear "context is too small" error than hours of truncated LLM output.
+    """
     request={"generation":{"num_ctx":4096},"stage_limits":{"segmentation_window_tokens":5000,"segmentation_num_predict":1200}}
     try:
         cb.PdfCorpusBuildManager._validate_execution_budget(request)
@@ -190,6 +235,7 @@ def test_execution_budget_rejects_impossible_context_before_build():
 
 
 def test_finished_corpus_operation_can_be_hidden_without_deleting_build(tmp_path:Path):
+    """Removing a finished operation from the list keeps the underlying build."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_build(repo)
@@ -202,6 +248,7 @@ def test_finished_corpus_operation_can_be_hidden_without_deleting_build(tmp_path
 
 
 def test_reconciliation_failure_is_an_explicit_topology_blocker(monkeypatch, tmp_path: Path):
+    """A classifier failure on the only candidate keeps the blocks together and is counted."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     blocks = _blocks(12)
@@ -253,6 +300,11 @@ def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(
 
 
 def test_manifest_review_checkpoint_stops_before_segmentation_and_confirm_resumes(monkeypatch, tmp_path: Path):
+    """With manifest review enabled the build pauses before segmentation until confirmed.
+
+    The build waits in "awaiting_manifest_review" without calling segmentation; confirming queues
+    it and records the confirmed manifest revision.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     blocks=_blocks(8)
     _install_asset(repo,blocks)
@@ -276,6 +328,11 @@ def test_manifest_review_checkpoint_stops_before_segmentation_and_confirm_resume
 
 
 def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(monkeypatch, tmp_path: Path):
+    """Resuming a blocked build queues one retry; a second resume does not start another.
+
+    The operation reports "Retrying 1 unresolved segmentation region(s)", the blocked flag is kept
+    until the retry resolves it, and only one background job is submitted.
+    """
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build = _build(repo, blocks=30)

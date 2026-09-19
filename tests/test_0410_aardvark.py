@@ -21,6 +21,11 @@ from app.models import PdfCorpusBuildCreate
 
 
 def text(path:str)->str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT/path).read_text(encoding="utf-8")
 
 

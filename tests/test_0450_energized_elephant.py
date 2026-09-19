@@ -1,3 +1,13 @@
+"""Metadata stage timeouts, progress, checkpoints, and concurrent writes (release 0.45.0, "Energized Elephant").
+
+Why: enrichment runs three LLM "families" per record (discourse, quotation, indexing).
+Each has its own timeout, checkpoint, and ledger entry so a slow or failed family does
+not lose the others, and progress is visible in the operations list. Record files are
+written by several threads and must never be corrupted.
+How: `_install_minimal_build` makes a one-block build; `_metadata_result` returns a canned
+LLM reply per family. Other helpers in this module are reused by later test files.
+"""
+
 from __future__ import annotations
 
 import json
@@ -17,12 +27,18 @@ from app import corpus_builder as cb
 
 
 def text(path:str)->str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT/path).read_text(encoding='utf-8')
 
 
 
 
 def test_metadata_stage_timeouts_are_configurable_and_reasonable():
+    """Default family timeouts are at most 300 seconds and can be overridden per family."""
     limits=cb.PdfCorpusBuildManager._stage_timeouts({})
     assert limits['discourse'] <= 300
     assert limits['quotation'] <= 300
@@ -37,6 +53,11 @@ def test_metadata_stage_timeouts_are_configurable_and_reasonable():
 
 
 def test_operations_surface_metadata_task_progress():
+    """The operations list shows task-level metadata progress.
+
+    4 done + 1 failed + 1 skipped = 6 of 33 settled, 3 active, 24 queued, 2 needing
+    review; the stage detail string and running count must reflect that.
+    """
     operation=cb.PdfCorpusBuildManager._operation_from_build({
         'build_id':'build-test','status':'running','stage':'enriching','progress':0.5,
         'metadata_tasks_total':33,'metadata_tasks_completed':4,'metadata_tasks_failed':1,
@@ -51,6 +72,7 @@ def test_operations_surface_metadata_task_progress():
 
 
 def _install_minimal_build(repo:cb.PdfCorpusRepository):
+    """Create a one-page, one-block asset and a build for it (reused by other test files)."""
     asset={"asset_id":"asset-elephant","sha256":"sha","filename":"elephant.pdf","page_count":1,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
     cb._json_write(repo.asset_meta_path(asset["asset_id"]),asset)
     repo.asset_blocks_path(asset["asset_id"]).write_text(json.dumps({"block_id":"b1","page":1,"bbox":[0,0,100,100],"type":"paragraph","text":"Derrida discusses hospitality.","extraction_method":"native","confidence":1.0})+'\n',encoding='utf-8')
@@ -58,6 +80,7 @@ def _install_minimal_build(repo:cb.PdfCorpusRepository):
 
 
 def _metadata_result(schema_name:str):
+    """Canned LLM reply for a family: discourse gives region/role, quotation is empty, indexing gives a topic."""
     if schema_name=='derridai_record_discourse':
         return {"metadata":{"region_type":"main_text","primary_text":True,"discourse_role":"analysis"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"body"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"body"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"analysis"}},"review_reason":""}
     if schema_name=='derridai_record_quotation':
@@ -66,6 +89,12 @@ def _metadata_result(schema_name:str):
 
 
 def test_metadata_families_checkpoint_independently_and_record_execution_ledger(tmp_path,monkeypatch):
+    """Each family runs in order, reports events, and leaves an execution ledger.
+
+    Events must be running/complete for discourse, quotation, indexing in order. Afterwards
+    all stages are "complete", the ledger records provider, model, timeout (90 s override)
+    and input size, and the raw stage results are dropped from the record.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -83,6 +112,11 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
 
 
 def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch):
+    """A family with a saved checkpoint is not sent to the LLM again.
+
+    With the discourse result already stored, only quotation and indexing are called and
+    the record ends metadata-complete. Why: resuming a long build must not repeat paid work.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -98,6 +132,7 @@ def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch
 
 
 def test_settle_metadata_unresolved_is_explicit_build_state(tmp_path):
+    """"Continue with unresolved metadata" is recorded on the build with a timestamp."""
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -108,6 +143,11 @@ def test_settle_metadata_unresolved_is_explicit_build_state(tmp_path):
 
 
 def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
+    """Two threads saving different large record sets never produce a mixed or torn file.
+
+    Each thread saves and immediately reloads 20 times; every load must equal one of the
+    two complete sets. Why: writes use a temp file and atomic replace under a lock.
+    """
     import threading
     from app.corpus_builder import PdfCorpusRepository
 

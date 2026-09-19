@@ -1,3 +1,12 @@
+"""Human text corrections, manifest overrides, selective reruns, and readiness (release 0.46.0, "Feral Fox").
+
+Why: reviewers fix bad extractions and override document-level metadata per record.
+Those human decisions must be remembered, must reopen acceptance when they change
+reviewed content, and must survive reruns and manifest edits.
+How: `install_review_build` makes a temp build containing one record built from the
+given fields; LLM calls are faked where enrichment runs.
+"""
+
 from __future__ import annotations
 
 import json
@@ -18,10 +27,16 @@ from app.config import APP_VERSION
 
 
 def text(path: str) -> str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT / path).read_text(encoding="utf-8")
 
 
 def install_review_build(tmp_path: Path, record: dict):
+    """Create a temp repository and build with one record (r1) built from the given fields."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     asset = {
         "asset_id": "asset-fox", "sha256": "sha-fox", "filename": "fox.pdf",
@@ -64,6 +79,13 @@ def install_review_build(tmp_path: Path, record: dict):
 
 
 def test_human_text_correction_preserves_immutable_extraction_and_can_resolve_source_issue(tmp_path: Path):
+    """Correcting text keeps the original extraction and can clear the source issue.
+
+    A record with a replacement character is corrected. The new text is stored, the
+    original stays in source_extracted_text, status is "human_corrected", the issue moves
+    to resolved_source_quality_issues, and history records the previous text's SHA-256
+    and a diff. Why: the change must be auditable and reversible.
+    """
     original = "A bro�ken extraction."
     record = {
         "text": original,
@@ -84,6 +106,7 @@ def test_human_text_correction_preserves_immutable_extraction_and_can_resolve_so
 
 
 def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path):
+    """Editing an accepted record sends it back to pending review with a text_corrected event."""
     record = {
         "text": "Accepted text.",
         "review_disposition": "accepted",
@@ -103,6 +126,11 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
 
 
 def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_overwrite():
+    """A record-level author override survives later manifest changes.
+
+    The manifest author is inherited first (status "inherited"); after a human override,
+    changing the manifest author does not replace it.
+    """
     record = {"metadata_field_status": {}, "pdf_pages": [10]}
     manifest = {"title": "Document title", "document_author": "Jacques Derrida", "main_text_start_page": 5, "main_text_end_page": 20}
     cb.PdfCorpusBuildManager._apply_manifest_metadata(record, manifest)
@@ -115,6 +143,11 @@ def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_over
 
 
 def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_all(tmp_path: Path, monkeypatch):
+    """Fast mode only runs discourse when there is no quotation signal; deep runs everything.
+
+    Fast: only the discourse family is called; quotation and indexing become "skipped".
+    Deep: all three families are called, in order.
+    """
     repo, build = install_review_build(tmp_path, {"text": "Derrida discusses hospitality without a direct citation."})
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
@@ -138,6 +171,7 @@ def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_a
 
 
 def test_source_problem_is_not_mislabeled_as_topology():
+    """A source-extraction problem is a "source" issue, not a "topology" one."""
     record = {"source_quality_issues": [{"code": "replacement_character", "severity": "minor"}], "review_reason": "Source extraction issue: replacement_character."}
     codes = cb.PdfCorpusBuildManager._review_issue_codes(record)
     assert "source" in codes
@@ -147,6 +181,11 @@ def test_source_problem_is_not_mislabeled_as_topology():
 
 
 def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(tmp_path: Path, monkeypatch):
+    """Rerunning only the discourse family keeps human values and other families' results.
+
+    The model proposes a different speaker, but the human-confirmed one is kept; only
+    discourse is called; quotation and indexing stay "complete".
+    """
     record = {
         "text": "Derrida discusses hospitality.",
         "speaker": "Human reviewer",
@@ -177,6 +216,7 @@ def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(
 
 
 def test_document_manifest_refresh_preserves_explicit_record_override(tmp_path: Path):
+    """Editing the document manifest does not overwrite a record-level human override."""
     record = {
         "text": "Primary text.",
         "document_author": "Section author",
@@ -195,6 +235,11 @@ def test_document_manifest_refresh_preserves_explicit_record_override(tmp_path: 
 
 
 def test_resolved_record_source_issue_unblocks_raw_page_quality_for_publication_readiness():
+    """Raw page-quality warnings block publishing only while record-level issues remain.
+
+    With no open source problems the build is publishable; with one open source problem a
+    "source_quality" blocker appears.
+    """
     build = {
         "record_count": 1, "accepted_count": 1, "rejected_count": 0, "needs_review_count": 0,
         "metadata_total": 1, "metadata_completed": 1, "metadata_issue_summary": {"fields_unresolved": 0, "records_incomplete": 0},
