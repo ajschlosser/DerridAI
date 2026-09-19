@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.2 — Vexing Vixen
+
+The sidebar is complete as soon as you sign in, researcher text policies are generated in the language they are for, and the language and policy screens lose their regional special cases. See [0.62.2](docs/notes/0.62.2.md).
+
 ## 0.62.1 — Factory Reset
 
 NUKE now returns DerridAI to a first-run install: users, corpora, vector stores, and job history are deleted, and the next load asks for a new administrator. The sign-in screen, footer, and API health endpoints show the git commit next to the version. See [0.62.1](docs/notes/0.62.1.md).
