@@ -19,14 +19,14 @@ def block(i:int,chars:int=320,kind:str="paragraph",text:str|None=None):
     return {"block_id":f"b{i}","page":1+i//8,"type":kind,"text":text or base,"bbox":[0,i,1,i+1],"extraction_method":"text","confidence":1.0}
 
 def test_release_profile_and_default_record_sizing():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v11"
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["preferred_record_chars"]==1750
     assert profile["record_length_tolerance"]==200
     assert profile["long_record_chars"]==3500
     assert profile["absolute_record_chars"]==6000
     body=PdfCorpusBuildCreate(asset_id="asset")
-    assert body.profile_id=="derrida-scholarly-v11"
+    assert body.profile_id=="derrida-scholarly-v12"
     assert body.record_sizing.preferred_record_chars==1750
     assert body.record_sizing.absolute_record_chars==6000
 
