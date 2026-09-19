@@ -14,7 +14,6 @@ const meta = {
 } satisfies Meta<typeof CountryFlagPicker>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Canada: Story = {};
+export const French: Story = {};
 export const UnitedStates: Story = { args: { modelValue: "🇺🇸", localeCode: "en-US" } };
 export const Neutral: Story = { args: { modelValue: "🌐", localeCode: "eo" } };
-export const QuebecSymbolAlternative: Story = { args: { modelValue: "⚜️", localeCode: "fr-CA" } };

@@ -37,6 +37,14 @@ def normalize_locale_code(code: str) -> str:
         parts.extend(part.lower() for part in variants.split("-") if part)
     return "-".join(parts)
 
+# Built-in languages are seed data: their name and flag are stored with the language like any
+# other, and nothing branches on a locale code to decide how a flag looks.
+BUILT_IN_LANGUAGES: dict[str, dict[str, Any]] = {
+    "en-US": {"name": "English", "flag": "🇺🇸", "dictionary": DEFAULT_EN_US},
+    "fr-CA": {"name": "Français", "flag": "🇨🇦", "dictionary": DEFAULT_FR_CA},
+}
+
+
 class SystemStore:
     def __init__(self) -> None:
         self.repository = system_repository
@@ -48,10 +56,7 @@ class SystemStore:
         return {
             "researcher_provider_profiles": [],
             "annotations": [],
-            "languages": {
-                "en-US": {"name": "English", "flag": "🇺🇸", "dictionary": DEFAULT_EN_US},
-                "fr-CA": {"name": "Français (Québec)", "flag": "🇨🇦", "dictionary": DEFAULT_FR_CA},
-            },
+            "languages": {code: dict(language) for code, language in BUILT_IN_LANGUAGES.items()},
         }
 
     def _ensure(self) -> None:
@@ -188,15 +193,15 @@ class SystemStore:
             return None
         with self._lock:
             value = copy.deepcopy(self.repository.get_language(code))
-        if code in {"en-US", "fr-CA"}:
-            defaults = DEFAULT_EN_US if code == "en-US" else DEFAULT_FR_CA
-            merged = dict(defaults)
+        if code in BUILT_IN_LANGUAGES:
+            built_in = BUILT_IN_LANGUAGES[code]
+            merged = dict(built_in["dictionary"])
             if isinstance(value, dict) and isinstance(value.get("dictionary"), dict):
                 merged.update({str(key): str(item) for key, item in value["dictionary"].items()})
             return {
                 "code": code,
-                "name": str((value or {}).get("name") or ("English" if code == "en-US" else "Français (Québec)")),
-                "flag": str((value or {}).get("flag") or ("🇺🇸" if code == "en-US" else "🇨🇦")),
+                "name": str((value or {}).get("name") or built_in["name"]),
+                "flag": str((value or {}).get("flag") or built_in["flag"]),
                 "dictionary": merged,
                 "content_policy_ready": self._policy_ready(value if isinstance(value, dict) else None),
                 **({"translation_report": copy.deepcopy(value.get("translation_report"))} if isinstance(value, dict) and isinstance(value.get("translation_report"), dict) else {}),
@@ -258,7 +263,7 @@ class SystemStore:
 
     def delete_language(self, code: str) -> None:
         code = normalize_locale_code(code)
-        if code in {"en-US", "fr-CA"}:
+        if code in BUILT_IN_LANGUAGES:
             raise ValueError("Built-in languages cannot be removed.")
         with self._lock:
             if not self.repository.delete_language(code):
@@ -281,7 +286,7 @@ class SystemStore:
         code = normalize_locale_code(code)
         clean = normalize_content_policy(policy, require_ready=True)
         with self._lock:
-            if self.repository.get_language(code) is None and code not in {"en-US", "fr-CA"}:
+            if self.repository.get_language(code) is None and code not in BUILT_IN_LANGUAGES:
                 raise KeyError(code)
             if not self.repository.put_content_policy(code, clean):
                 # Built-ins may exist only as merged Python defaults until first write.

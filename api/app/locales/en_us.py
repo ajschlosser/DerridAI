@@ -428,7 +428,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'language.content_policy_count': '{count} terms',
  'language.content_policy_generate': 'Generate policy',
  'language.content_policy_generate_help': 'The selected provider compiles forbidden terms for this locale. Built-in '
-                                           'English and Québec French need this once after the first administrator '
+                                           'English and French need this once after the first administrator '
                                            'account is created. Installing a new locale generates a policy automatically.',
  'language.content_policy_generated': 'Researcher text policy generated.',
  'language.content_policy_generating': 'Generating researcher text policy…',
@@ -566,9 +566,6 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'language.provider_profile_required': 'Configure an LLM provider profile before installing a dictionary.',
  'language.provider_unavailable': 'The selected provider cannot be reached: {message}',
  'language.provider_unavailable_short': 'provider unavailable',
- 'language.quebec_symbol': 'Québec symbol',
- 'language.quebec_symbol_help': 'Unicode has no standardized Québec flag emoji; this option uses the fleur-de-lis '
-                                'symbol.',
  'language.remove_confirm': 'Remove language?',
  'language.remove_help': 'The installed dictionary will be deleted from this DerridAI instance.',
  'language.remove_key': 'Remove dictionary key',

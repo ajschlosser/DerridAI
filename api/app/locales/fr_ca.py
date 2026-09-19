@@ -1,7 +1,6 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-# French is Canadian French (Québec).
 FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'common.cancel': 'Annuler',
  'common.clear': 'Effacer',
@@ -440,7 +439,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'language.content_policy_count': '{count} termes',
  'language.content_policy_generate': 'Générer la politique',
  'language.content_policy_generate_help': 'Le fournisseur choisi compile les termes interdits pour ce paramètre '
-                                           'régional. L’anglais et le français québécois intégrés doivent l’être une '
+                                           'régional. L’anglais et le français intégrés doivent l’être une '
                                            'fois après la création du premier compte administrateur. L’installation '
                                            'd’une nouvelle langue génère une politique automatiquement.',
  'language.content_policy_generated': 'Politique de texte chercheur générée.',
@@ -495,7 +494,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'language.flag_library': 'Bibliothèque de drapeaux de pays',
  'language.flag_library_help': 'Choisissez un drapeau dans la bibliothèque ou utilisez le globe neutre pour les '
                                'langues sans paramètre régional propre à un pays.',
- 'language.french_ca': 'Français (Québec)',
+ 'language.french_ca': 'Français',
  'language.french_short': 'Français',
  'language.identity_section': 'Identité de la langue',
  'language.identity_section_help': 'Choisissez le code régional et le libellé affiché dans le sélecteur de langue.',
@@ -588,9 +587,6 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'language.provider_profile_required': 'Configurez un profil fournisseur LLM avant d’installer un dictionnaire.',
  'language.provider_unavailable': 'Le fournisseur sélectionné est inaccessible : {message}',
  'language.provider_unavailable_short': 'fournisseur inaccessible',
- 'language.quebec_symbol': 'Symbole du Québec',
- 'language.quebec_symbol_help': 'Unicode ne définit aucun émoji normalisé du drapeau du Québec; cette option utilise '
-                                'le symbole de la fleur de lys.',
  'language.remove_confirm': 'Supprimer la langue?',
  'language.remove_help': 'Le dictionnaire installé sera supprimé de cette instance DerridAI.',
  'language.remove_key': 'Supprimer la clé du dictionnaire',

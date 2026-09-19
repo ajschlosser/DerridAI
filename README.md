@@ -14,7 +14,7 @@ Current version: **0.62.1 — Factory Reset** ([release notes](docs/notes/0.62.1
 - **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, streamed and cancellable generation, a cached Response Library, and LLM grading of answers.
 - **Roles** — Admin and Researcher accounts; researchers see summarized evidence text and cannot mutate corpora.
 - **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, PDFs, and every Chroma collection with its embeddings.
-- **Bilingual and accessible** — English and Québec French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
+- **Bilingual and accessible** — English and French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
 
 See the [User Guide](docs/USER_GUIDE.md) for a full feature reference.
 

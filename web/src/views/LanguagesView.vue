@@ -145,10 +145,9 @@ function translationRiskForModel(model: string) {
   return null;
 }
 
-function flagFor(code: string, fallback = "🌐") {
-  if (code === "en-US") return "🇺🇸";
-  if (code === "fr-CA") return "🇨🇦";
-  return fallback || "🌐";
+// A language's flag is plain stored data; nothing here depends on which language it is.
+function flagFor(_code: string, stored = "🌐") {
+  return stored || "🌐";
 }
 function snapshotCurrent() {
   if (!current.value) return "";
@@ -690,7 +689,7 @@ onUnmounted(() => {
               <small>{{ i18n.t("language.content_policy_help", "Researcher-authored queries, notes, and filters are checked against every generated locale policy. Terms are stored with the language, not in the application source.") }}</small>
             </div>
             <div class="language-policy-actions">
-              <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('language.provider_profile','Provider profile')" :help="i18n.t('language.content_policy_generate_help','The selected provider compiles forbidden terms for this locale. Built-in English and Québec French need this once after the first administrator account is created. Installing a new locale generates a policy automatically.')" :empty-title="i18n.t('language.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('language.no_provider_profiles_help','Create a provider profile first, then return here to translate a dictionary.')" :manage-label="i18n.t('language.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('language.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('language.concurrent_requests','max concurrent request(s)')" :context-label="i18n.t('providers.context_tokens','context tokens')" @manage="requestManageProviders" />
+              <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('language.provider_profile','Provider profile')" :help="i18n.t('language.content_policy_generate_help','The selected provider compiles forbidden terms for this locale. Built-in English and French need this once after the first administrator account is created. Installing a new locale generates a policy automatically.')" :empty-title="i18n.t('language.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('language.no_provider_profiles_help','Create a provider profile first, then return here to translate a dictionary.')" :manage-label="i18n.t('language.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('language.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('language.concurrent_requests','max concurrent request(s)')" :context-label="i18n.t('providers.context_tokens','context tokens')" @manage="requestManageProviders" />
               <button type="button" class="btn primary" :disabled="policyBusy || !selectedProvider" @click="generateContentPolicy">{{ policyBusy ? i18n.t("language.content_policy_generating", "Generating researcher text policy…") : (policyReady ? i18n.t("language.content_policy_regenerate", "Regenerate policy") : i18n.t("language.content_policy_generate", "Generate policy")) }}</button>
             </div>
             <div v-if="policyReady" class="language-policy-terms">

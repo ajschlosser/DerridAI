@@ -67,7 +67,7 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
     """A legacy derridai-system.json next to the database is ignored (and left untouched).
 
-    The store seeds English and Français (Québec) from the built-ins rather than reading
+    The store seeds English and Français from the built-ins rather than reading
     the old file.
     """
     import app.system_store as module
@@ -86,7 +86,7 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
     assert store.get_language("en-US")["name"] == "English"
     assert store.get_language("en-US")["dictionary"]["app.name"] == "DerridAI"
-    assert store.get_language("fr-CA")["name"] == "Français (Québec)"
+    assert store.get_language("fr-CA")["name"] == "Français"
     assert old_json.exists()
     assert old_json.read_text(encoding="utf-8").find("OLD") >= 0
 

@@ -79,7 +79,7 @@ export const useI18nStore = defineStore("i18n", () => {
       localStorage.setItem("derridai-locale", data.code);
       document.documentElement.lang = data.code;
       document.documentElement.dir = directionForLocale(data.code);
-      runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value);
+      runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, { name: data.name, flag: data.flag });
       if (document.querySelector("#main")) runtime.renderView();
     } finally { loading.value = false; }
   }

@@ -98,7 +98,7 @@ def test_system_reset_reseeds_locales_and_clears_jobs(tmp_path: Path, monkeypatc
     languages = store.repository.load()["languages"]
     assert set(languages) == {"en-US", "fr-CA"}
     assert languages["en-US"]["name"] == "English"
-    assert languages["fr-CA"]["name"] == "Français (Québec)"
+    assert languages["fr-CA"]["name"] == "Français"
     assert "content_policy" not in languages["en-US"]
     assert jobs.load("llm") == []
     with sqlite3.connect(db_path) as conn:
