@@ -5059,3 +5059,5 @@ body:has(#operationProgressStack:not(.minimized)) .vue-native-page{padding-botto
   .operation-progress-stack[data-tone="info"] .operation-dock-dot{box-shadow:none}
   .operation-progress-track i{transition:none}
 }
+
+#operationsPanelHost{display:contents}

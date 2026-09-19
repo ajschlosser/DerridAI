@@ -9,6 +9,8 @@ export interface OperationView {
   type: string;
   status: string;
   label: string;
+  /** Name of an AppIcon that suggests the kind of operation. */
+  icon: string;
   subtitle: string;
   facts: Array<{ name: string; value: string }>;
   owner: string;
@@ -22,6 +24,18 @@ export interface OperationView {
   error: string;
   /** The primary "go to the outcome" action, when the operation has one. */
   result: null | { kind: "review-partial" | "review" | "result" | "build" };
+}
+
+/** Everything the panel needs from the (legacy) runtime: data, change notification, and actions. */
+export interface OperationsBridge {
+  snapshot(): OperationView[];
+  subscribe(listener: () => void): () => void;
+  refresh(): Promise<void>;
+  openDetails(id: string): void;
+  openResult(id: string): void;
+  cancel(id: string): Promise<void>;
+  remove(id: string): Promise<void>;
+  clearFinished(): Promise<void>;
 }
 
 export type OperationFilter = "all" | "active" | "attention" | "done";

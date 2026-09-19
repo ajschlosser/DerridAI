@@ -11,6 +11,7 @@ import {
   shouldMountOperationDock,
   statusBadgeTone,
 } from "../domain/operationsDock";
+import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -2873,7 +2874,8 @@ async function refreshJobs({rerender=false}={}){
       operationsButton.classList.toggle("soft",active>0);
       operationsButton.innerHTML=`${icon("history")}Operations <span class="button-count">${active}</span>`;
     }
-    if(rerender&&state.view==="home"){refreshOperationsPanelOnly();refreshCorpusBuildsHomeCardOnly();}
+    notifyOperationsChanged();
+    if(rerender&&state.view==="home")refreshCorpusBuildsHomeCardOnly();
     if(state.view==="rag")refreshRagProgressPanel();
     return state.jobs;
   }catch(error){
@@ -3767,69 +3769,90 @@ function barChart(series,title,{valueLabel="Average characters"}={}){
 function statList(title,items){
   return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value,count],index)=>`<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="Search the corpus for ${esc(value)}"><span>${index+1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("")||'<div class="note" style="padding:12px">No data</div>'}</div></section>`;
 }
-function renderOperationsPanel(){
-  const jobs=state.jobs;
-  const activeCount=jobs.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
-  return `<section class="card dashboard-operations" id="operationsPanel" data-no-collapse="true">
-    <div class="cardhead">
-      <div><b>${esc(tr("operations.background","Background operations"))}</b><div class="note">${esc(trf("operations.summary",`{active} active · {retained} retained · {queue}`,{active:activeCount,retained:jobs.length,queue:tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")}))}</div></div>
-      <div class="tools operations-header-actions"><button class="btn small" id="refreshJobs">${icon("refresh")}${esc(tr("ui.refresh","Refresh"))}</button><button class="btn small" id="clearFinishedJobs" ${jobs.some(job=>!["queued","running","cancelling"].includes(job.status))?"":`disabled data-disabled-reason="${esc(tr("operations.no_finished","There are no finished operations to clear."))}"`}>${esc(tr("operations.clear_finished","Clear finished"))}</button></div>
-    </div>
-    <div class="operations-list">${jobs.map(job=>{
-      const pct=Math.round(job.total?job.completed/job.total*100:0);
-      const active=["queued","running","cancelling"].includes(job.status);
-      const hasPartialLlmResults=job.type==="llm"&&Number(job.pending_result_count||0)>0;
-      const decision=job.resolution_state||"pending";
-      const pairs=operationDetailPairs(job);
-      const primary=pairs.slice(0,6).map(([name,value])=>`<span><b>${esc(name)}</b> ${esc(value)}</span>`).join("");
-      const subtitle=job.status==="cancelling"||job.cancel_requested
-        ?"Cancellation requested · current call/batch is reaching a safe stopping point"
-        : job.type==="rag"
-          ? `${esc(job.stage_detail||job.stage||"queued")}`
-          : job.type==="upsert"
-            ? `${esc(job.store_name||"collection")} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`
-            : job.type==="pdf_corpus"
-              ? `${esc(job.source_filename||tr("pdf_corpus.source_pdf","Source PDF"))} · ${esc(job.stage_detail||job.stage||job.raw_status||"queued")}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${esc(tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)"))}`:""}`
-            : job.type==="llm_tool"
-              ? `${esc(job.stage_detail||job.label||job.tool||"LLM operation")} · ${esc(job.provider||"")} · ${esc(job.model||"")}`
-              : `${job.completed}/${job.total} records${job.current_record_id?` · current: ${esc(job.current_record_id)}`:""}${job.failed?` · ${job.failed} failed`:""}`;
-      return `<div class="operation-row operation-row-rich" data-operation-row="${job.id}">
-        <div class="operation-main">
-          <div class="operation-title"><b>${esc(jobLabel(job))}</b><span class="job-status ${esc(job.status)}">${esc(job.status)}</span>${job.type==="llm"&&decision!=="pending"?`<span class="job-resolution ${esc(decision)}">${esc(decision.replaceAll("_"," "))}</span>`:""}</div>
-          <div class="operation-subtitle">${subtitle}</div>
-          <div class="operation-facts">${primary}</div>
-          <div class="operation-inline-progress"><i style="width:${pct}%"></i></div>
-          <div class="operation-progress-caption"><span>${esc(jobProgressText(job))}</span><span>${job.finished_at?"Total":"Elapsed"}: ${esc(humanDuration(jobElapsedSeconds(job)))}</span></div>
-        </div>
-        <div class="tools operation-actions">
-          <button class="btn small" data-job-details="${job.id}">Details</button>
-          ${job.type==="llm"&&hasPartialLlmResults?`<button class="btn small primary" data-job-result="${job.id}">${active?"Review available results":"Review results"}</button>`:""}
-          ${(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status))?`<button class="btn small primary" data-job-result="${job.id}">${job.type==="pdf_corpus"?esc(tr("pdf_corpus.open_build","Open corpus build")):"Open result"}</button>`:""}
-          ${active?(job.cancel_requested||job.status==="cancelling"?'<button class="btn small" disabled>Cancelling…</button>':`<button class="btn small danger" data-cancel-job="${job.id}">Cancel</button>`):`<button class="btn small" data-remove-job="${job.id}">Remove</button>`}
-        </div>
-      </div>`;
-    }).join("")||'<div class="llm-empty">No background operations yet.</div>'}</div>
-  </section>`;
+// ---- Operations panel bridge -------------------------------------------------------------
+// The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
+// job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
+// model from here and calls back into the existing functions.
+const operationsListeners=new Set();
+function notifyOperationsChanged(){
+  for(const listener of [...operationsListeners]){
+    try{listener()}catch(error){console.warn("Operations panel listener failed",error)}
+  }
 }
-
-function wireOperationsPanel(){
-  const panel=document.querySelector("#operationsPanel");
-  if(!panel)return;
-  panel.querySelector("#refreshJobs")?.addEventListener("click",()=>refreshJobs({rerender:true}));
-  panel.querySelector("#clearFinishedJobs")?.addEventListener("click",()=>clearFinishedOperations());
-  panel.querySelectorAll("[data-job-details]").forEach(button=>button.onclick=()=>openJobDetails(button.dataset.jobDetails));
-  panel.querySelectorAll("[data-job-result]").forEach(button=>button.onclick=()=>openJobResults(button.dataset.jobResult));
-  panel.querySelectorAll("[data-cancel-job]").forEach(button=>button.onclick=()=>cancelBackgroundJob(button.dataset.cancelJob));
-  panel.querySelectorAll("[data-remove-job]").forEach(button=>button.onclick=()=>removeFinishedJob(button.dataset.removeJob));
+function operationIcon(job){
+  if(job.type==="pdf_corpus")return "pdf";
+  if(job.type==="upsert")return "database";
+  if(job.type==="rag")return "spark";
+  if(job.type==="llm_tool"){
+    const kind=String(job.tool||job.mode||job.label||"").toLowerCase();
+    if(kind.includes("policy"))return "lock";
+    if(kind.includes("language"))return "language";
+    if(kind.includes("pdf"))return "pdf";
+    return "gear";
+  }
+  return "edit";
+}
+function operationSubtitle(job){
+  if(job.status==="cancelling"||job.cancel_requested)return "Cancellation requested · current call/batch is reaching a safe stopping point";
+  if(job.type==="rag")return String(job.stage_detail||job.stage||"queued");
+  if(job.type==="upsert")return `${job.store_name||"collection"} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`;
+  if(job.type==="pdf_corpus")return `${job.source_filename||tr("pdf_corpus.source_pdf","Source PDF")} · ${job.stage_detail||job.stage||job.raw_status||"queued"}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)")}`:""}`;
+  if(job.type==="llm_tool")return `${job.stage_detail||job.label||job.tool||"LLM operation"} · ${job.provider||""} · ${job.model||""}`;
+  return `${job.completed}/${job.total} records${job.current_record_id?` · current: ${job.current_record_id}`:""}${job.failed?` · ${job.failed} failed`:""}`;
+}
+function operationResultKind(job){
+  const active=isActiveJobStatus(job.status);
+  if(job.type==="llm"&&Number(job.pending_result_count||0)>0)return active?"review-partial":"review";
+  if(["rag","llm_tool"].includes(job.type)&&job.status==="completed")return "result";
+  if(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status))return "build";
+  return null;
+}
+function operationViewModel(job){
+  // Facts already shown elsewhere in the row (owner, operation name, stage) are left out.
+  const skip=new Set(["Started by","Operation","Stage",tr("pdf_corpus.stage","Stage")]);
+  const facts=operationDetailPairs(job)
+    .filter(([name])=>!skip.has(String(name)))
+    .slice(0,4)
+    .map(([name,value])=>({name:String(name),value:String(value)}));
+  const failure=job.status==="failed"?String(job.fatal_error||job.error_message||job.error?.message||job.stage_detail||""):job.status==="blocked"?String(job.stage_detail||""):"";
+  const kind=operationResultKind(job);
+  return {
+    id:String(job.id),type:String(job.type||"llm"),status:String(job.status||""),
+    label:jobLabel(job),icon:operationIcon(job),subtitle:operationSubtitle(job),facts,
+    owner:String(job.owner||""),createdAt:job.created_at||null,startedAt:job.started_at||null,finishedAt:job.finished_at||null,
+    total:Number(job.total||0),completed:Number(job.completed||0),progressLabel:jobProgressText(job,"of"),
+    cancelRequested:Boolean(job.cancel_requested),error:failure,result:kind?{kind}:null,
+  };
+}
+function operationsBridge(){
+  return {
+    snapshot:()=>(state.jobs||[]).map(operationViewModel),
+    subscribe:listener=>{operationsListeners.add(listener);return()=>operationsListeners.delete(listener)},
+    refresh:async()=>{await refreshJobs({rerender:true})},
+    openDetails:id=>{void openJobDetails(id)},
+    openResult:id=>{void openJobResults(id)},
+    cancel:async id=>{await cancelBackgroundJob(id)},
+    remove:async id=>{
+      await api(`/api/jobs/${encodeURIComponent(id)}`,{method:"DELETE"});
+      pruneClientJobState(id);
+      persistPrefs();
+      await refreshJobs({rerender:true});
+    },
+    clearFinished:async()=>{
+      await api("/api/jobs",{method:"DELETE"});
+      await refreshJobs({rerender:true});
+    },
+  };
+}
+function renderOperationsPanel(){
+  // A placeholder only: the Vue panel is mounted into it by mountOperationsPanelHost().
+  return `<div id="operationsPanelHost"></div>`;
+}
+function mountOperationsPanelHost(){
+  mountOperationsPanel(document.querySelector("#operationsPanelHost"),operationsBridge());
 }
 function refreshOperationsPanelOnly(){
-  const current=document.querySelector("#operationsPanel");
-  if(!current)return;
-  const holder=document.createElement("div");
-  holder.innerHTML=renderOperationsPanel();
-  const replacement=holder.firstElementChild;
-  if(replacement)current.replaceWith(replacement);
-  wireOperationsPanel();
+  notifyOperationsChanged();
   if(state.view==="rag")refreshRagProgressPanel();
 }
 function wireCorpusBuildsHomeCard(root=document){
@@ -5407,6 +5430,7 @@ async function renderDashboard(main){
     <article class="card dashboard-quick-card dashboard-record-preview"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.record_view","Record View"))}</b></div><button class="dashboard-text-link" id="dashRecordView" ${previewTarget?"":`disabled data-disabled-reason="${esc(tr("dashboard.no_record_available","No record is available to open."))}"`}>${esc(tr("research.open","Open"))} →</button></div>${previewRecord?`<div class="dashboard-record-state">${esc(preview.lastViewed?tr("dashboard.last_viewed_record","Last viewed record"):tr("dashboard.random_record","A record from the corpus"))}</div><div class="dashboard-record-meta"><b>${esc(previewRecord.work||previewRecord.record_id||tr("dashboard.record","Record"))}</b><span class="dashboard-record-pages">${esc(mlaPageSpan(previewRecord)||"")}</span></div><div class="dashboard-record-text">${esc(String(previewRecord.text||"").replace(/\s+/g," ").slice(0,220))}${String(previewRecord.text||"").length>220?"…":""}</div>`:`<div class="dashboard-record-empty">${esc(tr("dashboard.no_record_selected","No corpus record is currently available."))}</div>`}</article>
     ${latestAnnotation?`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.latest_annotation","Latest annotation"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("annotations.view_all","View all"))} →</button></div><button class="dashboard-annotation-preview" ${latestAnnotation.server?`data-recent-server-annotation-record="${esc(latestAnnotation.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(latestAnnotation.annotation.store||"")}"`:`data-recent-annotation-file="${esc(latestAnnotation.file.id)}" data-recent-annotation-index="${latestAnnotation.index}"`}><div class="dashboard-annotation-meta"><span class="dashboard-annotation-work">${esc(latestAnnotation.work)}</span><span class="dashboard-annotation-pages">${esc(mlaPageSpan(latestAnnotation.record)||tr("record.page_not_recorded","Page not recorded"))}</span><span class="dashboard-annotation-author">${esc(latestAnnotation.annotation.initiated_by||latestAnnotation.annotation.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(latestAnnotation.annotation.created_at))}</time><small>${esc(latestAnnotation.record.record_id||tr("nav.record","Record"))}</small></div>${latestAnnotation.annotation.note?`<p>${esc(latestAnnotation.annotation.note)}</p>`:latestAnnotation.annotation.quote?`<blockquote>${esc(latestAnnotation.annotation.quote)}</blockquote>`:`<p>${esc(tr("annotations.record_note","Record annotation"))}</p>`}</button></article>`:`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.annotations","Annotations"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("research.open","Open"))} →</button></div><p>${esc(isResearcher()?tr("annotations.researcher_help","Annotations are organized by work when available in the current workspace."):tr("dashboard.annotations_help","Collect notes, tags, and discussion threads attached to corpus evidence."))}</p></article>`}
     </section>${renderCorpusBuildsHomeCard()}${renderOperationsPanel()}</div>`;
+  mountOperationsPanelHost();
   // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   const goSearch=async()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"",semantic=state.globalSearchMode==="database";state.globalPage=1;state.storeSearchResults=[];if(semantic){if(!state.activeStore){try{await refreshStores()}catch{};state.activeStore=recordStores()[0]?.name||""}state.globalSearchMode="database";if(!state.activeStore){persistPrefs();if(canAccessPage("vector")){toast(tr("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});openDatabaseCreationFromResearch()}else{navigateTo("global");toast(tr("research.no_database","No corpus database available"),{tone:"warn"})}return;}state.dbSearchWhere=work?{work}:{};state.storeQuery=state.globalSearch;if(state.globalSearch&&state.dbSearchMethod==="filter")state.dbSearchMethod="similarity";if(!state.globalSearch&&work)state.dbSearchMethod="filter";state.globalSearchAutoRun=false;state.storeSearchLoading=true;persistPrefs();navigateTo("global");try{const mode=state.dbSearchMethod||"similarity";const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:state.globalSearch,mode,n_results:100,where:Object.keys(dbSearchWhere()).length?dbSearchWhere():null,fetch_k:Number(state.dbSearchFetchK||100),lambda_mult:Number(state.dbSearchLambda??0.7)})});state.storeSearchResults=data.results||[]}catch(error){toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}finally{state.storeSearchLoading=false;persistPrefs();if(state.view==="global")renderGlobal(document.querySelector("#main"))}}else{state.globalSearchMode="traditional";state.globalSearchAutoRun=false;if(isResearcher())state.dbSearchWhere=work?{work}:{};else state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")}};
   // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
@@ -5485,9 +5509,11 @@ function renderView(){
   // the legacy surface. Do not let compatibility rendering or URL syncing
   // overwrite those routes while they are active.
   if(!main){
+    unmountOperationsPanel();
     shellRefreshHook?.();
     return null;
   }
+  if(state.view!=="home")unmountOperationsPanel();
   if(!canAccessPage(state.view))state.view="home";
   syncUrl({replace:true});
   let result;

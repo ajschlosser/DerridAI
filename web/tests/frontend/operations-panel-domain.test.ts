@@ -9,7 +9,7 @@ const iso = (offsetSeconds: number) => new Date(NOW + offsetSeconds * 1000).toIS
 
 function view(over: Partial<OperationView> = {}): OperationView {
   return {
-    id: "j", type: "llm_tool", status: "completed", label: "Job", subtitle: "", facts: [], owner: "admin",
+    id: "j", type: "llm_tool", status: "completed", label: "Job", icon: "gear", subtitle: "", facts: [], owner: "admin",
     createdAt: iso(-600), startedAt: iso(-600), finishedAt: iso(-300), total: 10, completed: 10,
     progressLabel: "10/10 (100%)", cancelRequested: false, error: "", result: null, ...over,
   };
