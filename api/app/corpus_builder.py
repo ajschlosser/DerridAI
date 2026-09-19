@@ -1038,6 +1038,146 @@ class PdfCorpusRepository:
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
+    def update_document_layout(self, asset_id: str, plan: dict[str, Any]) -> dict[str, Any]:
+        """Persist reviewer-owned document structure and derive page metadata deterministically.
+
+        The immutable physical PDF page remains the source coordinate. The layout plan may
+        derive scholarly folios, main-text/bibliography regions, logical left/right pages,
+        and alternating thread hints. These reviewer-owned facts outrank later LLM guesses.
+        """
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            page_count = int(asset.get("page_count") or 0)
+            layout = str(plan.get("page_layout") or "single")
+            if layout not in {"single", "two_up"}:
+                raise ValueError("page_layout must be single or two_up")
+            order = str(plan.get("reading_order") or "left_to_right")
+            if order not in {"left_to_right", "right_to_left"}:
+                raise ValueError("reading_order must be left_to_right or right_to_left")
+            main_pdf = int(plan["main_text_pdf_start"]) if plan.get("main_text_pdf_start") else None
+            main_printed = int(plan["main_text_printed_start"]) if plan.get("main_text_printed_start") else None
+            bib_pdf = int(plan["bibliography_pdf_start"]) if plan.get("bibliography_pdf_start") else None
+            for value, name in ((main_pdf, "main_text_pdf_start"), (bib_pdf, "bibliography_pdf_start")):
+                if value is not None and not 1 <= value <= max(1, page_count):
+                    raise ValueError(f"{name} must be within the PDF page range")
+            if main_pdf and bib_pdf and bib_pdf < main_pdf:
+                raise ValueError("bibliography_pdf_start cannot precede main_text_pdf_start")
+            slots = ["left", "right"] if order == "left_to_right" else ["right", "left"]
+            first_slot = str(plan.get("main_text_slot") or slots[0])
+            if first_slot not in {"left", "right"}:
+                first_slot = slots[0]
+            thread_mode = str(plan.get("thread_mode") or "continuous")
+            valid_thread_modes = {"continuous", "odd_even", "even_odd", "left_right", "right_left"}
+            if thread_mode not in valid_thread_modes:
+                raise ValueError("Unsupported thread_mode")
+            clean_plan = {
+                "page_layout": layout, "reading_order": order,
+                "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
+                "main_text_slot": first_slot if layout == "two_up" else None,
+                "bibliography_pdf_start": bib_pdf, "thread_mode": thread_mode,
+                "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
+                "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
+                "confirmed_by": "human", "updated_at": iso_now(),
+            }
+            pages = asset.get("pages") or []
+            blocks = self.load_blocks(asset_id)
+            page_lookup = {int(p.get("pdf_page") or 0): p for p in pages}
+            # Reset prior derived structural fields while preserving extraction facts and manual labels.
+            for page in pages:
+                for key in ("logical_pages", "deterministic_region_type", "thread_ids"):
+                    page.pop(key, None)
+            for block in blocks:
+                for key in ("logical_page_slot", "logical_printed_page_label", "deterministic_region_type", "document_thread", "thread_language"):
+                    block.pop(key, None)
+            def printed_for(pdf_page: int, slot: str | None = None) -> int | None:
+                if not (main_pdf and main_printed) or pdf_page < main_pdf:
+                    return None
+                if layout == "single":
+                    return main_printed + (pdf_page-main_pdf)
+                ordered = slots
+                start_index = ordered.index(first_slot)
+                absolute = (pdf_page-main_pdf)*2 + ordered.index(slot or ordered[0]) - start_index
+                if absolute < 0:
+                    return None
+                return main_printed + absolute
+            for pdf_page in range(1, page_count+1):
+                page = page_lookup.get(pdf_page)
+                if not page:
+                    continue
+                if bib_pdf and pdf_page >= bib_pdf:
+                    region = "bibliography"
+                elif main_pdf and pdf_page >= main_pdf:
+                    region = "main_text"
+                elif main_pdf:
+                    region = "front_matter"
+                else:
+                    region = None
+                if region:
+                    page["deterministic_region_type"] = region
+                logical = []
+                for slot in (slots if layout == "two_up" else [None]):
+                    number = printed_for(pdf_page, slot)
+                    logical.append({"slot": slot or "full", "printed_page_label": str(number) if number else None})
+                page["logical_pages"] = logical
+                thread_ids = []
+                if thread_mode in {"odd_even", "even_odd"}:
+                    a_is_odd = thread_mode == "odd_even"
+                    thread_ids = ["thread_a" if (pdf_page % 2 == 1) == a_is_odd else "thread_b"]
+                elif thread_mode in {"left_right", "right_left"}:
+                    a_slot = "left" if thread_mode == "left_right" else "right"
+                    thread_ids = ["thread_a" if (slot or "full") == a_slot else "thread_b" for slot in (slots if layout == "two_up" else [None])]
+                elif thread_mode == "continuous":
+                    thread_ids = ["thread_a"]
+                page["thread_ids"] = thread_ids
+                # A deterministic generated label is intentionally lower priority than a human override.
+                generated = logical[0].get("printed_page_label") if len(logical) == 1 else None
+                if generated and page.get("printed_page_label_source") != "human_override":
+                    page["printed_page_label"] = generated
+                    page["printed_page_label_source"] = "document_layout_rule"
+            # Bind block-side/thread metadata by physical geometry for two-up documents.
+            for block in blocks:
+                pdf_page = int(block.get("page") or 0)
+                page = page_lookup.get(pdf_page) or {}
+                region = page.get("deterministic_region_type")
+                if region:
+                    block["deterministic_region_type"] = region
+                slot = None
+                if layout == "two_up":
+                    bbox = block.get("bbox") or [0,0,0,0]
+                    width = float(page.get("width") or 0)
+                    center = (float(bbox[0])+float(bbox[2]))/2 if len(bbox) >= 4 else 0
+                    slot = "left" if not width or center < width/2 else "right"
+                    block["logical_page_slot"] = slot
+                    logical_label = printed_for(pdf_page, slot)
+                    if logical_label:
+                        block["logical_printed_page_label"] = str(logical_label)
+                        block["printed_page_label"] = str(logical_label)
+                        block["printed_page_label_source"] = "document_layout_rule"
+                elif page.get("printed_page_label_source") == "document_layout_rule":
+                    block["printed_page_label"] = page.get("printed_page_label")
+                    block["printed_page_label_source"] = "document_layout_rule"
+                thread = "thread_a"
+                if thread_mode in {"odd_even", "even_odd"}:
+                    a_is_odd = thread_mode == "odd_even"
+                    thread = "thread_a" if (pdf_page % 2 == 1) == a_is_odd else "thread_b"
+                elif thread_mode in {"left_right", "right_left"}:
+                    a_slot = "left" if thread_mode == "left_right" else "right"
+                    thread = "thread_a" if (slot or "full") == a_slot else "thread_b"
+                block["document_thread"] = thread
+                language = clean_plan.get("thread_a_language" if thread == "thread_a" else "thread_b_language")
+                if language:
+                    block["thread_language"] = language
+            tmp = self.asset_blocks_path(asset_id).with_suffix(".blocks.jsonl.tmp")
+            with tmp.open("w", encoding="utf-8") as handle:
+                for block in blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            os.replace(tmp, self.asset_blocks_path(asset_id))
+            asset["pages"] = pages
+            asset["document_layout"] = clean_plan
+            asset["document_layout_revision"] = int(asset.get("document_layout_revision") or 0) + 1
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
     def build_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "build.json"
 
@@ -3270,7 +3410,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 llm_candidates.append(candidate)
 
         import math
-        max_adjudications=max(8,int(math.ceil(max(1,len(blocks))*float(profile.get("max_llm_boundary_calls_per_100_atoms") or 18)/100.0)))
+        max_adjudications=min(16,max(4,int(math.ceil(max(1,len(blocks))*float(profile.get("max_llm_boundary_calls_per_100_atoms") or 6)/100.0))))
         llm_candidates=sorted(llm_candidates,key=lambda c:float(c.get("candidate_score") or 0),reverse=True)
         budget_skipped=max(0,len(llm_candidates)-max_adjudications)
         llm_candidates=llm_candidates[:max_adjudications]
@@ -3372,130 +3512,6 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         self._update(build_id,stage="reconciling",progress=0.40)
         return accepted
 
-    def _reconcile_boundaries(
-        self,
-        blocks: list[dict[str, Any]],
-        manifest: dict[str, Any],
-        candidates: list[dict[str, Any]],
-        request: dict[str, Any],
-        build_id: str,
-        threshold: float,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        block_index = {block["block_id"]: i for i, block in enumerate(blocks)}
-        accepted: list[dict[str, Any]] = []
-        unresolved: list[dict[str, Any]] = []
-        state = self.repo.load_checkpoint(build_id, "reconciliation_state", {})
-        if not isinstance(state, dict):
-            state = {}
-        completed = {str(value) for value in state.get("completed") or []}
-        restored = state.get("accepted") or []
-        if isinstance(restored, list):
-            accepted.extend(item for item in restored if isinstance(item, dict))
-        limits = self._stage_limits(request)
-
-        # Small batches keep structured output short and make local-model retries
-        # cheap. No prose reasons are requested in this topology-changing stage.
-        for offset in range(0, len(candidates), 8):
-            batch = candidates[offset:offset + 8]
-            batch_key = ",".join(str(item.get("after_block_id") or "") for item in batch)
-            if batch_key in completed:
-                continue
-            excerpts: list[str] = []
-            for candidate in batch:
-                idx = block_index.get(str(candidate.get("after_block_id") or ""), -1)
-                if idx < 0:
-                    continue
-                context = blocks[max(0, idx - 2):min(len(blocks), idx + 4)]
-                excerpts.append(
-                    f"CANDIDATE {candidate['after_block_id']} prior-confidence={float(candidate.get('confidence') or 0):.2f}\n"
-                    + "\n".join(f"[{b['block_id']}] {str(b.get('text') or '')[:1000]}" for b in context)
-                )
-            prompt = f"""Reconcile uncertain semantic record boundaries. Keep a boundary only when the surrounding source shows a genuine discourse/argument transition. Do not use page changes, window seams, or length as evidence. Preserve attribution and quotation framing. Prefer KEEP when evidence is weak.
-
-{chr(10).join(excerpts)}
-
-Return one compact decision for every supplied candidate using exact `after` IDs. No prose explanations.
-"""
-            try:
-                result = self._chat_json(
-                    active_request,
-                    prompt,
-                    response_model=CompactReconciliationResponseModel,
-                    max_tokens=limits["reconciliation_num_predict"],
-                    schema_name="derridai_boundary_reconciliation_compact",
-                    attempts=2,
-                    build_id=build_id,
-                )
-            except InterruptedError:
-                raise
-            except Exception as exc:
-                # Reconciliation is advisory. A failed compact reconciliation must
-                # not turn every candidate in the batch into an apparent pipeline
-                # failure. Preserve only genuinely uncertain/high-signal candidates
-                # as localized review items; ordinary weak candidates become KEEP.
-                self._increment_metric(build_id, "reconciliation_failures")
-                for candidate in batch:
-                    confidence = float(candidate.get("confidence") or 0)
-                    if candidate.get("decision") != "uncertain" and confidence < threshold:
-                        continue
-                    block_id = str(candidate.get("after_block_id") or "")
-                    idx = block_index.get(block_id, -1)
-                    next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
-                    unresolved.append({
-                        "after_block_id": block_id,
-                        "next_block_id": next_id,
-                        "kind": "reconciliation_review",
-                        "reason": f"This candidate could not be automatically reconciled and remains a local review item: {exc}",
-                    })
-                continue
-            original = {str(item["after_block_id"]): item for item in batch}
-            decided: set[str] = set()
-            for decision in result.get("decisions") or []:
-                block_id = str(decision.get("after") or "")
-                if block_id not in original:
-                    continue
-                decided.add(block_id)
-                if decision.get("decision") != "split":
-                    continue
-                confidence = float(decision.get("confidence") or 0)
-                if confidence < threshold:
-                    continue
-                merged = dict(original[block_id])
-                merged.update({"decision": "split", "confidence": confidence, "reconciled": True})
-                accepted.append(merged)
-            batch_unresolved = False
-            for block_id in sorted(set(original) - decided):
-                idx = block_index.get(block_id, -1)
-                if 0 <= idx < len(blocks) - 1:
-                    pair, failure = self._segment_pair(blocks[idx], blocks[idx + 1], manifest, request, build_id)
-                else:
-                    pair, failure = None, None
-                if pair and pair.get("decision") == "split" and float(pair.get("confidence") or 0) >= threshold:
-                    merged = dict(original[block_id])
-                    merged.update(pair)
-                    merged["reconciled"] = True
-                    merged["source"] = "reconciliation_pair_fallback"
-                    accepted.append(merged)
-                elif pair and pair.get("decision") == "keep":
-                    continue
-                else:
-                    batch_unresolved = True
-                    next_id = str(blocks[idx + 1].get("block_id") or "") if 0 <= idx < len(blocks) - 1 else ""
-                    unresolved.append({
-                        "after_block_id": block_id,
-                        "next_block_id": next_id,
-                        "kind": "reconciliation",
-                        "reason": str((failure or {}).get("reason") or "Boundary reconciliation remained uncertain after pairwise fallback."),
-                    })
-            # Do not checkpoint an incomplete reconciliation batch as completed.
-            if not batch_unresolved:
-                completed.add(batch_key)
-            self.repo.save_checkpoint(build_id, "reconciliation_state", {
-                "completed": sorted(completed),
-                "accepted": accepted,
-            })
-        return accepted, unresolved
-
     @staticmethod
     def _scholarly_page_range(group: list[dict[str, Any]]) -> tuple[int | str | None, int | str | None]:
         printed_labels = [str(block.get("printed_page_label") or "").strip() for block in group]
@@ -3529,6 +3545,9 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             page_start, page_end = PdfCorpusBuildManager._scholarly_page_range(group)
             last_id = group[-1]["block_id"]
             boundary = boundary_map.get(last_id)
+            layout_regions = [str(block.get("deterministic_region_type") or "") for block in group if block.get("deterministic_region_type")]
+            layout_region = layout_regions[0] if layout_regions and len(set(layout_regions)) == 1 else None
+            thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
             records.append({
                 "record_id": f"{prefix}-{index:05d}",
                 "record_revision": 1,
@@ -3543,6 +3562,11 @@ Return one compact decision for every supplied candidate using exact `after` IDs
                 "source_spans": [{"block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
                 "boundary_evidence": boundary,
                 "metadata_evidence": {},
+                **({"region_type": layout_region, "primary_text": layout_region == "main_text", "metadata_field_status": {
+                    "region_type": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
+                    "primary_text": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
+                }} if layout_region else {}),
+                **({"region_language": thread_languages, "region_is_multilingual": len(thread_languages) > 1} if thread_languages else {}),
                 "needs_review": False,
                 "review_reason": "",
                 "accepted": False,
@@ -4026,6 +4050,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                             deterministic_value = record.get(key)
                             assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
                             confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
+                            deterministic_strength = float(existing_status.get("confidence") or 0.0)
+                            deterministic_method = str(existing_status.get("method") or "")
                             existing_status["status"] = "unresolved"
                             existing_status["method"] = "deterministic+llm"
                             existing_status["reason_code"] = "deterministic_llm_disagreement"
@@ -4042,8 +4068,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                             # For interpretive conflicts, show the semantic reader's proposal in the
                             # editable field while retaining both candidates and their reasons. Human
                             # review remains required; hard constraints are re-applied below.
-                            if key != "primary_text":
+                            strong_structure = deterministic_method in {"human_document_layout", "confirmed_manifest_page_range", "document_layout_rule"}
+                            weak_manifest_range = deterministic_method == "manifest_page_range"
+                            if key != "primary_text" and not strong_structure and (weak_manifest_range or deterministic_strength < 0.9):
                                 record[key] = value
+                                existing_status["prefilled_candidate"] = "llm"
+                            else:
+                                existing_status["prefilled_candidate"] = "deterministic"
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
@@ -4122,6 +4153,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 "status": "unresolved" if needs_human else "llm_inferred",
                 "method": "llm",
                 "confidence": confidence,
+                "auto_populated": bool(confidence is not None and confidence > minimum and record.get(field) not in (None, "", [])),
                 "reason_code": "ambiguous" if needs_human else "resolved",
                 "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal."),
             }
@@ -4144,16 +4176,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # uncertainty item merely because the field exists in the schema.
                 continue
             if field in required_metadata_fields and value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "reason_code": "ambiguous", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # Model self-confidence is never publication authority. Any LLM
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
             elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
-                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "reason_code": "resolved", "reason": reason}
+                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "reason_code": "resolved", "reason": reason}
 
         apply_metadata_constraints(record)
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
@@ -4504,12 +4536,15 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
                 boundaries = self.repo.load_checkpoint(build_id, "boundaries")
             if not isinstance(boundaries, list):
+                segmentation_clock = time.monotonic()
                 boundaries = self._segment(semantic_blocks, manifest, request, build_id)
+                self._update(build_id, segmentation_elapsed_ms=int((time.monotonic()-segmentation_clock)*1000))
             if self._cancelled(build_id):
                 raise InterruptedError("Corpus build cancelled")
             self._update(build_id, retrying_segmentation=False)
             self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
+            self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
             records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
             if not records:
                 records = self._construct_records(asset, source_blocks, boundaries)
@@ -4523,9 +4558,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # or already-demonstrated risky seams. It never rewrites source
                 # topology on its own; it corroborates KEEP or creates an explicit
                 # human-review recommendation with an exact source-block seam.
-                second_reader = ({"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0}
-                    if not (request.get("model") or request.get("provider_profile_id"))
-                    else self._audit_suspicious_record_boundaries(records, manifest, request, build_id))
+                # Suspicious-boundary second reading is advisory and must not delay first
+                # record availability. Reviewers can invoke the boundary adjudicator on demand.
+                second_reader = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0, "deferred": boundary_suspect_count}
                 current_build = self.repo.get_build(build_id)
                 current_build.update({
                     "boundary_second_reader_count": int(second_reader.get("audited") or 0),
@@ -4533,6 +4568,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "boundary_second_reader_move_count": int(second_reader.get("move") or 0),
                     "boundary_second_reader_uncertain_count": int(second_reader.get("uncertain") or 0),
                     "boundary_second_reader_failure_count": int(second_reader.get("failed") or 0),
+                    "boundary_second_reader_deferred_count": int(second_reader.get("deferred") or 0),
                 })
                 self.repo.save_build(current_build)
                 for record in records:

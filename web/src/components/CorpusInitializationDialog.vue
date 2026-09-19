@@ -6,7 +6,7 @@ const props=defineProps<{build:CorpusBuild;disabled?:boolean}>();
 const emit=defineEmits<{cancel:[]}>();
 const i18n=useI18nStore();
 const stage=computed(()=>String(props.build.stage||''));
-const stages=['structure','segmenting','reconciling'];
+const stages=['structure','segmenting','constructing_records'];
 const currentIndex=computed(()=>Math.max(0,stages.indexOf(stage.value)));
 function state(index:number){return index<currentIndex.value?'complete':index===currentIndex.value?'current':'upcoming'}
 function label(name:string){return i18n.t(`pdf_corpus.stage.${name}`,name.replace(/_/g,' '))}

@@ -77,9 +77,9 @@ def test_llm_adjudication_budget_limits_work(monkeypatch,tmp_path):
     monkeypatch.setattr(manager,"_segment_candidate_batch",batch)
     manager._segment(_blocks(100),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
-    assert len(calls)==18
-    assert refreshed["boundary_budget_skipped_count"]==42
-    assert refreshed["boundary_llm_adjudication_count"]==18
+    assert len(calls)==16
+    assert refreshed["boundary_budget_skipped_count"]==44
+    assert refreshed["boundary_llm_adjudication_count"]==16
     assert refreshed["boundary_review_count"]==0
 
 

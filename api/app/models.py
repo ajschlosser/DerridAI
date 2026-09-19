@@ -342,6 +342,18 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PdfDocumentLayoutPatch(BaseModel):
+    page_layout: Literal["single", "two_up"] = "single"
+    reading_order: Literal["left_to_right", "right_to_left"] = "left_to_right"
+    main_text_pdf_start: int | None = Field(default=None, ge=1)
+    main_text_printed_start: int | None = Field(default=None, ge=1)
+    main_text_slot: Literal["left", "right"] | None = None
+    bibliography_pdf_start: int | None = Field(default=None, ge=1)
+    thread_mode: Literal["continuous", "odd_even", "even_odd", "left_right", "right_left"] = "continuous"
+    thread_a_language: str | None = None
+    thread_b_language: str | None = None
+
+
 class PdfCorpusProviderConfig(BaseModel):
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None

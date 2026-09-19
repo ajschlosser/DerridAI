@@ -10,7 +10,22 @@ export interface PdfAsset {
   ocr_pages: number;
   warnings: string[];
   metadata: Record<string, unknown>;
-  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string}>;
+  document_layout?: DocumentLayoutPlan;
+  document_layout_revision?: number;
+  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string;logical_pages?:Array<{slot:string;printed_page_label?:string|null}>;deterministic_region_type?:string;thread_ids?:string[]}>;
+}
+
+
+export interface DocumentLayoutPlan {
+  page_layout:"single"|"two_up";
+  reading_order:"left_to_right"|"right_to_left";
+  main_text_pdf_start?:number|null;
+  main_text_printed_start?:number|null;
+  main_text_slot?:"left"|"right"|null;
+  bibliography_pdf_start?:number|null;
+  thread_mode:"continuous"|"odd_even"|"even_odd"|"left_right"|"right_left";
+  thread_a_language?:string|null;
+  thread_b_language?:string|null;
 }
 
 export interface CorpusBuild {
@@ -179,6 +194,7 @@ export const pdfCorpusApi = {
   },
   assetContentUrl: (assetId:string) => `/api/pdf/assets/${encodeURIComponent(assetId)}/content`,
   updatePageLabels: (assetId:string, labels:Record<number,string|null>) => apiRequest<PdfAsset>(`/api/pdf/assets/${encodeURIComponent(assetId)}/page-labels`, {method:"PATCH",body:JSON.stringify({labels})}),
+  updateDocumentLayout: (assetId:string, plan:DocumentLayoutPlan) => apiRequest<PdfAsset>(`/api/pdf/assets/${encodeURIComponent(assetId)}/document-layout`, {method:"PATCH",body:JSON.stringify(plan)}),
   blocks: (assetId:string, offset=0, limit=200, ids:string[]=[]) => apiRequest<{items:SourceBlock[];total:number}>(`/api/pdf/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${ids.length?`&ids=${encodeURIComponent(ids.join(","))}`:""}`),
   profiles: () => apiRequest<{items:Array<Record<string,unknown>>}>("/api/pdf/corpus-profiles"),
   listBuilds: (offset=0, limit=50, assetId="") => apiRequest<{items:CorpusBuild[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds?offset=${offset}&limit=${limit}${assetId?`&asset_id=${encodeURIComponent(assetId)}`:""}`),

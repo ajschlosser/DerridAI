@@ -1,50 +1,16 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import type { ProviderProfile } from "../api/system";
+import { systemApi } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
-
-const props=withDefaults(defineProps<{
-  profiles:ProviderProfile[];
-  activeProfileId:string;
-  activeModel?:string;
-  disabled?:boolean;
-  history?:Array<{at?:string;provider_profile_id?:string;provider?:string;model?:string;metadata_completed?:number;note?:string}>;
-}>(),{activeModel:"",disabled:false,history:()=>[]});
-const emit=defineEmits<{change:[profileId:string]}>();
-const i18n=useI18nStore();
-const activeProfile=computed(()=>props.profiles.find(profile=>profile.id===props.activeProfileId)||null);
-const label=computed(()=>activeProfile.value?.name||props.activeProfileId||i18n.t("pdf_corpus.provider_default","Provider default"));
-function onChange(event:Event){const value=(event.target as HTMLSelectElement).value;if(value&&value!==props.activeProfileId)emit("change",value)}
+const props=withDefaults(defineProps<{profiles:ProviderProfile[];activeProfileId:string;activeModel?:string;disabled?:boolean;history?:Array<{at?:string;provider_profile_id?:string;provider?:string;model?:string;metadata_completed?:number;note?:string}>}>(),{activeModel:"",disabled:false,history:()=>[]});
+const emit=defineEmits<{change:[profileId:string,model:string]} >(); const i18n=useI18nStore();
+const selectedId=ref('');const model=ref('');const models=ref<string[]>([]);const loading=ref(false);const error=ref('');
+const selected=computed(()=>props.profiles.find(p=>p.id===selectedId.value)||null);
+watch(()=>[props.activeProfileId,props.activeModel] as const,([id,m])=>{selectedId.value=id;model.value=m||String(props.profiles.find(p=>p.id===id)?.model||'');void loadModels()},{immediate:true});
+async function loadModels(){models.value=[];error.value='';const p=selected.value;if(!p)return;loading.value=true;try{const result=await systemApi.researcherProviderStatus({id:p.id,type:p.type,base_url:p.base_url});models.value=(result.models||[]).map(x=>String(x.name||'')).filter(Boolean)}catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{loading.value=false}}
+async function profileChanged(){const p=selected.value;model.value=String(p?.model||'');await loadModels()}
+function apply(){if(selectedId.value)emit('change',selectedId.value,model.value.trim())}
 </script>
-
-<template>
-<section class="provider-switcher" aria-labelledby="corpus-provider-switcher-title">
-  <div class="provider-switcher-copy">
-    <span class="eyebrow">{{i18n.t('pdf_corpus.live_enrichment','Live enrichment')}}</span>
-    <b id="corpus-provider-switcher-title">{{i18n.t('pdf_corpus.enrichment_profile','Enrichment profile')}}</b>
-    <span>{{i18n.t('pdf_corpus.enrichment_profile_help','Changing profiles affects newly scheduled metadata tasks. Requests already running finish with the model that started them.')}}</span>
-  </div>
-  <label class="provider-switcher-control">
-    <span class="sr-only">{{i18n.t('pdf_corpus.enrichment_profile','Enrichment profile')}}</span>
-    <select class="control" :value="activeProfileId" :disabled="disabled||profiles.length<2" @change="onChange">
-      <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{profile.name||profile.id}} · {{profile.model||i18n.t('pdf_corpus.model_not_set','model not set')}}</option>
-    </select>
-    <small><b>{{label}}</b><template v-if="activeModel"> · <code>{{activeModel}}</code></template></small>
-  </label>
-  <details v-if="history.length>1" class="provider-history">
-    <summary>{{i18n.t('pdf_corpus.provider_history','Profile history')}}</summary>
-    <ol>
-      <li v-for="(item,index) in history.slice().reverse().slice(0,8)" :key="`${item.at||index}-${item.provider_profile_id||index}`">
-        <b>{{item.provider_profile_id||item.provider||'—'}}</b>
-        <span v-if="item.model">{{item.model}}</span>
-        <span v-if="item.metadata_completed!==undefined">{{i18n.tf('pdf_corpus.profile_switched_after_records','after {count} enriched record(s)',{count:item.metadata_completed})}}</span>
-      </li>
-    </ol>
-  </details>
-</section>
-</template>
-
-<style scoped>
-.provider-switcher{display:grid;grid-template-columns:minmax(220px,1fr) minmax(260px,420px) auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-.provider-switcher-copy{display:grid;gap:3px;min-width:0}.provider-switcher-copy>b{font-size:.9375rem}.provider-switcher-copy>span:last-child{color:var(--muted);font-size:.8125rem;line-height:1.45;max-width:72ch}.eyebrow{font-size:.8125rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:800}.provider-switcher-control{display:grid;gap:4px}.provider-switcher-control small{font-size:.8125rem;color:var(--muted);overflow-wrap:anywhere}.provider-history{font-size:.8125rem}.provider-history summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:750}.provider-history ol{position:absolute;z-index:20;right:18px;width:min(420px,calc(100vw - 36px));margin:6px 0 0;padding:12px 12px 12px 30px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:0 14px 38px rgb(0 0 0/.18)}.provider-history li{padding:4px 0}.provider-history li span{display:block;color:var(--muted)}.provider-switcher :is(select,summary):focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:900px){.provider-switcher{grid-template-columns:1fr}.provider-history ol{position:static;width:auto}}
-</style>
+<template><section class="provider-switcher" aria-labelledby="corpus-provider-switcher-title"><p class="sr-only" aria-live="polite">{{i18n.tf('pdf_corpus.active_enrichment_model','Current enrichment model: {model}',{model:activeModel||'—'})}}</p><div class="provider-switcher-copy"><span class="eyebrow">{{i18n.t('pdf_corpus.live_enrichment','Live enrichment')}}</span><b id="corpus-provider-switcher-title">{{i18n.t('pdf_corpus.enrichment_profile_model','Enrichment provider & model')}}</b><span>{{i18n.t('pdf_corpus.enrichment_profile_model_help','Changes affect only newly scheduled metadata tasks. In-flight requests finish with the provider and model that started them.')}}</span></div><div class="switch-controls"><label><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}</span><select v-model="selectedId" class="control" :disabled="disabled||!profiles.length" @change="profileChanged"><option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{profile.name||profile.id}}</option></select></label><label><span>{{i18n.t('pdf_corpus.model_for_new_tasks','Model for newly scheduled tasks')}}</span><input v-model="model" class="control" :list="`live-models-${selectedId}`" :disabled="disabled" :placeholder="loading?i18n.t('pdf_corpus.loading_models','Loading models…'):i18n.t('pdf_corpus.custom_model_allowed','Choose or type a model ID')"><datalist :id="`live-models-${selectedId}`"><option v-for="name in models" :key="name" :value="name"/></datalist></label><button class="btn" type="button" :disabled="disabled||!selectedId||!model.trim()||(selectedId===activeProfileId&&model.trim()===activeModel)" @click="apply">{{i18n.t('pdf_corpus.apply_to_new_tasks','Apply to new tasks')}}</button><small v-if="error" role="status">{{i18n.t('pdf_corpus.model_discovery_failed_custom_ok','Model discovery failed; you can still type a model ID.')}} {{error}}</small></div><details v-if="history.length>1" class="provider-history"><summary>{{i18n.t('pdf_corpus.provider_history','Profile history')}}</summary><ol><li v-for="(item,index) in history.slice().reverse().slice(0,8)" :key="`${item.at||index}-${item.provider_profile_id||index}`"><b>{{item.provider_profile_id||item.provider||'—'}}</b><span v-if="item.model">{{item.model}}</span><span v-if="item.metadata_completed!==undefined">{{i18n.tf('pdf_corpus.profile_switched_after_records','after {count} enriched record(s)',{count:item.metadata_completed})}}</span></li></ol></details></section></template>
+<style scoped>.provider-switcher{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(420px,1.2fr) auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.provider-switcher-copy{display:grid;gap:3px;min-width:0}.provider-switcher-copy>b{font-size:.9375rem}.provider-switcher-copy>span:last-child,.switch-controls small{color:var(--muted);font-size:.8125rem;line-height:1.45}.eyebrow{font-size:.8125rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:800}.switch-controls{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.switch-controls label{display:grid;gap:4px;font-size:.8125rem;font-weight:750}.switch-controls small{grid-column:1/-1}.provider-history{font-size:.8125rem}.provider-history summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:750}.provider-history ol{position:absolute;z-index:20;right:18px;width:min(420px,calc(100vw - 36px));margin:6px 0 0;padding:12px 12px 12px 30px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:0 14px 38px rgb(0 0 0/.18)}.provider-history li{padding:4px 0}.provider-history li span{display:block;color:var(--muted)}.provider-switcher :is(select,input,button,summary):focus-visible{outline:3px solid var(--accent);outline-offset:2px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:1000px){.provider-switcher{grid-template-columns:1fr}.switch-controls{grid-template-columns:1fr}.provider-history ol{position:static;width:auto}}</style>
