@@ -17,10 +17,10 @@ from app.locales.fr_ca import FR_CA
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_i18n_parity():
-    assert json.loads(text('web/package.json'))['version']=='0.58.0'
-    assert 'APP_VERSION = "0.58.0"' in text('api/app/config.py')
-    assert 'version="0.58.0"' in text('api/app/main.py')
-    assert '0.58.0 — Righteous Rhinoceros' in text('README.md')
+    assert json.loads(text('web/package.json'))['version']=='0.59.0'
+    assert 'APP_VERSION = "0.59.0"' in text('api/app/config.py')
+    assert 'version="0.59.0"' in text('api/app/main.py')
+    assert '0.59.0 — Serious Sandpipers' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.llm_touchup','pdf_corpus.preview_jsonl','pdf_corpus.editorial_memory_title','pdf_corpus.confidence_calibration']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]

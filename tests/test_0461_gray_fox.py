@@ -23,10 +23,10 @@ def _locale(path: Path, name: str) -> dict[str, str]:
 
 def test_gray_fox_release_identity():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.58.0"
-    assert 'APP_VERSION = "0.58.0"' in (ROOT / "api/app/config.py").read_text(encoding="utf-8")
-    assert 'version="0.58.0"' in (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert "0.58.0 — Righteous Rhinoceros" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert package["version"] == "0.59.0"
+    assert 'APP_VERSION = "0.59.0"' in (ROOT / "api/app/config.py").read_text(encoding="utf-8")
+    assert 'version="0.59.0"' in (ROOT / "api/app/main.py").read_text(encoding="utf-8")
+    assert "0.59.0 — Serious Sandpipers" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def test_built_in_locales_are_canonical_and_complete():

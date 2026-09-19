@@ -4,8 +4,8 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_identity_and_metadata_threshold():
-    assert json.loads(text("web/package.json"))["version"]=="0.58.0"
-    assert "0.58.0 — Righteous Rhinoceros" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"]=="0.59.0"
+    assert "0.59.0 — Serious Sandpipers" in text("README.md")
     src=text("api/app/corpus_builder.py")
     assert '"min_metadata_confidence": 0.65' in src
     assert 'confidence <= minimum' in src

@@ -3,7 +3,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path): return (ROOT/path).read_text(encoding='utf-8')
 
 def test_quiet_camel_release_and_metadata_field_typing():
-    assert '0.58.0 — Righteous Rhinoceros' in text('README.md')
+    assert '0.59.0 — Serious Sandpipers' in text('README.md')
     registry=text('web/src/domain/metadataFieldRegistry.ts')
     assert "field==='proposition_status'" in registry and "field==='stance'" in registry
     assert "field==='claim_scope'" in registry and "control:'combobox'" in registry

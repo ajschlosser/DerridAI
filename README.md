@@ -1,10 +1,24 @@
-# DerridAI Corpus Viewer 0.58.0
+# DerridAI 0.59.0
 
-**0.58.0 — Righteous Rhinoceros** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
+**0.59.0 — Serious Sandpipers** reorganizes Corpus Builder around a modern, progressive scholarly workflow: source selection and document structure precede LLM/enrichment choices, record construction and advanced execution are progressively disclosed, build readiness is summarized at the point of action, and complex metadata/source review can expand into full working-width modes. The application name is now consistently **DerridAI**; Corpus Viewer remains a major workspace within the application. English/Québec French i18n, keyboard accessibility, and WCAG 2.0 AA-oriented composition remain release requirements.
+
+## 0.59.0 — Serious Sandpipers
+
+A Corpus Builder workflow and information-architecture release focused on making DerridAI's most complex authoring surface easier to understand, configure, monitor, and review. Serious Sandpipers turns setup into a sequenced scholarly workflow, separates user-facing phases from machine stages, improves document-structure composition and build readiness, and continues the 0.58.0 metadata/source-review work.
+
+- Reorganizes Corpus Builder setup into a sequenced **Source → Document structure → LLM & enrichment → Record construction → Advanced execution → Build summary** workflow. Document structure now appears before launch instead of below it.
+- Replaces the seven mixed machine/user workflow steps with four user-facing phases: **Source & configure → Build → Review → Publish**. Internal segmentation/enrichment stages remain available in build progress and telemetry.
+- Adds a sticky, responsive **Build summary** that surfaces source, structure, enrichment, LLM, record target, concurrency notes, and context blockers immediately next to the launch decision.
+- Re-composes Document Structure into a true viewer/settings workspace: the PDF remains visible while structure rules are edited, settings are single-column, and mapping status remains directly attached to the structure task.
+- Moves PDF acquisition actions into the Source section and reduces duplicated page-header actions. Provider and enrichment controls are grouped behind a coherent disclosure rather than competing as separate dashboard cards.
+- Deep enrichment now presents semantic indexing as an included capability instead of a disabled checkbox. Record sizing is summary-first; advanced exception thresholds remain available on demand.
+- Adds full-width **Metadata workspace** and **Source workspace** modes for complex record review while preserving the compact inspector and Focus Review for quick triage.
+- Collapses settled metadata by default so unresolved/invalid fields retain visual priority.
+- Improves document-structure save feedback with mapped-page and exception counts instead of a generic success message.
+- Renames the application consistently to **DerridAI**. Corpus Viewer remains a major application workspace, not the product name.
+- Adds Storybook coverage for build readiness and updates English/Québec French strings for the new workflow, with layout behavior designed for narrow panes, laptop widths, keyboard navigation, and 200% zoom.
 
 ## 0.58.0 — Righteous Rhinoceros
-
-A Corpus Builder review-UX and metadata correctness release focused on the problems visible in the 0.57.x review workspace: cramped source inspection, unclear document-structure saving, clipped autocomplete menus, and semantic fields that did not reliably show high-confidence LLM proposals.
 
 - Rebuilds the **Source** inspector around a compact, width-safe source summary. PDF rendering, source actions, boundary second-reader controls, immutable extracted source, and revision history no longer compete in one narrow visual layer. Complex source work opens the shared full-size source/transcription workspace from both normal and Focus review.
 - Makes the PDF.js source renderer responsive below 320 px and rerender on container resize, eliminating the fixed minimum-width behavior that forced source content outside the inspector column.
@@ -218,9 +232,9 @@ The release remains a build candidate until the normal production frontend, Stor
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 
 **0.46.1 — Gray Fox** is a maintenance and interface-quality pass: canonical English and Québec French dictionaries are now first-class locale modules, obsolete migration/backward-compatibility shims and unused Vue components are removed, dense UI typography has an accessible 12px floor, and Storybook is pruned, renamed, reorganized, and wired to automated accessibility checks.
-# DerridAI Corpus Viewer 0.46.1
+# DerridAI 0.46.1
 
-DerridAI Corpus Viewer is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
+DerridAI is a local-first Docker application for editing philosophical JSONL corpora, auditing records with local or OpenAI-compatible LLMs, linking records to source PDFs, managing persistent ChromaDB collections, and running an evidence-grounded DerridAI RAG pipeline.
 
 The UI footer displays:
 

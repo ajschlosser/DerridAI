@@ -68,9 +68,9 @@ def install_repo(tmp_path: Path, record: dict):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.58.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.58.0"
-    assert "0.58.0 — Righteous Rhinoceros" in text("README.md")
+    assert APP_VERSION == "0.59.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.59.0"
+    assert "0.59.0 — Serious Sandpipers" in text("README.md")
 
 
 def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):

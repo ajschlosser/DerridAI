@@ -109,9 +109,12 @@ def test_lifecycle_and_storybook_cover_exception_resolution_and_french_layout():
     stepper = text('web/src/components/CorpusWorkflowStepper.vue')
     story = text('web/src/components/CorpusWorkflowStepper.stories.ts')
     cleanup_story = text('web/src/components/CorpusTextCleanupSummary.stories.ts')
-    assert 'Resolve exceptions' in stepper
-    assert 'Collaborative review' in stepper
-    assert 'ResolveExceptions' in story and 'ReadyToPublish' in story
+    assert 'Source & configure' in stepper
+    assert 'Build' in stepper
+    assert 'Review' in stepper
+    assert 'Initialize' not in stepper
+    assert 'Segment' not in stepper
+    assert 'Review' in story and 'Building' in story and 'ReadyToPublish' in story
     assert 'fr-CA' in story and 'fr-CA' in cleanup_story
 
 

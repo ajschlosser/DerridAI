@@ -42,9 +42,9 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
 
 
 def test_release_identity_locale_parity_and_quebec_copy():
-    assert APP_VERSION=='0.58.0'
-    assert json.loads(text('web/package.json'))['version']=='0.58.0'
-    assert '0.58.0 — Righteous Rhinoceros' in text('README.md')
+    assert APP_VERSION=='0.59.0'
+    assert json.loads(text('web/package.json'))['version']=='0.59.0'
+    assert '0.59.0 — Serious Sandpipers' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     keys=[
         'pdf_corpus.cleanup_paragraph_lines','pdf_corpus.cleanup_empty_lines',
