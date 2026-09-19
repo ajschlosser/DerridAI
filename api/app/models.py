@@ -17,6 +17,17 @@ class ChromaPathUpdate(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
 
 
+class ChromaConnectionUpdate(BaseModel):
+    """Switch or probe the Chroma backend. Token omitted keeps the current secret."""
+
+    mode: Literal["embedded", "http"]
+    path: str | None = Field(default=None, max_length=4096)
+    url: str | None = Field(default=None, max_length=2048)
+    token: str | None = Field(default=None, max_length=4096)
+    tenant: str | None = Field(default=None, max_length=128)
+    database: str | None = Field(default=None, max_length=128)
+
+
 class StoreCreate(BaseModel):
     name: str = Field(min_length=3, max_length=128)
     metadata: dict[str, Any] | None = None

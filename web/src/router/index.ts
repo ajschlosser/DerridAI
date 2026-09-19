@@ -21,7 +21,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/annotations", name: "annotations", component: CorpusView, meta: { view: "annotations", capability: "page.annotations" } },
   { path: "/pdf", name: "pdf", component: ToolsView, meta: { view: "pdf", capability: "page.pdf", adminOnly: true } },
   { path: "/compare", name: "compare", component: ToolsView, meta: { view: "compare", capability: "page.compare" } },
-  { path: "/databases", name: "vector", component: ToolsView, meta: { view: "vector", capability: "page.vector" } },
+  { path: "/databases", name: "vector", component: ToolsView, meta: { view: "vector", capability: "page.vector", vueNative: true } },
   { path: "/rag", name: "rag", component: ResearchView, meta: { view: "rag", capability: "page.research" } },
   { path: "/faq", name: "faq", component: ResponseFaqView, meta: { view: "faq", capability: "page.faq", adminOnly: true, vueNative: true } },
   { path: "/response-cache", name: "responsecache", component: ResearchView, meta: { view: "responsecache", capability: "page.response_cache", adminOnly: true } },
