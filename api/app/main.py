@@ -837,7 +837,7 @@ def create_rag_job(body: RAGRunRequest, request: Request):
             payload = body.model_dump()
             payload.update({
                 "provider": profile.get("type") or "ollama",
-                "model": requested_model or profile.get("model"),
+                "model": profile.get("model"),
                 "base_url": profile.get("base_url"),
                 "api_key": profile.get("api_key"),
                 "max_concurrent_requests": max(1, min(64, int(profile.get("max_concurrent_requests") or 1))),
