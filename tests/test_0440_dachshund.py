@@ -64,7 +64,7 @@ def test_release_contract_has_one_current_profile():
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]["version"] == 11
+    assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]["version"] == 12
     assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
 
 
