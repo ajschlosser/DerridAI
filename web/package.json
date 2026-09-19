@@ -1,7 +1,7 @@
 {
   "name": "derridai-corpus-viewer",
   "private": true,
-  "version": "0.44.0",
+  "version": "0.47.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -24,7 +24,8 @@
     "vite": "^7.1.5",
     "vue-tsc": "^3.0.6",
     "storybook": "^10.0.0",
-    "@storybook/vue3-vite": "^10.0.0"
+    "@storybook/vue3-vite": "^10.0.0",
+    "@storybook/addon-a11y": "^10.0.0"
   },
   "author": "Aaron John Schlosser, PhD",
   "copyright": "Copyright 2026 Aaron John Schlosser, PhD."

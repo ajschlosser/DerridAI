@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LegacySurface from "../components/LegacySurface.vue";
+import RuntimeSurface from "../components/RuntimeSurface.vue";
 </script>
 
-<template><LegacySurface /></template>
+<template><RuntimeSurface /></template>

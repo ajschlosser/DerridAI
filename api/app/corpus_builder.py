@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import ast
+import difflib
 import hashlib
 import json
 import os
 import re
 import threading
+import tempfile
 import time
 import uuid
 import unicodedata
@@ -66,7 +68,7 @@ class DocumentManifestModel(BaseModel):
     @field_validator("notes", mode="before")
     @classmethod
     def normalize_nullable_notes(cls, value: Any) -> str:
-        # Optional LLM/legacy manifest notes may be JSON null. Normalize that at
+        # Optional LLM manifest notes may be JSON null. Normalize that at
         # the schema boundary so an internal validation detail never reaches UI.
         return "" if value is None else str(value)
 
@@ -300,14 +302,35 @@ ALLOWED_METADATA_FIELDS = {
     "review_reason",
 }
 
+
+METADATA_FAMILY_FIELDS = {
+    "discourse": {
+        "region_type", "region_author", "primary_text", "speaker", "position_holder",
+        "target", "discourse_role", "proposition_status", "semantic_function", "stance",
+        "claim_scope", "attribution_confidence", "semantic_classification_confidence",
+    },
+    "quotation": {
+        "is_direct_quote", "quoted_speaker", "quoted_author", "quoted_work",
+        "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain",
+    },
+    "indexing": {"topics", "concepts", "persons", "works_referenced"},
+}
+
 MANIFEST_INHERITED_FIELDS = {
     "work", "document_title", "short_title", "original_title", "canonical_work_id",
     "document_author", "translator", "edition", "year", "publication_year", "publisher",
     "publication_place", "isbn", "document_language", "original_language",
-    "document_is_translation", "primary_text",
+    "document_is_translation",
 }
 
 HUMAN_EDITABLE_METADATA_FIELDS = {
+    # Record-level overrides of inherited bibliographic metadata are explicit
+    # human decisions. They never mutate the document manifest and must survive
+    # later automatic enrichment.
+    "work", "document_title", "short_title", "original_title", "canonical_work_id",
+    "document_author", "translator", "edition", "year", "publication_year",
+    "publisher", "publication_place", "isbn", "document_language",
+    "original_language", "document_is_translation",
     "language", "region_type", "region_author", "primary_text", "speaker",
     "position_holder", "target", "discourse_role", "proposition_status",
     "semantic_function", "stance", "claim_scope", "is_direct_quote",
@@ -334,10 +357,26 @@ def corpus_root() -> Path:
 
 
 def _json_write(path: Path, payload: Any) -> None:
+    """Write JSON atomically without a shared temporary filename.
+
+    Multiple Corpus Builder workers can persist telemetry while a reviewer is
+    active. A fixed ``*.tmp`` path lets concurrent writers truncate/interleave
+    one another before ``os.replace``. Use a unique sibling tempfile instead.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _json_read(path: Path, default: Any = None) -> Any:
@@ -727,21 +766,39 @@ class PdfCorpusRepository:
         return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
 
     def save_records(self, build_id: str, records: list[dict[str, Any]]) -> None:
+        """Atomically persist the record store.
+
+        The repository lock serializes writers in this process; the unique temp
+        file prevents two writers from ever sharing/truncating the same staging
+        file. This is critical while progressive review and metadata checkpoints
+        are both active.
+        """
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".jsonl.tmp")
-        with tmp.open("w", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        os.replace(tmp, path)
+        with self._lock:
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for record in records:
+                        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
         if not path.exists():
             return []
-        with path.open("r", encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
+        with self._lock:
+            with path.open("r", encoding="utf-8") as handle:
+                return [json.loads(line) for line in handle if line.strip()]
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
@@ -793,7 +850,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "id": PROFILE_VERSION,
         "name": "Derrida scholarly corpus v11",
         "version": 11,
-        "description": "Dachshund: exception-oriented review, durable human metadata decisions, authoritative review queues, and atomic accept/advance commands.",
+        "description": "Feral Fox: editable reviewed text, explicit metadata ownership, selective LLM enrichment, measurable automation contribution, and concurrent-build clarity.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -817,6 +874,22 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
     }
 }
 
+
+
+def _serialize_record_mutation(method):
+    """Serialize manager-level read/modify/write record transactions.
+
+    Progressive enrichment and human review intentionally overlap. Any command
+    that reads the whole JSONL, mutates it, then rewrites it must hold the same
+    manager lock as metadata checkpoint persistence or a stale reviewer snapshot
+    can overwrite a newer metadata checkpoint.
+    """
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    wrapped.__name__ = getattr(method, "__name__", "wrapped")
+    wrapped.__doc__ = getattr(method, "__doc__")
+    return wrapped
 
 
 class PdfCorpusBuildManager:
@@ -929,7 +1002,10 @@ class PdfCorpusBuildManager:
         build["resumable"] = True
         build["finished_at"] = None
         build["cancel_requested"] = False
+        build["metadata_settle_requested"] = False
         build["operation_hidden"] = False
+        with self._lock:
+            self._cancel.discard(build_id)
 
         # If the previous attempt reached a topology guard (for example, a long
         # book returned valid-but-empty boundary arrays), successful-window caches
@@ -988,6 +1064,29 @@ class PdfCorpusBuildManager:
         source_total = max(1, int(build.get("source_block_count") or 1))
         progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
         unresolved = list(build.get("segmentation_unresolved_regions") or [])
+        metadata_total = int(build.get("metadata_tasks_total") or 0)
+        metadata_completed = int(build.get("metadata_tasks_completed") or 0)
+        metadata_failed = int(build.get("metadata_tasks_failed") or 0)
+        metadata_skipped = int(build.get("metadata_tasks_skipped") or 0)
+        metadata_running = int(build.get("metadata_tasks_running") or 0)
+        metadata_queued = int(build.get("metadata_tasks_queued") or 0)
+        if raw_status in {"queued", "running"} and str(build.get("stage") or "") == "enriching" and metadata_total:
+            settled = metadata_completed + metadata_failed + metadata_skipped
+            metadata_stage_detail = (
+                f"Metadata: {settled}/{metadata_total} settled · "
+                f"{metadata_running} active · {metadata_queued} queued · "
+                f"{metadata_failed + metadata_skipped} review"
+            )
+        else:
+            metadata_stage_detail = None
+        if metadata_stage_detail:
+            operation_stage_detail = metadata_stage_detail
+        elif raw_status in {"queued", "running"} and build.get("retrying_segmentation"):
+            operation_stage_detail = f"Retrying {len(unresolved)} unresolved segmentation region(s)"
+        elif build.get("segmentation_blocked"):
+            operation_stage_detail = f"{len(unresolved)} unresolved segmentation region(s)"
+        else:
+            operation_stage_detail = str(build.get("stage") or raw_status).replace("_", " ")
         return {
             "id": str(build.get("build_id") or ""),
             "type": "pdf_corpus",
@@ -996,13 +1095,7 @@ class PdfCorpusBuildManager:
             "status": status,
             "raw_status": raw_status,
             "stage": build.get("stage"),
-            "stage_detail": (
-                f"Retrying {len(unresolved)} unresolved segmentation region(s)"
-                if raw_status in {"queued", "running"} and build.get("retrying_segmentation")
-                else f"{len(unresolved)} unresolved segmentation region(s)"
-                if build.get("segmentation_blocked")
-                else str(build.get("stage") or raw_status).replace("_", " ")
-            ),
+            "stage_detail": operation_stage_detail,
             "provider": build.get("provider"),
             "model": build.get("model"),
             "provider_profile_id": (build.get("request") or {}).get("provider_profile_id"),
@@ -1012,6 +1105,14 @@ class PdfCorpusBuildManager:
             "build_id": build.get("build_id"),
             "record_count": int(build.get("record_count") or 0),
             "review_count": int(build.get("needs_review_count") or 0),
+            "metadata_tasks_total": metadata_total,
+            "metadata_tasks_completed": metadata_completed,
+            "metadata_tasks_failed": metadata_failed,
+            "metadata_tasks_skipped": metadata_skipped,
+            "metadata_tasks_running": metadata_running,
+            "metadata_tasks_queued": metadata_queued,
+            "metadata_started_at": build.get("metadata_started_at"),
+            "metadata_last_progress_at": build.get("metadata_last_progress_at"),
             "unresolved_regions": len(unresolved),
             "progress": progress,
             "total": source_total,
@@ -1071,6 +1172,22 @@ class PdfCorpusBuildManager:
         if build.get("status") in {"queued", "running"}:
             build["cancel_requested"] = True
             self.repo.save_build(build)
+        return build
+
+    @_serialize_record_mutation
+    def settle_metadata_unresolved(self, build_id: str) -> dict[str, Any]:
+        """Ask active enrichment workers to stop scheduling automatic families.
+
+        The currently executing provider call is allowed to reach its bounded read
+        deadline; subsequent families settle as explicit review exceptions. Source
+        text, topology, and already completed metadata checkpoints are preserved.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") not in {"queued", "running"} or build.get("stage") != "enriching":
+            raise ValueError("Metadata can only be settled while enrichment is running.")
+        build["metadata_settle_requested"] = True
+        build["metadata_settle_requested_at"] = iso_now()
+        self.repo.save_build(build)
         return build
 
     def _cancelled(self, build_id: str) -> bool:
@@ -1144,8 +1261,13 @@ class PdfCorpusBuildManager:
             blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
         if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
             blockers.append({"code": "metadata_validation", "count": len(validation.get("metadata_evidence_errors") or []) + len(validation.get("metadata_schema_errors") or []) + len(validation.get("citation_errors") or [])})
-        if int(source_quality.get("blocking_page_count") or 0):
-            blockers.append({"code": "source_quality", "count": int(source_quality.get("blocking_page_count") or 0)})
+        # Raw PDF extraction findings remain in build.source_quality for audit,
+        # but a reviewer may resolve a record-level extraction problem by
+        # correcting the reviewed text while preserving source_extracted_text.
+        # Publication is therefore gated by unresolved record source issues, not
+        # forever by the immutable raw-page diagnostic.
+        if int(build.get("source_problem_count") or 0):
+            blockers.append({"code": "source_quality", "count": int(build.get("source_problem_count") or 0)})
 
         can_publish = bool(record_count and not blockers and bool(validation.get("valid", True)) and accepted == record_count)
         if publication:
@@ -1199,28 +1321,32 @@ class PdfCorpusBuildManager:
         return build
 
     def _update(self, build_id: str, *, stage: str | None = None, progress: float | None = None, **changes: Any) -> dict[str, Any]:
-        build = self.repo.get_build(build_id)
-        prior_stage = str(build.get("stage") or "")
-        prior_status = str(build.get("status") or "")
-        if stage is not None:
-            build["stage"] = stage
-        if progress is not None:
-            build["progress"] = max(0.0, min(1.0, float(progress)))
-        build.update(changes)
-        current_stage = str(build.get("stage") or "")
-        current_status = str(build.get("status") or "")
-        if current_stage != prior_stage or current_status != prior_status:
-            events = list(build.get("build_events") or [])
-            events.append({
-                "at": iso_now(),
-                "stage": current_stage,
-                "status": current_status,
-                "progress": round(float(build.get("progress") or 0.0), 4),
-            })
-            build["build_events"] = events[-120:]
-        self._refresh_workflow_fields(build)
-        self.repo.save_build(build)
-        return build
+        # Metadata workers update telemetry and warnings concurrently. Serialize
+        # read/modify/write of build.json so one worker cannot erase another
+        # worker's metric, progress, or recovery flag.
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            prior_stage = str(build.get("stage") or "")
+            prior_status = str(build.get("status") or "")
+            if stage is not None:
+                build["stage"] = stage
+            if progress is not None:
+                build["progress"] = max(0.0, min(1.0, float(progress)))
+            build.update(changes)
+            current_stage = str(build.get("stage") or "")
+            current_status = str(build.get("status") or "")
+            if current_stage != prior_stage or current_status != prior_status:
+                events = list(build.get("build_events") or [])
+                events.append({
+                    "at": iso_now(),
+                    "stage": current_stage,
+                    "status": current_status,
+                    "progress": round(float(build.get("progress") or 0.0), 4),
+                })
+                build["build_events"] = events[-120:]
+            self._refresh_workflow_fields(build)
+            self.repo.save_build(build)
+            return build
 
     @staticmethod
     def _llm_config(request: dict[str, Any]) -> tuple[str, str, str | None, str | None, OllamaTouchupOptions | None]:
@@ -1295,21 +1421,23 @@ class PdfCorpusBuildManager:
         return parsed
 
     def _append_warning(self, build_id: str, message: str) -> None:
-        build = self.repo.get_build(build_id)
-        warnings = list(build.get("warnings") or [])
-        if message not in warnings:
-            warnings.append(message)
-        build["warnings"] = warnings[-100:]
-        self.repo.save_build(build)
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            warnings = list(build.get("warnings") or [])
+            if message not in warnings:
+                warnings.append(message)
+            build["warnings"] = warnings[-100:]
+            self.repo.save_build(build)
 
     def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None:
         if not build_id:
             return
-        build = self.repo.get_build(build_id)
-        metrics = dict(build.get("llm_metrics") or {})
-        metrics[key] = int(metrics.get(key) or 0) + int(amount)
-        build["llm_metrics"] = metrics
-        self.repo.save_build(build)
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            metrics = dict(build.get("llm_metrics") or {})
+            metrics[key] = int(metrics.get(key) or 0) + int(amount)
+            build["llm_metrics"] = metrics
+            self.repo.save_build(build)
 
     def _chat_json(
         self,
@@ -1319,7 +1447,7 @@ class PdfCorpusBuildManager:
         response_model: type[BaseModel],
         max_tokens: int = 4096,
         schema_name: str = "derridai_corpus",
-        attempts: int = 3,
+        attempts: int = 2,
         build_id: str = "",
     ) -> dict[str, Any]:
         """Generate and validate typed structured output with bounded retry/escalation.
@@ -1378,6 +1506,14 @@ class PdfCorpusBuildManager:
                             self._increment_metric(build_id, "indexing_calls")
                         if attempt > 1:
                             self._increment_metric(build_id, "retries")
+                    timeout_key = (
+                        "manifest" if "manifest" in schema_name else
+                        "reconciliation" if "reconciliation" in schema_name else
+                        "segmentation" if ("boundar" in schema_name or "segment" in schema_name) else
+                        "discourse" if "record_discourse" in schema_name else
+                        "quotation" if "record_quotation" in schema_name else
+                        "indexing" if "record_indexing" in schema_name else "indexing"
+                    )
                     raw = chat_complete(
                         provider=provider,
                         model=model,
@@ -1390,12 +1526,20 @@ class PdfCorpusBuildManager:
                         schema_name=schema_name,
                         max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
                         cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                        timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
                     )
                 except InterruptedError:
                     raise
                 except Exception as exc:
                     failure = exc
                     diagnostic = ""
+                    # A hard read timeout already consumed the stage budget. Repeating
+                    # the same expensive request obscures stalls rather than improving
+                    # resilience; settle it for human review instead.
+                    if "timeout" in type(exc).__name__.casefold() or "timed out" in str(exc).casefold():
+                        if build_id:
+                            self._increment_metric(build_id, "timeouts")
+                        break
                     if attempt < max(1, attempts):
                         time.sleep(min(2.0, 0.35 * attempt))
                         continue
@@ -1584,6 +1728,28 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     defaults[key] = max(1024, min(24000, value))
                 else:
                     defaults[key] = max(256, min(8192, value))
+        return defaults
+
+    @staticmethod
+    def _stage_timeouts(request: dict[str, Any]) -> dict[str, int]:
+        """Per-call read deadlines for long-running corpus LLM stages.
+
+        These are deliberately much shorter than the provider-wide emergency
+        network ceiling so one unhealthy generation cannot monopolize a corpus
+        worker indefinitely. Values remain configurable per build.
+        """
+        defaults = {
+            "manifest": 300, "segmentation": 300, "reconciliation": 240,
+            "discourse": 240, "quotation": 240, "indexing": 180,
+        }
+        supplied = request.get("stage_timeouts")
+        if isinstance(supplied, dict):
+            for key, default in list(defaults.items()):
+                try:
+                    value = int(supplied.get(key, default))
+                except (TypeError, ValueError):
+                    value = default
+                defaults[key] = max(30, min(1800, value))
         return defaults
 
     @staticmethod
@@ -2350,8 +2516,7 @@ Return one compact decision per transition using its exact left-hand block ID in
         batch_call_count=0
         classifier_failures=0
 
-        # Reuse only provenance-compatible local decisions. Old 0.40.8 checkpoints
-        # cannot silently affect 0.40.9 topology because the fingerprint contains
+        # Reuse only provenance-compatible local decisions. The fingerprint binds
         # the prompt version, evidence text, model, and relevant generation knobs.
         pending=[]
         for candidate in llm_candidates:
@@ -2646,6 +2811,19 @@ Return one compact decision for every supplied candidate using exact `after` IDs
     @staticmethod
     def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -> None:
         field_status = record.setdefault("metadata_field_status", {})
+
+        def inherited(field: str, value: Any) -> None:
+            if value in (None, "", []):
+                return
+            status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            if status.get("status") in {"human_confirmed", "human_override"}:
+                return
+            record[field] = value
+            field_status[field] = {
+                "status": "inherited", "method": "document_manifest", "confidence": 1.0,
+                "reason": "Inherited from the reviewed document manifest.",
+            }
+
         title = manifest.get("title")
         author = manifest.get("document_author")
         translator = manifest.get("translator")
@@ -2654,39 +2832,31 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         language = manifest.get("language")
         original_language = manifest.get("original_language")
         if title:
-            record["work"] = title
-            record["document_title"] = title
-            record["canonical_work_id"] = re.sub(r"[^a-z0-9]+", "-", str(title).casefold()).strip("-")[:120]
-        if manifest.get("short_title"):
-            record["short_title"] = manifest.get("short_title")
-        if manifest.get("original_title"):
-            record["original_title"] = manifest.get("original_title")
-        if author:
-            record["document_author"] = author
-        if translator:
-            record["translator"] = translator
-        if edition:
-            record["edition"] = edition
-        if manifest.get("publisher"):
-            record["publisher"] = manifest.get("publisher")
-        if manifest.get("publication_place"):
-            record["publication_place"] = manifest.get("publication_place")
-        if manifest.get("isbn"):
-            record["isbn"] = manifest.get("isbn")
+            inherited("work", title)
+            inherited("document_title", title)
+            inherited("canonical_work_id", re.sub(r"[^a-z0-9]+", "-", str(title).casefold()).strip("-")[:120])
+        inherited("short_title", manifest.get("short_title"))
+        inherited("original_title", manifest.get("original_title"))
+        inherited("document_author", author)
+        inherited("translator", translator)
+        inherited("edition", edition)
+        inherited("publisher", manifest.get("publisher"))
+        inherited("publication_place", manifest.get("publication_place"))
+        inherited("isbn", manifest.get("isbn"))
         if year is not None:
             try:
                 parsed_year = int(year)
-                record["year"] = parsed_year
-                record["publication_year"] = parsed_year
+                inherited("year", parsed_year)
+                inherited("publication_year", parsed_year)
             except (TypeError, ValueError):
-                record["publication_year"] = year
+                inherited("publication_year", year)
         if language:
-            record["document_language"] = [str(language)]
-            record.setdefault("language", str(language))
+            inherited("document_language", [str(language)])
+            inherited("language", str(language))
         if original_language:
-            record["original_language"] = [str(original_language)]
+            inherited("original_language", [str(original_language)])
         if manifest.get("document_is_translation") is not None:
-            record["document_is_translation"] = bool(manifest.get("document_is_translation"))
+            inherited("document_is_translation", bool(manifest.get("document_is_translation")))
 
         start_page = manifest.get("main_text_start_page")
         end_page = manifest.get("main_text_end_page")
@@ -2695,23 +2865,37 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             inside = min(pdf_pages) >= start_page and (not isinstance(end_page, int) or max(pdf_pages) <= end_page)
             primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
             region_status = field_status.get("region_type") if isinstance(field_status.get("region_type"), dict) else {}
-            # A human decision always outranks deterministic re-enrichment. This
-            # prevents a retry/background pass from resurrecting a resolved issue.
-            if primary_status.get("status") != "human_confirmed":
+            if primary_status.get("status") not in {"human_confirmed", "human_override"}:
                 record["primary_text"] = inside
                 field_status["primary_text"] = {
-                    "status": "deterministic",
-                    "method": "manifest_page_range",
-                    "confidence": 1.0,
+                    "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
                     "reason": "Classified from the reviewed document main-text page range.",
                 }
-            if inside and region_status.get("status") != "human_confirmed":
-                record["region_type"] = "main_text"
-                field_status["region_type"] = {
-                    "status": "deterministic",
-                    "method": "manifest_page_range",
-                    "confidence": 1.0,
-                    "reason": "Record lies entirely inside the reviewed main-text page range.",
+            if region_status.get("status") not in {"human_confirmed", "human_override"}:
+                if inside:
+                    inferred_region = "main_text"
+                    region_reason = "Record lies entirely inside the reviewed main-text page range."
+                elif max(pdf_pages) < start_page:
+                    inferred_region = "front_matter"
+                    region_reason = "Record lies before the reviewed main-text page range."
+                elif isinstance(end_page, int) and min(pdf_pages) > end_page:
+                    inferred_region = "back_matter"
+                    region_reason = "Record lies after the reviewed main-text page range."
+                else:
+                    inferred_region = None
+                    region_reason = ""
+                if inferred_region:
+                    record["region_type"] = inferred_region
+                    field_status["region_type"] = {
+                        "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
+                        "reason": region_reason,
+                    }
+            role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
+            if not inside and role_status.get("status") not in {"human_confirmed", "human_override"}:
+                record["discourse_role"] = "paratext"
+                field_status["discourse_role"] = {
+                    "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
+                    "reason": "Non-primary material is deterministically classified as paratext unless a reviewer overrides it.",
                 }
         confidences = [
             float(span.get("confidence"))
@@ -2730,6 +2914,7 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         previous_text: str = "",
         next_text: str = "",
         build_id: str = "",
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
     ) -> dict[str, Any]:
         """Infer interpretive metadata through several small structured tasks.
 
@@ -2738,7 +2923,15 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         design keeps output schemas small, preserves successful partial work, and
         makes retries/escalation local to the failed metadata family.
         """
+        if build_id:
+            try:
+                current_manifest = self.repo.get_build(build_id).get("manifest")
+                if isinstance(current_manifest, dict) and current_manifest:
+                    manifest = current_manifest
+            except Exception:
+                pass
         self._apply_manifest_metadata(record, manifest)
+        editorial_context = self._editorial_context(build_id, exclude_record_id=str(record.get("record_id") or "")) if build_id else {}
         profile_id = PROFILE_VERSION
         if build_id:
             try:
@@ -2753,7 +2946,11 @@ Return one compact decision for every supplied candidate using exact `after` IDs
         # quality checks have already identified as corrupted. Preserve any
         # deterministic classifications and route only the unresolved fields to
         # explicit human/source repair.
-        if record.get("source_quality_issues"):
+        blocking_source_issues = [
+            item for item in (record.get("source_quality_issues") or [])
+            if str(item.get("severity") or "blocking") == "blocking"
+        ]
+        if blocking_source_issues and record.get("text_review_status") != "human_corrected":
             field_status = record.setdefault("metadata_field_status", {})
             for field in required_metadata_fields:
                 current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
@@ -2767,7 +2964,14 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             incomplete_fields = [field for field in required_metadata_fields if str((field_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or record.get(field) in (None, "", [])]
             record["metadata_incomplete_fields"] = incomplete_fields
             record["metadata_complete"] = not incomplete_fields
-            record["metadata_stage_status"] = {"source_quality": "needs_review"}
+            record["metadata_stage_status"] = {"discourse": "skipped", "quotation": "skipped", "indexing": "skipped", "source_quality": "needs_review"}
+            record["metadata_execution_ledger"] = {
+                family: {"state": "skipped", "finished_at": iso_now(), "error": "Source quality gate"}
+                for family in ("discourse", "quotation", "indexing")
+            }
+            if stage_callback:
+                for family in ("discourse", "quotation", "indexing"):
+                    stage_callback(record, family, "skipped", "Source quality gate")
             record["metadata_needs_attention"] = True
             record["metadata_attention_reasons"] = ["Source extraction quality must be resolved before scholarly metadata enrichment."]
             inline, full = _citation_strings(record)
@@ -2793,10 +2997,17 @@ Return one compact decision for every supplied candidate using exact `after` IDs
             record["needs_review"] = True
             record["review_reason"] = "Record exceeds this model's metadata context envelope; metadata was inferred from head/tail context and requires review."
 
+        human_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        human_locked_fields = sorted(
+            field for field, info in human_status.items()
+            if isinstance(info, dict) and str(info.get("status") or "") in {"human_confirmed", "human_override"}
+        )
         base_context = f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
+Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 Current source block IDs: {source_id_json}
-CURRENT RECORD TEXT (immutable):
+CURRENT REVIEWED RECORD TEXT:
 {source_text}
 """
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
@@ -2826,12 +3037,113 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 {base_context}
 """
 
-        tasks = [
-            ("discourse", discourse_prompt, DiscourseMetadataResponseModel, limits["discourse_num_predict"], "derridai_record_discourse"),
-            ("quotation", quotation_prompt, QuotationMetadataResponseModel, limits["quotation_num_predict"], "derridai_record_quotation"),
-            ("indexing", indexing_prompt, IndexMetadataResponseModel, limits["indexing_num_predict"], "derridai_record_indexing"),
-        ]
+        enrichment_mode = str(request.get("enrichment_mode") if "enrichment_mode" in request else "deep")
+        semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
+        region_type = str(record.get("region_type") or "")
+        obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
+        quote_signal = any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’')) or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
+        all_task_specs = {
+            "discourse": ("discourse", discourse_prompt, DiscourseMetadataResponseModel, limits["discourse_num_predict"], "derridai_record_discourse"),
+            "quotation": ("quotation", quotation_prompt, QuotationMetadataResponseModel, limits["quotation_num_predict"], "derridai_record_quotation"),
+            "indexing": ("indexing", indexing_prompt, IndexMetadataResponseModel, limits["indexing_num_predict"], "derridai_record_indexing"),
+        }
+        requested_families = request.get("families")
+        if isinstance(requested_families, list) and requested_families:
+            # Explicit human reruns bypass Fast-mode routing, but only for the
+            # selected family/families. This prevents a text correction from
+            # needlessly repeating every expensive metadata task.
+            requested = [str(value) for value in requested_families if str(value) in all_task_specs]
+            tasks = [all_task_specs[name] for name in ("discourse", "quotation", "indexing") if name in requested]
+        else:
+            tasks = []
+            if not obvious_apparatus or enrichment_mode == "deep":
+                tasks.append(all_task_specs["discourse"])
+            if enrichment_mode == "deep" or quote_signal:
+                tasks.append(all_task_specs["quotation"])
+            if semantic_indexing:
+                tasks.append(all_task_specs["indexing"])
+        selected_names = {item[0] for item in tasks}
+        # Normal Fast-mode routing settles unneeded families as skipped. An
+        # explicit selective rerun must leave every unselected family's prior
+        # terminal state and normalized metadata untouched.
+        if not (isinstance(requested_families, list) and requested_families):
+            for skipped_family in {"discourse", "quotation", "indexing"} - selected_names:
+                record.setdefault("metadata_stage_status", {})[skipped_family] = "skipped"
+                record.setdefault("metadata_execution_ledger", {})[skipped_family] = {
+                    "state": "skipped", "finished_at": iso_now(),
+                    "error": "Skipped by fast enrichment routing; no strong signal required this LLM family.",
+                }
+                if stage_callback:
+                    stage_callback(record, skipped_family, "skipped", "Fast enrichment routing")
+        persisted_stage_results = record.setdefault("metadata_stage_results", {})
+        stage_status = record.setdefault("metadata_stage_status", {})
+        stage_ledger = record.setdefault("metadata_execution_ledger", {})
         for task_name, prompt, response_model, max_tokens, schema_name in tasks:
+            if build_id:
+                try:
+                    live_rows = self.repo.load_records(build_id)
+                    live_record = next((row for row in live_rows if str(row.get("record_id") or "") == str(record.get("record_id") or "")), None)
+                except Exception:
+                    live_record = None
+                if isinstance(live_record, dict):
+                    touched = {str(value) for value in (live_record.get("human_touched_fields") or [])}
+                    live_status = live_record.get("metadata_field_status") if isinstance(live_record.get("metadata_field_status"), dict) else {}
+                    family_fields = METADATA_FAMILY_FIELDS.get(task_name, set())
+                    all_owned = bool(family_fields) and all(
+                        isinstance(live_status.get(field), dict) and str(live_status[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic"}
+                        for field in family_fields if field not in {"attribution_confidence", "semantic_classification_confidence"}
+                    )
+                    if "__text__" in touched or "__review__" in touched or all_owned:
+                        reason = "Human reviewed this record before automatic enrichment." if {"__text__", "__review__"} & touched else "All fields in this metadata family are already human-owned or deterministic."
+                        stage_status[task_name] = "skipped"
+                        stage_ledger[task_name] = {"state": "skipped", "finished_at": iso_now(), "error": reason}
+                        stage_results.append((task_name, {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None))
+                        if stage_callback:
+                            stage_callback(record, task_name, "skipped", reason)
+                        continue
+            prior = persisted_stage_results.get(task_name)
+            prior_state = str(stage_status.get(task_name) or "")
+            if isinstance(prior, dict):
+                stage_status[task_name] = "complete"
+                stage_results.append((task_name, prior, None))
+                continue
+            # A fully materialized family no longer needs its bulky raw response.
+            # Its status is sufficient to skip the provider on crash-safe resume;
+            # the normalized metadata/evidence already lives on the record. Failed
+            # and user-skipped families are also terminal until an explicit retry.
+            if prior_state == "complete":
+                stage_results.append((task_name, {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None))
+                continue
+            if prior_state in {"failed", "needs_review", "skipped"}:
+                prior_error = RuntimeError(f"{task_name} metadata previously settled as {prior_state}.")
+                stage_results.append((task_name, None, prior_error))
+                continue
+            if build_id:
+                try:
+                    if bool(self.repo.get_build(build_id).get("metadata_settle_requested")):
+                        exc = RuntimeError("Automatic metadata was settled as unresolved by the user.")
+                        stage_status[task_name] = "skipped"
+                        stage_ledger[task_name] = {"state": "skipped", "finished_at": iso_now(), "error": str(exc)}
+                        stage_results.append((task_name, None, exc))
+                        if stage_callback:
+                            stage_callback(record, task_name, "skipped", str(exc))
+                        continue
+                except KeyError:
+                    pass
+            started_at = iso_now()
+            ledger_context = {
+                "provider": request.get("provider"),
+                "model": request.get("model"),
+                "attempts_allowed": 2,
+                "input_chars": len(prompt),
+                "max_output_tokens": max_tokens,
+                "timeout_seconds": self._stage_timeouts(request).get(task_name),
+            }
+            stage_status[task_name] = "running"
+            stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
+            if stage_callback:
+                stage_callback(record, task_name, "running", None)
+            started_clock = time.monotonic()
             try:
                 result = self._chat_json(
                     request,
@@ -2841,11 +3153,26 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                     schema_name=schema_name,
                     build_id=build_id,
                 )
+                persisted_stage_results[task_name] = result
+                stage_status[task_name] = "complete"
+                stage_ledger[task_name] = {
+                    **ledger_context, "state": "complete", "started_at": started_at, "finished_at": iso_now(),
+                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
+                }
                 stage_results.append((task_name, result, None))
+                if stage_callback:
+                    stage_callback(record, task_name, "complete", None)
             except InterruptedError:
                 raise
             except Exception as exc:
+                stage_status[task_name] = "failed"
+                stage_ledger[task_name] = {
+                    **ledger_context, "state": "failed", "started_at": started_at, "finished_at": iso_now(),
+                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
+                }
                 stage_results.append((task_name, None, exc))
+                if stage_callback:
+                    stage_callback(record, task_name, "failed", str(exc))
                 if build_id:
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
@@ -2874,7 +3201,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 # Human decisions are authoritative. Background/retry enrichment
                 # may add evidence, but it must never resurrect an already
                 # confirmed review issue or overwrite a human value.
-                if existing_status.get("status") == "human_confirmed":
+                if existing_status.get("status") in {"human_confirmed", "human_override"}:
                     continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
                     continue
@@ -2932,7 +3259,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "human_confirmed"}:
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"}:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -2971,11 +3298,22 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # valid record permanently unpublishable. Required hybrid classifications and
         # the discourse task are the publication-critical metadata gate.
         discourse_ok = any(name == "discourse" and failure is None for name, _result, failure in stage_results)
+        if not discourse_ok and str(record.get("metadata_stage_status", {}).get("discourse") or "") == "skipped":
+            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            required_discourse = [field for field in required_metadata_fields if field in METADATA_FAMILY_FIELDS["discourse"]]
+            human_or_deterministic = all(
+                isinstance(status_map.get(field), dict) and str(status_map[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic", "inherited", "llm_inferred"}
+                for field in required_discourse
+            ) if required_discourse else True
+            discourse_ok = obvious_apparatus or human_or_deterministic
         record["metadata_complete"] = discourse_ok and not incomplete_fields and not review_fields
-        record["metadata_stage_status"] = {
-            task_name: ("complete" if failure is None else "needs_review")
-            for task_name, _result, failure in stage_results
-        }
+        # Preserve exact terminal states (complete/failed/skipped) from execution
+        # instead of flattening every exception into a generic needs_review state.
+        # After normalization the raw successful response objects are redundant;
+        # stage_status plus normalized record fields are enough to resume without
+        # re-running already settled families.
+        record["metadata_stage_status"] = dict(stage_status)
+        record.pop("metadata_stage_results", None)
         inline, full = _citation_strings(record)
         record["inline_citation"] = inline
         record["full_citation"] = full
@@ -3094,7 +3432,8 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 for block_id in ids
                 if block_id in block_map and block_map[block_id]["text"].strip()
             )
-            if _normalize_text(expected) != _normalize_text(record.get("text") or ""):
+            fidelity_text = record.get("source_extracted_text") if record.get("text_review_status") == "human_corrected" else record.get("text")
+            if _normalize_text(expected) != _normalize_text(fidelity_text or ""):
                 fidelity_errors.append(record_id)
 
             indexes = [source_index[value] for value in ids if value in source_index]
@@ -3282,23 +3621,35 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 affected = sorted(record_pages & blocking_pages)
                 issues = []
                 if affected:
-                    issues.append({"code": "source_quality_blocking", "pages": affected})
-                issues.extend(self._record_extraction_quality_issues(record))
+                    page_findings = [item for item in (source_quality.get("issues") or []) if int(item.get("page") or 0) in affected]
+                    issues.append({
+                        "code": "source_quality_blocking", "severity": "blocking", "pages": affected,
+                        "message": "The PDF text layer contains replacement or control characters on one or more pages.",
+                        "page_findings": page_findings,
+                    })
+                glyph_issues = self._record_extraction_quality_issues(record)
+                for item in glyph_issues:
+                    item.setdefault("severity", "blocking")
+                issues.extend(glyph_issues)
                 if issues:
                     record["source_quality_issues"] = issues
                     record["needs_review"] = True
-                    record["review_reason"] = "Source extraction requires attention before scholarly acceptance."
+                    record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
             self.repo.save_records(build_id, records)
             self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")))
 
             total = max(1, len(records))
             pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
             already_complete = len(records) - len(pending)
+            metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
             self._update(
                 build_id,
                 metadata_enriched_count=already_complete,
                 metadata_enrichment_total=len(records),
                 metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
+                metadata_started_at=metadata_started_at,
+                metadata_last_progress_at=iso_now(),
+                metadata_settle_requested=False,
             )
             # Metadata enrichment is book-length work and may take minutes on a
             # local model. Track readiness per record so completed records can be
@@ -3306,11 +3657,84 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             # final LLM call finishes.
             for index, record in enumerate(records):
                 if index in pending:
+                    # A process restart may leave a record marked running. No worker
+                    # survives the restart, so it safely returns to the queue while
+                    # per-family checkpoints determine where enrichment resumes.
                     record["metadata_enrichment_state"] = "queued"
+                    record.setdefault("metadata_stage_status", {})
                 else:
                     record["metadata_enrichment_state"] = "complete"
             self.repo.save_records(build_id, records)
             max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+            metadata_families = ("discourse", "quotation", "indexing")
+            # Fast mode still exposes all three family states, but deliberately
+            # skipped families settle immediately and do not consume provider time.
+            metadata_task_total = len(records) * len(metadata_families)
+
+            def family_states_for(rows: list[dict[str, Any]]) -> list[str]:
+                states: list[str] = []
+                for row in rows:
+                    row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
+                    for family in metadata_families:
+                        fallback = "complete" if row.get("metadata_complete") else "queued"
+                        states.append(str(row_status.get(family) or fallback))
+                return states
+
+            initial_states = family_states_for(records)
+            self._update(
+                build_id, metadata_tasks_total=metadata_task_total,
+                metadata_tasks_completed=sum(1 for value in initial_states if value == "complete"),
+                metadata_tasks_failed=sum(1 for value in initial_states if value in {"failed", "needs_review"}),
+                metadata_tasks_skipped=sum(1 for value in initial_states if value == "skipped"),
+                metadata_tasks_running=0,
+                metadata_tasks_queued=sum(1 for value in initial_states if value == "queued"),
+                metadata_active_tasks=[],
+            )
+
+            def persist_metadata_stage(snapshot: dict[str, Any], task_name: str, state: str, error_text: str | None) -> None:
+                """Atomically checkpoint one family and refresh live task telemetry."""
+                record_id = str(snapshot.get("record_id") or "")
+                with self._lock:
+                    live_records = self.repo.load_records(build_id)
+                    live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == record_id), None)
+                    if live_index is None:
+                        return
+                    copy = json.loads(json.dumps(snapshot))
+                    copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
+                    live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], copy)
+                    self.repo.save_records(build_id, live_records)
+                    states: list[str] = []
+                    active: list[dict[str, Any]] = []
+                    for row in live_records:
+                        row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
+                        ledger = row.get("metadata_execution_ledger") if isinstance(row.get("metadata_execution_ledger"), dict) else {}
+                        for family in metadata_families:
+                            fallback = "complete" if row.get("metadata_complete") else "queued"
+                            family_state = str(row_status.get(family) or fallback)
+                            states.append(family_state)
+                            if family_state == "running":
+                                entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
+                                active.append({
+                                    "record_id": row.get("record_id"), "task": family,
+                                    "started_at": entry.get("started_at"),
+                                })
+                    completed_tasks = sum(1 for value in states if value == "complete")
+                    failed_tasks = sum(1 for value in states if value in {"failed", "needs_review"})
+                    skipped_tasks = sum(1 for value in states if value == "skipped")
+                    running_tasks = sum(1 for value in states if value == "running")
+                    queued_tasks = max(0, metadata_task_total - completed_tasks - failed_tasks - skipped_tasks - running_tasks)
+                    updates = {
+                        "metadata_tasks_total": metadata_task_total,
+                        "metadata_tasks_completed": completed_tasks,
+                        "metadata_tasks_failed": failed_tasks,
+                        "metadata_tasks_skipped": skipped_tasks,
+                        "metadata_tasks_running": running_tasks,
+                        "metadata_tasks_queued": queued_tasks,
+                        "metadata_active_tasks": active[:32],
+                        "metadata_last_progress_at": iso_now() if state in {"complete", "failed", "skipped"} else self.repo.get_build(build_id).get("metadata_last_progress_at"),
+                    }
+                    self._update(build_id, **updates)
+
             if pending:
                 # Parallelism is a build-level execution concern. Each worker performs
                 # the three small metadata families serially for one record, while the
@@ -3332,6 +3756,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             previous_text=previous_text,
                             next_text=next_text,
                             build_id=build_id,
+                            stage_callback=persist_metadata_stage,
                         )
                         futures[future] = index
                     completed = already_complete
@@ -3378,15 +3803,16 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                         # human review decisions already made on other completed
                         # records while enrichment continues. The disk copy is the
                         # authoritative live review state; replace only this record.
-                        live_records = self.repo.load_records(build_id)
-                        completed_id = str(records[index].get("record_id") or "")
-                        live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
-                        if live_index is None:
-                            live_records = records
-                        else:
-                            live_records[live_index] = records[index]
-                        records = live_records
-                        self.repo.save_records(build_id, records)
+                        with self._lock:
+                            live_records = self.repo.load_records(build_id)
+                            completed_id = str(records[index].get("record_id") or "")
+                            live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
+                            if live_index is None:
+                                live_records = records
+                            else:
+                                live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], records[index])
+                            records = live_records
+                            self.repo.save_records(build_id, records)
                         self._update(
                             build_id,
                             stage="enriching",
@@ -3396,6 +3822,20 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                             metadata_total=len(records),
                             metadata_concurrency=max_workers,
                         )
+
+            settled_records = self.repo.load_records(build_id)
+            settled_states = family_states_for(settled_records)
+            self._update(
+                build_id,
+                metadata_tasks_total=metadata_task_total,
+                metadata_tasks_completed=sum(1 for value in settled_states if value == "complete"),
+                metadata_tasks_failed=sum(1 for value in settled_states if value in {"failed", "needs_review"}),
+                metadata_tasks_skipped=sum(1 for value in settled_states if value == "skipped"),
+                metadata_tasks_running=0,
+                metadata_tasks_queued=0,
+                metadata_active_tasks=[],
+                metadata_last_progress_at=iso_now(),
+            )
 
             # All automatic workers have now settled. Recompute the authoritative
             # record/metadata queues once before handing control to human review so
@@ -3478,9 +3918,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             issues.append("metadata")
         if record.get("needs_review") and str(record.get("review_reason") or "").strip():
             reason = str(record.get("review_reason") or "").casefold().strip()
-            # Any concrete human-review reason is an exception. Generic pending
-            # status is not: clean records remain in the Ready queue.
-            if reason not in {"pending human review.", "pending human review"}:
+            # Topology is a distinct exception class. Source/metadata review reasons
+            # must not be flattened into topology merely because they are concrete.
+            if reason not in {"pending human review.", "pending human review"} and any(token in reason for token in ("boundary", "topology", "merge", "split", "segmentation")):
                 issues.append("topology")
         return list(dict.fromkeys(issues))
 
@@ -3491,7 +3931,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # considered finished only when they already carry metadata stage output.
         if not state:
             return bool(record.get("metadata_stage_status") or record.get("metadata_complete"))
-        return state in {"complete", "failed"}
+        return state in {"complete", "failed", "skipped"}
 
     @classmethod
     def _matches_review_queue(cls, record: dict[str, Any], queue: str | None) -> bool:
@@ -3692,6 +4132,41 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "issues": issue_rows[:1000],
             "records": issue_records[:250],
         }
+        # Measure automation by useful, persisted contribution rather than merely
+        # counting successful HTTP/model calls. These metrics let the UI make the
+        # cost/benefit of enrichment visible to reviewers.
+        contribution = Counter()
+        llm_elapsed_ms = 0
+        llm_family_calls = 0
+        for record in records:
+            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            for _field, info in status_map.items():
+                if not isinstance(info, dict):
+                    continue
+                state = str(info.get("status") or "")
+                if state == "inherited": contribution["inherited_fields"] += 1
+                elif state == "deterministic": contribution["deterministic_fields"] += 1
+                elif state == "llm_inferred": contribution["llm_fields_usable"] += 1
+                elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
+                    contribution["llm_fields_review"] += 1
+                elif state in {"human_confirmed", "human_override"}: contribution["human_fields"] += 1
+            ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
+            for family in ("discourse", "quotation", "indexing"):
+                entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
+                state = str(entry.get("state") or "")
+                if state in {"complete", "failed"}: llm_family_calls += 1
+                try: llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
+                except (TypeError, ValueError): pass
+                contribution[f"tasks_{state or 'unknown'}"] += 1
+        useful = int(contribution.get("llm_fields_usable") or 0)
+        build["llm_contribution"] = {
+            **dict(contribution),
+            "family_calls": llm_family_calls,
+            "elapsed_ms": llm_elapsed_ms,
+            "useful_fields_per_minute": round(useful / max(1 / 60, llm_elapsed_ms / 60000), 2) if llm_elapsed_ms else 0.0,
+            "enrichment_mode": str((build.get("request") or {}).get("enrichment_mode") or "fast"),
+            "semantic_indexing": bool((build.get("request") or {}).get("semantic_indexing")),
+        }
         build["review_queue_counts"] = self._queue_counts(records)
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
         # Any human/topology edit after publication creates a new unpublished
@@ -3737,7 +4212,11 @@ Return topics, concepts, persons, and works_referenced that are materially prese
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
-            raise ValueError("Pause or wait for the corpus build before editing its document manifest.")
+            stage = str(build.get("stage") or "")
+            if stage not in {"enriching", "metadata_retry"}:
+                raise ValueError("Document metadata becomes editable after segmentation is complete.")
+            if {"main_text_start_page", "main_text_end_page"} & set(changes):
+                raise ValueError("Main-text page boundaries are structural and cannot change while background enrichment is running.")
         current_revision = int(build.get("manifest_revision") or 1)
         if expected_revision is not None and int(expected_revision) != current_revision:
             raise ValueError("This document manifest changed after it was opened. Reload it before saving.")
@@ -3760,8 +4239,15 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         records = self.repo.load_records(build_id)
         if records:
             for record in records:
+                field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 for field in MANIFEST_INHERITED_FIELDS:
+                    info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+                    if str(info.get("status") or "") in {"human_override", "human_confirmed"}:
+                        continue
                     record.pop(field, None)
+                    if str(info.get("status") or "") == "inherited":
+                        field_status.pop(field, None)
+                record["metadata_field_status"] = field_status
                 self._apply_manifest_metadata(record, manifest)
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
@@ -3774,13 +4260,100 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             build = self.repo.get_build(build_id)
         return build
 
+    @staticmethod
+    def _mark_human_touch(record: dict[str, Any], fields: list[str] | set[str] | tuple[str, ...]) -> None:
+        touched = [str(value) for value in (record.get("human_touched_fields") or []) if str(value)]
+        for field in fields:
+            field_name = str(field)
+            if field_name and field_name not in touched:
+                touched.append(field_name)
+        record["human_touched_fields"] = touched
+        record["human_touched_at"] = iso_now()
+        record["human_touched_revision"] = int(record.get("record_revision") or 1) + 1
+
+    def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
+        """Return conservative build-local conventions derived from repeated human decisions.
+
+        A one-off record correction is never generalized. A value becomes prompt context
+        only after at least two distinct records have received the same human-confirmed
+        value. The context is advisory for untouched fields and is never applied directly.
+        """
+        try:
+            rows = self.repo.load_records(build_id)
+        except Exception:
+            return {}
+        counts: dict[str, dict[str, tuple[Any, int]]] = {}
+        for row in rows:
+            if exclude_record_id and str(row.get("record_id") or "") == exclude_record_id:
+                continue
+            statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
+            for field, info in statuses.items():
+                if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
+                    continue
+                value = row.get(field)
+                if value in (None, "", []):
+                    continue
+                key = json.dumps(value, ensure_ascii=False, sort_keys=True)
+                prior = counts.setdefault(str(field), {}).get(key)
+                counts[str(field)][key] = (value, (prior[1] if prior else 0) + 1)
+        conventions: dict[str, Any] = {}
+        for field, values in counts.items():
+            ranked = sorted(values.values(), key=lambda item: item[1], reverse=True)
+            if ranked and ranked[0][1] >= 2:
+                conventions[field] = {"value": ranked[0][0], "confirmed_records": ranked[0][1]}
+        return conventions
+
+    @classmethod
+    def _merge_enrichment_snapshot(cls, live: dict[str, Any], worker: dict[str, Any]) -> dict[str, Any]:
+        """Merge automatic enrichment into current human state without overwriting it."""
+        merged = json.loads(json.dumps(live))
+        live_status = live.get("metadata_field_status") if isinstance(live.get("metadata_field_status"), dict) else {}
+        worker_status = worker.get("metadata_field_status") if isinstance(worker.get("metadata_field_status"), dict) else {}
+        touched_markers = set(str(v) for v in (live.get("human_touched_fields") or []))
+        text_was_touched = "__text__" in touched_markers
+        record_frozen_by_review = "__review__" in touched_markers
+        automatic_merge_blocked = text_was_touched or record_frozen_by_review
+        for field in ALLOWED_METADATA_FIELDS:
+            if field in MANIFEST_INHERITED_FIELDS:
+                continue
+            info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
+            if str(info.get("status") or "") in {"human_confirmed", "human_override"}:
+                continue
+            if not automatic_merge_blocked and field in worker:
+                merged[field] = worker[field]
+            if not automatic_merge_blocked and field in worker_status:
+                merged.setdefault("metadata_field_status", {})[field] = worker_status[field]
+        if not automatic_merge_blocked:
+            worker_evidence = worker.get("metadata_evidence") if isinstance(worker.get("metadata_evidence"), dict) else {}
+            live_evidence = merged.setdefault("metadata_evidence", {})
+            for field, info in worker_evidence.items():
+                status = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
+                if str(status.get("status") or "") not in {"human_confirmed", "human_override"}:
+                    live_evidence[field] = info
+        for key in (
+            "metadata_stage_status", "metadata_execution_ledger", "metadata_incomplete_fields",
+            "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
+            "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
+            "semantic_classification_confidence", "attribution_confidence",
+        ):
+            if key in worker:
+                merged[key] = worker[key]
+        if automatic_merge_blocked:
+            status = merged.setdefault("metadata_stage_status", {})
+            ledger = merged.setdefault("metadata_execution_ledger", {})
+            reason = "Human edited reviewed text before automatic enrichment settled." if text_was_touched else "Human completed record review before automatic enrichment settled."
+            for family in ("discourse", "quotation", "indexing"):
+                status[family] = "skipped"
+                ledger[family] = {"state": "skipped", "finished_at": iso_now(), "error": reason}
+        return merged
+
     def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if str(build.get("status") or "") in {"queued", "running"}:
             stage = str(build.get("stage") or "")
-            if stage == "enriching" and record is not None and not structural and self._metadata_enrichment_finished(record):
+            if stage in {"enriching", "metadata_retry"} and record is not None and not structural:
                 return build
-            raise ValueError("This record is still being prepared. Review becomes available for each record as soon as its metadata enrichment finishes.")
+            raise ValueError("This record is still being prepared. Text and metadata become editable as soon as segmentation is complete; structural edits wait until background enrichment stops.")
         return build
 
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
@@ -3799,6 +4372,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "records": records,
         })
 
+    @_serialize_record_mutation
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
@@ -3835,10 +4409,12 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         else:
             target["needs_review"] = True
             target["review_reason"] = str(reason or target.get("review_reason") or "Pending human review.")
+        self._mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         return target
 
+    @_serialize_record_mutation
     def review_decision(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None, review_queue: str | None = None) -> dict[str, Any]:
         """Apply one review decision and return the authoritative next step atomically.
 
@@ -3885,6 +4461,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         target["rejected"] = disposition == "rejected"
         target["needs_review"] = False
         target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
+        self._mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
         # Prefer the next *pending* record in the active review queue.  `all` is
@@ -3893,12 +4470,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         # an accepted/rejected row and made the primary action look like a no-op.
         ordered = records[index + 1:] + records[:index]
         def pending(candidate: dict[str, Any]) -> bool:
-            if str(candidate.get("review_disposition") or "pending") != "pending":
-                return False
-            build_now = self.repo.get_build(build_id)
-            if str(build_now.get("status") or "") in {"queued", "running"} and str(build_now.get("stage") or "") == "enriching":
-                return self._metadata_enrichment_finished(candidate)
-            return True
+            return str(candidate.get("review_disposition") or "pending") == "pending"
         if review_queue and review_queue != "all":
             next_record = next((candidate for candidate in ordered if pending(candidate) and self._matches_review_queue(candidate, review_queue)), None)
         else:
@@ -3910,16 +4482,20 @@ Return topics, concepts, persons, and works_referenced that are materially prese
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
         return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
 
-    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None, review_queue: str | None = None) -> dict[str, Any]:
+    @_serialize_record_mutation
+    def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None, review_queue: str | None = None, record_ids: list[str] | None = None) -> dict[str, Any]:
         self._assert_human_review_available(build_id)
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
         q = str(query or "").casefold().strip()
+        selected_ids = {str(value) for value in (record_ids or []) if str(value).strip()}
         changed = 0
         blocked_metadata = 0
         blocked_record_ids: list[str] = []
         for record in records:
+            if selected_ids and str(record.get("record_id") or "") not in selected_ids:
+                continue
             if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
                 continue
             current_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
@@ -3959,6 +4535,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": self._queue_counts(records)}
 
+    @_serialize_record_mutation
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
         checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)
         if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get("records"), list):
@@ -3969,11 +4546,77 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self.repo.save_checkpoint(build_id, "review_undo", {"consumed_at": iso_now()})
         return {"restored": True, "action": checkpoint.get("action"), "selected_record_id": checkpoint.get("selected_record_id"), "record_count": len(records)}
 
+    @_serialize_record_mutation
+    def patch_record_text(
+        self, build_id: str, record_id: str, text: str, expected_revision: int | None = None,
+        resolve_source_issues: bool = False,
+    ) -> dict[str, Any]:
+        """Save reviewer-corrected corpus text without destroying extraction provenance."""
+        records = self.repo.load_records(build_id)
+        target = next((record for record in records if record.get("record_id") == record_id), None)
+        if target is None:
+            raise KeyError(record_id)
+        self._assert_human_review_available(build_id, target)
+        current_revision = self._assert_record_revision(target, expected_revision)
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            raise ValueError("Reviewed record text cannot be empty.")
+        if "source_extracted_text" not in target:
+            target["source_extracted_text"] = str(target.get("text") or "")
+        previous = str(target.get("text") or "")
+        if cleaned == previous and not resolve_source_issues:
+            return target
+        history = list(target.get("text_revision_history") or [])
+        history.append({
+            "at": iso_now(), "source": "human",
+            "previous_sha256": hashlib.sha256(previous.encode("utf-8")).hexdigest(),
+            "text_sha256": hashlib.sha256(cleaned.encode("utf-8")).hexdigest(),
+            "previous_length": len(previous), "text_length": len(cleaned),
+            "diff": "\n".join(difflib.unified_diff(
+                previous.splitlines(), cleaned.splitlines(),
+                fromfile="previous reviewed text", tofile="reviewed text", lineterm="",
+            )),
+            "resolved_source_issues": bool(resolve_source_issues),
+        })
+        target["text_revision_history"] = history[-20:]
+        target["text"] = cleaned
+        target["text_length"] = len(cleaned)
+        target["text_review_status"] = "human_corrected"
+        target["text_reviewed_at"] = iso_now()
+        target["text_review_source"] = "human"
+        self._mark_human_touch(target, ["__text__"])
+        # Any text correction invalidates a prior record-level acceptance. The
+        # reviewer may accept again after deciding whether selective metadata
+        # reruns are warranted; automatic metadata is never silently treated as
+        # newly human-approved merely because the text editor saved.
+        target["review_disposition"] = "pending"
+        target["accepted"] = False
+        target["rejected"] = False
+        target["needs_review"] = True
+        target["review_reason"] = "Reviewed record text changed; verify the correction and rerun any affected metadata families before acceptance."
+        review_events = list(target.get("review_events") or [])
+        review_events.append({"at": iso_now(), "event": "text_corrected", "resolve_source_issues": bool(resolve_source_issues)})
+        target["review_events"] = review_events[-100:]
+        if resolve_source_issues:
+            target["resolved_source_quality_issues"] = list(target.get("source_quality_issues") or [])
+            target["source_quality_issues"] = []
+            target["source_quality_resolved_at"] = iso_now()
+        target["metadata_needs_attention"] = True
+        reasons = list(target.get("metadata_attention_reasons") or [])
+        reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
+        target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+        target["record_revision"] = current_revision + 1
+        self._rewrite_and_validate(build_id, records)
+        persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+        self._decorate_review_state(persisted)
+        return persisted
+
+    @_serialize_record_mutation
     def patch_metadata(self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         forbidden = sorted(set(changes) - HUMAN_EDITABLE_METADATA_FIELDS)
         if forbidden:
             raise ValueError(
-                "Source-bound fields cannot be edited here; manifest- and system-bound fields are also protected: "
+                "Source-bound fields cannot be edited as record metadata. These system/source-bound fields are protected: "
                 + ", ".join(forbidden)
             )
         # Validate the editable interpretive schema before modifying the persisted record.
@@ -3994,18 +4637,20 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         decision_log = list(target.get("metadata_decisions") or [])
         for key, value in changes.items():
             target[key] = value
-            if key in REVIEW_METADATA_FIELDS:
-                status = target.setdefault("metadata_field_status", {})
+            status = target.setdefault("metadata_field_status", {})
+            if key in HUMAN_EDITABLE_METADATA_FIELDS:
+                is_override = key in MANIFEST_INHERITED_FIELDS
                 status[key] = {
-                    "status": "human_confirmed",
-                    "method": "human",
+                    "status": "human_override" if is_override else "human_confirmed",
+                    "method": "human_record_override" if is_override else "human",
                     "confidence": 1.0,
-                    "reason_code": "human_confirmed",
-                    "reason": "Confirmed during record review.",
+                    "reason_code": "human_override" if is_override else "human_confirmed",
+                    "reason": "Human record-level override of inherited document metadata." if is_override else "Confirmed during record review.",
                 }
-                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human"})
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_override else "human"})
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
+        self._mark_human_touch(target, list(changes))
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
         self._sync_record_metadata_state(target, profile)
         target["record_revision"] = current_revision + 1
@@ -4015,6 +4660,66 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._decorate_review_state(persisted)
         return persisted
 
+    @_serialize_record_mutation
+    def bulk_patch_metadata(
+        self, build_id: str, changes: dict[str, Any], *, record_ids: list[str] | None = None,
+        apply_to_all: bool = False, review_queue: str | None = None, query: str = "",
+    ) -> dict[str, Any]:
+        if not changes:
+            raise ValueError("Choose at least one metadata field to update.")
+        forbidden = sorted(set(changes) - HUMAN_EDITABLE_METADATA_FIELDS)
+        if forbidden:
+            raise ValueError("Unsupported bulk metadata field(s): " + ", ".join(forbidden))
+        schema_input = {key: value for key, value in changes.items() if key in RecordMetadataModel.model_fields}
+        try:
+            RecordMetadataModel.model_validate(schema_input)
+        except ValidationError as exc:
+            raise ValueError(f"Invalid bulk metadata: {exc}") from exc
+        build = self.repo.get_build(build_id)
+        records = self.repo.load_records(build_id)
+        wanted = {str(value) for value in (record_ids or []) if str(value)}
+        query_l = str(query or "").strip().casefold()
+        changed_ids: list[str] = []
+        profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        for record in records:
+            if wanted:
+                selected = str(record.get("record_id") or "") in wanted
+            elif apply_to_all:
+                selected = True
+            else:
+                selected = self._matches_review_queue(record, review_queue) if review_queue else False
+            if not selected:
+                continue
+            if query_l and query_l not in (str(record.get("record_id") or "") + " " + str(record.get("text") or "")).casefold():
+                continue
+            self._assert_human_review_available(build_id, record)
+            decisions = list(record.get("metadata_decisions") or [])
+            statuses = record.setdefault("metadata_field_status", {})
+            for key, value in changes.items():
+                record[key] = value
+                override = key in MANIFEST_INHERITED_FIELDS
+                statuses[key] = {
+                    "status": "human_override" if override else "human_confirmed",
+                    "method": "human_bulk_override" if override else "human_bulk",
+                    "confidence": 1.0, "reason_code": "human_bulk",
+                    "reason": "Applied through bulk record metadata editing.",
+                }
+                decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
+            record["metadata_decisions"] = decisions[-100:]
+            record["metadata_reviewed_at"] = iso_now()
+            self._mark_human_touch(record, list(changes))
+            record["record_revision"] = int(record.get("record_revision") or 1) + 1
+            self._sync_record_metadata_state(record, profile)
+            inline, full = _citation_strings(record)
+            record["inline_citation"] = inline; record["full_citation"] = full
+            changed_ids.append(str(record.get("record_id") or ""))
+        if not changed_ids:
+            raise ValueError("No records matched the bulk metadata selection.")
+        self._rewrite_and_validate(build_id, records)
+        persisted = self.repo.load_records(build_id)
+        return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": self._queue_counts(persisted)}
+
+    @_serialize_record_mutation
     def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
@@ -4044,6 +4749,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "review_state": str(record.get("review_state") or "ready"),
         }
 
+    @_serialize_record_mutation
     def patch_evidence(
         self,
         build_id: str,
@@ -4087,6 +4793,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return target
 
+    @_serialize_record_mutation
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
         self._assert_human_review_available(build_id, structural=True)
         records = self.repo.load_records(build_id)
@@ -4119,6 +4826,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         self._rewrite_and_validate(build_id, records)
         return merged
 
+    @_serialize_record_mutation
     def split(self, build_id: str, record_id: str, after_block_id: str, expected_revision: int | None = None) -> dict[str, Any]:
         self._assert_human_review_available(build_id, structural=True)
         records = self.repo.load_records(build_id)
@@ -4273,21 +4981,40 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             self._refresh_workflow_fields(build)
             self.repo.save_build(build)
 
+    @_serialize_record_mutation
     def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
         target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
-        # Clear only model-owned fields; source fields remain byte-for-byte source-derived.
-        for key in ALLOWED_METADATA_FIELDS:
-            if key not in {"needs_review", "review_reason"}:
-                target.pop(key, None)
+        requested_families = request.get("families")
+        families = [str(value) for value in requested_families or [] if str(value) in METADATA_FAMILY_FIELDS]
+        if not families:
+            families = ["discourse", "quotation", "indexing"]
+        # Clear only values owned by the selected LLM family. Inherited,
+        # deterministic, human-confirmed, and human-override values are
+        # authoritative and survive reruns.
+        status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+        for family in families:
+            for key in METADATA_FAMILY_FIELDS[family]:
+                info = status_map.get(key) if isinstance(status_map.get(key), dict) else {}
+                if str(info.get("status") or "") in {"human_confirmed", "human_override", "inherited", "deterministic"}:
+                    continue
+                if str(info.get("method") or "").startswith("llm") or str(info.get("status") or "") in {"llm_inferred", "unresolved", "invalid"}:
+                    target.pop(key, None)
+                    status_map.pop(key, None)
+            target.setdefault("metadata_stage_status", {}).pop(family, None)
+            target.setdefault("metadata_stage_results", {}).pop(family, None)
+            target.setdefault("metadata_execution_ledger", {}).pop(family, None)
+        target["metadata_field_status"] = status_map
+        rerun_request = dict(request)
+        rerun_request["families"] = families
         index = records.index(target)
         self._enrich_record(
             target,
             build.get("manifest") or {},
-            request,
+            rerun_request,
             previous_text=str(records[index - 1].get("text") or "") if index > 0 else "",
             next_text=str(records[index + 1].get("text") or "") if index + 1 < len(records) else "",
             build_id=build_id,
@@ -4354,6 +5081,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             "topology_quality": build.get("topology_quality"),
         }
 
+    @_serialize_record_mutation
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)

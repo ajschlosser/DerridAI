@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import SearchWorkspaceHeader from "./SearchWorkspaceHeader.vue";
 
 const meta:Meta<typeof SearchWorkspaceHeader>={
-  title:"Search/Search Workspace Header",
+  title:"Search/Workspace Header",
   component:SearchWorkspaceHeader,
   args:{scope:"loaded",totalLoaded:1842,databaseCount:3,selectedEvidence:7,canUseLoaded:true,researcher:false},
 };

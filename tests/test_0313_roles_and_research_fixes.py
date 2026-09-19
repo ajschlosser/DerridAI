@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 APP = (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
 RESEARCH = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
@@ -17,15 +17,15 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_release_version_is_0313():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_tooltips_escape_sidebar_and_stack_above_workspace():
-    assert ".v030-sidebar{z-index:500!important;overflow:visible!important}" in STYLE
+    assert ".shell-sidebar{z-index:500!important;overflow:visible!important}" in STYLE
     assert "z-index:20000!important" in STYLE
-    assert ".v030-side-nav,.v030-side-nav .nav-tooltip-wrap{overflow:visible!important}" in STYLE
+    assert ".shell-primary-nav,.shell-primary-nav .nav-tooltip-wrap{overflow:visible!important}" in STYLE
 
 
 def test_research_no_database_redirects_instead_of_disabling_navigation():
@@ -52,24 +52,22 @@ def test_research_request_normalizes_numeric_fields_before_post():
 
 
 
-def test_rag_schema_accepts_blank_legacy_numeric_values():
+def test_rag_schema_rejects_blank_numeric_values():
     import sys
+    import pytest
+    from pydantic import ValidationError
     if str(ROOT / "api") not in sys.path:
         sys.path.insert(0, str(ROOT / "api"))
     from app.models import RAGRunRequest
 
-    request = RAGRunRequest.model_validate({
-        "prompt": "What is différance?",
-        "k": "",
-        "fetch_k": None,
-        "lambda_mult": "",
-        "max_concurrent_requests": "",
-        "generation": {"num_ctx": "", "temperature": "", "top_p": "0.8", "seed": ""},
-    })
-    assert request.k == 64 and request.fetch_k == 500 and request.lambda_mult == 0.7
-    assert request.max_concurrent_requests == 32
-    assert request.generation is not None and request.generation.num_ctx is None
-    assert request.generation.temperature is None and request.generation.top_p == 0.8
+    with pytest.raises(ValidationError):
+        RAGRunRequest.model_validate({
+            "prompt": "What is différance?",
+            "k": "",
+            "fetch_k": None,
+            "lambda_mult": "",
+            "max_concurrent_requests": "",
+        })
 
 def test_research_heading_hierarchy_is_distinct():
     assert "research.page_kicker" in RESEARCH

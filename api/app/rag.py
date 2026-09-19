@@ -124,6 +124,7 @@ def chat_complete(
     schema_name: str = "derridai_response",
     max_tokens: int | None = None,
     cancelled: Callable[[], bool] | None = None,
+    timeout_seconds: float | None = None,
 ) -> str:
     tuning = options or OllamaTouchupOptions()
     provider = provider.strip().lower()
@@ -159,12 +160,13 @@ def chat_complete(
 
         timeout = httpx.Timeout(
             connect=settings.openai_connect_timeout_seconds,
-            read=settings.openai_timeout_seconds,
-            write=settings.openai_timeout_seconds,
+            read=min(settings.openai_timeout_seconds, timeout_seconds) if timeout_seconds else settings.openai_timeout_seconds,
+            write=min(settings.openai_timeout_seconds, timeout_seconds) if timeout_seconds else settings.openai_timeout_seconds,
             pool=settings.openai_connect_timeout_seconds,
         )
         if cancelled is not None:
             def stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+                started_clock = time.monotonic()
                 streaming = dict(payload)
                 streaming["stream"] = True
                 chunks: list[str] = []
@@ -179,6 +181,8 @@ def chat_complete(
                             raw = response.read().decode("utf-8", errors="replace")
                             return response.status_code, "", raw[:2000]
                         for line in response.iter_lines():
+                            if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
+                                raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
                             if cancelled():
                                 raise InterruptedError("RAG generation cancelled.")
                             if not line or not line.startswith("data:"):
@@ -327,12 +331,13 @@ def chat_complete(
 
     timeout = httpx.Timeout(
         connect=settings.ollama_connect_timeout_seconds,
-        read=settings.ollama_timeout_seconds,
-        write=settings.ollama_timeout_seconds,
+        read=min(settings.ollama_timeout_seconds, timeout_seconds) if timeout_seconds else settings.ollama_timeout_seconds,
+        write=min(settings.ollama_timeout_seconds, timeout_seconds) if timeout_seconds else settings.ollama_timeout_seconds,
         pool=settings.ollama_connect_timeout_seconds,
     )
     if cancelled is not None:
         def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+            started_clock = time.monotonic()
             streaming = dict(payload)
             streaming["stream"] = True
             chunks: list[str] = []
@@ -342,6 +347,8 @@ def chat_complete(
                         raw = response.read().decode("utf-8", errors="replace")
                         return response.status_code, "", raw[:2000]
                     for line in response.iter_lines():
+                        if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
+                            raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
                         if cancelled():
                             raise InterruptedError("RAG generation cancelled.")
                         if not line:

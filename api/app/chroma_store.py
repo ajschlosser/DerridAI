@@ -431,7 +431,7 @@ class ChromaStore:
             "source_snapshot_hash": metadata.get(self._SOURCE_HASH_KEY),
             "source_works": [str(value) for value in works],
             "protected": bool(metadata.get(self._PROTECTED_KEY) or False),
-            "app_version": str(metadata.get(self._APP_VERSION_KEY) or "legacy"),
+            "app_version": str(metadata.get(self._APP_VERSION_KEY) or ""),
             "build_history": history[-20:],
         }
 
@@ -775,7 +775,7 @@ class ChromaStore:
             )
         if collection.count() > 0 and changed:
             raise ValueError(
-                "Embedding settings cannot be changed on a non-empty legacy collection "
+                "Embedding settings cannot be changed on a non-empty collection "
                 "because existing vectors may have a different dimension. "
                 "Create a new collection with the desired embedding model."
             )
@@ -896,18 +896,12 @@ class ChromaStore:
         if model:
             collection_metadata[self._MODEL_KEY] = model
 
-        # Chroma 1.x supports collection configuration. Older compatible builds
-        # use the hnsw:space metadata key; keep the fallback isolated here.
         try:
             col = self.client.create_collection(
                 name=name,
                 metadata=collection_metadata,
                 configuration={"hnsw": {"space": metric}},
             )
-        except TypeError:
-            fallback_metadata = dict(collection_metadata)
-            fallback_metadata.setdefault("hnsw:space", metric)
-            col = self.client.create_collection(name=name, metadata=fallback_metadata)
         except Exception as exc:
             # Chroma's exception type differs across releases. Convert the race
             # between the explicit existence check and create into a 409-capable
@@ -1468,29 +1462,6 @@ class ChromaStore:
             for item in self.client.list_collections()
         }
 
-        # v0.7 generated regional-language collections. When regenerating the
-        # same source under the coarse en/fr model, remove only legacy derived
-        # collections that identify this source as their parent.
-        removed_legacy: list[str] = []
-        for legacy_name in (
-            f"{source_name}_en_us",
-            f"{source_name}_en_gb",
-            f"{source_name}_fr_fr",
-        ):
-            if legacy_name not in existing:
-                continue
-            try:
-                legacy = self.client.get_collection(name=legacy_name)
-                _, legacy_role, legacy_source = self._language_spec(legacy)
-                if legacy_role == "language" and legacy_source == source_name:
-                    self.client.delete_collection(name=legacy_name)
-                    removed_legacy.append(legacy_name)
-                    existing.discard(legacy_name)
-            except Exception:
-                # A legacy collection is never deleted merely by name when its
-                # provenance cannot be verified.
-                pass
-
         for target in names.values():
             if target in existing:
                 if not overwrite:
@@ -1595,7 +1566,6 @@ class ChromaStore:
                 for code in ("en", "fr")
             },
             "skipped": totals["skipped"],
-            "removed_legacy_collections": removed_legacy,
         }
 
     @staticmethod
@@ -2085,8 +2055,7 @@ class ChromaStore:
 
         The browser sends only stable storage ids plus content fingerprints. The
         server owns the comparison, including rows that disappeared from the
-        source. Legacy vectors without stored fingerprints are conservatively
-        classified as modified so one sync establishes the 0.37 provenance data.
+        source. Rows without fingerprints are classified as modified and rebuilt.
         """
         col = self._collection(store)
         requested: dict[str, str] = {}

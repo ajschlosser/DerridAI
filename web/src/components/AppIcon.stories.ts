@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import AppIcon from "./AppIcon.vue";
 
 const meta = {
-  title: "Components/AppIcon",
+  title: "Foundations/Visuals/App Icon",
   component: AppIcon,
   args: { name: "database" },
 } satisfies Meta<typeof AppIcon>;

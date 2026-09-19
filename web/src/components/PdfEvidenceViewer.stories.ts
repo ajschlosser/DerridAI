@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
 
-const meta:Meta<typeof PdfEvidenceViewer>={title:"PDF Corpus/PDF Evidence Viewer",component:PdfEvidenceViewer,args:{pdfUrl:"",page:1,pageWidth:612,pageHeight:792,blocks:[],evidenceBlockIds:[]}};
+const meta:Meta<typeof PdfEvidenceViewer>={title:"Corpus Builder/Source/PDF Evidence Viewer",component:PdfEvidenceViewer,args:{pdfUrl:"",page:1,pageWidth:612,pageHeight:792,blocks:[],evidenceBlockIds:[]}};
 export default meta;
 type Story=StoryObj<typeof PdfEvidenceViewer>;
 export const Empty:Story={};

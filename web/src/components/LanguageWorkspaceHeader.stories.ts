@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import LanguageWorkspaceHeader from "./LanguageWorkspaceHeader.vue";
 
 const meta = {
-  title: "Localization/LanguageWorkspaceHeader",
+  title: "Internationalization/Workspace Header",
   component: LanguageWorkspaceHeader,
   args: {
     languageCount: 4,

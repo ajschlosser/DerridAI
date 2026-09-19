@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 
 export interface ShellFile {
   id: string;

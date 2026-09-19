@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import LegacySurface from "../components/LegacySurface.vue";
+import RuntimeSurface from "../components/RuntimeSurface.vue";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
@@ -10,7 +10,7 @@ import ResearchPipelineBar from "../components/research/ResearchPipelineBar.vue"
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import type { ResearchConfig, ResearchJob, ResearchProfile, ResearchWorkspaceSnapshot } from "../types/research";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 
 const route=useRoute();
 const router=useRouter();
@@ -274,7 +274,7 @@ onBeforeUnmount(()=>{window.clearTimeout(pollTimer);window.clearTimeout(draftTim
 </script>
 
 <template>
-  <LegacySurface v-if="!isNativeResearch" />
+  <RuntimeSurface v-if="!isNativeResearch" />
   <main v-else class="vue-native-page research-native-page" aria-labelledby="research-page-title">
     <div v-if="loading&&!workspace" class="research-loading" role="status"><span class="spinner"></span>{{i18n.t('research.loading_workspace','Loading Research workspace…')}}</div>
     <template v-else-if="workspace&&config">

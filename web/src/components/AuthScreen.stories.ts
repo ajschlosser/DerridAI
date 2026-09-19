@@ -3,7 +3,7 @@ import { useAuthStore } from "../stores/auth";
 import AuthScreen from "./AuthScreen.vue";
 
 const meta = {
-  title: "Components/AuthScreen",
+  title: "Shell/Authentication",
   component: AuthScreen,
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof AuthScreen>;

@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
-SYSTEM_STORE = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM_STORE = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 USERS_VIEW = (ROOT / "web/src/views/UsersView.vue").read_text(encoding="utf-8")
 LANGUAGES_VIEW = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
 APP_VUE = (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
@@ -26,9 +26,9 @@ def _load_content_filter():
 
 def test_release_version_is_current_everywhere_primary():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_uses_specific_users_and_language_icons():

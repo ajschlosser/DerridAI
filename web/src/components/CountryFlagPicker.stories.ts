@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CountryFlagPicker from "./CountryFlagPicker.vue";
 
 const meta = {
-  title: "Localization/CountryFlagPicker",
+  title: "Internationalization/Inputs/Country Flag Picker",
   component: CountryFlagPicker,
   args: {
     modelValue: "🇨🇦",

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 const base:any={build_id:"build-bunny",asset_id:"asset",source_filename:"book.pdf",source_sha256:"sha",status:"awaiting_metadata",stage:"metadata_review",progress:.96,created_at:"",record_count:63,accepted_count:63,rejected_count:0,profile_id:"derrida-scholarly-v9",metadata_completed:58,metadata_total:63,validation:{valid:true,source_valid:true,metadata_valid:true,coverage:1},source_quality:{blocking_page_count:0},metadata_issue_summary:{records_incomplete:5,fields_unresolved:7,auto_retry_fields:5,human_review_fields:2},publication_readiness:{can_publish:false,next_action:"resolve_metadata",records_total:63,records_reviewed:63,records_accepted:63,records_rejected:0,records_pending:0,blockers:[{code:"metadata_unresolved",count:7}]}};
-const meta={title:"Corpus Builder/Finish Corpus",component:CorpusFinishWorkspace,args:{build:base}} satisfies Meta<typeof CorpusFinishWorkspace>;
+const meta={title:"Corpus Builder/Workflow/Finish Workspace",component:CorpusFinishWorkspace,args:{build:base}} satisfies Meta<typeof CorpusFinishWorkspace>;
 export default meta; type Story=StoryObj<typeof meta>;
 export const MetadataBlocked:Story={};
 export const ReadyToPublish:Story={args:{build:{...base,status:"ready",stage:"ready",metadata_completed:63,metadata_issue_summary:{records_incomplete:0,fields_unresolved:0,auto_retry_fields:0,human_review_fields:0},publication_readiness:{...base.publication_readiness,can_publish:true,next_action:"publish",blockers:[]}}}};

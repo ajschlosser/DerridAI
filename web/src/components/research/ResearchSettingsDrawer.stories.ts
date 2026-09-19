@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchSettingsDrawer from "./ResearchSettingsDrawer.vue";
 
 const baseConfig={
@@ -8,7 +8,7 @@ const baseConfig={
   bind_citations:true,include_works_cited:true,auto_grade:false,auto_grade_provider_profile_id:"phi4",provider_profile_id:"phi4",skip_retrieval:false,prompt:"",instructions:"",
 };
 const meta:Meta<typeof ResearchSettingsDrawer>={
-  title:"Research/Expert Settings Studio 0.35",
+  title:"Research/Expert Settings",
   component:ResearchSettingsDrawer,
   parameters:{layout:"fullscreen"},
   args:{

@@ -1,2 +1,0 @@
-import type { Meta, StoryObj } from "@storybook/vue3-vite"; import WorkCoverCard from "./WorkCoverCard.vue";
-const meta={title:"Corpus/Work Cover Card",component:WorkCoverCard,args:{title:"Of Grammatology",count:1892,subtitle:"1967"}} satisfies Meta<typeof WorkCoverCard>;export default meta;type Story=StoryObj<typeof meta>;export const WithoutCover:Story={};export const WithCover:Story={args:{coverUrl:"/brand/derridai-mark.png",selected:true}};

@@ -17,9 +17,9 @@ def text(path: str) -> str:
 
 def test_0370_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in text("api/app/main.py")
-    assert "# DerridAI Corpus Viewer 0.44.0" in text("README.md")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in text("api/app/main.py")
+    assert "# DerridAI Corpus Viewer 0.47.1" in text("README.md")
     assert "0.37.0 — New Direction" in text("README.md")
 
 
@@ -66,7 +66,7 @@ def test_collection_name_contract_is_validated_in_api_schema():
 
 def test_background_vector_builds_are_spooled_and_resume_after_restart():
     jobs = text("api/app/jobs.py")
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     assert "UPSERT_JOB_SPOOL_PATH" in jobs
     assert "_write_spool" in jobs
     assert "_resume_spooled_jobs" in jobs
@@ -77,7 +77,7 @@ def test_background_vector_builds_are_spooled_and_resume_after_restart():
 
 
 def test_vector_store_ui_exposes_new_direction_workflow_and_retrieval_testing():
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     for token in (
         "collection-wizard-v037",
         "Source",
@@ -108,7 +108,7 @@ def test_hybrid_search_has_semantic_and_lexical_legs():
 def test_rag_retrieval_defaults_to_semantic_lexical_and_mmr_fusion():
     models = text("api/app/models.py")
     rag = text("api/app/rag.py")
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     assert '["similarity", "lexical", "mmr"]' in models
     assert 'if "lexical" in request.search_types:' in rag
     assert 'store.lexical_search(' in rag

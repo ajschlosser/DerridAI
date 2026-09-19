@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Literal
 import re
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 LanguageCode = Literal["en", "fr"]
@@ -84,12 +84,6 @@ class StoreLanguageUpdate(BaseModel):
 class DeriveLanguageStoresRequest(BaseModel):
     en_name: str | None = None
     fr_name: str | None = None
-    # Backward-compatible aliases accepted from 0.7.x clients.
-    english_name: str | None = None
-    french_name: str | None = None
-    en_us_name: str | None = None
-    en_gb_name: str | None = None
-    fr_fr_name: str | None = None
     overwrite: bool = True
 
 
@@ -99,16 +93,6 @@ class RecordUpsert(BaseModel):
     id_field: str = "record_id"
     embedding_field: str = "embedding"
     id_prefix: str | None = None
-    include_updates: bool = False
-
-
-class StoredRecordUpdate(BaseModel):
-    # Backward-compatible full-record update. New 0.30.11 clients should use
-    # StoredRecordPatch so unchanged fields (especially ``updates``) never
-    # cross the API boundary.
-    record: dict[str, Any]
-    document_field: str = "text"
-    embedding_field: str = "embedding"
     include_updates: bool = False
 
 
@@ -128,15 +112,11 @@ class BulkUpsertItem(BaseModel):
 
 
 class BulkUpsert(BaseModel):
-    # ``records`` is retained for older clients. 0.30.11 uses ``items`` so
-    # audit-history deltas travel separately from the record itself.
-    records: list[dict[str, Any]] = Field(default_factory=list)
-    items: list[BulkUpsertItem] = Field(default_factory=list)
+    items: list[BulkUpsertItem] = Field(min_length=1)
     document_field: str = "text"
     id_field: str = "record_id"
     embedding_field: str = "embedding"
     id_prefix: str | None = None
-    include_updates: bool = False
 
 
 class UpsertJobItem(BaseModel):
@@ -300,25 +280,6 @@ class RAGEvidenceSelection(BaseModel):
 
 
 class RAGRunRequest(BaseModel):
-    @model_validator(mode="before")
-    @classmethod
-    def _blank_numeric_fields_use_defaults(cls, value: Any) -> Any:
-        # A stale browser draft/profile can carry blank or null numeric controls.
-        # These values mean “use the request default”; removing them before field
-        # validation keeps old clients compatible and avoids opaque 422 errors.
-        if not isinstance(value, dict):
-            return value
-        cleaned = dict(value)
-        for key in (
-            "k", "fetch_k", "lambda_mult", "rrf_k", "rerank_top_n",
-            "query_decomposition_num_predict", "evidence_record_char_limit",
-            "evidence_total_char_limit", "max_concurrent_requests",
-            "ollama_concurrency_limit",
-        ):
-            if cleaned.get(key) in (None, ""):
-                cleaned.pop(key, None)
-        return cleaned
-
     prompt: str = Field(min_length=1)
     instructions: str | None = None
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
@@ -352,8 +313,7 @@ class RAGRunRequest(BaseModel):
     skip_retrieval: bool = False
     auto_grade: bool = False
     # Auto-grading can use an independent provider/model from answer generation.
-    # Keeping these fields flat preserves backward compatibility with older saved
-    # RAG requests while making the final pipeline step fully configurable.
+    # These execution fields are resolved server-side from the selected profile.
     auto_grade_provider: Literal["ollama", "openai"] | None = None
     auto_grade_model: str | None = None
     auto_grade_base_url: str | None = None
@@ -409,6 +369,16 @@ class PdfCorpusStageLimits(BaseModel):
 
 
 
+class PdfCorpusStageTimeouts(BaseModel):
+    """Per-build wall-clock/read deadlines for corpus LLM stages, in seconds."""
+    manifest: int = Field(default=300, ge=30, le=1800)
+    segmentation: int = Field(default=300, ge=30, le=1800)
+    reconciliation: int = Field(default=240, ge=30, le=1800)
+    discourse: int = Field(default=240, ge=30, le=1800)
+    quotation: int = Field(default=240, ge=30, le=1800)
+    indexing: int = Field(default=180, ge=30, le=1800)
+
+
 class PdfCorpusRecordSizing(BaseModel):
     """Soft record-length policy for retrieval-oriented corpus topology.
 
@@ -444,9 +414,12 @@ class PdfCorpusBuildCreate(BaseModel):
     use_profile_defaults: bool = True
     max_concurrent_requests: int = Field(default=1, ge=1, le=16)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     review_manifest_before_segmentation: bool = False
     auto_enrich_work_metadata: bool = True
+    enrichment_mode: Literal["fast", "deep"] = "fast"
+    semantic_indexing: bool = False
 
 
 class PdfCorpusManifestPatch(BaseModel):
@@ -457,6 +430,12 @@ class PdfCorpusManifestPatch(BaseModel):
 class PdfCorpusRecordPatch(BaseModel):
     changes: dict[str, Any] = Field(default_factory=dict)
     expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusRecordTextPatch(BaseModel):
+    text: str = Field(min_length=1, max_length=500000)
+    expected_revision: int | None = Field(default=None, ge=1)
+    resolve_source_issues: bool = False
 
 
 class PdfCorpusMetadataDecision(BaseModel):
@@ -491,6 +470,15 @@ class PdfCorpusBulkDisposition(BaseModel):
     filter_disposition: Literal["pending", "accepted", "rejected"] | None = None
     review_queue: Literal["ready", "issues", "metadata", "source", "topology"] | None = None
     query: str = Field(default="", max_length=500)
+    record_ids: list[str] = Field(default_factory=list, max_length=500)
+
+
+class PdfCorpusBulkMetadataPatch(BaseModel):
+    changes: dict[str, Any] = Field(default_factory=dict)
+    record_ids: list[str] = Field(default_factory=list, max_length=5000)
+    apply_to_all: bool = False
+    review_queue: Literal["ready", "issues", "metadata", "source", "topology", "accepted", "rejected"] | None = None
+    query: str = Field(default="", max_length=500)
 
 
 class PdfCorpusReviewDecision(BaseModel):
@@ -522,7 +510,11 @@ class PdfCorpusRecordRerun(BaseModel):
     use_profile_defaults: bool = True
     max_concurrent_requests: int = Field(default=1, ge=1, le=16)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
+    stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
+    enrichment_mode: Literal["fast", "deep"] = "fast"
+    semantic_indexing: bool = False
+    families: list[Literal["discourse", "quotation", "indexing"]] | None = None
 
 
 class PdfCorpusPublishRequest(BaseModel):

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 
-const meta={title:"PDF Corpus Builder/Build Progress",component:CorpusBuildProgress,args:{status:"running",stage:"enriching",progress:.63,recordCount:187,reviewCount:12,acceptedCount:0,warnings:[],validation:null,llmMetrics:{calls:81,retries:3,structured_output_failures:3,escalations:0},segmentationTelemetry:{candidateCount:54,deterministicSplits:5,deterministicKeeps:31,llmAdjudications:12,llmBatchCalls:2,llmSplits:4,llmKeeps:8,provisionalSplits:1,budgetSkipped:6,classifierFailures:0,reviewCount:0}}} satisfies Meta<typeof CorpusBuildProgress>;
+const meta={title:"Corpus Builder/Workflow/Build Progress",component:CorpusBuildProgress,args:{status:"running",stage:"enriching",progress:.63,recordCount:187,reviewCount:12,acceptedCount:0,warnings:[],validation:null,llmMetrics:{calls:81,retries:3,structured_output_failures:3,escalations:0},segmentationTelemetry:{candidateCount:54,deterministicSplits:5,deterministicKeeps:31,llmAdjudications:12,llmBatchCalls:2,llmSplits:4,llmKeeps:8,provisionalSplits:1,budgetSkipped:6,classifierFailures:0,reviewCount:0}}} satisfies Meta<typeof CorpusBuildProgress>;
 export default meta;
 type Story=StoryObj<typeof meta>;
 export const Running:Story={};

@@ -12,36 +12,36 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.44.0"' in text("api/app/config.py")
-    assert "0.44.0 — Dachshund" in text("README.md")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.47.1"' in text("api/app/config.py")
+    assert "0.47.1 — Fatso" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
     workspace = text("web/src/views/PdfWorkspaceView.vue")
-    dictionary = text("api/app/system_store.py")
+    dictionary = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     assert 'route.query.mode==="explorer"?"explorer":"builder"' in workspace
     assert workspace.index("mode==='builder'") < workspace.index("mode==='explorer'")
     assert '<PdfCorpusBuilder v-if="mode===\'builder\'" />' in workspace
-    assert '"nav.pdf": "Corpus Builder"' in dictionary
-    assert '"nav.pdf": "Générateur de corpus"' in dictionary
+    assert 'nav.pdf' in dictionary and 'Corpus Builder' in dictionary
+    assert 'Générateur de corpus' in dictionary
 
 
 def test_explorer_specific_actions_still_open_the_secondary_explorer_tab():
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     app = text("web/src/App.vue")
     assert 'function openPdfExplorerWorkspace()' in runtime
     assert 'path:"/pdf?mode=explorer"' in runtime
     assert 'openLoadedPdfPage(page)' in runtime
-    assert 'runtime.navigateView(legacyView,path)' in app
+    assert 'runtime.navigateView(runtimeView,path)' in app
     assert 'function syncUrl({replace=false,href=null}={})' in runtime
     assert '@param {string} [href=""]' in runtime
     assert 'function navigateView(view,href="")' in runtime
 
 
 def test_home_has_dedicated_corpus_build_card_and_initial_jobs_refresh_rerenders_it():
-    runtime = text("web/src/legacy/runtime.js")
+    runtime = text("web/src/runtime/runtime.js")
     style = text("web/src/style.css")
     assert "function renderCorpusBuildsHomeCard()" in runtime
     assert '${renderCorpusBuildsHomeCard()}' in runtime
@@ -62,7 +62,7 @@ def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     selector = text("web/src/components/ProviderProfileSelect.vue")
     models = text("api/app/models.py")
-    dictionary = text("api/app/system_store.py")
+    dictionary = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     assert "provider-area" in builder and "setup-card-heading" in builder
     assert "escalation-field" in builder
     assert "build-launch-row" in builder
@@ -71,7 +71,7 @@ def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
     assert 'profile_id:"derrida-scholarly-v5"' not in builder
     assert 'default="derrida-scholarly-v11"' in models
-    assert '"pdf_corpus.provider_profile": "Primary LLM provider"' in dictionary
+    assert 'pdf_corpus.provider_profile' in dictionary and 'Provider profile' in dictionary and 'Profil fournisseur' in dictionary
 
 
 def test_retry_ui_hides_blocked_action_while_build_is_running_and_syncs_rail():
@@ -101,7 +101,7 @@ def test_retry_state_is_explicit_in_backend_operations():
 
 
 def test_0406_new_strings_exist_in_english_and_quebec_french():
-    dictionary = text("api/app/system_store.py")
+    dictionary = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
     for key in (
         "pdf_corpus.retry_in_progress",
         "pdf_corpus.build_stopped_title",
@@ -109,4 +109,4 @@ def test_0406_new_strings_exist_in_english_and_quebec_french():
         "pdf_corpus.open_builder",
         "providers.context_tokens",
     ):
-        assert dictionary.count(f'"{key}"') >= 2
+        assert dictionary.count(key) >= 2

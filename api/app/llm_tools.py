@@ -396,7 +396,7 @@ def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     params = {"query.bibliographic": query, "rows": 8}
     if author:
         params["query.author"] = author
-    with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.44.0 (bibliographic metadata lookup)"}) as client:
+    with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.47.1 (bibliographic metadata lookup)"}) as client:
         response = client.get("https://api.crossref.org/works", params=params)
         response.raise_for_status()
         items = list((((response.json() or {}).get("message") or {}).get("items") or []))
@@ -648,11 +648,10 @@ def run_work_metadata_batch(
 
 
 def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
-    """Normalize scores while preserving the complete grader response.
+    """Normalize grader output into the application's canonical audit shape.
 
-    The flattened score fields remain backward-compatible with existing UI and
-    analytics, while ``categories``, free-form analysis, and ``raw_output`` keep
-    the full audit trail produced by the grading model.
+    ``categories``, free-form analysis, and ``raw_output`` preserve the complete
+    audit trail while top-level score fields support current UI summaries.
     """
     original = copy.deepcopy(value)
     if isinstance(value, dict):

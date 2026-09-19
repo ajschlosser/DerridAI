@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 AUTH = (ROOT / "api/app/auth.py").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
@@ -25,9 +25,9 @@ def _load_content_filter():
 
 def test_release_version_03013():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_dashboard_background_ops_fixed_open_and_annotation_graph_removed():
@@ -125,7 +125,7 @@ def test_content_filter_avoids_name_and_substring_false_positives():
 
 
 def test_storybook_expands_with_role_permission_matrix():
-    story = ROOT / "web/src/stories/RolePermissionMatrix.stories.ts"
+    story = ROOT / "web/src/components/RolePermissionMatrix.stories.ts"
     assert story.exists()
     assert "RolePermissionMatrix" in story.read_text(encoding="utf-8")
 

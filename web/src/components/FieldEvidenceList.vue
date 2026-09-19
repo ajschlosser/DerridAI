@@ -23,5 +23,5 @@ function select(field:string){emit("select",props.selectedField===field?"":field
   <p v-else class="help">{{i18n.t('pdf_corpus.no_evidence','No field evidence recorded.')}}</p>
 </template>
 <style scoped>
-.evidence-list{list-style:none;padding:0;display:grid;gap:8px;margin:8px 0 0}.evidence-list li{margin:0}.evidence-list button{width:100%;display:grid;gap:2px;padding:7px;background:var(--soft);border:1px solid transparent;border-radius:7px;text-align:start;color:inherit;cursor:pointer}.evidence-list button.active{border-color:var(--accent)}.evidence-list button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.evidence-list b{font-size:9px}.evidence-list span,.evidence-list small,.help{font-size:8px;color:var(--muted)}
+.evidence-list{list-style:none;padding:0;display:grid;gap:8px;margin:8px 0 0}.evidence-list li{margin:0}.evidence-list button{width:100%;display:grid;gap:2px;padding:7px;background:var(--soft);border:1px solid transparent;border-radius:7px;text-align:start;color:inherit;cursor:pointer}.evidence-list button.active{border-color:var(--accent)}.evidence-list button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.evidence-list b{font-size:.8125rem}.evidence-list span,.evidence-list small,.help{font-size:.8125rem;color:var(--muted)}
 </style>

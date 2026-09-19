@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
@@ -153,7 +153,7 @@ function removeSavedView(id:string){savedViews.value=savedViews.value.filter(ite
 async function copyLink(){try{await navigator.clipboard.writeText(runtime.getSearchShareHref());runtime.notifyToast(i18n.t("search.link_copied","Shareable search link copied"),{tone:"success"})}catch(exc){runtime.notifyToast(exc instanceof Error?exc.message:String(exc),{tone:"danger"})}}
 function recordRecentSearch(){if(!snapshot.value)return;const q=query.value.trim();if(!q&&!hasFilters.value)return;const href=runtime.getSearchShareHref();const entry:RecentSearchEntry={id:crypto.randomUUID(),query:q||i18n.t("search.filtered_view","Filtered view"),scope:snapshot.value.scope,method:snapshot.value.method,href,created_at:new Date().toISOString()};recentSearches.value=[entry,...recentSearches.value.filter(item=>item.href!==href)].slice(0,12);persistRecent()}
 
-function displayValue(value:unknown){if(value==null||value==="")return "—";if(Array.isArray(value))return value.join(", ");if(typeof value==="object")return JSON.stringify(value);if(typeof value==="boolean")return value?i18n.t("legacy.yes","Yes"):i18n.t("legacy.no","No");return String(value)}
+function displayValue(value:unknown){if(value==null||value==="")return "—";if(Array.isArray(value))return value.join(", ");if(typeof value==="object")return JSON.stringify(value);if(typeof value==="boolean")return value?i18n.t("runtime.yes","Yes"):i18n.t("runtime.no","No");return String(value)}
 function columnValue(result:SearchResult,key:string){if(key==="__file")return result.file_name||"—";if(key==="page_start")return result.page_span||"—";if(key==="text")return result.text;if(key==="__db_status")return result.db_status?.label||i18n.t("search.db_in_database","In DB");return result.record[key]}
 function columnLabel(key:string){return snapshot.value?.available_columns.find(column=>column.key===key)?.label||key}
 function columnStyle(key:string){if(!databaseMode.value)return undefined;const width=columnWidths[key];return width?{width:`${width}px`,minWidth:`${width}px`,maxWidth:key==='text'?`${Math.max(width,260)}px`:undefined}:undefined}

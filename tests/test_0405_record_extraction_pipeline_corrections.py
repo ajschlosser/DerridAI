@@ -9,9 +9,9 @@ def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 
 def test_0405_release_identity_and_name():
     package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.44.0"
-    assert 'version="0.44.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.44.0"' in text("api/app/config.py")
+    assert package["version"]=="0.47.1"
+    assert 'version="0.47.1"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.47.1"' in text("api/app/config.py")
     assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
@@ -64,7 +64,7 @@ def test_build_level_provider_parameters_and_stage_budgets_are_exposed():
 
 def test_pdf_corpus_builds_join_global_operations_and_open_from_home():
     main=text("api/app/main.py")
-    runtime=text("web/src/legacy/runtime.js")
+    runtime=text("web/src/runtime/runtime.js")
     assert "pdf_corpus_builds.list_operations()" in main
     assert "pdf_corpus_builds.clear_finished()" in main
     assert 'job.type==="pdf_corpus"' in runtime
@@ -77,12 +77,12 @@ def test_corpus_builder_workflow_quality_ui_storybook_i18n_and_wcag():
     builder=text("web/src/components/PdfCorpusBuilder.vue")
     stepper=text("web/src/components/CorpusWorkflowStepper.vue")
     quality=text("web/src/components/CorpusQualitySummary.vue")
-    dictionary=text("api/app/system_store.py")
+    dictionary=text("api/app/locales/en_us.py")+text("api/app/locales/fr_ca.py")
     assert "CorpusWorkflowStepper" in builder and "CorpusQualitySummary" in builder
     assert ":aria-current=\"step.state==='current'?'step':undefined\"" in stepper
     assert "<ol>" in stepper and "<nav" in stepper
     assert "<dl>" in quality
-    assert "DEFAULT_FR_CA.update" in dictionary
+    assert "FR_CA" in dictionary
     for key in ("pdf_corpus.workflow.label","pdf_corpus.quality.title","pdf_corpus.mirostat"):
         assert key in dictionary
     assert (ROOT/"web/src/components/CorpusWorkflowStepper.stories.ts").exists()

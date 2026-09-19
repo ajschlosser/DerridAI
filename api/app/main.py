@@ -41,10 +41,11 @@ from .models import (
     PdfPageLabelsPatch,
     PdfCorpusManifestPatch,
     PdfCorpusRecordPatch,
+    PdfCorpusRecordTextPatch,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
     PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
-    PdfCorpusBulkDisposition,
+    PdfCorpusBulkDisposition, PdfCorpusBulkMetadataPatch,
     PdfCorpusRecordMerge,
     PdfCorpusRecordSplit,
     PdfCorpusRecordRerun,
@@ -61,7 +62,6 @@ from .models import (
     StoreEmbeddingUpdate,
     StoreLanguageUpdate,
     StoreProtectionUpdate,
-    StoredRecordUpdate,
     StoredRecordPatch,
     TouchupRequest,
     TouchupResponse,
@@ -83,7 +83,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI Corpus API", version="0.44.0")
+app = FastAPI(title="DerridAI Corpus API", version="0.47.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1190,7 +1190,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.44.0",
+            "app_version": "0.47.1",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1775,9 +1775,8 @@ def list_pdf_corpus_profiles():
 def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     """Resolve server-owned researcher profiles without rejecting admin profiles.
 
-    Administrator provider profiles are stored in the browser workspace for legacy
-    compatibility, while researcher-approved profiles are persisted server-side.
-    PDF Corpus Builder must support both sources.  When a profile id is known to
+    Administrator requests may supply an explicit provider configuration, while
+    researcher-approved profiles are persisted server-side. When a profile id is known to
     the server we resolve its secrets there; otherwise an explicit provider
     configuration supplied by the authenticated admin request is used.  Secrets
     are stripped by the build manager before the public build manifest is saved.
@@ -1907,6 +1906,16 @@ def cancel_pdf_corpus_build(build_id: str):
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/settle-metadata")
+def settle_pdf_corpus_metadata(build_id: str):
+    try:
+        return pdf_corpus_builds.settle_metadata_unresolved(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/resume")
 def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun):
     try:
@@ -1921,6 +1930,16 @@ def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun):
 def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch):
     try:
         return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes, body.expected_revision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text")
+def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusRecordTextPatch):
+    try:
+        return pdf_corpus_builds.patch_record_text(build_id, record_id, body.text, body.expected_revision, body.resolve_source_issues)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -1980,7 +1999,20 @@ def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRevie
 @app.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
 def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition):
     try:
-        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition, body.review_queue)
+        return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition, body.review_queue, body.record_ids)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/records/metadata")
+def bulk_patch_pdf_corpus_record_metadata(build_id: str, body: PdfCorpusBulkMetadataPatch):
+    try:
+        return pdf_corpus_builds.bulk_patch_metadata(
+            build_id, body.changes, record_ids=body.record_ids, apply_to_all=body.apply_to_all,
+            review_queue=body.review_queue, query=body.query,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:
@@ -2156,17 +2188,8 @@ def derive_language_stores(
     try:
         return store.derive_language_stores(
             store_name,
-            en_name=(
-                body.en_name
-                or body.english_name
-                or body.en_us_name
-                or body.en_gb_name
-            ),
-            fr_name=(
-                body.fr_name
-                or body.french_name
-                or body.fr_fr_name
-            ),
+            en_name=body.en_name,
+            fr_name=body.fr_name,
             overwrite=body.overwrite,
         )
     except Exception as exc:
@@ -2342,43 +2365,6 @@ def create_record(store_name: str, body: RecordUpsert, request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.put("/api/stores/{store_name}/records/{chroma_id:path}")
-def update_record(
-    store_name: str,
-    chroma_id: str,
-    body: StoredRecordUpdate,
-    request: Request,
-):
-    try:
-        user = _require_admin(request)
-        record = dict(body.record)
-        if not body.include_updates:
-            existing = store.get_record(store_name, chroma_id, include_updates=True) or {}
-            record.pop("updates", None)
-            if "updates" in existing:
-                record["updates"] = existing["updates"]
-        record = _stamp_record_activity(record, user.username)
-        result = store.update_existing(
-            store_name,
-            chroma_id,
-            record,
-            document_field=body.document_field,
-            embedding_field=body.embedding_field,
-        )
-        mirror_record = dict(record)
-        mirror_record["_chroma_id"] = chroma_id
-        language_sync = store.sync_language_children(
-            store_name,
-            [mirror_record],
-            id_field="_chroma_id",
-        )
-        return {**result, "language_sync": language_sync}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @app.patch("/api/stores/{store_name}/records/{chroma_id:path}")
 def patch_record(
     store_name: str,
@@ -2433,38 +2419,27 @@ def bulk_upsert(store_name: str, body: BulkUpsert, request: Request):
         audit_entries_by_id: dict[str, list[dict[str, Any]]] = {}
         replace_updates_by_id: dict[str, list[dict[str, Any]]] = {}
 
-        if body.items:
-            for item in body.items:
-                record = dict(item.record)
-                record.pop("updates", None)
-                if item.chroma_id:
-                    record[body.id_field] = item.chroma_id
-                raw_id = record.get(body.id_field)
-                if raw_id is None or str(raw_id).strip() == "":
-                    raise ValueError(f"Bulk upsert item is missing '{body.id_field}'.")
-                storage_id = str(raw_id)
-                chroma_id = f"{body.id_prefix}::{storage_id}" if body.id_prefix else storage_id
-                if item.audit_entries:
-                    audit_entries_by_id[chroma_id] = [
-                        {**dict(entry), "initiated_by": entry.get("initiated_by") or user.username}
-                        for entry in item.audit_entries
-                    ]
-                if item.replace_updates is not None:
-                    replace_updates_by_id[chroma_id] = [
-                        {**dict(entry), "initiated_by": entry.get("initiated_by") or user.username}
-                        for entry in item.replace_updates
-                    ]
-                records.append(_stamp_record_activity(record, user.username))
-        else:
-            # Legacy 0.30.10 shape. Full history remains opt-in.
-            for raw in body.records:
-                record = dict(raw)
-                if not body.include_updates:
-                    record.pop("updates", None)
-                records.append(_stamp_record_activity(record, user.username))
-
-        if not records:
-            raise ValueError("Provide at least one record to upsert.")
+        for item in body.items:
+            record = dict(item.record)
+            record.pop("updates", None)
+            if item.chroma_id:
+                record[body.id_field] = item.chroma_id
+            raw_id = record.get(body.id_field)
+            if raw_id is None or str(raw_id).strip() == "":
+                raise ValueError(f"Bulk upsert item is missing '{body.id_field}'.")
+            storage_id = str(raw_id)
+            chroma_id = f"{body.id_prefix}::{storage_id}" if body.id_prefix else storage_id
+            if item.audit_entries:
+                audit_entries_by_id[chroma_id] = [
+                    {**dict(entry), "initiated_by": entry.get("initiated_by") or user.username}
+                    for entry in item.audit_entries
+                ]
+            if item.replace_updates is not None:
+                replace_updates_by_id[chroma_id] = [
+                    {**dict(entry), "initiated_by": entry.get("initiated_by") or user.username}
+                    for entry in item.replace_updates
+                ]
+            records.append(_stamp_record_activity(record, user.username))
         return store.upsert_with_language_sync(
             store_name,
             records,

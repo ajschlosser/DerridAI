@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { authApi, type CapabilityDefinition, type RoleDefinition, type UserRole } from "../api/auth";
 import { useI18nStore } from "../stores/i18n";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
-import * as runtime from "../legacy/runtime.js";
+import * as runtime from "../runtime/runtime.js";
 
 const i18n = useI18nStore();
 const roles = ref<RoleDefinition[]>([]);

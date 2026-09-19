@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 AUTH = (ROOT / "api/app/auth.py").read_text(encoding="utf-8")
@@ -19,26 +19,25 @@ PRESENTATION = (ROOT / "web/src/components/research/ResearchResultPresentation.v
 
 
 def _translation_dicts() -> dict[str, dict[str, str]]:
-    tree = ast.parse((ROOT / "api/app/system_store.py").read_text(encoding="utf-8"))
-    found: dict[str, dict[str, str]] = {}
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if node.target.id in {"DEFAULT_EN_US", "DEFAULT_FR_CA"}:
-                found[node.target.id] = ast.literal_eval(node.value)
-        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-            call=node.value
-            if isinstance(call.func, ast.Attribute) and call.func.attr=="update" and isinstance(call.func.value, ast.Name):
-                name=call.func.value.id
-                if name in {"DEFAULT_EN_US", "DEFAULT_FR_CA"} and len(call.args)==1:
-                    found.setdefault(name, {}).update(ast.literal_eval(call.args[0]))
-    return found
-
+    def load(path: Path, variable: str) -> dict[str, str]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                target = node.targets[0] if isinstance(node, ast.Assign) else node.target
+                value = node.value
+                if isinstance(target, ast.Name) and target.id == variable:
+                    return ast.literal_eval(value)
+        raise AssertionError(f"{variable} not found in {path}")
+    return {
+        "DEFAULT_EN_US": load(ROOT / "api/app/locales/en_us.py", "EN_US"),
+        "DEFAULT_FR_CA": load(ROOT / "api/app/locales/fr_ca.py", "FR_CA"),
+    }
 
 def test_release_version_and_title_0310():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert "Corpus Viewer 0.44.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert "Corpus Viewer 0.47.1" in (ROOT / "web/index.html").read_text(encoding="utf-8")
     assert "0.31.0 — The Pretty Release" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -49,7 +48,7 @@ def test_research_is_native_vue_workspace_not_legacy_surface():
     assert "ResearchEvidencePanel" in PRESENTATION
     assert "ResearchSettingsDrawer" in VIEW
     assert "ResearchRunsDrawer" in VIEW
-    assert '<LegacySurface v-if="!isNativeResearch"' in VIEW
+    assert '<RuntimeSurface v-if="!isNativeResearch"' in VIEW
     assert 'route.name==="rag"' in VIEW
     assert "openRagResult" not in VIEW
 

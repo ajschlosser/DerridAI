@@ -7,9 +7,9 @@ from pathlib import Path
 from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/legacy/runtime.js").read_text(encoding="utf-8")
+RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-SYSTEM = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
+SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 LANGUAGES = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
 FLAG_PICKER = (ROOT / "web/src/components/CountryFlagPicker.vue").read_text(encoding="utf-8")
 READING = (ROOT / "web/src/components/record/RecordReadingPane.vue").read_text(encoding="utf-8")
@@ -21,10 +21,10 @@ HTTP = (ROOT / "web/src/api/http.ts").read_text(encoding="utf-8")
 
 def test_release_identity_and_notes():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.44.0"
-    assert 'version="0.44.0"' in MAIN
-    assert '"app_version": "0.44.0"' in MAIN
-    assert "DerridAI 0.44.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.47.1"
+    assert 'version="0.47.1"' in MAIN
+    assert '"app_version": "0.47.1"' in MAIN
+    assert "DerridAI 0.47.1" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.17 — Lingua Franca" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -63,9 +63,9 @@ def test_annotation_escape_and_accessible_hover_focus_tooltip():
 
 def test_built_in_language_names_are_region_neutral_but_flags_are_locale_specific():
     assert '"en-US": {"name": "English", "flag": "🇺🇸"' in SYSTEM
-    assert '"fr-CA": {"name": "Français", "flag": "🇨🇦"' in SYSTEM
-    assert '"language.english_us": "English"' in SYSTEM
-    assert '"language.french_ca": "Français"' in SYSTEM
+    assert '"fr-CA": {"name": "Français (Québec)", "flag": "🇨🇦"' in SYSTEM
+    assert "'language.english_us': 'English'" in SYSTEM
+    assert "'language.french_ca': 'Français (Québec)'" in SYSTEM
     assert 'name: "English", flag: "🇺🇸"' in (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
     assert 'name: "Français", flag: "🇨🇦"' in (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
     assert 'i18n.t("language.english_us", "English")' in LANGUAGES
