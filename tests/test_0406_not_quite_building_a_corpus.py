@@ -70,7 +70,7 @@ def test_provider_setup_is_streamlined_and_current_profile_is_server_owned():
     assert "provider-stat-group" in selector
     assert ':context-label="i18n.t(\'providers.context_tokens\',\'context tokens\')"' in builder
     assert 'profile_id:"derrida-scholarly-v5"' not in builder
-    assert 'default="derrida-scholarly-v11"' in models
+    assert 'default="derrida-scholarly-v12"' in models
     assert 'pdf_corpus.provider_profile' in dictionary and 'Provider profile' in dictionary and 'Profil fournisseur' in dictionary
 
 
