@@ -4784,3 +4784,7 @@ body{font-size:15px;line-height:1.55}
   :root { --line: #a7ada5; --line-strong: #737b73; --muted: #50564f; }
 }
 .empty-inline{padding:12px 14px;border:1px dashed var(--ref-line,#d5dde6);border-radius:8px;color:var(--muted,#526279);font-size:.875rem;line-height:1.4;background:transparent}
+/* The sidebar is a fixed-height column: let the long "More tools" list scroll
+   instead of running underneath the status footer on short viewports. */
+.shell-sidebar>.shell-more-tools{min-height:0;overflow-y:auto}
+.shell-sidebar>.shell-sidebar-footer,.shell-sidebar>.shell-primary-nav{flex:none}
