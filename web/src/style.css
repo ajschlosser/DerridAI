@@ -39,6 +39,11 @@
   --sidebar: 220px;
 }
 
+[data-surface="solid"] { background-color: var(--surface-solid, #fff) !important; }
+[data-surface="raised"] { background-color: var(--surface-raised, #fff) !important; }
+[data-surface="overlay"] { background-color: var(--surface-overlay, #fff) !important; }
+[data-surface="glass"] { background-color: var(--surface-glass, rgba(255,255,255,.96)) !important; }
+
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; min-height: 100%; }
 body {
