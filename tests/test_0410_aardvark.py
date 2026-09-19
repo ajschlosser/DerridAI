@@ -1,3 +1,12 @@
+"""Hybrid deterministic/LLM metadata, review state, and Unicode safety (release 0.41.0, "Aardvark").
+
+Why: required fields (region type, primary text, discourse role) combine
+deterministic rules with a constrained LLM, and every field must record where its
+value came from. Review actions must change state reliably.
+How: `install_asset`/`make_build` create a small build; the LLM (`_chat_json`) is
+replaced by canned responses so the reconciliation logic is what is being tested.
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,10 +21,16 @@ from app.models import PdfCorpusBuildCreate
 
 
 def text(path:str)->str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT/path).read_text(encoding="utf-8")
 
 
 def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
+    """Write an asset and its blocks (with accented names) into the temp repository."""
     asset={"asset_id":"asset-aardvark","sha256":"sha","filename":"book.pdf","page_count":2,"block_count":count,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
     cb._json_write(repo.asset_meta_path(asset["asset_id"]),asset)
     lines=[]
@@ -26,12 +41,19 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
+    """Create the asset plus a build referring to it; returns (asset, build)."""
     asset=install_asset(repo,count)
     build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.60.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 
 def test_release_contract_is_v8_with_field_aware_metadata():
+    """Pin profile/prompt ids and the required metadata fields.
+
+    Required fields are region_type, primary_text and discourse_role; the profile must
+    list main_text and analysis as allowed values. (Name says v8 for history; the ids now
+    checked are the current ones.)
+    """
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
     assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
@@ -43,6 +65,12 @@ def test_release_contract_is_v8_with_field_aware_metadata():
 
 
 def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_path:Path,monkeypatch):
+    """LLM output fills fields and provenance shows which value came from where.
+
+    The prompt must tell the model to choose from closed vocabularies. With a confident
+    reply: region_type and discourse_role are "llm_inferred", primary_text is
+    "deterministic" (derived from region type), and the record is metadata-complete.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -69,6 +97,14 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
 
 
 def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeypatch):
+    """When the LLM contradicts reviewer-defined structure, the human value stays selected.
+
+    The manifest says main text is page 1; the model says front matter. Expect
+    region_type/primary_text keep their deterministic values, status "unresolved" with
+    reason deterministic_llm_disagreement, both candidates retained, and llm_checked
+    True. Why: reviewer-defined structure outranks a model opinion, but the disagreement
+    must be visible.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -95,6 +131,11 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
 
 
 def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_path:Path):
+    """Issue counts and the metadata queue are computed from the records themselves.
+
+    Two accepted records, one missing discourse_role: 1 of 2 complete, 1 incomplete, the
+    by-field summary names discourse_role, and the metadata_incomplete filter returns r2.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,2)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -113,6 +154,7 @@ def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_
 
 
 def test_accept_reject_and_bulk_disposition_mutate_review_state_reliably(tmp_path:Path):
+    """Accept, reject, and bulk-accept-the-rejected update the stored state."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,2)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -135,6 +177,10 @@ def test_accept_reject_and_bulk_disposition_mutate_review_state_reliably(tmp_pat
 
 
 def test_unicode_is_preserved_in_normalization_and_json_serialization():
+    """Accents, Polish, Greek, and CJK survive normalization and JSON encoding.
+
+    Why: names like Cixous, Glissant, and Łódź must never be mangled or ASCII-escaped.
+    """
     original="Hélène Cixous · Édouard Glissant · différance · Łódź · Ελληνικά · 東京"
     assert cb._normalize_text(original)==original
     encoded=json.dumps({"text":original},ensure_ascii=False)

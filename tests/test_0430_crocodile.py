@@ -1,3 +1,11 @@
+"""Human-editable primary_text and acceptance gating (release 0.43.0, "Crocodile").
+
+Why: primary_text is a boolean where False is a real answer ("this is not primary
+text"). It must be editable by a reviewer, False must persist and count as resolved,
+and no record may be accepted while required metadata is still missing.
+How: `install_repo` builds a temp repository with one custom record.
+"""
+
 from __future__ import annotations
 
 import json
@@ -11,10 +19,16 @@ from app import corpus_builder as cb
 
 
 def text(path: str) -> str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT / path).read_text(encoding="utf-8")
 
 
 def install_repo(tmp_path: Path, record: dict):
+    """Create a temp asset, block, build, and save the given record."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     cb._json_write(
         repo.asset_meta_path("a"),
@@ -67,6 +81,13 @@ def install_repo(tmp_path: Path, record: dict):
 
 
 def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):
+    """A reviewer can set primary_text to False and it is kept and treated as resolved.
+
+    Flow: an unresolved primary_text (50% LLM confidence) is patched to False. The
+    field is "human_confirmed", removed from the incomplete and review lists, saved to
+    disk, and the record can then be accepted.
+    Why: a naive "empty means missing" check would treat False as missing forever.
+    """
     assert "primary_text" in cb.HUMAN_EDITABLE_METADATA_FIELDS
     record = {
         "record_id": "r1",
@@ -110,6 +131,11 @@ def test_primary_text_is_human_editable_and_false_persists(tmp_path: Path):
 
 
 def test_accept_and_bulk_accept_block_any_incomplete_metadata(tmp_path: Path):
+    """Neither single nor bulk accept may bypass incomplete required metadata.
+
+    Single accept raises a metadata ValueError. Bulk accept changes 0 records and
+    reports 1 blocked record (r1) so the UI can explain why.
+    """
     record = {
         "record_id": "r1",
         "record_revision": 1,

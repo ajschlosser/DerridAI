@@ -1,3 +1,13 @@
+"""Review queues, metadata decisions, and progressive unlocking (release 0.44.0, "Dachshund").
+
+Why: reviewers work through queues (ready, metadata, source, topology). A record is
+"ready" only when nothing else is outstanding, decisions must persist and update
+queue counts, and reviewers may start reviewing finished records while enrichment
+continues (with automatic changes to reviewed records frozen).
+How: `install_repo` builds a temp repository; `ready_record` makes a clean, accepted-able
+record that tests then degrade with specific problems.
+"""
+
 from __future__ import annotations
 
 import json
@@ -18,10 +28,16 @@ from app.models import PdfCorpusBuildCreate
 
 
 def text(path: str) -> str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT / path).read_text(encoding="utf-8")
 
 
 def install_repo(tmp_path: Path, records: list[dict], *, status: str = "ready"):
+    """Create a temp repository and build with the given records and build status."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     cb._json_write(repo.asset_meta_path("a"), {
         "asset_id":"a","sha256":"x","filename":"x.pdf","page_count":2,
@@ -44,6 +60,7 @@ def install_repo(tmp_path: Path, records: list[dict], *, status: str = "ready"):
 
 
 def ready_record(rid: str, bid: str) -> dict:
+    """Make a complete, clean record (all required metadata resolved) ready to accept."""
     return {
         "record_id":rid,"record_revision":1,"text":"Édouard Glissant and différance","text_length":31,
         "source_block_ids":[bid],"source_spans":[{"block_id":bid,"page":1}],"pdf_pages":[1],
@@ -59,6 +76,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
+    """Pin profile and prompt ids, and that a single profile is registered."""
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -66,6 +84,12 @@ def test_release_contract_has_one_current_profile():
 
 
 def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp_path: Path):
+    """A human "not primary text" answer counts as resolved and survives manifest re-application.
+
+    primary_text=False is saved as human_confirmed with a decision-history entry, leaves
+    the incomplete/review lists, and is not overwritten when the document manifest is
+    applied again (main text pages 1-2).
+    """
     record = ready_record("r1", "b1")
     record.update({"primary_text":None,"metadata_incomplete_fields":["primary_text"],"metadata_review_fields":["primary_text"]})
     record["metadata_field_status"]["primary_text"]={"status":"unresolved","method":"llm"}
@@ -83,6 +107,11 @@ def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp
 
 
 def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp_path: Path):
+    """Resolving the last unresolved field moves the record from the metadata queue to ready.
+
+    Checks the decision result (nothing remaining, ready for acceptance), the persisted
+    status "human_confirmed", and the queue totals (metadata 0, ready 1).
+    """
     record = ready_record("r1", "b1")
     record.update({"position_holder":"Derrida","metadata_review_fields":["position_holder"],"metadata_complete":False})
     record["metadata_field_status"]["position_holder"]={"status":"unresolved","method":"llm","confidence":.61}
@@ -101,6 +130,7 @@ def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp
 
 
 def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_path: Path):
+    """Accepting r1 returns r2 as next, refreshed queue counts, and confirms LLM-inferred fields."""
     repo, build = install_repo(tmp_path, [ready_record("r1","b1"), ready_record("r2","b2")])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     result = manager.review_decision(build["build_id"], "r1", "accepted", expected_revision=1, review_queue="ready")
@@ -113,6 +143,11 @@ def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_
 
 
 def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Path):
+    """From the "all" queue, "next" skips records that are already accepted.
+
+    r1 is accepted; r2 was already accepted; the next record returned must be r3, and the
+    counts must show 2 accepted and 1 pending.
+    """
     first=ready_record("r1","b1")
     already=ready_record("r2","b2")
     already.update({"review_disposition":"accepted","accepted":True,"record_revision":2})
@@ -127,6 +162,13 @@ def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Pat
     assert result["queue_counts"]["pending"] == 1
 
 def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_path: Path):
+    """Records can be reviewed while enrichment runs; topology edits stay locked.
+
+    Both a finished (r1) and a still-queued (r2) record can be accepted mid-build, and a
+    review marks the record "__review__" human-touched so background work will not alter
+    it. Merging records is refused ("not editable until segmentation is complete")
+    because neighbors' metadata is still in flight.
+    """
     complete=ready_record("r1","b1")
     complete["metadata_enrichment_state"]="complete"
     queued=ready_record("r2","b2")
@@ -154,6 +196,12 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):
+    """A record accepted while metadata was unresolved is reopened on the next validation.
+
+    The authoritative rewrite sets disposition back to "pending", moves it to the
+    "metadata" review state, zeroes accepted_count, and logs an "acceptance_reopened"
+    event. Why: state must never claim a record is publishable when it is not.
+    """
     record=ready_record("r1","b1")
     record.update({"review_disposition":"accepted","accepted":True,"position_holder":"Derrida","metadata_review_fields":["position_holder"]})
     record["metadata_field_status"]["position_holder"]={"status":"unresolved","method":"llm","confidence":.5}
@@ -169,6 +217,12 @@ def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_
     assert "acceptance_reopened" == persisted["review_events"][-1]["event"]
 
 def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp_path: Path):
+    """"Ready" contains only clean records.
+
+    Four records: clean, unresolved metadata, source-quality issue, and a topology
+    (boundary) exception. Each lands in exactly one queue; bulk-accept on "ready" changes
+    only the clean record and leaves 3 issues.
+    """
     clean=ready_record("clean","b1")
     metadata=ready_record("metadata","b2")
     metadata["metadata_review_fields"]=["position_holder"]

@@ -1,3 +1,12 @@
+"""LLM dictionary translation validation and locale codes (release 0.35.12, "Tongue Twister").
+
+Why: machine-translated UI text must keep every {placeholder} and must be a real
+translation. Locale codes must be normalized to BCP 47 and right-to-left scripts
+must set the document direction.
+How: stubs app.rag so the translation module imports without an LLM, then swaps in
+fake chat functions that return good, damaged, or untranslated output.
+"""
+
 from __future__ import annotations
 
 import json
@@ -16,6 +25,16 @@ I18N_STORE = (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
 
 
 def test_translation_helper_accepts_valid_output_and_rejects_bad_provider_output(monkeypatch):
+    """Accept a faithful translation; reject dropped placeholders and untranslated output.
+
+    1) Valid: 3 strings translate in one batch and "{count}" survives.
+    2) Damaged: "ui.count" is returned as "Hallo" without {count}, which must raise
+       LanguageTranslationError mentioning "placeholder".
+    3) Echo: a model that returns the English unchanged for 25 strings must raise
+       "did not produce a usable" translation.
+    Why: shipping broken placeholders crashes screens; shipping English as "German" is a
+    silent failure.
+    """
     import importlib
     import sys
     from types import ModuleType
@@ -83,6 +102,12 @@ def test_translation_helper_accepts_valid_output_and_rejects_bad_provider_output
 
 
 def test_bcp47_normalization_and_rtl_document_direction():
+    """Locale codes are normalized, and RTL scripts set the page direction.
+
+    Normalization: "pt_br" -> "pt-BR", "zh-hant-tw" -> "zh-Hant-TW". Frontend wiring is
+    checked in the i18n store source (directionForLocale, document dir, Arabic and
+    Hebrew script codes); this part is a text-presence check, not a browser test.
+    """
     from app.system_store import normalize_locale_code
 
     assert normalize_locale_code("de") == "de"

@@ -1,3 +1,13 @@
+"""Reviewer-owned document structure, touch-up sanitizing, and confident stance (release 0.60.0, "Testy Titmouse").
+
+Why: a reviewer can declare where the main text starts and where bibliography begins. That
+structure is authoritative: an LLM or a page-range guess may disagree, but must not replace it.
+Text touch-ups must not leak model-added separators. Confident closed-vocabulary values
+(like "stance") must be normalized and filled in automatically.
+How: `install_asset` / `make_build` create a 12-page build whose layout says main text starts on
+PDF page 3; the LLM (`_chat_json`) is replaced with canned replies.
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,10 +22,16 @@ from app import corpus_builder as cb
 
 
 def text(path:str)->str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT/path).read_text(encoding="utf-8")
 
 
 def install_asset(repo:cb.PdfCorpusRepository):
+    """Write a 12-page asset whose human-confirmed layout puts main text at PDF page 3, with one block on page 9."""
     asset={
         "asset_id":"asset-testy-titmouse","sha256":"sha","filename":"book.pdf",
         "page_count":12,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},
@@ -37,6 +53,7 @@ def install_asset(repo:cb.PdfCorpusRepository):
 
 
 def make_build(repo:cb.PdfCorpusRepository):
+    """Create the asset and a build for it; returns (asset, build)."""
     asset=install_asset(repo)
     build=repo.create_build({
         "asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf",
@@ -49,12 +66,18 @@ def make_build(repo:cb.PdfCorpusRepository):
 
 
 def test_release_identity_and_profile_versions():
+    """Pin the profile, metadata prompt, and document-manifest prompt version ids."""
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
     assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
 
 
 def test_touchup_sanitizer_removes_only_model_added_outer_separators():
+    """Strip "---", "~~~", or code fences a model wrapped around text, but nothing else.
+
+    Separators inside the text stay, and a source that legitimately starts/ends with "---" is left
+    alone. Why: touch-ups must not change the text apart from what the reviewer asked for.
+    """
     source="A sentence — with a legitimate dash.\n\n---\n\nAn internal separator remains."
     proposed="---\n"+source+"\n---"
     assert cb._sanitize_touchup_output(proposed,source)==source
@@ -65,6 +88,12 @@ def test_touchup_sanitizer_removes_only_model_added_outer_separators():
 
 
 def test_human_document_layout_cannot_be_overwritten_by_manifest_range():
+    """A manifest page range never overrides reviewer-defined layout.
+
+    The record on PDF page 9 is main text by reviewer layout; a bad manifest range (main text starts on
+    page 11) would call it front matter, but region_type/primary_text and their
+    "human_document_layout" method must not change.
+    """
     record={
         "record_id":"r1","pdf_pages":[9],"region_type":"main_text","primary_text":True,
         "metadata_field_status":{
@@ -81,6 +110,12 @@ def test_human_document_layout_cannot_be_overwritten_by_manifest_range():
 
 
 def test_llm_disagreement_is_recorded_but_reviewer_structure_stays_selected(tmp_path:Path,monkeypatch):
+    """The LLM may disagree with reviewer structure; the disagreement is kept, the value is not.
+
+    The model says "front_matter / not primary text" at 96% confidence. The record stays main text, and
+    the status keeps both values, marks llm_checked, prefills the deterministic candidate, and is
+    not auto-populated with the LLM value.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
@@ -125,6 +160,11 @@ def test_llm_disagreement_is_recorded_but_reviewer_structure_stays_selected(tmp_
 
 
 def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,monkeypatch):
+    """"affirmed" at 91% confidence becomes the vocabulary value "affirm" and is auto-filled.
+
+    The raw model text is kept in raw_llm_value for audit, and the field records its confidence and
+    proposed value. Why: the >65% rule should fill fields even when the model uses a near-synonym.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)

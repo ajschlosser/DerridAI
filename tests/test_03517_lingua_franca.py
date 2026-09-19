@@ -1,3 +1,12 @@
+"""Robust LLM translation of interface dictionaries (release 0.35.17, "Lingua Franca").
+
+Why: administrators can machine-translate the UI into new languages. Local models
+often return broken JSON or wrap it in an extra key, so the pipeline must repair,
+split (bisect) and finally fall back to plain text rather than fail the language.
+How: stubs the app.rag module (avoids real LLM/Chroma dependencies), re-imports
+app.i18n_translation, and replaces chat_complete with fake providers.
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -21,6 +30,14 @@ TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 
 
 def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_resort(monkeypatch):
+    """Invalid JSON for large batches is recovered by splitting and, if needed, plain text.
+
+    Contract checks (source text): batch limits (24 items / 6,500 chars) and the repair,
+    bisect and plain-text helpers still exist.
+    Behavior: a fake provider returns "not json" for batches larger than 3 items and
+    valid JSON otherwise, so 12 strings must be bisected. Expected: all 12 translated,
+    zero failures, and more than one structured call.
+    """
     assert "max_items: int = 24" in TRANSLATION
     assert "max_chars: int = 6_500" in TRANSLATION
     assert "_extract_translation_json" in TRANSLATION
@@ -60,6 +77,11 @@ def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_reso
 
 
 def test_translation_pipeline_accepts_common_nested_translation_wrapper(monkeypatch):
+    """Accept {"translations": {...}} as well as a flat mapping.
+
+    Why: models commonly wrap the answer in a "translations" object; rejecting it would
+    discard a correct translation. Expect both strings translated with no failures.
+    """
     rag_stub = ModuleType("app.rag")
     rag_stub._extract_json = lambda raw: json.loads(raw)
     rag_stub.chat_complete = lambda **kwargs: "{}"

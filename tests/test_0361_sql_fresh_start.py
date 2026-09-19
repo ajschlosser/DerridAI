@@ -1,3 +1,12 @@
+"""SQLite persistence layer for system state and jobs (release 0.36.1, fresh-start SQLite).
+
+Why: since 0.36 provider profiles, annotations, languages, and background-job
+history live in SQLite. The schema is created directly (no migrations), state must
+survive restarts, and jobs interrupted by a restart must be marked failed, never
+silently replayed.
+How: uses SQLiteSystemRepository / SQLiteJobRepository on temp database files.
+"""
+
 from __future__ import annotations
 
 import json
@@ -14,6 +23,11 @@ from app.persistence import SQLiteJobRepository, SQLiteSystemRepository
 
 
 def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
+    """Saved system state loads back identically, with WAL mode and no migration tables.
+
+    Also checks describe() reports the sqlite backend and file size, and that only the
+    current tables exist (researcher_provider_profiles, annotations, languages, jobs).
+    """
     db_path = tmp_path / "derridai-system.sqlite3"
     repo = SQLiteSystemRepository(db_path)
     payload = {
@@ -51,6 +65,11 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
 
 
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
+    """A legacy derridai-system.json next to the database is ignored (and left untouched).
+
+    The store seeds English and Français (Québec) from the built-ins rather than reading
+    the old file.
+    """
     import app.system_store as module
 
     db_path = tmp_path / "derridai-system.sqlite3"
@@ -77,6 +96,12 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
 
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):
+    """After a restart a running job becomes "failed/interrupted" but keeps resume data.
+
+    The job's resume dictionary, failed keys and resumable flag are preserved, the error
+    mentions the restart, and the last event stage is "interrupted".
+    Why: side-effecting work must never be replayed automatically.
+    """
     db_path = tmp_path / "derridai-system.sqlite3"
     repo = SQLiteJobRepository(db_path)
     job = {
@@ -107,6 +132,7 @@ def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_pa
 
 
 def test_jobs_and_system_state_share_one_durable_database(tmp_path: Path):
+    """System state and job history coexist in one database file and load independently."""
     path = tmp_path / "derridai-system.sqlite3"
     system = SQLiteSystemRepository(path)
     jobs = SQLiteJobRepository(path)
@@ -131,6 +157,11 @@ def test_jobs_and_system_state_share_one_durable_database(tmp_path: Path):
 
 
 def test_language_translation_emits_durable_checkpoint(monkeypatch):
+    """Translation reports partial progress through a checkpoint callback.
+
+    The final checkpoint holds the translated pair, letting a job persist partial work
+    so an interrupted translation can be resumed.
+    """
     import app.i18n_translation as module
 
     def fake_chat_complete(**kwargs):

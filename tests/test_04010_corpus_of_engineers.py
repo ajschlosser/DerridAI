@@ -1,3 +1,12 @@
+"""Record topology: sizing, normalization, validation (release 0.40.10, "Corpus of Engineers").
+
+Why: records should be about 1,750 characters (within a tolerance) without cutting
+through a semantic boundary or an attribution, and every source block must land in
+exactly one record, in order. These tests pin the policy and the validators.
+How: `block` makes synthetic paragraph blocks; POLICY holds the sizing limits; the
+tests call the normalizer, record constructor and sanity checks directly.
+"""
+
 from __future__ import annotations
 
 import json
@@ -15,10 +24,16 @@ from app.models import PdfCorpusBuildCreate
 POLICY={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
 
 def block(i:int,chars:int=320,kind:str="paragraph",text:str|None=None):
+    """Make a synthetic paragraph block of about `chars` characters (or custom text)."""
     base=("A philosophical sentence develops one coherent point and closes cleanly. "*20)[:chars]
     return {"block_id":f"b{i}","page":1+i//8,"type":kind,"text":text or base,"bbox":[0,i,1,i+1],"extraction_method":"text","confidence":1.0}
 
 def test_release_profile_and_default_record_sizing():
+    """The profile and API defaults agree on record sizing.
+
+    Preferred 1750, tolerance 200, "long" 3500, absolute limit 6000, profile id
+    derrida-scholarly-v12. Update these numbers deliberately when policy changes.
+    """
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["preferred_record_chars"]==1750
@@ -32,6 +47,12 @@ def test_release_profile_and_default_record_sizing():
 
 
 def test_normalizer_targets_preferred_range_without_removing_semantic_boundary():
+    """Large runs are split toward the preferred size but a semantic split is kept.
+
+    Setup: 18 blocks of about 330 chars and a confident semantic boundary after b8.
+    Expect: b8 stays a boundary, no review items, at least one extra size-driven split,
+    no record over the long limit, and every block appears in exactly one record.
+    """
     blocks=[block(i,330) for i in range(18)]
     semantic={"after_block_id":"b8","decision":"split","confidence":1.0,"source":"semantic","semantic_boundary":True}
     boundaries,reviews,metrics=cb.PdfCorpusBuildManager._normalize_topology(blocks,[semantic],POLICY)
@@ -45,6 +66,11 @@ def test_normalizer_targets_preferred_range_without_removing_semantic_boundary()
 
 
 def test_coherent_exception_is_allowed_when_no_good_target_seam():
+    """Do not cut an attributed quotation just to hit a size target.
+
+    The only possible seam separates "Derrida writes:" from its quote, so the unit stays
+    whole (below the long limit): no boundaries, no reviews, no forced safety splits.
+    """
     blocks=[
         block(0,1700,text="Derrida writes:"),
         block(1,1450,text="“"+(("The quoted thought remains attached to its attribution. "*40)[:1448])+"”"),
@@ -58,6 +84,12 @@ def test_coherent_exception_is_allowed_when_no_good_target_seam():
 
 
 def test_topology_validator_detects_gap_overlap_order_and_size():
+    """The sanity checker reports gaps, overlaps, and over-length records.
+
+    Two bad records: one exceeds the absolute limit, they share block b1, and b2 is
+    missing. Expect valid False with topology.over_absolute_limit, source_gap and
+    source_overlap findings.
+    """
     blocks=[block(i,300) for i in range(4)]
     records=[
         {"record_id":"r1","text":"x"*1700,"text_length":1700,"source_block_ids":["b0","b1"]},
@@ -72,6 +104,10 @@ def test_topology_validator_detects_gap_overlap_order_and_size():
 
 
 def test_quality_report_exposes_distribution_and_conservation():
+    """The quality report shows full coverage, conservation, and length percentiles.
+
+    Why: reviewers and the release gate use it to confirm no text was lost or invented.
+    """
     blocks=[block(i,300) for i in range(6)]
     boundaries=[{"after_block_id":"b2"}]
     records=cb.PdfCorpusBuildManager._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
@@ -86,6 +122,12 @@ def test_quality_report_exposes_distribution_and_conservation():
 
 
 def test_acceptance_fixture_invariants():
+    """Every case in fixtures/corpus_builder/topology_cases.json satisfies the invariants.
+
+    Per case: normalization needs no reviews, records validate, each block appears in
+    exactly one record, and the longest record is within the case's limit. Add a new
+    tricky layout to the JSON fixture to extend coverage without new code.
+    """
     fixture=json.loads((ROOT/"tests/fixtures/corpus_builder/topology_cases.json").read_text(encoding="utf-8"))
     for case in fixture["cases"]:
         blocks=case["blocks"]

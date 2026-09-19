@@ -1,3 +1,11 @@
+"""Review actions during metadata enrichment (release 0.48.0, "Frightened Ferret").
+
+Why: enrichment of a book-length build takes a long time; reviewers must be able to
+reject or accept records while it runs, and those human decisions must be marked so
+the background workers never overwrite them.
+How: `install` creates a running two-record build with queued enrichment stages.
+"""
+
 from __future__ import annotations
 
 import json
@@ -17,10 +25,16 @@ from app.config import APP_VERSION
 
 
 def text(path:str)->str:
+    """Read a repository file as UTF-8 text.
+
+    Currently unused in this file: it is a leftover from earlier source-text checks that were
+    removed (AGENTS.md: test behavior, not text). Safe to delete in a code-changing cleanup.
+    """
     return (ROOT/path).read_text(encoding='utf-8')
 
 
 def install(tmp_path:Path):
+    """Temp repository with two pending records whose metadata stages are still "queued"."""
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     asset={'asset_id':'a','sha256':'x','filename':'x.pdf','page_count':2,'block_count':2,'ocr_pages':0,'warnings':[],'metadata':{},'pages':[]}
     cb._json_write(repo.asset_meta_path('a'),asset)
@@ -43,6 +57,11 @@ def install(tmp_path:Path):
 
 
 def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path:Path):
+    """Bulk-rejecting while enrichment is running works and records human ownership.
+
+    What: rejecting r1 and r2 changes 2 records to disposition "rejected", and each
+    record's human_touched_fields includes "__review__" so enrichment leaves them alone.
+    """
     repo,build=install(tmp_path)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     result=manager.bulk_disposition(build['build_id'],'rejected',record_ids=['r1','r2'])

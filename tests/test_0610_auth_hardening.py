@@ -1,4 +1,12 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
+"""Session cookie setting and failed-login throttling (release 0.61.0).
+
+Why: repeated password guesses should be slowed by a fixed lockout, without revealing which usernames
+exist, and the Secure cookie flag must be configurable for HTTPS deployments.
+How: drives AuthStore against a temporary SQLite database (with cheap password hashing) and a
+tiny compiled copy of the login route, so no web server is started.
+"""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +22,7 @@ from app import auth, config
 
 
 def configure_auth(monkeypatch, tmp_path: Path, *, failures: int = 3, seconds: int = 300):
+    """Point auth at a temp database with low PBKDF2 cost and the given failure limit and lockout time."""
     monkeypatch.setattr(auth, "PBKDF2_ITERATIONS", 1_000)
     monkeypatch.setattr(
         auth,
@@ -27,6 +36,7 @@ def configure_auth(monkeypatch, tmp_path: Path, *, failures: int = 3, seconds: i
 
 
 def throttle_row(store: auth.AuthStore, username: str):
+    """Read one username's failure counter row directly from SQLite."""
     with store._connect() as conn:
         return conn.execute(
             "SELECT failures,locked_until FROM login_failures WHERE username_key=?",
@@ -35,6 +45,7 @@ def throttle_row(store: auth.AuthStore, username: str):
 
 
 def test_session_cookie_secure_boolean_setting_is_environment_driven(monkeypatch):
+    """SESSION_COOKIE_SECURE accepts true/false-style words and ignores garbage."""
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
     assert config._bool_env("SESSION_COOKIE_SECURE", False) is True
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "off")
@@ -44,6 +55,11 @@ def test_session_cookie_secure_boolean_setting_is_environment_driven(monkeypatch
 
 
 def test_failed_login_lockout_persists_expires_and_success_resets(monkeypatch, tmp_path: Path):
+    """Failures lock after the limit, persist across store instances, expire, and reset on success.
+
+    Two failures then a success clears the counter. Three failures lock the name (also for a second
+    store object using the same database); once the lock time passes the correct password works again.
+    """
     configure_auth(monkeypatch, tmp_path, failures=3, seconds=300)
     first = auth.AuthStore()
     user = first.create_user("Scholar", "correct-horse", "researcher")
@@ -76,6 +92,10 @@ def test_failed_login_lockout_persists_expires_and_success_resets(monkeypatch, t
 
 
 def test_unknown_user_is_throttled_without_requiring_an_account(monkeypatch, tmp_path: Path):
+    """Nonexistent usernames are throttled exactly like real ones.
+
+    Why: a different behavior would reveal which accounts exist.
+    """
     configure_auth(monkeypatch, tmp_path, failures=2)
     store = auth.AuthStore()
     assert store.authenticate("does-not-exist", "guess-1") is None
@@ -87,6 +107,10 @@ def test_unknown_user_is_throttled_without_requiring_an_account(monkeypatch, tmp
 
 
 def test_concurrent_failures_across_store_instances_cannot_bypass_lockout(monkeypatch, tmp_path: Path):
+    """Eight parallel wrong guesses across four store objects still lock at exactly 4 failures.
+
+    The counter update is serialized in the database, so concurrency cannot smuggle extra attempts.
+    """
     configure_auth(monkeypatch, tmp_path, failures=4)
     creator = auth.AuthStore()
     creator.create_user("Concurrent", "correct-horse", "researcher")
@@ -106,6 +130,10 @@ def test_concurrent_failures_across_store_instances_cannot_bypass_lockout(monkey
 
 
 def test_lockout_remaining_is_reported_identically_for_real_and_unknown_usernames(monkeypatch, tmp_path: Path):
+    """The remaining lock time is 0 before locking, about the lock length after, and 0 once expired.
+
+    Real and unknown usernames must behave the same.
+    """
     configure_auth(monkeypatch, tmp_path, failures=2, seconds=120)
     store = auth.AuthStore()
     store.create_user("Scholar", "correct-horse", "researcher")
@@ -143,6 +171,11 @@ def _login_route(store):
 
 
 def test_login_route_returns_429_with_retry_after_for_locked_usernames(monkeypatch, tmp_path: Path):
+    """The third attempt gets HTTP 429 with Retry-After, for real and unknown names alike.
+
+    Attempts 1-2 return 401. Attempt 3 returns 429 with a login_locked code and a retry time that
+    matches the header. Even the correct password is refused with 429 while locked.
+    """
     configure_auth(monkeypatch, tmp_path, failures=2, seconds=120)
     store = auth.AuthStore()
     store.create_user("Scholar", "correct-horse", "researcher")
