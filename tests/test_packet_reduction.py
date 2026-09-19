@@ -1,4 +1,4 @@
-"""Vector-store upsert payload reduction and audit-history handling (release 0.30.11, "Big Packet Reduction").
+"""Vector-store upsert payload reduction and audit-history handling.
 
 Why: sending each record's full audit history on every update made requests huge. The client now
 omits history and the server keeps, appends to, or replaces it. Compaction must not touch
