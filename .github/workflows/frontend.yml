@@ -18,6 +18,11 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      CHROMA_DATA_ROOT: ${{ runner.temp }}/derridai-data
+      CHROMA_PATH: ${{ runner.temp }}/derridai-data/chroma
+      AUTH_DB_PATH: ${{ runner.temp }}/derridai-data/.home/derridai-auth.sqlite3
+      SYSTEM_DB_PATH: ${{ runner.temp }}/derridai-data/.home/derridai-system.sqlite3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
