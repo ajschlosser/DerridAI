@@ -3954,5 +3954,22 @@ EN_US: dict[str, str] = {'annotations.add_note': 'Add note',
  'pdf_corpus.continue_review': 'Continue review',
 
  'pdf_corpus.go_fix': 'Go fix',
+ 'pdf_corpus.select_from_text': 'Select from text',
+ 'pdf_corpus.select_from_text_help': 'Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.',
+ 'pdf_corpus.boundary_edit': 'Boundary edit',
+ 'pdf_corpus.slice_record': 'Slice record',
+ 'pdf_corpus.slice_record_help': 'Place the caret where this record should begin or end, then move the misplaced text to the neighboring record. Both records remain in review and the operation can be undone.',
+ 'pdf_corpus.slice_point': 'Slice point',
+ 'pdf_corpus.slice_point_help': 'Click between characters to choose the boundary. The preview below shows what would move.',
+ 'pdf_corpus.before_slice': 'Before slice',
+ 'pdf_corpus.after_slice': 'After slice',
+ 'pdf_corpus.move_before_previous': 'Move before slice to previous record',
+ 'pdf_corpus.move_after_next': 'Move after slice to next record',
+ 'pdf_corpus.slice_done': 'Boundary adjusted. Both neighboring records were reopened for review and affected metadata was marked stale.',
+ 'pdf_corpus.redo': 'Redo',
+ 'pdf_corpus.redo_done': 'The last undone review change was restored.',
+ 'pdf_corpus.pdf_source': 'PDF source',
+ 'pdf_corpus.pdf_page': 'PDF page {page}',
+
 
 }

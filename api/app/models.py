@@ -505,6 +505,12 @@ class PdfCorpusRecordSplit(BaseModel):
     after_block_id: str = Field(min_length=1, max_length=200)
     expected_revision: int | None = Field(default=None, ge=1)
 
+class PdfCorpusRecordSlice(BaseModel):
+    direction: Literal["previous", "next"]
+    offset: int = Field(ge=1, le=500000)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
 
 class PdfCorpusProviderSwitch(BaseModel):
     provider_profile_id: str = Field(min_length=1, max_length=200)

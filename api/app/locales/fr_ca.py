@@ -4206,5 +4206,22 @@ FR_CA: dict[str, str] = {'annotations.add_note': 'Ajouter une note',
  'pdf_corpus.continue_review': 'Poursuivre la révision',
 
  'pdf_corpus.go_fix': 'Corriger',
+ 'pdf_corpus.select_from_text': 'Sélectionner dans le texte',
+ 'pdf_corpus.select_from_text_help': 'Surlignez du texte dans la notice, puis choisissez Sélectionner dans le texte. Les champs texte sont remplacés; les champs de type liste ajoutent la sélection.',
+ 'pdf_corpus.boundary_edit': 'Modification de la limite',
+ 'pdf_corpus.slice_record': 'Découper la notice',
+ 'pdf_corpus.slice_record_help': 'Placez le curseur à l’endroit où cette notice devrait commencer ou se terminer, puis déplacez le texte mal placé vers la notice voisine. Les deux notices demeurent en révision et l’opération peut être annulée.',
+ 'pdf_corpus.slice_point': 'Point de découpe',
+ 'pdf_corpus.slice_point_help': 'Cliquez entre deux caractères pour choisir la limite. L’aperçu ci-dessous montre ce qui sera déplacé.',
+ 'pdf_corpus.before_slice': 'Avant la découpe',
+ 'pdf_corpus.after_slice': 'Après la découpe',
+ 'pdf_corpus.move_before_previous': 'Déplacer le texte avant la découpe vers la notice précédente',
+ 'pdf_corpus.move_after_next': 'Déplacer le texte après la découpe vers la notice suivante',
+ 'pdf_corpus.slice_done': 'La limite a été ajustée. Les deux notices voisines ont été rouvertes pour révision et les métadonnées touchées ont été marquées comme périmées.',
+ 'pdf_corpus.redo': 'Rétablir',
+ 'pdf_corpus.redo_done': 'La dernière modification annulée a été rétablie.',
+ 'pdf_corpus.pdf_source': 'Source PDF',
+ 'pdf_corpus.pdf_page': 'Page PDF {page}',
+
 
 }

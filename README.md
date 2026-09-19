@@ -1,4 +1,23 @@
-# DerridAI Corpus Viewer 0.53.0
+# DerridAI Corpus Viewer 0.54.0
+
+**0.54.0 — Neurotic Gnat** turns record boundaries and review history into first-class editorial objects. It adds reversible neighbor slicing, open-field text selection, Focus View PDF parity, multi-level undo/redo, and deterministic boundary-suspicion checks while preserving collaborative enrichment, provenance, English/Québec French i18n, and WCAG-oriented interaction patterns.
+
+## 0.54.0 — Neurotic Gnat
+
+- Adds a transactional **Slice record** workflow: move text before a chosen caret to the previous record or text after it to the next record without creating another record. Both affected records reopen for review, metadata is marked stale, and the operation is grouped for undo/redo.
+- Adds a post-segmentation **boundary-suspicion check** for likely sentence/quotation continuations across adjacent records so suspicious cuts cannot silently look clean.
+- Replaces one-shot structural undo with a bounded, multi-level **Undo / Redo** review history that restores complete record-set snapshots for text, metadata, evidence, disposition, bulk, merge/split, and boundary operations.
+- Adds **Select from text** for open metadata fields. The reviewer can highlight record text and use it directly: scalar fields replace the current value, list fields append a unique selected value. Closed enum/boolean/number controls do not expose the action.
+- Brings **Focus View** closer to feature parity by embedding the current PDF source page alongside source blocks and adding Slice, Undo and Redo controls in the same focused workspace.
+- Extends record audit history with boundary-edit transactions while keeping immutable extracted source text separate from reviewed corpus text.
+- Adds reusable Storybook coverage for the boundary-slice dialog and preserves shared metadata-field components rather than introducing one-off review controls.
+- Adds English and Québec French (`fr-CA`) strings for all new review/boundary/history controls and keeps visible labels, focus states, keyboard-safe dialogs, readable typography, and non-colour-only status communication.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **427 passed**.
+- Python bytecode compilation, locale parity, frontend relative-import checks, runtime JavaScript syntax, `git diff --check`, and ZIP integrity are run before packaging.
+- Production Vue/Vite, Storybook, and Docker/container builds remain mandatory release gates; if unavailable in the sandbox the archive remains a build candidate.
 
 **0.53.0 — Manic Monkey** is a Corpus Builder stabilization and last-mile workflow release. It makes record editing non-destructive while background enrichment continues, adds exact publication-shape JSONL preview and conservative LLM text touch-up, corroborates deterministic structural metadata with semantic LLM checks, turns rejected records into an explicit editorial outcome rather than a publication dead-end, and makes Editorial Memory and model effectiveness auditable.
 

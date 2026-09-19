@@ -631,6 +631,33 @@ HUMAN_EDITABLE_METADATA_FIELDS = {
 }
 
 
+
+
+def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
+    # Flag likely sentence/paragraph cuts between adjacent records without
+    # automatically rewriting scholarly boundaries on weak heuristics.
+    count = 0
+    continuation_re = re.compile(r"^(?:[a-zà-öø-ÿ]|[,;:)\]])")
+    for left, right in zip(records, records[1:]):
+        lt = str(left.get("text") or "").rstrip()
+        rt = str(right.get("text") or "").lstrip()
+        if not lt or not rt:
+            continue
+        incomplete_left = not bool(re.search(r"[.!?…][\"'’”)]?$", lt))
+        continuation_right = bool(continuation_re.search(rt))
+        open_quote = (lt.count('"') % 2 == 1) or (lt.count('“') > lt.count('”'))
+        if incomplete_left and (continuation_right or open_quote):
+            reason = "Possible sentence/quotation continuation across this record boundary."
+            for row, edge in ((left, "end"), (right, "start")):
+                flags = list(row.get("boundary_quality_issues") or [])
+                flags.append({"code": "boundary_suspect", "edge": edge, "reason": reason})
+                row["boundary_quality_issues"] = flags
+                row["needs_review"] = True
+                if not row.get("review_reason") or str(row.get("review_reason")).lower() == "pending human review.":
+                    row["review_reason"] = reason
+            count += 1
+    return count
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -4173,6 +4200,11 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if not records:
                 records = self._construct_records(asset, source_blocks, boundaries)
                 self._mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
+                boundary_suspect_count = annotate_boundary_suspects(records)
+                if boundary_suspect_count:
+                    current_build = self.repo.get_build(build_id)
+                    current_build["boundary_suspect_count"] = boundary_suspect_count
+                    self.repo.save_build(current_build)
                 for record in records:
                     self._apply_manifest_metadata(record, manifest)
                     inline, full = _citation_strings(record)
@@ -5034,15 +5066,25 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError("This record changed after it was opened. Reload it before continuing.")
         return current_revision
 
-    def _save_review_undo(self, build_id: str, records: list[dict[str, Any]], *, action: str, selected_record_id: str) -> None:
-        # Single-level structural undo is deliberately stored outside build.json so
-        # large record snapshots do not bloat normal build reads.
-        self.repo.save_checkpoint(build_id, "review_undo", {
-            "action": action,
-            "selected_record_id": selected_record_id,
-            "created_at": iso_now(),
-            "records": records,
+    def _push_review_history(self, build_id: str, records: list[dict[str, Any]], *, action: str, selected_record_id: str) -> None:
+        """Persist a reversible human-edit snapshot.
+
+        Review history is intentionally separate from the append-only scholarly
+        audit fields carried on each record.  The stack stores authoritative
+        record-set snapshots so multi-record boundary operations can be undone
+        atomically.  Any new human edit clears redo history.
+        """
+        checkpoint = self.repo.load_checkpoint(build_id, "review_history", {})
+        undo = list(checkpoint.get("undo") or []) if isinstance(checkpoint, dict) else []
+        undo.append({
+            "action": action, "selected_record_id": selected_record_id,
+            "created_at": iso_now(), "records": json.loads(json.dumps(records)),
         })
+        self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": []})
+
+    # Backward-compatible internal alias for older call sites in this source tree.
+    def _save_review_undo(self, build_id: str, records: list[dict[str, Any]], *, action: str, selected_record_id: str) -> None:
+        self._push_review_history(build_id, records, action=action, selected_record_id=selected_record_id)
 
     @_serialize_record_mutation
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
@@ -5054,6 +5096,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise KeyError(record_id)
         self._assert_human_review_available(build_id, target)
         current_revision = self._assert_record_revision(target, expected_revision)
+        self._push_review_history(build_id, records, action="disposition", selected_record_id=record_id)
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
         self._sync_record_metadata_state(target, profile)
         if disposition == "accepted" and target.get("source_quality_issues"):
@@ -5120,6 +5163,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             }
         self._assert_record_revision(target, expected_revision)
         current_revision = int(target.get("record_revision") or 1)
+        self._push_review_history(build_id, records, action=f"review_{disposition}", selected_record_id=record_id)
         if disposition == "accepted":
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in REVIEW_METADATA_FIELDS:
@@ -5160,6 +5204,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
+        self._push_review_history(build_id, records, action=f"bulk_{disposition}", selected_record_id="")
         q = str(query or "").casefold().strip()
         selected_ids = {str(value) for value in (record_ids or []) if str(value).strip()}
         changed = 0
@@ -5213,14 +5258,39 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
     @_serialize_record_mutation
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
-        checkpoint = self.repo.load_checkpoint(build_id, "review_undo", None)
-        if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get("records"), list):
+        checkpoint = self.repo.load_checkpoint(build_id, "review_history", {})
+        undo = list(checkpoint.get("undo") or []) if isinstance(checkpoint, dict) else []
+        redo = list(checkpoint.get("redo") or []) if isinstance(checkpoint, dict) else []
+        if not undo:
             raise KeyError(build_id)
-        records = checkpoint["records"]
+        entry = undo.pop()
+        current = self.repo.load_records(build_id)
+        redo.append({
+            "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"),
+            "created_at": iso_now(), "records": json.loads(json.dumps(current)),
+        })
+        records = entry["records"]
         self._rewrite_and_validate(build_id, records)
-        # Consuming the snapshot prevents an accidental second undo from applying stale topology.
-        self.repo.save_checkpoint(build_id, "review_undo", {"consumed_at": iso_now()})
-        return {"restored": True, "action": checkpoint.get("action"), "selected_record_id": checkpoint.get("selected_record_id"), "record_count": len(records)}
+        self.repo.save_checkpoint(build_id, "review_history", {"undo": undo, "redo": redo[-40:]})
+        return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": bool(undo), "can_redo": True}
+
+    @_serialize_record_mutation
+    def redo_last_review_edit(self, build_id: str) -> dict[str, Any]:
+        checkpoint = self.repo.load_checkpoint(build_id, "review_history", {})
+        undo = list(checkpoint.get("undo") or []) if isinstance(checkpoint, dict) else []
+        redo = list(checkpoint.get("redo") or []) if isinstance(checkpoint, dict) else []
+        if not redo:
+            raise KeyError(build_id)
+        entry = redo.pop()
+        current = self.repo.load_records(build_id)
+        undo.append({
+            "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"),
+            "created_at": iso_now(), "records": json.loads(json.dumps(current)),
+        })
+        records = entry["records"]
+        self._rewrite_and_validate(build_id, records)
+        self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": redo})
+        return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": True, "can_redo": bool(redo)}
 
     @_serialize_record_mutation
     def patch_record_text(
@@ -5234,6 +5304,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise KeyError(record_id)
         self._assert_human_review_available(build_id, target)
         current_revision = self._assert_record_revision(target, expected_revision)
+        self._push_review_history(build_id, records, action="text_edit", selected_record_id=record_id)
         cleaned = str(text or "").strip()
         if not cleaned:
             raise ValueError("Reviewed record text cannot be empty.")
@@ -5320,6 +5391,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         current_revision = int(target.get("record_revision") or 1)
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
+        self._push_review_history(build_id, records, action="metadata_edit", selected_record_id=record_id)
         decision_log = list(target.get("metadata_decisions") or [])
         for key, value in changes.items():
             status = target.setdefault("metadata_field_status", {})
@@ -5369,6 +5441,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError(f"Invalid bulk metadata: {exc}") from exc
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
+        self._push_review_history(build_id, records, action="bulk_metadata_edit", selected_record_id=(str(record_ids[0]) if record_ids else ""))
         wanted = {str(value) for value in (record_ids or []) if str(value)}
         query_l = str(query or "").strip().casefold()
         changed_ids: list[str] = []
@@ -5468,6 +5541,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         current_revision = int(target.get("record_revision") or 1)
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before editing evidence.")
+        self._push_review_history(build_id, records, action="evidence_edit", selected_record_id=record_id)
         allowed_ids = set(map(str, target.get("source_block_ids") or []))
         unique_ids = list(dict.fromkeys(map(str, block_ids)))
         invalid = [block_id for block_id in unique_ids if block_id not in allowed_ids]
@@ -5490,6 +5564,74 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         return target
+
+    @_serialize_record_mutation
+    def slice_to_neighbor(
+        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Move reviewed text across an existing record boundary without creating a record.
+
+        ``previous`` moves text before ``offset`` to the end of the previous record.
+        ``next`` moves text after ``offset`` to the start of the next record.  The
+        immutable extraction is retained on both records; this operation edits the
+        reviewed corpus layer and records an atomic two-record revision.
+        """
+        if direction not in {"previous", "next"}:
+            raise ValueError("Slice direction must be previous or next.")
+        records = self.repo.load_records(build_id)
+        index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
+        if index < 0:
+            raise KeyError(record_id)
+        target = records[index]
+        self._assert_human_review_available(build_id, target, structural=False)
+        self._assert_record_revision(target, expected_revision)
+        neighbor_index = index - 1 if direction == "previous" else index + 1
+        if neighbor_index < 0 or neighbor_index >= len(records):
+            raise ValueError(f"No {direction} record is available for this slice.")
+        neighbor = records[neighbor_index]
+        text = str(target.get("text") or "")
+        original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
+        if offset <= 0 or offset >= len(text):
+            raise ValueError("Slice point must be inside the selected record text.")
+        self._push_review_history(build_id, records, action=f"slice_{direction}", selected_record_id=record_id)
+        if direction == "previous":
+            moved, retained = text[:offset].strip(), text[offset:].lstrip()
+            if not moved or not retained:
+                raise ValueError("Slice must leave non-empty text in both records.")
+            neighbor["text"] = (str(neighbor.get("text") or "").rstrip() + "\n\n" + moved).strip()
+            target["text"] = retained
+        else:
+            retained, moved = text[:offset].rstrip(), text[offset:].strip()
+            if not moved or not retained:
+                raise ValueError("Slice must leave non-empty text in both records.")
+            neighbor["text"] = (moved + "\n\n" + str(neighbor.get("text") or "").lstrip()).strip()
+            target["text"] = retained
+        now = iso_now()
+        transaction_id = f"slice-{uuid.uuid4().hex[:12]}"
+        for row in (target, neighbor):
+            if "source_extracted_text" not in row:
+                row["source_extracted_text"] = original_texts.get(str(row.get("record_id")), str(row.get("text") or ""))
+            row["text_length"] = len(str(row.get("text") or ""))
+            row["text_review_status"] = "human_corrected"
+            row["text_reviewed_at"] = now
+            row["text_review_source"] = "human_boundary_slice"
+            row["review_disposition"] = "pending"
+            row["accepted"] = False
+            row["rejected"] = False
+            row["needs_review"] = True
+            row["review_reason"] = "Record boundary adjusted during human review; verify neighboring text and affected metadata."
+            row["metadata_needs_attention"] = True
+            reasons = list(row.get("metadata_attention_reasons") or [])
+            reasons.append("Record boundary changed; metadata whose interpretation depends on moved text may need review.")
+            row["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+            row["metadata_enrichment_state"] = "stale"
+            row["record_revision"] = int(row.get("record_revision") or 1) + 1
+            self._mark_human_touch(row, ["__text__", "__boundary__"])
+            events = list(row.get("review_events") or [])
+            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id})
+            row["review_events"] = events[-100:]
+        self._rewrite_and_validate(build_id, records)
+        return {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
 
     @_serialize_record_mutation
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
