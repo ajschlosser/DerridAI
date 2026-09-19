@@ -64,7 +64,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ${OLLAMA_MODELS_DIR}:/root/.ollama
+      - ${OLLAMA_MODELS_DIR:-ollama-data}:/root/.ollama
     gpus: all
     healthcheck:
       test: ["CMD-SHELL", "ollama list || exit 1"]
@@ -79,3 +79,4 @@ volumes:
   huggingface-cache:
   nltk-cache:
   redis-data:
+  ollama-data:
