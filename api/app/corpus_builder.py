@@ -4092,6 +4092,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         model_review_reasons: list[str] = []
         field_assessments: dict[str, dict[str, Any]] = {}
         llm_populated_fields: set[str] = set()
+        raw_llm_values: dict[str, Any] = {}
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -4106,6 +4107,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             for key, value in metadata.items():
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
                     continue
+                value, raw_llm_value = _normalize_semantic_value(key, value)
+                if raw_llm_value is not None:
+                    raw_llm_values[key] = raw_llm_value
                 existing_status = field_status.get(key) if isinstance(field_status.get(key), dict) else {}
                 # Human decisions are authoritative. Background/retry enrichment
                 # may add evidence, but it must never resurrect an already
