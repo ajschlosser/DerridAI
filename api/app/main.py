@@ -95,7 +95,7 @@ from .content_filter import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI API", version="0.62.0")
+app = FastAPI(title="DerridAI API", version="0.62.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1287,7 +1287,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.62.0",
+            "app_version": "0.62.1",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1719,7 +1719,7 @@ def get_restored_current_pdf():
 
 
 @app.post("/api/admin/nuke")
-def nuke():
+def nuke(response: Response):
     if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count() or pdf_corpus_builds.active_count():
         raise HTTPException(
             status_code=409,
@@ -1729,12 +1729,13 @@ def nuke():
             ),
         )
     try:
+        # Drop live job maps first so the SQLite checkpoint thread cannot rewrite
+        # history after the durable stores are emptied.
         cleared_jobs = (
-            llm_jobs.clear_finished()
-            + llm_tool_jobs.clear_finished()
-            + rag_jobs.clear_finished()
-            + upsert_jobs.clear_finished()
-            + pdf_corpus_builds.clear_finished()
+            llm_jobs.clear_all()
+            + llm_tool_jobs.clear_all()
+            + rag_jobs.clear_all()
+            + upsert_jobs.clear_all()
         )
         chroma_result = store.nuke()
         data_root = Path(settings.chroma_data_root).expanduser().resolve()
@@ -1748,10 +1749,17 @@ def nuke():
         # subsequent PDF uploads do not depend on process restart.
         for part in ("assets", "builds", "publications"):
             (pdf_corpus_repository.root / part).mkdir(parents=True, exist_ok=True)
+        pdf_corpus_builds.reset_in_memory_state()
+        system_result = system_store.reset_to_fresh_install()
+        auth_result = auth_store.reset_to_fresh_install()
+        response.delete_cookie(SESSION_COOKIE, path="/")
         return {
             "ok": True,
+            "bootstrap_required": True,
             "cleared_jobs": cleared_jobs,
             "chroma": chroma_result,
+            "auth": auth_result,
+            "system": system_result,
         }
     except Exception as exc:
         logger.exception("Nuke operation failed")

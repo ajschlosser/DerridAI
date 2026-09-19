@@ -2031,19 +2031,25 @@ class ChromaStore:
         return {"collections": restored, "count": len(restored)}
 
     def nuke(self) -> dict[str, Any]:
-        names = [
-            collection.name if hasattr(collection, "name") else str(collection)
-            for collection in self.client.list_collections()
-        ]
-        for name in names:
-            self.client.delete_collection(name=name)
+        names: list[str] = []
+        try:
+            names = [
+                collection.name if hasattr(collection, "name") else str(collection)
+                for collection in self.client.list_collections()
+            ]
+            for name in names:
+                self.client.delete_collection(name=name)
+        except Exception:
+            # Filesystem wipe below is the authoritative reset. A failed catalog
+            # listing must not leave user collections or sqlite files behind.
+            pass
+        self._client = None
+        gc.collect()
 
-        # Keep the Chroma catalog itself valid, but remove orphaned collection
-        # directories below the persistence path after all collections are gone.
         root = Path(self._path)
         removed_paths = 0
         for child in list(root.iterdir()) if root.exists() else []:
-            if child.name in {"chroma.sqlite3", ".derridai-write-test"}:
+            if child.name == ".gitkeep":
                 continue
             try:
                 if child.is_dir():
@@ -2055,7 +2061,7 @@ class ChromaStore:
                 # Collection deletion is the authoritative reset; stale files are
                 # non-fatal and can be removed after the API container stops.
                 pass
-        gc.collect()
+        root.mkdir(parents=True, exist_ok=True)
         return {
             "deleted_collections": len(names),
             "removed_paths": removed_paths,

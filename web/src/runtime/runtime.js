@@ -547,7 +547,7 @@ function decorateDisabledControls(root=document){
     else if(id==="breadcrumbforward")reason="There is no forward navigation location.";
     else if(id==="loadraghistory")reason="Choose a previous RAG question first.";
     else if(id==="applyjobselected"||id==="applyselectedchanges")reason="Select at least one proposed change first.";
-    else if(id==="nukeeverything")reason='Type "NUKE" exactly to enable this destructive action.';
+    else if(id==="nukeeverything")reason=tr("config.nuke.type_to_enable_help",'Type "NUKE" exactly to enable this destructive action.');
     else if(id==="linkpdf")reason="The current PDF page is already linked to this record.";
     else if(id==="runsearch")reason="Semantic search is unavailable for precomputed-only collections.";
     else if(["ragmodel","toolmodel","touchmodel"].includes(id))reason="The provider is configured to choose the model automatically.";
@@ -643,6 +643,32 @@ async function deleteWorkspaceDatabase(){
     request.onerror=()=>reject(request.error);
     request.onblocked=()=>reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
   });
+}
+function isDerridaiStorageKey(key){
+  return Boolean(key)&&((key.startsWith("derridai.")||key.startsWith("derridai-")||key==="derridai"));
+}
+async function deleteAllDerridaiBrowserState(){
+  await deleteWorkspaceDatabase().catch(()=>{});
+  if(typeof indexedDB.databases==="function"){
+    const dbs=await indexedDB.databases();
+    await Promise.all((dbs||[]).map(info=>new Promise(resolve=>{
+      const name=String(info?.name||"");
+      if(!name.startsWith("derridai"))return resolve();
+      const request=indexedDB.deleteDatabase(name);
+      request.onsuccess=()=>resolve();
+      request.onerror=()=>resolve();
+      request.onblocked=()=>resolve();
+    })));
+  }
+  try{
+    const keys=[];
+    for(let i=0;i<localStorage.length;i+=1){
+      const key=localStorage.key(i);
+      if(isDerridaiStorageKey(key))keys.push(key);
+    }
+    keys.forEach(key=>localStorage.removeItem(key));
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
+  }catch{}
 }
 async function persistCurrentPdfAsset(){
   if(!state.pdf.file)return;
@@ -9610,9 +9636,9 @@ function renderConfig(main){
     </section>
 
     <section class="card config-card danger-zone">
-      <div class="cardhead"><div><b>Start from scratch</b><div class="note">Deletes all loaded browser JSONL workspace data and every collection in the current Chroma persistence database. Installed model files are not deleted.</div></div></div>
-      <div class="info error">This cannot be undone unless you have exported/backed up your JSONL and Chroma data.</div>
-      <div class="nuke-controls"><input class="control" id="nukeConfirm" placeholder='Type NUKE to enable'><button class="btn danger" id="nukeEverything" disabled>NUKE DerridAI workspace</button></div>
+      <div class="cardhead"><div><b>${esc(tr("config.nuke.title","Start from scratch"))}</b><div class="note">${esc(tr("config.nuke.help","Deletes accounts, corpora, PDF builds, vector collections, provider profiles, annotations, job history, and this browser workspace so the next load is a first-run setup. Installed model files are not deleted."))}</div></div></div>
+      <div class="info error">${esc(tr("config.nuke.irreversible","This cannot be undone unless you have a full backup."))}</div>
+      <div class="nuke-controls"><input class="control" id="nukeConfirm" placeholder="${esc(tr("config.nuke.type_to_enable","Type NUKE to enable"))}"><button class="btn danger" id="nukeEverything" disabled>${esc(tr("config.nuke.button","NUKE DerridAI workspace"))}</button></div>
     </section>
   </div>`;
 
@@ -9694,15 +9720,15 @@ function renderConfig(main){
   confirmInput.oninput=()=>nukeButton.disabled=confirmInput.value!=="NUKE";
   nukeButton.onclick=async()=>{
     if(confirmInput.value!=="NUKE")return;
-    if(!await openMessageModal({title:"Delete entire DerridAI workspace?",message:"Delete the entire browser workspace and every collection in the current Chroma DB?",tone:"danger",confirmLabel:"Delete everything",cancelLabel:"Cancel"}))return;
-    nukeButton.disabled=true;nukeButton.textContent="Deleting…";
+    if(!await openMessageModal({title:tr("config.nuke.confirm_title","Reset DerridAI to a fresh install?"),message:tr("config.nuke.confirm_message","This returns DerridAI to a first-run state: users, corpora, PDF builds, vector collections, provider profiles, annotations, jobs, and this browser workspace are deleted. You will create a new administrator account. Installed model files are not deleted."),tone:"danger",confirmLabel:tr("config.nuke.confirm_label","Delete everything"),cancelLabel:tr("common.cancel","Cancel")}))return;
+    nukeButton.disabled=true;nukeButton.textContent=tr("config.nuke.deleting","Deleting…");
     try{
       await api("/api/admin/nuke",{method:"POST",body:"{}"});
-      await deleteWorkspaceDatabase();
+      await deleteAllDerridaiBrowserState();
       location.reload();
     }catch(error){
-      nukeButton.disabled=false;nukeButton.textContent="NUKE DerridAI workspace";
-      toast(`Nuke failed: ${error.message}`);
+      nukeButton.disabled=false;nukeButton.textContent=tr("config.nuke.button","NUKE DerridAI workspace");
+      toast(trf("config.nuke.failed","Nuke failed: {error}",{error:error.message}));
     }
   };
 }

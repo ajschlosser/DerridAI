@@ -1305,6 +1305,12 @@ class PdfCorpusBuildManager:
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         self._mark_interrupted()
 
+    def reset_in_memory_state(self) -> None:
+        """Drop live cancel/runtime maps after the corpus tree has been deleted."""
+        with self._lock:
+            self._cancel.clear()
+            self._runtime_requests.clear()
+
     def _mark_interrupted(self) -> None:
         listing = self.repo.list_builds(offset=0, limit=10000)
         for build in listing["items"]:

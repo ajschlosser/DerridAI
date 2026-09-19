@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.1 — Factory Reset
+
+NUKE now returns DerridAI to a first-run install: users, corpora, vector stores, and job history are deleted, and the next load asks for a new administrator. See [0.62.1](docs/notes/0.62.1.md).
+
 ## 0.62.0 — Vociferous Vulture
 
 Researcher forbidden-term lists move out of the application source into generated per-locale policies, stored with the language in the system database. See [0.62.0](docs/notes/0.62.0.md).
