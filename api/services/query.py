@@ -1,149 +1,225 @@
 from __future__ import annotations
+
 import asyncio
+import logging
 import re
 import time
 from typing import TYPE_CHECKING
+
 from clients.llm import LLMClient
 from clients.rag import RAGClient
-from clients.db import RedisClient
+from schemas.schemas import (
+    CitationInfo,
+    GenericResponse,
+    QueryRequest,
+    ResearchResponseContent,
+    RetrievalDiagnostics,
+    RetrievalMode,
+    ValidationIssue,
+)
 from services.nlp import NLPService
-from schemas.schemas import DerridAIQueryMetadata, QueryRequest, GenericResponse
-from utils.get_language_status import get_language_status
-from utils.generate_citation_strings import generate_citation_strings
+from templates.research_prompt import RESEARCH_PROMPT
 from utils.generate_context_string import generate_context_string
-from utils.extract_query_metadata import QueryMetadataExtractor
-from templates.query_template import query_template
-from templates.focused_prompt_template import focused_prompt_template as prompt_template
-import logging
+from utils.provenance import (
+    document_to_evidence_record,
+    input_to_evidence_record,
+    validation_issues,
+)
 from utils.request_id import request_id
-from services.pipeline_steps.get_query_metadata import get_query_metadata
-from services.pipeline_steps.get_query_details_via_llm import get_query_details_via_llm
-from services.pipeline_steps.basic_rag_lookup import basic_rag_lookup
-from services.pipeline_steps.get_retrieval_context import get_retrieval_context
-from services.pipeline_steps.rerank_documents import rerank_documents
-from services.pipeline_steps.invoke_llm_with_prompt import invoke_llm_with_prompt
-from services.pipeline_steps.bind_sources import bind_sources
-from services.pipeline import PipelineStep, PipelineStepContext, PipelineStepResult
 
 if TYPE_CHECKING:
     from services.jobs import JobService
 
 LOG = logging.getLogger(__name__)
+EVIDENCE_TAG_RE = re.compile(r"\[E(?P<index>\d+)\]")
+
+
+def _detected_languages(nlp_service: NLPService, text: str, fallback: str) -> list[str]:
+    try:
+        values = list(nlp_service.detect_languages(text))
+        normalized: list[str] = []
+        for value in values:
+            code = str(value).strip().lower()
+            if code and code not in normalized:
+                normalized.append(code)
+        return normalized or [fallback]
+    except Exception:
+        LOG.exception("Language detection failed; using request locale")
+        return [fallback]
+
+
+def _queries_by_language(
+    nlp_service: NLPService,
+    prompt: str,
+    prompt_languages: list[str],
+    document_languages: list[str],
+) -> dict[str, str]:
+    primary = prompt_languages[0] if prompt_languages else "en"
+    result = {language: prompt for language in document_languages}
+    for language in document_languages:
+        if language == primary:
+            continue
+        if {primary, language}.issubset({"en", "fr"}):
+            try:
+                result[language] = nlp_service.translate(
+                    prompt,
+                    from_lang=primary,
+                    to_lang=language,
+                )
+            except Exception:
+                LOG.exception("Prompt translation %s -> %s failed", primary, language)
+    return result
+
+
+def _bind_response_citations(response: str, evidence):
+    cited_indexes: list[int] = []
+    issues: list[ValidationIssue] = []
+    for match in EVIDENCE_TAG_RE.finditer(response):
+        index = int(match.group("index"))
+        if index >= len(evidence):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    code="unknown_evidence_tag",
+                    message=f"The synthesis model referenced unknown evidence tag E{index}.",
+                )
+            )
+        elif index not in cited_indexes:
+            cited_indexes.append(index)
+
+    if evidence and not cited_indexes:
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                code="response_missing_evidence_tags",
+                message="The synthesis model returned source-dependent prose without evidence tags.",
+            )
+        )
+
+    def replace(match: re.Match[str]) -> str:
+        index = int(match.group("index"))
+        if index >= len(evidence):
+            return match.group(0)
+        return f"({evidence[index].inline_citation}) [E{index}]"
+
+    bound = EVIDENCE_TAG_RE.sub(replace, response)
+    citations = [
+        CitationInfo(
+            record_id=evidence[index].record_id,
+            inline=evidence[index].inline_citation,
+            full=evidence[index].full_citation,
+            work=evidence[index].work,
+            page_start=evidence[index].page_start,
+            page_end=evidence[index].page_end,
+        )
+        for index in cited_indexes
+        if index < len(evidence)
+    ]
+    return bound, citations, issues
+
 
 async def handle_query(
-        request: QueryRequest,
-        rag_client: RAGClient,
-        llm_client: LLMClient,
-        redis_client: RedisClient,
-        nlp_service: NLPService,
-        job_service: JobService,
-        metadata_extractor: QueryMetadataExtractor,
-        job_id: str,
+    request: QueryRequest,
+    rag_client: RAGClient,
+    llm_client: LLMClient,
+    nlp_service: NLPService,
+    job_service: JobService,
+    job_id: str,
 ) -> GenericResponse:
-    LOG.debug("Decomposing prompt: %s", request.prompt)
     start = time.perf_counter()
+    token = request_id.set(job_id)
+    try:
+        await job_service.update_job(job_id, status="running", phase="preparing_evidence")
+        prompt_languages = _detected_languages(nlp_service, request.prompt, request.locale)
+        options = request.options
+        evidence = []
+        counts = {"candidate_count": 0, "deduplicated_count": 0, "returned_count": 0}
 
-    steps = [
-        PipelineStep(
-            fn=get_query_metadata,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "get_language_status": get_language_status,
-                    "nlp_service": nlp_service,
-                    "job_service": job_service,
-                    "metadata_extractor": metadata_extractor,
-                }
-            ),
-            name="Get query metadata via NLP service",
-        ),
-        PipelineStep(
-            fn=get_query_details_via_llm,
-            context=PipelineStepContext(
-                request=request,
-                state={
+        if options.retrieval_mode == RetrievalMode.SELECTED:
+            if not request.selected_evidence:
+                raise ValueError("retrieval_mode='selected' requires selected_evidence")
+            evidence = [
+                input_to_evidence_record(item, evidence_tag=f"E{index}")
+                for index, item in enumerate(request.selected_evidence[: options.limit])
+            ]
+            counts = {
+                "candidate_count": len(request.selected_evidence),
+                "deduplicated_count": len(evidence),
+                "returned_count": len(evidence),
+            }
+        else:
+            await job_service.update_job(job_id, status="running", phase="retrieving")
+            query_by_language = _queries_by_language(
+                nlp_service,
+                request.prompt,
+                prompt_languages,
+                options.document_languages,
+            )
+            async with rag_client.lookup_semaphore:
+                docs, counts = await asyncio.to_thread(
+                    rag_client.hybrid_lookup,
+                    query=request.prompt,
+                    query_by_language=query_by_language,
+                    languages=options.document_languages,
+                    canonical_work_ids=options.canonical_work_ids,
+                    limit=options.limit,
+                )
+            evidence = [
+                document_to_evidence_record(doc, evidence_tag=f"E{index}")
+                for index, doc in enumerate(docs)
+            ]
+
+        issues = validation_issues(evidence)
+        if not evidence:
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    code="no_evidence",
+                    message="No evidence records were available for synthesis.",
+                )
+            )
+
+        await job_service.update_job(job_id, status="running", phase="synthesizing")
+        response, _ = await llm_client.prompt(
+            params={
+                "user": RESEARCH_PROMPT,
+                "template": {
                     "prompt": request.prompt,
-                    "llm_client": llm_client,
-                    "job_service": job_service,
-                }
-            ),
-            name="Get query details via LLM",
-        ),
-        PipelineStep(
-            fn=basic_rag_lookup,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "rag_client": rag_client,
-                    "job_service": job_service,
-                }
-            ),
-            name="Basic RAG lookup",
-        ),
-        PipelineStep(
-            fn=rerank_documents,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "rag_client": rag_client,
-                    "job_service": job_service,
-                }
-            ),
-            name="Basic RAG lookup",
-        ),
-        PipelineStep(
-            fn=get_retrieval_context,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "job_service": job_service,
-                }
-            ),
-            name="Get retrieval context",
-        ),
-        PipelineStep(
-            fn=invoke_llm_with_prompt,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "llm_client": llm_client,
-                    "job_service": job_service,
-                }
-            ),
-            name="Invoke LLM with prompt",
-        ),
-        PipelineStep(
-            fn=bind_sources,
-            context=PipelineStepContext(
-                request=request,
-                state={
-                    "job_service": job_service,
-                }
-            ),
-            name="Bind sources",
-        ),
-    ]
+                    "response_language": options.response_language,
+                    "context": generate_context_string(evidence) or "No evidence was retrieved.",
+                },
+            }
+        )
 
-    step_results = PipelineStepResult(result={}, execution_time=0.0)
-    for step in steps:
-        LOG.info("Executing pipeline step #%d '%s' with ID '%s'...", step.position, step.name, step.id)
-        step_results = await step.execute(step_results)
-        LOG.info("Finished in %.4f seconds execution of pipeline step #%d '%s' with ID '%s'.", time.perf_counter() - start, step.position, step.name, step.id)
+        await job_service.update_job(job_id, status="running", phase="validating")
+        bound_response, citations, citation_issues = _bind_response_citations(str(response), evidence)
+        issues.extend(citation_issues)
 
-    p_results = step_results.result["p_results"]
-    b_results = step_results.result["b_results"]
-    d_results = step_results.result["d_results"]
-    q = step_results.result["query_metadata"]
-    r = step_results.result["p_response"]
-
-    # Report results
-    LOG.info("Original query: %s", q)
-    total_elapsed = time.perf_counter() - start
-    LOG.info("Total time elapsed: %.4f seconds", total_elapsed)
-    LOG.info(rag_client.get_config_string())
-    LOG.info(llm_client.get_config_string())
-    LOG.info(f"initial mmr and similarity results: {len(b_results)} | total after deduplication: {len(d_results)} | total after reranking: {len(p_results)}")
-
-    response = GenericResponse(content=q | { "response": r, "request_id": request_id.get() }, results=[p_results])
-
-    return response
+        retrieval = RetrievalDiagnostics(
+            mode=options.retrieval_mode,
+            candidate_count=counts["candidate_count"],
+            deduplicated_count=counts["deduplicated_count"],
+            returned_count=counts["returned_count"],
+            languages=options.document_languages,
+            canonical_work_ids=options.canonical_work_ids,
+        )
+        content = ResearchResponseContent(
+            response=bound_response,
+            request_id=job_id,
+            locale=request.locale,
+            response_language=options.response_language,
+            evidence=evidence,
+            citations=citations,
+            validation_issues=issues if options.include_diagnostics else [],
+            retrieval=retrieval,
+            query_metadata={
+                "prompt_languages": prompt_languages,
+                "document_languages": options.document_languages,
+                "canonical_work_ids": options.canonical_work_ids,
+                "retrieval_mode": options.retrieval_mode.value,
+                "elapsed_seconds": round(time.perf_counter() - start, 4),
+            },
+        )
+        return GenericResponse(content=content, results=[])
+    finally:
+        request_id.reset(token)

@@ -1,294 +1,345 @@
-const API_BASE = "/api/v0.1.0";
-const POLL_INTERVAL_MS = 2000;
-const RESULTS_STORAGE_KEY = "derridai.results";
-const JOBS_STORAGE_KEY = "derridai.active-jobs";
+const API_BASE = "/api/v0.58.5";
+const POLL_INTERVAL_MS = 1500;
+const HISTORY_KEY = "derridai.0.58.5.history";
+const ACTIVE_JOB_KEY = "derridai.0.58.5.active-job";
+const LOCALE_KEY = "derridai.locale";
+const SUPPORTED_LOCALES = ["en", "fr"];
 
-const form = document.getElementById("query-form");
-const promptInput = document.getElementById("prompt-input");
-const submitButton = document.getElementById("submit-button");
-const loadingSpinner = document.getElementById("loading-spinner");
-const statusMessage = document.getElementById("status-message");
-const errorMessage = document.getElementById("error-message");
-const resultsSection = document.getElementById("results-section");
-const resultsFilterInput = document.getElementById("results-filter-input");
-const clearHistoryButton = document.getElementById("clear-history-button");
-const resultCards = document.getElementById("result-cards");
+const $ = (id) => document.getElementById(id);
+const dom = {
+  locale: $("locale-select"), form: $("research-form"), prompt: $("prompt-input"),
+  responseLanguage: $("response-language"), limit: $("evidence-limit"),
+  canonicalWorkIds: $("canonical-work-ids"), submit: $("submit-button"),
+  loading: $("loading-indicator"), status: $("status-message"), error: $("error-message"),
+  errorText: $("error-text"), selectionCount: $("selection-count"),
+  clearSelection: $("clear-selection-button"), runSelected: $("run-selected-button"),
+  resultRegion: $("result-region"), resultHeading: $("result-heading"),
+  answer: $("answer-content"), copyAnswer: $("copy-answer-button"),
+  citations: $("citations-list"), citationsEmpty: $("citations-empty"),
+  validation: $("validation-list"), validationEmpty: $("validation-empty"),
+  diagnostics: $("diagnostics-list"), evidenceList: $("evidence-list"),
+  historyList: $("history-list"), historyEmpty: $("history-empty"),
+  clearHistory: $("clear-history-button"),
+};
 
-const pollTimers = new Map();
-let activeJobs = [];
+let messages = {};
+let locale = "en";
+let currentResult = null;
+let currentPrompt = "";
+let selectedEvidence = new Map();
+let pollTimer = null;
 
-function save(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+function loadLocal(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
+function saveLocal(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+function interpolate(template, vars = {}) {
+  return String(template).replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? `{${key}}`));
+}
+function t(key, vars = {}) { return interpolate(messages[key] ?? key, vars); }
 
-function load(key, fallback) {
+async function setLocale(nextLocale) {
+  const requested = SUPPORTED_LOCALES.includes(nextLocale) ? nextLocale : "en";
   try {
-    const value = JSON.parse(localStorage.getItem(key));
-    return value ?? fallback;
+    const response = await fetch(`/i18n/${requested}.json`, { cache: "no-cache" });
+    if (!response.ok) throw new Error(String(response.status));
+    messages = await response.json();
+    locale = requested;
   } catch {
-    return fallback;
+    if (requested !== "en") return setLocale("en");
+    messages = {};
+    locale = "en";
   }
+  document.documentElement.lang = locale;
+  document.documentElement.dir = messages.meta?.dir || "ltr";
+  dom.locale.value = locale;
+  localStorage.setItem(LOCALE_KEY, locale);
+  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
+  for (const node of document.querySelectorAll("[data-i18n-placeholder]")) node.placeholder = t(node.dataset.i18nPlaceholder);
+  renderSelectionSummary();
+  renderHistory();
+  if (currentResult) renderResult(currentResult, currentPrompt, false);
 }
 
-function stopPolling(jobId) {
-  const timer = pollTimers.get(jobId);
-  if (timer !== undefined) {
-    clearInterval(timer);
-    pollTimers.delete(jobId);
-  }
+function setBusy(busy) {
+  dom.form.setAttribute("aria-busy", String(busy));
+  dom.submit.disabled = busy;
+  dom.loading.hidden = !busy;
 }
-
-function saveActiveJobs() {
-  save(JOBS_STORAGE_KEY, activeJobs);
-}
-
-function removeActiveJob(jobId) {
-  activeJobs = activeJobs.filter((job) => job.jobId !== jobId);
-  saveActiveJobs();
-  stopPolling(jobId);
-}
-
-function setBusy(isBusy) {
-  submitButton.disabled = isBusy;
-  form.setAttribute("aria-busy", String(isBusy));
-  loadingSpinner.hidden = !isBusy;
-}
-
+function clearError() { dom.error.hidden = true; dom.errorText.textContent = ""; }
 function showError(message) {
-  errorMessage.textContent = message;
+  dom.errorText.textContent = message || t("error.generic");
+  dom.error.hidden = false;
+  dom.error.tabIndex = -1;
+  dom.error.focus();
+}
+function setStatus(status, phase) {
+  const parts = [];
+  if (status) parts.push(t(`status.${status}`));
+  if (phase) parts.push(t(`status.phase.${phase}`));
+  dom.status.textContent = parts.join(" — ");
 }
 
-function appendFormattedText(container, text) {
-  const fragments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
-
-  for (const fragment of fragments) {
-    if (fragment.startsWith("**") && fragment.endsWith("**")) {
-      const strong = document.createElement("strong");
-      strong.textContent = fragment.slice(2, -2);
-      container.append(strong);
-    } else if (fragment.startsWith("*") && fragment.endsWith("*")) {
-      const emphasis = document.createElement("em");
-      emphasis.textContent = fragment.slice(1, -1);
-      container.append(emphasis);
-    } else {
-      container.append(document.createTextNode(fragment));
-    }
-  }
+function retrievalMode() {
+  return document.querySelector('input[name="retrieval-mode"]:checked')?.value || "auto";
+}
+function sourceLanguages() {
+  return [...document.querySelectorAll('input[name="document-language"]:checked')].map((x) => x.value);
+}
+function workIds() {
+  return dom.canonicalWorkIds.value.split(/[,;\n]+/).map((x) => x.trim()).filter((x, i, a) => x && a.indexOf(x) === i);
+}
+function compactEvidence(record) {
+  const keys = [
+    "record_id","text","work","canonical_work_id","document_author","speaker","quoted_speaker",
+    "position_holder","stance","proposition_status","target","discourse_role","language",
+    "page_start","page_end","year","edition","translator","publisher"
+  ];
+  return Object.fromEntries(keys.filter((k) => record[k] !== undefined && record[k] !== null && record[k] !== "").map((k) => [k, record[k]]));
+}
+function requestPayload(forceSelected = false) {
+  const mode = forceSelected ? "selected" : retrievalMode();
+  const languages = sourceLanguages();
+  if (!languages.length) throw new Error(t("form.document_languages"));
+  if (mode === "selected" && !selectedEvidence.size) throw new Error(t("error.selected_evidence_required"));
+  return {
+    prompt: dom.prompt.value.trim(),
+    locale,
+    options: {
+      retrieval_mode: mode,
+      response_language: dom.responseLanguage.value,
+      document_languages: languages,
+      canonical_work_ids: workIds(),
+      limit: Number.parseInt(dom.limit.value, 10) || 12,
+      include_diagnostics: true
+    },
+    selected_evidence: mode === "selected" ? [...selectedEvidence.values()].map(compactEvidence) : []
+  };
 }
 
-function appendResponseContent(container, response) {
-  const lines = String(response).trim().split(/\n{2,}/);
-  let list = null;
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    const heading = trimmedLine.match(/^#{1,3}\s+(.+)$/);
-    const orderedItems = [...trimmedLine.matchAll(/^(\d+)\.\s+(.+)$/gm)];
-    const unorderedItem = trimmedLine.match(/^[-*]\s+(.+)$/);
-
-    if (heading) {
-      list = null;
-      const title = document.createElement("h3");
-      appendFormattedText(title, heading[1]);
-      container.append(title);
-    } else if (orderedItems.length || unorderedItem) {
-      const tagName = orderedItems.length ? "ol" : "ul";
-      if (!list || list.tagName.toLowerCase() !== tagName) {
-        list = document.createElement(tagName);
-        container.append(list);
-      }
-      const items = orderedItems.length ? orderedItems : [[unorderedItem[1]]];
-      for (const itemMatch of items) {
-        const item = document.createElement("li");
-        appendFormattedText(item, itemMatch.at(-1));
-        list.append(item);
-      }
-    } else {
-      list = null;
-      const paragraph = document.createElement("p");
-      appendFormattedText(paragraph, trimmedLine.replace(/\n/g, " "));
-      container.append(paragraph);
-    }
-  }
-}
-
-function createMetadataDetails(metadata) {
-  const entries = Object.entries(metadata || {}).filter(
-    ([key, value]) => (
-      key !== "response"
-      && !key.includes("record")
-      && value !== null
-      && value !== ""
-      && !(Array.isArray(value) && value.length === 0)
-    ),
-  );
-  if (!entries.length) return null;
-
-  const details = document.createElement("details");
-  details.className = "result-card__details";
-  const summary = document.createElement("summary");
-  summary.textContent = "Query details";
-  const list = document.createElement("dl");
-  list.className = "metadata-list";
-
-  for (const [key, value] of entries) {
-    const term = document.createElement("dt");
-    term.textContent = key.replaceAll("_", " ");
-    const description = document.createElement("dd");
-    description.textContent = Array.isArray(value) ? value.join(", ") : String(value);
-    list.append(term, description);
-  }
-  details.append(summary, list);
-  return details;
-}
-
-function renderResponse(response, prompt, metadata = {}, focus = false) {
-  const card = document.createElement("article");
-  card.className = "result-card";
-  card.tabIndex = -1;
-
-  const answerDetails = document.createElement("details");
-  answerDetails.open = true;
-  const summary = document.createElement("summary");
-  summary.className = "result-card__summary";
-  const question = document.createElement("p");
-  question.className = "result-card__question";
-  question.textContent = `Question: ${prompt}`;
-  summary.append(question);
-
-  const body = document.createElement("div");
-  body.className = "result-card__body";
-  const [answer, citations = ""] = String(response).split(/\n{2,}\*\*Works Cited\*\*\s*/i);
-  const content = document.createElement("div");
-  content.className = "result-card__content";
-  appendResponseContent(content, answer);
-  body.append(content);
-
-  if (citations.trim()) {
-    const worksCited = document.createElement("details");
-    worksCited.className = "result-card__details works-cited";
-    const worksSummary = document.createElement("summary");
-    worksSummary.textContent = "Works cited";
-    const worksList = document.createElement("ol");
-    worksList.className = "works-cited__list";
-    for (const citation of citations.matchAll(/^\d+\.\s+(.+)$/gm)) {
-      const item = document.createElement("li");
-      appendFormattedText(item, citation[1]);
-      worksList.append(item);
-    }
-    worksCited.append(worksSummary, worksList);
-    body.append(worksCited);
-  }
-
-  const metadataDetails = createMetadataDetails(metadata);
-  if (metadataDetails) body.append(metadataDetails);
-  answerDetails.append(summary, body);
-  card.append(answerDetails);
-  resultCards.prepend(card);
-  if (focus) card.focus();
-}
-
-function saveResult(prompt, response, metadata) {
-  const results = load(RESULTS_STORAGE_KEY, []);
-  results.unshift({ prompt, response, metadata, completedAt: new Date().toISOString() });
-  save(RESULTS_STORAGE_KEY, results.slice(0, 30));
-}
-
-function renderSavedResults(focusLatest = false) {
-  const filter = resultsFilterInput.value.trim().toLocaleLowerCase();
-  const results = load(RESULTS_STORAGE_KEY, []);
-  const filteredResults = results.filter((result) => (
-    `${result.prompt}\n${result.response}`.toLocaleLowerCase().includes(filter)
-  ));
-
-  resultCards.innerHTML = ""; // Clear all existing children for clean redraw\n  for (const result of [...filteredResults].reverse()) {\n    renderResponse(result.response, result.prompt, result.metadata);\n  }
-  for (const result of filteredResults.reverse()) {
-    renderResponse(result.response, result.prompt, result.metadata);
-  }
-  resultsSection.hidden = filteredResults.length === 0;
-
-  if (focusLatest && filteredResults.length) {
-    resultCards.firstElementChild.focus();
-  }
-}
-
-function startPolling(job) {
-  if (pollTimers.has(job.jobId)) return;
-  pollJobStatus(job);
-  pollTimers.set(job.jobId, setInterval(() => pollJobStatus(job), POLL_INTERVAL_MS));
-}
-
-async function pollJobStatus(job) {
-  try {
-    const response = await fetch(`${API_BASE}/query/${job.jobId}`);
-    if (!response.ok) {
-      throw new Error(`Status check failed: ${response.status}`);
-    }
-    const jobStatus = await response.json();
-    statusMessage.textContent = `Status: ${jobStatus.status}`;
-
-    if (jobStatus.status === "completed") {
-      removeActiveJob(job.jobId);
-      if (activeJobs.length === 0) setBusy(false);
-      const responseText = jobStatus.result?.content?.response;
-      if (typeof responseText !== "string") throw new Error("Completed job did not include a response.");
-      saveResult(job.prompt, responseText, jobStatus.result.content);
-      renderSavedResults(true);
-      statusMessage.textContent = "Status: completed";
-    }
-  } catch (err) {
-    removeActiveJob(job.jobId);
-    if (activeJobs.length === 0) setBusy(false);
-    showError(`Error: ${err.message}`);
-  }
-}
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const prompt = promptInput.value.trim();
-  if (!prompt) return;
-
+async function submitResearch(forceSelected = false) {
+  clearError();
+  if (!dom.prompt.value.trim()) { dom.prompt.focus(); return; }
+  let payload;
+  try { payload = requestPayload(forceSelected); } catch (error) { showError(error.message); return; }
   setBusy(true);
-  showError("");
-  statusMessage.textContent = "Submitting...";
-
+  setStatus("pending", "queued");
   try {
     const response = await fetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(payload)
     });
-    if (!response.ok) {
-      throw new Error(`Submit failed: ${response.status}`);
-    }
-    const { job_id } = await response.json();
-    const job = { jobId: job_id, prompt };
-    activeJobs.push(job);
-    saveActiveJobs();
-    statusMessage.textContent = "Status: [pending] Contacting DerridAI...";
-    startPolling(job);
-  } catch (err) {
-    if (activeJobs.length === 0) setBusy(false);
-    showError(`Error: ${err.message}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || String(response.status));
+    const job = { jobId: body.job_id, prompt: payload.prompt, submittedAt: new Date().toISOString() };
+    saveLocal(ACTIVE_JOB_KEY, job);
+    await pollJob(job);
+  } catch (error) {
+    setBusy(false);
+    showError(error.message || t("error.network"));
   }
-});
-
-
-resultsFilterInput.addEventListener("input", () => {
-  // Debounce the update by clearing any existing timer and setting a new one.
-  clearTimeout(resultsFilterInput.debounceTimer);
-  resultsFilterInput.debounceTimer = setTimeout(() => renderSavedResults(), 200);
-});
-
-// Initial call to render the results
-renderSavedResults();
-
-activeJobs = load(JOBS_STORAGE_KEY, []).filter(
-  (job) => typeof job?.jobId === "string" && typeof job?.prompt === "string",
-);
-if (activeJobs.length) {
-  setBusy(true);
-  statusMessage.textContent = "Status: resuming saved queries...";
-  activeJobs.forEach(startPolling);
 }
+
+async function pollJob(job) {
+  if (pollTimer) clearTimeout(pollTimer);
+  try {
+    const response = await fetch(`${API_BASE}/query/${encodeURIComponent(job.jobId)}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || String(response.status));
+    setStatus(body.status, body.phase);
+    if (body.status === "completed") {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      setBusy(false);
+      currentResult = body.result?.content;
+      currentPrompt = job.prompt;
+      if (!currentResult) throw new Error(t("error.generic"));
+      saveHistory(job.prompt, currentResult);
+      renderResult(currentResult, job.prompt, true);
+      return;
+    }
+    if (body.status === "failed") {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      setBusy(false);
+      showError(body.error || t("error.generic"));
+      return;
+    }
+    pollTimer = setTimeout(() => pollJob(job), POLL_INTERVAL_MS);
+  } catch (error) {
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+    setBusy(false);
+    showError(error.message || t("error.network"));
+  }
+}
+
+function appendInline(container, text) {
+  for (const fragment of String(text).split(/(\[E\d+\]|\*\*[^*]+\*\*|\*[^*]+\*)/g)) {
+    if (!fragment) continue;
+    if (/^\[E\d+\]$/.test(fragment)) {
+      const tag = fragment.slice(1, -1);
+      const link = document.createElement("a");
+      link.href = `#evidence-${tag}`;
+      link.className = "evidence-link";
+      link.textContent = fragment;
+      link.setAttribute("aria-label", `${t("evidence.heading")} ${tag}`);
+      container.append(link);
+    } else if (fragment.startsWith("**") && fragment.endsWith("**")) {
+      const strong = document.createElement("strong"); strong.textContent = fragment.slice(2, -2); container.append(strong);
+    } else if (fragment.startsWith("*") && fragment.endsWith("*")) {
+      const em = document.createElement("em"); em.textContent = fragment.slice(1, -1); container.append(em);
+    } else container.append(document.createTextNode(fragment));
+  }
+}
+function renderAnswer(text) {
+  dom.answer.replaceChildren();
+  for (const block of String(text || "").trim().split(/\n{2,}/)) {
+    const trimmed = block.trim(); if (!trimmed) continue;
+    const heading = trimmed.match(/^#{1,4}\s+(.+)$/);
+    const lines = trimmed.split("\n");
+    const unordered = lines.every((line) => /^[-*]\s+/.test(line.trim()));
+    const ordered = lines.every((line) => /^\d+\.\s+/.test(line.trim()));
+    if (heading) {
+      const h = document.createElement("h4"); appendInline(h, heading[1]); dom.answer.append(h);
+    } else if (unordered || ordered) {
+      const list = document.createElement(ordered ? "ol" : "ul");
+      for (const line of lines) {
+        const li = document.createElement("li"); appendInline(li, line.replace(/^([-*]|\d+\.)\s+/, "")); list.append(li);
+      }
+      dom.answer.append(list);
+    } else {
+      const p = document.createElement("p"); appendInline(p, trimmed.replace(/\n/g, " ")); dom.answer.append(p);
+    }
+  }
+}
+function metadataRow(list, label, value, score = false) {
+  if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) return;
+  const dt = document.createElement("dt"); dt.textContent = label;
+  const dd = document.createElement("dd");
+  const rendered = Array.isArray(value) ? value.join(", ") : String(value);
+  if (score) {
+    const span = document.createElement("span"); span.textContent = rendered; span.title = t("evidence.score_help"); span.tabIndex = 0; dd.append(span);
+  } else dd.textContent = rendered;
+  list.append(dt, dd);
+}
+function renderCitations(citations = []) {
+  dom.citations.replaceChildren(); dom.citationsEmpty.hidden = citations.length > 0;
+  for (const citation of citations) {
+    const li = document.createElement("li"); li.textContent = citation.full;
+    const evidence = currentResult?.evidence?.find((x) => x.record_id === citation.record_id);
+    if (evidence) {
+      const link = document.createElement("a"); link.href = `#evidence-${evidence.evidence_tag}`; link.className = "evidence-link"; link.textContent = ` [${evidence.evidence_tag}]`; li.append(link);
+    }
+    dom.citations.append(li);
+  }
+}
+function renderValidation(issues = []) {
+  dom.validation.replaceChildren(); dom.validationEmpty.hidden = issues.length > 0;
+  for (const issue of issues) {
+    const li = document.createElement("li"); li.className = "validation-item"; li.dataset.severity = issue.severity || "info";
+    li.textContent = `${String(issue.severity || "info").toUpperCase()}: ${issue.message || issue.code}`; dom.validation.append(li);
+  }
+}
+function renderDiagnostics(info = {}) {
+  dom.diagnostics.replaceChildren();
+  metadataRow(dom.diagnostics, t("diagnostics.mode"), info.mode);
+  metadataRow(dom.diagnostics, t("diagnostics.candidates"), info.candidate_count ?? 0);
+  metadataRow(dom.diagnostics, t("diagnostics.deduplicated"), info.deduplicated_count ?? 0);
+  metadataRow(dom.diagnostics, t("diagnostics.returned"), info.returned_count ?? 0);
+  metadataRow(dom.diagnostics, t("diagnostics.languages"), info.languages || []);
+  metadataRow(dom.diagnostics, t("diagnostics.works"), info.canonical_work_ids || []);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(String(text || "")); dom.status.textContent = t("result.copy_success"); }
+  catch { showError(t("error.generic")); }
+}
+function renderEvidence(records = []) {
+  dom.evidenceList.replaceChildren();
+  for (const record of records) {
+    const article = document.createElement("article"); article.className = "evidence-card"; article.id = `evidence-${record.evidence_tag}`;
+    const header = document.createElement("div"); header.className = "evidence-card__header";
+    const h3 = document.createElement("h3");
+    const pages = record.page_start ? `${record.page_start}${record.page_end && record.page_end !== record.page_start ? "–" + record.page_end : ""}` : "";
+    h3.textContent = [record.evidence_tag, record.work, pages].filter(Boolean).join(" · ");
+    const label = document.createElement("label"); label.className = "evidence-card__select";
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = selectedEvidence.has(record.record_id);
+    checkbox.setAttribute("aria-label", t("evidence.select", { tag: record.evidence_tag }));
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedEvidence.set(record.record_id, record); else selectedEvidence.delete(record.record_id);
+      renderSelectionSummary();
+    });
+    const span = document.createElement("span"); span.textContent = t("evidence.selected"); label.append(checkbox, span); header.append(h3, label);
+
+    const body = document.createElement("div"); body.className = "evidence-card__body";
+    const dl = document.createElement("dl"); dl.className = "metadata-list";
+    metadataRow(dl, t("evidence.work"), record.work); metadataRow(dl, t("evidence.pages"), pages);
+    metadataRow(dl, t("evidence.author"), record.document_author); metadataRow(dl, t("evidence.speaker"), record.speaker);
+    metadataRow(dl, t("evidence.quoted_speaker"), record.quoted_speaker); metadataRow(dl, t("evidence.position_holder"), record.position_holder);
+    metadataRow(dl, t("evidence.stance"), record.stance); metadataRow(dl, t("evidence.role"), record.discourse_role);
+    metadataRow(dl, t("evidence.language"), record.language); metadataRow(dl, t("evidence.record_id"), record.record_id);
+    metadataRow(dl, t("evidence.retrieval_method"), record.retrieval_method);
+    metadataRow(dl, t("evidence.retrieval_score"), record.retrieval_score?.toFixed?.(4) ?? record.retrieval_score, true);
+    metadataRow(dl, t("evidence.rerank_score"), record.rerank_score?.toFixed?.(4) ?? record.rerank_score, true);
+
+    const text = document.createElement("p"); text.className = "evidence-text"; text.textContent = record.text || "";
+    const actions = document.createElement("div"); actions.className = "evidence-actions";
+    const inline = document.createElement("button"); inline.type = "button"; inline.className = "button quiet"; inline.textContent = t("evidence.copy_inline"); inline.addEventListener("click", () => copyText(record.inline_citation));
+    const full = document.createElement("button"); full.type = "button"; full.className = "button quiet"; full.textContent = t("evidence.copy_full"); full.addEventListener("click", () => copyText(record.full_citation));
+    actions.append(inline, full); body.append(dl, text, actions);
+    for (const warning of record.provenance_warnings || []) {
+      const p = document.createElement("p"); p.className = "provenance-warning"; p.textContent = `${t("evidence.provenance_warning")}: ${String(warning).replaceAll("_", " ")}`; body.append(p);
+    }
+    article.append(header, body); dom.evidenceList.append(article);
+  }
+}
+function renderSelectionSummary() {
+  const count = selectedEvidence.size;
+  dom.selectionCount.textContent = count ? t("selection.count", { count }) : t("selection.none");
+  dom.clearSelection.disabled = count === 0; dom.runSelected.disabled = count === 0;
+}
+function renderResult(content, prompt, focus = false) {
+  currentResult = content; currentPrompt = prompt; dom.resultRegion.hidden = false; dom.resultHeading.textContent = prompt;
+  renderAnswer(content.response); renderCitations(content.citations || []); renderValidation(content.validation_issues || []);
+  renderDiagnostics(content.retrieval || {}); renderEvidence(content.evidence || []);
+  if (focus) { dom.resultHeading.tabIndex = -1; dom.resultHeading.focus(); }
+}
+function saveHistory(prompt, content) {
+  const history = loadLocal(HISTORY_KEY, []);
+  const light = {
+    prompt, response: content.response, citations: content.citations || [],
+    validation_issues: content.validation_issues || [], retrieval: content.retrieval || {},
+    completedAt: new Date().toISOString()
+  };
+  saveLocal(HISTORY_KEY, [light, ...history.filter((x) => x.prompt !== prompt)].slice(0, 12)); renderHistory();
+}
+function renderHistory() {
+  const history = loadLocal(HISTORY_KEY, []); dom.historyList.replaceChildren(); dom.historyEmpty.hidden = history.length > 0;
+  for (const item of history) {
+    const li = document.createElement("li"), button = document.createElement("button"); button.type = "button"; button.textContent = item.prompt;
+    const meta = document.createElement("span"); meta.className = "history-meta"; meta.textContent = item.completedAt ? new Date(item.completedAt).toLocaleString(locale) : ""; button.append(meta);
+    button.addEventListener("click", () => { dom.prompt.value = item.prompt; renderResult({ ...item, evidence: [] }, item.prompt, true); }); li.append(button); dom.historyList.append(li);
+  }
+}
+
+dom.form.addEventListener("submit", (event) => { event.preventDefault(); submitResearch(false); });
+dom.runSelected.addEventListener("click", () => submitResearch(true));
+dom.clearSelection.addEventListener("click", () => {
+  selectedEvidence.clear(); renderSelectionSummary();
+  for (const checkbox of dom.evidenceList.querySelectorAll('input[type="checkbox"]')) checkbox.checked = false;
+});
+dom.copyAnswer.addEventListener("click", () => copyText(currentResult?.response || ""));
+dom.clearHistory.addEventListener("click", () => { saveLocal(HISTORY_KEY, []); renderHistory(); });
+dom.locale.addEventListener("change", async () => { await setLocale(dom.locale.value); dom.responseLanguage.value = locale; });
+for (const input of document.querySelectorAll('input[name="retrieval-mode"]')) {
+  input.addEventListener("change", () => {
+    dom.selectionCount.textContent = retrievalMode() === "selected" && !selectedEvidence.size ? t("error.selected_evidence_required") : (selectedEvidence.size ? t("selection.count", { count: selectedEvidence.size }) : t("selection.none"));
+  });
+}
+
+(async function initialize() {
+  const browser = (navigator.language || "en").slice(0, 2).toLowerCase();
+  const saved = localStorage.getItem(LOCALE_KEY);
+  await setLocale(SUPPORTED_LOCALES.includes(saved) ? saved : (SUPPORTED_LOCALES.includes(browser) ? browser : "en"));
+  dom.responseLanguage.value = locale; renderSelectionSummary(); renderHistory();
+  const active = loadLocal(ACTIVE_JOB_KEY, null);
+  if (active?.jobId && active?.prompt) { dom.prompt.value = active.prompt; setBusy(true); pollJob(active); }
+})();

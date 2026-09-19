@@ -1,27 +1,34 @@
+from __future__ import annotations
+
 import os
-os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
+import traceback
 from contextlib import asynccontextmanager
-from time import time
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+
+os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
+
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import ResponseValidationError
-from clients.llm import LLMClient   
+
 from clients.db import RedisClient
-from services.nlp import NLPService
-from services.jobs import JobService
+from clients.llm import LLMClient
 from clients.rag import RAGClient
-from schemas.schemas import QueryRequest, JobStatusResponse, JobStartResponse
-from utils.extract_query_metadata import QueryMetadataExtractor
 from logging_config import configure_logging
+from schemas.schemas import AppCapabilities, JobStartResponse, JobStatusResponse, QueryRequest
+from services.jobs import JobService
+from services.nlp import NLPService
 from utils.request_id import request_id
+
 configure_logging()
 import logging
-LOG = logging.getLogger(__name__)
-import traceback
 
-DEBUG = True
-CURRENT_VERSION = "0.1.0"
-LOG.debug(f"Starting DerridAI API version {CURRENT_VERSION}...")
+LOG = logging.getLogger(__name__)
+
+CURRENT_VERSION = "0.58.5"
+LEGACY_VERSION = "0.1.0"
+RELEASE_NAME = "Radical Rex"
+DEBUG = os.getenv("DERRIDAI_DEBUG", "0").strip().lower() in {"1", "true", "yes"}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,63 +37,116 @@ async def lifespan(app: FastAPI):
     app.state.redis_client = RedisClient()
     app.state.job_service = JobService(app.state.redis_client)
     app.state.nlp_service = NLPService()
-    app.state.metadata_extractor = QueryMetadataExtractor(app.state.nlp_service)
-    LOG.info("Initialized application state with RAG client, LLM client, and NLP service.")
+    LOG.info("Initialized DerridAI %s - %s", CURRENT_VERSION, RELEASE_NAME)
     yield
     await app.state.redis_client.redis.aclose()
 
-# Initialize the FastAPI application instance
+
 app = FastAPI(
     lifespan=lifespan,
-    title="DerridAI Query API",
-    description="DerridAI Query API",
-    version=CURRENT_VERSION
+    title="DerridAI Research API",
+    description="Evidence-grounded Derrida research with structured provenance and hybrid retrieval.",
+    version=CURRENT_VERSION,
 )
+
 
 @app.get("/health")
 async def health_check():
-    """Simple health check endpoint."""
-    return {"status": "ok", "api_version": CURRENT_VERSION}
+    return {"status": "ok", "api_version": CURRENT_VERSION, "release_name": RELEASE_NAME}
 
-@app.post(f"/v{CURRENT_VERSION}/query", response_model=JobStartResponse)
-async def process_query(request: QueryRequest, background_tasks: BackgroundTasks):
+
+@app.get(f"/v{CURRENT_VERSION}/capabilities", response_model=AppCapabilities)
+async def capabilities():
+    return AppCapabilities(api_version=CURRENT_VERSION)
+
+
+async def _start_query(request: QueryRequest, background_tasks: BackgroundTasks):
     job_id = await app.state.job_service.create_job()
-    LOG.debug(f"Received query request: {request.model_dump_json(indent=2)}")
-    request_id_token = request_id.set(job_id)
     background_tasks.add_task(
         app.state.job_service.run_query_job,
         job_id,
         request,
         app.state.rag_client,
         app.state.llm_client,
-        app.state.redis_client,
         app.state.nlp_service,
-        app.state.job_service,
-        app.state.metadata_extractor,
     )
     return JobStartResponse(job_id=job_id)
 
-@app.get(f"/v{CURRENT_VERSION}/query/{{job_id}}", response_model=JobStatusResponse)
-async def get_query_result(job_id: str):
+
+@app.post(f"/v{CURRENT_VERSION}/query", response_model=JobStartResponse)
+@app.post(f"/v{LEGACY_VERSION}/query", response_model=JobStartResponse, include_in_schema=False)
+async def process_query(request: QueryRequest, background_tasks: BackgroundTasks):
+    return await _start_query(request, background_tasks)
+
+
+async def _query_result(job_id: str):
     job = await app.state.job_service.get_job(job_id)
     if job is None:
-        raise HTTPException(404, "job not found")
-    return JobStatusResponse(job_id=job_id, status=job["status"], result=job["result"])
+        raise HTTPException(404, detail={"code": "job_not_found", "job_id": job_id})
+    return JobStatusResponse(
+        job_id=job_id,
+        status=job.get("status", "pending"),
+        phase=job.get("phase"),
+        result=job.get("result"),
+        error=job.get("error"),
+    )
+
+
+@app.get(f"/v{CURRENT_VERSION}/query/{{job_id}}", response_model=JobStatusResponse)
+@app.get(
+    f"/v{LEGACY_VERSION}/query/{{job_id}}",
+    response_model=JobStatusResponse,
+    include_in_schema=False,
+)
+async def get_query_result(job_id: str):
+    return await _query_result(job_id)
+
+
+def _request_id() -> str | None:
+    try:
+        return request_id.get()
+    except LookupError:
+        return None
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "request_validation_error",
+            "request_id": _request_id(),
+            "detail": exc.errors(),
+        },
+    )
+
 
 @app.exception_handler(ResponseValidationError)
 async def response_validation_handler(request: Request, exc: ResponseValidationError):
     LOG.exception("Response validation failed for %s", request.url)
+    payload = {"error": "response_validation_error", "request_id": _request_id()}
     if DEBUG:
-        return JSONResponse(status_code=500, content={"error": "response_validation_error", "detail": exc.errors()})
-    return JSONResponse(status_code=500, content={"error": "internal_server_error"})
+        payload["detail"] = exc.errors()
+    return JSONResponse(status_code=500, content=payload)
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     LOG.exception("Unhandled exception for %s", request.url)
+    payload = {"error": "internal_server_error", "request_id": _request_id()}
     if DEBUG:
-        return JSONResponse(status_code=500, content={"error": type(exc).__name__, "detail": str(exc), "traceback": traceback.format_exc()})
-    return JSONResponse(status_code=500, content={"error": "internal_server_error"})
+        payload["detail"] = str(exc)
+        payload["traceback"] = traceback.format_exc()
+    return JSONResponse(status_code=500, content=payload)
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8081, reload=True, reload_excludes=["*.pyc", "data/**", "__pycache__/**","*.log"])
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8081,
+        reload=True,
+        reload_excludes=["*.pyc", "data/**", "__pycache__/**", "*.log"],
+    )

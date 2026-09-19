@@ -1,525 +1,165 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DerridAI - Ask Jackie Anything</title>
-  <style>
-    :root {
-      --bg: #e9f0ed;
-      --surface: #fffefa;
-      --surface-muted: #f4f7f2;
-      --text: #17241f;
-      --muted: #52625a;
-      --border: #cbd8d0;
-      --accent: #006b5b;
-      --accent-hover: #005246;
-      --accent-soft: #d5ede5;
-      --focus-ring: #005fcc;
-      --error: #9a2436;
-      --error-bg: #fdebee;
-      --shadow: 0 16px 38px rgba(24, 47, 37, 0.1);
-      --radius: 0.5rem;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        linear-gradient(90deg, rgba(23, 36, 31, 0.035) 1px, transparent 1px),
-        linear-gradient(rgba(23, 36, 31, 0.035) 1px, transparent 1px),
-        var(--bg);
-      background-size: 28px 28px;
-      color: var(--text);
-      font-family: "Aptos", "Segoe UI", sans-serif;
-      line-height: 1.6;
-    }
-
-    h1,
-    h2 {
-      font-family: Georgia, "Times New Roman", serif;
-    }
-
-    /* Visible focus indicator for all interactive elements (WCAG 2.4.7) */
-    a:focus-visible,
-    button:focus-visible,
-    textarea:focus-visible {
-      outline: 3px solid var(--focus-ring);
-      outline-offset: 2px;
-    }
-
-    .skip-link {
-      position: absolute;
-      left: -9999px;
-      top: 0;
-      background: var(--surface);
-      color: var(--text);
-      padding: 0.75em 1.25em;
-      z-index: 100;
-      border-radius: 0 0 var(--radius) 0;
-      font-weight: 600;
-    }
-
-    .skip-link:focus {
-      left: 0;
-      top: 0;
-    }
-
-    header {
-      max-width: 68rem;
-      margin: 0 auto;
-      padding: 3.5rem 1.5rem 2.25rem;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 2.75rem;
-      letter-spacing: 0;
-      color: var(--accent);
-    }
-
-    header p {
-      max-width: 34rem;
-      margin: 0.25rem 0 0;
-      color: var(--muted);
-      font-size: 1rem;
-    }
-
-    main {
-      max-width: 68rem;
-      margin: 0 auto;
-      padding: 0 1.5rem 4rem;
-    }
-
-    #query-form {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.5rem;
-      box-shadow: var(--shadow);
-    }
-
-    label {
-      display: block;
-      font-weight: 700;
-      margin-bottom: 0.4em;
-      font-size: 1.05rem;
-    }
-
-    .hint {
-      font-size: 0.9em;
-      color: var(--muted);
-      margin: 0.5em 0 1em;
-    }
-
-    textarea {
-      font: inherit;
-      width: 100%;
-      min-height: 9rem;
-      padding: 0.9em 1em;
-      border: 1px solid var(--border);
-      border-radius: 0.35rem;
-      background: var(--surface-muted);
-      color: var(--text);
-      resize: vertical;
-    }
-
-    textarea:hover {
-      border-color: #8ba99a;
-    }
-
-    textarea:focus {
-      border-color: var(--accent);
-    }
-
-    .submit-row {
-      display: flex;
-      align-items: center;
-      gap: 0.75em;
-    }
-
-    button {
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      border-radius: 0.35rem;
-      padding: 0.7em 1.5em;
-      background: var(--accent);
-      color: #ffffff;
-      min-height: 44px;
-    }
-
-    button:hover {
-      background: var(--accent-hover);
-    }
-
-    button:disabled {
-      background: var(--muted);
-      cursor: not-allowed;
-    }
-
-    .spinner {
-      width: 1.5rem;
-      height: 1.5rem;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    .spinner[hidden] {
-      display: none;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .spinner {
-        animation-duration: 2.4s;
-      }
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    #status-message {
-      min-height: 1.5em;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    #error-message {
-      min-height: 1.5em;
-      color: var(--error);
-      font-weight: 600;
-    }
-
-    #error-message:not(:empty) {
-      background: var(--error-bg);
-      border: 1px solid var(--error);
-      border-radius: 0.35rem;
-      padding: 0.75em 1em;
-    }
-
-    section {
-      margin-top: 1.5rem;
-    }
-
-    #result-heading {
-      font-size: 1.5rem;
-      margin: 0;
-    }
-
-    .results-toolbar {
-      display: flex;
-      align-items: end;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .results-filter {
-      flex: 1 1 16rem;
-      max-width: 28rem;
-    }
-
-    .results-filter label {
-      margin-bottom: 0.2rem;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-
-    .results-filter input {
-      width: 100%;
-      min-height: 2.75rem;
-      padding: 0.5rem 0.7rem;
-      border: 1px solid var(--border);
-      border-radius: 0.35rem;
-      background: var(--surface);
-      color: var(--text);
-      font: inherit;
-    }
-
-    .results-filter input:focus {
-      border-color: var(--accent);
-    }
-
-    .clear-history-button {
-      min-height: 2.75rem;
-      padding: 0.5rem 0.9rem;
-      border: 1px solid var(--accent);
-      background: transparent;
-      color: var(--accent);
-    }
-
-    .clear-history-button:hover {
-      background: var(--accent-soft);
-      color: var(--accent-hover);
-    }
-
-    #result-cards {
-      display: grid;
-      gap: 1rem;
-    }
-
-    .result-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--accent);
-      border-radius: var(--radius);
-      padding: 1.5rem;
-      box-shadow: 0 6px 18px rgba(24, 47, 37, 0.07);
-      animation: result-appear 220ms ease-out;
-    }
-
-    .result-card__summary {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      cursor: pointer;
-      list-style: none;
-    }
-
-    .result-card__summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .result-card__summary::before {
-      content: "+";
-      display: grid;
-      line-height: 1;
-      width: 1.4rem;
-      height: 1.4rem;
-      flex: 0 0 auto;
-      place-items: center;
-      border: 1px solid var(--accent);
-      border-radius: 50%;
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    details[open] > .result-card__summary::before {
-      content: "-";
-    }
-
-    .result-card__question {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .result-card__body {
-      margin-top: 1.25rem;
-    }
-
-    .result-card__content > :first-child {
-      margin-top: 0;
-    }
-
-    .result-card__content > :last-child {
-      margin-bottom: 0;
-    }
-
-    .result-card__content h3 {
-      margin: 1.5rem 0 0.6rem;
-      color: var(--accent);
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: 1.25rem;
-    }
-
-    .result-card__content p {
-      margin: 0 0 0.9rem;
-      max-width: 78ch;
-    }
-
-    .result-card__content ol,
-    .result-card__content ul {
-      margin: 0.75rem 0;
-      padding-left: 1.4rem;
-    }
-
-    .result-card__content li + li {
-      margin-top: 0.45rem;
-    }
-
-    .result-card__content em {
-      color: var(--muted);
-    }
-
-    .result-card__content strong {
-      color: var(--text);
-    }
-
-    .result-card__details {
-      margin-top: 1.25rem;
-      border-top: 1px solid var(--border);
-    }
-
-    .result-card__details > summary {
-      padding: 0.75rem 0;
-      cursor: pointer;
-      color: var(--accent);
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-
-    .result-card__details > summary:focus-visible,
-    .result-card__summary:focus-visible {
-      outline: 3px solid var(--focus-ring);
-      outline-offset: 3px;
-    }
-
-    .works-cited {
-      margin-top: 1.5rem;
-      max-width: 52rem;
-    }
-
-    .works-cited__list {
-      display: grid;
-      gap: 0.75rem;
-      margin: 0 0 0.75rem;
-      padding: 1rem 1.25rem 1rem 2.25rem;
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      border-radius: 0.25rem;
-      background: #fbfcf8;
-      color: var(--muted);
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: 0.9rem;
-      line-height: 1.55;
-    }
-
-    .works-cited__list li {
-      padding-left: 0.25rem;
-    }
-
-    .works-cited__list li + li {
-      margin: 0;
-      padding-top: 0.75rem;
-      border-top: 1px solid var(--border);
-    }
-
-    .metadata-list {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      gap: 0.45rem 1rem;
-      margin: 0;
-      padding: 1rem;
-      background: var(--surface-muted);
-      font-size: 0.9rem;
-    }
-
-    .metadata-list dt {
-      color: var(--muted);
-      font-weight: 700;
-    }
-
-    .metadata-list dd {
-      margin: 0;
-      overflow-wrap: anywhere;
-    }
-
-    @media (max-width: 40rem) {
-      .results-toolbar {
-        display: grid;
-        align-items: stretch;
-      }
-
-      .results-filter {
-        max-width: none;
-      }
-
-      .clear-history-button {
-        width: 100%;
-      }
-
-      .metadata-list {
-        grid-template-columns: 1fr;
-        gap: 0.2rem;
-      }
-
-      .metadata-list dd {
-        margin-bottom: 0.6rem;
-      }
-    }
-
-    @keyframes result-appear {
-      from {
-        opacity: 0;
-        transform: translateY(0.5rem);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @media (max-width: 40rem) {
-      header {
-        padding-top: 2.25rem;
-      }
-
-      header h1 {
-        font-size: 2.2rem;
-      }
-
-      main,
-      header {
-        padding-left: 1rem;
-        padding-right: 1rem;
-      }
-
-      #query-form,
-      .result-card {
-        padding: 1rem;
-      }
-    }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>DerridAI 0.58.5 — Radical Rex</title>
+  <link rel="stylesheet" href="/styles/derridai.css">
 </head>
 <body>
-  <a class="skip-link" href="#main-content">Skip to main content</a>
-  <header>
-    <h1>DerridAI</h1>
-    <p>Research notes and responses on the work of Jacques Derrida.</p>
+  <a class="skip-link" href="#research-workspace" data-i18n="nav.skip_main">Skip to research workspace</a>
+  <a class="skip-link skip-link--secondary" href="#evidence-region" data-i18n="nav.skip_evidence">Skip to evidence</a>
+
+  <header class="site-header">
+    <div>
+      <p class="eyebrow" data-i18n="app.release">0.58.5 — Radical Rex</p>
+      <h1 data-i18n="app.title">DerridAI</h1>
+      <p class="subtitle" data-i18n="app.subtitle">Evidence-grounded research on Jacques Derrida</p>
+    </div>
+    <div class="locale-control">
+      <label for="locale-select" data-i18n="language.label">Interface language</label>
+      <select id="locale-select">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
   </header>
-  <main id="main-content">
-    <form id="query-form">
-      <label for="prompt-input">Your question</label>
-      <textarea
-        id="prompt-input"
-        rows="4"
-        cols="60"
-        required
-        aria-describedby="prompt-hint"
-      ></textarea>
-      <p id="prompt-hint" class="hint">Ask about a concept, text, or question in Derrida's work.</p>
-      <div class="submit-row">
-        <button type="submit" id="submit-button">Ask DerridAI</button>
-        <span class="spinner" id="loading-spinner" hidden aria-hidden="true"></span>
-      </div>
-    </form>
-    <p id="status-message" role="status" aria-live="polite"></p>
-    <div id="error-message" role="alert" aria-live="assertive"></div>
-    <section id="results-section" aria-labelledby="result-heading" hidden>
-      <div class="results-toolbar">
-        <h2 id="result-heading">Results</h2>
-        <div class="results-filter">
-          <label for="results-filter-input">Filter saved results</label>
-          <input id="results-filter-input" type="search" placeholder="Search questions and responses" autocomplete="off" />
+
+  <main id="research-workspace" class="workspace" tabindex="-1">
+    <section class="intro" aria-labelledby="research-heading">
+      <h2 id="research-heading" data-i18n="research.heading">Research workspace</h2>
+      <p data-i18n="research.description">Ask a question, inspect the evidence, and keep source attribution visible from retrieval through synthesis.</p>
+    </section>
+
+    <div class="workspace-grid">
+      <section class="panel" aria-labelledby="query-heading">
+        <h2 id="query-heading" class="visually-hidden" data-i18n="research.heading">Research workspace</h2>
+        <form id="research-form" novalidate>
+          <div class="field">
+            <label for="prompt-input" data-i18n="form.question">Research question</label>
+            <textarea id="prompt-input" rows="8" required aria-describedby="prompt-hint" data-i18n-placeholder="form.question_placeholder"></textarea>
+            <p id="prompt-hint" class="hint" data-i18n="form.question_hint">Ask about a concept, work, passage, relation, or interpretive problem.</p>
+          </div>
+
+          <fieldset>
+            <legend data-i18n="form.retrieval_mode">Evidence mode</legend>
+            <label class="choice"><input type="radio" name="retrieval-mode" value="auto" checked><span data-i18n="form.retrieval_auto">Retrieve evidence from the corpus</span></label>
+            <label class="choice"><input type="radio" name="retrieval-mode" value="selected"><span data-i18n="form.retrieval_selected">Use only selected evidence</span></label>
+            <p class="hint" data-i18n="form.retrieval_selected_hint">Select evidence from a completed result before using this mode.</p>
+          </fieldset>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="response-language" data-i18n="form.response_language">Answer language</label>
+              <select id="response-language">
+                <option value="en" data-i18n="form.language_en">English</option>
+                <option value="fr" data-i18n="form.language_fr">French</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="evidence-limit" data-i18n="form.limit">Maximum evidence records</label>
+              <input id="evidence-limit" type="number" min="1" max="48" value="12" inputmode="numeric" aria-describedby="limit-hint">
+              <p id="limit-hint" class="hint" data-i18n="form.limit_hint">The final evidence packet is reranked and capped at this number.</p>
+            </div>
+          </div>
+
+          <fieldset>
+            <legend data-i18n="form.document_languages">Source languages</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="checkbox" name="document-language" value="en" checked><span data-i18n="form.language_en">English</span></label>
+              <label class="choice"><input type="checkbox" name="document-language" value="fr" checked><span data-i18n="form.language_fr">French</span></label>
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label for="canonical-work-ids" data-i18n="form.canonical_work_ids">Canonical work IDs</label>
+            <input id="canonical-work-ids" type="text" autocomplete="off" aria-describedby="canonical-work-hint" data-i18n-placeholder="form.canonical_work_ids_placeholder">
+            <p id="canonical-work-hint" class="hint" data-i18n="form.canonical_work_ids_hint">Optional. Separate multiple IDs with commas.</p>
+          </div>
+
+          <section class="selection-summary" aria-labelledby="selection-heading">
+            <div>
+              <h3 id="selection-heading" data-i18n="selection.heading">Selected evidence</h3>
+              <p id="selection-count" aria-live="polite" data-i18n="selection.none">No evidence selected.</p>
+            </div>
+            <button id="clear-selection-button" class="button secondary" type="button" data-i18n="form.clear_selection">Clear selected evidence</button>
+          </section>
+
+          <div class="submit-row">
+            <button id="submit-button" class="button primary" type="submit" data-i18n="form.submit">Run research query</button>
+            <span id="loading-indicator" class="spinner" hidden aria-hidden="true"></span>
+          </div>
+        </form>
+
+        <section class="status-region" aria-labelledby="status-heading">
+          <h3 id="status-heading" class="visually-hidden" data-i18n="status.label">Research status</h3>
+          <p id="status-message" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div id="error-message" class="error" role="alert" aria-live="assertive" hidden>
+            <h3 data-i18n="error.heading">Research error</h3>
+            <p id="error-text"></p>
+          </div>
+        </section>
+      </section>
+
+      <aside class="panel history-panel" aria-labelledby="history-heading">
+        <div class="heading-row">
+          <h2 id="history-heading" data-i18n="history.heading">Recent research</h2>
+          <button id="clear-history-button" class="button quiet" type="button" data-i18n="history.clear">Clear recent research</button>
         </div>
-        <button type="button" id="clear-history-button" class="clear-history-button">Clear history</button>
+        <p id="history-empty" class="muted" data-i18n="history.empty">No saved research results yet.</p>
+        <ol id="history-list" class="history-list"></ol>
+      </aside>
+    </div>
+
+    <section id="result-region" class="result-region" aria-labelledby="result-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" data-i18n="result.heading">Research result</p>
+          <h2 id="result-heading"></h2>
+        </div>
+        <button id="copy-answer-button" class="button secondary" type="button" data-i18n="result.copy_answer">Copy answer</button>
       </div>
-      <div id="result-cards" aria-live="polite"></div>
+
+      <article class="panel answer-panel" aria-labelledby="answer-heading">
+        <h3 id="answer-heading" data-i18n="result.answer">Answer</h3>
+        <div id="answer-content" class="answer-content"></div>
+      </article>
+
+      <div class="result-grid">
+        <section class="panel" aria-labelledby="citations-heading">
+          <h3 id="citations-heading" data-i18n="result.citations">Citations</h3>
+          <ol id="citations-list"></ol>
+          <p id="citations-empty" class="muted" data-i18n="result.no_citations">No evidence citations were returned.</p>
+        </section>
+        <section class="panel" aria-labelledby="validation-heading">
+          <h3 id="validation-heading" data-i18n="result.validation">Validation notices</h3>
+          <ul id="validation-list" class="validation-list"></ul>
+          <p id="validation-empty" class="muted" data-i18n="result.validation_none">No provenance warnings were reported.</p>
+        </section>
+        <section class="panel" aria-labelledby="diagnostics-heading">
+          <h3 id="diagnostics-heading" data-i18n="result.query_details">Query and retrieval details</h3>
+          <dl id="diagnostics-list" class="metadata-list"></dl>
+        </section>
+      </div>
+    </section>
+
+    <section id="evidence-region" class="evidence-region" aria-labelledby="evidence-heading" tabindex="-1">
+      <div class="section-heading">
+        <div>
+          <h2 id="evidence-heading" data-i18n="evidence.heading">Evidence</h2>
+          <p data-i18n="evidence.description">Inspect source identity, discourse metadata, pages, and retrieval signals.</p>
+        </div>
+        <button id="run-selected-button" class="button secondary" type="button" data-i18n="form.rerun_selected" disabled>Run with selected evidence</button>
+      </div>
+      <div id="evidence-list" class="evidence-list"></div>
     </section>
   </main>
-  <script src="/scripts/derridai.js"></script>
+
+  <footer class="site-footer">
+    <p>DerridAI · <span data-i18n="app.release">0.58.5 — Radical Rex</span> · WCAG 2.0 AA</p>
+  </footer>
+
+  <script type="module" src="/scripts/derridai.js"></script>
 </body>
 </html>

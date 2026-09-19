@@ -1,31 +1,43 @@
-from langchain_core.documents import Document
-from .generate_citation_strings import generate_citation_strings
+from __future__ import annotations
+
+from schemas.schemas import EvidenceRecord
 
 
-def generate_context_string(docs: list[Document]) -> str:
-    context_str = ""
-    for i, doc in enumerate(docs):
-        doc.metadata["inline_citation"], doc.metadata["full_citation"] = generate_citation_strings(doc)
-        d = doc.metadata
-        author = d.get("document_author")
-        processor_note = d.get("processor_note", None)
-        discourse_role = d.get("discourse_role", "general text")
-        holder = d.get("position_holder", "")
-        speaker = d.get("speaker", "")
-        work = d.get("work", "")
-        stance = d.get("stance")
-        text = " ".join(d.get("text", "").split())
-        context_str += f"""\n<BEGIN EVIDENCE_TAG E{i}>
-evidence_tag=[E{i}]
-record_id={d.get("record_id")}
-work={work}
-document_author={author}
-speaker={"Derrida" if speaker == "Jacques Derrida" else speaker}
-position_holder={holder}{f"\nstance={stance}" if stance else ""}
-position_status={d.get("proposition_status", "")}
-target={d.get("target", "")}
-role={discourse_role}
-text={text}{f"\nnote_for_llms_processing_this_data={processor_note}" if processor_note else ""}
-<END EVIDENCE_TAG E{i}>\n"""
-    cleaned_context_str = " ".join(context_str.split())
-    return cleaned_context_str
+def _line(key: str, value) -> str | None:
+    if value is None or value == "" or value == []:
+        return None
+    if isinstance(value, list):
+        value = "; ".join(str(item) for item in value)
+    return f"{key}={value}"
+
+
+def generate_context_string(records: list[EvidenceRecord]) -> str:
+    """Compact evidence packet: only provenance-bearing fields plus verbatim text."""
+
+    blocks: list[str] = []
+    for record in records:
+        lines = [
+            _line("record_id", record.record_id),
+            _line("work", record.work),
+            _line("canonical_work_id", record.canonical_work_id),
+            _line("document_author", record.document_author),
+            _line("speaker", record.speaker),
+            _line("quoted_speaker", record.quoted_speaker),
+            _line("position_holder", record.position_holder),
+            _line("stance", record.stance),
+            _line("proposition_status", record.proposition_status),
+            _line("target", record.target),
+            _line("discourse_role", record.discourse_role),
+            _line("language", record.language),
+            _line("page_start", record.page_start),
+            _line("page_end", record.page_end),
+            _line("citation", record.inline_citation),
+        ]
+        metadata = "\n".join(line for line in lines if line)
+        blocks.append(
+            f"<BEGIN_EVIDENCE {record.evidence_tag}>\n"
+            f"{metadata}\n"
+            f"text=\n{record.text.strip()}\n"
+            f"<END_EVIDENCE {record.evidence_tag}>"
+        )
+    return "\n\n".join(blocks)
