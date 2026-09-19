@@ -55,6 +55,8 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 EMBEDDING_PROVIDER=ollama
 ```
 
+Set `SESSION_COOKIE_SECURE=true` only when the browser reaches DerridAI through an HTTPS reverse proxy (it defaults to `false` for local HTTP). Repeated failed logins lock the username for `AUTH_LOGIN_LOCKOUT_SECONDS` (default 300) after `AUTH_LOGIN_MAX_FAILURES` (default 5).
+
 On Docker Desktop with WSL, set `HOST_UID` and `HOST_GID` to `id -u` / `id -g` so Chroma files are not created root-owned. Additional LLM providers are configured in the app under **LLM Providers**.
 
 ### Troubleshooting
@@ -79,12 +81,13 @@ npm run storybook            # or: docker compose --profile dev up storybook
 npm run test:e2e             # Playwright + axe-core
 ```
 
-CI (`.github/workflows/frontend.yml`) runs the backend tests and the full frontend gate. See [AGENTS.md](AGENTS.md) for contributor and coding-agent conventions.
+CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, the backend tests, and the full frontend gate. See [CONTRIBUTING.md](CONTRIBUTING.md) for every gate and [AGENTS.md](AGENTS.md) for conventions.
 
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) — feature reference, operations, backup, and limitations
-- [Release notes](docs/notes/) — one file per release, e.g. [0.60.0](docs/notes/0.60.0.md)
+- [Changelog](CHANGELOG.md) — release history; full notes live in [`docs/notes/`](docs/notes/)
+- [Architecture overview](docs/ARCHITECTURE.md) and [Contributing](CONTRIBUTING.md)
 - Design notes: [Storage](docs/STORAGE_0.36.1.md), [Shareable state and data model](docs/SHAREABLE_STATE_AND_DATA_MODEL_0.36.2.md), [Search workspace](docs/SEARCH_WORKSPACE_0.36.10.md), [Packet reduction](docs/PACKET_REDUCTION_0.30.11.md), [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
 
 ## License
