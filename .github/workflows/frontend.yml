@@ -1,0 +1,38 @@
+name: Frontend quality
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches: [master]
+    paths:
+      - "web/**"
+      - ".github/workflows/frontend.yml"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit/component tests
+        run: npm run test:unit
+      - name: Production build
+        run: npm run build
+      - name: Storybook build
+        run: npm run build-storybook
+      - name: Composed UI, opacity, and WCAG 2.0 AA tests
+        run: npm run test:e2e
