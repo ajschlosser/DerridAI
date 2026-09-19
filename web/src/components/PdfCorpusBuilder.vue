@@ -29,6 +29,7 @@ import CorpusMetadataLiveStatus from "./CorpusMetadataLiveStatus.vue";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
+import CorpusProviderSwitcher from "./CorpusProviderSwitcher.vue";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -204,6 +205,10 @@ const activeProviderProfileLabel=computed<string>(()=>{
   const profile=request && typeof request.provider_profile_id==="string" ? request.provider_profile_id : "";
   return profile || String(build.provider||"—");
 });
+const activeBuildProfileId=computed<string>(()=>{
+  const request=currentBuild.value?.request;
+  return request&&typeof request.provider_profile_id==="string"?request.provider_profile_id:"";
+});
 const activeModelLabel=computed<string>(()=>String(currentBuild.value?.model||"—"));
 const pageNumber=computed(()=>Math.floor(recordOffset.value/pageSize)+1);
 const pageCount=computed(()=>Math.max(1,Math.ceil(recordTotal.value/pageSize)));
@@ -318,6 +323,38 @@ function recordMetadata(record:CorpusRecord){
   return Object.fromEntries(editableFields.filter(key=>record[key]!==undefined).map(key=>[key,record[key]]));
 }
 function manageProviders(){window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/providers",runtimeView:"providers"}}))}
+async function switchBuildProvider(profileId:string){
+  if(!currentBuild.value||!selectedBuildId.value||!profileId||profileId===activeBuildProfileId.value)return;
+  busy.value="profile";error.value="";
+  try{
+    const direct=directProfilePayload(profileId);
+    const payload:Record<string,unknown>={provider_profile_id:profileId};
+    // Server-owned researcher profiles resolve credentials on the API. Runtime/admin
+    // profiles must carry their explicit provider configuration with the switch.
+    if(!serverProviderIds.value.has(profileId)&&direct){
+      for(const key of ["provider","model","base_url","api_key","generation"]){
+        if(direct[key]!==undefined)payload[key]=direct[key];
+      }
+    }
+    if(selectedReviewProviderId.value&&selectedReviewProviderId.value!==profileId){
+      payload.review_provider_profile_id=selectedReviewProviderId.value;
+      if(!serverProviderIds.value.has(selectedReviewProviderId.value)){
+        const review=directProfilePayload(selectedReviewProviderId.value);
+        if(review){
+          const reviewConfig:Record<string,unknown>={};
+          for(const key of ["provider","model","base_url","api_key","generation"]){
+            if(review[key]!==undefined)reviewConfig[key]=review[key];
+          }
+          payload.review_provider=reviewConfig;
+        }
+      }
+    }
+    currentBuild.value=await pdfCorpusApi.switchProviderProfile(selectedBuildId.value,payload);
+    selectedProviderId.value=profileId;syncBuildInRail(currentBuild.value);
+    const profile=providerProfiles.value.find(item=>item.id===profileId);
+    setMessage(i18n.tf('pdf_corpus.profile_switched','New metadata tasks will use {profile}. In-flight requests continue unchanged.',{profile:profile?.name||profileId}));
+  }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),'error')}finally{busy.value=""}
+}
 
 async function refreshProviders(){
   const runtimeProfiles=((runtime as any).getProviderProfilesForUi?.()||[]) as ProviderProfile[];
@@ -838,10 +875,11 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         </section>
 
         <template v-if="showReviewWorkspace">
+          <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <section v-if="currentBuild?.llm_contribution" class="llm-contribution" aria-labelledby="llm-contribution-title">
             <div><span class="eyebrow">{{i18n.t('pdf_corpus.llm_contribution','LLM contribution')}}</span><h3 id="llm-contribution-title">{{i18n.t('pdf_corpus.llm_contribution_title','What automation actually contributed')}}</h3><p>{{i18n.tf('pdf_corpus.llm_contribution_help','{mode} mode · {calls} model family call(s) · {minutes} min model time.',{mode:i18n.t(`pdf_corpus.enrichment_${String(llmContribution.enrichment_mode||'fast')}`,String(llmContribution.enrichment_mode||'fast')),calls:Number(llmContribution.family_calls||0),minutes:(Number(llmContribution.elapsed_ms||0)/60000).toFixed(1)})}}</p></div>
-            <dl><div><dt>{{i18n.t('pdf_corpus.llm_usable_fields','Useful LLM fields')}}</dt><dd>{{Number(llmContribution.llm_fields_usable||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.llm_review_fields','LLM fields needing review')}}</dt><dd>{{Number(llmContribution.llm_fields_review||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.inherited_fields','Inherited fields')}}</dt><dd>{{Number(llmContribution.inherited_fields||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.deterministic_fields','Deterministic fields')}}</dt><dd>{{Number(llmContribution.deterministic_fields||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.human_fields','Human-confirmed/override fields')}}</dt><dd>{{Number(llmContribution.human_fields||0)}}</dd></div></dl>
+            <dl><div><dt>{{i18n.t('pdf_corpus.llm_usable_fields','Useful LLM fields')}}</dt><dd>{{Number(llmContribution.llm_fields_usable||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.llm_review_fields','LLM fields needing review')}}</dt><dd>{{Number(llmContribution.llm_fields_review||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.inherited_fields','Inherited fields')}}</dt><dd>{{Number(llmContribution.inherited_fields||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.deterministic_fields','Deterministic fields')}}</dt><dd>{{Number(llmContribution.deterministic_fields||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.human_fields','Human-confirmed/override fields')}}</dt><dd>{{Number(llmContribution.human_fields||0)}}</dd></div><div><dt>{{i18n.t('pdf_corpus.editorial_examples_used','Human-confirmed examples reused')}}</dt><dd>{{Number(currentBuild?.llm_metrics?.editorial_examples_used||0)}}</dd></div></dl>
           </section>
 
           <section v-if="currentBuild" class="review-session-bar" role="status" aria-live="polite">
@@ -919,7 +957,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" @save="saveManifest" @close="documentMetadataOpen=false" />
 
     <CorpusTextCleanupDialog v-if="textCleanupOpen&&selectedRecord" :text="textDraft" :recurring-lines="recurringCleanupLines" @close="textCleanupOpen=false" @apply="value=>{textDraft=value;textCleanupOpen=false;setMessage(i18n.t('pdf_corpus.cleanup_applied_draft','Cleanup applied to the reviewed-text draft. Save to persist it.'))}" />
-    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" @close="focusView=false" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
+    <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" @close="focusView=false" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @merge="merge" /></Teleport>
   </section>
 </template>
 

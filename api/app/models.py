@@ -498,6 +498,17 @@ class PdfCorpusRecordSplit(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+class PdfCorpusProviderSwitch(BaseModel):
+    provider_profile_id: str = Field(min_length=1, max_length=200)
+    provider: Literal["ollama", "openai"] | None = None
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    generation: OllamaTouchupOptions | None = None
+    review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
+
+
 class PdfCorpusRecordRerun(BaseModel):
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None

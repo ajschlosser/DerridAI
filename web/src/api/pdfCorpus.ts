@@ -45,6 +45,7 @@ export interface CorpusBuild {
   manifest_confirmed_revision?: number | null;
   publication?: {publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}|null;
   publication_status?: "unpublished"|"published";
+  provider_profile_history?: Array<{at?:string;provider_profile_id?:string;provider?:string;model?:string;metadata_completed?:number;note?:string}>;
   published_at?: string | null;
   error?: string | null;
   warnings?: string[];
@@ -102,7 +103,7 @@ export interface CorpusBuild {
   publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean};
   build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
   request?: Record<string,unknown>;
-  llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number};
+  llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number;editorial_examples_used?:number};
   llm_contribution?: {inherited_fields?:number;deterministic_fields?:number;llm_fields_usable?:number;llm_fields_review?:number;human_fields?:number;family_calls?:number;elapsed_ms?:number;useful_fields_per_minute?:number;tasks_complete?:number;tasks_failed?:number;tasks_skipped?:number;enrichment_mode?:string;semantic_indexing?:boolean};
 }
 
@@ -170,6 +171,7 @@ export const pdfCorpusApi = {
   listBuilds: (offset=0, limit=50, assetId="") => apiRequest<{items:CorpusBuild[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds?offset=${offset}&limit=${limit}${assetId?`&asset_id=${encodeURIComponent(assetId)}`:""}`),
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
+  switchProviderProfile: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`, {method:"PATCH",body:JSON.stringify(payload)}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
   records: (buildId:string, offset=0, limit=50, reviewQueue="", query="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewQueue&&reviewQueue!=="all"?`&review_queue=${encodeURIComponent(reviewQueue)}`:""}${query?`&query=${encodeURIComponent(query)}`:""}`),
   accept: (buildId:string, recordId:string, accepted=true, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted,expected_revision:expectedRevision})}),
