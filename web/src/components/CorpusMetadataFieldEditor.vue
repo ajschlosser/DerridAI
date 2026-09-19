@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
+import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
 
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
@@ -18,17 +19,21 @@ const isLlm=computed(()=>String(props.status?.method||'').includes('llm'));
 const hasValue=(value:unknown)=>!(value===undefined||value===null||value===''||(Array.isArray(value)&&!value.length));
 const resolvedValue=computed(()=>{
   const status=props.status||{};
-  if(status.reason_code==='deterministic_llm_disagreement'&&status.prefilled_candidate==='llm'&&hasValue(status.llm_value))return status.llm_value;
-  if(hasValue(props.value))return props.value;
-  if(confidence.value!==null&&confidence.value>0.65&&hasValue(status.proposed_value))return status.proposed_value;
-  if(hasValue(props.constraint?.value))return props.constraint?.value;
-  return props.value??'';
+  if(status.reason_code==='deterministic_llm_disagreement'&&status.prefilled_candidate==='llm'&&hasValue(status.llm_value))return normalizeMetadataFieldValue(props.field,status.llm_value);
+  if(hasValue(props.value))return normalizeMetadataFieldValue(props.field,props.value);
+  if(confidence.value!==null&&confidence.value>0.65&&hasValue(status.proposed_value))return normalizeMetadataFieldValue(props.field,status.proposed_value);
+  if(hasValue(props.constraint?.value))return normalizeMetadataFieldValue(props.field,props.constraint?.value);
+  return normalizeMetadataFieldValue(props.field,props.value??'');
 });
 function editableValue(){const value=resolvedValue.value;return Array.isArray(value)?value.join(', '):value??''}
 watch(()=>[props.field,props.value,props.status?.proposed_value,props.status?.llm_value,props.status?.prefilled_candidate,props.constraint?.value],()=>{draft.value=editableValue()},{immediate:true,deep:true});
 watch(()=>props.open,value=>{if(value)editing.value=true});
 
-function normalized(){if(props.control==='multi-combobox')return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);if(props.control==='number'&&draft.value!=="")return Number(draft.value);return draft.value}
+function normalized(){
+  if(props.control==='multi-combobox')return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);
+  if(props.control==='number'&&draft.value!=="")return Number(draft.value);
+  return normalizeMetadataFieldValue(props.field,draft.value);
+}
 function save(){emit('save',normalized());emit('dirty',false);editing.value=true}
 function markDirty(){emit('dirty',true)}
 function selectFromText(){
@@ -69,6 +74,9 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
     <p v-if="control==='combobox'||control==='multi-combobox'||control==='text'" class="selection-help">{{i18n.t('pdf_corpus.select_from_text_help','Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.')}}</p>
     <div class="field-meta">
       <span v-if="isLlm&&hasValue(resolvedValue)" class="proposal">{{status?.auto_populated?i18n.t('pdf_corpus.llm_suggestion_autofilled','LLM value auto-filled from a >65% confidence suggestion'):i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
+      <span v-if="status?.llm_checked===true">{{i18n.t('pdf_corpus.llm_field_checked','LLM checked this field')}}</span>
+      <span v-else-if="status?.llm_checked===false&&status?.llm_skip_reason">{{i18n.tf('pdf_corpus.llm_field_not_checked','LLM not checked: {reason}',{reason:String(status?.llm_skip_reason)})}}</span>
+      <span v-if="status?.raw_llm_value&&status?.raw_llm_value!==resolvedValue">{{i18n.tf('pdf_corpus.llm_value_normalized','LLM returned “{raw}”; normalized to “{value}”.',{raw:String(status?.raw_llm_value),value:String(resolvedValue)})}}</span>
       <span>{{confidenceLabel}}</span>
       <span v-if="calibratedAcceptance&&calibratedAcceptance.reviewed>=3">{{i18n.tf('pdf_corpus.calibrated_acceptance','Historically accepted {percent}% of the time ({count} reviews)',{percent:Math.round(calibratedAcceptance.acceptanceRate*100),count:calibratedAcceptance.reviewed})}}</span>
       <span v-if="saved" class="saved" role="status">{{i18n.t('pdf_corpus.decision_saved_editable','Saved — you can keep editing this value')}}</span>
