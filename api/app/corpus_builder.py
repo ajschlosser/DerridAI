@@ -134,6 +134,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
 
     primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
     human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
+    strong_structural_primary = str(primary_status.get("method") or "") in STRONG_STRUCTURAL_METHODS
     semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
     desired_primary: bool | None = None
     primary_reason = ""
@@ -149,7 +150,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
         if record.get("primary_text") is not desired_primary:
             changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
         record["primary_text"] = desired_primary
-        if not semantic_disagreement:
+        if not semantic_disagreement and not strong_structural_primary:
             status["primary_text"] = {
                 "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
                 "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
