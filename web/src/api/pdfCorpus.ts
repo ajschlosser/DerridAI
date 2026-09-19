@@ -38,7 +38,7 @@ export interface CorpusBuild {
   segmentation_prompt_version?: string;
   metadata_prompt_version?: string;
   document_prompt_version?: string;
-  validation?: {valid?:boolean;source_valid?:boolean;metadata_valid?:boolean;coverage?:number;missing_block_ids?:string[];duplicate_block_ids?:string[];text_fidelity_errors?:string[];source_order_errors?:string[];page_mapping_errors?:string[];printed_page_label_errors?:string[];metadata_evidence_errors?:Array<{record_id?:string;field?:string;reason?:string}>;metadata_schema_errors?:Array<{record_id?:string;reason?:string}>;citation_errors?:string[]};
+  validation?: {valid?:boolean;source_valid?:boolean;metadata_valid?:boolean;coverage?:number;missing_block_ids?:string[];duplicate_block_ids?:string[];text_fidelity_errors?:string[];source_order_errors?:string[];page_mapping_errors?:string[];printed_page_label_errors?:string[];metadata_evidence_errors?:Array<{record_id?:string;field?:string;reason?:string}>;metadata_schema_errors?:Array<{record_id?:string;reason?:string}>;citation_errors?:string[];relationship_errors?:string[];human_ownership_errors?:string[];record_content_errors?:string[]};
   manifest?: Record<string, unknown>;
   manifest_revision?: number;
   manifest_confirmed_at?: string | null;
@@ -100,11 +100,13 @@ export interface CorpusBuild {
   metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null};
   source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
   pipeline_state?: {current?:string;stages?:Record<string,{state?:string;[key:string]:unknown}>};
-  publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean};
+  publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];required_document_fields?:string[];missing_document_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean};
   build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
   request?: Record<string,unknown>;
   llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number;editorial_examples_used?:number};
   llm_contribution?: {inherited_fields?:number;deterministic_fields?:number;llm_fields_usable?:number;llm_fields_review?:number;human_fields?:number;family_calls?:number;elapsed_ms?:number;useful_fields_per_minute?:number;tasks_complete?:number;tasks_failed?:number;tasks_skipped?:number;enrichment_mode?:string;semantic_indexing?:boolean};
+  llm_family_effectiveness?: Record<string,{calls?:number;proposed_fields?:number;elapsed_ms?:number;human_accepted_fields?:number;human_corrected_fields?:number;last_updated_at?:string;last_human_feedback_at?:string}>;
+  text_cleanup?: {enabled?:boolean;rules?:string[];records_changed?:number;changes?:number;removed_lines?:number;recurring_line_patterns?:number};
 }
 
 export interface CorpusRecord {

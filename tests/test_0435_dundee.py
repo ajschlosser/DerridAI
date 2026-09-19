@@ -51,9 +51,9 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
 
 
 def test_release_identity():
-    assert APP_VERSION == "0.51.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.51.0"
-    assert "0.51.0 — Krazy Kangaroo" in text("README.md")
+    assert APP_VERSION == "0.52.0"
+    assert json.loads(text("web/package.json"))["version"] == "0.52.0"
+    assert "0.52.0 — Lazy Lizard" in text("README.md")
 
 
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):

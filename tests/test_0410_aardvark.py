@@ -27,7 +27,7 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
     asset=install_asset(repo,count)
-    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.51.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.52.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 
@@ -128,7 +128,7 @@ def test_focus_review_is_full_screen_portaled_record_first_and_accessible():
     assert 'position:fixed;inset:0;z-index:10000' in focus
     assert 'role="dialog" aria-modal="true"' in focus
     assert 'focus-record-text' in focus
-    assert 'metadata_field_status' in focus
+    assert 'CorpusMetadataResolutionPanel' in focus
     assert 'role="tablist"' in focus
     assert 'Escape' in focus and 'event.key!=="Tab"' in focus
 

@@ -418,6 +418,14 @@ class PdfCorpusBuildCreate(BaseModel):
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     review_manifest_before_segmentation: bool = False
     auto_enrich_work_metadata: bool = True
+    auto_clean_text: bool = True
+    text_cleanup_rules: list[Literal[
+        "page_numbers", "repeated_short_lines", "line_hyphenation",
+        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
+    ]] = Field(default_factory=lambda: [
+        "page_numbers", "repeated_short_lines", "line_hyphenation",
+        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
+    ])
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
 
