@@ -15,7 +15,7 @@ Researcher-visible corpus text is transformed on the API before it is returned t
 
 ### Sign-in protection
 
-Repeated failed sign-ins lock that username for a fixed period (`AUTH_LOGIN_MAX_FAILURES`, default `5`; `AUTH_LOGIN_LOCKOUT_SECONDS`, default `300`). The counter is stored in the authentication database, is keyed by the case-folded username, and applies equally to usernames that do not exist, so the response never reveals whether an account exists. A successful sign-in clears the counter. The lock is per username, not per IP address.
+Repeated failed sign-ins lock that username for a fixed period (`AUTH_LOGIN_MAX_FAILURES`, default `5`; `AUTH_LOGIN_LOCKOUT_SECONDS`, default `300`). The counter is stored in the authentication database, is keyed by the case-folded username, and applies equally to usernames that do not exist, so the response never reveals whether an account exists. A locked username receives HTTP 429 with a `Retry-After` header, and the sign-in form says how many minutes to wait; this response is identical for existing and unknown usernames, and the correct password is also refused until the lock expires. A successful sign-in clears the counter. The lock is per username, not per IP address, so someone who knows a username can lock that account out for the lockout period.
 
 Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=true` only when browsers reach DerridAI through an HTTPS reverse proxy; leave it `false` (the default) for plain-HTTP local or Docker use, or browsers will not send the cookie.
 

@@ -103,3 +103,70 @@ def test_concurrent_failures_across_store_instances_cannot_bypass_lockout(monkey
     assert int(row["failures"]) == 4
     assert row["locked_until"]
     assert stores[0].authenticate("Concurrent", "correct-horse") is None
+
+
+def test_lockout_remaining_is_reported_identically_for_real_and_unknown_usernames(monkeypatch, tmp_path: Path):
+    configure_auth(monkeypatch, tmp_path, failures=2, seconds=120)
+    store = auth.AuthStore()
+    store.create_user("Scholar", "correct-horse", "researcher")
+
+    assert store.login_lockout_remaining("Scholar") == 0
+    assert store.login_lockout_remaining("ghost") == 0
+    for name in ("Scholar", "ghost"):
+        store.authenticate(name, "wrong-1")
+        assert store.login_lockout_remaining(name) == 0
+        store.authenticate(name, "wrong-2")
+
+    real, ghost = store.login_lockout_remaining("scholar"), store.login_lockout_remaining("GHOST")
+    assert 100 < real <= 121 and 100 < ghost <= 121
+
+    with store._connect() as conn:
+        conn.execute("UPDATE login_failures SET locked_until=?", ((datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),))
+    assert store.login_lockout_remaining("Scholar") == 0
+
+
+def _login_route(store):
+    """Compile only the login route so importing main.py's global workers is unnecessary."""
+    import ast
+    from fastapi import HTTPException
+
+    path = ROOT / "api/app/main.py"
+    node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body if isinstance(n, ast.FunctionDef) and n.name == "auth_login")
+    node.decorator_list = []
+    scope = {
+        "auth_store": store, "HTTPException": HTTPException,
+        "_session_cookie": lambda response, token: None,
+        "AuthLoginRequest": object, "Response": object,
+    }
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), scope)
+    return scope["auth_login"], HTTPException
+
+
+def test_login_route_returns_429_with_retry_after_for_locked_usernames(monkeypatch, tmp_path: Path):
+    configure_auth(monkeypatch, tmp_path, failures=2, seconds=120)
+    store = auth.AuthStore()
+    store.create_user("Scholar", "correct-horse", "researcher")
+    login, HTTPException = _login_route(store)
+    body = lambda name, password: SimpleNamespace(username=name, password=password)  # noqa: E731
+
+    statuses = {}
+    for name in ("Scholar", "ghost"):
+        seen = []
+        for _ in range(3):
+            try:
+                login(body(name, "wrong"), None)
+            except HTTPException as exc:
+                seen.append(exc)
+        statuses[name] = seen
+        assert [exc.status_code for exc in seen] == [401, 401, 429]
+        locked = seen[-1]
+        assert locked.detail["code"] == "login_locked"
+        assert 100 < locked.detail["retry_after_seconds"] <= 121
+        assert locked.headers["Retry-After"] == str(locked.detail["retry_after_seconds"])
+
+    # The correct password is refused while locked, with the same 429.
+    try:
+        login(body("Scholar", "correct-horse"), None)
+        raise AssertionError("locked account must not sign in")
+    except HTTPException as exc:
+        assert exc.status_code == 429

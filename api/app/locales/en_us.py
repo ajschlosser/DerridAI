@@ -62,6 +62,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'auth.password': 'Password',
  'auth.password_note': 'Passwords must contain at least 6 characters. No default administrator credentials are '
                        'created.',
+ 'auth.locked_out': 'Too many failed sign-in attempts. Try again in {minutes} minute(s).',
  'auth.passwords_no_match': 'Passwords do not match.',
  'auth.required': 'Authentication required',
  'auth.session_expired': 'Your session expired. Sign in again.',

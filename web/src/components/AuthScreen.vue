@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
+import { ApiError } from "../api/http";
 import BrandMark from "./BrandMark.vue";
 import LanguageFlag from "./LanguageFlag.vue";
 
@@ -9,7 +10,15 @@ const auth=useAuthStore(); const i18n=useI18nStore();
 const username=ref(""); const password=ref(""); const confirmPassword=ref(""); const busy=ref(false); const error=ref("");
 const title=computed(()=>auth.bootstrapRequired?i18n.t("auth.create_first_admin","Create the first administrator"):i18n.t("auth.sign_in_title","Sign in to DerridAI"));
 const currentLocaleInfo=computed(()=>i18n.languages.find(language=>language.code===i18n.locale));
-async function submit(){error.value="";if(auth.bootstrapRequired&&password.value!==confirmPassword.value){error.value=i18n.t("auth.passwords_no_match","Passwords do not match.");return}busy.value=true;try{if(auth.bootstrapRequired)await auth.bootstrap(username.value.trim(),password.value);else await auth.login(username.value.trim(),password.value)}catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{busy.value=false}}
+// The server locks a username after repeated failures (HTTP 429, same for unknown names).
+function lockoutMessage(exc:unknown){
+  if(!(exc instanceof ApiError)||exc.status!==429)return null;
+  const detail=(exc.payload as {detail?:{retry_after_seconds?:unknown}}|null)?.detail;
+  const seconds=Number(detail?.retry_after_seconds);
+  const minutes=Number.isFinite(seconds)&&seconds>0?Math.max(1,Math.ceil(seconds/60)):5;
+  return i18n.tf("auth.locked_out","Too many failed sign-in attempts. Try again in {minutes} minute(s).",{minutes});
+}
+async function submit(){error.value="";if(auth.bootstrapRequired&&password.value!==confirmPassword.value){error.value=i18n.t("auth.passwords_no_match","Passwords do not match.");return}busy.value=true;try{if(auth.bootstrapRequired)await auth.bootstrap(username.value.trim(),password.value);else await auth.login(username.value.trim(),password.value)}catch(exc){error.value=lockoutMessage(exc)??(exc instanceof Error?exc.message:String(exc))}finally{busy.value=false}}
 </script>
 <template>
   <main class="auth-page">

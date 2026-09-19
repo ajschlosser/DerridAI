@@ -65,6 +65,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'auth.password': 'Mot de passe',
  'auth.password_note': 'Les mots de passe doivent comporter au moins 6 caractères. Aucun identifiant administrateur '
                        'par défaut n’est créé.',
+ 'auth.locked_out': 'Trop de tentatives de connexion échouées. Réessayez dans {minutes} minute(s).',
  'auth.passwords_no_match': 'Les mots de passe ne correspondent pas.',
  'auth.required': 'Authentification requise',
  'auth.session_expired': 'Votre session a expiré. Connectez-vous de nouveau.',
