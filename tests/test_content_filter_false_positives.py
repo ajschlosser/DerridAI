@@ -45,11 +45,13 @@ def _load_content_filter():
 
 
 def test_content_filter_avoids_name_and_substring_false_positives():
-    """Names and dictionary words pass; genuine abuse and obfuscation are caught.
+    """Names, look-alike words, and quoted mentions pass; real use and obfuscation are caught.
 
-    Passes: "Dick Higgins", "Dickens and Dickinson", and "fag" used as the British
-    word for cigarette. Blocked: "you dick", "what the damn", and the obfuscated
-    "f.u.c.k".
+    Uses a dummy policy of placeholder words (no real terms in source). Contextual rules under test:
+    title-case names are allowed ("Widget Higgins"), longer words containing a term are allowed ("Widgetry",
+    "Flintstone"), a term is allowed next to a listed neighbor word ("flint" with "pebble"), and allowed
+    after a marker like "the word" (mention, not use). The bare use ("you widget", "what the blot") and a
+    dotted-out spelling ("z.z.b.l.o.c.k") are blocked.
     """
     content_filter = _load_content_filter()
     policies = [_DUMMY_POLICY]

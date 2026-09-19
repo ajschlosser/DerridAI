@@ -45,11 +45,11 @@ def _load_content_filter():
 def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     """Filter nested payloads and obfuscation; confirm enforcement hooks exist.
 
-    Behavior: ordinary scholarly text ("hospitality and différance") passes; "f.u.c.k"
-    and "sh1t" are blocked; find_disallowed_path reports where in a nested payload the
-    offending value is ("input.tags[1]").
-    Wiring: main.py must still define enforce_researcher_text, and runtime.js must keep
-    the user-facing message and the capture-phase input listener.
+    Behavior (dummy placeholder policy): ordinary scholarly text ("hospitality and différance") passes; a
+    dotted spelling and a leetspeak spelling ("qwvulg4r") of blocked terms are caught; find_disallowed_path
+    reports where in a nested payload the bad value is ("input.tags[1]").
+    Wiring (source text): main.py still defines enforce_researcher_text, and runtime.js still has the warning
+    message, the input filter, the term-digest helper, and the /api/i18n/content-policy fetch.
     """
     content_filter = _load_content_filter()
     policies = [_DUMMY_POLICY]

@@ -21,11 +21,12 @@ def find_all(pattern: str, path: str) -> list[str]:
 
 
 def test_all_declared_versions_agree():
-    """Every place that declares the app version must equal web/package.json.
+    """Every place that declares the app version must equal web/package.json, and the release needs notes.
 
-    Checked: api/app/config.py, api/app/main.py (API version and reported app_version),
-    web/index.html title, the web/src/App.vue footer, and README.md "Current version". When cutting a
-    release, bump them all (see AGENTS.md). Do not hard-code the version in other tests.
+    Checked: api/app/config.py, api/app/main.py (API version and reported app_version), web/index.html title,
+    the web/src/App.vue footer, and README.md "Current version". Also docs/notes/<version>.md must exist and
+    start with "# <version> —". When cutting a release, bump them all (see AGENTS.md). Do not hard-code the
+    version in other tests.
     """
     version = json.loads(read("web/package.json"))["version"]
     assert re.fullmatch(SEMVER, version)
