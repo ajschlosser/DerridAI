@@ -27,8 +27,9 @@ def test_all_declared_versions_agree():
     The FastAPI constructor, backup manifest, App.vue footer, and AuthScreen read
     APP_VERSION / the Vite-injected build stamp rather than duplicating the string.
     docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
-    release, bump the declared copies (see AGENTS.md). Do not hard-code the version in
-    other tests.
+    release, bump the declared copies and create annotated git tag v<version> on that
+    commit (see AGENTS.md). This test checks the working tree, not git tags. Do not
+    hard-code the version in other tests.
     """
     version = json.loads(read("web/package.json"))["version"]
     assert re.fullmatch(SEMVER, version)
