@@ -33,3 +33,16 @@ def test_confirmed_absence_and_shared_slice_dialog():
     assert 'human_confirmed_absent' in src
     assert "emit('noValue')" in field
     assert '<UiDialog' in slice_dialog
+
+
+
+def test_unconfirmed_manifest_bounds_are_non_destructive_and_resume_repairs_old_scope():
+    src=text("api/app/corpus_builder.py")
+    helper=src[src.index("def _manifest_main_text_blocks"):src.index("def _segmentation_windows")]
+    assert "bounds_confirmed: bool = False" in helper
+    assert "if not bounds_confirmed:" in helper
+    assert "return blocks" in helper
+    run=src[src.index("def _run("):src.index("def _metadata_enrichment_finished", src.index("def _run("))]
+    assert "source_scope_repair" in run
+    assert "resume and not source_scope_repair" in run
+    assert "previously truncated automatic main-text scope" in run
