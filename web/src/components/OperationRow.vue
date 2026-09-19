@@ -102,8 +102,8 @@ const resultAria = computed(() => {
       </p>
 
       <p class="ops-meta">
-        <time v-if="whenText" :datetime="whenIso || undefined" :title="absoluteTime(whenIso, locale)">{{ whenText }}</time>
-        <span v-if="timingText">{{ timingText }}</span>
+        <time v-if="whenText" :datetime="whenIso || undefined" :title="absoluteTime(whenIso, locale)">{{ whenText }}</time><span v-if="whenText && (timingText || view.owner)" class="sr-only">. </span>
+        <span v-if="timingText">{{ timingText }}</span><span v-if="timingText && view.owner" class="sr-only">. </span>
         <span v-if="view.owner">{{ i18n.tf("operations.panel.by", "by {name}", { name: view.owner }) }}</span>
       </p>
 

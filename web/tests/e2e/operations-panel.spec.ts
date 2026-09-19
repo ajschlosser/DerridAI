@@ -98,3 +98,62 @@ test("progress is exposed to assistive technology with a name, range and value",
   await expect(bar).toHaveAttribute("aria-valuemin", "0");
   await expect(bar).toHaveAttribute("aria-valuemax", "100");
 });
+
+// The browser's accessibility tree is what a screen reader is given. These are not screen-reader tests (that needs a
+// human with NVDA/JAWS/VoiceOver), but they pin the structure and names assistive technology receives.
+test("accessibility tree: landmark, headings, groups, and what each control is called", async ({ page }) => {
+  await page.goto(url("mixed"));
+  await expect(page.locator("#operationsPanel")).toBeVisible();
+  await expect(page.locator("#operationsPanel")).toMatchAriaSnapshot(`
+    - region "Background operations":
+      - heading "Background operations" [level=2]
+      - button "Refresh"
+      - button "Clear finished"
+      - group "Show operations":
+        - button /All \\d+/ [pressed]
+        - button /Running \\d+/
+        - button /Needs attention \\d+/
+        - button /Finished \\d+/
+      - region /Needs attention \\d+/:
+        - heading /Needs attention \\d+/ [level=3]
+        - list:
+          - listitem "Languages · Français":
+            - heading "Languages · Français" [level=4]
+            - text: Failed
+            - button "Details for Languages · Français": Details
+            - button "Remove Languages · Français": Remove
+  `);
+});
+
+test("accessibility tree: an in-progress row exposes a named progress bar and a row-specific Cancel", async ({ page }) => {
+  await page.goto(url("mixed"));
+  const row = page.getByRole("listitem", { name: "PDF corpus build" });
+  await expect(row).toMatchAriaSnapshot(`
+    - listitem "PDF corpus build":
+      - heading "PDF corpus build" [level=4]
+      - text: Running
+      - progressbar "Progress of PDF corpus build"
+      - paragraph: 30% overall
+      - button "Details for PDF corpus build": Details
+      - button "Cancel PDF corpus build": Cancel
+  `);
+});
+
+test("accessibility tree: the meta line reads as separate sentences, not one run-on", async ({ page }) => {
+  await page.goto(url("mixed"));
+  const meta = page.getByRole("listitem", { name: "Languages · Français" }).locator(".ops-meta");
+  const text = (await meta.evaluate((el) => (el as HTMLElement).textContent || "")).replace(/\s+/g, " ");
+  expect(text).toMatch(/Finished .* ago\. Took .*\. by admin/);
+});
+
+test("accessibility tree: the empty state is a heading and a sentence, and no list is exposed", async ({ page }) => {
+  await page.goto(url("empty"));
+  await expect(page.locator("#operationsPanel")).toMatchAriaSnapshot(`
+    - region "Background operations":
+      - heading "Background operations" [level=2]
+      - group "Show operations"
+      - heading "Nothing in flight" [level=3]
+      - paragraph: /Start a corpus build/
+  `);
+  await expect(page.locator("#operationsPanel li")).toHaveCount(0);
+});

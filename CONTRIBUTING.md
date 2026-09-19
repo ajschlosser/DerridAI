@@ -11,14 +11,7 @@ pip install -r api/requirements.txt -r api/requirements-dev.txt pytest
 cd web && npm install --no-audit --no-fund
 ```
 
-Backend tests write to disk, so point them at a scratch directory (CI uses `/tmp/derridai-data`):
-
-```bash
-export CHROMA_DATA_ROOT=$PWD/.test-data CHROMA_PATH=$PWD/.test-data/chroma
-export AUTH_DB_PATH=$PWD/.test-data/.home/derridai-auth.sqlite3
-export SYSTEM_DB_PATH=$PWD/.test-data/.home/derridai-system.sqlite3
-mkdir -p .test-data/.home
-```
+Backend tests need no environment setup: `tests/conftest.py` points storage at a temporary directory (and leaves any value CI has already set alone). **Do not `export` `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH`, or `CHROMA_PATH` in your shell.** `docker-compose.yml` interpolates the same names, so an exported test path is picked up by the next `docker compose up` and the API container crash-loops on a host path that does not exist inside it.
 
 ## CI gates
 
