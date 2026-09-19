@@ -36,9 +36,9 @@ def install(tmp_path:Path, records:list[dict], *, status='running', stage='enric
 
 
 def test_release_identity():
-    assert APP_VERSION=='0.50.1'
-    assert json.loads(text('web/package.json'))['version']=='0.50.1'
-    assert '0.50.1 — Ignoble Insect' in text('README.md')
+    assert APP_VERSION=='0.51.0'
+    assert json.loads(text('web/package.json'))['version']=='0.51.0'
+    assert '0.51.0 — Krazy Kangaroo' in text('README.md')
 
 
 def test_human_metadata_edit_is_allowed_during_enrichment_and_establishes_field_ownership(tmp_path:Path):

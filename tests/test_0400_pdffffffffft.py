@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.50.1"
-    assert 'version="0.50.1"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.50.1"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.50.1" in text("README.md")
+    assert package["version"] == "0.51.0"
+    assert 'version="0.51.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.51.0"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.51.0" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
