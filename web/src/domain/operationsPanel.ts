@@ -54,7 +54,9 @@ function time(value: string | null): number {
   const parsed = value ? new Date(value).getTime() : NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
-const newestFirst = (key: (view: OperationView) => number) => (a: OperationView, b: OperationView) => key(b) - key(a);
+const newestFirst =
+  (key: (view: OperationView) => number) => (a: OperationView, b: OperationView) =>
+    key(b) - key(a);
 const startedOrCreated = (view: OperationView) => time(view.startedAt) || time(view.createdAt);
 const endedOrStarted = (view: OperationView) => time(view.finishedAt) || startedOrCreated(view);
 
@@ -67,11 +69,16 @@ export interface ClassifiedOperations {
 export function classifyOperations(views: readonly OperationView[]): ClassifiedOperations {
   const active = views.filter(isActive).sort(newestFirst(startedOrCreated));
   const attention = views.filter(needsAttention).sort(newestFirst(endedOrStarted));
-  const rest = views.filter((view) => !isActive(view) && !needsAttention(view)).sort(newestFirst(endedOrStarted));
+  const rest = views
+    .filter((view) => !isActive(view) && !needsAttention(view))
+    .sort(newestFirst(endedOrStarted));
   return { active, attention, history: rest };
 }
 
-export function filterOperations(views: readonly OperationView[], filter: OperationFilter): OperationView[] {
+export function filterOperations(
+  views: readonly OperationView[],
+  filter: OperationFilter,
+): OperationView[] {
   if (filter === "active") return views.filter(isActive);
   if (filter === "attention") return views.filter(needsAttention);
   if (filter === "done") return views.filter((view) => !isActive(view));
@@ -124,7 +131,9 @@ export function formatDuration(seconds: number, locale: string): string {
   // Two most significant units are plenty for a glance ("1 h 4 min", not "1 h 4 min 17 s").
   return useful
     .slice(0, 2)
-    .map(([value, unit]) => new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "short" }).format(value))
+    .map(([value, unit]) =>
+      new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "short" }).format(value),
+    )
     .join(" ");
 }
 
@@ -142,7 +151,11 @@ export function relativeTime(iso: string | null, nowMs: number, locale: string):
 
 export function absoluteTime(iso: string | null, locale: string): string {
   const then = time(iso);
-  return then ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(then)) : "";
+  return then
+    ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(then),
+      )
+    : "";
 }
 
 const localDayKey = (ms: number) => {
@@ -157,7 +170,11 @@ export interface DayGroup {
 }
 
 /** History grouped by local calendar day, newest first, labelled "today"/"yesterday" or a date. */
-export function groupByDay(views: readonly OperationView[], nowMs: number, locale: string): DayGroup[] {
+export function groupByDay(
+  views: readonly OperationView[],
+  nowMs: number,
+  locale: string,
+): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   const today = new Date(nowMs);
   today.setHours(0, 0, 0, 0);
@@ -170,9 +187,10 @@ export function groupByDay(views: readonly OperationView[], nowMs: number, local
       const day = new Date(ms);
       day.setHours(0, 0, 0, 0);
       const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
-      const label = diff >= -1 && diff <= 0
-        ? relative.format(diff, "day")
-        : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(day);
+      const label =
+        diff >= -1 && diff <= 0
+          ? relative.format(diff, "day")
+          : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(day);
       group = { key, label: label.charAt(0).toLocaleUpperCase(locale) + label.slice(1), items: [] };
       groups.set(key, group);
     }

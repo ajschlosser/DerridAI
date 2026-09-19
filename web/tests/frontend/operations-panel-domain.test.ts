@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyOperations, elapsedSeconds, etaSeconds, filterCounts, filterOperations, formatDuration,
-  groupByDay, needsAttention, relativeTime, type OperationView,
+  classifyOperations,
+  elapsedSeconds,
+  etaSeconds,
+  filterCounts,
+  filterOperations,
+  formatDuration,
+  groupByDay,
+  needsAttention,
+  relativeTime,
+  type OperationView,
 } from "../../src/domain/operationsPanel";
 
 const NOW = new Date("2026-09-20T15:00:00").getTime();
@@ -9,9 +17,24 @@ const iso = (offsetSeconds: number) => new Date(NOW + offsetSeconds * 1000).toIS
 
 function view(over: Partial<OperationView> = {}): OperationView {
   return {
-    id: "j", type: "llm_tool", status: "completed", label: "Job", icon: "gear", subtitle: "", facts: [], owner: "admin",
-    createdAt: iso(-600), startedAt: iso(-600), finishedAt: iso(-300), total: 10, completed: 10,
-    progressLabel: "10/10 (100%)", cancelRequested: false, error: "", result: null, ...over,
+    id: "j",
+    type: "llm_tool",
+    status: "completed",
+    label: "Job",
+    icon: "gear",
+    subtitle: "",
+    facts: [],
+    owner: "admin",
+    createdAt: iso(-600),
+    startedAt: iso(-600),
+    finishedAt: iso(-300),
+    total: 10,
+    completed: 10,
+    progressLabel: "10/10 (100%)",
+    cancelRequested: false,
+    error: "",
+    result: null,
+    ...over,
   };
 }
 
@@ -33,7 +56,9 @@ describe("classification", () => {
   });
 
   it("does not call a running job with partial results 'needs attention'", () => {
-    expect(needsAttention(view({ status: "running", result: { kind: "review-partial" } }))).toBe(false);
+    expect(needsAttention(view({ status: "running", result: { kind: "review-partial" } }))).toBe(
+      false,
+    );
   });
 
   it("orders each section newest first", () => {
@@ -45,7 +70,11 @@ describe("classification", () => {
   });
 
   it("counts and filters consistently", () => {
-    const list = [view({ id: "a", status: "running", finishedAt: null }), view({ id: "b", status: "failed" }), view({ id: "c" })];
+    const list = [
+      view({ id: "a", status: "running", finishedAt: null }),
+      view({ id: "b", status: "failed" }),
+      view({ id: "c" }),
+    ];
     expect(filterCounts(list)).toEqual({ all: 3, active: 1, attention: 1, done: 2 });
     expect(filterOperations(list, "done").map((v) => v.id)).toEqual(["b", "c"]);
     expect(filterOperations(list, "all")).toHaveLength(3);
@@ -54,13 +83,23 @@ describe("classification", () => {
 
 describe("time", () => {
   it("measures elapsed time against 'now' for running jobs and against the end for finished ones", () => {
-    expect(elapsedSeconds(view({ status: "running", startedAt: iso(-90), finishedAt: null }), NOW)).toBe(90);
+    expect(
+      elapsedSeconds(view({ status: "running", startedAt: iso(-90), finishedAt: null }), NOW),
+    ).toBe(90);
     expect(elapsedSeconds(view({ startedAt: iso(-600), finishedAt: iso(-300) }), NOW)).toBe(300);
     expect(elapsedSeconds(view({ startedAt: null }), NOW)).toBe(0);
   });
 
   it("estimates the remaining time only when the rate is trustworthy", () => {
-    const running = (over: Partial<OperationView>) => view({ status: "running", finishedAt: null, startedAt: iso(-100), total: 100, completed: 50, ...over });
+    const running = (over: Partial<OperationView>) =>
+      view({
+        status: "running",
+        finishedAt: null,
+        startedAt: iso(-100),
+        total: 100,
+        completed: 50,
+        ...over,
+      });
     expect(etaSeconds(running({}), NOW)).toBeCloseTo(100, 0);
     expect(etaSeconds(running({ completed: 1 }), NOW)).toBeNull(); // too early to extrapolate
     expect(etaSeconds(running({ completed: 99 }), NOW)).toBeNull(); // about to finish
@@ -89,17 +128,25 @@ describe("time", () => {
 
 describe("history grouping", () => {
   it("groups by local day with today/yesterday labels and dates after that", () => {
-    const groups = groupByDay([
-      view({ id: "t", finishedAt: iso(-60) }),
-      view({ id: "y", finishedAt: iso(-86400) }),
-      view({ id: "old", finishedAt: iso(-86400 * 10) }),
-    ], NOW, "en-US");
+    const groups = groupByDay(
+      [
+        view({ id: "t", finishedAt: iso(-60) }),
+        view({ id: "y", finishedAt: iso(-86400) }),
+        view({ id: "old", finishedAt: iso(-86400 * 10) }),
+      ],
+      NOW,
+      "en-US",
+    );
     expect(groups.map((g) => g.label)).toEqual(["Today", "Yesterday", "Sep 10, 2026"]);
     expect(groups.map((g) => g.items[0].id)).toEqual(["t", "y", "old"]);
   });
 
   it("keeps several operations from one day together", () => {
-    const groups = groupByDay([view({ id: "a", finishedAt: iso(-60) }), view({ id: "b", finishedAt: iso(-120) })], NOW, "en-US");
+    const groups = groupByDay(
+      [view({ id: "a", finishedAt: iso(-60) }), view({ id: "b", finishedAt: iso(-120) })],
+      NOW,
+      "en-US",
+    );
     expect(groups).toHaveLength(1);
     expect(groups[0].items.map((v) => v.id)).toEqual(["a", "b"]);
   });

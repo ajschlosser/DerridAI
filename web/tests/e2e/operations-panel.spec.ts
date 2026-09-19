@@ -1,7 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const STORIES = ["mixed", "empty", "many-running", "failures-only", "long-names", "long-history", "narrow", "french-formatting"];
+const STORIES = [
+  "mixed",
+  "empty",
+  "many-running",
+  "failures-only",
+  "long-names",
+  "long-history",
+  "narrow",
+  "french-formatting",
+];
 // WCAG 2.0, 2.1 and 2.2 at levels A and AA.
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -28,11 +37,16 @@ for (const story of STORIES) {
   });
 }
 
-test("keyboard: every control is reachable, shows a visible focus ring, and filters work with Enter", async ({ page }) => {
+test("keyboard: every control is reachable, shows a visible focus ring, and filters work with Enter", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   const chip = page.getByRole("button", { name: /^Running/ });
   await chip.focus();
-  const outline = await chip.evaluate((el) => { const s = getComputedStyle(el); return { width: parseFloat(s.outlineWidth), style: s.outlineStyle }; });
+  const outline = await chip.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { width: parseFloat(s.outlineWidth), style: s.outlineStyle };
+  });
   expect(outline.style).toBe("solid");
   expect(outline.width).toBeGreaterThanOrEqual(2);
   await page.keyboard.press("Enter");
@@ -43,15 +57,30 @@ test("keyboard: every control is reachable, shows a visible focus ring, and filt
   const seen = new Set<string>();
   for (let i = 0; i < 30; i++) {
     await page.keyboard.press("Tab");
-    seen.add(await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent?.trim() || ""));
+    seen.add(
+      await page.evaluate(
+        () =>
+          document.activeElement?.getAttribute("aria-label") ||
+          document.activeElement?.textContent?.trim() ||
+          "",
+      ),
+    );
   }
   expect(seen.size).toBeGreaterThan(5);
 });
 
-test("target size (2.5.8): interactive controls are at least 24x24 CSS pixels", async ({ page }) => {
+test("target size (2.5.8): interactive controls are at least 24x24 CSS pixels", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   const small = await page.locator("#operationsPanel button").evaluateAll((buttons) =>
-    buttons.map((b) => { const r = b.getBoundingClientRect(); return { text: b.textContent?.trim(), w: r.width, h: r.height }; }).filter((b) => b.w > 0 && (b.w < 24 || b.h < 24)));
+    buttons
+      .map((b) => {
+        const r = b.getBoundingClientRect();
+        return { text: b.textContent?.trim(), w: r.width, h: r.height };
+      })
+      .filter((b) => b.w > 0 && (b.w < 24 || b.h < 24)),
+  );
   expect(small).toEqual([]);
 });
 
@@ -59,7 +88,9 @@ test("reflow (1.4.10): no horizontal scrolling at 320 CSS pixels", async ({ page
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(url("long-names"));
   await expect(page.locator("#operationsPanel")).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
@@ -69,7 +100,10 @@ test("text resize (1.4.4): 200% text does not clip or overflow the panel", async
   await page.addStyleTag({ content: "html{font-size:200%!important}" });
   const { panelOverflow, pageOverflow } = await page.evaluate(() => {
     const panel = document.querySelector("#operationsPanel") as HTMLElement;
-    return { panelOverflow: panel.scrollWidth - panel.clientWidth, pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    return {
+      panelOverflow: panel.scrollWidth - panel.clientWidth,
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
   });
   expect(panelOverflow).toBeLessThanOrEqual(1);
   expect(pageOverflow).toBeLessThanOrEqual(1);
@@ -78,20 +112,35 @@ test("text resize (1.4.4): 200% text does not clip or overflow the panel", async
 test("text spacing (1.4.12): increased spacing does not hide content", async ({ page }) => {
   await page.goto(url("mixed"));
   await expect(page.locator("#operationsPanel")).toBeVisible();
-  await page.addStyleTag({ content: "*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important} p{margin-bottom:2em!important}" });
-  const clipped = await page.locator("#operationsPanel .ops-row").evaluateAll((rows) => rows.filter((r) => r.scrollWidth > r.clientWidth + 1).length);
+  await page.addStyleTag({
+    content:
+      "*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important} p{margin-bottom:2em!important}",
+  });
+  const clipped = await page
+    .locator("#operationsPanel .ops-row")
+    .evaluateAll((rows) => rows.filter((r) => r.scrollWidth > r.clientWidth + 1).length);
   expect(clipped).toBe(0);
 });
 
 test("motion: reduced-motion turns every animation and transition off", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(url("mixed"));
-  const animated = await page.locator("#operationsPanel *").evaluateAll((els) =>
-    els.filter((el) => { const s = getComputedStyle(el); return (s.animationName !== "none" && parseFloat(s.animationDuration) > 0.001) || parseFloat(s.transitionDuration) > 0.001; }).length);
+  const animated = await page.locator("#operationsPanel *").evaluateAll(
+    (els) =>
+      els.filter((el) => {
+        const s = getComputedStyle(el);
+        return (
+          (s.animationName !== "none" && parseFloat(s.animationDuration) > 0.001) ||
+          parseFloat(s.transitionDuration) > 0.001
+        );
+      }).length,
+  );
   expect(animated).toBe(0);
 });
 
-test("progress is exposed to assistive technology with a name, range and value", async ({ page }) => {
+test("progress is exposed to assistive technology with a name, range and value", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   const bar = page.getByRole("progressbar", { name: /Progress of PDF corpus build/ });
   await expect(bar).toHaveAttribute("aria-valuenow", "30");
@@ -101,7 +150,9 @@ test("progress is exposed to assistive technology with a name, range and value",
 
 // The browser's accessibility tree is what a screen reader is given. These are not screen-reader tests (that needs a
 // human with NVDA/JAWS/VoiceOver), but they pin the structure and names assistive technology receives.
-test("accessibility tree: landmark, headings, groups, and what each control is called", async ({ page }) => {
+test("accessibility tree: landmark, headings, groups, and what each control is called", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   await expect(page.locator("#operationsPanel")).toBeVisible();
   await expect(page.locator("#operationsPanel")).toMatchAriaSnapshot(`
@@ -125,7 +176,9 @@ test("accessibility tree: landmark, headings, groups, and what each control is c
   `);
 });
 
-test("accessibility tree: an in-progress row exposes a named progress bar and a row-specific Cancel", async ({ page }) => {
+test("accessibility tree: an in-progress row exposes a named progress bar and a row-specific Cancel", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   const row = page.getByRole("listitem", { name: "PDF corpus build" });
   await expect(row).toMatchAriaSnapshot(`
@@ -139,14 +192,21 @@ test("accessibility tree: an in-progress row exposes a named progress bar and a 
   `);
 });
 
-test("accessibility tree: the meta line reads as separate sentences, not one run-on", async ({ page }) => {
+test("accessibility tree: the meta line reads as separate sentences, not one run-on", async ({
+  page,
+}) => {
   await page.goto(url("mixed"));
   const meta = page.getByRole("listitem", { name: "Languages · Français" }).locator(".ops-meta");
-  const text = (await meta.evaluate((el) => (el as HTMLElement).textContent || "")).replace(/\s+/g, " ");
+  const text = (await meta.evaluate((el) => (el as HTMLElement).textContent || "")).replace(
+    /\s+/g,
+    " ",
+  );
   expect(text).toMatch(/Finished .* ago\. Took .*\. by admin/);
 });
 
-test("accessibility tree: the empty state is a heading and a sentence, and no list is exposed", async ({ page }) => {
+test("accessibility tree: the empty state is a heading and a sentence, and no list is exposed", async ({
+  page,
+}) => {
   await page.goto(url("empty"));
   await expect(page.locator("#operationsPanel")).toMatchAriaSnapshot(`
     - region "Background operations":
