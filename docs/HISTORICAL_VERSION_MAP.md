@@ -19,10 +19,13 @@ The important finding is that the current Git DAG and the later versioned applic
 | 0.40.8 — Coming Around the Mountain | 2026-09-16 | Explicit version request; build output references `src/components/CorpusBuildProgress.vue` | No matching Git commit | Snapshot-only |
 | 0.58.5 — Radical Rex | 2026-09-18 | Current implementation | `8cc054aad2803e1d07e96bcb8aedcd94e9e29169` | Exact |
 | 0.58.5 compose fix | 2026-09-18 | Fix for unset `OLLAMA_MODELS_DIR` | `0f62a862368ead1ff984673cfd23f085ffb80248` | Exact |
+| 0.58.5 clean-clone startup fix | 2026-09-18 | Removes untracked `api/data` startup dependency and lazy-loads NLP models | `9783504457c92705001559ad3d2307e5f18afc68` | Exact |
+| 0.58.5 startup regression guard | 2026-09-18 | Prevents reintroduction of clean-clone startup dependency | `906f236794b3afd40cf0df01763e5fe2e40b3740` | Exact |
+| 0.58.6 — Risky Rabbit | 2026-09-18 | Release identity for the clean-clone/container-startup fixes | `4fc4fce3400d5348ae18dad45b6a7700e0ab92b8` | Exact |
 
 ## Git ancestry actually present
 
-The `release/0.58.5-radical-rex` branch has a continuous parent chain of 98 commits back to:
+The `release/0.58.6-risky-rabbit` branch contains the complete Radical Rex lineage plus the clean-clone/startup fixes and Risky Rabbit release commit. Its ancestry remains continuous back to:
 
 - `3366fa9e15658d941f4220a699624df2df174f3e` — `initial commit`
 - Git timestamp: `2026-08-17T08:18:13Z`
@@ -65,4 +68,4 @@ For reconstructed historical commits:
 3. if only the project-conversation timestamp survives, record it explicitly as a reconstructed timestamp rather than pretending it was an original Git commit time;
 4. do not use the date on which the snapshot is imported into Git as the historical release date.
 
-The 0.58.5 commits are not reconstructed; their Git timestamps are their actual creation timestamps.
+The 0.58.5 and 0.58.6 commits are not reconstructed; their Git timestamps are their actual creation timestamps.
