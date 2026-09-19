@@ -46,3 +46,35 @@ test("confident stance is visibly selected in the real Storybook component", asy
   const select=page.locator("select.control");
   await expect(select).toHaveValue("affirm");
 });
+
+
+test("reviewer-defined structure remains selected in the rendered conflict editor", async ({page}) => {
+  await page.goto("/iframe.html?id=corpus-builder-review-metadata-field--reviewer-structure-conflict&viewMode=story");
+  const select=page.locator("select.control");
+  await expect(select).toHaveValue("main_text");
+  await expect(page.getByText(/Deterministic and LLM suggestions disagree/i)).toBeVisible();
+  await expectWcag2AA(page,".metadata-field");
+});
+
+test("normalized stance aliases remain selected and disclose normalization", async ({page}) => {
+  await page.goto("/iframe.html?id=corpus-builder-review-metadata-field--normalized-stance-alias&viewMode=story");
+  const select=page.locator("select.control");
+  await expect(select).toHaveValue("affirm");
+  await expect(page.getByText(/normalized to/i)).toBeVisible();
+  await expectWcag2AA(page,".metadata-field");
+});
+
+test("build summary remains usable at 200 percent zoom-equivalent scaling", async ({page}) => {
+  await page.goto("/iframe.html?id=corpus-build-readiness--ready&viewMode=story");
+  await page.evaluate(()=>{ document.documentElement.style.zoom="2"; });
+  const surface=page.locator(".build-readiness");
+  await expect(surface).toBeVisible();
+  const metrics=await surface.evaluate(el=>({
+    scrollWidth:(el as HTMLElement).scrollWidth,
+    clientWidth:(el as HTMLElement).clientWidth,
+    rect:(el as HTMLElement).getBoundingClientRect().toJSON(),
+  }));
+  expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth+1);
+  await expect(page.getByRole("button",{name:/Build record set/i})).toBeVisible();
+  await expectWcag2AA(page,".build-readiness");
+});
