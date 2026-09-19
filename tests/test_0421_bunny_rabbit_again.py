@@ -10,9 +10,9 @@ def text(path:str)->str:
     return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_profile():
-    assert cb.PROFILE_VERSION=='derrida-scholarly-v11'
-    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v8'
-    assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v11'
+    assert cb.PROFILE_VERSION=='derrida-scholarly-v12'
+    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v9'
+    assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)
     assert json.loads(text('web/package.json'))['version']=='0.59.0'
