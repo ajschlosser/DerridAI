@@ -1295,6 +1295,23 @@ class PdfCorpusBuildManager:
             current = self._runtime_requests.get(build_id)
             return dict(current) if isinstance(current, dict) and current else dict(fallback)
 
+    def _interactive_llm_request(self, build_id: str, override: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Resolve a user-triggered LLM call without replacing it with build runtime state.
+
+        Build workers intentionally follow the latest build-level provider switch. Interactive
+        actions are different: the provider/model selected in the dialog is authoritative for
+        that invocation. Build policy/budgets are inherited only for keys the action did not
+        provide.
+        """
+        build = self.repo.get_build(build_id) if build_id else {}
+        base = self._latest_runtime_request(build_id, dict(build.get("request") or {})) if build_id else {}
+        chosen = {k: v for k, v in dict(override or {}).items() if v is not None}
+        if not chosen:
+            return dict(base)
+        merged = dict(base)
+        merged.update(chosen)
+        return merged
+
     def switch_provider_profile(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Change the provider used by metadata tasks scheduled after this point.
 
@@ -3676,7 +3693,8 @@ Return one compact decision for every supplied candidate using exact `after` IDs
                 current_manifest = current_build.get("manifest")
                 if isinstance(current_manifest, dict) and current_manifest:
                     manifest = current_manifest
-                request = self._latest_runtime_request(build_id, request)
+                if not bool(request.get("_interactive_provider_override")):
+                    request = self._latest_runtime_request(build_id, request)
             except Exception:
                 pass
         self._apply_manifest_metadata(record, manifest)
@@ -4005,10 +4023,27 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         existing_status["llm_corroborates"] = corroborates
                         existing_status["corroboration_method"] = "llm"
                         if not corroborates:
+                            deterministic_value = record.get(key)
+                            assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
+                            confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
                             existing_status["status"] = "unresolved"
                             existing_status["method"] = "deterministic+llm"
                             existing_status["reason_code"] = "deterministic_llm_disagreement"
-                            existing_status["reason"] = f"Deterministic {key} inference and semantic LLM check disagree; reviewer confirmation is required."
+                            existing_status["deterministic_value"] = deterministic_value
+                            existing_status["llm_value"] = value
+                            existing_status["llm_confidence"] = confidence
+                            existing_status["deterministic_reason"] = str(existing_status.get("reason") or f"Deterministic inference selected {deterministic_value!r}.")
+                            existing_status["llm_reason"] = str(assessment.get("reason") or "Semantic LLM check selected a different value.")
+                            existing_status["reason"] = (
+                                f"Deterministic inference suggests {deterministic_value!r}; semantic LLM check suggests {value!r}"
+                                + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
+                                + ". The LLM suggestion is prefilled for reviewer confirmation."
+                            )
+                            # For interpretive conflicts, show the semantic reader's proposal in the
+                            # editable field while retaining both candidates and their reasons. Human
+                            # review remains required; hard constraints are re-applied below.
+                            if key != "primary_text":
+                                record[key] = value
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
@@ -5969,7 +6004,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError(f"No {direction} record is available for boundary adjudication.")
         left, right = (records[neighbor_index], records[index]) if direction == "previous" else (records[index], records[neighbor_index])
         build = self.repo.get_build(build_id)
-        request = self._latest_runtime_request(build_id, request_override or dict(build.get("request") or {}))
+        request = self._interactive_llm_request(build_id, request_override)
         if not request.get("provider") and not request.get("provider_profile_id"):
             raise ValueError("No LLM provider is available for boundary adjudication.")
         decision = self._adjudicate_record_boundary_pair(left, right, build.get("manifest") or {}, request, build_id)
@@ -6195,7 +6230,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     for field in METADATA_FAMILY_FIELDS[family]: candidate.pop(field,None);status.pop(field,None)
                     candidate.setdefault("metadata_stage_status",{}).pop(family,None);candidate.setdefault("metadata_execution_ledger",{}).pop(family,None)
                 candidate["metadata_field_status"]=status
-                return self._enrich_record(candidate,manifest,{**request,"families":families},previous_text=str(records[index-1].get("text") or "") if index>0 else "",next_text=str(records[index+1].get("text") or "") if index+1<len(records) else "",build_id=build_id)
+                return self._enrich_record(candidate,manifest,{**request,"families":families,"_interactive_provider_override":True},previous_text=str(records[index-1].get("text") or "") if index>0 else "",next_text=str(records[index+1].get("text") or "") if index+1<len(records) else "",build_id=build_id)
             with ThreadPoolExecutor(max_workers=max_workers,thread_name_prefix="pdf-corpus-meta-enrich") as pool:
                 futures={pool.submit(candidate_for,index):index for index in indices};processed=0
                 for future in as_completed(futures):
@@ -6254,6 +6289,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         target["metadata_field_status"] = status_map
         rerun_request = dict(request)
         rerun_request["families"] = families
+        rerun_request["_interactive_provider_override"] = True
         index = records.index(target)
         self._enrich_record(
             target,
@@ -6309,7 +6345,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if not current_text.strip():
             raise ValueError("Record text is empty.")
         fallback = self.repo.get_build(build_id).get("request") or {}
-        active_request = self._latest_runtime_request(build_id, request or fallback)
+        active_request = self._interactive_llm_request(build_id, request or None)
         prompt = f"""You are performing a conservative scholarly text touch-up on OCR/PDF extracted text.
 
 RULES:
