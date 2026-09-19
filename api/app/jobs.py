@@ -97,9 +97,17 @@ class PersistentJobStateMixin:
                     jobs = [copy.deepcopy(job) for job in self._jobs.values()]
                 if jobs:
                     job_repository.upsert_many(jobs)
-            except Exception:
-                # Persistence is retried on the next checkpoint. API calls keep
-                # their existing behavior rather than crashing a worker thread.
+            except Exception as exc:
+                # Keep workers alive, but make durability degradation visible in
+                # every live operation. When SQLite recovers, the next checkpoint
+                # persists this warning together with the current job state.
+                detail = f"Durable job checkpoint failed and will be retried: {exc}"
+                with self._lock:
+                    for job in self._jobs.values():
+                        if job.get("status") in {"queued", "running", "cancelling"}:
+                            warnings = job.setdefault("warnings", [])
+                            if detail not in warnings[-3:]:
+                                warnings.append(detail)
                 continue
 
     def _persist_job(self, job_id: str) -> None:
@@ -1955,6 +1963,8 @@ class UpsertJobManager(PersistentJobStateMixin):
         try:
             self._spool_path(job_id).unlink(missing_ok=True)
         except OSError:
+            # Terminal job state lives in SQLite. Spool deletion is cleanup only;
+            # a stale file is ignored unless the durable job ledger says to resume.
             pass
 
     def _run_from_spool(self, job_id: str) -> None:
@@ -2104,12 +2114,15 @@ class UpsertJobManager(PersistentJobStateMixin):
                 self._jobs[job_id] = job
             self._persist_job(job_id)
             self._executor.submit(self._run_from_spool, job_id)
-        except Exception:
+        except Exception as exc:
             self._remove_spool(job_id)
             try:
                 self._store.fail_sync(body.store_name, "Vector build could not be queued.")
-            except Exception:
-                pass
+            except Exception as sync_exc:
+                raise RuntimeError(
+                    f"Vector build could not be queued ({exc}); collection failure status "
+                    f"could not be persisted ({sync_exc})."
+                ) from exc
             raise
         return self.get(job_id)
 
@@ -2253,8 +2266,13 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job["finished_at"] = iso_now()
             try:
                 self._store.fail_sync(body.store_name, str(exc))
-            except Exception:
-                pass
+            except Exception as sync_exc:
+                with self._lock:
+                    job = self._jobs[job_id]
+                    job["collection_status_sync_error"] = str(sync_exc)
+                    job.setdefault("warnings", []).append(
+                        f"Vector build failed, and the collection failure status could not be persisted: {sync_exc}"
+                    )
             with self._lock:
                 job = self._jobs[job_id]
                 job["events"].append({

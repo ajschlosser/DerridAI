@@ -1593,6 +1593,29 @@ class ChromaStore:
             return vector
         return [value / norm for value in vector]
 
+    @staticmethod
+    def _is_missing_collection_error(exc: Exception) -> bool:
+        """Recognize an absent collection without conflating it with storage failure."""
+        name = exc.__class__.__name__.casefold()
+        message = str(exc).casefold()
+        return (
+            name in {"notfounderror", "invalidcollectionexception"}
+            or ("collection" in message and ("not found" in message or "does not exist" in message))
+        )
+
+    @staticmethod
+    def _is_query_capability_error(exc: Exception) -> bool:
+        """Return True only for query-shape/capability failures with a safe scan fallback."""
+        if isinstance(exc, (TypeError, ValueError)):
+            return True
+        name = exc.__class__.__name__.casefold()
+        message = str(exc).casefold()
+        if name in {"invalidargumenterror", "invalidwhereerror"}:
+            return True
+        mentions_feature = any(token in message for token in ("where_document", "$contains", "limit"))
+        mentions_capability = any(token in message for token in ("unsupported", "not supported", "invalid", "unexpected"))
+        return mentions_feature and mentions_capability
+
     def get_response_cache_records(
         self,
         *,
@@ -1603,22 +1626,24 @@ class ChromaStore:
         """Read the current response-cache collection."""
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
-        except Exception:
-            return {
-                "records": [],
-                "count": 0,
-                "total": 0,
-                "limit": limit,
-                "offset": offset,
-                "query": query or "",
-                "exists": False,
-            }
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return {
+                    "records": [],
+                    "count": 0,
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "query": query or "",
+                    "exists": False,
+                }
+            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
 
         try:
             payload = collection.get(include=["documents", "metadatas"])
             records = [dict(record) for record in self._decode_result(payload)]
-        except Exception:
-            records = []
+        except Exception as exc:
+            raise RuntimeError(f"Could not read response-cache records: {exc}") from exc
 
         records.sort(
             key=lambda record: str(
@@ -1655,7 +1680,9 @@ class ChromaStore:
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
             return self._public_store(collection)
-        except Exception:
+        except Exception as exc:
+            if not self._is_missing_collection_error(exc):
+                raise RuntimeError(f"Could not inspect response-cache collection: {exc}") from exc
             return self.create_store(
                 self._RESPONSE_CACHE_PUBLIC,
                 embedding_provider="precomputed",
@@ -2455,7 +2482,9 @@ class ChromaStore:
         fast_args["where_document"] = {"$contains": needle}
         try:
             rows = self._decode_result(col.get(**fast_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             rows = []
         if rows:
             return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
@@ -2468,7 +2497,9 @@ class ChromaStore:
         try:
             scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
             candidates = self._decode_result(col.get(**scan_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             scan_args.pop("limit", None)
             candidates = self._decode_result(col.get(**scan_args))
         folded = needle.casefold()
@@ -2507,7 +2538,9 @@ class ChromaStore:
         try:
             scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
             candidates = self._decode_result(col.get(**scan_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             scan_args.pop("limit", None)
             candidates = self._decode_result(col.get(**scan_args))
         if not candidates:
