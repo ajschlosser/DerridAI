@@ -54,9 +54,9 @@ The `needs_review` historical chart reconstructs prior state from the current re
 
 ## Background operations
 
-Background operations are managed from Dashboard and also appear as stacked operation toasts.
+Background operations are managed from Dashboard and also appear in a floating operations dock.
 
-The operations panel floats at the bottom-right of the page. Minimize it to a small "Show operations" pill; while it is shown the page keeps extra scroll room beneath the content so it never permanently covers controls. Progress for a PDF corpus build is shown as "N% overall" because its overall progress blends several stages and has no meaningful item count. The Corpus Builder's metadata card shows its real count as "settled / total tasks".
+The dock appears only while there is something to show. It sits at the bottom-center of the page; drag it anywhere, and double-click the handle to recenter it. Collapse it to a status pill, or expand it to cancel work, open a result, or dismiss a finished item. Dismissing a finished operation — or using **Clear finished** on Dashboard or in the dock — removes it from both surfaces. While the dock is shown, the page keeps extra scroll room beneath the content so it does not permanently cover controls. Progress for a PDF corpus build is shown as "N% overall" because its overall progress blends several stages and has no meaningful item count. The Corpus Builder's metadata card shows its real count as "settled / total tasks".
 
 Supported operation types:
 
@@ -79,7 +79,7 @@ Each operation exposes:
 - timestamped operation/event timeline
 - result summary
 
-Operation toasts can be expanded without navigating away from the current view. They expose a compact parameter/status summary, recent events, a full-details link, and a cancellation button while the operation is active.
+The expanded dock shows a compact row for each operation: status, progress, the current stage, and the next action. Full request details, event timelines, and result summaries remain on Dashboard and in the operation inspector.
 
 ### Cancellation semantics
 
@@ -339,7 +339,7 @@ An upsert creates a background job with:
 - cancellation
 - timestamped event history
 
-The dashboard and operation toast update while batches commit. Synchronization receipts are applied incrementally, so local records can change from `Pending` to `Synced` before the entire job has finished.
+The dashboard and operations dock update while batches commit. Synchronization receipts are applied incrementally, so local records can change from `Pending` to `Synced` before the entire job has finished.
 
 If a local record changes after its batch was written, its stored fingerprint remains the older one and the UI correctly returns that record to `Pending`.
 
