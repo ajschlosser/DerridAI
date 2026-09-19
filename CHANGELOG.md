@@ -5,7 +5,7 @@ Release history for DerridAI, newest first. Each entry links to the full release
 
 ## 0.61.0 — Undulating Umbrellabird
 
-Backend and frontend decomposition of the corpus build pipeline, separate lint/type CI gates, fail-visible handling of correctness-affecting fallbacks, and hardened authentication (environment-driven Secure session cookie, persistent failed-login throttle). See [0.61.0](docs/notes/0.61.0.md).
+Backend and frontend decomposition of the corpus build pipeline, separate lint/type CI gates, fail-visible handling of correctness-affecting fallbacks, and hardened authentication (environment-driven Secure session cookie, persistent failed-login throttle), a fix for LLM metadata values not being populated, and UI polish (in-place empty states, operations panel, progress labels). See [0.61.0](docs/notes/0.61.0.md).
 
 ## Earlier releases
 
