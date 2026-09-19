@@ -326,6 +326,10 @@ svg.ops-status-icon{fill:none;stroke:currentColor;stroke-width:1.8;stroke-lineca
 }
 @media (forced-colors:active){
   .ops-progress{border:1px solid CanvasText}.ops-progress-fill{background:Highlight}.ops-rail{background:CanvasText;opacity:1}
-  .ops-chip[aria-pressed="true"]{background:Highlight;color:HighlightText}
+  /* Do not depend on Highlight/HighlightText pairing: a thick border and underline say "pressed" in any palette. */
+  .ops-chip[aria-pressed="true"]{background:Canvas;color:CanvasText;border:3px solid Highlight;text-decoration:underline;text-underline-offset:3px}
+  .ops-chip-count,.ops-chip[aria-pressed="true"] .ops-chip-count{background:Canvas;color:CanvasText;border:1px solid CanvasText}
+  .ops-dot{background:none;border:2px solid CanvasText}
+  .ops-status{border:1px solid CanvasText}.ops-error{border:1px solid CanvasText}.ops-btn.is-primary{border-width:2px}
 }
 </style>

@@ -27,7 +27,7 @@ function bridgeFor(jobs: OperationView[]): OperationsBridge {
 const mixed = [
   op({ id: "b", type: "pdf_corpus", icon: "pdf", label: "PDF corpus build", status: "running", subtitle: "Derrida_ Jacques - On Cosmopolitanism and Forgiveness.pdf · Metadata: 54/180 settled", finishedAt: null, result: null, total: 307, completed: 92, progressLabel: "30% overall", facts: [{ name: "records", value: "60" }, { name: "need review", value: "21" }] }),
   op({ id: "u", type: "upsert", icon: "database", label: "Chroma upsert", status: "queued", subtitle: "derrida-primary · 0/400 committed", startedAt: null, finishedAt: null, result: null, total: 400, completed: 0, progressLabel: "0/400" }),
-  op({ id: "f", label: "Languages · Français", status: "failed", result: null, error: "Provider unreachable: connection refused (http://host.docker.internal:11434)", finishedAt: iso(-3600) }),
+  op({ id: "f", label: "Languages · Français", status: "failed", result: null, error: "Provider unreachable: connection refused (http://host.docker.internal:11434)", startedAt: iso(-3690), finishedAt: iso(-3600) }),
   op({ id: "r", type: "llm", icon: "edit", label: "LLM review", status: "completed", result: { kind: "review" }, subtitle: "10/10 records", finishedAt: iso(-7000), startedAt: iso(-7290) }),
   op({ id: "o1", label: "Languages · English", finishedAt: iso(-90000), startedAt: iso(-90050) }),
   op({ id: "o2", type: "rag", icon: "spark", label: "RAG pipeline", subtitle: "complete", finishedAt: iso(-94900), startedAt: iso(-95000) }),
