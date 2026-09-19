@@ -4083,6 +4083,18 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if build_id:
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
+        # Expose whether the semantic reader actually evaluated deterministic
+        # structural fields. A final value alone must never imply corroboration.
+        discourse_state = str(stage_status.get("discourse") or "")
+        discourse_ledger = stage_ledger.get("discourse") if isinstance(stage_ledger.get("discourse"), dict) else {}
+        if discourse_state in {"skipped", "failed", "needs_review"}:
+            skip_reason = str(discourse_ledger.get("error") or f"Discourse metadata stage was {discourse_state}.")
+            for structural_field in ("region_type", "primary_text"):
+                structural_status = record.setdefault("metadata_field_status", {}).get(structural_field)
+                if isinstance(structural_status, dict) and structural_status.get("status") == "deterministic" and "llm_checked" not in structural_status:
+                    structural_status["llm_checked"] = False
+                    structural_status["llm_skip_reason"] = skip_reason
+
         minimum = float(profile.get("min_metadata_confidence") or 0.65)
         clean_evidence: dict[str, Any] = dict(record.get("metadata_evidence") or {})
         valid_ids = set(source_ids)
@@ -4093,6 +4105,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         field_assessments: dict[str, dict[str, Any]] = {}
         llm_populated_fields: set[str] = set()
         raw_llm_values: dict[str, Any] = {}
+        llm_checked_fields: set[str] = set()
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -4107,6 +4120,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             for key, value in metadata.items():
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
                     continue
+                llm_checked_fields.add(key)
                 value, raw_llm_value = _normalize_semantic_value(key, value)
                 if raw_llm_value is not None:
                     raw_llm_values[key] = raw_llm_value
@@ -4186,7 +4200,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported proposition status: {value}"}
                     continue
                 if key == "stance" and value is not None and value not in STANCE_VALUES:
-                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported stance: {value}"}
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "raw_llm_value": raw_llm_value or value, "llm_checked": True, "reason": f"Model returned an unsupported stance: {value}"}
                     continue
                 assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
                 result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
@@ -4305,6 +4319,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "resolved", "reason": reason}
 
         apply_metadata_constraints(record)
+        for checked_field in llm_checked_fields:
+            checked_status = field_status.get(checked_field)
+            if isinstance(checked_status, dict):
+                checked_status.setdefault("llm_checked", True)
+                if checked_field in raw_llm_values:
+                    checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
+
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
