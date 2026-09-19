@@ -19,7 +19,7 @@ from starlette.background import BackgroundTask
 
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
 from .chroma_store import ChromaStore, StoreAlreadyExistsError
-from .config import settings
+from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm_tools import run_pdf_llm, run_rag_grade
 from .researcher_view import sanitize_rag_job, sanitize_records_payload, summarize_record
@@ -95,7 +95,7 @@ from .content_filter import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI API", version="0.62.1")
+app = FastAPI(title="DerridAI API", version=app_version_label())
 
 app.add_middleware(
     CORSMiddleware,
@@ -662,7 +662,7 @@ def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, req
 
 @app.get("/api/live")
 def live():
-    return {"ok": True}
+    return {"ok": True, "version": APP_VERSION, "git_commit": APP_GIT_COMMIT or None}
 
 
 @app.get("/api/health")
@@ -671,6 +671,8 @@ def health():
     ollama = llm_status("ollama")
     return {
         "ok": True,
+        "version": APP_VERSION,
+        "git_commit": APP_GIT_COMMIT or None,
         "chroma": chroma,
         "chroma_path": settings.chroma_path,
         "embedding_provider": settings.embedding_provider,
@@ -709,6 +711,8 @@ def health():
 @app.get("/api/config")
 def config():
     return {
+        "version": APP_VERSION,
+        "git_commit": APP_GIT_COMMIT or None,
         "defaults": {
             "embedding_provider": settings.embedding_provider,
             "embedding_model": settings.ollama_embed_model,
@@ -1287,7 +1291,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.62.1",
+            "app_version": APP_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),

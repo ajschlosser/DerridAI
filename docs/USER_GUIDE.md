@@ -1,6 +1,6 @@
 # DerridAI User Guide
 
-Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes.
+Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, workspace footer, and browser tab title show the release version next to the git commit that built this instance.
 
 ## Users and roles
 
