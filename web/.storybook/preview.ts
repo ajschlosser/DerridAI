@@ -10,12 +10,43 @@ setup((app) => {
   app.use(createPinia());
 });
 
+function directionForLocale(locale: string) {
+  try {
+    const script = new Intl.Locale(locale).maximize().script || "";
+    return ["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"].includes(script) ? "rtl" : "ltr";
+  } catch {
+    return "ltr";
+  }
+}
+
 const preview: Preview = {
+  globalTypes: {
+    locale: {
+      description: "Document language used to review localized layouts",
+      toolbar: {
+        icon: "globe",
+        items: [
+          { value: "en-US", title: "English (United States)" },
+          { value: "fr-CA", title: "Français (Québec)" },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { locale: "en-US" },
   parameters: {
     layout: "padded",
     a11y: { test: "error" },
     controls: { expanded: true },
   },
+  decorators: [
+    (story, context) => {
+      const locale = String(context.parameters.locale || context.globals.locale || "en-US");
+      document.documentElement.lang = locale;
+      document.documentElement.dir = directionForLocale(locale);
+      return { components: { story }, template: "<story />" };
+    },
+  ],
 };
 
 export default preview;
