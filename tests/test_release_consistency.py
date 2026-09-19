@@ -21,12 +21,14 @@ def find_all(pattern: str, path: str) -> list[str]:
 
 
 def test_all_declared_versions_agree():
-    """Every place that declares the app version must equal web/package.json.
+    """Every place that declares the app version must equal web/package.json, and the release needs notes.
 
     Checked: api/app/config.py, web/index.html title, and README.md "Current version".
     The FastAPI constructor, backup manifest, App.vue footer, and AuthScreen read
     APP_VERSION / the Vite-injected build stamp rather than duplicating the string.
-    When cutting a release, bump the declared copies (see AGENTS.md).
+    docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
+    release, bump the declared copies (see AGENTS.md). Do not hard-code the version in
+    other tests.
     """
     version = json.loads(read("web/package.json"))["version"]
     assert re.fullmatch(SEMVER, version)

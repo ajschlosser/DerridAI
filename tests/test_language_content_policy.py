@@ -1,4 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
+"""Locale-generated researcher text policies (the terms live in data, not in source).
+
+Why: the researcher content filter is driven by per-language policies that an administrator generates
+with an LLM and stores in the system database. These tests cover enforcement, what the browser
+sees, persistence, generation validation, and combining several languages.
+How: works on small hand-written policies (`_READY` and a French one) with placeholder words, so no
+real forbidden term appears in the test source. Uses temp SQLite databases and a fake LLM call.
+"""
+
 from __future__ import annotations
 
 import json
@@ -41,6 +50,11 @@ _READY = {
 
 
 def test_enforce_researcher_text_requires_a_ready_locale_policy():
+    """Text cannot be checked without a ready policy, and a ready policy blocks its terms.
+
+    With no policies the check raises "generates a text policy" (so researcher input is not silently allowed).
+    With `_READY`, ordinary text passes and a text containing a blocked term raises "cannot contain".
+    """
     with pytest.raises(ValueError, match="generates a text policy"):
         enforce_researcher_text("hospitality", policies=[])
     enforce_researcher_text("hospitality", policies=[_READY])
@@ -49,6 +63,11 @@ def test_enforce_researcher_text_requires_a_ready_locale_policy():
 
 
 def test_public_policy_mirror_sends_digests_not_terms():
+    """The mirror sent to browsers holds hashes of terms, never the terms themselves.
+
+    Checks ready=True, the locale list, that a blocked term's digest is present, and that the raw word does
+    not appear anywhere in the serialized mirror.
+    """
     mirror = public_content_policy_mirror([{**_READY, "code": "en-US"}])
     assert mirror["ready"] is True
     assert mirror["locales"] == ["en-US"]
@@ -58,6 +77,11 @@ def test_public_policy_mirror_sends_digests_not_terms():
 
 
 def test_content_policy_survives_dictionary_save(tmp_path, monkeypatch):
+    """Saving a language dictionary must not erase or expose its content policy.
+
+    Stores a policy, confirms the language listing shows content_policy_ready, that get_language hides the raw
+    policy, and that saving the dictionary again keeps the blocked terms. The admin snapshot still includes the policy.
+    """
     import app.system_store as store_module
 
     repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
@@ -81,6 +105,11 @@ def test_content_policy_survives_dictionary_save(tmp_path, monkeypatch):
 
 
 def test_generate_content_policy_validates_model_json(monkeypatch):
+    """A model's JSON reply becomes a validated policy; too-thin policies are rejected.
+
+    A fake LLM returns 8 blocked terms and one contextual term: the result is "ready", marked llm-generated.
+    A policy with only one blocked term must raise ValueError (it would give a false sense of protection).
+    """
     import app.content_policy_generation as module
 
     def fake_chat_complete(**kwargs):
@@ -117,6 +146,11 @@ def test_generate_content_policy_validates_model_json(monkeypatch):
 
 
 def test_union_of_locale_policies_is_what_gets_enforced():
+    """Terms from every ready language are enforced together.
+
+    A French-only term is blocked when both English and French policies are supplied, while the same
+    words split by a space (a different phrase) are not.
+    """
     french = {
         "status": "ready",
         "code": "fr-CA",
