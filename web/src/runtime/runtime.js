@@ -10559,6 +10559,7 @@ function searchCurrentRecordMetadata(field,value,{contains=false}={}){return sea
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
 export {
+  jobProgressText,
   state,
   viewConfig,
   setUserContext,
