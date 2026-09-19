@@ -52,12 +52,7 @@ class LanguageTranslationInterrupted(InterruptedError):
 
 
 def _locale_style(code: str) -> str:
-    if code == "fr-CA":
-        return (
-            "Use professional Canadian French as written in Québec. Follow Office québécois de la langue française (OQLF) "
-            "terminology where applicable, prefer natural Québec software-interface vocabulary, avoid France-only wording "
-            "and unnecessary English calques, and follow Canadian French typography. "
-        )
+    """Extra style guidance for a locale. None is needed: the target language and code are already in the prompt."""
     return ""
 
 

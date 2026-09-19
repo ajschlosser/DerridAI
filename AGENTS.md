@@ -43,7 +43,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 ## Conventions
 
 - Every source file carries `Copyright 2026 Aaron John Schlosser, PhD.` (comment header). New files should too.
-- **Internationalization:** English (`en-US`) and Québec French (`fr-CA`) are first-class. Any new user-facing string must be added to both `api/app/locales` / frontend locale modules with identical key sets and placeholders; parity is regression-tested. No hard-coded UI strings.
+- **Internationalization:** English (`en-US`) and French (`fr-CA`) are first-class. Any new user-facing string must be added to both `api/app/locales` / frontend locale modules with identical key sets and placeholders; parity is regression-tested. No hard-coded UI strings.
 - **Accessibility:** keyboard operability, visible focus, semantic status communication, a 12px minimum type size, and WCAG 2.0 AA. Add or update Storybook stories for new components; the a11y addon and axe tests are gates.
 - **Surfaces:** floating panels use the solid/raised/overlay/glass surface tokens; overlays must be opaque and glass at least 90% opaque. No text may bleed through popovers.
 - **Scholarly provenance is the core requirement.** The chain is source → passage → speaker → position holder → stance → proposition → exact evidence → citation → claim. Preserve it.

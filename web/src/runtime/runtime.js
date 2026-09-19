@@ -185,14 +185,14 @@ const UI_COLOR_THEMES=new Set(["green","blue","slate"]);
 // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{}try{localStorage.setItem("derridai.ui.theme",next)}catch{}return next}
 
-function setTranslationDictionary(locale,dictionary={},base={}){
+function setTranslationDictionary(locale,dictionary={},base={},info={}){
   const canonical=base||{};
   const reverse=new Map();
   for(const [key,value] of Object.entries(canonical)){
     const text=String(value??"").trim();
     if(text&&!reverse.has(text))reverse.set(text,key);
   }
-  state.translations={locale:String(locale||"en-US"),dictionary:dictionary||{},base:canonical,reverse};
+  state.translations={locale:String(locale||"en-US"),dictionary:dictionary||{},base:canonical,reverse,info:info||{}};
 }
 function tr(key,fallback=""){
   return state.translations?.dictionary?.[key] ?? state.translations?.base?.[key] ?? fallback ?? key;
@@ -5180,8 +5180,8 @@ async function renderDashboard(main){
     : recentAuditChanges(4).map(({file,record,index,update})=>({kind:"record",timestamp:update.timestamp||"",file,record,index,update}));
   const works=workItems.sort((a,b)=>a.work.localeCompare(b.work));
   const currentProvider=defaultProviderProfile();
-  const currentLanguage=state.translations?.locale==="fr-CA"?tr("language.french_ca","Français"):tr("language.english_us","English");
-  const currentLanguageFlag=state.translations?.locale==="fr-CA"?"🇨🇦":"🇺🇸";
+  const currentLanguage=state.translations?.info?.name||state.translations?.locale||"";
+  const currentLanguageFlag=state.translations?.info?.flag||"🌐";
   const latestAnnotation=(!isResearcher()||hasCapability("annotations.read"))?(recentAnnotations(1)[0]||null):null;
   const preview=await dashboardRecordPreview(),previewRecord=preview.record,previewTarget=preview.target;
   main.innerHTML=`<div class="dashboard-page">
@@ -9803,13 +9803,19 @@ function getShellSnapshot(){
     forwardLabel:state.navForward.length?viewLabel(state.navForward[state.navForward.length-1].view):"",
     selectedEvidenceCount:selectedEvidenceEntries().length,
     systemHtml:systemCardHtml(),
-    nav:viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
-      ...item,
-      label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
-      section:translatedSectionLabel(item.section),
-      disabledReason:viewDisabledReason(item.id),
-    })),
+    nav:getNavItems(),
   };
+}
+// Navigation membership depends only on the signed-in user, the static view list,
+// and translations, never on workspace/bootstrap state. The Vue shell calls this as
+// soon as a user exists so the menu is complete before the slow runtime bootstrap.
+function getNavItems(){
+  return viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
+    ...item,
+    label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
+    section:translatedSectionLabel(item.section),
+    disabledReason:viewDisabledReason(item.id),
+  }));
 }
 
 function toggleSidebar(){
@@ -10620,6 +10626,7 @@ function searchCurrentRecordMetadata(field,value,{contains=false}={}){return sea
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
 export {
+  getNavItems,
   jobProgressText,
   state,
   viewConfig,

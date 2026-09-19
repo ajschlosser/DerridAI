@@ -23,6 +23,8 @@ Browser workspace persistence is isolated for researcher accounts so a researche
 
 Researcher-authored text (queries, notes, tags, and filters) is checked against a per-locale forbidden-term policy. Those terms are not shipped in the application source. After the first administrator account exists, generate a policy for each built-in locale from **System → Languages** using a provider profile. Installing a new interface language generates a policy as part of that job. Until at least one locale has a ready policy, the API rejects researcher-authored text. Enforcement uses the union of every generated locale list, so English and French (or any later locale) are checked together. Administrators can review, edit, and regenerate the stored terms; researcher sessions receive only hashed terms for immediate browser feedback.
 
+A policy is generated **in the language it is for**. The request names the installed language (for example "Français (fr)") and asks for terms in six categories: vulgarities, sexual insults, racial and ethnic slurs, religious slurs, homophobic and transphobic slurs, and ableist slurs, at least three each. A second, narrower question then audits every candidate ("is this a word of this language?"). Terms that also appear in another installed language's policy must be affirmatively confirmed, since that overlap is the usual sign of English leaking into another language. Rejected terms are removed, and only the categories still short are requested again (up to three rounds), with the rejected terms listed so the model does not repeat them. Wrong-language terms are never saved. If the model still cannot fill a category, the policy is saved with a "Coverage is incomplete for: …" note so you can add terms yourself; if fewer than eight acceptable terms exist, generation fails with an explanation. The card shows how many attempts were needed and how many terms the language check removed. The check uses the same model, so it reduces the problem rather than eliminating it; review a generated list before relying on it.
+
 ## Dashboard
 
 Dashboard shows:
@@ -418,7 +420,7 @@ Image-only PDFs still require an external OCR/vision workflow; DerridAI does not
 
 ## Empty states and shortcuts
 
-When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms).
+When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
 
 ## RAG Research
 

@@ -14,6 +14,8 @@ export interface ProviderProfile {
 
 export interface LanguageInfo { code: string; name: string; flag: string; content_policy_ready?: boolean }
 export interface LanguageContentPolicy {
+  target_language?: string;
+  generation_report?: { attempts: number; removed_as_wrong_language: number; categories?: Record<string, number>; short_categories?: string[] };
   code?: string;
   status?: string;
   blocked_terms?: string[];

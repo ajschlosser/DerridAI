@@ -107,28 +107,23 @@ def test_content_policy_survives_dictionary_save(tmp_path, monkeypatch):
 def test_generate_content_policy_validates_model_json(monkeypatch):
     """A model's JSON reply becomes a validated policy; too-thin policies are rejected.
 
-    A fake LLM returns 8 blocked terms and one contextual term: the result is "ready", marked llm-generated.
-    A policy with only one blocked term must raise ValueError (it would give a false sense of protection).
+    A fake LLM returns 3 terms in each of the 6 categories plus one contextual term, and a language
+    audit that approves everything: the result is "ready", marked llm-generated, with a report of
+    how it was produced. A policy with only one blocked term must raise ValueError (it would give a
+    false sense of protection).
     """
     import app.content_policy_generation as module
 
     def fake_chat_complete(**kwargs):
         assert kwargs["json_mode"] is True
-        return json.dumps({
-            "blocked_terms": [
-                "zzblock",
-                "qwvulgar",
-                "aaarghword",
-                "bbarghword",
-                "ccarghword",
-                "ddarghword",
-                "eearghword",
-                "ffarghword",
-            ],
-            "contextual_terms": [
-                {"term": "widget", "allow_title_case": True, "allow_if_surrounding": [], "allow_if_before_markers": []},
-            ],
-        })
+        if kwargs["schema_name"] == "derridai_policy_language_audit":
+            listed = [line[2:].split()[0] for line in kwargs["prompt"].splitlines() if line.startswith("- ")]
+            return json.dumps({"verdicts": [{"term": term, "in_language": True} for term in listed]})
+        reply = {category: [f"{category[:2]}{word}" for word in ("aaa", "bbb", "ccc")] for category in module.CATEGORIES}
+        reply["contextual_terms"] = [
+            {"term": "widget", "allow_title_case": True, "allow_if_surrounding": [], "allow_if_before_markers": []},
+        ]
+        return json.dumps(reply)
 
     monkeypatch.setattr(module, "chat_complete", fake_chat_complete)
     policy = generate_content_policy(
@@ -141,6 +136,7 @@ def test_generate_content_policy_validates_model_json(monkeypatch):
     assert policy["status"] == "ready"
     assert policy["source"] == "llm-generated"
     assert "widget" in {item["term"] for item in policy["contextual_terms"]}
+    assert policy["generation_report"]["attempts"] == 1
     with pytest.raises(ValueError):
         normalize_content_policy({"blocked_terms": ["too-few"], "contextual_terms": []})
 

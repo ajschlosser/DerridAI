@@ -109,17 +109,40 @@ def normalize_content_policy(raw: Any, *, require_ready: bool = True) -> dict[st
     if require_ready and len(blocked) < _MIN_BLOCKED:
         raise ValueError(f"Researcher text policy needs at least {_MIN_BLOCKED} forbidden terms.")
     status = "ready" if blocked or contextual else "missing"
-    policy = {
+    policy: dict[str, Any] = {
         "version": POLICY_VERSION,
         "status": status,
         "blocked_terms": blocked,
         "contextual_terms": contextual,
     }
-    for key in ("generated_at", "source", "provider", "model"):
+    for key in ("generated_at", "source", "provider", "model", "target_language"):
         value = raw.get(key)
         if value:
             policy[key] = value
+    report = _clean_generation_report(raw.get("generation_report"))
+    if report:
+        policy["generation_report"] = report
     return policy
+
+
+def _clean_generation_report(raw: Any) -> dict[str, Any]:
+    """Keep the small, numeric summary of how a policy was generated; drop anything else."""
+    if not isinstance(raw, Mapping):
+        return {}
+    categories = raw.get("categories")
+    try:
+        report: dict[str, Any] = {
+            "attempts": int(raw.get("attempts") or 0),
+            "removed_as_wrong_language": int(raw.get("removed_as_wrong_language") or 0),
+        }
+        if isinstance(categories, Mapping):
+            report["categories"] = {str(name): int(count) for name, count in categories.items()}
+        short = raw.get("short_categories")
+        if isinstance(short, list):
+            report["short_categories"] = [str(name) for name in short]
+    except (TypeError, ValueError):
+        return {}
+    return report
 
 
 def public_content_policy_mirror(policies: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

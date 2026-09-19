@@ -1,6 +1,6 @@
 """Built-in language dictionaries and their usage in the web app.
 
-Why: English and Québec French must stay complete and equivalent, every string the
+Why: English and French must stay complete and equivalent, every string the
 frontend asks for must exist, and administrator edits to a dictionary must survive
 restarts.
 How: reads the locale modules with `ast` (no import) and scans web sources with
@@ -52,7 +52,7 @@ def test_english_and_quebec_french_dictionaries_are_complete_and_placeholder_saf
     french = dictionaries["DEFAULT_FR_CA"]
     assert len(english) >= 1500
     assert set(english) == set(french)
-    assert french["language.french_ca"] == "Français (Québec)"
+    assert french["language.french_ca"] == "Français"
     assert "500" in french["vector.sync_behavior_help"]
     assert re.findall(r"\d+", english["vector.sync_behavior_help"]) == re.findall(r"\d+", french["vector.sync_behavior_help"])
     for key, source in english.items():
@@ -114,7 +114,7 @@ def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(
 
     store = store_module.SystemStore()
     fresh = store.snapshot()
-    assert fresh["languages"]["fr-CA"]["name"] == "Français (Québec)"
+    assert fresh["languages"]["fr-CA"]["name"] == "Français"
     assert fresh["languages"]["en-US"]["dictionary"]["app.name"] == "DerridAI"
     assert fresh["languages"]["fr-CA"]["dictionary"]["nav.rag"] == "Recherche"
 

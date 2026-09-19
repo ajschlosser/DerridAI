@@ -86,7 +86,7 @@ from .pdf_tools import extract_pdf_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import translate_english_dictionary
-from .content_policy_generation import generate_content_policy
+from .content_policy_generation import generate_policy_for_installed_language
 from .content_filter import (
     admin_content_policy_view,
     enforce_researcher_text,
@@ -606,7 +606,7 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
     try:
         system_store.put_content_policy(
             code,
-            generate_content_policy(
+            generate_policy_for_installed_language(
                 code=code,
                 provider=body.provider,
                 model=model,

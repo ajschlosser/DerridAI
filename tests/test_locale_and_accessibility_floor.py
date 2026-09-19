@@ -1,6 +1,6 @@
 """Locale completeness and accessibility floor.
 
-Why: English (en-US) and Québec French (fr-CA) are both first-class. Every string
+Why: English (en-US) and French (fr-CA) are both first-class. Every string
 must exist in both with the same {placeholders}, and no UI text may be smaller than
 12px (WCAG readability requirement in AGENTS.md).
 How: parses the locale modules with `ast` (no import) and scans CSS/Vue sources
@@ -34,15 +34,15 @@ def test_built_in_locales_are_canonical_and_complete():
     """en_us and fr_ca have identical keys, non-empty values, and matching placeholders.
 
     Checks: at least 3000 keys; the two key sets are equal; the French language name is
-    "Français (Québec)"; every value is non-blank; and each key's {placeholder} names
+    "Français"; every value is non-blank; and each key's {placeholder} names
     match between languages (so a translation cannot drop or rename a variable).
     """
     en = _locale(EN_PATH, "EN_US")
     fr = _locale(FR_PATH, "FR_CA")
     assert len(en) >= 3000
     assert set(en) == set(fr)
-    assert fr["language.french_ca"] == "Français (Québec)"
-    assert "Québec" in FR_PATH.read_text(encoding="utf-8")
+    assert fr["language.french_ca"] == "Français"
+    assert "Français" in FR_PATH.read_text(encoding="utf-8")
     for key, source in en.items():
         assert source.strip(), key
         assert fr[key].strip(), key

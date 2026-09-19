@@ -3,7 +3,7 @@
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
-Current version: **0.62.1 — Factory Reset** ([release notes](docs/notes/0.62.1.md)).
+Current version: **0.62.2 — Vexing Vixen** ([release notes](docs/notes/0.62.2.md)).
 
 ## Features
 
@@ -14,7 +14,7 @@ Current version: **0.62.1 — Factory Reset** ([release notes](docs/notes/0.62.1
 - **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, streamed and cancellable generation, a cached Response Library, and LLM grading of answers.
 - **Roles** — Admin and Researcher accounts; researchers see summarized evidence text and cannot mutate corpora.
 - **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, PDFs, and every Chroma collection with its embeddings.
-- **Bilingual and accessible** — English and Québec French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
+- **Bilingual and accessible** — English and French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
 
 See the [User Guide](docs/USER_GUIDE.md) for a full feature reference.
 

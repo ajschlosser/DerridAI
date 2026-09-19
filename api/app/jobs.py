@@ -23,7 +23,7 @@ from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
-from .content_policy_generation import generate_content_policy
+from .content_policy_generation import generate_policy_for_installed_language
 from .persistence import job_repository
 
 
@@ -1767,7 +1767,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 "detail": f"Generating researcher text policy for {code}",
             })
         try:
-            policy = generate_content_policy(
+            policy = generate_policy_for_installed_language(
                 code=code,
                 provider=provider,
                 model=model,
