@@ -64,7 +64,7 @@ def test_llm_suggestion_prefill_and_missing_confidence_are_not_fabricated_as_zer
     assert 'llm_suggestion_prefilled' in field
     assert 'confidence_not_reported' in field
     assert 'confidence: float | None = Field(default=None' in backend
-    assert 'region_type_consistency' in backend
+    assert 'region_type_consistency' in text('api/app/corpus_metadata.py')
 
 
 def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path:Path):
