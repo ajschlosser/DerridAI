@@ -1,0 +1,16 @@
+import {chromium} from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import {makeJobs} from '/tmp/opsfixture.mjs';
+const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1440,height:1000}});const p=await ctx.newPage();
+let tick=0;await p.route('**/api/jobs',async r=>{ if(r.request().method()==='GET') return r.fulfill({json:{jobs:makeJobs(tick)}}); return r.continue()});
+await p.goto('http://127.0.0.1:15173');await p.waitForTimeout(1200);
+await p.fill('input[type=text],input:not([type])','admin');await p.fill('input[type=password]',process.env.PW);
+await p.click('button:has-text("Sign in")');await p.waitForTimeout(3500);
+await p.locator('aside button[title="Operations"]').first().click();await p.waitForTimeout(2500);
+await p.evaluate(()=>{window.__mark={panel:document.querySelector('#operationsPanel'),host:document.querySelector('#operationsPanelHost'),main:document.querySelector('#main'),btn:document.querySelector('[data-op-id="ok-1"] button')};
+  window.__mo=[];new MutationObserver(m=>{for(const x of m){for(const n of x.removedNodes){if(n.nodeType===1&&(n.id==='operationsPanel'||n.id==='operationsPanelHost'||n.matches?.('.dashboard-page,.dashboard,.card')))window.__mo.push('removed '+(n.id||n.className).toString().slice(0,50)+' from '+(x.target.id||x.target.className||x.target.tagName).toString().slice(0,40))}}}).observe(document.querySelector('#main'),{childList:true,subtree:true})});
+const res=await new AxeBuilder({page:p}).include('#operationsPanel').withTags(['wcag2aa']).analyze();
+for(const v of res.incomplete)for(const n of v.nodes)console.log('needs-review',v.id,n.target.join(' '),'|',(n.any[0]?.message||'').slice(0,160));
+tick++;await p.waitForTimeout(9000);
+console.log(JSON.stringify(await p.evaluate(()=>({panelSame:window.__mark.panel===document.querySelector('#operationsPanel'),hostSame:window.__mark.host===document.querySelector('#operationsPanelHost'),mainSame:window.__mark.main===document.querySelector('#main'),btnSame:window.__mark.btn===document.querySelector('[data-op-id="ok-1"] button'),mutations:window.__mo}))));
+await b.close();

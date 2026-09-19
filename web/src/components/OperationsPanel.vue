@@ -244,7 +244,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 .ops-chip:hover{background:var(--ops-sunken)}
 .ops-chip[aria-pressed="true"]{background:var(--ops-accent);border-color:var(--ops-accent);color:#fff}
 .ops-chip-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--ops-neutral-bg);color:var(--ops-neutral-fg);font-size:.8125rem;font-variant-numeric:tabular-nums}
-.ops-chip[aria-pressed="true"] .ops-chip-count{background:rgba(255,255,255,.22);color:#fff}
+.ops-chip[aria-pressed="true"] .ops-chip-count{background:#fff;color:var(--ops-accent)}
 .ops-chip.is-attention:not([aria-pressed="true"]) .ops-chip-count{background:var(--ops-warning-bg);color:var(--ops-warning-fg)}
 .ops-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 14px;border:1px solid var(--ops-control);border-radius:10px;background:var(--ops-surface);color:var(--ops-text);font:inherit;font-size:.875rem;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
 .ops-btn :where(svg){width:16px;height:16px}

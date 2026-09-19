@@ -92,6 +92,13 @@ describe("Operations panel semantics", () => {
     }
   });
 
+  it("labels a queued operation as queued, not as started, and never shows raw status codes", async () => {
+    const { wrapper } = await mountPanel([running({ id: "q", status: "queued", startedAt: null, completed: 0 }), job({ id: "c", status: "cancelled", result: null })]);
+    const rows = wrapper.findAll("li.ops-row");
+    expect(rows[0].get(".ops-meta").text()).toMatch(/^Queued /);
+    expect(wrapper.findAll(".ops-status").map((s) => s.text())).toEqual(["Queued", "Cancelled"]);
+  });
+
   it("shows the reason for a failure inline", async () => {
     const { wrapper } = await mountPanel([job({ status: "failed", result: null, error: "Provider unreachable" })]);
     expect(wrapper.get(".ops-error").text()).toContain("What went wrong");

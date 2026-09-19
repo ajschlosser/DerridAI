@@ -15,7 +15,10 @@ const tone = computed(() => statusBadgeTone(props.view.status));
 const percent = computed(() => percentOf(props.view));
 const determinate = computed(() => active.value && props.view.total > 0 && props.view.status !== "queued");
 const locale = computed(() => i18n.locale || "en-US");
-const statusText = computed(() => i18n.t(`operations.panel.status_${props.view.status}`, props.view.status));
+const STATUS_FALLBACK: Record<string, string> = {
+  queued: "Queued", running: "Running", cancelling: "Cancelling", completed: "Completed", cancelled: "Cancelled", failed: "Failed", blocked: "Blocked",
+};
+const statusText = computed(() => i18n.t(`operations.panel.status_${props.view.status}`, STATUS_FALLBACK[props.view.status] ?? props.view.status));
 const time = (seconds: number) => formatDuration(seconds, locale.value);
 
 const progressText = computed(() => {
@@ -34,10 +37,11 @@ const timingText = computed(() => {
   if (v.startedAt && v.finishedAt) parts.push(i18n.tf("operations.panel.took", "Took {time}", { time: time(elapsedSeconds(v, props.now)) }));
   return parts.join(" · ");
 });
-const whenIso = computed(() => (active.value ? props.view.startedAt || props.view.createdAt : props.view.finishedAt || props.view.startedAt));
+const whenIso = computed(() => (props.view.status === "queued" ? props.view.createdAt : active.value ? props.view.startedAt || props.view.createdAt : props.view.finishedAt || props.view.startedAt));
 const whenText = computed(() => {
   const when = relativeTime(whenIso.value, props.now, locale.value);
   if (!when) return "";
+  if (props.view.status === "queued") return i18n.tf("operations.panel.queued_at", "Queued {when}", { when });
   return active.value
     ? i18n.tf("operations.panel.started", "Started {when}", { when })
     : i18n.tf("operations.panel.finished", "Finished {when}", { when });

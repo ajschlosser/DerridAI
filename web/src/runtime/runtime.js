@@ -3797,7 +3797,8 @@ function operationSubtitle(job){
   if(job.type==="rag")return String(job.stage_detail||job.stage||"queued");
   if(job.type==="upsert")return `${job.store_name||"collection"} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`;
   if(job.type==="pdf_corpus")return `${job.source_filename||tr("pdf_corpus.source_pdf","Source PDF")} · ${job.stage_detail||job.stage||job.raw_status||"queued"}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)")}`:""}`;
-  if(job.type==="llm_tool")return `${job.stage_detail||job.label||job.tool||"LLM operation"} · ${job.provider||""} · ${job.model||""}`;
+  // Provider and model appear in the facts, and the label is the row title: say only what is new.
+  if(job.type==="llm_tool"){const detail=String(job.stage_detail||"");return detail&&detail!==jobLabel(job)?detail:""}
   return `${job.completed}/${job.total} records${job.current_record_id?` · current: ${job.current_record_id}`:""}${job.failed?` · ${job.failed} failed`:""}`;
 }
 function operationResultKind(job){
@@ -3809,9 +3810,9 @@ function operationResultKind(job){
 }
 function operationViewModel(job){
   // Facts already shown elsewhere in the row (owner, operation name, stage) are left out.
-  const skip=new Set(["Started by","Operation","Stage",tr("pdf_corpus.stage","Stage")]);
+  const skip=new Set(["Started by","Operation","Stage","Total time",tr("pdf_corpus.stage","Stage")]);
   const facts=operationDetailPairs(job)
-    .filter(([name])=>!skip.has(String(name)))
+    .filter(([name,value])=>!skip.has(String(name))&&String(value??"").trim()!==""&&String(value).trim()!=="—")
     .slice(0,4)
     .map(([name,value])=>({name:String(name),value:String(value)}));
   const failure=job.status==="failed"?String(job.fatal_error||job.error_message||job.error?.message||job.stage_detail||""):job.status==="blocked"?String(job.stage_detail||""):"";
