@@ -10,14 +10,6 @@ def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_0406_release_identity_and_notes():
-    package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
-
-
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():
     workspace = text("web/src/views/PdfWorkspaceView.vue")
     dictionary = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")

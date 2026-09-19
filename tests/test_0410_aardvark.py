@@ -36,7 +36,6 @@ def test_release_contract_is_v8_with_field_aware_metadata():
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
     assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==12
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]

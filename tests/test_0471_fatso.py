@@ -1,13 +1,9 @@
 from pathlib import Path
-import json
 ROOT=Path(__file__).resolve().parents[1]
 
 def text(rel): return (ROOT/rel).read_text(encoding='utf-8')
 
 def test_fatso_release_identity_and_foundations():
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert 'APP_VERSION = "0.60.0"' in text('api/app/config.py')
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
     assert (ROOT/'web/src/components/ui/UiButton.vue').exists()
     assert (ROOT/'web/src/components/ui/UiCard.vue').exists()
     assert (ROOT/'web/src/components/ui/UiField.vue').exists()

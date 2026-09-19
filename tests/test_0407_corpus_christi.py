@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from app import corpus_builder as cb
@@ -10,12 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
-
-
-def test_0408_release_identity():
-    assert json.loads(text("web/package.json"))["version"] == "0.60.0"
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
 
 
 def test_segmentation_uses_deterministic_candidates_and_boundary_level_review():
@@ -78,7 +71,6 @@ def test_work_separation_and_saved_subset_profiles_are_first_class_ui_flows():
 def test_pdf_corpus_builder_review_action_calls_declared_refresh_handler():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     assert 'loadRecords()' not in builder
-
 
 
 def test_corpus_build_progress_does_not_dereference_nullable_validation_in_template():

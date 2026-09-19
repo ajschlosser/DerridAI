@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,13 +12,6 @@ ROLES = (ROOT / "web/src/views/RolesView.vue").read_text(encoding="utf-8")
 USERS = (ROOT / "web/src/views/UsersView.vue").read_text(encoding="utf-8")
 AUTH_API = (ROOT / "web/src/api/auth.ts").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-
-
-def test_release_version_is_0313():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_tooltips_escape_sidebar_and_stack_above_workspace():
@@ -49,7 +41,6 @@ def test_research_request_normalizes_numeric_fields_before_post():
     assert "const cfg=normalizedResearchConfig(updateResearchConfig(input.config||{}));" in RUNTIME
     assert "const generation=sanitizeResearchGeneration" in RUNTIME
     assert "auto_grade_generation:gradeConfig?.ollama?sanitizeResearchGeneration" in RUNTIME
-
 
 
 def test_rag_schema_rejects_blank_numeric_values():

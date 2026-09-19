@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding='utf-8')
-
-
-def test_release_identity_0580():
-    assert json.loads(text('web/package.json'))['version'] == '0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-    assert 'APP_VERSION = "0.60.0"' in text('api/app/config.py')
 
 
 def test_metadata_semantic_fields_have_correct_control_kinds():

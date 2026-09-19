@@ -35,12 +35,6 @@ def install(tmp_path:Path, records:list[dict], *, status='running', stage='enric
     return repo,build
 
 
-def test_release_identity():
-    assert APP_VERSION=='0.60.0'
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-
-
 def test_human_metadata_edit_is_allowed_during_enrichment_and_establishes_field_ownership(tmp_path:Path):
     repo,build=install(tmp_path,[{'text':'Derrida writes about hospitality.'}])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)

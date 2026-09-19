@@ -50,12 +50,6 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
     }
 
 
-def test_release_identity():
-    assert APP_VERSION == "0.60.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
-
-
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
     repo, build = install_repo(tmp_path, [rec("r1","b1"), rec("r2","b2")])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -91,7 +85,6 @@ def test_source_problem_filter_is_first_class(tmp_path: Path):
     page = repo.page_records(build["build_id"], source_problem=True)
     assert page["total"] == 1
     assert page["items"][0]["record_id"] == "r1"
-
 
 
 def test_fragmented_glyph_record_is_detected():

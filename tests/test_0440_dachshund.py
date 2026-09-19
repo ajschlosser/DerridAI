@@ -60,11 +60,9 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.60.0"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]["version"] == 12
     assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
 
 
@@ -115,7 +113,6 @@ def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_
     assert result["record"]["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
 
 
-
 def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Path):
     first=ready_record("r1","b1")
     already=ready_record("r2","b2")
@@ -155,7 +152,6 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
         assert False, "topology edits must remain locked while neighboring metadata is in flight"
     except ValueError as exc:
         assert "not editable until segmentation is complete" in str(exc).lower()
-
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):

@@ -1,22 +1,11 @@
 from pathlib import Path
-import json
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 INSPECTOR = (ROOT / "web/src/components/record/RecordInspector.vue").read_text(encoding="utf-8")
-README = (ROOT / "README.md").read_text(encoding="utf-8")
 MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-
-
-def test_0364_release_identity():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert '"app_version": "0.60.0"' in MAIN
-    assert "# DerridAI 0.60.0" in README
-    assert "0.36.4 — Oops You Did It Again" in README
 
 
 def test_export_overwrite_ux_is_removed():

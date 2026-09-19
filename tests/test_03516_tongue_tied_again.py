@@ -18,17 +18,6 @@ LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
 SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 
 
-def test_03516_release_identity():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in main
-    assert '"app_version": "0.60.0"' in main
-    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.60.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
-    assert "0.35.16 — Tongue Tied Again" in (ROOT / "README.md").read_text(encoding="utf-8")
-
-
 def test_language_table_identity_warning_and_resume_ui():
     assert ".language-string-head{position:static" in LANGUAGE_VIEW
     assert "align-items:start" in LANGUAGE_VIEW

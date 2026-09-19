@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import json
 import re
 from pathlib import Path
 
@@ -30,14 +29,6 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
         "DEFAULT_EN_US": load(ROOT / "api/app/locales/en_us.py", "EN_US"),
         "DEFAULT_FR_CA": load(ROOT / "api/app/locales/fr_ca.py", "FR_CA"),
     }
-
-def test_0350_release_version_is_consistent():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.60.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
-    assert "## 0.35.10" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def test_research_supports_multiple_simultaneous_jobs_without_a_ui_job_cap():

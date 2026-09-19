@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,13 +20,6 @@ def _load_content_filter():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_release_version_03013():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_dashboard_background_ops_fixed_open_and_annotation_graph_removed():

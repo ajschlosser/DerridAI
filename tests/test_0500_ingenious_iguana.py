@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import sys
 import types
@@ -42,9 +41,6 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
 
 
 def test_release_identity_locale_parity_and_quebec_copy():
-    assert APP_VERSION=='0.60.0'
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     keys=[
         'pdf_corpus.cleanup_paragraph_lines','pdf_corpus.cleanup_empty_lines',

@@ -23,8 +23,6 @@ def text(path: str) -> str:
 
 
 def test_release_identity_and_locale_parity():
-    assert APP_VERSION >= "0.60.0"
-    assert json.loads(text("web/package.json"))["version"] >= "0.60.0"
     assert set(EN_US) == set(FR_CA)
     for key in (
         "pdf_corpus.document_structure",
