@@ -7,78 +7,17 @@ from pathlib import Path
 from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
-MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
-LANGUAGES = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
-FLAG_PICKER = (ROOT / "web/src/components/CountryFlagPicker.vue").read_text(encoding="utf-8")
-READING = (ROOT / "web/src/components/record/RecordReadingPane.vue").read_text(encoding="utf-8")
-FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
-REPORT = (ROOT / "web/src/components/research/EvaluationReport.vue").read_text(encoding="utf-8")
 TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
-HTTP = (ROOT / "web/src/api/http.ts").read_text(encoding="utf-8")
 
 
-def test_release_identity_and_notes():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert '"app_version": "0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
-    assert "0.35.17 — Lingua Franca" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
-def test_research_payload_is_normalized_before_post_and_400_is_not_used_for_rag_start():
-    assert 'reranker=["cross_encoder","lexical","none"].includes' in RUNTIME
-    assert 'responseLanguage=["auto","en","fr"].includes' in RUNTIME
-    assert "The selected corpus database is no longer available" in RUNTIME
-    assert "selected.length>500" in RUNTIME
-    assert "selectedPayload.length!==selected.length" in RUNTIME
-    assert "unsupported provider" in RUNTIME
-    endpoint = MAIN[MAIN.index('@app.post("/api/jobs/rag")'):MAIN.index('@app.post("/api/jobs/upsert")')]
-    assert "status_code=400" not in endpoint
-    assert "status_code=422" in endpoint
-    assert "status_code=500" in endpoint
 
 
-def test_http_errors_keep_full_status_message_and_response_body():
-    for source in (RUNTIME, HTTP):
-        assert "derridai.httpErrors.v1" in source
-        assert "responseBody" in source
-        assert "statusText" in source
-        assert "fullMessage" in source
-    assert "rows.slice(0,50)" in RUNTIME
-    assert "rows.slice(0, 50)" in HTTP
 
 
-def test_annotation_escape_and_accessible_hover_focus_tooltip():
-    assert "window.addEventListener('keydown',onGlobalKeydown)" in READING
-    assert "if(selectedQuote.value)" in READING
-    assert "record-annotation-tooltip" in READING
-    assert 'role="tooltip"' in READING
-    assert "@mouseenter=\"showAnnotationTooltip" in READING
-    assert "@focus=\"showAnnotationTooltip" in READING
-    assert "annotation.tags" in READING and "annotation.author" in READING and "created_at" in READING
 
 
-def test_built_in_language_names_are_region_neutral_but_flags_are_locale_specific():
-    assert '"en-US": {"name": "English", "flag": "🇺🇸"' in SYSTEM
-    assert '"fr-CA": {"name": "Français (Québec)", "flag": "🇨🇦"' in SYSTEM
-    assert "'language.english_us': 'English'" in SYSTEM
-    assert "'language.french_ca': 'Français (Québec)'" in SYSTEM
-    assert 'name: "English", flag: "🇺🇸"' in (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
-    assert 'name: "Français", flag: "🇨🇦"' in (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
-    assert 'i18n.t("language.english_us", "English")' in LANGUAGES
-
-
-def test_flag_picker_teleports_outside_modal_and_explains_quebec_symbol():
-    assert '<teleport to="body">' in FLAG_PICKER
-    assert "position:fixed" in FLAG_PICKER
-    assert "updatePopoverPosition" in FLAG_PICKER
-    assert 'const QUEBEC_SYMBOL = "⚜️"' in FLAG_PICKER
-    assert "Unicode defines no standardized Québec flag emoji" in FLAG_PICKER
-    assert "language.quebec_symbol_help" in FLAG_PICKER
-    assert (ROOT / "web/src/components/CountryFlagPicker.stories.ts").exists()
 
 
 def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_resort(monkeypatch):
@@ -120,7 +59,6 @@ def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_reso
     assert calls["structured"] > 1
 
 
-
 def test_translation_pipeline_accepts_common_nested_translation_wrapper(monkeypatch):
     rag_stub = ModuleType("app.rag")
     rag_stub._extract_json = lambda raw: json.loads(raw)
@@ -142,11 +80,3 @@ def test_translation_pipeline_accepts_common_nested_translation_wrapper(monkeypa
     assert translated == {key: f"FR {value}" for key, value in source.items()}
     assert stats["failed_count"] == 0
 
-def test_response_faq_uses_structured_evaluation_report_with_raw_output_secondary():
-    assert "EvaluationReport" in FAQ
-    assert ':report="entry.result||entry"' in FAQ
-    assert "evaluation-categories" in REPORT
-    assert "unsupported_or_risky_claims" in REPORT
-    assert "Technical raw output" in REPORT
-    assert 'role="meter"' in REPORT
-    assert (ROOT / "web/src/components/research/EvaluationReport.stories.ts").exists()

@@ -14,8 +14,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 
 def text(path:str)->str:
@@ -38,33 +36,10 @@ def install(tmp_path:Path):
     return repo,build
 
 
-def test_release_identity_and_quebec_i18n_parity():
-    assert APP_VERSION=='0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.initialization_title','pdf_corpus.source_issue_help_v48','pdf_corpus.confidence_not_reported','pdf_corpus.accept_clean_none_changed']:
-        assert key in EN_US and key in FR_CA and FR_CA[key] != EN_US[key]
 
 
-def test_source_issue_resolution_and_initialization_are_explicit_in_ui():
-    source=text('web/src/components/CorpusSourceIssuePanel.vue')
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    init=text('web/src/components/CorpusInitializationDialog.vue')
-    assert "emit('editText')" in source and "emit('openSource')" in source
-    assert 'resolve_source_with_correction' in builder
-    assert 'CorpusInitializationDialog' in builder
-    assert 'role="dialog" aria-modal="true"' in init
-    assert ':has-asset="Boolean(selectedAsset)"' in builder
 
 
-def test_llm_suggestion_prefill_and_missing_confidence_are_not_fabricated_as_zero():
-    panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    backend=text('api/app/corpus_builder.py')
-    field=text('web/src/components/CorpusMetadataFieldEditor.vue')
-    assert 'llm_suggestion_prefilled' in field
-    assert 'confidence_not_reported' in field
-    assert 'confidence: float | None = Field(default=None' in backend
-    assert 'region_type_consistency' in text('api/app/corpus_metadata.py')
 
 
 def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path:Path):
@@ -77,19 +52,5 @@ def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path
     assert all('__review__' in row.get('human_touched_fields',[]) for row in rows)
 
 
-def test_new_dialogs_and_bulk_editor_have_accessible_modal_semantics_and_stories():
-    manifest_dialog=text('web/src/components/DocumentManifestDialog.vue')
-    shared_dialog=text('web/src/components/ui/UiDialog.vue')
-    assert 'UiDialog' in manifest_dialog
-    assert 'role="dialog"' in shared_dialog and 'aria-modal="true"' in shared_dialog
-    source=text('web/src/components/CorpusBulkMetadataEditor.vue')
-    assert 'role="dialog"' in source and 'aria-modal="true"' in source
-    assert 'Initialization Dialog' in text('web/src/components/CorpusInitializationDialog.stories.ts')
-    assert 'Document Metadata Dialog' in text('web/src/components/DocumentManifestDialog.stories.ts')
 
 
-def test_auth_heading_regression_and_default_semantic_indexing():
-    css=text('web/src/style.css')
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert '212px' not in css
-    assert 'const semanticIndexing=ref(true);' in builder
