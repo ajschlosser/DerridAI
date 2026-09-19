@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,14 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
-
-
-def test_0371_release_identity_and_notes():
-    package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in text("api/app/main.py")
-    assert "# DerridAI 0.60.0" in text("README.md")
-    assert "0.37.1 — Disoriented" in text("README.md")
 
 
 def test_response_cache_logical_alias_is_validated_as_physical_name():

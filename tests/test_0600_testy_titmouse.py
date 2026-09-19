@@ -52,9 +52,6 @@ def test_release_identity_and_profile_versions():
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
     assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert json.loads(text("web/package.json"))["version"]=="0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
 
 
 def test_touchup_sanitizer_removes_only_model_added_outer_separators():

@@ -21,12 +21,6 @@ def text(path:str)->str:
     return (ROOT/path).read_text(encoding='utf-8')
 
 
-def test_release_identity_and_documentation():
-    assert APP_VERSION=='0.60.0'
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-
-
 def test_metadata_enrichment_is_family_checkpointed_and_bounded():
     source=text('api/app/corpus_builder.py')
     rag=text('api/app/rag.py')

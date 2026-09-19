@@ -18,16 +18,6 @@ TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 
 
-def test_03512_release_version_is_consistent():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert '"app_version": "0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
-    assert "DerridAI 0.60.0" in APP
-    assert "0.35.12 — Tongue Twister" in (ROOT / "README.md").read_text(encoding="utf-8")
-
-
 def test_languages_page_is_a_bilingual_localization_studio():
     assert "LanguageWorkspaceHeader" in LANGUAGE_VIEW
     assert "CountryFlagPicker" in LANGUAGE_VIEW

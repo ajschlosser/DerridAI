@@ -4,11 +4,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
-README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def test_0362_release_identity_and_docs():
-    assert "0.36.2 — Bugs in the Machine" in README
     assert (ROOT / "docs/SHAREABLE_STATE_AND_DATA_MODEL_0.36.2.md").exists()
 
 

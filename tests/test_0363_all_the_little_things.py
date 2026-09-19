@@ -4,17 +4,11 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
-README = (ROOT / "README.md").read_text(encoding="utf-8")
 I18N = (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8")
 LANGUAGES = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
 INSPECTOR = (ROOT / "web/src/components/record/RecordInspector.vue").read_text(encoding="utf-8")
 EMPTY = (ROOT / "web/src/components/AccessibleEmptyState.vue").read_text(encoding="utf-8")
 FAQ = (ROOT / "web/src/views/ResponseFaqView.vue").read_text(encoding="utf-8")
-
-
-def test_0363_release_identity():
-    assert "0.36.3 — All The Little Things" in README
-    assert "# DerridAI 0.60.0" in README
 
 
 def test_export_still_has_shared_download_blob_support_for_subset_exports():

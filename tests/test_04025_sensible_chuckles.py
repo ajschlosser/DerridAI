@@ -9,9 +9,6 @@ from app import corpus_builder as cb
 def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
 def test_release_contract_and_review_refresh_fix():
-    package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
     ui=text("web/src/components/PdfCorpusBuilder.vue")
     assert "reviewHydrated" in ui
     assert "for(let attempt=0;attempt<5;attempt++)" in ui

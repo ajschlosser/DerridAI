@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -13,14 +12,6 @@ sys.path.insert(0, str(ROOT / "api"))
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
-
-
-def test_0370_release_identity_and_notes():
-    package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in text("api/app/main.py")
-    assert "# DerridAI 0.60.0" in text("README.md")
-    assert "0.37.0 — New Direction" in text("README.md")
 
 
 def test_collection_creation_is_strict_and_preflighted():

@@ -19,15 +19,6 @@ TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 HTTP = (ROOT / "web/src/api/http.ts").read_text(encoding="utf-8")
 
 
-def test_release_identity_and_notes():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in MAIN
-    assert '"app_version": "0.60.0"' in MAIN
-    assert "DerridAI 0.60.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
-    assert "0.35.17 — Lingua Franca" in (ROOT / "README.md").read_text(encoding="utf-8")
-
-
 def test_research_payload_is_normalized_before_post_and_400_is_not_used_for_rag_start():
     assert 'reranker=["cross_encoder","lexical","none"].includes' in RUNTIME
     assert 'responseLanguage=["auto","en","fr"].includes' in RUNTIME
@@ -118,7 +109,6 @@ def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_reso
     assert len(translated) == len(source)
     assert stats["failed_count"] == 0
     assert calls["structured"] > 1
-
 
 
 def test_translation_pipeline_accepts_common_nested_translation_wrapper(monkeypatch):

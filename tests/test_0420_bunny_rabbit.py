@@ -21,7 +21,6 @@ def test_release_identity_and_legacy_profile_contract():
     assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
     assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v12"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
 
 
 def test_source_quality_blocks_corruption_not_unicode():

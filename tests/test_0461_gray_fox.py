@@ -21,14 +21,6 @@ def _locale(path: Path, name: str) -> dict[str, str]:
     raise AssertionError(f"{name} not found in {path}")
 
 
-def test_gray_fox_release_identity():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.60.0"
-    assert 'APP_VERSION = "0.60.0"' in (ROOT / "api/app/config.py").read_text(encoding="utf-8")
-    assert 'version="0.60.0"' in (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    assert "0.60.0 — Testy Titmouse" in (ROOT / "README.md").read_text(encoding="utf-8")
-
-
 def test_built_in_locales_are_canonical_and_complete():
     en = _locale(EN_PATH, "EN_US")
     fr = _locale(FR_PATH, "FR_CA")

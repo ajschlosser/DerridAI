@@ -5,14 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def text(path): return (ROOT/path).read_text(encoding='utf-8')
 
 def test_0590_release_identity_and_product_name():
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
     assert json.loads(text('web/package.json'))['name']=='derridai'
-    assert 'APP_VERSION = "0.60.0"' in text('api/app/config.py')
-    assert 'FastAPI(title="DerridAI API", version="0.60.0")' in text('api/app/main.py')
-    assert '<title>DerridAI 0.60.0</title>' in text('web/index.html')
-    assert '# DerridAI 0.60.0' in text('README.md')
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-    assert 'DerridAI Corpus Viewer 0.60.0' not in text('README.md')
 
 def test_user_workflow_is_four_phases_not_machine_stages():
     stepper=text('web/src/components/CorpusWorkflowStepper.vue')

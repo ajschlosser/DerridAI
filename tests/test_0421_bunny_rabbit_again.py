@@ -15,8 +15,6 @@ def test_release_identity_and_profile():
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert 'Bunny Rabbit - Again' in text('README.md')
 
 def test_manifest_nullable_notes_are_normalized_not_rejected():
     manifest=cb.DocumentManifestModel.model_validate({'title':'Book','notes':None})

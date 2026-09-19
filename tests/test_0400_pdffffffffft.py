@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,15 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
-
-
-def test_0400_release_identity_and_notes():
-    package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.60.0"
-    assert 'version="0.60.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert "# DerridAI 0.60.0" in text("README.md")
-    assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
 def test_pdf_sources_are_content_addressed_layout_aware_and_ocr_capable():

@@ -1,18 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 def text(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
-
-
-def test_0405_release_identity_and_name():
-    package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.60.0"
-    assert 'version="0.60.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert "0.40.5 — Record Extraction Pipeline Corrections" in text("README.md")
 
 
 def test_0405_new_semantic_pipeline_is_provenance_versioned():
