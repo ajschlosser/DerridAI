@@ -1947,7 +1947,7 @@ class PdfCorpusBuildManager:
         # metadata state. A stale worker counter must never manufacture blockers.
         metadata_remaining = int(issue_summary.get("records_incomplete") or 0) if issue_summary_present else max(0, metadata_total - metadata_completed)
         validation = build.get("validation") if isinstance(build.get("validation"), dict) else {}
-        source_quality = build.get("source_quality") if isinstance(build.get("source_quality"), dict) else {}
+        _ = build.get("source_quality") if isinstance(build.get("source_quality"), dict) else {}
         publication = build.get("publication") if isinstance(build.get("publication"), dict) else None
         running = str(build.get("status") or "") in {"queued", "running"}
         stage = str(build.get("stage") or "")
@@ -3198,7 +3198,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         if PdfCorpusBuildManager._is_protected_transition(left, right):
             return -10.0, True, ["protected_transition"]
         left_text = str(left.get("text") or "").strip()
-        right_text = str(right.get("text") or "").strip()
+        _ = str(right.get("text") or "").strip()
         left_type = str(left.get("type") or "body").casefold()
         right_type = str(right.get("type") or "body").casefold()
         heading_types = {"heading", "title", "subtitle", "section", "chapter"}
@@ -3427,7 +3427,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         """Choose the strongest safe seam near the preferred size target."""
         target=hard_max*0.72
         cumulative=0
-        total=max(1,sum(len(str(b.get("text") or "")) for b in span))
+        _=max(1,sum(len(str(b.get("text") or "")) for b in span))
         scored=[]
         heading_types={"heading","title","subtitle","section","chapter"}
         speaker_re=re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
@@ -3460,7 +3460,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         profile=CORPUS_PROFILES[str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)]
         threshold=float(profile.get("min_boundary_confidence") or 0.72)
         sizing_policy=self._record_sizing_policy(request,profile)
-        hard_max=sizing_policy["absolute_record_chars"]
+        _=sizing_policy["absolute_record_chars"]
         index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
         candidates=self._deterministic_boundary_candidates(blocks,profile)
         state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
@@ -5942,7 +5942,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
         self._sync_record_metadata_state(target, profile)
         target["record_revision"] = current_revision + 1
-        build = self._rewrite_and_validate(build_id, records)
+        _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
         self._decorate_review_state(persisted)
@@ -6432,7 +6432,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         ostatus=original.get("metadata_field_status") if isinstance(original.get("metadata_field_status"),dict) else {};cstatus=candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"),dict) else {};cevidence=candidate.get("metadata_evidence") if isinstance(candidate.get("metadata_evidence"),dict) else {};oevidence=original.setdefault("metadata_evidence",{})
                         for family in families:
                             for field in METADATA_FAMILY_FIELDS[family]:
-                                new=candidate.get(field);old=original.get(field);new_info=cstatus.get(field) if isinstance(cstatus.get(field),dict) else {};old_info=ostatus.get(field) if isinstance(ostatus.get(field),dict) else {}
+                                new=candidate.get(field);old=original.get(field);new_info=cstatus.get(field) if isinstance(cstatus.get(field),dict) else {};_=ostatus.get(field) if isinstance(ostatus.get(field),dict) else {}
                                 if new in (None,"",[]):continue
                                 if old in (None,"",[]): original[field]=new;original.setdefault("metadata_field_status",{})[field]=new_info;changed.append(field);oevidence.update({field:cevidence[field]} if field in cevidence else {});continue
                                 if new!=old: disputes.append({"field":field,"existing":old,"proposed":new,"confidence":new_info.get("confidence"),"reason":new_info.get("reason"),"run_id":operation_id});continue
@@ -6534,7 +6534,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         current_text = str(text_override if text_override is not None else record.get("text") or "")
         if not current_text.strip():
             raise ValueError("Record text is empty.")
-        fallback = self.repo.get_build(build_id).get("request") or {}
+        _ = self.repo.get_build(build_id).get("request") or {}
         active_request = self._interactive_llm_request(build_id, request or None)
         prompt = f"""You are performing a conservative scholarly text touch-up on OCR/PDF extracted text.
 

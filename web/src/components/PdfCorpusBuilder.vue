@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock } from "../api/pdfCorpus";
+import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock, type DocumentLayoutPlan } from "../api/pdfCorpus";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
@@ -142,7 +142,7 @@ const DRAFT_KEY="derridai.pdf-corpus-builder.draft.v2";
 function restoreBuilderDraft(){
   try{
     const raw=localStorage.getItem(DRAFT_KEY);if(!raw)return;
-    const draft=JSON.parse(raw) as Record<string,any>;
+    const draft=JSON.parse(raw) as Record<string,unknown>;
     if(typeof draft.selectedAssetId==="string")selectedAssetId.value=draft.selectedAssetId;
     if(typeof draft.manualProvider==="string"&&(draft.manualProvider==="ollama"||draft.manualProvider==="openai"))manualProvider.value=draft.manualProvider;
     if(typeof draft.manualModel==="string")manualModel.value=draft.manualModel;
@@ -201,7 +201,9 @@ const visibleBlocks=computed(()=>{
 });
 const recurringCleanupLines=computed(()=>recurringShortLines(records.value.map(row=>String(row.text||"")),3));
 const cleanupDocumentTerms=computed(()=>[currentBuild.value?.manifest?.title,currentBuild.value?.manifest?.short_title,currentBuild.value?.manifest?.original_title].map(value=>String(value||"").trim()).filter(Boolean));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const metadataComplete=computed(()=>Number(currentBuild.value?.metadata_total||0)===0||Number(currentBuild.value?.metadata_completed||0)>=Number(currentBuild.value?.metadata_total||0));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const canPublish=computed(()=>Boolean(currentBuild.value?.publication_readiness?.can_publish));
 const selectedRecordIndex=computed(()=>records.value.findIndex(row=>row.record_id===selectedRecordId.value));
 const canMergePrevious=computed(()=>{const topo=Number(selectedRecord.value?.topology_index??-1);return topo>=0?topo>0:(recordOffset.value+Math.max(0,selectedRecordIndex.value))>0});
@@ -214,9 +216,9 @@ const topologyIssueCount=computed(()=>Number(reviewQueueCounts.value.topology??0
 const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
 const activeBuilds=computed(()=>builds.value.filter(build=>["queued","running"].includes(String(build.status||""))));
 const activeBuildCount=computed(()=>activeBuilds.value.length);
-const selectedProfileActiveBuildCount=computed(()=>selectedProviderId.value?activeBuilds.value.filter(build=>String((build.request as any)?.provider_profile_id||"")===selectedProviderId.value).length:0);
+const selectedProfileActiveBuildCount=computed(()=>selectedProviderId.value?activeBuilds.value.filter(build=>String(build.request?.provider_profile_id||"")===selectedProviderId.value).length:0);
 function providerResourceKey(profileId:string){const profile=providerProfiles.value.find(p=>p.id===profileId);if(!profile)return profileId;const base=String(profile.base_url||'').trim().replace(/\/+$/,'').toLowerCase();return `${profile.type||'unknown'}|${base}`;}
-const llmActionConcurrentLoad=computed(()=>{if(!llmActionProviderId.value)return 0;const target=providerResourceKey(llmActionProviderId.value);return activeBuilds.value.filter(build=>{const id=String((build.request as any)?.provider_profile_id||'');return id&&providerResourceKey(id)===target}).reduce((sum,build)=>sum+Math.max(1,Number((build.request as any)?.max_concurrent_requests||1)),0)});
+const llmActionConcurrentLoad=computed(()=>{if(!llmActionProviderId.value)return 0;const target=providerResourceKey(llmActionProviderId.value);return activeBuilds.value.filter(build=>{const id=String(build.request?.provider_profile_id||'');return id&&providerResourceKey(id)===target}).reduce((sum,build)=>sum+Math.max(1,Number(build.request?.max_concurrent_requests||1)),0)});
 const canStartConcurrentBuild=computed(()=>Boolean(selectedAsset.value&&contextSafe.value&&(selectedProviderId.value||!activeBuildCount.value)));
 const llmContribution=computed(()=>currentBuild.value?.llm_contribution||{});
 const transientNetworkError=computed(()=>Boolean(buildRunning.value&&/networkerror|failed to fetch|network error/i.test(error.value)));
@@ -230,7 +232,9 @@ const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.
 const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete ?? 0));
 const metadataFieldIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.fields_unresolved ?? 0));
 const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const metadataEnrichedCount=computed(()=>Number(currentBuild.value?.metadata_enriched_count||0));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const metadataEnrichmentTotal=computed(()=>Number(currentBuild.value?.metadata_enrichment_total||currentBuild.value?.record_count||0));
 const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
 const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
@@ -298,7 +302,7 @@ const setupWarnings=computed(()=>{
 });
 
 function directProfilePayload(profileId:string): Record<string,unknown>|null{
-  const config=(runtime as any).getProviderRequestConfigForUi?.(profileId,{textReview:false}) as Record<string,unknown>|null;
+  const config=runtime.getProviderRequestConfigForUi?.(profileId,{textReview:false}) as Record<string,unknown>|null;
   if(!config)return null;
   const ollama=config.ollama;
   return {
@@ -363,7 +367,7 @@ function registerBuildOperation(build:CorpusBuild){
   const asset=assets.value.find(item=>item.asset_id===build.asset_id);
   const total=Math.max(1,Number(asset?.block_count||1));
   const progress=Math.max(0,Math.min(1,Number(build.progress||0)));
-  (runtime as any).registerExternalJob?.({
+  runtime.registerExternalJob?.({
     id:build.build_id,build_id:build.build_id,type:"pdf_corpus",kind:"pdf_corpus",label:`PDF corpus · ${build.source_filename||"source"}`,
     status:["queued","running"].includes(build.status)?build.status:build.status==="blocked"?"blocked":"completed",raw_status:build.status,stage:build.stage,stage_detail:build.stage,
     source_filename:build.source_filename,progress,total,completed:Math.min(total,Math.round(total*progress)),record_count:Number(build.record_count||0),review_count:Number(build.needs_review_count||0),
@@ -424,7 +428,7 @@ async function switchBuildProvider(profileId:string,modelOverride=""){
 }
 
 async function refreshProviders(){
-  const runtimeProfiles=((runtime as any).getProviderProfilesForUi?.()||[]) as ProviderProfile[];
+  const runtimeProfiles=(runtime.getProviderProfilesForUi?.()||[]) as ProviderProfile[];
   let serverProfiles:ProviderProfile[]=[];
   try{serverProfiles=(await systemApi.researcherProviders()).profiles||[]}catch{serverProfiles=[]}
   serverProviderIds.value=new Set(serverProfiles.map(profile=>profile.id));
@@ -435,7 +439,7 @@ async function refreshProviders(){
   for(const profile of serverProfiles)merged.set(profile.id,profile);
   for(const profile of runtimeProfiles)merged.set(profile.id,profile);
   providerProfiles.value=Array.from(merged.values());
-  const defaultId=String((runtime as any).getDefaultProviderProfileId?.()||"");
+  const defaultId=String(runtime.getDefaultProviderProfileId?.()||"");
   const activeBuildProfile=String((currentBuild.value?.request as Record<string,unknown>|undefined)?.provider_profile_id||"");
   if(activeBuildProfile&&providerProfiles.value.some(profile=>profile.id===activeBuildProfile)){
     selectedProviderId.value=activeBuildProfile;
@@ -541,12 +545,14 @@ function selectRecord(record:CorpusRecord){
   if(!sameRecord)metadataEditorDirty.value=false;
   selectedRecordId.value=record.record_id;selectedRecord.value=record;selectedEvidenceField.value="";selectedPdfPage.value=Number(record.pdf_pages?.[0]||1);reviewInspectorTab.value=selectedMetadataBlocked.value?"metadata":reviewInspectorTab.value;
   if(!preserveActiveDraft){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     let saved="";try{saved=localStorage.getItem(textDraftKey(selectedBuildId.value,record.record_id))||""}catch{}
     textDraft.value=saved||String(record.text||"");editingText.value=Boolean(saved&&saved!==String(record.text||""));
   }
   resolveSourceOnTextSave.value=Boolean(record.source_quality_issues?.length);const fallback=JSON.stringify(recordMetadata(record),null,2);try{metadataDraft.value=localStorage.getItem(metadataDraftKey(selectedBuildId.value,record.record_id))||fallback}catch{metadataDraft.value=fallback}void refreshBlocks();void restoreReviewViewport(viewport,{record:!sameRecord})
 }
 function beginTextEdit(){if(!selectedRecord.value)return;editingText.value=true;if(!textDraft.value)textDraft.value=String(selectedRecord.value.text||"")}
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function cancelTextEdit(){if(!selectedRecord.value)return;editingText.value=false;textDraft.value=String(selectedRecord.value.text||"");try{localStorage.removeItem(textDraftKey(selectedBuildId.value,selectedRecord.value.record_id))}catch{}}
 function toggleReviewSelection(recordId:string,checked:boolean){const next=new Set(selectedReviewIds.value);if(checked)next.add(recordId);else next.delete(recordId);selectedReviewIds.value=next}
 function toggleVisibleSelection(checked:boolean){const next=new Set(selectedReviewIds.value);for(const record of records.value){if(checked)next.add(record.record_id);else next.delete(record.record_id)}selectedReviewIds.value=next}
@@ -558,9 +564,9 @@ function nextSourcePage(){if(selectedPdfPageIndex.value<recordPdfPages.value.len
 
 async function upload(file?:File|null){if(!file)return;busy.value="upload";setMessage("");try{const asset=await pdfCorpusApi.uploadAsset(file,"auto");await refreshAssets();selectedAssetId.value=asset.asset_id;setMessage(i18n.tf("pdf_corpus.source_ingested","Source ingested: {pages} pages · {blocks} source blocks · OCR on {ocr} pages.",{pages:asset.page_count,blocks:asset.block_count,ocr:asset.ocr_pages||0}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function savePageLabels(labels:Record<number,string|null>){if(!selectedAssetId.value||!Object.keys(labels).length)return;busy.value="page-labels";try{const asset=await pdfCorpusApi.updatePageLabels(selectedAssetId.value,labels);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);setMessage(i18n.t("pdf_corpus.page_mapping_saved","Printed-page overrides saved. New corpus builds will use the corrected labels."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
-async function saveDocumentLayout(plan:any){if(!selectedAssetId.value)return;busy.value="document-layout";try{const asset=await pdfCorpusApi.updateDocumentLayout(selectedAssetId.value,plan);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);const mapped=(asset.pages||[]).filter(page=>Boolean(String(page.printed_page_label??"").trim())||(page.logical_pages||[]).some(item=>Boolean(String(item.printed_page_label??"").trim()))).length;const exceptions=(asset.pages||[]).filter(page=>String(page.printed_page_label_source||"").includes("override")).length;setMessage(i18n.tf("pdf_corpus.document_structure_saved_impact","Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.",{mapped,total:asset.page_count,exceptions}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function saveDocumentLayout(plan:DocumentLayoutPlan){if(!selectedAssetId.value)return;busy.value="document-layout";try{const asset=await pdfCorpusApi.updateDocumentLayout(selectedAssetId.value,plan);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);const mapped=(asset.pages||[]).filter(page=>Boolean(String(page.printed_page_label??"").trim())||(page.logical_pages||[]).some(item=>Boolean(String(item.printed_page_label??"").trim()))).length;const exceptions=(asset.pages||[]).filter(page=>String(page.printed_page_label_source||"").includes("override")).length;setMessage(i18n.tf("pdf_corpus.document_structure_saved_impact","Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.",{mapped,total:asset.page_count,exceptions}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 
-async function useCurrentPdf(){const file=(runtime.state as any)?.pdf?.file as File|undefined;if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
+async function useCurrentPdf(){const file=(runtime.state.pdf.file as File|null);if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
 async function startBuild(){if(!selectedAsset.value){setMessage(i18n.t("pdf_corpus.choose_pdf_before_build","Choose or load a source PDF before starting a corpus build."),"error");return;}busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,review_manifest_before_segmentation:false,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
 async function retryIncompleteMetadata(){
@@ -712,6 +718,7 @@ async function saveReviewedText(resolveIssues=resolveSourceOnTextSave.value){
   const recordId=selectedRecord.value.record_id;const viewport=captureReviewViewport();busy.value="text";
   try{
     const row=await pdfCorpusApi.patchText(currentBuild.value.build_id,recordId,textDraft.value,Number(selectedRecord.value.record_revision||1),resolveIssues);
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     selectedRecord.value=row;textDraft.value=String(row.text||"");editingText.value=false;resolveSourceOnTextSave.value=false;try{localStorage.removeItem(textDraftKey(selectedBuildId.value,row.record_id))}catch{}
     const idx=records.value.findIndex(item=>item.record_id===recordId);if(idx>=0)records.value.splice(idx,1,row);
     await refreshBuild();await refreshRecords(false,row.record_id);await restoreReviewViewport(viewport,{record:true});
@@ -724,6 +731,7 @@ async function markTextReviewed(){if(!selectedRecord.value)return;textDraft.valu
 async function saveTextFromFocus(text:string,resolve:boolean){textDraft.value=text;resolveSourceOnTextSave.value=resolve;await saveReviewedText(resolve)}
 async function saveSourceTranscription(text:string){textDraft.value=text;resolveSourceOnTextSave.value=false;await saveReviewedText(false);sourceTranscriptionOpen.value=false}
 
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 async function saveMetadata(){if(!currentBuild.value||!selectedRecord.value)return;const viewport=captureReviewViewport();let changes:Record<string,unknown>;try{changes=JSON.parse(metadataDraft.value)}catch{setMessage(i18n.t("pdf_corpus.metadata_invalid","Metadata must be a valid JSON object."),"error");return}busy.value="record";try{const row=await pdfCorpusApi.patchMetadata(currentBuild.value.build_id,selectedRecord.value.record_id,changes,Number(selectedRecord.value.record_revision||1));selectedRecord.value=row;metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);try{localStorage.removeItem(metadataDraftKey(currentBuild.value.build_id,row.record_id))}catch{}await refreshBuild();await refreshRecords(false,row.record_id);await restoreReviewViewport(viewport);setMessage(i18n.t("pdf_corpus.metadata_saved","Metadata saved. Source-bound text and provenance were not modified."))}catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function toggleEvidenceBlock(blockId:string){
   if(!currentBuild.value||!selectedRecord.value||!selectedEvidenceField.value)return;
@@ -866,7 +874,9 @@ watch([selectedBuildId,reviewQueue,selectedRecordId],()=>{
 },{flush:"post"});
 watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,stageTimeouts,recordSizing,maxConcurrentRequests],persistBuilderDraft,{deep:true});
 watch([reviewQueue,recordQuery,selectedBuildId],()=>{selectedReviewIds.value=new Set()});
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(metadataDraft,(value)=>{if(!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(metadataDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(textDraft,(value)=>{if(!editingText.value||!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(textDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
 onMounted(()=>{window.addEventListener("keydown",reviewShortcut);restoreBuilderDraft();void refreshAll().then(()=>{if(buildRunning.value)startPolling()}).catch(exc=>setMessage(exc instanceof Error?exc.message:String(exc),"error"))});
 onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPolling()});

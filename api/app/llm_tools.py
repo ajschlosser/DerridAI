@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .bibliography import _mla_citation, _mla_book_citation
+
 from typing import Any, Callable
 import copy
 import json
@@ -7,7 +9,6 @@ import re
 import unicodedata
 
 import httpx
-from datetime import datetime, timezone
 
 from .chroma_store import ChromaStore
 from .config import settings
@@ -225,7 +226,6 @@ def _edition_translator(entry: dict[str, Any]) -> str:
     return ", ".join(names)
 
 
-from .bibliography import _mla_citation, _mla_book_citation
 
 def _edition_metadata(
     *,

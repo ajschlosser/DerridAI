@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CorpusBuild } from '../api/pdfCorpus';
 import { useI18nStore } from '../stores/i18n';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props=withDefaults(defineProps<{builds:CorpusBuild[];selectedBuildId?:string;total?:number}>(),{selectedBuildId:'',total:0});
 const emit=defineEmits<{select:[build:CorpusBuild];refresh:[]}>();
 const i18n=useI18nStore();

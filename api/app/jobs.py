@@ -2249,7 +2249,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job = self._jobs[job_id]
                 job["status"] = "failed"
                 job["failed"] += 1
-                details = _store_job_error(job, exc)
+                _ = _store_job_error(job, exc)
                 job["finished_at"] = iso_now()
             try:
                 self._store.fail_sync(body.store_name, str(exc))

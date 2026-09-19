@@ -40,6 +40,7 @@ const selectedEvidence=computed(()=>workspace.value?.selected_evidence||[]);
 const profiles=computed(()=>workspace.value?.profiles||[]);
 const stores=computed(()=>workspace.value?.stores||[]);
 const activeResult=computed(()=>activeJob.value?.result||null);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const resultEvidence=computed(()=>activeResult.value?.evidence||[]);
 const selectedProfile=computed(()=>profiles.value.find(profile=>profile.id===config.value?.provider_profile_id)||profiles.value[0]||null);
 const canManageRuns=computed(()=>Boolean(workspace.value?.can_manage_jobs&&auth.can("rag.jobs.own"))||auth.isAdmin);

@@ -51,6 +51,7 @@ const resultSummary=computed(()=>{
 });
 const searchPlaceholder=computed(()=>databaseMode.value?i18n.t("search.database_placeholder","Search the corpus semantically…"):i18n.t("search.loaded_placeholder","Search extracted text across loaded records…"));
 const methodHelp=computed(()=>snapshot.value?.method==="mmr"?i18n.t("search.mmr_help","Balances semantic relevance with diversity across the result set."):snapshot.value?.method==="filter"?i18n.t("search.filter_only_help","Returns records using metadata filters without embedding a text query."):i18n.t("search.similarity_help","Ranks records by semantic similarity to your query."));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const selectedColumnKeys=computed(()=>snapshot.value?.columns.map(column=>column.key)||[]);
 const sortOptions=computed(()=>{
   const base=[{key:"work",label:i18n.t("field.work","Work")},{key:"page_start",label:i18n.t("field.page_start","Page Start")},{key:"record_id",label:i18n.t("field.record_id","Record ID")}];
@@ -60,12 +61,15 @@ const sortOptions=computed(()=>{
 const activeSortLabel=computed(()=>sortOptions.value.find(item=>item.key===snapshot.value?.sort.key)?.label||i18n.t("search.sort","Sort"));
 
 function loadColumnWidths(){try{return JSON.parse(localStorage.getItem("derridai.search.columnWidths.v1")||"{}")||{}}catch{return {}}}
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistColumnWidths(){try{localStorage.setItem("derridai.search.columnWidths.v1",JSON.stringify(columnWidths))}catch{}}
 function loadSavedState(){
   try{savedViews.value=JSON.parse(localStorage.getItem("derridai.search.savedViews.v1")||"[]")||[]}catch{savedViews.value=[]}
   try{recentSearches.value=JSON.parse(localStorage.getItem("derridai.search.recent.v1")||"[]")||[]}catch{recentSearches.value=[]}
 }
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistSavedViews(){try{localStorage.setItem("derridai.search.savedViews.v1",JSON.stringify(savedViews.value.slice(0,40)))}catch{}}
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistRecent(){try{localStorage.setItem("derridai.search.recent.v1",JSON.stringify(recentSearches.value.slice(0,12)))}catch{}}
 
 async function load(options:{refresh?:boolean;autoRun?:boolean}={}){
@@ -155,6 +159,7 @@ function recordRecentSearch(){if(!snapshot.value)return;const q=query.value.trim
 
 function displayValue(value:unknown){if(value==null||value==="")return "—";if(Array.isArray(value))return value.join(", ");if(typeof value==="object")return JSON.stringify(value);if(typeof value==="boolean")return value?i18n.t("runtime.yes","Yes"):i18n.t("runtime.no","No");return String(value)}
 function columnValue(result:SearchResult,key:string){if(key==="__file")return result.file_name||"—";if(key==="page_start")return result.page_span||"—";if(key==="text")return result.text;if(key==="__db_status")return result.db_status?.label||i18n.t("search.db_in_database","In DB");return result.record[key]}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 function columnLabel(key:string){return snapshot.value?.available_columns.find(column=>column.key===key)?.label||key}
 function columnStyle(key:string){if(!databaseMode.value)return undefined;const width=columnWidths[key];return width?{width:`${width}px`,minWidth:`${width}px`,maxWidth:key==='text'?`${Math.max(width,260)}px`:undefined}:undefined}
 function startResize(event:PointerEvent,key:string){event.preventDefault();event.stopPropagation();const th=(event.currentTarget as HTMLElement).closest("th") as HTMLElement|null;if(!th)return;const startX=event.clientX,startWidth=th.getBoundingClientRect().width;const move=(moveEvent:PointerEvent)=>{columnWidths[key]=Math.max(key==='text'?260:96,Math.min(900,startWidth+(moveEvent.clientX-startX)))};const stop=()=>{window.removeEventListener('pointermove',move);persistColumnWidths()};window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true})}

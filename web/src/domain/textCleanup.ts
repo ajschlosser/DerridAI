@@ -4,6 +4,7 @@ export type TextCleanupPreview = { text: string; removed: string[]; changes: num
 const PAGE_NUMBER_RE = /^\s*(?:page\s+)?(?:[ivxlcdm]+|\d{1,4})\s*$/i;
 const LIST_OR_QUOTE_RE = /^\s*(?:[-*•]|\d+[.)]|[a-z][.)]|[ivxlcdm]+[.)]|[>»«“”"'])\s*/i;
 const HEADINGISH_RE = /^\s*(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 '\u2019\-–—:;,.]{3,}|.{0,80}:)\s*$/u;
+// eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
 const SENTENCE_END_RE = /[.!?…:;][\]\)\}"'»”’]*\s*$/u;
 const LOWERCASE_START_RE = /^\s*[a-zà-öø-ÿ]/u;
 const OCR_GARBAGE_RE = /(?:�|[|¦]{3,}|[_~^]{4,}|(?:[^\p{L}\p{N}\s.,;:!?()'"–—-]){5,})/u;
@@ -65,6 +66,7 @@ export function cleanupText(input: string, rules: Set<TextCleanupRule>, recurrin
 
   if (rules.has("ocr_artifacts")) {
     const next = text
+      // eslint-disable-next-line no-misleading-character-class -- SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics.
       .replace(/[\u00ad\u200b\u200c\u200d\ufeff]/gu, "")
       .replace(/ﬁ/gu, "fi").replace(/ﬂ/gu, "fl").replace(/ﬀ/gu, "ff").replace(/ﬃ/gu, "ffi").replace(/ﬄ/gu, "ffl")
       .replace(/\f/gu, "\n");

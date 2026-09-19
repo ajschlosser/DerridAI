@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
-const props=defineProps<{build:Record<string,any>}>();
+import type { CorpusBuild } from "../api/pdfCorpus";
+const props=defineProps<{build:Partial<CorpusBuild>}>();
 const i18n=useI18nStore();
 const validation=computed(()=>props.build.validation||{});
-const topology=computed(()=>props.build.topology_quality||props.build.topology_validation||{});
+const topology=computed<NonNullable<CorpusBuild['topology_quality']> & NonNullable<CorpusBuild['topology_validation']>>(()=>props.build.topology_quality||props.build.topology_validation||{});
 const coverage=computed(()=>Math.round(Number((topology.value.source_coverage??validation.value.coverage)??0)*100));
 const unresolved=computed(()=>Number(props.build.boundary_review_count||props.build.segmentation_unresolved_regions?.length||0));
 const metadataDone=computed(()=>Number(props.build.metadata_completed||0));

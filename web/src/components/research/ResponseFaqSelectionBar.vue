@@ -3,6 +3,7 @@ import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResponseFaqRecord } from "../../types/research";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props=defineProps<{record:ResponseFaqRecord;evidenceCount:number;grade?:string|number|null}>();
 const emit=defineEmits<{browse:[]}>();
 const i18n=useI18nStore();

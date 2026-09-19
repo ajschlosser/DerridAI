@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import re
 import secrets
 import sqlite3
@@ -352,7 +351,7 @@ class AuthStore:
         except sqlite3.IntegrityError as exc:
             raise ValueError("A user with that username already exists.") from exc
         assert row is not None
-        return self._row_user(row)  # type: ignore[return-value]
+        return self._row_user(row)
 
     def authenticate(self, username: str, password: str) -> AuthUser | None:
         with self._connect() as conn:
@@ -417,7 +416,7 @@ class AuthStore:
     def list_users(self) -> list[AuthUser]:
         with self._connect() as conn:
             rows = conn.execute(self._user_select(order="ORDER BY u.username COLLATE NOCASE")).fetchall()
-            return [self._row_user(row) for row in rows if row is not None]  # type: ignore[list-item]
+            return [self._row_user(row) for row in rows if row is not None]
 
     def get_user(self, user_id: int) -> AuthUser | None:
         with self._connect() as conn:
@@ -454,7 +453,7 @@ class AuthStore:
                 conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
             row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
         assert row is not None
-        return self._row_user(row)  # type: ignore[return-value]
+        return self._row_user(row)
 
     def delete_user(self, user_id: int) -> None:
         current = self.get_user(user_id)
