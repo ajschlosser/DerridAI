@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.55.0"
+    assert APP_VERSION == "0.56.0"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v8"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -239,5 +239,5 @@ def test_dachshund_i18n_and_storybook_cover_exception_review():
 
 def test_low_confidence_llm_review_metadata_is_forced_to_human_review():
     source = text("api/app/corpus_builder.py")
-    assert 'elif (confidence is None or confidence < minimum) and value not in (None, "", []):' in source
+    assert 'elif (confidence is None or confidence <= minimum) and value not in (None, "", []):' in source
     assert '"reason_code": "low_confidence"' in source

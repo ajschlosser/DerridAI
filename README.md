@@ -1,18 +1,18 @@
-# DerridAI Corpus Viewer 0.55.0
+# DerridAI Corpus Viewer 0.56.0
 
-**0.55.0 — Outrageous Orangutan** adds a bounded LLM “second reader” for record boundaries without giving the model authority to rewrite source topology. Deterministic segmentation remains primary; suspicious or demonstrated-risk seams receive semantic adjudication, human boundary corrections become build-local editorial examples, and reviewers can request an explicit previous/next boundary check in both standard and Focus review. Source-span conservation, auditable decisions, English/Québec French i18n, and WCAG-oriented interaction patterns remain mandatory.
+**0.56.0 — Perilous Penguins** adds a bounded LLM “second reader” for record boundaries without giving the model authority to rewrite source topology. Deterministic segmentation remains primary; suspicious or demonstrated-risk seams receive semantic adjudication, human boundary corrections become build-local editorial examples, and reviewers can request an explicit previous/next boundary check in both standard and Focus review. Source-span conservation, auditable decisions, English/Québec French i18n, and WCAG-oriented interaction patterns remain mandatory.
 
-## 0.55.0 — Outrageous Orangutan
+## 0.56.0 — Perilous Penguins
 
-- Uses the LLM only as a second reader for suspicious or otherwise demonstrated-risk record seams after deterministic segmentation.
-- Keeps the existing deterministic-first ambiguous-boundary classifier and adds a post-segmentation semantic integrity audit.
-- Boundary decisions are constrained to `keep`, `move earlier`, `move later`, or `uncertain`; movement recommendations must reference an exact nearby source-block seam.
-- The LLM never moves or rewrites source text automatically. Human review remains authoritative for recommended moves.
-- Human slice corrections are stored as build-local boundary editorial examples and supplied as bounded few-shot context for later ambiguous boundaries.
-- Adds on-demand “Check with LLM” actions for previous/next boundaries in standard review and Focus View, with confidence, rationale, and suggested seam.
-- High-confidence LLM corroboration can clear a heuristic sentence/quotation-continuation warning, while disagreement or uncertainty remains an explicit topology review item.
-- Adds second-reader metrics and per-record provenance for boundary adjudication.
-- Adds reusable Storybook coverage for the boundary-adjudication component and English/Québec French strings for the full interaction.
+- Auto-uses valid metadata suggestions only above the 65% confidence threshold while preserving explicit LLM provenance.
+- Makes “No supported value” a durable human-confirmed-absence decision rather than an unresolved null.
+- Adds reusable accessible autocomplete/combobox controls and known-value suggestions for interpretive metadata.
+- Resets LLM text touch-up state per record/run so stale proposals cannot leak into later records.
+- Adds explicit provider-profile selection and LLM disclosure for touch-up, metadata reruns/enrichment, and boundary second-reader actions.
+- Rebuilds Slice Record on the shared accessible dialog primitive and clarifies merge actions as “Combine with previous/next record.”
+- Makes JSONL preview/export serialize only the scholarly corpus record; build, extraction, review, and runtime metadata stay server-side.
+- Adds repeatable metadata enrichment passes across accepted or pending records, preserving human decisions and reopening accepted records only for new metadata or substantive disagreements.
+- Adds English/Québec French i18n and Storybook coverage for the new LLM execution, enrichment, and combobox primitives.
 
 ## 0.54.0 — Neurotic Gnat
 

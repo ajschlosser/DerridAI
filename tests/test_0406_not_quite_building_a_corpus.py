@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0406_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.55.0"
-    assert 'version="0.55.0"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.55.0"' in text("api/app/config.py")
-    assert "0.55.0 — Outrageous Orangutan" in text("README.md")
+    assert package["version"] == "0.56.0"
+    assert 'version="0.56.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.56.0"' in text("api/app/config.py")
+    assert "0.56.0 — Perilous Penguins" in text("README.md")
 
 
 def test_pdf_workspace_defaults_to_builder_and_explorer_is_secondary():

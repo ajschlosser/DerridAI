@@ -34,9 +34,9 @@ def install(tmp_path:Path):
     return repo,build
 
 def test_release_and_i18n_parity():
-    assert APP_VERSION=='0.55.0'
-    assert json.loads(text('web/package.json'))['version']=='0.55.0'
-    assert '0.55.0 — Outrageous Orangutan' in text('README.md')
+    assert APP_VERSION=='0.56.0'
+    assert json.loads(text('web/package.json'))['version']=='0.56.0'
+    assert '0.56.0 — Perilous Penguins' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.slice_record','pdf_corpus.select_from_text','pdf_corpus.redo','pdf_corpus.pdf_source']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
@@ -68,6 +68,6 @@ def test_review_ui_has_slice_select_from_text_focus_pdf_and_undo_redo():
 
 def test_boundary_slice_storybook_component_is_accessible_and_reusable():
     comp=text('web/src/components/CorpusBoundarySliceDialog.vue');story=text('web/src/components/CorpusBoundarySliceDialog.stories.ts')
-    assert 'role="dialog"' in comp and 'aria-modal="true"' in comp
+    assert '<UiDialog' in comp and "import UiDialog" in comp
     assert ':focus-visible' in comp
     assert 'Corpus Builder/Review/Boundary Slice Dialog' in story

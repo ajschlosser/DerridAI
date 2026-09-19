@@ -4,7 +4,7 @@ import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 
 const props=defineProps<{build:CorpusBuild;busy?:boolean}>();
-const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];reviewRecords:[];reviewSource:[];restoreRejected:[];startNew:[];editDocumentMetadata:[];publish:[]}>();
+const emit=defineEmits<{retryMetadata:[];reviewMetadata:[];reviewRejected:[];reviewRecords:[];reviewSource:[];restoreRejected:[];startNew:[];editDocumentMetadata:[];rerunEnrichment:[];publish:[]}>();
 const i18n=useI18nStore();
 const readiness=computed(()=>props.build.publication_readiness||{});
 const summary=computed(()=>props.build.metadata_issue_summary||{});
@@ -73,7 +73,7 @@ function fixBlocker(code?:string){
         <p v-if="Number(summary.fields_unresolved||0)>0">{{i18n.tf('pdf_corpus.finish_metadata_summary','{records} record(s) contain {fields} unresolved required field(s).',{records:Number(summary.records_incomplete||0),fields:Number(summary.fields_unresolved||0)})}}</p>
         <p v-else>{{i18n.t('pdf_corpus.finish_metadata_complete','All publication-required metadata fields are resolved and validated.')}}</p>
         <dl><div><dt>{{i18n.t('pdf_corpus.auto_retry','Auto retry')}}</dt><dd>{{summary.auto_retry_fields||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.human_review','Human review')}}</dt><dd>{{summary.human_review_fields||0}}</dd></div></dl>
-        <div v-if="Number(summary.fields_unresolved||0)>0" class="card-actions"><button type="button" class="btn" @click="emit('reviewMetadata')">{{i18n.t('pdf_corpus.open_metadata_queue','Open metadata queue')}}</button><button v-if="Number(summary.auto_retry_fields||0)>0" type="button" class="btn" :disabled="busy" @click="emit('retryMetadata')">{{i18n.tf('pdf_corpus.retry_metadata_fields','Retry {count} field(s)',{count:Number(summary.auto_retry_fields||0)})}}</button></div>
+        <div class="card-actions"><button v-if="Number(summary.fields_unresolved||0)>0" type="button" class="btn" @click="emit('reviewMetadata')">{{i18n.t('pdf_corpus.open_metadata_queue','Open metadata queue')}}</button><button v-if="Number(summary.fields_unresolved||0)>0&&Number(summary.auto_retry_fields||0)>0" type="button" class="btn" :disabled="busy" @click="emit('retryMetadata')">{{i18n.tf('pdf_corpus.retry_metadata_fields','Retry {count} field(s)',{count:Number(summary.auto_retry_fields||0)})}}</button><button type="button" class="btn" :disabled="busy" @click="emit('rerunEnrichment')">{{i18n.t('pdf_corpus.metadata_enrichment_again','Run metadata enrichment again')}}</button></div>
       </article>
 
       <article class="finish-card" :data-state="validation.valid?'complete':'attention'">

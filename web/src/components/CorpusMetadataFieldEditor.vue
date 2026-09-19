@@ -2,13 +2,14 @@
 import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
+import UiCombobox from "./ui/UiCombobox.vue";
 
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
   boolean?:boolean; number?:boolean; array?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
   constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
 }>();
-const emit=defineEmits<{save:[value:unknown];source:[];dirty:[dirty:boolean]}>();
+const emit=defineEmits<{save:[value:unknown];noValue:[];source:[];dirty:[dirty:boolean]}>();
 const i18n=useI18nStore();
 const editing=ref(Boolean(props.open));
 const draft=ref<unknown>("");
@@ -17,7 +18,7 @@ const isLlm=computed(()=>String(props.status?.method||'').includes('llm')&&props
 function editableValue(){const value=props.constraint?.value ?? props.value;return Array.isArray(value)?value.join(', '):value??''}
 watch(()=>[props.field,props.value,props.constraint?.value],()=>{draft.value=editableValue()},{immediate:true});
 watch(()=>props.open,value=>{if(value)editing.value=true});
-watch(isLlm,value=>{if(value)editing.value=true},{immediate:true});
+
 function normalized(){if(props.array)return String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);if(props.number&&draft.value!=="")return Number(draft.value);return draft.value}
 function save(){emit('save',normalized());emit('dirty',false);editing.value=true}
 function markDirty(){emit('dirty',true)}
@@ -48,14 +49,14 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
     <div class="editor-row">
       <select v-if="options?.length" v-model="draft" class="control" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
       <fieldset v-else-if="boolean" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
-      <input v-else v-model="draft" class="control" :type="number?'number':'text'" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty">
+      <UiCombobox v-else-if="!number&&!array" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" @update:model-value="value=>{draft=value;markDirty()}"/><input v-else v-model="draft" class="control" :type="number?'number':'text'" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty">
       <button v-if="!options?.length&&!boolean&&!number" type="button" class="btn" :disabled="busy" @click="selectFromText">{{i18n.t('pdf_corpus.select_from_text','Select from text')}}</button>
       <button type="button" class="btn primary" :disabled="busy||draft===''||draft===undefined||(required&&draft===null)" @click="save">{{saving?i18n.t('pdf_corpus.saving_decision','Saving…'):i18n.t('pdf_corpus.save_field_value','Save value')}}</button>
-      <button v-if="!required" type="button" class="btn" :disabled="busy" @click="emit('save',null)">{{i18n.t('pdf_corpus.confirm_no_value','No supported value')}}</button>
+      <button type="button" class="btn" :disabled="busy" @click="emit('noValue')">{{i18n.t('pdf_corpus.confirm_no_value','No supported value')}}</button>
     </div>
     <p v-if="!options?.length&&!boolean&&!number" class="selection-help">{{i18n.t('pdf_corpus.select_from_text_help','Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.')}}</p>
     <div class="field-meta">
-      <span v-if="isLlm" class="proposal">{{i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
+      <span v-if="isLlm" class="proposal">{{confidence!==null&&confidence>0.65?i18n.t('pdf_corpus.llm_suggestion_autofilled','LLM value auto-filled from a >65% confidence suggestion'):i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
       <span>{{confidenceLabel}}</span>
       <span v-if="calibratedAcceptance&&calibratedAcceptance.reviewed>=3">{{i18n.tf('pdf_corpus.calibrated_acceptance','Historically accepted {percent}% of the time ({count} reviews)',{percent:Math.round(calibratedAcceptance.acceptanceRate*100),count:calibratedAcceptance.reviewed})}}</span>
       <span v-if="saved" class="saved" role="status">{{i18n.t('pdf_corpus.decision_saved_editable','Saved — you can keep editing this value')}}</span>
