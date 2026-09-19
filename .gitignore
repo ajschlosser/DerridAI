@@ -52,3 +52,4 @@ data/.home/*
 *.swp
 *.swo
 .test-data/
+web/test-results/
