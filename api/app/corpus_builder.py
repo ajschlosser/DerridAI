@@ -2355,6 +2355,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             bibliography_start = reviewed_layout.get("bibliography_pdf_start")
             if isinstance(layout_start, int):
                 result["main_text_start_page"] = layout_start
+                # A reviewer-defined start with no bibliography/end marker means
+                # the main text remains open-ended; do not preserve an LLM-guessed
+                # end page that could reclassify later records as apparatus.
+                result["main_text_end_page"] = None
             if isinstance(bibliography_start, int) and bibliography_start > 1:
                 result["main_text_end_page"] = bibliography_start - 1
         result["pdf_metadata"] = metadata
