@@ -21,6 +21,12 @@ async function expectNoHorizontalOverflow(locator:any){
 const story=(id:string)=>"/iframe.html?id="+id+"&viewMode=story";
 
 test.describe("Corpus Builder composed workflow",()=>{
+  test("French length stories declare their language to assistive technology",async({page})=>{
+    await page.goto(story("corpus-builder-workflow-lifecycle-stepper--french-length-stress"));
+    await expect(page.locator("html")).toHaveAttribute("lang","fr-CA");
+    await expect(page.locator("html")).toHaveAttribute("dir","ltr");
+  });
+
   test("lifecycle stepper maps configure, build, review, and publish states",async({page})=>{
     const states=[
       ["corpus-builder-workflow-lifecycle-stepper--configure","Source & configure"],
