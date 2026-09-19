@@ -27,16 +27,16 @@ def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
 
 def make_build(repo:cb.PdfCorpusRepository,count:int=2):
     asset=install_asset(repo,count)
-    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.59.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
+    build=repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"book.pdf","source_page_count":2,"source_block_count":count,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":8,"app_version":"0.60.0","provider":"ollama","model":"test-model","request":{"provider_profile_id":"primary"},"manifest":{},"validation":{"valid":True}})
     return asset,build
 
 
 def test_release_contract_is_v8_with_field_aware_metadata():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v11"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v8"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v11"
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==11
+    assert profile["version"]==12
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]
@@ -73,7 +73,7 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    record={"record_id":"r1","record_revision":1,"text":"Main text.","text_length":10,"pdf_pages":[1],"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
+    record={"record_id":"r1","record_revision":1,"text":"Main text.","text_length":10,"pdf_pages":[1],"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"region_type":"main_text","primary_text":True,"metadata_field_status":{"region_type":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."},"primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."}}}
     def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
         if schema_name=="derridai_record_discourse":
             return {"metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"assertion"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"assertion"}},"review_reason":""}
@@ -81,17 +81,18 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
         return {"metadata":{},"review_reason":""}
     monkeypatch.setattr(manager,"_chat_json",fake_chat)
     manager._enrich_record(record,{"main_text_start_page":1,"main_text_end_page":1},{"provider":"ollama","model":"test-model"},build_id=build["build_id"])
-    # Quizzical Quacker preserves both candidates but prefills the semantic LLM
-    # proposal for interpretive review. Region-type constraints then keep
-    # primary_text internally consistent with that proposed region.
-    assert record["region_type"]=="front_matter"
-    assert record["primary_text"] is False
+    # Testy Titmouse preserves reviewer-defined document structure as the selected
+    # value while retaining the semantic reader's disagreement for explicit review.
+    assert record["region_type"]=="main_text"
+    assert record["primary_text"] is True
     assert record["metadata_field_status"]["primary_text"]["status"]=="unresolved"
     assert record["metadata_field_status"]["primary_text"]["reason_code"]=="deterministic_llm_disagreement"
     assert record["metadata_field_status"]["region_type"]["status"]=="unresolved"
     assert record["metadata_field_status"]["region_type"]["llm_corroborates"] is False
     assert record["metadata_field_status"]["region_type"]["deterministic_value"]=="main_text"
     assert record["metadata_field_status"]["region_type"]["llm_value"]=="front_matter"
+    assert record["metadata_field_status"]["region_type"]["prefilled_candidate"]=="deterministic"
+    assert record["metadata_field_status"]["region_type"]["llm_checked"] is True
 
 
 def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_path:Path):

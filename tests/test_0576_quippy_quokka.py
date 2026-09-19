@@ -9,9 +9,9 @@ def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 def test_release_identity_0576():
-    assert json.loads(text("web/package.json"))["version"] == "0.59.0"
-    assert "0.59.0 — Serious Sandpipers" in text("README.md")
-    assert 'APP_VERSION = "0.59.0"' in text("api/app/config.py")
+    assert json.loads(text("web/package.json"))["version"] == "0.60.0"
+    assert "0.60.0 — Testy Titmouse" in text("README.md")
+    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
 
 def test_document_structure_typescript_regression():
     component = text("web/src/components/DocumentStructureConfigurator.vue")

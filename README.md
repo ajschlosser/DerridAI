@@ -1,6 +1,23 @@
-# DerridAI 0.59.0
+# DerridAI 0.60.0
 
-**0.59.0 — Serious Sandpipers** reorganizes Corpus Builder around a modern, progressive scholarly workflow: source selection and document structure precede LLM/enrichment choices, record construction and advanced execution are progressively disclosed, build readiness is summarized at the point of action, and complex metadata/source review can expand into full working-width modes. The application name is now consistently **DerridAI**; Corpus Viewer remains a major workspace within the application. English/Québec French i18n, keyboard accessibility, and WCAG 2.0 AA-oriented composition remain release requirements.
+**0.60.0 — Testy Titmouse** stabilizes the 0.59.0 Corpus Builder redesign around explicit surface opacity, reviewer-owned document structure, sanitized LLM text proposals, reliable semantic-field auto-population, and a real frontend test foundation. English/Québec French i18n, keyboard accessibility, visible focus, semantic status communication, and WCAG 2.0 AA-oriented testing remain release requirements.
+
+## 0.60.0 — Testy Titmouse
+
+A correctness-and-testability release for Corpus Builder.
+
+- Establishes explicit solid, raised, overlay, and glass surface tokens. Floating panels no longer depend on undefined/translucent component variables; overlay surfaces are opaque and glass surfaces use at least 90% opacity.
+- Fixes the **Corpus builds** popover and sticky **Build summary** so underlying text/content cannot bleed through them.
+- Sanitizes LLM text-touch-up output at the backend boundary. Model-added outer triple-hyphen or Markdown-fence wrappers are removed only when they were not present in the source; legitimate internal separators, em dashes, and source punctuation remain untouched.
+- Strengthens the touch-up prompt so the returned JSON text field contains only the corrected passage, without separators, labels, fences, or commentary.
+- Makes reviewer-confirmed document structure authoritative over manifest and semantic inference. A record classified as main text by reviewed document layout can no longer be silently changed to front matter by a later manifest or LLM pass.
+- Retains LLM disagreement as auditable field provenance: deterministic value, LLM value, confidence, reason, whether the field was actually checked, and why a semantic check was skipped/failed when applicable.
+- Requires the discourse reader to independently assess region type and primary-text status even when deterministic structure exists, so corroboration and disagreement are observable rather than inferred.
+- Normalizes direct grammatical stance aliases (for example, `affirmed → affirm`) before closed-vocabulary validation while retaining the raw LLM value. High-confidence normalized stance values materialize into the record and appear selected in the editor.
+- Adds frontend defensive normalization so existing/stale records containing an inflectional stance alias still select the canonical enum value.
+- Introduces **Vitest + Vue Test Utils + happy-dom** component tests and **Playwright + axe-core** composed UI tests. Initial coverage verifies progressive stance auto-selection, structural conflict selection, floating-surface opacity, keyboard focus, overflow, and WCAG 2.0 A/AA rules.
+- Adds a frontend GitHub Actions quality gate for typechecking, component tests, production build, Storybook build, Playwright/Chromium layout tests, and accessibility checks.
+- Bumps the auditable corpus contract to `derrida-scholarly-v12`, metadata prompt to `derridai-record-metadata-v9`, and document-manifest prompt to `derridai-document-manifest-v3`.
 
 ## 0.59.0 — Serious Sandpipers
 
@@ -359,7 +376,7 @@ Energized Elephant retains Dachshund’s exception-oriented review contract: **e
 
 Human metadata decisions are now durable server-side decisions rather than loosely coupled UI state. A decision writes the value, marks the field `human_confirmed`, records an audit entry, increments the record revision, recomputes the record's blockers and queue membership, persists the record set, and returns the authoritative record/build/queue state. `primary_text` retains true three-state semantics (`true`, `false`, `null`); `false` is never treated as missing. Background enrichment is progressively reviewable: a record unlocks as soon as its own metadata families settle, while in-flight records remain read-only and structural edits remain locked until neighboring enrichment settles.
 
-The active scholarly profile is `derrida-scholarly-v11` and metadata prompt contract is `derridai-record-metadata-v7`; v10 remains registered for existing builds. Review-relevant metadata includes `region_type`, `primary_text`, `discourse_role`, `speaker`, `position_holder`, `target`, `stance`, `proposition_status`, and `claim_scope`. Deterministic classifications are preserved. LLM proposals are constrained to controlled enums/booleans where applicable, source-bound evidence is validated, and any proposal below the profile confidence threshold is routed to human review even if the model fails to request review itself. High-confidence supported proposals remain visible and become human-confirmed when the reviewer accepts the record.
+The active scholarly profile is `derrida-scholarly-v12` and metadata prompt contract is `derridai-record-metadata-v7`; v10 remains registered for existing builds. Review-relevant metadata includes `region_type`, `primary_text`, `discourse_role`, `speaker`, `position_holder`, `target`, `stance`, `proposition_status`, and `claim_scope`. Deterministic classifications are preserved. LLM proposals are constrained to controlled enums/booleans where applicable, source-bound evidence is validated, and any proposal below the profile confidence threshold is routed to human review even if the model fails to request review itself. High-confidence supported proposals remain visible and become human-confirmed when the reviewer accepts the record.
 
 Review queues are derived from authoritative record state rather than independently persisted flags. The primary review navigation is **All**, **Reviewable**, **Issues**, **Accepted**, and **Rejected**; **Metadata**, **Topology**, and **Source problem** are issue-type filters rather than equally prominent tabs. Clean pending records have no source/topology/metadata blockers and can be approved individually with **Accept & next** or safely in bulk with **Accept clean**. Destructive batch rejection requires explicit record selection. Source extraction problems (including fragmented-glyph/layout artifacts) and uncertain provenance remain exception records with explicit reasons. Queue membership, metadata completeness, and publication eligibility are recalculated from the same persisted records so a confirmed field cannot reappear merely because a stale counter or client filter disagrees.
 

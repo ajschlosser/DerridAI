@@ -10,9 +10,9 @@ def text(path: str) -> str:
 
 
 def test_release_identity_0580():
-    assert json.loads(text('web/package.json'))['version'] == '0.59.0'
-    assert '0.59.0 — Serious Sandpipers' in text('README.md')
-    assert 'APP_VERSION = "0.59.0"' in text('api/app/config.py')
+    assert json.loads(text('web/package.json'))['version'] == '0.60.0'
+    assert '0.60.0 — Testy Titmouse' in text('README.md')
+    assert 'APP_VERSION = "0.60.0"' in text('api/app/config.py')
 
 
 def test_metadata_semantic_fields_have_correct_control_kinds():

@@ -4141,4 +4141,9 @@ EN_US: dict[str, str] = {'annotations.add_note': 'Add note',
  'pdf_corpus.document_structure_saved_impact': 'Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.',
  'pdf_corpus.build_history_anywhere': 'Open or monitor another build without leaving the current task.',
 
+ 'pdf_corpus.build_history_panel': 'Corpus build history',
+ 'pdf_corpus.llm_field_checked': 'LLM checked this field',
+ 'pdf_corpus.llm_field_not_checked': 'LLM not checked: {reason}',
+ 'pdf_corpus.llm_value_normalized': 'LLM returned “{raw}”; normalized to “{value}”.',
+
 }

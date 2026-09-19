@@ -21,11 +21,11 @@ def _build(tmp_path, n=20):
 
 
 def test_current_release_keeps_v6_registered_and_uses_v8_contract():
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v11"
+    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
-    assert profile["version"]==11
+    assert profile["version"]==12
     assert profile["boundary_batch_size"]>=2
     assert profile["max_llm_boundary_calls_per_100_atoms"]<100
 
@@ -128,5 +128,5 @@ def test_storybook_and_i18n_expose_segmentation_telemetry():
 def test_new_build_default_and_ui_do_not_drift_from_v8_profile():
     models=(ROOT/"api/app/models.py").read_text(encoding="utf-8")
     builder=(ROOT/"web/src/components/PdfCorpusBuilder.vue").read_text(encoding="utf-8")
-    assert 'default="derrida-scholarly-v11"' in models
+    assert 'default="derrida-scholarly-v12"' in models
     assert 'profile_id:"derrida-scholarly-v5"' not in builder

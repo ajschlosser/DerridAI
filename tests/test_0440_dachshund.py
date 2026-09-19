@@ -60,12 +60,12 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.59.0"
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v8"
+    assert APP_VERSION == "0.60.0"
+    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]["version"] == 11
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v11"
+    assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]["version"] == 12
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
 
 
 def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp_path: Path):

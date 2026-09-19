@@ -4393,4 +4393,9 @@ FR_CA: dict[str, str] = {'annotations.add_note': 'Ajouter une note',
  'pdf_corpus.document_structure_saved_impact': 'Structure du document enregistrée. {mapped} pages PDF sur {total} sont mappées; {exceptions} exception(s) de correspondance. Les métadonnées déterministes de page, de région et de fil seront utilisées par les nouvelles constructions.',
  'pdf_corpus.build_history_anywhere': 'Ouvrez ou surveillez une autre construction sans quitter la tâche en cours.',
 
+ 'pdf_corpus.build_history_panel': 'Historique des constructions de corpus',
+ 'pdf_corpus.llm_field_checked': 'Le LLM a vérifié ce champ',
+ 'pdf_corpus.llm_field_not_checked': 'LLM non consulté : {reason}',
+ 'pdf_corpus.llm_value_normalized': 'Le LLM a retourné « {raw} »; normalisé en « {value} ».',
+
 }

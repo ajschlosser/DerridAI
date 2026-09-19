@@ -36,9 +36,9 @@ def install(tmp_path:Path):
     return repo,build
 
 def test_release_identity_and_quebec_i18n():
-    assert APP_VERSION=='0.59.0'
-    assert json.loads(text('web/package.json'))['version']=='0.59.0'
-    assert '0.59.0 — Serious Sandpipers' in text('README.md')
+    assert APP_VERSION=='0.60.0'
+    assert json.loads(text('web/package.json'))['version']=='0.60.0'
+    assert '0.60.0 — Testy Titmouse' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.boundary_second_reader','pdf_corpus.check_with_llm','pdf_corpus.boundary_llm.move_later']:
         assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]

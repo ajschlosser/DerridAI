@@ -27,10 +27,10 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v8"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v9"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
-DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v2"
-PROFILE_VERSION = "derrida-scholarly-v11"
+DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
+PROFILE_VERSION = "derrida-scholarly-v12"
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -46,6 +46,59 @@ PROPOSITION_STATUS_VALUES = [
     "hypothetical", "attributed", "reported", "conceded", "suspended",
 ]
 STANCE_VALUES = ["affirm", "reject", "criticize", "question", "qualify", "suspend", "neutral", "describe"]
+
+STANCE_ALIASES = {
+    "affirmed": "affirm",
+    "rejected": "reject",
+    "criticized": "criticize",
+    "questioned": "question",
+    "qualified": "qualify",
+    "suspended": "suspend",
+    "descriptive": "describe",
+}
+STRONG_STRUCTURAL_METHODS = {
+    "human_document_layout",
+    "document_layout_rule",
+    "confirmed_manifest_page_range",
+}
+
+
+def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
+    """Canonicalize only closed-vocabulary grammatical aliases.
+
+    The raw model value is returned separately for audit. We deliberately avoid
+    semantic synonym expansion: only direct inflectional variants are normalized.
+    """
+    if field != "stance" or not isinstance(value, str):
+        return value, None
+    raw = value
+    token = value.strip().casefold()
+    if token in STANCE_VALUES:
+        return token, None
+    normalized = STANCE_ALIASES.get(token)
+    return (normalized, raw) if normalized else (value, None)
+
+
+def _sanitize_touchup_output(proposed: str, source: str) -> str:
+    """Remove model-added outer wrappers without touching source punctuation."""
+    value = str(proposed or "").strip()
+    source_value = str(source or "").strip()
+    lines = value.splitlines()
+    source_lines = source_value.splitlines()
+    if len(lines) >= 3:
+        first, last = lines[0].strip(), lines[-1].strip()
+        source_first = source_lines[0].strip() if source_lines else ""
+        source_last = source_lines[-1].strip() if source_lines else ""
+        if first == "---" and last == "---" and not (source_first == "---" and source_last == "---"):
+            value = "\n".join(lines[1:-1]).strip()
+            lines = value.splitlines()
+        if len(lines) >= 3 and lines[0].strip().startswith("~~~") and lines[-1].strip() == "~~~":
+            if not (source_first.startswith("~~~") and source_last == "~~~"):
+                value = "\n".join(lines[1:-1]).strip()
+        if len(lines) >= 3 and lines[0].strip().startswith("```") and lines[-1].strip() == "```":
+            if not (source_first.startswith("```") and source_last == "```"):
+                value = "\n".join(lines[1:-1]).strip()
+    return value
 
 DISCOURSE_ROLE_DEFINITIONS = {
     "assertion": "The speaker directly advances a proposition as part of the argument.",
@@ -81,6 +134,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
 
     primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
     human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
+    strong_structural_primary = str(primary_status.get("method") or "") in STRONG_STRUCTURAL_METHODS
     semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
     desired_primary: bool | None = None
     primary_reason = ""
@@ -96,7 +150,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
         if record.get("primary_text") is not desired_primary:
             changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
         record["primary_text"] = desired_primary
-        if not semantic_disagreement:
+        if not semantic_disagreement and not strong_structural_primary:
             status["primary_text"] = {
                 "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
                 "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
@@ -1327,9 +1381,9 @@ class PdfCorpusRepository:
 CORPUS_PROFILES: dict[str, dict[str, Any]] = {
     PROFILE_VERSION: {
         "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v11",
-        "version": 11,
-        "description": "Perilous Penguins: confidence-driven metadata review, explicit LLM profile choice, clean scholarly publication records, and repeatable metadata second-reader enrichment.",
+        "name": "Derrida scholarly corpus v12",
+        "version": 12,
+        "description": "Testy Titmouse: reviewer-owned document structure outranks semantic inference, closed-vocabulary LLM output is normalized with raw provenance retained, and field-level LLM participation remains auditable.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
@@ -2231,6 +2285,7 @@ class PdfCorpusBuildManager:
 
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         metadata = asset.get("metadata") or {}
+        reviewed_layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) and asset.get("document_layout", {}).get("confirmed_by") == "human" else {}
         # Sample the whole document rather than assuming the front matter is
         # representative. Headings plus front/middle/end blocks reveal later
         # section transitions, notes and bibliographic regions without sending a
@@ -2271,6 +2326,7 @@ Use only evidence in the supplied PDF metadata and source blocks. Use null when 
 
 PDF metadata: {json.dumps(metadata, ensure_ascii=False)}
 Filename: {asset.get('filename')}
+Reviewer-confirmed document structure (authoritative where present): {json.dumps(reviewed_layout, ensure_ascii=False)}
 Strategic whole-document sample:
 {sample_text}
 
@@ -2294,6 +2350,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # Human-confirmed document structure outranks LLM page-range inference.
+        if reviewed_layout:
+            layout_start = reviewed_layout.get("main_text_pdf_start")
+            bibliography_start = reviewed_layout.get("bibliography_pdf_start")
+            if isinstance(layout_start, int):
+                result["main_text_start_page"] = layout_start
+                # A reviewer-defined start with no bibliography/end marker means
+                # the main text remains open-ended; do not preserve an LLM-guessed
+                # end page that could reclassify later records as apparatus.
+                result["main_text_end_page"] = None
+            if isinstance(bibliography_start, int) and bibliography_start > 1:
+                result["main_text_end_page"] = bibliography_start - 1
         result["pdf_metadata"] = metadata
         result["source_asset_id"] = asset["asset_id"]
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
@@ -3659,13 +3727,17 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             inside = min(pdf_pages) >= start_page and (not isinstance(end_page, int) or max(pdf_pages) <= end_page)
             primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
             region_status = field_status.get("region_type") if isinstance(field_status.get("region_type"), dict) else {}
-            if primary_status.get("status") not in {"human_confirmed", "human_override"}:
+            primary_method = str(primary_status.get("method") or "")
+            region_method = str(region_status.get("method") or "")
+            primary_structure_owned = primary_method in STRONG_STRUCTURAL_METHODS
+            region_structure_owned = region_method in STRONG_STRUCTURAL_METHODS
+            if primary_status.get("status") not in {"human_confirmed", "human_override"} and not primary_structure_owned:
                 record["primary_text"] = inside
                 field_status["primary_text"] = {
                     "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
                     "reason": "Classified from the reviewed document main-text page range.",
                 }
-            if region_status.get("status") not in {"human_confirmed", "human_override"}:
+            if region_status.get("status") not in {"human_confirmed", "human_override"} and not region_structure_owned:
                 if inside:
                     inferred_region = "main_text"
                     region_reason = "Record lies entirely inside the reviewed main-text page range."
@@ -3685,7 +3757,15 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         "reason": region_reason,
                     }
             role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
-            if not inside and role_status.get("status") not in {"human_confirmed", "human_override"}:
+            # A stale/inferred manifest range must not make a reviewer-defined
+            # main-text record paratext. Region/primary structural ownership is
+            # the higher-order document fact; discourse role remains available
+            # for semantic classification.
+            strong_main_text = (
+                (region_structure_owned and record.get("region_type") == "main_text")
+                or (primary_structure_owned and record.get("primary_text") is True)
+            )
+            if not inside and not strong_main_text and role_status.get("status") not in {"human_confirmed", "human_override"}:
                 record["discourse_role"] = "paratext"
                 field_status["discourse_role"] = {
                     "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
@@ -3830,6 +3910,7 @@ Hybrid classification fields are constrained:
 - primary_text MUST be true or false. It means the record belongs to the substantive work rather than front/back matter, bibliography, index, publishing paratext, or other apparatus.
 - proposition_status describes the character/status of the proposition, not a boolean. Prefer one of: {json.dumps(PROPOSITION_STATUS_VALUES, ensure_ascii=False)}
 - stance describes the position holder's orientation toward the target/proposition. Prefer one of: {json.dumps(STANCE_VALUES, ensure_ascii=False)}
+- Independently assess region_type and primary_text even when deterministic document-structure metadata already exists. Return the semantically supported value and confidence. DerridAI will retain reviewer-defined structural facts as authoritative while recording any disagreement for review; do not suppress a disagreement merely because structure metadata exists.
 
 Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
@@ -4016,6 +4097,18 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if build_id:
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
+        # Expose whether the semantic reader actually evaluated deterministic
+        # structural fields. A final value alone must never imply corroboration.
+        discourse_state = str(stage_status.get("discourse") or "")
+        discourse_ledger = stage_ledger.get("discourse") if isinstance(stage_ledger.get("discourse"), dict) else {}
+        if discourse_state in {"skipped", "failed", "needs_review"}:
+            skip_reason = str(discourse_ledger.get("error") or f"Discourse metadata stage was {discourse_state}.")
+            for structural_field in ("region_type", "primary_text"):
+                structural_status = record.setdefault("metadata_field_status", {}).get(structural_field)
+                if isinstance(structural_status, dict) and structural_status.get("status") == "deterministic" and "llm_checked" not in structural_status:
+                    structural_status["llm_checked"] = False
+                    structural_status["llm_skip_reason"] = skip_reason
+
         minimum = float(profile.get("min_metadata_confidence") or 0.65)
         clean_evidence: dict[str, Any] = dict(record.get("metadata_evidence") or {})
         valid_ids = set(source_ids)
@@ -4025,6 +4118,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         model_review_reasons: list[str] = []
         field_assessments: dict[str, dict[str, Any]] = {}
         llm_populated_fields: set[str] = set()
+        raw_llm_values: dict[str, Any] = {}
+        llm_checked_fields: set[str] = set()
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -4034,11 +4129,17 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
             if isinstance(result.get("field_assessments"), dict):
-                field_assessments.update({str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)})
+                assessed = {str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)}
+                field_assessments.update(assessed)
+                llm_checked_fields.update(key for key in assessed if key in ALLOWED_METADATA_FIELDS)
             field_status = record.setdefault("metadata_field_status", {})
             for key, value in metadata.items():
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
                     continue
+                llm_checked_fields.add(key)
+                value, raw_llm_value = _normalize_semantic_value(key, value)
+                if raw_llm_value is not None:
+                    raw_llm_values[key] = raw_llm_value
                 existing_status = field_status.get(key) if isinstance(field_status.get(key), dict) else {}
                 # Human decisions are authoritative. Background/retry enrichment
                 # may add evidence, but it must never resurrect an already
@@ -4046,50 +4147,60 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if existing_status.get("status") in {"human_confirmed", "human_override"}:
                     continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
-                    # Deterministic structure is fast and useful, but page-range
-                    # decisions can be imperfect. Preserve the deterministic value
-                    # while recording a semantic LLM corroboration/disagreement.
-                    if value is not None:
-                        corroborates = value == record.get(key)
-                        existing_status = dict(existing_status)
+                    # Structural classifications remain selected. The semantic
+                    # reader may corroborate or dispute them, but reviewer-owned
+                    # document structure is never replaced by an LLM proposal.
+                    assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
+                    result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
+                    key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
+                    confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
+                    deterministic_value = record.get(key)
+                    deterministic_method = str(existing_status.get("method") or "")
+                    strong_structure = deterministic_method in STRONG_STRUCTURAL_METHODS
+                    existing_status = dict(existing_status)
+                    existing_status["llm_checked"] = True
+                    existing_status["llm_value"] = value
+                    existing_status["llm_confidence"] = confidence
+                    if value is None:
+                        existing_status["llm_corroborates"] = None
+                        existing_status["llm_skip_reason"] = "Semantic LLM returned no supported value for this field."
+                    else:
+                        corroborates = value == deterministic_value
                         existing_status["llm_corroboration"] = value
                         existing_status["llm_corroborates"] = corroborates
                         existing_status["corroboration_method"] = "llm"
                         if not corroborates:
-                            deterministic_value = record.get(key)
-                            assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
-                            result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
-                            key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
-                            confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
                             deterministic_strength = float(existing_status.get("confidence") or 0.0)
-                            deterministic_method = str(existing_status.get("method") or "")
                             existing_status["status"] = "unresolved"
                             existing_status["method"] = "deterministic+llm"
                             existing_status["reason_code"] = "deterministic_llm_disagreement"
                             existing_status["deterministic_value"] = deterministic_value
-                            existing_status["llm_value"] = value
-                            existing_status["llm_confidence"] = confidence
                             existing_status["deterministic_reason"] = str(existing_status.get("reason") or f"Deterministic inference selected {deterministic_value!r}.")
                             existing_status["llm_reason"] = str(assessment.get("reason") or "Semantic LLM check selected a different value.")
-                            existing_status["reason"] = (
-                                f"Deterministic inference suggests {deterministic_value!r}; semantic LLM check suggests {value!r}"
-                                + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
-                                + ". The LLM suggestion is prefilled for reviewer confirmation."
-                            )
-                            # For interpretive conflicts, show the semantic reader's proposal in the
-                            # editable field while retaining both candidates and their reasons. Human
-                            # review remains required; hard constraints are re-applied below.
-                            strong_structure = deterministic_method in {"human_document_layout", "confirmed_manifest_page_range", "document_layout_rule"}
-                            weak_manifest_range = deterministic_method == "manifest_page_range"
-                            if key != "primary_text" and confidence is not None and float(confidence) > minimum and not strong_structure and (weak_manifest_range or deterministic_strength < 0.9):
-                                record[key] = value
-                                existing_status["prefilled_candidate"] = "llm"
-                                existing_status["auto_populated"] = True
-                            elif key != "primary_text" and not strong_structure:
+                            if strong_structure:
+                                existing_status["reason"] = (
+                                    f"Reviewer-defined document structure requires {deterministic_value!r}; semantic LLM check suggests {value!r}"
+                                    + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
+                                    + ". The structural value remains selected; the disagreement is retained for review."
+                                )
                                 existing_status["prefilled_candidate"] = "deterministic"
                                 existing_status["auto_populated"] = False
                             else:
-                                existing_status["prefilled_candidate"] = "deterministic"
+                                existing_status["reason"] = (
+                                    f"Deterministic inference suggests {deterministic_value!r}; semantic LLM check suggests {value!r}"
+                                    + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
+                                    + ". Review both candidates."
+                                )
+                                weak_manifest_range = deterministic_method == "manifest_page_range"
+                                if key != "primary_text" and confidence is not None and float(confidence) > minimum and (weak_manifest_range or deterministic_strength < 0.9):
+                                    record[key] = value
+                                    existing_status["prefilled_candidate"] = "llm"
+                                    existing_status["auto_populated"] = True
+                                elif key != "primary_text":
+                                    existing_status["prefilled_candidate"] = "deterministic"
+                                    existing_status["auto_populated"] = False
+                                else:
+                                    existing_status["prefilled_candidate"] = "deterministic"
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
@@ -4105,7 +4216,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported proposition status: {value}"}
                     continue
                 if key == "stance" and value is not None and value not in STANCE_VALUES:
-                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported stance: {value}"}
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "raw_llm_value": raw_llm_value or value, "llm_checked": True, "reason": f"Model returned an unsupported stance: {value}"}
                     continue
                 assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
                 result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
@@ -4224,6 +4335,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "resolved", "reason": reason}
 
         apply_metadata_constraints(record)
+        for checked_field in llm_checked_fields:
+            checked_status = field_status.get(checked_field)
+            if isinstance(checked_status, dict):
+                checked_status.setdefault("llm_checked", True)
+                if checked_field in raw_llm_values:
+                    checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
+
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
@@ -6427,16 +6545,17 @@ RULES:
 - Preserve poetry, verse, block quotations, lists, footnotes, and deliberate typographic/orthographic oddities unless the artifact is unambiguous.
 - When uncertain, leave the source text unchanged and mention the uncertainty in warnings.
 - Return the COMPLETE touched-up text.
+- In the JSON text field, return ONLY the corrected passage text. Do not add Markdown fences, triple-hyphen separators, SOURCE_TEXT labels, quotation wrappers, or commentary around the passage.
 
 Optional reviewer instruction: {instructions or 'None'}
 
-TEXT:
----
+SOURCE_TEXT:
+<SOURCE_TEXT>
 {current_text}
----
+</SOURCE_TEXT>
 """
         result = self._chat_json(active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=min(8192, max(2048, len(current_text)//3)), schema_name="record_text_touchup", attempts=2, build_id=build_id)
-        proposed = str(result.get("text") or "").strip()
+        proposed = _sanitize_touchup_output(str(result.get("text") or ""), current_text)
         if not proposed:
             raise ValueError("LLM text touch-up returned empty text.")
         provider, model, _, _, _ = self._llm_config(active_request)
