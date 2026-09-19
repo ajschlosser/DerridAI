@@ -50,3 +50,11 @@ def test_all_static_i18n_keys_exist_in_catalogs():
 def test_compose_mounts_complete_web_tree():
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert "./web:/usr/share/nginx/html:ro" in compose
+
+
+def test_api_startup_does_not_require_untracked_api_data():
+    nlp = (ROOT / "api" / "services" / "nlp.py").read_text(encoding="utf-8")
+    assert "from data." not in nlp
+    assert "import data." not in nlp
+    assert "local_files_only=True" not in nlp
+    assert "@cached_property" in nlp
