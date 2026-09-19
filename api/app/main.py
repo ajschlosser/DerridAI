@@ -8,6 +8,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
@@ -88,7 +89,7 @@ from .content_filter import enforce_researcher_text
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI API", version="0.60.0")
+app = FastAPI(title="DerridAI API", version="0.61.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -231,7 +232,7 @@ def _session_cookie(response: Response, token: str) -> None:
         token,
         max_age=14 * 24 * 60 * 60,
         httponly=True,
-        secure=False,
+        secure=settings.session_cookie_secure,
         samesite="lax",
         path="/",
     )
@@ -401,13 +402,19 @@ def list_annotations(request: Request, store_name: str | None = Query(default=No
                 str(item.get("name")) for item in store.list_stores()
                 if item.get("name") and item.get("collection_role") != "language" and not str(item.get("name")).startswith("_response_cache")
             ]
-        except Exception:
+        except Exception as exc:
+            # Fail closed for researcher visibility instead of risking a
+            # cross-corpus disclosure. The server log retains diagnosis.
+            logger.warning("Researcher annotation store scope could not be loaded: %s", exc)
             candidate_stores = []
     accessible_works: dict[str, set[str]] = {}
     for name in candidate_stores:
         try:
             accessible_works[name] = {str(work) for work in store.list_works(name)}
-        except Exception:
+        except Exception as exc:
+            # Security scope checks fail closed: an unreadable store exposes no
+            # works rather than risking cross-corpus annotation disclosure.
+            logger.warning("Researcher annotation work scope could not be loaded for %s: %s", name, exc)
             accessible_works[name] = set()
     visible: list[dict] = []
     for item in annotations:
@@ -433,7 +440,10 @@ def create_annotation(body: AnnotationCreateRequest, request: Request):
             raise HTTPException(status_code=403, detail="Researcher annotations must be attached to an accessible corpus database record.")
         try:
             accessible_record = store.get_record(body.store, body.record_id, include_updates=False)
-        except Exception:
+        except Exception as exc:
+            # Deliberately fail closed without exposing whether the record or
+            # backing store failed, avoiding an account-enumeration distinction.
+            logger.warning("Researcher annotation evidence check failed closed: %s", exc)
             accessible_record = None
         if accessible_record is None:
             raise HTTPException(status_code=403, detail="That record is not available in the selected corpus database.")
@@ -837,7 +847,7 @@ def create_rag_job(body: RAGRunRequest, request: Request):
             payload = body.model_dump()
             payload.update({
                 "provider": profile.get("type") or "ollama",
-                "model": requested_model or profile.get("model"),
+                "model": profile.get("model"),
                 "base_url": profile.get("base_url"),
                 "api_key": profile.get("api_key"),
                 "max_concurrent_requests": max(1, min(64, int(profile.get("max_concurrent_requests") or 1))),
@@ -1195,7 +1205,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.60.0",
+            "app_version": "0.61.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
@@ -1614,8 +1624,10 @@ def get_restored_current_pdf():
             media_type = str(
                 meta.get("content_type") or media_type
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            # The PDF bytes remain authoritative. Corrupt optional download
+            # metadata only falls back to the neutral filename/content type.
+            logger.warning("Restored PDF metadata could not be read; using safe defaults: %s", exc)
 
     return FileResponse(
         pdf_path,

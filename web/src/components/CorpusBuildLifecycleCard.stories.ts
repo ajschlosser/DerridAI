@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 const build:any={build_id:"build-1",asset_id:"asset",source_filename:"book.pdf",source_sha256:"sha",status:"awaiting_review",stage:"review",progress:.94,created_at:"",record_count:63,needs_review_count:12,accepted_count:49,rejected_count:2,profile_id:"derrida-scholarly-v9",metadata_completed:58,metadata_total:63,pipeline_state:{extraction:{state:"complete"},construction:{state:"complete"},enrichment:{state:"complete"},review:{state:"active"},validation:{state:"waiting"},publication:{state:"waiting"}},publication_readiness:{next_action:"continue_review"}};
 const meta={title:"Corpus Builder/Workflow/Build Lifecycle",component:CorpusBuildLifecycleCard,args:{build}} satisfies Meta<typeof CorpusBuildLifecycleCard>;
 export default meta; type Story=StoryObj<typeof meta>;

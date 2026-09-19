@@ -56,6 +56,7 @@ function captureSelection(){
   const rect=range.getBoundingClientRect();selectedQuote.value=quote;
   selectionStyle.value={left:`${Math.max(12,Math.min(window.innerWidth-250,(rect.left+rect.right)/2-125))}px`,top:`${Math.max(12,rect.top-52)}px`};
 }
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 async function copySelection(){if(!selectedQuote.value)return;try{await navigator.clipboard.writeText(selectedQuote.value)}catch{}selectedQuote.value=''}
 function annotate(){if(!selectedQuote.value)return;emit('annotate',{field:'text',quote:selectedQuote.value});selectedQuote.value=''}
 function closeSelection(){selectedQuote.value='';window.getSelection()?.removeAllRanges()}

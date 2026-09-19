@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import CorpusSegmentationTelemetry from "./CorpusSegmentationTelemetry.vue";
 import type { CorpusSegmentationTelemetry as CorpusSegmentationTelemetryData } from "../types/corpus";
@@ -13,7 +14,7 @@ const props=defineProps<{
   acceptedCount:number;
   error?:string|null;
   warnings?:string[];
-  validation?:Record<string,any>|null;
+  validation?:CorpusBuild['validation']|null;
   llmMetrics?:{calls?:number;manifest_calls?:number;segmentation_calls?:number;metadata_calls?:number;discourse_calls?:number;quotation_calls?:number;indexing_calls?:number;retries?:number;structured_output_failures?:number;escalations?:number}|null;
   unresolvedCount?:number;
   segmentationTelemetry?:CorpusSegmentationTelemetryData|null;

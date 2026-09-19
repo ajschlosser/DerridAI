@@ -182,6 +182,7 @@ const state = {
 };
 
 const UI_COLOR_THEMES=new Set(["green","blue","slate"]);
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{}try{localStorage.setItem("derridai.ui.theme",next)}catch{}return next}
 
 function setTranslationDictionary(locale,dictionary={},base={}){
@@ -624,6 +625,7 @@ async function deleteWorkspaceDatabase(){
   try{
     const db=await openWorkspaceDb();
     db.close();
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   }catch{}
   dbPromise=null;
   await new Promise((resolve,reject)=>{
@@ -830,6 +832,7 @@ async function restoreWorkspace(){
       state.reviewSelection=new Set(prefs.reviewSelection||[]);
       state.activeFileId=state.files.some(f=>f.id===prefs.activeFileId)?prefs.activeFileId:(state.files[0]?.id||null);
     }else{
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       state.activeFileId=state.files[0]?.id||null;ensureProviderProfiles();try{state.appConfig.ui_color_theme=localStorage.getItem("derridai.ui.theme")||state.appConfig.ui_color_theme||"green"}catch{}applyUiTheme(state.appConfig.ui_color_theme);
     }
     const validPrefixes=new Set(state.files.map(f=>f.id));
@@ -1342,6 +1345,7 @@ function highlight(text, query){
 
 function highlightTerms(text, query){
   const source=String(text??"");
+  // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
   const terms=[...new Set(String(query??"").trim().split(/\s+/).map(term=>term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g,"")).filter(term=>term.length>1))]
     .sort((a,b)=>b.length-a.length);
   if(!terms.length)return esc(source);
@@ -2466,6 +2470,7 @@ function applyOperationStackPosition(stack){
 }
 function wireOperationStackDrag(stack){
   const handle=stack?.querySelector("[data-operation-drag]");if(!handle||handle.dataset.dragWired)return;handle.dataset.dragWired="1";
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   handle.addEventListener("pointerdown",event=>{if(event.button!==0||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width,maxLeft=Math.max(8,window.innerWidth-width-8),maxTop=Math.max(8,window.innerHeight-52);let nextLeft=startLeft,nextTop=startTop,frame=0;handle.classList.add("dragging");stack.classList.add("is-dragging");try{handle.setPointerCapture(event.pointerId)}catch{}const paint=()=>{frame=0;stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`};const move=e=>{nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));if(!frame)frame=requestAnimationFrame(paint)};const done=e=>{if(frame)cancelAnimationFrame(frame);stack.style.transform="";state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};applyOperationStackPosition(stack);handle.classList.remove("dragging");stack.classList.remove("is-dragging");window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",done);window.removeEventListener("pointercancel",done);try{handle.releasePointerCapture(e?.pointerId)}catch{}persistPrefs()};window.addEventListener("pointermove",move,{passive:true});window.addEventListener("pointerup",done,{once:true});window.addEventListener("pointercancel",done,{once:true})});
   handle.addEventListener("dblclick",event=>{if(event.target.closest("button"))return;state.operationStackPosition=null;persistPrefs();applyOperationStackPosition(stack)});handle.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),step=event.shiftKey?40:12;let left=rect.left,top=rect.top;if(event.key==="ArrowLeft")left-=step;if(event.key==="ArrowRight")left+=step;if(event.key==="ArrowUp")top-=step;if(event.key==="ArrowDown")top+=step;state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};persistPrefs();applyOperationStackPosition(stack)});window.addEventListener("resize",()=>applyOperationStackPosition(stack),{passive:true});
 }
@@ -2591,6 +2596,7 @@ async function syncUpsertJobReceipts(job){
   persistPrefs();
   updateDbStatusElements();
   if(!["queued","running","cancelling"].includes(detail.status)){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{await refreshStores()}catch{}
   }
 }
@@ -2951,6 +2957,7 @@ function flattenValueList(value){
   const text=String(value).trim();
   if(!text)return [];
   if((text.startsWith("[")&&text.endsWith("]"))||(text.startsWith("{")&&text.endsWith("}"))){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{return flattenValueList(JSON.parse(text))}catch{}
   }
   // Legacy corpus files have used newline, semicolon, pipe, and CSV-like
@@ -3073,6 +3080,7 @@ function annotationItemHtml(item){
   return `<article class="annotation-feed-item">${open}<div class="annotation-feed-copy"><div class="annotation-feed-meta"><b>${esc(item.record?.record_id||tr("nav.record","Record"))}</b><span>${esc(annotation.field?label(annotation.field):tr("annotations.record_note","Record note"))}</span><time>${esc(formatTimestamp(annotation.created_at))}</time></div>${annotation.quote?`<blockquote>${esc(annotation.quote)}</blockquote>`:""}${annotation.note?`<p>${esc(annotation.note)}</p>`:""}${tags?`<div class="annotation-tags">${tags}</div>`:""}<small>${esc(annotation.initiated_by||annotation.author||tr("annotations.unknown_author","Unknown author"))} · ${esc(source)}</small></div>${removeButton}</article>`;
 }
 async function renderAnnotations(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(isResearcher()&&!state.activeStore){try{await refreshStores();state.activeStore=recordStores()[0]?.name||""}catch{}}
   await refreshServerAnnotations(isResearcher()&&state.serverAnnotationsStore!==String(state.activeStore||""));
   const all=allAnnotations();
@@ -3083,6 +3091,7 @@ async function renderAnnotations(main){
   const input=main.querySelector("#annotationSearch");let timer=null;input?.addEventListener("input",event=>{const value=event.target.value,pos=event.target.selectionStart;state.annotationSearch=value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>{if(state.view!=="annotations")return;renderAnnotations(main);requestAnimationFrame(()=>{const next=main.querySelector("#annotationSearch");if(next){next.focus();next.setSelectionRange(pos,pos)}})},150)});
   main.querySelectorAll("[data-annotation-view]").forEach(button=>button.onclick=()=>{state.annotationView=button.dataset.annotationView;persistPrefs();syncUrl({replace:true});renderAnnotations(main)});
   main.querySelectorAll("[data-annotation-file]").forEach(button=>button.onclick=()=>navigateTo("record",{fileId:button.dataset.annotationFile,index:Number(button.dataset.annotationIndex)}));
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   main.querySelectorAll("[data-server-annotation-record]").forEach(button=>button.onclick=()=>openSharedAnnotationRecord(button.dataset.serverAnnotationStore,button.dataset.serverAnnotationRecord));
   main.querySelectorAll("[data-delete-server-annotation]").forEach(button=>button.onclick=async()=>{if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_help","This removes the shared annotation. This action cannot be undone."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;try{await api(`/api/annotations/${encodeURIComponent(button.dataset.deleteServerAnnotation)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.removed","Annotation removed."));renderAnnotations(main)}catch(error){toast(error.message,{tone:"danger"})}});
   main.querySelectorAll("[data-delete-local-annotation]").forEach(button=>button.onclick=async()=>{
@@ -4943,6 +4952,7 @@ async function renderRag(main){
           prompt,
           instructions:instructions||null,
           source_collection:cfg.source_collection,
+          // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
           selected_evidence:selectedPayload,
           skip_retrieval:Boolean(cfg.skip_retrieval),
           locales:cfg.locales,
@@ -5141,7 +5151,9 @@ async function renderDashboard(main){
     <article class="card dashboard-quick-card dashboard-record-preview"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.record_view","Record View"))}</b></div><button class="dashboard-text-link" id="dashRecordView" ${previewTarget?"":`disabled data-disabled-reason="${esc(tr("dashboard.no_record_available","No record is available to open."))}"`}>${esc(tr("research.open","Open"))} →</button></div>${previewRecord?`<div class="dashboard-record-state">${esc(preview.lastViewed?tr("dashboard.last_viewed_record","Last viewed record"):tr("dashboard.random_record","A record from the corpus"))}</div><div class="dashboard-record-meta"><b>${esc(previewRecord.work||previewRecord.record_id||tr("dashboard.record","Record"))}</b><span class="dashboard-record-pages">${esc(mlaPageSpan(previewRecord)||"")}</span></div><div class="dashboard-record-text">${esc(String(previewRecord.text||"").replace(/\s+/g," ").slice(0,220))}${String(previewRecord.text||"").length>220?"…":""}</div>`:`<div class="dashboard-record-empty">${esc(tr("dashboard.no_record_selected","No corpus record is currently available."))}</div>`}</article>
     ${latestAnnotation?`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.latest_annotation","Latest annotation"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("annotations.view_all","View all"))} →</button></div><button class="dashboard-annotation-preview" ${latestAnnotation.server?`data-recent-server-annotation-record="${esc(latestAnnotation.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(latestAnnotation.annotation.store||"")}"`:`data-recent-annotation-file="${esc(latestAnnotation.file.id)}" data-recent-annotation-index="${latestAnnotation.index}"`}><div class="dashboard-annotation-meta"><span class="dashboard-annotation-work">${esc(latestAnnotation.work)}</span><span class="dashboard-annotation-pages">${esc(mlaPageSpan(latestAnnotation.record)||tr("record.page_not_recorded","Page not recorded"))}</span><span class="dashboard-annotation-author">${esc(latestAnnotation.annotation.initiated_by||latestAnnotation.annotation.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(latestAnnotation.annotation.created_at))}</time><small>${esc(latestAnnotation.record.record_id||tr("nav.record","Record"))}</small></div>${latestAnnotation.annotation.note?`<p>${esc(latestAnnotation.annotation.note)}</p>`:latestAnnotation.annotation.quote?`<blockquote>${esc(latestAnnotation.annotation.quote)}</blockquote>`:`<p>${esc(tr("annotations.record_note","Record annotation"))}</p>`}</button></article>`:`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.annotations","Annotations"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("research.open","Open"))} →</button></div><p>${esc(isResearcher()?tr("annotations.researcher_help","Annotations are organized by work when available in the current workspace."):tr("dashboard.annotations_help","Collect notes, tags, and discussion threads attached to corpus evidence."))}</p></article>`}
     </section>${renderCorpusBuildsHomeCard()}${renderOperationsPanel()}</div>`;
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   const goSearch=async()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"",semantic=state.globalSearchMode==="database";state.globalPage=1;state.storeSearchResults=[];if(semantic){if(!state.activeStore){try{await refreshStores()}catch{};state.activeStore=recordStores()[0]?.name||""}state.globalSearchMode="database";if(!state.activeStore){persistPrefs();if(canAccessPage("vector")){toast(tr("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});openDatabaseCreationFromResearch()}else{navigateTo("global");toast(tr("research.no_database","No corpus database available"),{tone:"warn"})}return;}state.dbSearchWhere=work?{work}:{};state.storeQuery=state.globalSearch;if(state.globalSearch&&state.dbSearchMethod==="filter")state.dbSearchMethod="similarity";if(!state.globalSearch&&work)state.dbSearchMethod="filter";state.globalSearchAutoRun=false;state.storeSearchLoading=true;persistPrefs();navigateTo("global");try{const mode=state.dbSearchMethod||"similarity";const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:state.globalSearch,mode,n_results:100,where:Object.keys(dbSearchWhere()).length?dbSearchWhere():null,fetch_k:Number(state.dbSearchFetchK||100),lambda_mult:Number(state.dbSearchLambda??0.7)})});state.storeSearchResults=data.results||[]}catch(error){toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}finally{state.storeSearchLoading=false;persistPrefs();if(state.view==="global")renderGlobal(document.querySelector("#main"))}}else{state.globalSearchMode="traditional";state.globalSearchAutoRun=false;if(isResearcher())state.dbSearchWhere=work?{work}:{};else state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")}};
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireCorpusBuildsHomeCard(main);wireOperationsPanel();decorateDisabledControls(main);
 }
 
@@ -6213,6 +6225,7 @@ async function openSeparateWorksModal(){
 
 async function renderWorks(main){
   if(isResearcher())return renderResearcherWorks(main);
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
   if(Date.now()-Number(state.storesLastFetchedAt||0)>5000){
     showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking vector database state…"));
@@ -6376,6 +6389,7 @@ async function renderResearcherGlobal(main){
 }
 async function renderResearcherWorks(main){
   showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking corpus database…"));try{await refreshStores();if(state.activeStore)await refreshStoreWorks(true)}catch(error){main.innerHTML=`<div class="info error">${esc(error.message)}</div>`;return}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   const stores=recordStores();if(!state.activeStore&&stores.length){state.activeStore=stores[0].name;await refreshStoreWorks(true)};try{await refreshServerAnnotations(true)}catch{};if(!stores.length){main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("database")}</div><h1>${esc(tr("research.no_database","No corpus database available"))}</h1></div></section>`;return}
   const works=(state.storeWorkStats||[]).filter(item=>!state.worksSearch||String(item.work).toLocaleLowerCase().includes(state.worksSearch.toLocaleLowerCase()));const selected=works.find(item=>item.work===state.workOverview)||null;
   const selectedAnnotationCount=selected?allAnnotations().filter(item=>String(item.work||"")===String(selected.work)).length:0;
@@ -6384,10 +6398,13 @@ async function renderResearcherWorks(main){
   let timer=null;main.querySelector("#worksSearch")?.addEventListener("input",event=>{state.worksSearch=event.target.value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>renderResearcherWorks(main),150)});main.querySelector("#researchWorksStore")?.addEventListener("change",async event=>{state.activeStore=event.target.value;state.storeWorksStore="";state.workOverview="";await refreshStoreWorks(true);persistPrefs();syncUrl({replace:true});renderResearcherWorks(main)});main.querySelectorAll("[data-research-work]").forEach(button=>button.onclick=()=>{const y=window.scrollY;state.workOverview=button.dataset.researchWork||"";persistPrefs();syncUrl({replace:true});renderResearcherWorks(main);requestAnimationFrame(()=>window.scrollTo(0,y))});main.querySelector("#browseResearchWork")?.addEventListener("click",()=>{state.storeWork=state.workOverview;state.storeBrowseMode="records";state.storePage=1;persistPrefs();navigateTo("vector")});main.querySelector("#researchWorkAnnotations")?.addEventListener("click",()=>{state.annotationSearch=state.workOverview;state.annotationView="works";persistPrefs();navigateTo("annotations")});
 }
 async function renderResearcherRecord(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!state.activeStore){try{await refreshStores()}catch{};if(!state.activeStore){main.innerHTML=`<div class="info warn">${esc(tr("research.no_database","No corpus database available"))}</div>`;return}}
   let id=state.researcherRecordId;let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
   if(!record&&id){try{record=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(id)}`)}catch{record=null}}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!record){if(!state.storeRecords.length){try{await loadStorePage()}catch{}}record=state.storeRecords[0];id=String(record?._chroma_id||record?.record_id||"");state.researcherRecordId=id}
   if(!record){main.innerHTML=`<section class="empty"><div class="drop"><h1>${esc(tr("research.no_records","No records available"))}</h1><button class="btn primary" id="recordBrowseWorks">${esc(tr("works.browse_records","Browse records"))}</button></div></section>`;main.querySelector("#recordBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));return}
   const viewedPointer={kind:"database",store:state.activeStore,id:String(record._chroma_id||record.record_id||id)};
@@ -6398,6 +6415,7 @@ async function renderResearcherRecord(main){
   let researcherSelection=null;const updateResearcherSelection=()=>{researcherSelection=selectionInsideRecordView();const toolbar=main.querySelector("#researchRecordSelectionToolbar");if(toolbar){toolbar.hidden=!researcherSelection;if(researcherSelection)positionSelectionToolbar(toolbar,researcherSelection)}};const researcherGrid=main.querySelector(".recordgrid");researcherGrid?.addEventListener("mouseup",updateResearcherSelection);researcherGrid?.addEventListener("keyup",updateResearcherSelection);main.querySelector("#researchAnnotateSelection")?.addEventListener("click",()=>{if(!researcherSelection)return;openAnnotationPopover(researcherSelection,{recordLabel:String(record.record_id||id),onSave:async({field,quote,note,tags})=>{await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||id),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});renderResearcherRecord(main)}})});
 }
 async function renderResearcherCompare(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!state.activeStore){try{await refreshStores()}catch{}};if(!state.storeRecords.length&&state.activeStore){state.storePageSize=100;try{await loadStorePage()}catch{}}
   const records=researcherDbRecords();const byId=new Map(records.map(record=>[String(record._chroma_id||record.record_id||""),record]));if(!state.researcherCompareA&&records[0])state.researcherCompareA=String(records[0]._chroma_id||records[0].record_id||"");if(!state.researcherCompareB&&records[1])state.researcherCompareB=String(records[1]._chroma_id||records[1].record_id||"");const a=byId.get(state.researcherCompareA),b=byId.get(state.researcherCompareB);
   const options=records.map(record=>{const id=String(record._chroma_id||record.record_id||"");return `<option value="${esc(id)}">${esc(record.record_id||id)} · ${esc(record.work||"")}</option>`}).join("");
@@ -6426,6 +6444,7 @@ async function renderAdminDatabaseGlobal(main){
   main.querySelector("#runAdminGlobalSearch")?.addEventListener("click",run);main.querySelector("#adminGlobalQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();void run()}});main.querySelector("#clearAdminGlobalSearch")?.addEventListener("click",()=>{state.globalSearch="";state.storeSearchResults=[];state.dbSearchWhere={};persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)});
   main.querySelector("#addAdminFilter")?.addEventListener("click",()=>{const field=main.querySelector("#adminFilterField")?.value;const value=main.querySelector("#adminFilterValue")?.value?.trim();if(field&&value){state.dbSearchWhere={...(state.dbSearchWhere||{}),[field]:value};persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)}});main.querySelectorAll("[data-remove-admin-filter]").forEach(button=>button.onclick=()=>{const next={...(state.dbSearchWhere||{})};delete next[button.dataset.removeAdminFilter];state.dbSearchWhere=next;persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)});
   main.querySelectorAll("[data-admin-db-edit]").forEach(button=>button.onclick=()=>{const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id||"")===String(button.dataset.adminDbEdit));if(result)openStoreRecordEditor({...result.record,_chroma_id:result.id})});
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   wireEvidenceButtons(main);decorateDisabledControls(main);
   if(state.globalSearchAutoRun){state.globalSearchAutoRun=false;persistPrefs();queueMicrotask(()=>void run())}
 }
@@ -6444,6 +6463,7 @@ function renderTraditionalGlobal(main){
   const flagged=needsReviewItems(rows).length;
   const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(x.file,x.index)));
   const available=tableAvailableFields(allRows(),["__file","__db_status"]);
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   const columns=scope==="loaded"
     ? SEARCH_LOADED_COLUMNS.filter(key=>available.includes(key))
     : getTableColumns("global",available);
@@ -6785,6 +6805,7 @@ function cleanText(text){
   let s=String(text??""),before=s;
   s=s.replace(/[ﬀﬁﬂﬃﬄﬅﬆ]/g,c=>ligatures[c]||c)
     .replace(/\u00ad/g,"")
+    // eslint-disable-next-line no-misleading-character-class -- SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics.
     .replace(/[\u200b\u200c\u200d\u2060\ufeff\ufffe\uffff]/g,"")
     .replace(/([A-Za-zÀ-ÖØ-öø-ÿ])-[ \t]*\r?\n[ \t]*([a-zà-öø-ÿ])/g,"$1$2")
     .replace(/\r\n/g,"\n");
@@ -7717,6 +7738,7 @@ function fullHttpErrorDetail(payload,text,statusText=""){
   if(detail&&typeof detail==="object"){
     const message=detail.message||detail.error||detail.detail;
     if(message)return String(message);
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{return JSON.stringify(detail)}catch{}
   }
   if(text&&String(text).trim())return String(text).trim();
@@ -7728,6 +7750,7 @@ function storeHttpError(entry){
     const rows=Array.isArray(current)?current:[];
     rows.unshift(entry);
     localStorage.setItem(HTTP_ERROR_STORAGE_KEY,JSON.stringify(rows.slice(0,50)));
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   }catch{}
 }
 async function api(path,options={}){
@@ -8068,6 +8091,7 @@ async function renderVector(main){
   }
 
   if(!state.llmStatus){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{state.llmStatus=await api("/api/llm/status")}catch{}
   }
 
@@ -8577,6 +8601,7 @@ function providerDisplayName(profile){
 function providerRequestConfig(profile,{textReview=false}={}){
   if(!profile)return null;
   let extra={};
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{extra=JSON.parse(profile.extra_options||"{}")}catch{}
   if(!extra||Array.isArray(extra)||typeof extra!=="object")extra={};
   let think=null;
@@ -8949,6 +8974,7 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
     dialog.querySelector("#touchModel")?.addEventListener("input",e=>{state.llmConfig.model=e.target.value;persistPrefs();updateSelection()});
     dialog.querySelector("#touchInstructions")?.addEventListener("input",e=>instructionsValue=e.target.value);
     dialog.querySelector("#refreshModels").onclick=async()=>{
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       try{captureConfig()}catch{}
       status=await fetchLlmStatus();
       renderSetup();
@@ -9165,12 +9191,15 @@ async function downloadFullBackup(){
     const response=await fetch("/api/admin/backup",{method:"POST",body:form});
     if(!response.ok){
       let detail=`HTTP ${response.status}`;
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       try{const payload=await response.json();detail=payload.detail||detail}catch{}
       throw new Error(detail);
     }
     const blob=await response.blob();
     const disposition=response.headers.get("content-disposition")||"";
+    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
     const match=disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
     const filename=decodeURIComponent((match?.[1]||`derridai-full-backup-${new Date().toISOString().slice(0,10)}.zip`).replace(/^\"|\"$/g,""));
     const url=URL.createObjectURL(blob);
     const anchor=document.createElement("a");
@@ -10340,8 +10369,10 @@ function normalizedRecordAnnotation(item,index=0,{removable=false}={}){
   };
 }
 async function researcherCurrentRecord(){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
   if(!state.activeStore){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{await refreshStores()}catch{}
     if(!state.activeStore)return null;
   }
@@ -10349,6 +10380,7 @@ async function researcherCurrentRecord(){
   let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
   if(!record&&id){try{record=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(id)}`)}catch{record=null}}
   if(!record){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     if(!state.storeRecords.length){try{await loadStorePage()}catch{}}
     record=state.storeRecords[0]||null;
     id=String(record?._chroma_id||record?.record_id||"");

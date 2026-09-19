@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import CorpusProviderSwitcher from './CorpusProviderSwitcher.vue';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 const profiles:any[]=[
   {id:'gemma26',name:'Gemma 4 26B',type:'ollama',model:'hf.co/unsloth/gemma-4-26B-A4B-it-GGUF:UD-IQ4_XS'},
   {id:'qwen27',name:'Qwen 27B',type:'ollama',model:'Qwen3.8-27B'},

@@ -1,0 +1,13 @@
+target-version = "py312"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# SA-01: legacy compact statements. Keep the first gate focused on correctness;
+# reformat each module with its own reviewed change, not a business-logic rewrite.
+"api/app/auth.py" = ["E702"]
+"api/app/bibliography.py" = ["E701"]
+"api/app/chroma_store.py" = ["E701", "E702"]
+"api/app/corpus_builder.py" = ["E701", "E702"]
+"api/app/llm_tools.py" = ["E701"]

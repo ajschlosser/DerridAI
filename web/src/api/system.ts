@@ -1,4 +1,5 @@
 import { apiRequest } from "./http";
+import type { JobSummary } from "./jobs";
 
 export interface ProviderProfile {
   id: string;
@@ -34,6 +35,6 @@ export const systemApi = {
   languages: () => apiRequest<{languages: LanguageInfo[]}>("/api/i18n/languages"),
   language: (code: string) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
   updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "PUT", body: JSON.stringify(payload)}),
-  installLanguage: (payload: Record<string, unknown>) => apiRequest<any>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
+  installLanguage: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   deleteLanguage: (code: string) => apiRequest<{deleted: string}>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "DELETE"}),
 };

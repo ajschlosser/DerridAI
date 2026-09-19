@@ -107,6 +107,8 @@ def _response_detail(response: httpx.Response) -> str:
                 return str(error.get("message") or error)
             return str(payload.get("detail") or payload.get("message") or "")
     except Exception:
+        # Safe: only extracts a friendlier message from an error body; the raw
+        # response text below is returned instead and the HTTP failure stands.
         pass
     return response.text[:1200]
 

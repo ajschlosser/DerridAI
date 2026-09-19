@@ -266,7 +266,7 @@ async function saveAndSwitch() {
   }
 }
 function providerGeneration(profile: ProviderProfile) {
-  const value = (key: string) => profile[key] as any;
+  const value = (key: string) => profile[key];
   return {
     num_ctx: value("num_ctx") || undefined,
     num_predict: value("metadata_num_predict") || value("num_predict") || undefined,

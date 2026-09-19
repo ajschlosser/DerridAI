@@ -2,6 +2,7 @@
 import PdfEvidenceViewer from './PdfEvidenceViewer.vue';
 import { useI18nStore } from '../stores/i18n';
 import type { SourceBlock } from '../api/pdfCorpus';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props=withDefaults(defineProps<{pdfUrl?:string;page:number;pageCount?:number;pageWidth?:number;pageHeight?:number;blocks?:SourceBlock[];evidenceBlockIds?:string[];canPrevious?:boolean;canNext?:boolean;showPdfExplorer?:boolean}>(),{pdfUrl:'',pageCount:0,pageWidth:0,pageHeight:0,blocks:()=>[],evidenceBlockIds:()=>[],canPrevious:false,canNext:false,showPdfExplorer:true});
 const emit=defineEmits<{openViewer:[];openPdfExplorer:[];previous:[];next:[]}>();
 const i18n=useI18nStore();
