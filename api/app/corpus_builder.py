@@ -114,7 +114,7 @@ class ReconciliationResponseModel(BaseModel):
 class FieldEvidenceModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     block_ids: list[str] = Field(default_factory=list)
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     reason: str = ""
 
 
@@ -230,7 +230,9 @@ class DiscourseMetadataModel(BaseModel):
 
 class RecordFieldAssessmentModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Missing model confidence is unknown, not 0%. This distinction matters in
+    # review UI and avoids manufacturing false certainty from omitted fields.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     needs_review: bool = False
     reason: str = Field(default="", max_length=500)
 
@@ -2958,7 +2960,7 @@ Return one compact decision for every supplied candidate using exact `after` IDs
                     continue
                 field_status[field] = {
                     "status": "unresolved", "method": "source_quality_gate",
-                    "confidence": 0.0, "reason_code": "source_quality",
+                    "confidence": None, "reason_code": "source_quality",
                     "reason": "Automatic enrichment was skipped because this record touches a source page with blocking extraction-quality findings.",
                 }
             incomplete_fields = [field for field in required_metadata_fields if str((field_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or record.get(field) in (None, "", [])]
@@ -3220,18 +3222,20 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 if field not in ALLOWED_METADATA_FIELDS or not isinstance(info, dict):
                     continue
                 block_ids = [str(value) for value in info.get("block_ids") or [] if str(value) in valid_ids]
+                raw_confidence = info.get("confidence")
                 try:
-                    confidence = max(0.0, min(1.0, float(info.get("confidence") or 0)))
+                    confidence = max(0.0, min(1.0, float(raw_confidence))) if isinstance(raw_confidence, (int, float)) else None
                 except (TypeError, ValueError):
-                    confidence = 0.0
+                    confidence = None
                 clean_evidence[field] = {
                     "block_ids": block_ids,
                     "confidence": confidence,
                     "reason": str(info.get("reason") or ""),
                 }
-                evidence_confidences.append(confidence)
-                if field in ATTRIBUTION_EVIDENCE_FIELDS:
-                    attribution_confidences.append(confidence)
+                if confidence is not None:
+                    evidence_confidences.append(confidence)
+                    if field in ATTRIBUTION_EVIDENCE_FIELDS:
+                        attribution_confidences.append(confidence)
             reason = str(result.get("review_reason") or "").strip()
             if reason:
                 model_review_reasons.append(reason)
@@ -3250,7 +3254,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if not info.get("block_ids"):
                 review_reasons.append(f"{field} evidence does not identify a current-record source block")
-            if float(info.get("confidence") or 0) < minimum:
+            evidence_confidence = info.get("confidence")
+            if not isinstance(evidence_confidence, (int, float)):
+                review_reasons.append(f"{field} evidence confidence was not reported")
+            elif float(evidence_confidence) < minimum:
                 review_reasons.append(f"{field} evidence confidence is below {minimum:.2f}")
 
         record["metadata_evidence"] = clean_evidence
@@ -3263,7 +3270,9 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
-            confidence = float(assessment.get("confidence") or evidence_info.get("confidence") or 0.0)
+            assessment_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
+            evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
+            confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
             reason = str(assessment.get("reason") or evidence_info.get("reason") or "Model assessment.")
             needs_human = bool(assessment.get("needs_review"))
             if field not in required_metadata_fields and value in (None, "", []) and not assessment:
@@ -3273,16 +3282,34 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                 continue
             if field in required_metadata_fields and value in (None, "", []):
                 field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "reason_code": "ambiguous", "reason": reason}
-            elif confidence < minimum and value not in (None, "", []):
+            elif (confidence is None or confidence < minimum) and value not in (None, "", []):
                 # Model self-confidence is never publication authority. Any LLM
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
-            elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or float(evidence_info.get("confidence") or 0) < minimum)):
+            elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) < minimum)):
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
                 field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "reason_code": "resolved", "reason": reason}
-        record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else 0.0
+
+        # Semantic consistency rules are deterministic publication invariants, not
+        # questions for an LLM. Apparatus cannot simultaneously be primary text.
+        apparatus_regions = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
+        region_value = str(record.get("region_type") or "")
+        primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
+        if region_value in apparatus_regions and str(primary_status.get("status") or "") not in {"human_confirmed", "human_override"}:
+            record["primary_text"] = False
+            field_status["primary_text"] = {
+                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+                "reason_code": "semantic_invariant", "reason": f"{region_value} cannot be primary text.",
+            }
+        elif region_value == "main_text" and str(primary_status.get("status") or "") not in {"human_confirmed", "human_override"}:
+            record["primary_text"] = True
+            field_status["primary_text"] = {
+                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+                "reason_code": "semantic_invariant", "reason": "main_text is deterministically primary text.",
+            }
+        record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
         if review_reasons:
@@ -3786,7 +3813,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                                 if current.get("status") == "deterministic":
                                     continue
                                 failure_status[field] = {
-                                    "status": "unresolved", "method": "llm", "confidence": 0.0,
+                                    "status": "unresolved", "method": "llm", "confidence": None,
                                     "reason_code": "llm_failed",
                                     "reason": f"Metadata worker failed before this field could be validated: {exc}",
                                 }
@@ -4351,9 +4378,13 @@ Return topics, concepts, persons, and works_referenced that are materially prese
         build = self.repo.get_build(build_id)
         if str(build.get("status") or "") in {"queued", "running"}:
             stage = str(build.get("stage") or "")
-            if stage in {"enriching", "metadata_retry"} and record is not None and not structural:
+            # Once segmentation has persisted the authoritative record topology,
+            # non-structural review operations are available immediately. Bulk
+            # review actions do not target one record object, so record=None must
+            # not accidentally turn them into structural operations.
+            if stage in {"enriching", "metadata_retry", "review"} and not structural:
                 return build
-            raise ValueError("This record is still being prepared. Text and metadata become editable as soon as segmentation is complete; structural edits wait until background enrichment stops.")
+            raise ValueError("Records are not editable until segmentation is complete. Structural merge/split operations wait until background enrichment stops.")
         return build
 
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
@@ -4484,7 +4515,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
 
     @_serialize_record_mutation
     def bulk_disposition(self, build_id: str, disposition: str, reason: str = "", needs_review: bool | None = None, query: str = "", filter_disposition: str | None = None, review_queue: str | None = None, record_ids: list[str] | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id)
+        self._assert_human_review_available(build_id, structural=False)
         if disposition not in {"pending", "accepted", "rejected"}:
             raise ValueError("Unsupported review disposition.")
         records = self.repo.load_records(build_id)
@@ -4524,6 +4555,10 @@ Return topics, concepts, persons, and works_referenced that are materially prese
             record["review_disposition"] = disposition
             record["accepted"] = disposition == "accepted"
             record["rejected"] = disposition == "rejected"
+            # Bulk review is still a human decision. Freeze later automatic
+            # enrichment from overwriting the reviewed record exactly as the
+            # single-record review path does.
+            self._mark_human_touch(record, ["__review__"])
             if disposition == "accepted":
                 record["needs_review"] = False; record["review_reason"] = ""
             elif disposition == "rejected":
@@ -4932,7 +4967,7 @@ Return topics, concepts, persons, and works_referenced that are materially prese
                         updated = dict(records[index])
                         statuses = updated.setdefault("metadata_field_status", {})
                         for field in target_fields.get(str(updated.get("record_id") or index), []):
-                            statuses[field] = {"status": "unresolved", "method": "llm", "confidence": 0.0, "reason_code": "llm_failed", "reason": f"Metadata retry failed: {exc}"}
+                            statuses[field] = {"status": "unresolved", "method": "llm", "confidence": None, "reason_code": "llm_failed", "reason": f"Metadata retry failed: {exc}"}
                         updated["metadata_needs_attention"] = True
                         updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
                     records[index] = updated

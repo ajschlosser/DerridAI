@@ -1,6 +1,20 @@
-# DerridAI Corpus Viewer 0.47.1
+# DerridAI Corpus Viewer 0.48.0
 
-**0.47.1 — Fatso** is a general UI/UX unification and accessibility pass. It introduces reusable foundation components, removes release-era CSS naming from the active shell and dashboard, raises dense-control readability and focus treatment, standardizes Storybook taxonomy, and refactors active components onto the shared design primitives without changing corpus semantics.
+**0.48.0 — Frightened Ferret** makes Corpus Builder review actions explicit and repairable: source extraction issues now have a concrete resolution workflow, metadata editing uses dedicated accessible workspaces, LLM proposals are visible and preselected at useful confidence, bulk review works during enrichment, initialization is presented as a clear stepper handoff, and review feedback is surfaced where the action occurs.
+
+## 0.48.0 — Frightened Ferret
+
+- Source-quality findings now explain exactly how to resolve them inside Corpus Builder and provide direct actions to inspect source or correct reviewed text.
+- Metadata proposals at 65% confidence or higher are preselected for human confirmation; missing confidence is shown as unavailable rather than misleadingly rendered as 0%.
+- Deterministic consistency rules enforce that front matter, back matter, bibliography, index, and paratext are not primary text.
+- Metadata remains editable after a value is saved.
+- Bulk metadata editing and document metadata editing use dedicated accessible modal workspaces rather than dense inline panels.
+- Bulk dispositions are allowed once segmentation has persisted records, even while metadata enrichment continues, and human bulk decisions freeze later automatic overwrite.
+- Accept Clean now reports exactly how many records changed in the review workspace.
+- The Build button requires a real loaded PDF asset, not a stale saved asset id.
+- Pre-segmentation initialization is shown in a modal stepper that explains the handoff into the live record-review workspace.
+- Fixed the oversized authentication heading regression.
+- English and Québec French copy is complete for the new workflow.
 
 ## 0.47.1 — Fatso
 
