@@ -4263,6 +4263,15 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
+            elif value in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and confidence is not None and confidence > minimum and not needs_human:
+                # A confident assessment with no value cannot be shown as an
+                # inference: there is nothing to display, populate, or cite. Keep it
+                # in the review queue (one click confirms a genuine absence).
+                field_status[field] = {
+                    "status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False,
+                    "proposed_value": None, "reason_code": "no_value_returned",
+                    "reason": f"The model reported {round(confidence * 100)}% confidence but returned no value. {reason}".strip(),
+                }
             elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
