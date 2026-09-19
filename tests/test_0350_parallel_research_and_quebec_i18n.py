@@ -61,6 +61,17 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
         text = path.read_text(encoding="utf-8")
         for pattern in patterns:
             used.update(pattern.findall(text))
+    # Context-free labels are aliased to shared `common.*` keys in the i18n store
+    # (legacy keys resolve there first). A used key is satisfied by its alias
+    # target, and every alias target must itself exist in both dictionaries.
+    aliases = dict(re.findall(
+        r'"([^"]+)":\s*"(common\.[^"]+)"',
+        (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8"),
+    ))
+    assert aliases, "COMMON_KEY_ALIASES not found in web/src/stores/i18n.ts"
+    assert set(aliases.values()) - set(english) == set()
+    assert set(aliases.values()) - set(french) == set()
+    used = {aliases.get(key, key) for key in used}
     assert used - set(english) == set()
     assert used - set(french) == set()
 
