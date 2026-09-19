@@ -19,9 +19,9 @@ def test_0361_release_identity_and_storage_configuration():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert package["version"] == "0.57.6"
-    assert 'version="0.57.6"' in main
-    assert '"app_version": "0.57.6"' in main
+    assert package["version"] == "0.58.0"
+    assert 'version="0.58.0"' in main
+    assert '"app_version": "0.58.0"' in main
     assert "SYSTEM_DB_PATH" in config
     assert "SYSTEM_DB_PATH" in compose
     assert "0.36.10" in readme

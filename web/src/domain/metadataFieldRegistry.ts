@@ -4,10 +4,22 @@ export interface MetadataFieldSpec { control:MetadataControl; allowedValues?:str
 const SPEAKER_FIELDS=['speaker','position_holder','region_author','document_author','translator','quoted_speaker','quoted_author','quoted_position_holder'];
 const TARGET_FIELDS=['target','quoted_addressee','quoted_referent'];
 
+// Closed semantic vocabularies belong here. Open scholarly identifiers remain
+// editable comboboxes even when the application can suggest known values.
+export const PROPOSITION_STATUS_VALUES=[
+  'asserted','affirmed','rejected','criticized','questioned','qualified',
+  'hypothetical','attributed','reported','conceded','suspended'
+];
+export const STANCE_VALUES=[
+  'affirm','reject','criticize','question','qualify','suspend','neutral','describe'
+];
+
 export function metadataFieldSpec(field:string, regionTypes:string[], discourseRoles:string[]):MetadataFieldSpec{
   if(field==='region_type') return {control:'enum',allowedValues:regionTypes};
   if(field==='discourse_role') return {control:'enum',allowedValues:discourseRoles};
-  if(['proposition_status','stance','claim_scope'].includes(field)) return {control:'combobox',suggestionFields:[field],allowCustom:true};
+  if(field==='proposition_status') return {control:'enum',allowedValues:PROPOSITION_STATUS_VALUES};
+  if(field==='stance') return {control:'enum',allowedValues:STANCE_VALUES};
+  if(field==='claim_scope') return {control:'combobox',suggestionFields:[field],allowCustom:true};
   if(field==='primary_text'||field==='document_is_translation'||field==='is_direct_quote') return {control:'boolean'};
   if(field==='year'||field==='publication_year') return {control:'number'};
   if(['semantic_function','quoted_speaker','quoted_author','quoted_work','quoted_position_holder','quoted_addressee','quoted_referent','quotation_chain','topics','concepts','persons','works_referenced','document_language','original_language'].includes(field)){

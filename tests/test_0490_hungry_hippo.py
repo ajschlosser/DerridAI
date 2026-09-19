@@ -17,9 +17,9 @@ from app.locales.fr_ca import FR_CA
 def text(path:str)->str: return (ROOT/path).read_text(encoding='utf-8')
 
 def test_release_identity_and_locale_parity():
-    assert json.loads(text('web/package.json'))['version']=='0.57.6'
-    assert 'APP_VERSION = "0.57.6"' in text('api/app/config.py')
-    assert '0.57.6 — Quippy Quokka' in text('README.md')
+    assert json.loads(text('web/package.json'))['version']=='0.58.0'
+    assert 'APP_VERSION = "0.58.0"' in text('api/app/config.py')
+    assert '0.58.0 — Righteous Rhinoceros' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.text_cleanup_title','pdf_corpus.llm_suggestion_prefilled','pdf_corpus.constraint_non_primary_region','pdf_corpus.accept_all_suggestions']:
         assert key in EN_US and key in FR_CA
@@ -28,7 +28,8 @@ def test_release_identity_and_locale_parity():
 def test_llm_suggestions_prefill_independent_of_confidence_threshold():
     field=text('web/src/components/CorpusMetadataFieldEditor.vue')
     panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    assert 'const value=props.constraint?.value ?? props.value' in field
+    assert 'const resolvedValue=computed' in field
+    assert "status.prefilled_candidate==='llm'" in field
     assert 'PROPOSAL_PREFILL_CONFIDENCE' not in field
     assert 'llm_suggestion_prefilled' in field
     assert 'llmSuggestions' in panel and 'resolveMany' in panel

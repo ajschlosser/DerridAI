@@ -12,10 +12,10 @@ def text(path: str) -> str:
 
 def test_0400_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.57.6"
-    assert 'version="0.57.6"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.57.6"' in text("api/app/config.py")
-    assert "# DerridAI Corpus Viewer 0.57.6" in text("README.md")
+    assert package["version"] == "0.58.0"
+    assert 'version="0.58.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.58.0"' in text("api/app/config.py")
+    assert "# DerridAI Corpus Viewer 0.58.0" in text("README.md")
     assert "0.40.0 — Pdffffffffft." in text("README.md")
 
 
@@ -86,7 +86,7 @@ def test_native_vue_corpus_builder_has_history_review_and_three_pane_source_bind
     for token in (
         "Corpus builds",
         "Review queue",
-        "Source context",
+        "CorpusSourceSummary",
         "Proposed record",
         "Interpretive metadata",
         "Metadata",

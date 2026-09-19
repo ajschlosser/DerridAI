@@ -12,9 +12,9 @@ def text(path: str) -> str:
 
 def test_0401_release_identity_and_notes():
     package = json.loads(text("web/package.json"))
-    assert package["version"] == "0.57.6"
-    assert 'version="0.57.6"' in text("api/app/main.py")
-    assert 'APP_VERSION = "0.57.6"' in text("api/app/config.py")
+    assert package["version"] == "0.58.0"
+    assert 'version="0.58.0"' in text("api/app/main.py")
+    assert 'APP_VERSION = "0.58.0"' in text("api/app/config.py")
     assert "0.40.1 — Dorar the Explorah" in text("README.md")
 
 
@@ -170,7 +170,7 @@ def test_pdf_evidence_viewer_overlays_source_boxes_and_has_storybook_coverage():
     assert "block-overlay" in viewer
     assert "evidenceBlockIds" in viewer
     assert 'aria-live="polite"' in viewer
-    assert "PdfEvidenceViewer" in component
+    assert "CorpusSourceSummary" in component
     assert "selectedPdfPage" in component
     assert (ROOT / "web/src/components/PdfEvidenceViewer.stories.ts").exists()
 
