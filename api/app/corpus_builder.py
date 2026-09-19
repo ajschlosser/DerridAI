@@ -3897,6 +3897,7 @@ Hybrid classification fields are constrained:
 - primary_text MUST be true or false. It means the record belongs to the substantive work rather than front/back matter, bibliography, index, publishing paratext, or other apparatus.
 - proposition_status describes the character/status of the proposition, not a boolean. Prefer one of: {json.dumps(PROPOSITION_STATUS_VALUES, ensure_ascii=False)}
 - stance describes the position holder's orientation toward the target/proposition. Prefer one of: {json.dumps(STANCE_VALUES, ensure_ascii=False)}
+- Independently assess region_type and primary_text even when deterministic document-structure metadata already exists. Return the semantically supported value and confidence. DerridAI will retain reviewer-defined structural facts as authoritative while recording any disagreement for review; do not suppress a disagreement merely because structure metadata exists.
 
 Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
