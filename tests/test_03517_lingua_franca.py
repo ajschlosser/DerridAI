@@ -21,10 +21,10 @@ HTTP = (ROOT / "web/src/api/http.ts").read_text(encoding="utf-8")
 
 def test_release_identity_and_notes():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.59.0"
-    assert 'version="0.59.0"' in MAIN
-    assert '"app_version": "0.59.0"' in MAIN
-    assert "DerridAI 0.59.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
+    assert package["version"] == "0.60.0"
+    assert 'version="0.60.0"' in MAIN
+    assert '"app_version": "0.60.0"' in MAIN
+    assert "DerridAI 0.60.0" in (ROOT / "web/src/App.vue").read_text(encoding="utf-8")
     assert "0.35.17 — Lingua Franca" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
