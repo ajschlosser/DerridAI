@@ -51,3 +51,4 @@ data/.home/*
 .idea/
 *.swp
 *.swo
+.test-data/

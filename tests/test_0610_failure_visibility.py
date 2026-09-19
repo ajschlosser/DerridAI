@@ -164,3 +164,16 @@ def test_vector_queue_surfaces_secondary_failure_status_persistence_error(tmp_pa
     with pytest.raises(RuntimeError, match="collection failure status could not be persisted"):
         manager.create(body)
     assert list(tmp_path.glob("*.json")) == []
+
+
+def test_editorial_memory_failure_is_recorded_as_build_warning(tmp_path: Path, monkeypatch):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = make_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(repo, "load_records", lambda _build_id: (_ for _ in ()).throw(OSError("records unavailable")))
+
+    memory = manager._editorial_memory(build["build_id"])
+
+    assert memory == {"conventions": {}, "examples": {}}
+    warnings = repo.get_build(build["build_id"])["warnings"]
+    assert any("Editorial memory was unavailable" in item and "records unavailable" in item for item in warnings)

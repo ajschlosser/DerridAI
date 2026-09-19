@@ -623,6 +623,8 @@ def _json_write(path: Path, payload: Any) -> None:
         try:
             tmp.unlink(missing_ok=True)
         except OSError:
+            # Safe: best-effort removal of a leftover temp file after the
+            # atomic replace succeeded or the original error is propagating.
             pass
 
 
@@ -1180,6 +1182,7 @@ class PdfCorpusRepository:
                 try:
                     tmp.unlink(missing_ok=True)
                 except OSError:
+                    # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
@@ -1959,6 +1962,8 @@ class PdfCorpusBuildManager:
         try:
             return _extract_json(value)
         except Exception:
+            # Safe: this is the strict first pass; the fence-stripping and
+            # brace-scanning recovery below raises if nothing parses.
             pass
         value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
         value = re.sub(r"\s*```$", "", value)
@@ -5411,7 +5416,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         try:
             rows = self.repo.load_records(build_id)
             build = self.repo.get_build(build_id)
-        except Exception:
+        except Exception as exc:
+            # Editorial memory only supplies advisory few-shot context; records
+            # are never altered by it. Proceed without it but say so on the build.
+            self._append_warning(build_id, f"Editorial memory was unavailable; enrichment ran without reviewer examples ({exc}).")
             return {"conventions": {}, "examples": {}}
         reset_at = str(build.get("editorial_memory_reset_at") or "")
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
