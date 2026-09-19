@@ -520,6 +520,7 @@ function setUserContext(user){
   state.userContext=user||null;
   if(priorId!==state.userContext?.id){state.serverAnnotations=[];state.serverAnnotationsStore="";state.annotationsFetchedAt=0}
   if(!canAccessPage(state.view))state.view="home";
+  void refreshResearcherContentPolicy();
 }
 function viewDisabledReason(view){
   if(!canAccessPage(view))return "This workspace is available to administrators only.";
@@ -9898,39 +9899,62 @@ document.addEventListener("click",event=>{
     if(record){const copy={...record};delete copy._chroma_id;copyJsonToClipboard(copy,copy.record_id||"Chroma record")}
   }
 });
-const researcherSevereTerms=["fuck","fucking","fucker","motherfucker","shit","bullshit","bitch","bastard","cunt","cock","pussy","asshole","arsehole","whore","slut","goddamn","nigger","nigga","faggot","kike","chink","spic","wetback","tranny","retard","retarded"];
-const researcherSeverePattern=new RegExp(`\\b(?:${researcherSevereTerms.sort((a,b)=>b.length-a.length).map(term=>term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})\\b`,`gi`);
+let researcherPolicy={ready:false,blocked:new Set(),contextual:[]};
 let researcherPolicyToastAt=0;
-function researcherContextualViolation(value){
-  const text=String(value||"");
-  for(const match of text.matchAll(/[A-Za-z][A-Za-z'-]*/g)){
-    const token=match[0],lower=token.toLowerCase();
-    // "Dick" is a common proper name. Lowercase use remains contextual.
-    if(lower==="dick"&&token==="Dick")continue;
-    if(lower==="fag"&&/\b(cigarette|smoke|smoking|british|uk)\b/i.test(text))continue;
-    if(lower==="damn"&&/\b(word|term|quote|quoted|language|example)\b/i.test(text))continue;
-    if(["dick","fag","damn"].includes(lower))return token;
-  }
-  return "";
+const researcherLeet={"0":"o","1":"i","3":"e","4":"a","5":"s","7":"t","@":"a","$":"s"};
+function normalizeResearcherToken(value){
+  const text=String(value||"").normalize("NFKC").replace(/[013457@$]/g,ch=>researcherLeet[ch]||ch).toLocaleLowerCase();
+  return text.replace(/(?<=\w)[._*~-]+(?=\w)/g,"");
 }
-function filterResearcherInputElement(target){
-  if(!isResearcher()||!(target instanceof HTMLElement))return;
+async function researcherTokenDigest(value){
+  if(!globalThis.crypto?.subtle)return "";
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalizeResearcherToken(value)));
+  return Array.from(new Uint8Array(buf),b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function refreshResearcherContentPolicy(){
+  if(!state.userContext){researcherPolicy={ready:false,blocked:new Set(),contextual:[]};return}
+  try{
+    const data=await api("/api/i18n/content-policy");
+    researcherPolicy={
+      ready:Boolean(data?.ready),
+      blocked:new Set(Array.isArray(data?.blocked_term_hashes)?data.blocked_term_hashes:[]),
+      contextual:Array.isArray(data?.contextual)?data.contextual:[],
+    };
+  }catch{
+    researcherPolicy={ready:false,blocked:new Set(),contextual:[]};
+  }
+}
+async function filterResearcherInputElement(target){
+  if(!isResearcher()||!(target instanceof HTMLElement)||!researcherPolicy.ready)return;
   const acceptsText=target instanceof HTMLTextAreaElement||(target instanceof HTMLInputElement&&["text","search","url","email","tel"].includes(target.type))||target.isContentEditable;
   if(!acceptsText)return;
   const original=target.isContentEditable?target.textContent||"":target.value||"";
-  researcherSeverePattern.lastIndex=0;
-  const severe=researcherSeverePattern.exec(original)?.[0]||"";
-  const contextual=researcherContextualViolation(original);
-  if(!severe&&!contextual)return;
+  const words=[...original.matchAll(/[\w'’]+/g)];
+  const remove=[];
+  for(const match of words){
+    const raw=match[0];
+    const digest=await researcherTokenDigest(raw);
+    if(!digest)continue;
+    if(researcherPolicy.blocked.has(digest)){remove.push(raw);continue}
+    const rule=researcherPolicy.contextual.find(item=>item.term_hash===digest);
+    if(!rule)continue;
+    if(rule.allow_title_case&&raw===raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase()&&raw!==raw.toLowerCase())continue;
+    const index=words.indexOf(match);
+    const surrounding=words.slice(Math.max(0,index-3),index+4).map(item=>normalizeResearcherToken(item[0])).join(" ");
+    if((rule.allow_if_surrounding||[]).some(marker=>surrounding.includes(normalizeResearcherToken(marker))))continue;
+    const before=normalizeResearcherToken(original.slice(Math.max(0,match.index-20),match.index));
+    if((rule.allow_if_before_markers||[]).some(marker=>before.includes(normalizeResearcherToken(marker))))continue;
+    remove.push(raw);
+  }
+  if(!remove.length)return;
   let filtered=original;
-  if(severe){researcherSeverePattern.lastIndex=0;filtered=filtered.replace(researcherSeverePattern,"");}
-  if(contextual)filtered=filtered.replace(new RegExp(`\\b${contextual.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`),"");
+  for(const token of remove)filtered=filtered.replace(new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`),"");
   filtered=filtered.replace(/ {2,}/g," ");
   if(target.isContentEditable)target.textContent=filtered;else target.value=filtered;
   target.dispatchEvent(new Event("change",{bubbles:true}));
   const now=Date.now();if(now-researcherPolicyToastAt>1200){researcherPolicyToastAt=now;toast(tr("content_filter.warning","That language is not permitted for researcher accounts. The flagged term was removed."),{tone:"warn"})}
 }
-document.addEventListener("input",event=>filterResearcherInputElement(event.target),true);
+document.addEventListener("input",event=>{void filterResearcherInputElement(event.target)},true);
 
 window.addEventListener("popstate",()=>{
   applyUrlState();
