@@ -22,10 +22,12 @@ const saving = ref(false);
 const installing = ref(false);
 const error = ref("");
 const installOpen = ref(false);
+const installCloseConfirm = ref(false);
 const manageProvidersConfirm = ref(false);
 const headerRef = ref<InstanceType<typeof LanguageWorkspaceHeader> | null>(null);
 const installCodeInput = ref<HTMLInputElement | null>(null);
 const installDialog = ref<HTMLElement | null>(null);
+const installCloseDialog = ref<HTMLElement | null>(null);
 const manageProvidersDialog = ref<HTMLElement | null>(null);
 const unsavedDialog = ref<HTMLElement | null>(null);
 const deleteDialog = ref<HTMLElement | null>(null);
@@ -96,6 +98,11 @@ const installCodeExists = computed(() => {
   const candidate = install.value.code.trim().replaceAll("_", "-").toLowerCase();
   return Boolean(candidate) && languages.value.some(item => item.code.replaceAll("_", "-").toLowerCase() === candidate);
 });
+const installDraftDirty = computed(() => Boolean(
+  install.value.code.trim()
+  || install.value.name.trim()
+  || (install.value.flag && install.value.flag !== "🌐"),
+));
 const modelTranslationRisk = computed(() => translationRiskForModel(String(selectedProvider.value?.model || "")));
 const modelTranslationRiskMessage = computed(() => {
   const risk = modelTranslationRisk.value;
@@ -297,7 +304,7 @@ async function monitorInstall(jobId: string) {
         const fallbackCount = Number(job.result?.fallback_count || job.result?.failed_count || 0);
         if (fallbackCount > 0) {
           statusFilter.value = "review";
-          runtime.notifyToast?.(i18n.tf("language.installed_with_fallbacks", "Language installed with {count} English fallback string(s). Review them under Matches English.", { count: fallbackCount.toLocaleString(i18n.locale) }), { tone: "warning" });
+          runtime.notifyToast?.(i18n.tf("language.installed_with_fallbacks", "Language installed with {count} English fallback string(s). Review them under Needs review.", { count: fallbackCount.toLocaleString(i18n.locale) }), { tone: "warning" });
         } else {
           runtime.notifyToast?.(i18n.t("language.translation_complete", "Language translated and installed."), { tone: "success" });
         }
@@ -322,6 +329,21 @@ function openInstallDialog() {
   installFlagTouched.value = false;
   translationRiskAcknowledged.value = false;
   installOpen.value = true;
+}
+
+function requestCloseInstall() {
+  if (installing.value) return;
+  if (installDraftDirty.value) {
+    rememberConfirmationFocus();
+    installCloseConfirm.value = true;
+    return;
+  }
+  installOpen.value = false;
+}
+
+function discardInstallDraft() {
+  installCloseConfirm.value = false;
+  installOpen.value = false;
 }
 
 function openResumeDialog() {
@@ -454,6 +476,10 @@ watch(manageProvidersConfirm, async open => {
   if (open) await focusDialog(manageProvidersDialog.value);
   else if (installOpen.value) restoreConfirmationFocus();
 });
+watch(installCloseConfirm, async open => {
+  if (open) await focusDialog(installCloseDialog.value);
+  else if (installOpen.value) restoreConfirmationFocus();
+});
 watch(pendingLocaleCode, async code => {
   if (code) await focusDialog(unsavedDialog.value);
   else restoreConfirmationFocus();
@@ -582,9 +608,9 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
     </section>
 
     <Teleport to="body">
-      <div v-if="installOpen" class="workflow-overlay language-modal-overlay" role="presentation" @mousedown.self="installOpen=false" @keydown.esc.stop.prevent="installOpen=false" @keydown="trapFocus($event, installDialog)">
+      <div v-if="installOpen" class="workflow-overlay language-modal-overlay" role="presentation" @mousedown.self="requestCloseInstall" @keydown.esc.stop.prevent="requestCloseInstall" @keydown="trapFocus($event, installDialog)">
         <section ref="installDialog" class="workflow-dialog language-install-dialog modern-language-dialog" role="dialog" aria-modal="true" aria-labelledby="language-install-title" aria-describedby="language-install-description">
-          <header class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary_modern", "Translate & install locale") }}</h2><span id="language-install-description">{{ i18n.t("language.install_help_modern", "DerridAI translates from the canonical English interface, validates every key and placeholder, and reports any strings that require an English fallback or retry.") }}</span></div></div><button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="installOpen=false">×</button></header>
+          <header class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary_modern", "Translate & install locale") }}</h2><span id="language-install-description">{{ i18n.t("language.install_help_modern", "DerridAI translates from the canonical English interface, validates every key and placeholder, and reports any strings that require an English fallback or retry.") }}</span></div></div><button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="requestCloseInstall">×</button></header>
           <form class="workflow-form language-install-form" @submit.prevent="installLanguage">
             <section class="language-install-source"><span class="language-install-source-icon">🇺🇸</span><div><b>{{ i18n.t("language.english_source_set", "Source: English") }}</b><small>{{ i18n.tf("language.source_key_count", "{count} interface strings will be translated.", {count:Object.keys(referenceDictionary).length.toLocaleString(i18n.locale)}) }}</small></div><span class="source-lock"><AppIcon name="lock"/>{{ i18n.t("language.canonical", "Canonical") }}</span></section>
             <section class="workflow-section"><div class="workflow-section-copy"><b>{{ i18n.t("language.identity_section", "Language identity") }}</b><span>{{ i18n.t("language.identity_section_help_modern", "Use a BCP 47 locale code. Script-aware locales such as zh-Hant-TW are supported.") }}</span></div><div class="workflow-fields workflow-identity-fields"><label class="workflow-field"><span>{{ i18n.t("language.locale_code", "Locale code") }}</span><input ref="installCodeInput" v-model="install.code" class="control" required autocomplete="off" spellcheck="false" placeholder="de-DE" aria-describedby="locale-code-help" :disabled="Boolean(resumeJobId)"><small id="locale-code-help">{{ i18n.t("language.locale_code_help_modern", "Examples: de-DE, pt-BR, zh-Hant-TW.") }}</small></label><label class="workflow-field"><span>{{ i18n.t("language.name", "Display name") }}</span><input v-model="install.name" class="control" autocomplete="off" placeholder="Deutsch (Deutschland)"><small>{{ i18n.t("language.name_help", "Human-readable language name shown in the picker.") }}</small></label><CountryFlagPicker :model-value="install.flag" :locale-code="install.code" :label="i18n.t('language.locale_icon','Locale icon')" :help="i18n.t('language.flag_library_help','Choose from the country flag library or use the neutral globe for languages without a country-specific locale.')" @update:model-value="setInstallFlag" /></div></section>
@@ -593,10 +619,12 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
               <aside v-if="modelTranslationRisk" class="language-model-warning" role="note" aria-live="polite"><AppIcon name="warning"/><div><b>{{ i18n.t("language.model_translation_risk_title", "Translation quality warning") }}</b><p>{{ modelTranslationRiskMessage }}</p><label><input v-model="translationRiskAcknowledged" type="checkbox"><span>{{ i18n.t("language.model_translation_risk_ack", "I understand the risk and want to use this model anyway.") }}</span></label></div></aside>
             </div></section>
             <section class="language-install-assurance"><div><AppIcon name="check"/><span><b>{{ i18n.t("language.atomic_install", "Validated before installation") }}</b><small>{{ i18n.t("language.atomic_install_help", "Unsafe strings are tracked individually. Fewer than 10% may fall back to canonical English; larger failures remain resumable instead of discarding completed work.") }}</small></span></div><div><AppIcon name="history"/><span><b>{{ i18n.t("language.background_translation", "Runs in the background") }}</b><small>{{ i18n.t("language.background_translation_help_modern", "Progress remains visible here and in Operations. If the job stops, validated translations are retained for a later resume.") }}</small></span></div></section>
-            <footer class="workflow-actions"><button type="button" class="btn" @click="installOpen=false">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider || installCodeExists || Boolean(modelTranslationRisk && !translationRiskAcknowledged)">{{ installing ? i18n.t("language.checking_provider", "Checking provider…") : (resumeJobId ? i18n.t("language.resume_translation", "Resume translation") : i18n.t("language.translate_install", "Translate & install")) }}</button></footer>
+            <footer class="workflow-actions"><button type="button" class="btn" @click="requestCloseInstall">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider || installCodeExists || Boolean(modelTranslationRisk && !translationRiskAcknowledged)">{{ installing ? i18n.t("language.checking_provider", "Checking provider…") : (resumeJobId ? i18n.t("language.resume_translation", "Resume translation") : i18n.t("language.translate_install", "Translate & install")) }}</button></footer>
           </form>
         </section>
       </div>
+
+      <div v-if="installCloseConfirm" class="native-confirm-backdrop" role="presentation" @click.self="installCloseConfirm=false" @keydown.esc.stop.prevent="installCloseConfirm=false" @keydown="trapFocus($event, installCloseDialog)"><section ref="installCloseDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="discard-install-title"><div class="cardhead"><div><b id="discard-install-title">{{ i18n.t("language.discard_install_title", "Discard language installation draft?") }}</b><div class="note">{{ i18n.t("language.discard_install_help", "The locale code, display name, and flag you entered have not been saved.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="installCloseConfirm=false">{{ i18n.t("language.keep_editing", "Keep editing") }}</button><button class="btn danger" type="button" @click="discardInstallDraft">{{ i18n.t("language.discard_install", "Discard draft") }}</button></div></section></div>
 
       <div v-if="manageProvidersConfirm" class="native-confirm-backdrop" role="presentation" @click.self="manageProvidersConfirm=false" @keydown.esc.stop.prevent="manageProvidersConfirm=false" @keydown="trapFocus($event, manageProvidersDialog)"><section ref="manageProvidersDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="manage-provider-warning"><div class="cardhead"><div><b id="manage-provider-warning">{{ i18n.t("language.leave_install_title", "Leave language installation?") }}</b><div class="note">{{ i18n.t("language.leave_install_help", "Manage provider profiles opens another page. Values entered in this installation form will be discarded.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="manageProvidersConfirm=false">{{ i18n.t("ui.stay", "Stay here") }}</button><button class="btn primary" type="button" @click="confirmManageProviders">{{ i18n.t("language.leave_manage_providers", "Leave and manage providers") }}</button></div></section></div>
 
