@@ -6529,16 +6529,17 @@ RULES:
 - Preserve poetry, verse, block quotations, lists, footnotes, and deliberate typographic/orthographic oddities unless the artifact is unambiguous.
 - When uncertain, leave the source text unchanged and mention the uncertainty in warnings.
 - Return the COMPLETE touched-up text.
+- In the JSON text field, return ONLY the corrected passage text. Do not add Markdown fences, triple-hyphen separators, SOURCE_TEXT labels, quotation wrappers, or commentary around the passage.
 
 Optional reviewer instruction: {instructions or 'None'}
 
-TEXT:
----
+SOURCE_TEXT:
+<SOURCE_TEXT>
 {current_text}
----
+</SOURCE_TEXT>
 """
         result = self._chat_json(active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=min(8192, max(2048, len(current_text)//3)), schema_name="record_text_touchup", attempts=2, build_id=build_id)
-        proposed = str(result.get("text") or "").strip()
+        proposed = _sanitize_touchup_output(str(result.get("text") or ""), current_text)
         if not proposed:
             raise ValueError("LLM text touch-up returned empty text.")
         provider, model, _, _, _ = self._llm_config(active_request)
