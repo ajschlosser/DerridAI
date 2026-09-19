@@ -5,6 +5,7 @@ import { useI18nStore } from "../stores/i18n";
 import { ApiError } from "../api/http";
 import BrandMark from "./BrandMark.vue";
 import LanguageFlag from "./LanguageFlag.vue";
+import { appVersionLabel } from "../buildInfo";
 
 const auth=useAuthStore(); const i18n=useI18nStore();
 const username=ref(""); const password=ref(""); const confirmPassword=ref(""); const busy=ref(false); const error=ref("");
@@ -28,6 +29,7 @@ async function submit(){error.value="";if(auth.bootstrapRequired&&password.value
       <div v-if="auth.error" class="auth-error auth-connect-error">{{auth.error}}</div>
       <form class="auth-form" @submit.prevent="submit"><label>{{i18n.t('auth.username','Username')}}<input v-model="username" class="control" autocomplete="username" required minlength="2"></label><label>{{i18n.t('auth.password','Password')}}<input v-model="password" class="control" type="password" :autocomplete="auth.bootstrapRequired?'new-password':'current-password'" required :minlength="auth.bootstrapRequired?6:1"></label><label v-if="auth.bootstrapRequired">{{i18n.t('auth.confirm_password','Confirm password')}}<input v-model="confirmPassword" class="control" type="password" autocomplete="new-password" required minlength="6"></label><div v-if="error" class="auth-error">{{error}}</div><button class="btn primary auth-submit" :disabled="busy">{{busy?i18n.t('auth.working','Working…'):auth.bootstrapRequired?i18n.t('auth.create_admin','Create administrator'):i18n.t('auth.sign_in','Sign in')}}</button></form>
       <div v-if="auth.bootstrapRequired" class="auth-note">{{i18n.t('auth.password_note','Passwords must contain at least 6 characters. No default administrator credentials are created.')}}</div>
+      <p class="auth-build">DerridAI {{appVersionLabel()}}</p>
     </section>
   </main>
 </template>

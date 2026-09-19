@@ -497,6 +497,18 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
             conn.commit()
             return int(cursor.rowcount or 0)
 
+    def clear_type(self, job_type: str) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM jobs WHERE job_type=?", (str(job_type),))
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
+    def clear_all(self) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM jobs")
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
     def replace_finished(self, job_type: str, jobs: list[dict[str, Any]]) -> int:
         """Replace retained finished records for one manager during backup restore."""
         restored = 0

@@ -8,7 +8,7 @@ from typing import Any
 
 from .locales.en_us import EN_US as DEFAULT_EN_US
 from .locales.fr_ca import FR_CA as DEFAULT_FR_CA
-from .persistence import system_repository
+from .persistence import SQLiteJobRepository, system_repository
 
 _LOCALE_RE = re.compile(
     r"^(?P<language>[A-Za-z]{2,3})(?:-(?P<script>[A-Za-z]{4}))?(?:-(?P<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?P<variants>[A-Za-z0-9][A-Za-z0-9-]{0,24}))?$"
@@ -327,6 +327,18 @@ class SystemStore:
         """
         with self._lock:
             return copy.deepcopy(self._read())
+
+    def reset_to_fresh_install(self) -> dict[str, Any]:
+        """Restore shipped locales and drop profiles, annotations, and job history."""
+        with self._lock:
+            self._write(self._default())
+        cleared_jobs = SQLiteJobRepository(self.path).clear_all()
+        return {
+            "languages": ["en-US", "fr-CA"],
+            "profiles": 0,
+            "annotations": 0,
+            "cleared_jobs": cleared_jobs,
+        }
 
     def restore_snapshot(self, payload: dict[str, Any]) -> None:
         """Restore a current-format server-owned configuration snapshot."""

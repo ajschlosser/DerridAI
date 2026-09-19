@@ -271,6 +271,51 @@ class AuthStore:
         with self._connect() as conn:
             return int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]) == 0
 
+    def reset_to_fresh_install(self) -> dict[str, int]:
+        """Return authentication to the first-run schema: no users, builtin roles only.
+
+        Open connections stay valid. Tables are emptied in place so WAL files and
+        the live AuthStore instance remain usable, then researcher permissions are
+        restored to the shipped defaults.
+        """
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            deleted_users = int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+            deleted_roles = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM roles WHERE id NOT IN ('admin','researcher')"
+                ).fetchone()[0]
+            )
+            conn.execute("DELETE FROM sessions")
+            conn.execute("DELETE FROM login_failures")
+            conn.execute("DELETE FROM user_role_assignments")
+            conn.execute("DELETE FROM users")
+            conn.execute("DELETE FROM role_permissions WHERE role NOT IN ('admin','researcher')")
+            conn.execute("DELETE FROM roles WHERE id NOT IN ('admin','researcher')")
+            try:
+                conn.execute("DELETE FROM sqlite_sequence WHERE name='users'")
+            except sqlite3.OperationalError:
+                # sqlite_sequence exists only after at least one AUTOINCREMENT insert.
+                pass
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('admin','Administrator','Full application access. Administrator permissions are locked to prevent loss of administrative control.',1,1,?,?)",
+                (now, now),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
+                (now, now),
+            )
+            conn.execute("DELETE FROM role_permissions WHERE role='researcher'")
+            conn.executemany(
+                "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                [
+                    ("researcher", capability, 1 if capability in DEFAULT_RESEARCHER_CAPABILITIES else 0)
+                    for capability in sorted(CAPABILITY_CATALOG)
+                ],
+            )
+            conn.commit()
+        return {"deleted_users": deleted_users, "deleted_custom_roles": deleted_roles}
+
     def bootstrap_admin(self, username: str, password: str) -> AuthUser:
         with self._lock:
             if not self.bootstrap_required():

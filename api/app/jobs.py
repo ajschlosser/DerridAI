@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import uuid
@@ -121,6 +122,20 @@ class PersistentJobStateMixin:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
         job_repository.upsert_many(jobs)
+
+    def clear_all(self) -> int:
+        """Drop in-memory and durable history for this manager (fresh-install reset)."""
+        with self._lock:
+            count = len(self._jobs)
+            self._jobs.clear()
+            provider_active = getattr(self, "_provider_active", None)
+            if isinstance(provider_active, dict):
+                provider_active.clear()
+            active = getattr(self, "_active", None)
+            if isinstance(active, dict):
+                active.clear()
+        job_repository.clear_type(self.JOB_TYPE)
+        return count
 
 
 class LLMJobManager(PersistentJobStateMixin):
@@ -2484,6 +2499,12 @@ class UpsertJobManager(PersistentJobStateMixin):
         for job_id in ids:
             self._remove_spool(job_id)
         return len(ids)
+
+    def clear_all(self) -> int:
+        count = super().clear_all()
+        shutil.rmtree(self._spool_dir, ignore_errors=True)
+        self._spool_dir.mkdir(parents=True, exist_ok=True)
+        return count
 
     @staticmethod
     def _copy(job: dict[str, Any], *, include_results: bool) -> dict[str, Any]:

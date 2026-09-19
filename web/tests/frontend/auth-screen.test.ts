@@ -8,6 +8,10 @@ describe("AuthScreen", () => {
     const text=mount(AuthScreen).text();
     for(const found of text.match(/\d+\.\d+\.\d+/g)??[])expect(found).toBe(pkg.version);
   });
+
+  it("shows the build stamp next to the product name", () => {
+    expect(mount(AuthScreen).text()).toContain(`DerridAI ${pkg.version} (vitest)`);
+  });
 });
 
 describe("AuthScreen lockout", () => {

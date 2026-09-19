@@ -1,6 +1,6 @@
 # DerridAI User Guide
 
-Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes.
+Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, workspace footer, and browser tab title show the release version next to the git commit that built this instance.
 
 ## Users and roles
 
@@ -552,12 +552,15 @@ Configuration includes:
 
 ### NUKE
 
-Typing `NUKE` enables deletion of:
+Typing `NUKE` enables a full reset to a first-run install. It deletes:
 
-1. all collections in the current Chroma persistence database;
-2. browser IndexedDB workspace state.
+1. every Chroma collection and the persistence files under the current Chroma path (the catalog itself is recreated empty);
+2. authentication (users, sessions, lockouts, and custom roles), so the next load asks you to create the first administrator account;
+3. provider profiles, annotations, installed-language edits, researcher text policies, and job history;
+4. PDF corpus assets, builds, publications, and backup/restore temp directories;
+5. browser IndexedDB workspace state and DerridAI `localStorage` keys.
 
-Installed Ollama model files are not deleted.
+Installed Ollama / embedding model files under `data/models` and `data/ollama` are not deleted.
 
 ## Dashboard additions in 0.9.0
 

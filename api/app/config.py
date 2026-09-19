@@ -2,9 +2,51 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
-APP_VERSION = "0.62.0"
+APP_VERSION = "0.62.1"
+
+
+_GIT_COMMIT_FILE = Path("/app/git-commit")
+
+
+def resolve_git_commit() -> str:
+    """Short git commit for the running build, or empty when it cannot be known.
+
+    Order: GIT_COMMIT / SOURCE_COMMIT, a baked `/app/git-commit` file from the
+    Docker image, then `git rev-parse` when the process has a checkout.
+    """
+    for name in ("GIT_COMMIT", "SOURCE_COMMIT"):
+        raw = os.getenv(name, "").strip()
+        if raw:
+            return raw.split()[0][:40]
+    if _GIT_COMMIT_FILE.is_file():
+        value = _GIT_COMMIT_FILE.read_text(encoding="utf-8").strip().split()
+        if value:
+            return value[0][:40]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout.strip()[:40]
+
+
+APP_GIT_COMMIT = resolve_git_commit()
+
+
+def app_version_label(version: str = APP_VERSION, commit: str = APP_GIT_COMMIT) -> str:
+    """UI/API display form: ``0.62.1`` or ``0.62.1 (abc1234)``."""
+    version = str(version or "").strip() or APP_VERSION
+    commit = str(commit or "").strip()
+    return f"{version} ({commit})" if commit else version
 
 
 def _float_env(name: str, default: float) -> float:
