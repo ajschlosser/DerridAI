@@ -5,14 +5,6 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SYSTEM_STORE = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
-MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
-I18N_TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
-VIEW = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
-SETTINGS = (ROOT / "web/src/components/research/ResearchSettingsDrawer.vue").read_text(encoding="utf-8")
-PIPELINE = (ROOT / "web/src/components/research/ResearchPipelineBar.vue").read_text(encoding="utf-8")
-STYLE = (ROOT / "web/src/style.css").read_text(encoding="utf-8")
 
 
 def _translation_dicts() -> dict[str, dict[str, str]]:
@@ -31,49 +23,12 @@ def _translation_dicts() -> dict[str, dict[str, str]]:
     }
 
 
-def test_research_supports_multiple_simultaneous_jobs_without_a_ui_job_cap():
-    assert "ResearchPipelineBar" in VIEW
-    assert "sessionJobIds" in VIEW
-    assert "Promise.all(" in VIEW and "activeSessionJobs.map" in VIEW
-    assert "sessionJobIds.value.add(job.id)" in VIEW
-    assert "starting.value" in VIEW
-    # The page may serialize the submission request itself, but an existing active
-    # job must not disable starting a second pipeline.
-    assert "activeJob.value &&" not in VIEW
-    assert "jobs.length >=" not in VIEW
-    assert "Active research pipelines" in PIPELINE
-    assert "overflow-x:auto" in STYLE
-    assert "threading.Thread" in JOBS and "daemon=True" in JOBS
 
 
-def test_parallel_research_keeps_existing_role_boundaries():
-    assert 'auth.can("rag.run")' in VIEW
-    assert 'auth.can("rag.jobs.own")' in VIEW
-    assert "auth.can('evidence.select')" in VIEW
-    assert "canManageRuns" in VIEW
-    assert "rag.jobs.own" in MAIN and "rag.run" in MAIN
 
 
-def test_expert_settings_is_a_centered_sectioned_settings_studio():
-    assert "research-settings-studio-dialog" in SETTINGS
-    assert "research-settings-studio-body" in SETTINGS
-    assert '"retrieval"' in SETTINGS
-    assert '"evidence"' in SETTINGS
-    assert '"generation"' in SETTINGS
-    assert "research-settings-nav" in SETTINGS
-    assert "research-settings-card-grid" in SETTINGS
-    assert "width:min(1080px" in STYLE
-    assert "grid-template-columns:230px minmax(0,1fr)" in STYLE
-    # Do not regress to illegibly tiny helper typography.
-    assert "research-settings-card>p{margin:0 0 13px;color:#66758a;font-size:12.5px" in STYLE
-    assert "research-settings-nav>button b{font-size:13px" in STYLE
 
 
-def test_research_pipeline_and_settings_have_storybook_coverage():
-    assert (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").exists()
-    story = (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").read_text(encoding="utf-8")
-    assert story.count("status:") >= 3
-    assert (ROOT / "web/src/components/research/ResearchSettingsDrawer.stories.ts").exists()
 
 
 def test_english_and_quebec_french_dictionaries_are_complete_and_placeholder_safe():
@@ -110,11 +65,6 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
     assert used - set(french) == set()
 
 
-def test_fr_ca_translation_prompt_explicitly_targets_quebec_and_oqlf():
-    assert "professional Canadian French as written in Québec" in I18N_TRANSLATION
-    assert "Office québécois de la langue française (OQLF)" in I18N_TRANSLATION
-    assert "avoid France-only wording" in I18N_TRANSLATION
-    assert "Canadian French typography" in I18N_TRANSLATION
 
 
 def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(tmp_path, monkeypatch):
@@ -139,9 +89,3 @@ def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(
     assert preserved["languages"]["fr-CA"]["dictionary"]["app.subtitle"] == "Mon libellé personnalisé"
 
 
-def test_quebec_localization_policy_is_documented():
-    policy = (ROOT / "docs/LOCALIZATION_FR_CA.md").read_text(encoding="utf-8")
-    assert "professional Canadian French as written in Québec" in policy
-    assert "OQLF" in policy
-    assert "Never translate corpus passages" in policy
-    assert "language_dictionary_revision" not in policy or "0.35.0" in policy

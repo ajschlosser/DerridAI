@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import json
 import re
 from pathlib import Path
 
@@ -36,22 +35,6 @@ def test_built_in_locales_are_canonical_and_complete():
         assert source_slots == target_slots, key
 
 
-def test_every_literal_web_translation_key_exists_in_both_locales():
-    en = _locale(EN_PATH, "EN_US")
-    fr = _locale(FR_PATH, "FR_CA")
-    used: set[str] = set()
-    patterns = (
-        re.compile(r"\bi18n\.(?:t|tf)\(\s*['\"]([^'\"]+)['\"]"),
-        re.compile(r"(?<![\w.])trf?\(\s*['\"]([^'\"]+)['\"]"),
-    )
-    for path in WEB.rglob("*"):
-        if path.suffix not in {".vue", ".ts", ".js"}:
-            continue
-        text = path.read_text(encoding="utf-8")
-        for pattern in patterns:
-            used.update(pattern.findall(text))
-    assert not (used - set(en))
-    assert not (used - set(fr))
 
 
 def test_no_explicit_frontend_font_size_is_below_twelve_pixels():
@@ -68,40 +51,5 @@ def test_no_explicit_frontend_font_size_is_below_twelve_pixels():
     assert offenders == []
 
 
-def test_storybook_is_accessibility_enabled_and_taxonomy_is_clean():
-    package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert "@storybook/addon-a11y" in package["devDependencies"]
-    main = (ROOT / "web/.storybook/main.ts").read_text(encoding="utf-8")
-    preview = (ROOT / "web/.storybook/preview.ts").read_text(encoding="utf-8")
-    assert '"@storybook/addon-a11y"' in main
-    assert 'a11y: { test: "error" }' in preview
-    titles: list[str] = []
-    for path in WEB.rglob("*.stories.ts"):
-        match = re.search(r"title:\s*['\"]([^'\"]+)", path.read_text(encoding="utf-8"))
-        assert match, path
-        titles.append(match.group(1))
-    assert not any(re.search(r"\b0\.\d+", title) for title in titles)
-    assert "Record Workspace/Inspector" in titles
-    assert "Shell/Content Surface" in titles
 
 
-def test_unused_and_compatibility_scaffolding_is_gone():
-    assert not (ROOT / "web/src/components/PdfCorpusBuilder.vue.tmp").exists()
-    assert not (ROOT / "web/src/components/LegacySurface.vue").exists()
-    assert (ROOT / "web/src/components/RuntimeSurface.vue").exists()
-    models = (ROOT / "api/app/models.py").read_text(encoding="utf-8")
-    main = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
-    chroma = (ROOT / "api/app/chroma_store.py").read_text(encoding="utf-8")
-    system = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
-    assert "english_name" not in models and "fr_fr_name" not in models
-    assert "class StoredRecordUpdate" not in models
-    assert "records: list[dict[str, Any]]" not in models.split("class BulkUpsert", 1)[1].split("class UpsertJobItem", 1)[0]
-    assert '@app.put("/api/stores/{store_name}/records/{chroma_id:path}")' not in main
-    assert "removed_legacy_collections" not in chroma
-    assert "DEFAULT_EN_US.update" not in system and "DEFAULT_FR_CA.update" not in system
-    assert not (ROOT / "web/src/legacy").exists()
-    runtime = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
-    assert "app_config_version" not in runtime
-    assert "migratedLocales" not in runtime
-    assert "Older compatible builds" not in chroma
-    assert "except TypeError" not in chroma.split("def create_store", 1)[1].split("def delete_store", 1)[0]

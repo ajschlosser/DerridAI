@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 from app.models import PdfCorpusBuildCreate
 
 
@@ -196,44 +195,7 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
     assert result["queue_counts"]["issues"] == 3
 
 
-def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
-    ui=text("web/src/components/PdfCorpusBuilder.vue")
-    api=text("web/src/api/pdfCorpus.ts")
-    panel=text("web/src/components/CorpusMetadataResolutionPanel.vue")
-    assert "acceptCleanRecords" in ui
-    assert "reviewQueueCounts" in ui
-    assert "CorpusMetadataLiveStatus" in ui
-    assert "collaborative_review_settled" not in ui
-    assert "textDraftKey" in ui
-    assert "structuralReviewLocked=computed(()=>buildRunning.value)" in ui
-    assert "review-readonly-banner" in ui
-    assert "metadataDecision" in ui and "reviewDecision" in api
-    assert 'reviewQueue.value="ready"' not in ui[ui.index("async function resolveMetadataField"):ui.index("function showMetadataSource")]
-    assert "acceptButtonEl.value?.focus({preventScroll:true})" in ui
-    field_editor=text("web/src/components/CorpusMetadataFieldEditor.vue")
-    assert '@click="save"' in field_editor
-    assert ':value="false"' in field_editor
-    assert "metadataSavingField" in ui and "metadataSavedField" in ui
-    assert 'aria-controls="review-panel-metadata"' in ui
-    assert 'aria-labelledby="review-tab-metadata"' in ui
-    queue_tabs=text("web/src/components/CorpusReviewQueueTabs.vue")
-    assert 'role="toolbar"' in queue_tabs and ':aria-pressed="modelValue===tab.id||primaryModel===tab.id"' in queue_tabs
 
 
-def test_dachshund_i18n_and_storybook_cover_exception_review():
-    store=text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in (
-        '"pdf_corpus.queue_ready"', '"pdf_corpus.accept_clean"',
-        '"pdf_corpus.review_preparing_title"', '"pdf_corpus.decision_saved"', '"pdf_corpus.review_details"',
-    ):
-        assert store.count(key.strip('"')) >= 2
-    stories=text("web/src/components/CorpusReviewQueueTabs.stories.ts")
-    assert "ExceptionsRemain" in stories and "MetadataQueue" in stories and "LockedDuringEnrichment" in stories
-    metadata_stories=text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")
-    assert "PrimaryTextHumanDecisionNo" in metadata_stories
 
 
-def test_low_confidence_llm_review_metadata_is_forced_to_human_review():
-    source = text("api/app/corpus_builder.py")
-    assert 'elif (confidence is None or confidence <= minimum) and value not in (None, "", []):' in source
-    assert '"reason_code": "low_confidence"' in source

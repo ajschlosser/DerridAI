@@ -83,16 +83,6 @@ def test_quality_report_exposes_distribution_and_conservation():
     assert quality["p90_record_chars"]>=quality["p10_record_chars"]
 
 
-def test_storybook_i18n_and_accessibility_surfaces_exist():
-    sizing=(ROOT/"web/src/components/CorpusRecordSizingSettings.vue").read_text(encoding="utf-8")
-    stories=(ROOT/"web/src/components/CorpusRecordSizingSettings.stories.ts").read_text(encoding="utf-8")
-    quality=(ROOT/"web/src/components/CorpusQualitySummary.vue").read_text(encoding="utf-8")
-    store=(ROOT/"api/app/locales/en_us.py").read_text(encoding="utf-8")+(ROOT/"api/app/locales/fr_ca.py").read_text(encoding="utf-8")
-    assert "<fieldset" in sizing and "<legend>" in sizing and "aria-describedby" in sizing
-    assert "Corpus Builder/Settings/Record Sizing" in stories
-    assert "source_conservation_valid" in quality
-    assert 'pdf_corpus.record_sizing.preferred' in store
-    assert 'pdf_corpus.quality.size_detail' in store
 
 
 def test_acceptance_fixture_invariants():

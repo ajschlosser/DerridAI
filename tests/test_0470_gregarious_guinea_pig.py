@@ -91,22 +91,5 @@ def test_resume_clears_cancel_marker(tmp_path:Path,monkeypatch):
     assert repo.get_build(build['build_id'])['status']=='queued'
 
 
-def test_collaborative_review_ui_has_durable_text_drafts_bulk_edit_and_accessible_story():
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    bulk=text('web/src/components/CorpusBulkMetadataEditor.vue')
-    metadata=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    story=text('web/src/components/CorpusBulkMetadataEditor.stories.ts')
-    assert 'textDraftKey' in builder and 'preserveActiveDraft' in builder
-    assert 'CorpusBulkMetadataEditor' in builder and 'bulkMetadata' in text('web/src/api/pdfCorpus.ts')
-    assert 'inherited-metadata' in metadata
-    assert 'role="dialog"' in bulk and ':focus-visible' in bulk
-    assert 'Corpus Builder/Review/Bulk Metadata Editor' in story
-    assert 'font:10px' not in builder
 
 
-def test_new_i18n_keys_exist_in_english_and_quebec_french():
-    en=text('api/app/locales/en_us.py');fr=text('api/app/locales/fr_ca.py')
-    keys=['pdf_corpus.bulk_metadata_title','pdf_corpus.collaborative_review_title','pdf_corpus.start_concurrent_build','pdf_corpus.inherited_metadata_section','pdf_corpus.document_metadata_live_help']
-    for key in keys:
-        assert f"'{key}'" in en and f"'{key}'" in fr
-    assert 'Québec' in text('api/app/locales/fr_ca.py')

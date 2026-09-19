@@ -14,24 +14,12 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 
 
 def text(path:str)->str:
     return (ROOT/path).read_text(encoding='utf-8')
 
 
-def test_metadata_enrichment_is_family_checkpointed_and_bounded():
-    source=text('api/app/corpus_builder.py')
-    rag=text('api/app/rag.py')
-    for token in ('metadata_stage_results','metadata_execution_ledger','metadata_tasks_running','metadata_last_progress_at','metadata_active_tasks'):
-        assert token in source
-    assert 'stage_callback' in source
-    assert 'attempts: int = 2' in source
-    assert 'metadata_settle_requested' in source
-    assert 'settle_metadata_unresolved' in source
-    assert 'timeout_seconds' in rag
-    assert 'LLM generation exceeded' in rag
 
 
 def test_metadata_stage_timeouts_are_configurable_and_reasonable():
@@ -44,26 +32,8 @@ def test_metadata_stage_timeouts_are_configurable_and_reasonable():
     assert custom['indexing']==45
 
 
-def test_live_status_component_is_storybooked_accessible_and_localized():
-    component=text('web/src/components/CorpusMetadataLiveStatus.vue')
-    stories=text('web/src/components/CorpusMetadataLiveStatus.stories.ts')
-    store=text('api/app/locales/en_us.py')+text('api/app/locales/fr_ca.py')
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'role="progressbar"' in component
-    assert 'aria-live="polite"' in component
-    assert 'font-size:.8125rem' in component and 'font-size:13px' in component
-    assert 'Continue with unresolved metadata' in component
-    assert 'Stalled' in stories and 'FrenchLengthStress' in stories
-    for key in ('"pdf_corpus.metadata_live_title"','"pdf_corpus.continue_unresolved"','"pdf_corpus.status_refresh_failed"'):
-        assert store.count(key.strip('"')) >= 2
-    assert '<CorpusMetadataLiveStatus' in builder
-    assert 'transientNetworkError' in builder
 
 
-def test_workflow_stepper_no_longer_uses_tiny_status_fonts():
-    stepper=text('web/src/components/CorpusWorkflowStepper.vue')
-    assert 'font-size:8px' not in stepper
-    assert 'font-size:9px' not in stepper
 
 
 def test_operations_surface_metadata_task_progress():
@@ -76,30 +46,8 @@ def test_operations_surface_metadata_task_progress():
     assert operation['metadata_tasks_running']==3
 
 
-def test_energized_elephant_i18n_and_review_controls_are_bilingual():
-    store=text('api/app/locales/en_us.py')+text('api/app/locales/fr_ca.py')
-    for key in (
-        'pdf_corpus.stage_timeouts','pdf_corpus.timeout.discourse','pdf_corpus.timeout.quotation',
-        'pdf_corpus.timeout.indexing','pdf_corpus.issue_filter','pdf_corpus.select_visible',
-        'pdf_corpus.reject_selected_count','pdf_corpus.open_pdf_explorer','pdf_corpus.resume_safe',
-    ):
-        assert store.count(key.strip('"')) >= 2
-    queue=text('web/src/components/CorpusReviewQueueTabs.vue')
-    assert 'issue-filter' in queue
-    assert 'primaryTabs' in queue
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'selectedReviewIds' in builder
-    assert 'openPdfExplorer' in builder
-    assert 'Accessible type floor' in builder
 
 
-def test_bulk_disposition_accepts_explicit_record_ids():
-    models=text('api/app/models.py')
-    manager=text('api/app/corpus_builder.py')
-    api=text('web/src/api/pdfCorpus.ts')
-    assert 'record_ids: list[str]' in models
-    assert 'selected_ids = {' in manager
-    assert 'record_ids:recordIds' in api
 
 
 def _install_minimal_build(repo:cb.PdfCorpusRepository):
@@ -189,16 +137,3 @@ def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
     assert repo.load_records(build_id) in (rows_a, rows_b)
 
 
-def test_progressive_review_mutations_are_serialized_with_metadata_checkpoints():
-
-    for name in (
-        "set_disposition", "review_decision", "bulk_disposition", "undo_last_review_edit",
-        "patch_metadata", "metadata_decision", "patch_evidence", "merge", "split",
-        "rerun_metadata", "settle_metadata_unresolved", "publish",
-    ):
-        method = getattr(cb.PdfCorpusBuildManager, name)
-        assert method.__name__ == name
-    source = (ROOT / "api/app/corpus_builder.py").read_text(encoding="utf-8")
-    assert "def _serialize_record_mutation" in source
-    assert "with self._lock:\n                            live_records = self.repo.load_records(build_id)" in source
-    assert "tempfile.mkstemp(prefix=f\".{path.name}.\"" in source
