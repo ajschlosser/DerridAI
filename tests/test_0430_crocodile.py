@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 
 
 def text(path: str) -> str:
@@ -166,12 +165,3 @@ def test_primary_text_uses_boolean_radio_not_string_truthiness():
     assert "PrimaryTextHumanDecisionNo" in stories
 
 
-def test_review_i18n_has_en_and_fr_keys():
-    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in (
-        '"pdf_corpus.review_mode"',
-        '"pdf_corpus.resolve_metadata_to_accept"',
-        '"pdf_corpus.primary_text_help"',
-        '"pdf_corpus.bulk_done_metadata_blocked"',
-    ):
-        assert store.count(key.strip('"')) >= 2

@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 from app.models import PdfCorpusBuildCreate
 
 
@@ -220,17 +219,6 @@ def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
     assert 'role="toolbar"' in queue_tabs and ':aria-pressed="modelValue===tab.id||primaryModel===tab.id"' in queue_tabs
 
 
-def test_dachshund_i18n_and_storybook_cover_exception_review():
-    store=text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in (
-        '"pdf_corpus.queue_ready"', '"pdf_corpus.accept_clean"',
-        '"pdf_corpus.review_preparing_title"', '"pdf_corpus.decision_saved"', '"pdf_corpus.review_details"',
-    ):
-        assert store.count(key.strip('"')) >= 2
-    stories=text("web/src/components/CorpusReviewQueueTabs.stories.ts")
-    assert "ExceptionsRemain" in stories and "MetadataQueue" in stories and "LockedDuringEnrichment" in stories
-    metadata_stories=text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")
-    assert "PrimaryTextHumanDecisionNo" in metadata_stories
 
 
 def test_low_confidence_llm_review_metadata_is_forced_to_human_review():

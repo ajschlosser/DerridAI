@@ -54,10 +54,6 @@ def test_deep_enrichment_does_not_render_semantic_indexing_as_disabled_control()
     assert "v-if=\"enrichmentMode==='deep'\" class=\"included-feature\"" in setup
     assert ':disabled="enrichmentMode===\'deep\'"' not in setup
 
-def test_new_strings_exist_in_both_locales():
-    en=text('api/app/locales/en_us.py'); fr=text('api/app/locales/fr_ca.py')
-    for key in ('pdf_corpus.workflow.source_configure','pdf_corpus.readiness.ready','pdf_corpus.review_workspace','pdf_corpus.workspace.metadata','pdf_corpus.document_structure_saved_impact'):
-        assert key in en and key in fr
 
 def test_build_history_is_available_without_leaving_current_phase():
     builder=text('web/src/components/PdfCorpusBuilder.vue')

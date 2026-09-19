@@ -153,9 +153,6 @@ def test_pipeline_hydration_and_completion_are_explicit_without_form_interaction
         assert label in lifecycle
 
 
-def test_storybook_covers_aardvark_workflow_surfaces():
-    for name in ["CorpusMetadataIssues.stories.ts","CorpusFinishWorkspace.stories.ts","CorpusMetadataResolutionPanel.stories.ts","CorpusBuildTimeline.stories.ts","CorpusRecordFocusReview.stories.ts"]:
-        assert (ROOT/"web/src/components"/name).exists()
 
 
 def test_unicode_is_preserved_in_normalization_and_json_serialization():

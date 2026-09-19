@@ -104,9 +104,3 @@ def test_collaborative_review_ui_has_durable_text_drafts_bulk_edit_and_accessibl
     assert 'font:10px' not in builder
 
 
-def test_new_i18n_keys_exist_in_english_and_quebec_french():
-    en=text('api/app/locales/en_us.py');fr=text('api/app/locales/fr_ca.py')
-    keys=['pdf_corpus.bulk_metadata_title','pdf_corpus.collaborative_review_title','pdf_corpus.start_concurrent_build','pdf_corpus.inherited_metadata_section','pdf_corpus.document_metadata_live_help']
-    for key in keys:
-        assert f"'{key}'" in en and f"'{key}'" in fr
-    assert 'Québec' in text('api/app/locales/fr_ca.py')

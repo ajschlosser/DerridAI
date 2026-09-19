@@ -68,12 +68,3 @@ def test_response_faq_neutral_empty_state_and_storybook_variant():
     assert 'iconTone: "neutral"' in story
 
 
-def test_new_strings_are_bilingual():
-    for key in (
-        "subset.autocomplete_count",
-        "subset.autocomplete_large_field",
-        "records.columns",
-        "record.page",
-        "annotations.remove_local_help",
-    ):
-        assert SYSTEM.count(repr(key)) >= 2

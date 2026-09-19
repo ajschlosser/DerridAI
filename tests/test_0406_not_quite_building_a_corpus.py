@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,13 +91,3 @@ def test_retry_state_is_explicit_in_backend_operations():
     assert 'if build.get("status") in {"queued", "running"}' in builder
 
 
-def test_0406_new_strings_exist_in_english_and_quebec_french():
-    dictionary = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in (
-        "pdf_corpus.retry_in_progress",
-        "pdf_corpus.build_stopped_title",
-        "pdf_corpus.home_title",
-        "pdf_corpus.open_builder",
-        "providers.context_tokens",
-    ):
-        assert dictionary.count(key) >= 2

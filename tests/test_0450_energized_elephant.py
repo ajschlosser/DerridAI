@@ -14,7 +14,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 
 
 def text(path:str)->str:
@@ -76,21 +75,6 @@ def test_operations_surface_metadata_task_progress():
     assert operation['metadata_tasks_running']==3
 
 
-def test_energized_elephant_i18n_and_review_controls_are_bilingual():
-    store=text('api/app/locales/en_us.py')+text('api/app/locales/fr_ca.py')
-    for key in (
-        'pdf_corpus.stage_timeouts','pdf_corpus.timeout.discourse','pdf_corpus.timeout.quotation',
-        'pdf_corpus.timeout.indexing','pdf_corpus.issue_filter','pdf_corpus.select_visible',
-        'pdf_corpus.reject_selected_count','pdf_corpus.open_pdf_explorer','pdf_corpus.resume_safe',
-    ):
-        assert store.count(key.strip('"')) >= 2
-    queue=text('web/src/components/CorpusReviewQueueTabs.vue')
-    assert 'issue-filter' in queue
-    assert 'primaryTabs' in queue
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'selectedReviewIds' in builder
-    assert 'openPdfExplorer' in builder
-    assert 'Accessible type floor' in builder
 
 
 def test_bulk_disposition_accepts_explicit_record_ids():

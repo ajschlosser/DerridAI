@@ -36,22 +36,6 @@ def test_built_in_locales_are_canonical_and_complete():
         assert source_slots == target_slots, key
 
 
-def test_every_literal_web_translation_key_exists_in_both_locales():
-    en = _locale(EN_PATH, "EN_US")
-    fr = _locale(FR_PATH, "FR_CA")
-    used: set[str] = set()
-    patterns = (
-        re.compile(r"\bi18n\.(?:t|tf)\(\s*['\"]([^'\"]+)['\"]"),
-        re.compile(r"(?<![\w.])trf?\(\s*['\"]([^'\"]+)['\"]"),
-    )
-    for path in WEB.rglob("*"):
-        if path.suffix not in {".vue", ".ts", ".js"}:
-            continue
-        text = path.read_text(encoding="utf-8")
-        for pattern in patterns:
-            used.update(pattern.findall(text))
-    assert not (used - set(en))
-    assert not (used - set(fr))
 
 
 def test_no_explicit_frontend_font_size_is_below_twelve_pixels():

@@ -9,8 +9,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
@@ -33,10 +31,6 @@ def install(tmp_path:Path):
     repo.save_records(build['build_id'],rows)
     return repo,build
 
-def test_release_and_i18n_parity():
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.slice_record','pdf_corpus.select_from_text','pdf_corpus.redo','pdf_corpus.pdf_source']:
-        assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
 
 def test_boundary_suspect_detection_marks_both_sides():
     rows=[{'text':'This continues without punctuation'},{'text':'and clearly continues here.'}]

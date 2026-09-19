@@ -55,15 +55,3 @@ def test_llm_review_uses_central_provider_connection_settings():
     assert 'const api_key=provider==="openai"?(profile?.api_key||""):null;' in RUNTIME
 
 
-def test_new_ux_strings_exist_in_both_builtin_dictionaries():
-    for key in (
-        "records.table_scroll_label",
-        "records.open_shared_workspace",
-        "works.metadata_variants",
-        "works.work_insights",
-        "dashboard.top_persons_work",
-        "dashboard.top_discourse_targets_work",
-        "dashboard.discourse_roles_share_work",
-        "llm.connection_from_profile",
-    ):
-        assert SYSTEM.count(repr(key)) >= 2

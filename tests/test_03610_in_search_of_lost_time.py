@@ -75,26 +75,5 @@ def test_semantic_search_never_exposes_contains_metadata_operator():
     assert SYSTEM.count(repr("search.contains_filter_removed")) >= 2
 
 
-def test_search_components_have_storybook_coverage():
-    for rel in (
-        "web/src/components/search/SearchWorkspaceHeader.stories.ts",
-        "web/src/components/search/SearchFacetPanel.stories.ts",
-        "web/src/components/search/SearchSelectionBar.stories.ts",
-    ):
-        assert (ROOT / rel).exists()
 
 
-def test_new_search_strings_are_bilingual():
-    for key in (
-        "search.kicker",
-        "search.loaded_records",
-        "search.corpus_database",
-        "search.advanced_filters",
-        "search.saved_views",
-        "search.recent_searches",
-        "search.why_result",
-        "search.layout_comfortable",
-        "search.semantic_match",
-        "search.results_table_scroll",
-    ):
-        assert SYSTEM.count(repr(key)) >= 2

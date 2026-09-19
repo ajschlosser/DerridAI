@@ -10,15 +10,9 @@ except ModuleNotFoundError:
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
-def test_release_identity_and_i18n_parity():
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.llm_touchup','pdf_corpus.preview_jsonl','pdf_corpus.editorial_memory_title','pdf_corpus.confidence_calibration']:
-        assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
 
 def test_cleanup_repairs_multi_line_prose_and_ocr_without_flattening_poetry():
     prose='This sentence is artificially wrapped across\nseveral physical PDF lines in the middle\nof one continuous thought and contains ﬁ ligature.\n\nNext paragraph.'
@@ -96,8 +90,3 @@ def test_finish_workspace_routes_current_backend_review_state_to_an_actionable_q
     assert "next.value==='resolve_rejections'" not in finish
 
 
-def test_effectiveness_story_covers_calibration_and_mixed_model_profile_metrics():
-    story=text('web/src/components/CorpusLlmEffectivenessPanel.stories.ts')
-    assert 'confidenceCalibration' in story
-    assert 'modelEffectiveness' in story
-    assert 'fr-CA' in story

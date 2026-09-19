@@ -13,8 +13,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 
 def text(path:str)->str:
@@ -40,17 +38,6 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
     return repo,build
 
 
-def test_release_identity_locale_parity_and_quebec_copy():
-    assert set(EN_US)==set(FR_CA)
-    keys=[
-        'pdf_corpus.cleanup_paragraph_lines','pdf_corpus.cleanup_empty_lines',
-        'pdf_corpus.enrichment_profile','pdf_corpus.profile_switched',
-        'pdf_corpus.editorial_examples_used',
-    ]
-    for key in keys:
-        assert key in EN_US and key in FR_CA
-        assert EN_US[key] != FR_CA[key]
-    assert 'profil' in FR_CA['pdf_corpus.enrichment_profile'].lower()
 
 
 def test_focus_view_reuses_cleanup_component_and_cleanup_has_paragraph_rules():

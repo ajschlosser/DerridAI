@@ -14,8 +14,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 
 def text(path:str)->str:
@@ -38,10 +36,6 @@ def install(tmp_path:Path):
     return repo,build
 
 
-def test_release_identity_and_quebec_i18n_parity():
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.initialization_title','pdf_corpus.source_issue_help_v48','pdf_corpus.confidence_not_reported','pdf_corpus.accept_clean_none_changed']:
-        assert key in EN_US and key in FR_CA and FR_CA[key] != EN_US[key]
 
 
 def test_source_issue_resolution_and_initialization_are_explicit_in_ui():

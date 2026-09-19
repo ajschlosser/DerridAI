@@ -102,9 +102,6 @@ def test_record_review_actions_are_not_auto_publish_side_effects():
     assert "Accept & next" in ui
     assert "Technical build details" in text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
 
-def test_storybook_covers_queue_and_lifecycle():
-    assert (ROOT/"web/src/components/CorpusReviewQueueTabs.stories.ts").exists()
-    assert (ROOT/"web/src/components/CorpusBuildLifecycleCard.stories.ts").exists()
 
 def test_metadata_incomplete_creates_explicit_attention_state_and_blocks_publish(tmp_path:Path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")

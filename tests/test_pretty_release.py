@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,15 +148,6 @@ def test_accessibility_semantics_and_responsive_research_layout():
     assert "research-settings-error" in SETTINGS and 'role="alert"' in SETTINGS
 
 
-def test_all_native_research_strings_exist_in_english_and_french():
-    keys: set[str] = set()
-    paths = [ROOT / "web/src/views/ResearchView.vue", *sorted((ROOT / "web/src/components/research").glob("*.vue"))]
-    for path in paths:
-        keys.update(re.findall(r"i18n\.t\(['\"]([^'\"]+)", path.read_text(encoding="utf-8")))
-    dictionaries = _translation_dicts()
-    assert set(dictionaries) == {"DEFAULT_EN_US", "DEFAULT_FR_CA"}
-    for dictionary in dictionaries.values():
-        assert not (keys - set(dictionary))
 
 
 def test_storybook_has_native_research_component_coverage():

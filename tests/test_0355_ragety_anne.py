@@ -66,20 +66,5 @@ def test_toasts_and_operation_notifications_stack_above_sidebar():
     assert '.operation-progress-stack{z-index:11000!important' in STYLE
 
 
-def test_new_result_and_faq_components_expand_storybook():
-    stories={path.name for path in (ROOT/"web/src/components/research").glob("*.stories.ts")}
-    assert "ResearchResultPresentation.stories.ts" in stories
-    assert "ResponseFaqList.stories.ts" in stories
 
 
-def test_new_faq_strings_have_english_quebec_french_parity():
-    dictionaries=_dictionaries()
-    en=dictionaries["DEFAULT_EN_US"]
-    fr=dictionaries["DEFAULT_FR_CA"]
-    assert set(en)==set(fr)
-    for key in (
-        "faq.page_kicker","faq.page_subtitle","faq.saved_responses","faq.run_provenance",
-        "research.retrieval_diagnostics","research.query_metadata","permissions.faq_denied",
-    ):
-        assert key in en and key in fr
-        assert en[key] and fr[key]

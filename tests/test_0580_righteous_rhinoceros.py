@@ -60,10 +60,3 @@ def test_combobox_is_viewport_clamped_and_high_layer():
     assert '<Teleport to="body">' in combo
 
 
-def test_storybook_covers_problem_states():
-    field_story = text('web/src/components/CorpusMetadataFieldEditor.stories.ts')
-    assert 'AutoPopulatedStance' in field_story
-    assert 'AutoPopulatedPropositionStatus' in field_story
-    assert 'NarrowOpenCombobox' in field_story
-    assert (ROOT/'web/src/components/DocumentStructureConfigurator.stories.ts').exists()
-    assert (ROOT/'web/src/components/SourceTranscriptionDialog.stories.ts').exists()

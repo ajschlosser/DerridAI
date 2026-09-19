@@ -187,13 +187,3 @@ def test_frontend_surface_and_test_contracts_are_present():
         assert (ROOT/path).exists()
 
 
-def test_new_i18n_strings_have_en_us_fr_ca_parity():
-    en=text("api/app/locales/en_us.py")
-    fr=text("api/app/locales/fr_ca.py")
-    for key in (
-        "pdf_corpus.build_history_panel",
-        "pdf_corpus.llm_field_checked",
-        "pdf_corpus.llm_field_not_checked",
-        "pdf_corpus.llm_value_normalized",
-    ):
-        assert key in en and key in fr

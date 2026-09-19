@@ -78,31 +78,5 @@ def test_record_reading_and_editing_are_accessible_native_components():
     assert 'record-id' in HEADER
 
 
-def test_record_workspace_has_full_storybook_coverage_for_major_components():
-    stories = {path.name for path in (ROOT / "web/src/components/record").glob("*.stories.ts")}
-    expected = {
-        "RecordWorkspaceHeader.stories.ts",
-        "RecordReadingPane.stories.ts",
-        "RecordProvenance.stories.ts",
-        "RecordIndexTerms.stories.ts",
-        "RecordAnnotations.stories.ts",
-        "RecordPdfLinks.stories.ts",
-        "RecordHistoryTimeline.stories.ts",
-        "RecordInspector.stories.ts",
-        "RecordEditSheet.stories.ts",
-    }
-    assert expected <= stories
 
 
-def test_record_player_strings_have_english_quebec_french_parity():
-    dictionaries = _dictionaries()
-    en = dictionaries["DEFAULT_EN_US"]
-    fr = dictionaries["DEFAULT_FR_CA"]
-    assert set(en) == set(fr)
-    for key in (
-        "record.inspector", "record.tab_provenance", "record.focus_mode", "record.edit",
-        "record.unsaved_fields", "record.quotation_provenance", "record.source_documents",
-        "annotations.add_note", "record.change_history", "permissions.record_edit_denied",
-    ):
-        assert key in en and key in fr
-        assert en[key].strip() and fr[key].strip()

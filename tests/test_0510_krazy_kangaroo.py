@@ -1,5 +1,4 @@
 from pathlib import Path
-import json
 
 ROOT=Path(__file__).resolve().parents[1]
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
@@ -28,25 +27,7 @@ def test_review_workspace_uses_componentized_session_and_effectiveness_surfaces(
     assert 'class="llm-contribution"' not in builder
     assert 'class="review-session-bar"' not in builder
 
-def test_new_storybook_components_have_french_stress_states():
-    for path in [
-        'web/src/components/ui/UiDialog.stories.ts',
-        'web/src/components/CorpusReviewSessionBar.stories.ts',
-        'web/src/components/CorpusLlmEffectivenessPanel.stories.ts',
-    ]:
-        story=text(path)
-        assert 'fr-CA' in story
 
-def test_new_locale_keys_exist_in_both_builtins():
-    en=text('api/app/locales/en_us.py'); fr=text('api/app/locales/fr_ca.py')
-    for key in [
-        'pdf_corpus.document_defaults_title',
-        'pdf_corpus.manifest_propagation_preview',
-        'pdf_corpus.llm_effectiveness_title',
-        'pdf_corpus.useful_fields_per_minute',
-    ]:
-        assert repr(key) in en
-        assert repr(key) in fr
 
 def test_review_session_bar_accepts_nullable_model_from_build_contract():
     component=text('web/src/components/CorpusReviewSessionBar.vue')

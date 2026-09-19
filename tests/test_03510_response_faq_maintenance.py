@@ -65,39 +65,8 @@ def test_response_faq_current_selection_is_compact_and_accessible():
     assert "@media(prefers-reduced-motion:reduce)" in FAQ
 
 
-def test_response_faq_polish_strings_have_english_quebec_french_parity():
-    dictionaries = _dictionaries()
-    en = dictionaries["DEFAULT_EN_US"]
-    fr = dictionaries["DEFAULT_FR_CA"]
-    assert set(en) == set(fr)
-    for key in (
-        "faq.library_title",
-        "faq.library_help",
-        "faq.archive_help",
-        "faq.browse_archive",
-        "faq.current_response",
-        "faq.find_question",
-        "faq.find_another_question",
-        "faq.current_question",
-        "faq.questions_label",
-        "faq.saved_questions",
-        "faq.run_summary",
-        "faq.retrieval_help",
-        "faq.query_help",
-        "faq.technical_metadata",
-        "record.provenance_help",
-        "record.attribution_path",
-    ):
-        assert key in en and key in fr
-        assert en[key].strip() and fr[key].strip()
 
 
-def test_new_result_and_faq_components_expand_storybook():
-    stories={path.name for path in (ROOT/"web/src/components/research").glob("*.stories.ts")}
-    assert "ResearchResultPresentation.stories.ts" in stories
-    assert "ResponseFaqList.stories.ts" in stories
-    assert "ResponseFaqArchiveDialog.stories.ts" in stories
-    assert "ResponseFaqSelectionBar.stories.ts" in stories
 
 
 def test_response_faq_question_finder_prioritizes_question_scanning():

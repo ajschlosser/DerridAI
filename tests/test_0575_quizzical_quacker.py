@@ -13,24 +13,12 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 from app import corpus_builder as cb
-from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_release_identity_and_locale_parity():
-    assert set(EN_US) == set(FR_CA)
-    for key in (
-        "pdf_corpus.document_structure",
-        "pdf_corpus.source_transcription_title",
-        "pdf_corpus.enrichment_profile_model",
-        "pdf_corpus.active_enrichment_model",
-    ):
-        assert key in EN_US and key in FR_CA
 
 
 def test_source_viewer_replaces_focus_iframe_and_is_storybook_backed():

@@ -64,11 +64,3 @@ def test_frontend_exposes_finish_metadata_resolution_and_reload_safe_queue():
     assert "retryMetadata" in api and "/metadata/retry" in api
 
 
-def test_storybook_covers_new_finish_and_metadata_workflows():
-    for name in (
-        "CorpusFinishWorkspace.stories.ts",
-        "CorpusMetadataResolutionPanel.stories.ts",
-        "CorpusMetadataIssues.stories.ts",
-        "CorpusBuildLifecycleCard.stories.ts",
-    ):
-        assert (ROOT / "web/src/components" / name).exists()

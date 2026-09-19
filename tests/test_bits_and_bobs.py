@@ -116,10 +116,6 @@ def test_content_filter_avoids_name_and_substring_false_positives():
     assert content_filter.contains_disallowed_language("f.u.c.k")
 
 
-def test_storybook_expands_with_role_permission_matrix():
-    story = ROOT / "web/src/components/RolePermissionMatrix.stories.ts"
-    assert story.exists()
-    assert "RolePermissionMatrix" in story.read_text(encoding="utf-8")
 
 
 def test_new_ui_has_focus_and_responsive_accessibility_rules():

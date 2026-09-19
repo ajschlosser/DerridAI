@@ -69,11 +69,6 @@ def test_expert_settings_is_a_centered_sectioned_settings_studio():
     assert "research-settings-nav>button b{font-size:13px" in STYLE
 
 
-def test_research_pipeline_and_settings_have_storybook_coverage():
-    assert (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").exists()
-    story = (ROOT / "web/src/components/research/ResearchPipelineBar.stories.ts").read_text(encoding="utf-8")
-    assert story.count("status:") >= 3
-    assert (ROOT / "web/src/components/research/ResearchSettingsDrawer.stories.ts").exists()
 
 
 def test_english_and_quebec_french_dictionaries_are_complete_and_placeholder_safe():

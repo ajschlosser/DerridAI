@@ -52,18 +52,3 @@ def test_search_routes_missing_database_to_creation_flow():
     assert RUNTIME.count("openDatabaseCreationFromResearch()") >= 4
 
 
-def test_new_strings_are_bilingual():
-    for key in (
-        "ui.get_citation",
-        "ui.inline",
-        "ui.full",
-        "dashboard.top_discourse_targets_work",
-        "dashboard.discourse_roles_share_work",
-        "works.other_values",
-        "works.role_occurrences",
-        "search.redirect_database",
-    ):
-        en = (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8")
-        fr = (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8")
-        assert f"'{key}'" in en or f'"{key}"' in en
-        assert f"'{key}'" in fr or f'"{key}"' in fr

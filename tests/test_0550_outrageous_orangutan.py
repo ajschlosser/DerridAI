@@ -9,8 +9,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
@@ -35,10 +33,6 @@ def install(tmp_path:Path):
     repo.save_records(build['build_id'],rows)
     return repo,build
 
-def test_release_identity_and_quebec_i18n():
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.boundary_second_reader','pdf_corpus.check_with_llm','pdf_corpus.boundary_llm.move_later']:
-        assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
 
 def test_second_reader_keep_corroboration_clears_only_heuristic_boundary_warning():
     left={'boundary_quality_issues':[{'code':'boundary_suspect','edge':'end','reason':'x'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'}

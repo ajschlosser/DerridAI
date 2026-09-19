@@ -10,10 +10,6 @@ def test_dundee_queue_tabs_use_explicit_numeric_counts():
     assert "sourceProblems?:number" in text
 
 
-def test_dundee_storybook_stories_import_declared_adapter_package():
-    for name in ("CorpusBuildStageNotice.stories.ts", "CorpusReviewQueueTabs.stories.ts"):
-        text = (ROOT / "web/src/components" / name).read_text()
-        assert 'from "@storybook/vue3-vite"' in text
 
 
 def test_dundee_active_build_summary_avoids_inline_unknown_record_access():

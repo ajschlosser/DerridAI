@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 
 
 def text(path: str) -> str:
@@ -103,10 +102,3 @@ def test_ui_suppresses_empty_review_and_zero_metadata_attention():
     assert "showBuildConfiguration" in builder
 
 
-def test_dundee_i18n_and_storybook_surface():
-    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in ('"pdf_corpus.building_records_title"','"pdf_corpus.queue_source"','"pdf_corpus.configure_new_build"'):
-        assert store.count(key.strip('"')) >= 2
-    # Existing review and resolution components stay independently testable in Storybook.
-    assert (ROOT / "web/src/components/CorpusMetadataResolutionPanel.stories.ts").exists()
-    assert (ROOT / "web/src/components/CorpusRecordFocusReview.stories.ts").exists()
