@@ -1,3 +1,12 @@
+"""Human ownership of metadata during and after enrichment (release 0.47.0, "Gregarious Guinea Pig").
+
+Why: reviewers edit while background workers enrich. Human decisions must win, be
+marked as such, and never be overwritten by later model output; only repeated human
+choices may become advisory conventions.
+How: `install` creates a temporary build with the given records and status, and the
+tests call PdfCorpusBuildManager methods directly.
+"""
+
 from __future__ import annotations
 
 import json
@@ -21,6 +30,12 @@ def text(path:str)->str:
 
 
 def install(tmp_path:Path, records:list[dict], *, status='running', stage='enriching'):
+    """Create a temp repository with an asset, blocks, a build, and the given records.
+
+    Fills defaults for each record (id, revision, text, block ids/spans, pending
+    review). status/stage choose whether the build looks like it is enriching or in
+    review.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     asset={'asset_id':'a','sha256':'x','filename':'x.pdf','page_count':1,'block_count':len(records),'ocr_pages':0,'warnings':[],'metadata':{},'pages':[]}
     cb._json_write(repo.asset_meta_path('a'),asset)
@@ -36,6 +51,11 @@ def install(tmp_path:Path, records:list[dict], *, status='running', stage='enric
 
 
 def test_human_metadata_edit_is_allowed_during_enrichment_and_establishes_field_ownership(tmp_path:Path):
+    """Editing a field mid-enrichment saves it and marks it human-confirmed.
+
+    Checks: the value is stored, status becomes "human_confirmed", and the field is added
+    to human_touched_fields so workers will not replace it.
+    """
     repo,build=install(tmp_path,[{'text':'Derrida writes about hospitality.'}])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     updated=manager.patch_metadata(build['build_id'],'r1',{'speaker':'Derrida'},expected_revision=1)
@@ -45,6 +65,11 @@ def test_human_metadata_edit_is_allowed_during_enrichment_and_establishes_field_
 
 
 def test_bulk_metadata_patch_supports_selection_and_all_records(tmp_path:Path):
+    """Bulk edit applies to selected records or to every record.
+
+    First a patch targets r1 and r3 only (2 changed, r2 untouched, status
+    "human_override"). Then apply_to_all sets language on all 3 records.
+    """
     repo,build=install(tmp_path,[{'text':'one'},{'text':'two'},{'text':'three'}])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     result=manager.bulk_patch_metadata(build['build_id'],{'document_author':'Jacques Derrida'},record_ids=['r1','r3'])
@@ -59,6 +84,13 @@ def test_bulk_metadata_patch_supports_selection_and_all_records(tmp_path:Path):
 
 
 def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_results():
+    """Merging a worker's snapshot into the live record never clobbers human edits.
+
+    Case 1: the human set speaker="Human"; the worker proposes speaker="Model" and
+    target="Kant". Result keeps "Human" and accepts the new target.
+    Case 2: the record's text was hand-edited ("__text__" touched), so the whole worker
+    result is discarded (its stage becomes "skipped") and the human target stays.
+    """
     live={'record_id':'r1','text':'reviewed','speaker':'Human','human_touched_fields':['speaker'],'metadata_field_status':{'speaker':{'status':'human_confirmed'}},'metadata_stage_status':{},'metadata_execution_ledger':{}}
     worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'llm_inferred'},'target':{'status':'llm_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
     merged=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(live,worker)
@@ -71,6 +103,11 @@ def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_re
 
 
 def test_editorial_context_only_generalizes_repeated_human_choices(tmp_path:Path):
+    """A convention needs at least two matching human confirmations.
+
+    Records confirmed as Derrida, Derrida, Levinas produce a speaker convention of
+    "Derrida" supported by 2 records; the single Levinas choice is not generalized.
+    """
     rows=[]
     for i,value in enumerate(['Derrida','Derrida','Levinas'],1):
         rows.append({'record_id':f'r{i}','text':str(i),'speaker':value,'metadata_field_status':{'speaker':{'status':'human_confirmed'}}})
@@ -82,6 +119,11 @@ def test_editorial_context_only_generalizes_repeated_human_choices(tmp_path:Path
 
 
 def test_resume_clears_cancel_marker(tmp_path:Path,monkeypatch):
+    """Resuming a cancelled build clears the in-memory cancel flag and re-queues it.
+
+    Why: a stale cancel marker would make the resumed build stop immediately.
+    The executor is stubbed so no real work runs.
+    """
     repo,build=install(tmp_path,[{'text':'x'}],status='cancelled',stage='cancelled')
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     manager._cancel.add(build['build_id'])

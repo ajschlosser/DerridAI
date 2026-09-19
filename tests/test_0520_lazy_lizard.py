@@ -1,3 +1,12 @@
+"""Automatic text cleanup, publication gate, and adaptive enrichment (release 0.52.0, "Lazy Lizard").
+
+Why: extracted PDF text carries running headers, page numbers and layout line
+breaks that would pollute records and prompts, but the untouched source text must
+remain recoverable. The publish gate must know a book's identity, and fast
+enrichment may skip families that are not paying off (never when explicitly asked).
+How: pure helpers and PdfCorpusBuildManager methods called with small dicts.
+"""
+
 from pathlib import Path
 import sys
 import types
@@ -18,6 +27,15 @@ def text(path: str) -> str:
 
 
 def test_pre_enrichment_cleanup_is_default_and_preserves_source_truth():
+    """Cleanup is on by default, removes noise, and keeps the original and a diff.
+
+    What: two records contain a repeated running title, a page number, a "Downloaded
+    from JSTOR" line and a sentence broken by layout. After cleanup both records are
+    changed; the header, page number and boilerplate are gone; the broken clause is
+    rejoined; the untouched text is kept in source_extracted_text; and
+    text_revision_history logs an "automatic_cleanup" entry with a diff.
+    Why: cleanup improves prompts, but provenance requires the original text.
+    """
     request = PdfCorpusBuildCreate(asset_id='pdf-test')
     assert request.auto_clean_text is True
     assert 'ocr_artifacts' in request.text_cleanup_rules
@@ -49,6 +67,10 @@ def test_pre_enrichment_cleanup_is_default_and_preserves_source_truth():
 
 
 def test_cleanup_preserves_likely_poetry_and_quotation_layout():
+    """Short quoted verse lines are not joined into prose.
+
+    Why: rejoining verse changes the quotation. The report must say nothing changed.
+    """
     poetry = '“First short line\nSecond short line\nThird short line\nFourth short line”'
     cleaned, report = cb._clean_text_value(poetry, {'paragraph_lines'}, set())
     assert cleaned == poetry
@@ -56,6 +78,13 @@ def test_cleanup_preserves_likely_poetry_and_quotation_layout():
 
 
 def test_publication_readiness_requires_document_identity_and_semantic_integrity():
+    """A build with no title or author cannot be published.
+
+    What: otherwise-complete accepted metadata but an empty manifest title and author.
+    Expect can_publish False, both fields listed as missing, and a
+    required_document_metadata blocker.
+    Why: citations are built from document title/author.
+    """
     build = {
         'profile_id': cb.PROFILE_VERSION,
         'record_count': 1,
@@ -80,6 +109,13 @@ def test_publication_readiness_requires_document_identity_and_semantic_integrity
 
 
 def test_adaptive_fast_mode_can_skip_repeatedly_low_yield_family_but_not_deep_or_explicit_rerun():
+    """Fast mode skips a family that keeps proposing almost nothing; other modes never do.
+
+    Setup: 7 indexing calls have proposed only 1 field. Fast mode should skip the
+    family (with a reason). Deep mode, and a fast run that explicitly names the
+    "indexing" family, must still run it.
+    Why: a reviewer who asks for a family must always get it.
+    """
     class Repo:
         def get_build(self, _build_id):
             return {'llm_family_effectiveness': {'indexing': {'calls': 7, 'proposed_fields': 1}}}

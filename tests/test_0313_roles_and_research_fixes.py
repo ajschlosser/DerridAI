@@ -1,3 +1,11 @@
+"""Role storage and RAG request validation fixes (release 0.31.3).
+
+Why: custom roles decide what non-admin users may do, and the RAG request schema is
+the first line of defense against malformed numeric settings posted by forms.
+How: validates the Pydantic model directly, and drives AuthStore against a
+temporary SQLite database.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,6 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_rag_schema_rejects_blank_numeric_values():
+    """Blank strings and nulls for numeric RAG settings must fail validation.
+
+    Why: an empty form field arrives as "" (or null). Accepting it would let a bogus
+    value reach retrieval (k, fetch_k, lambda_mult) or concurrency limits.
+    """
     import sys
     import pytest
     from pydantic import ValidationError
@@ -34,6 +47,14 @@ def test_rag_schema_rejects_blank_numeric_values():
 
 
 def test_custom_role_store_round_trip(tmp_path, monkeypatch):
+    """Create a custom role, use it, restrict it, and delete it.
+
+    Flow: create "Evidence Reviewer" (its id becomes "evidence-reviewer" and it starts
+    with the researcher permission set); assign a user to it and confirm sessions see
+    that role; set its permissions; move the user back and delete the role.
+    Key rule: even if "page.users" is requested, it is dropped, because system
+    administration stays outside every non-admin role.
+    """
     import sys
     sys.path.insert(0, str(ROOT / "api"))
     from app import auth

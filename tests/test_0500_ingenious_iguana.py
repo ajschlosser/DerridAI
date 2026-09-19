@@ -1,3 +1,12 @@
+"""Apparatus constraints, editorial memory, and provider switching (release 0.50.0, "Ingenious Iguana").
+
+Why: three behaviors keep long builds correct: apparatus regions imply certain
+metadata, only reviewer-confirmed values may teach the model, and switching LLM
+provider mid-build must never persist secrets.
+How: `make_build` creates a running build (optionally with records) on a
+temporary repository.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,6 +29,10 @@ def text(path:str)->str:
 
 
 def make_build(tmp_path:Path, rows:list[dict]|None=None):
+    """Create a temp repository and running "enriching" build, saving any given records.
+
+    Missing record_id/text/metadata_field_status fields are filled with defaults.
+    """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=repo.create_build({
         'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':1,
@@ -43,6 +56,11 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
 
 
 def test_deterministic_constraints_include_discourse_role_for_apparatus():
+    """Bibliography and front matter force primary_text=False and a matching role.
+
+    Bibliography -> discourse_role "bibliographic"; front_matter -> "paratext". Both
+    changes are reported (primary_text and discourse_role) for the review trail.
+    """
     bibliography={'region_type':'bibliography','primary_text':True,'discourse_role':'analysis','metadata_field_status':{}}
     changes=cb.apply_metadata_constraints(bibliography)
     assert bibliography['primary_text'] is False
@@ -55,6 +73,14 @@ def test_deterministic_constraints_include_discourse_role_for_apparatus():
 
 
 def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path):
+    """Few-shot memory uses only human-confirmed or human-overridden values.
+
+    Setup: r1 confirmed and r2 overridden as "reported_position", r3 an unreviewed LLM
+    guess ("analysis"), r4 the record being enriched.
+    Expect: a convention for discourse_role = reported_position seen on 2 records, and
+    examples drawn only from r1/r2.
+    Why: LLM guesses must not train future LLM calls (no self-reinforcing errors).
+    """
     rows=[
         {'record_id':'r1','text':'Derrida reports Heidegger argues that sovereignty precedes law.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_confirmed'}}},
         {'record_id':'r2','text':'Here Derrida reports another proposition held by Heidegger concerning sovereignty.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_override'}}},
@@ -72,6 +98,13 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
 
 
 def test_provider_profile_switch_is_secret_safe_and_audited(tmp_path:Path):
+    """Changing provider mid-build updates the model, hides the key, and logs the change.
+
+    Checks: the saved build request has the new profile and model but no api_key; the
+    in-memory runtime request has the new key while keeping stage limits; and
+    provider_profile_history records the switch.
+    Why: build files are stored on disk and included in backups, so secrets stay in memory.
+    """
     repo,build=make_build(tmp_path,[])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     manager._runtime_requests[build['build_id']]={

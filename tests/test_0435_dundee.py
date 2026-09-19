@@ -1,3 +1,12 @@
+"""Review workflow: atomic decisions, blockers, and filters (release 0.43.5, "Dundee").
+
+Why: reviewers accept or reject records one at a time. A decision must be applied
+atomically (and tell the UI which record comes next), blocked with a structured
+reason when metadata is incomplete, and source problems must be filterable.
+How: `install_repo` builds a temp repository with the given record dicts and
+`rec` creates a minimal valid record (optionally with a metadata or source blocker).
+"""
+
 from __future__ import annotations
 
 import json
@@ -21,6 +30,7 @@ def text(path: str) -> str:
 
 
 def install_repo(tmp_path: Path, records: list[dict]):
+    """Create a temp repository and build containing the supplied records."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     cb._json_write(repo.asset_meta_path("a"), {
         "asset_id": "a", "sha256": "x", "filename": "x.pdf", "page_count": 1,
@@ -40,6 +50,7 @@ def install_repo(tmp_path: Path, records: list[dict]):
 
 
 def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
+    """Build a minimal record; blocked=True leaves primary_text unresolved, source_problem=True adds a blocking source-quality issue."""
     return {
         "record_id":rid,"record_revision":1,"text":"text","text_length":4,"source_block_ids":[bid],
         "source_spans":[{"block_id":bid,"page":1}],"metadata_incomplete_fields":["primary_text"] if blocked else [],
@@ -50,6 +61,7 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
 
 
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
+    """Accepting r1 succeeds, updates counts, and returns r2 as the next record."""
     repo, build = install_repo(tmp_path, [rec("r1","b1"), rec("r2","b2")])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     result = manager.review_decision(build["build_id"], "r1", "accepted", expected_revision=1)
@@ -61,6 +73,11 @@ def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
 
 
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
+    """Accepting a record with unresolved required metadata is refused with details.
+
+    Expect applied False, blocked True, blocker "metadata_decision_required", and the
+    blocking field list (["primary_text"]) so the UI can point the reviewer at it.
+    """
     repo, build = install_repo(tmp_path, [rec("r1","b1",blocked=True)])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     result = manager.review_decision(build["build_id"], "r1", "accepted", expected_revision=1)
@@ -71,6 +88,10 @@ def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
 
 
 def test_empty_metadata_issue_summary_is_authoritative(tmp_path: Path):
+    """With no incomplete fields, validation reports zero unresolved and no metadata blocker.
+
+    Why: an empty issue list must mean "complete", not fall back to a stale count.
+    """
     repo, build = install_repo(tmp_path, [rec("r1","b1")])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     refreshed = manager._rewrite_and_validate(build["build_id"], repo.load_records(build["build_id"]))
@@ -80,6 +101,7 @@ def test_empty_metadata_issue_summary_is_authoritative(tmp_path: Path):
 
 
 def test_source_problem_filter_is_first_class(tmp_path: Path):
+    """page_records(source_problem=True) returns only records with source-quality issues."""
     repo, build = install_repo(tmp_path, [rec("r1","b1",source_problem=True), rec("r2","b2")])
     page = repo.page_records(build["build_id"], source_problem=True)
     assert page["total"] == 1
@@ -87,6 +109,11 @@ def test_source_problem_filter_is_first_class(tmp_path: Path):
 
 
 def test_fragmented_glyph_record_is_detected():
+    """Text broken into single glyphs is flagged "fragmented_glyph_layout".
+
+    Why: this is a bad text layer (valid Unicode but unusable), so it should go to the
+    source-problem queue instead of looking ready for acceptance.
+    """
     record={"text":"OFF\n:\n=\n*\n?\n;\ni\n2\nA\nl\n©\nCosmopolitanism and Forgiveness","pdf_pages":[1]}
     issues=cb.PdfCorpusBuildManager._record_extraction_quality_issues(record)
     assert issues and issues[0]["code"]=="fragmented_glyph_layout"
