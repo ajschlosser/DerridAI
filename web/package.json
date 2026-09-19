@@ -1,7 +1,7 @@
 {
   "name": "derridai",
   "private": true,
-  "version": "0.59.0",
+  "version": "0.60.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -9,7 +9,11 @@
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview --host 0.0.0.0",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:frontend": "npm run typecheck && npm run test:unit && npm run build && npm run build-storybook && npm run test:e2e"
   },
   "dependencies": {
     "diff": "^7.0.0",
@@ -25,7 +29,12 @@
     "vue-tsc": "^3.0.6",
     "storybook": "^10.0.0",
     "@storybook/vue3-vite": "^10.0.0",
-    "@storybook/addon-a11y": "^10.0.0"
+    "@storybook/addon-a11y": "^10.0.0",
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.0",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^18.0.1",
+    "vitest": "^3.2.4"
   },
   "author": "Aaron John Schlosser, PhD",
   "copyright": "Copyright 2026 Aaron John Schlosser, PhD."
