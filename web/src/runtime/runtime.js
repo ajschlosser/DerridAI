@@ -3504,7 +3504,7 @@ function renderOperationsPanel(){
   const activeCount=jobs.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
   return `<section class="card dashboard-operations" id="operationsPanel" data-no-collapse="true">
     <div class="cardhead">
-      <div><b>${esc(tr("operations.background","Background operations"))}</b><div class="note">${esc(trf("operations.summary",{active:activeCount,retained:jobs.length,queue:tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")},`${activeCount} active · ${jobs.length} retained · ${tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")}`))}</div></div>
+      <div><b>${esc(tr("operations.background","Background operations"))}</b><div class="note">${esc(trf("operations.summary",`{active} active · {retained} retained · {queue}`,{active:activeCount,retained:jobs.length,queue:tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")}))}</div></div>
       <div class="tools operations-header-actions"><button class="btn small" id="refreshJobs">${icon("refresh")}${esc(tr("ui.refresh","Refresh"))}</button><button class="btn small" id="clearFinishedJobs" ${jobs.some(job=>!["queued","running","cancelling"].includes(job.status))?"":`disabled data-disabled-reason="${esc(tr("operations.no_finished","There are no finished operations to clear."))}"`}>${esc(tr("operations.clear_finished","Clear finished"))}</button></div>
     </div>
     <div class="operations-list">${jobs.map(job=>{
