@@ -24,9 +24,9 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-CURRENT_VERSION = "0.58.5"
+CURRENT_VERSION = "0.58.6"
 LEGACY_VERSION = "0.1.0"
-RELEASE_NAME = "Radical Rex"
+RELEASE_NAME = "Risky Rabbit"
 DEBUG = os.getenv("DERRIDAI_DEBUG", "0").strip().lower() in {"1", "true", "yes"}
 
 

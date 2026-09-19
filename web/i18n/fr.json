@@ -1,6 +1,6 @@
 {
   "meta":{"name":"Français","dir":"ltr"},
-  "app.title":"DerridAI","app.release":"0.58.5 — Radical Rex","app.subtitle":"Recherche fondée sur les sources dans l’œuvre de Jacques Derrida",
+  "app.title":"DerridAI","app.release":"0.58.6 — Risky Rabbit","app.subtitle":"Recherche fondée sur les sources dans l’œuvre de Jacques Derrida",
   "nav.skip_main":"Aller à l’espace de recherche","nav.skip_evidence":"Aller aux sources","language.label":"Langue de l’interface",
   "research.heading":"Espace de recherche","research.description":"Posez une question, examinez les sources et conservez l’attribution visible de la recherche à la synthèse.",
   "form.question":"Question de recherche","form.question_hint":"Interrogez un concept, une œuvre, un passage, une relation ou un problème d’interprétation.",

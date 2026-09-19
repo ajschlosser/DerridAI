@@ -1,6 +1,6 @@
 [project]
 name = "derridai"
-version = "0.58.5"
+version = "0.58.6"
 description = "DerridAI — evidence-grounded scholarly research, provenance, retrieval, and RAG evaluation"
 requires-python = ">=3.10"
 dependencies = [

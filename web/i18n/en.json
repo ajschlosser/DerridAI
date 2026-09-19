@@ -1,6 +1,6 @@
 {
   "meta":{"name":"English","dir":"ltr"},
-  "app.title":"DerridAI","app.release":"0.58.5 — Radical Rex","app.subtitle":"Evidence-grounded research on Jacques Derrida",
+  "app.title":"DerridAI","app.release":"0.58.6 — Risky Rabbit","app.subtitle":"Evidence-grounded research on Jacques Derrida",
   "nav.skip_main":"Skip to research workspace","nav.skip_evidence":"Skip to evidence","language.label":"Interface language",
   "research.heading":"Research workspace","research.description":"Ask a question, inspect the evidence, and keep source attribution visible from retrieval through synthesis.",
   "form.question":"Research question","form.question_hint":"Ask about a concept, work, passage, relation, or interpretive problem.",

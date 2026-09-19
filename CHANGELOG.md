@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.58.6 — Risky Rabbit
+
+DerridAI 0.58.6 is a clean-clone and container-startup reliability release built on Radical Rex.
+
+### Container and startup reliability
+
+- Removes the API startup dependency on the untracked `api/data.knowledge_base` module that caused clean Docker builds to fail with `ModuleNotFoundError: No module named 'data'`.
+- Makes spaCy, sentence-transformer, KeyBERT, and translation-model initialization lazy so the API health check does not depend on local model caches that may not exist yet.
+- Allows the sentence-transformer model to populate the configured Hugging Face cache instead of requiring a pre-existing `./data/models` directory with `local_files_only=True`.
+- Keeps translation failure non-fatal so retrieval can continue with the original query when the translation model is unavailable.
+- Retains the Compose fallback named volume for Ollama when `OLLAMA_MODELS_DIR` is not configured.
+- Adds a release-contract regression test that prohibits reintroducing untracked `data.*` startup imports or a hard local-only sentence-transformer requirement.
+
+### Release identity
+
+- Versions the package, API, web client, localization catalogs, storage namespace, capability metadata, and regression tests as `0.58.6`.
+- Release codename: **Risky Rabbit**.
+- The `0.58.5` API remains in Git history; this release serves the current research API at `/api/v0.58.6`.
+
 ## 0.58.5 — Radical Rex
 
 DerridAI 0.58.5 establishes the provenance-first research workspace as the primary product surface.

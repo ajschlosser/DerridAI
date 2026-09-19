@@ -9,10 +9,10 @@ def test_release_version_is_consistent():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     api_main = (ROOT / "api" / "main.py").read_text(encoding="utf-8")
     web = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    assert 'version = "0.58.5"' in pyproject
-    assert 'CURRENT_VERSION = "0.58.5"' in api_main
-    assert "0.58.5" in web
-    assert "Radical Rex" in web
+    assert 'version = "0.58.6"' in pyproject
+    assert 'CURRENT_VERSION = "0.58.6"' in api_main
+    assert "0.58.6" in web
+    assert "Risky Rabbit" in web
 
 
 def test_translation_catalogs_have_identical_keys():

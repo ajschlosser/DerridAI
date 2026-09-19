@@ -138,7 +138,7 @@ class JobStatusResponse(BaseModel):
 class AppCapabilities(BaseModel):
     api_version: str
     product_name: str = "DerridAI"
-    release_name: str = "Radical Rex"
+    release_name: str = "Risky Rabbit"
     supported_locales: list[str] = Field(default_factory=lambda: ["en", "fr"])
     supported_document_languages: list[str] = Field(default_factory=lambda: ["en", "fr"])
     retrieval_modes: list[str] = Field(default_factory=lambda: [mode.value for mode in RetrievalMode])

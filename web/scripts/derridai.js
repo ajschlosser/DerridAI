@@ -1,7 +1,7 @@
-const API_BASE = "/api/v0.58.5";
+const API_BASE = "/api/v0.58.6";
 const POLL_INTERVAL_MS = 1500;
-const HISTORY_KEY = "derridai.0.58.5.history";
-const ACTIVE_JOB_KEY = "derridai.0.58.5.active-job";
+const HISTORY_KEY = "derridai.0.58.6.history";
+const ACTIVE_JOB_KEY = "derridai.0.58.6.active-job";
 const LOCALE_KEY = "derridai.locale";
 const SUPPORTED_LOCALES = ["en", "fr"];
 
