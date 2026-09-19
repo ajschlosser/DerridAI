@@ -25,9 +25,9 @@ def _load_content_filter():
 
 def test_release_version_03013():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.57.6"
-    assert 'version="0.57.6"' in MAIN
-    assert "Corpus Viewer 0.57.6" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.58.0"
+    assert 'version="0.58.0"' in MAIN
+    assert "Corpus Viewer 0.58.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_dashboard_background_ops_fixed_open_and_annotation_graph_removed():

@@ -41,6 +41,12 @@ DISCOURSE_ROLES = [
     "qualification", "transition", "question", "definition", "example",
     "commentary", "paratext", "bibliographic",
 ]
+PROPOSITION_STATUS_VALUES = [
+    "asserted", "affirmed", "rejected", "criticized", "questioned", "qualified",
+    "hypothetical", "attributed", "reported", "conceded", "suspended",
+]
+STANCE_VALUES = ["affirm", "reject", "criticize", "question", "qualify", "suspend", "neutral", "describe"]
+
 DISCOURSE_ROLE_DEFINITIONS = {
     "assertion": "The speaker directly advances a proposition as part of the argument.",
     "analysis": "The passage examines, interprets, or explicates a claim, text, concept, or distinction.",
@@ -3822,6 +3828,8 @@ Hybrid classification fields are constrained:
 - region_type MUST be one of: {json.dumps(allowed_region_types, ensure_ascii=False)}
 - discourse_role MUST be one of: {json.dumps(allowed_discourse_roles, ensure_ascii=False)}
 - primary_text MUST be true or false. It means the record belongs to the substantive work rather than front/back matter, bibliography, index, publishing paratext, or other apparatus.
+- proposition_status describes the character/status of the proposition, not a boolean. Prefer one of: {json.dumps(PROPOSITION_STATUS_VALUES, ensure_ascii=False)}
+- stance describes the position holder's orientation toward the target/proposition. Prefer one of: {json.dumps(STANCE_VALUES, ensure_ascii=False)}
 
 Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
@@ -4008,6 +4016,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if build_id:
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
+        minimum = float(profile.get("min_metadata_confidence") or 0.65)
         clean_evidence: dict[str, Any] = dict(record.get("metadata_evidence") or {})
         valid_ids = set(source_ids)
         review_reasons: list[str] = []
@@ -4049,7 +4058,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         if not corroborates:
                             deterministic_value = record.get(key)
                             assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
-                            confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
+                            result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
+                            key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
+                            confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
                             deterministic_strength = float(existing_status.get("confidence") or 0.0)
                             deterministic_method = str(existing_status.get("method") or "")
                             existing_status["status"] = "unresolved"
@@ -4070,9 +4081,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                             # review remains required; hard constraints are re-applied below.
                             strong_structure = deterministic_method in {"human_document_layout", "confirmed_manifest_page_range", "document_layout_rule"}
                             weak_manifest_range = deterministic_method == "manifest_page_range"
-                            if key != "primary_text" and not strong_structure and (weak_manifest_range or deterministic_strength < 0.9):
+                            if key != "primary_text" and confidence is not None and float(confidence) > minimum and not strong_structure and (weak_manifest_range or deterministic_strength < 0.9):
                                 record[key] = value
                                 existing_status["prefilled_candidate"] = "llm"
+                                existing_status["auto_populated"] = True
+                            elif key != "primary_text" and not strong_structure:
+                                existing_status["prefilled_candidate"] = "deterministic"
+                                existing_status["auto_populated"] = False
                             else:
                                 existing_status["prefilled_candidate"] = "deterministic"
                     field_status[key] = existing_status
@@ -4085,6 +4100,27 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     continue
                 if key == "primary_text" and value is not None and not isinstance(value, bool):
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "reason": "Model returned a non-boolean primary_text value."}
+                    continue
+                if key == "proposition_status" and value is not None and value not in PROPOSITION_STATUS_VALUES:
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported proposition status: {value}"}
+                    continue
+                if key == "stance" and value is not None and value not in STANCE_VALUES:
+                    field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "reason": f"Model returned an unsupported stance: {value}"}
+                    continue
+                assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
+                result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
+                key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
+                proposal_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
+                if value not in (None, "", []) and (proposal_confidence is None or float(proposal_confidence) <= minimum):
+                    # Keep low/unknown-confidence output as an explicit suggestion, not
+                    # as the record's current value. The UI may display the proposal,
+                    # but automatic population starts strictly above the configured threshold.
+                    field_status[key] = {
+                        "status": "unresolved", "method": "llm", "confidence": proposal_confidence,
+                        "auto_populated": False, "proposed_value": value,
+                        "reason_code": "low_confidence" if proposal_confidence is not None else "confidence_missing",
+                        "reason": str(assessment.get("reason") or "Model proposal requires reviewer confirmation before population."),
+                    }
                     continue
                 record[key] = value
                 if value not in (None, "", []):
@@ -4112,7 +4148,6 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if reason:
                 model_review_reasons.append(reason)
 
-        minimum = float(profile.get("min_metadata_confidence") or 0.65)
         for field in sorted(EVIDENCE_REQUIRED_FIELDS):
             value = record.get(field)
             if value in (None, "", []):
@@ -4154,6 +4189,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 "method": "llm",
                 "confidence": confidence,
                 "auto_populated": bool(confidence is not None and confidence > minimum and record.get(field) not in (None, "", [])),
+                "proposed_value": record.get(field),
                 "reason_code": "ambiguous" if needs_human else "resolved",
                 "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal."),
             }
@@ -4161,7 +4197,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") == "deterministic_llm_disagreement":
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override", "invalid"} or current.get("reason_code") in {"deterministic_llm_disagreement", "low_confidence", "confidence_missing"}:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -4176,16 +4212,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # uncertainty item merely because the field exists in the schema.
                 continue
             if field in required_metadata_fields and value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "reason_code": "ambiguous", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # Model self-confidence is never publication authority. Any LLM
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
             elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:
-                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "reason_code": "resolved", "reason": reason}
+                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "resolved", "reason": reason}
 
         apply_metadata_constraints(record)
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None

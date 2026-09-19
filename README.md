@@ -1,30 +1,28 @@
-# DerridAI Corpus Viewer 0.57.6
+# DerridAI Corpus Viewer 0.58.0
 
-**0.57.6 — Quippy Quokka** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
+**0.58.0 — Righteous Rhinoceros** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
 
-## 0.57.6 — Quippy Quokka
+## 0.58.0 — Righteous Rhinoceros
 
-TypeScript build correction for the Document Structure configurator: deterministic defaults no longer duplicate spread properties, and two-up logical-page previews now use an explicit typed shape. The release was validated with the actual Vue TypeScript/Vite production build before handoff.
+A Corpus Builder review-UX and metadata correctness release focused on the problems visible in the 0.57.x review workspace: cramped source inspection, unclear document-structure saving, clipped autocomplete menus, and semantic fields that did not reliably show high-confidence LLM proposals.
 
-- Replaces the narrow Focus View PDF iframe with a compact source navigator and a shared full-size **Source Viewer / transcription workspace** available from normal and Focus review. The original PDF is served inline, while PDF.js rendering avoids browser download behavior and supports manual transcription against immutable source blocks.
-- Promotes **Document structure & pagination** to a first-class build workspace with live PDF browsing, one-up/two-up layout, left/right reading order, main-text and bibliography anchors, printed-page anchors, and alternating thread patterns.
-- Derives printed-page labels, deterministic region types, logical-page slots, thread identities, and optional thread languages from reviewer-owned document-layout rules while preserving per-page human overrides as exceptions.
-- Uses strong reviewer-defined structural evidence to arbitrate `region_type` conflicts instead of blindly replacing it with a record-local semantic LLM suggestion.
-- Reduces the initial semantic boundary budget and defers advisory suspicious-boundary second-reader calls so reviewable records become available sooner; segmentation timing is retained for diagnostics.
-- Lets **live enrichment** select both provider profile and model for newly scheduled work while in-flight requests retain the model that actually launched them. Model override remains free-entry when provider model discovery is incomplete.
-- Fixes stored-profile model resolution so OpenAI/FreeLLM and Ollama interactive actions honor the explicitly selected per-operation model.
-- Aggregates Ollama contention by normalized shared endpoint rather than profile ID, so profiles pointing at the same server contribute to the same concurrency warning.
-- Makes >65% LLM metadata population explicit in field status, preserves visible candidate/conflict provenance, and moves autocomplete popovers to a body-level overlay so suggestions are not clipped by inspector panels.
-- Keeps true enums constrained while scholarly free-text metadata remains custom-editable with autocomplete suggestions.
-- Expands Storybook with accessible Document Structure, two-up/thread, Source Transcription, provider/model, metadata, and overlay states, with English and Québec French copy and keyboard/focus semantics.
+- Rebuilds the **Source** inspector around a compact, width-safe source summary. PDF rendering, source actions, boundary second-reader controls, immutable extracted source, and revision history no longer compete in one narrow visual layer. Complex source work opens the shared full-size source/transcription workspace from both normal and Focus review.
+- Makes the PDF.js source renderer responsive below 320 px and rerender on container resize, eliminating the fixed minimum-width behavior that forced source content outside the inspector column.
+- Adds a collapsible review queue so reviewers can reclaim horizontal space for record text and metadata/source inspection without leaving the review workspace.
+- Re-composes **Document structure & pagination** to use the available workspace, adds current-page anchor actions, a generated-mapping summary, and explicit `Unsaved changes` / `Saving…` / `Saved` feedback. “Save structure” is now the clearer **Save document structure** action and is enabled only when the plan is dirty.
+- Corrects metadata semantics: `proposition_status` is a controlled proposition-character field rather than a boolean; `stance` is a distinct controlled orientation field; open scholarly identifiers such as `position_holder` remain editable autocomplete fields.
+- Enforces the >65% auto-population policy in the backend. High-confidence schema-valid LLM proposals become current field values; lower/unknown-confidence outputs remain explicit `proposed_value` suggestions instead of silently becoming authoritative record values.
+- Preserves high-confidence LLM proposals in field status so the editor can still populate the control when a progressive/background refresh arrives before the record value is materialized. Deterministic/LLM conflicts continue to retain both candidates and reasons.
+- Reorders metadata editing so **Select from text** is the alternate acquisition action after Save / No supported value, and makes field editing a single-column layout suitable for narrow inspector widths.
+- Strengthens the shared autocomplete popup with viewport clamping and a top-level overlay layer so suggestions are not hidden behind field text, neighboring controls, sticky tabs, or inspector overflow.
+- Adds backend validation and prompt guidance for proposition status and stance, rejecting unsupported model values rather than letting malformed semantic classifications masquerade as accepted metadata.
+- Expands Storybook coverage for narrow source summary, narrow/open autocomplete, high-confidence auto-populated stance, auto-populated proposition status, document-structure states, and existing full-size source transcription. English and Québec French remain first-class and locale-key parity is enforced by tests.
 
 ### Validation in this packaging environment
 
-- `pytest -q`: **449 passed**.
-- Python bytecode compilation, English/Québec French locale parity, frontend relative-import checks (**0 missing imports**), and `git diff --check` pass.
-- `npm run build` was attempted but frontend dependencies are not installed (`vue-tsc: not found`).
-- `npm run build-storybook` was attempted but Storybook dependencies are not installed (`storybook: not found`).
-- Production Vue/Vite, Storybook, and Docker/container builds remain mandatory release gates; the archive therefore remains a build candidate until those normal environment gates pass.
+- `pytest -q`: **458 passed**.
+- Python bytecode compilation, English/Québec French locale parity, frontend relative-import checks, TypeScript-script syntax checks, `git diff --check`, and ZIP integrity are run before packaging.
+- The actual `vue-tsc --noEmit && vite build` release gate cannot run in this environment because frontend dependencies are not installed and npm registry DNS is unavailable (`EAI_AGAIN`). The archive remains a build candidate until that normal environment build passes.
 
 ## 0.56.0 — Perilous Penguins
 
