@@ -25,6 +25,11 @@ describe("jobProgressText", () => {
     expect(text).not.toContain("307");
   });
 
+  it("says a finished build is ready for review instead of reporting its internal percentage", () => {
+    expect(jobProgressText({ type: "pdf_corpus", status: "completed", completed: 277, total: 307 })).toBe("Build complete · ready for review");
+    expect(jobProgressText({ type: "pdf_corpus", status: "running", completed: 133, total: 307 })).toBe("43% overall");
+  });
+
   it("keeps real counts for other operations", () => {
     expect(jobProgressText({ type: "upsert", completed: 5, total: 10 })).toBe("5/10 (50%)");
     expect(jobProgressText({ type: "upsert", completed: 5, total: 10 }, "of")).toBe("5 of 10 (50%)");

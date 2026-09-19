@@ -403,7 +403,7 @@ function currentContext(){
   if(state.view==="record"&&r) return {kicker:r.record_id||"Record", title:r.work||"Record", meta:f?.name||""};
   const map={
     home:["Overview","Dashboard","Workspace, vector stores, review activity, and corpus statistics"],
-    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} records`:"Open a JSONL file"],
+    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} ${tr("dynamic.records","records")}`:"Open a JSONL file"],
     works:["Corpus","Works","Cross-file work overview"],
     global:["Corpus","Global Search","Search and filter every loaded record"],
     annotations:["Corpus","Annotations","Review annotations by work or in recent-activity order"],
@@ -416,8 +416,16 @@ function currentContext(){
     providers:["System","LLM Providers","Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow"],
     config:["System","Settings","Application behavior, retrieval defaults, storage, backup, and reset controls"],
   };
-  const [kicker,title,meta]=map[state.view]||map.list;
-  return {kicker,title,meta};
+  const dynamicTitle=state.view==="list"&&f?.name||state.view==="pdf"&&state.pdf.title;
+  const dynamicMeta=state.view==="list"&&f||state.view==="pdf"&&state.pdf.name;
+  const key=map[state.view]?state.view:"list";
+  const [kickerText,titleText,metaText]=map[key];
+  // Static labels are translated; data-driven titles (file names, PDF titles) are not.
+  return {
+    kicker:tr(`context.${key}.kicker`,kickerText),
+    title:dynamicTitle?titleText:tr(`context.${key}.title`,titleText),
+    meta:dynamicMeta?metaText:tr(`context.${key}.meta`,metaText),
+  };
 }
 
 const uid = () => crypto.randomUUID();
@@ -2498,7 +2506,7 @@ function updateOperationStackCount(){
   if(!stack)return;
   const count=stack.querySelectorAll(".operation-progress").length;
   const label=stack.querySelector("#operationStackCount");
-  if(label)label.textContent=count?`${count} operation${count===1?"":"s"}`:"";
+  if(label)label.textContent=count?trf(count===1?"operations.count_one":"operations.count_other",count===1?"{count} operation":"{count} operations",{count}):"";
 }
 function showOperationProgress(title,total){
   const id=uid();
@@ -2799,7 +2807,10 @@ function jobProgressText(job,style){
   const total=Number(job.total||0),done=Number(job.completed||0),pct=Math.round(total?done/total*100:0);
   // A PDF corpus build reports a synthetic count (source blocks x weighted
   // stage progress), not a real tally, so show only the honest percentage.
-  if(job.type==="pdf_corpus")return trf("operations.progress_overall","{percent}% overall",{percent:pct});
+  if(job.type==="pdf_corpus"){
+    if(job.status==="completed")return tr("operations.progress_build_complete","Build complete · ready for review");
+    return trf("operations.progress_overall","{percent}% overall",{percent:pct});
+  }
   return style==="of"?`${done.toLocaleString()} of ${total.toLocaleString()} (${pct}%)`:`${done}/${total} (${pct}%)`;
 }
 function maybeDesktopNotify(job){
