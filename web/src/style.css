@@ -2532,8 +2532,14 @@ code{overflow-wrap:anywhere}
   display:none;
 }
 .operation-progress-stack.minimized{
-  width:min(235px,calc(100vw - 36px));
+  width:max-content;
+  max-width:calc(100vw - 28px);
+  white-space:nowrap;
 }
+/* Keep the floating operations panel from permanently covering page controls:
+   leave scroll room beneath the page while it is shown. */
+body:has(#operationProgressStack.minimized) main,body:has(#operationProgressStack.minimized) .vue-native-page{padding-bottom:64px}
+body:has(#operationProgressStack:not(.minimized)) main,body:has(#operationProgressStack:not(.minimized)) .vue-native-page{padding-bottom:min(60vh,460px)}
 .job-resolution{
   display:inline-flex;
   align-items:center;
@@ -4777,3 +4783,4 @@ body{font-size:15px;line-height:1.55}
 @media (prefers-contrast: more) {
   :root { --line: #a7ada5; --line-strong: #737b73; --muted: #50564f; }
 }
+.empty-inline{padding:12px 14px;border:1px dashed var(--ref-line,#d5dde6);border-radius:8px;color:var(--muted,#526279);font-size:.875rem;line-height:1.4;background:transparent}
