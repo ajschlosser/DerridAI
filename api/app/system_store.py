@@ -163,11 +163,21 @@ class SystemStore:
                 return profile
         return None
 
-    def list_languages(self) -> list[dict[str, str]]:
+    @staticmethod
+    def _policy_ready(value: dict[str, Any] | None) -> bool:
+        from .content_filter import policy_is_ready
+        return policy_is_ready((value or {}).get("content_policy") if isinstance(value, dict) else None)
+
+    def list_languages(self) -> list[dict[str, Any]]:
         with self._lock:
             languages = copy.deepcopy(self.repository.list_languages())
         return [
-            {"code": code, "name": str(value.get("name") or code), "flag": str(value.get("flag") or "🌐")}
+            {
+                "code": code,
+                "name": str(value.get("name") or code),
+                "flag": str(value.get("flag") or "🌐"),
+                "content_policy_ready": self._policy_ready(value if isinstance(value, dict) else None),
+            }
             for code, value in sorted(languages.items())
         ]
 
@@ -188,11 +198,13 @@ class SystemStore:
                 "name": str((value or {}).get("name") or ("English" if code == "en-US" else "Français (Québec)")),
                 "flag": str((value or {}).get("flag") or ("🇺🇸" if code == "en-US" else "🇨🇦")),
                 "dictionary": merged,
+                "content_policy_ready": self._policy_ready(value if isinstance(value, dict) else None),
                 **({"translation_report": copy.deepcopy(value.get("translation_report"))} if isinstance(value, dict) and isinstance(value.get("translation_report"), dict) else {}),
             }
         if not value:
             return None
-        return {"code": code, **value}
+        public = {key: item for key, item in value.items() if key != "content_policy"}
+        return {"code": code, "content_policy_ready": self._policy_ready(value), **public}
 
     def put_language(
         self,
@@ -251,6 +263,60 @@ class SystemStore:
         with self._lock:
             if not self.repository.delete_language(code):
                 raise KeyError(code)
+
+    def get_content_policy(self, code: str) -> dict[str, Any] | None:
+        try:
+            code = normalize_locale_code(code)
+        except ValueError:
+            return None
+        with self._lock:
+            value = self.repository.get_language(code)
+        if not isinstance(value, dict):
+            return None
+        policy = value.get("content_policy")
+        return copy.deepcopy(policy) if isinstance(policy, dict) else None
+
+    def put_content_policy(self, code: str, policy: dict[str, Any]) -> dict[str, Any]:
+        from .content_filter import normalize_content_policy
+        code = normalize_locale_code(code)
+        clean = normalize_content_policy(policy, require_ready=True)
+        with self._lock:
+            if self.repository.get_language(code) is None and code not in {"en-US", "fr-CA"}:
+                raise KeyError(code)
+            if not self.repository.put_content_policy(code, clean):
+                # Built-ins may exist only as merged Python defaults until first write.
+                language = self.get_language(code)
+                if language is None:
+                    raise KeyError(code)
+                self.repository.put_language(code, {
+                    "name": language.get("name") or code,
+                    "flag": language.get("flag") or "🌐",
+                    "dictionary": language.get("dictionary") or {},
+                    "translation_report": language.get("translation_report"),
+                })
+                if not self.repository.put_content_policy(code, clean):
+                    raise KeyError(code)
+        return {"code": code, **clean}
+
+    def list_ready_content_policies(self) -> list[dict[str, Any]]:
+        with self._lock:
+            languages = copy.deepcopy(self.repository.list_languages())
+        ready: list[dict[str, Any]] = []
+        for code, value in languages.items():
+            if not isinstance(value, dict):
+                continue
+            policy = value.get("content_policy")
+            if self._policy_ready(value):
+                item = copy.deepcopy(policy)
+                item["code"] = code
+                ready.append(item)
+        return ready
+
+    def content_policy_summaries(self) -> list[dict[str, Any]]:
+        return [
+            {"code": item["code"], "content_policy_ready": bool(item.get("content_policy_ready"))}
+            for item in self.list_languages()
+        ]
 
     def snapshot(self) -> dict[str, Any]:
         """Return the complete server-owned configuration for full backups.

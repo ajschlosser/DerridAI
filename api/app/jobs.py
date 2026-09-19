@@ -22,6 +22,7 @@ from .rag import run_rag_pipeline
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
+from .content_policy_generation import generate_content_policy
 from .persistence import job_repository
 
 
@@ -1435,6 +1436,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
             raise ValueError("Work metadata jobs require a work_metadata payload.")
         if body.task == "language_dictionary" and body.language is None:
             raise ValueError("Language dictionary jobs require a language payload.")
+        if body.task == "language_content_policy" and body.language is None:
+            raise ValueError("Researcher text policy jobs require a language payload.")
 
         payload = self._payload(body)
         assert payload is not None
@@ -1448,6 +1451,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
         elif body.task == "language_dictionary":
             base = system_store.get_language("en-US") or {"dictionary": {}}
             total = len(base.get("dictionary") or {})
+        elif body.task == "language_content_policy":
+            total = 1
 
         job_id = str(uuid.uuid4())
         label = body.label or {
@@ -1458,6 +1463,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
             "rag_grade_batch": "RAG · grade response cache",
             "work_metadata": "Works · populate metadata",
             "language_dictionary": "Languages · translate dictionary",
+            "language_content_policy": "Languages · researcher text policy",
         }.get(body.task, body.task)
         job = {
             "id": job_id,
@@ -1706,11 +1712,105 @@ class LLMToolJobManager(PersistentJobStateMixin):
             dictionary=clean,
             translation_report=translation_report,
         )
+        policy_result = self._generate_language_content_policy(
+            job_id,
+            code=code,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            generation=config.generation,
+            cancelled=cancelled,
+        )
         return {
             "code": str(saved.get("code") or code),
             "name": str(saved.get("name") or config.name or code),
             "flag": str(saved.get("flag") or config.flag or "🌐"),
             **stats,
+            **policy_result,
+        }
+
+    def _generate_language_content_policy(
+        self,
+        job_id: str,
+        *,
+        code: str,
+        provider: str,
+        model: str,
+        base_url: str | None,
+        api_key: str | None,
+        generation: Any,
+        cancelled: Any,
+    ) -> dict[str, Any]:
+        with self._lock:
+            job = self._jobs[job_id]
+            job["stage"] = "content_policy"
+            job["stage_detail"] = f"Generating researcher text policy for {code}"
+            job["events"].append({
+                "timestamp": iso_now(),
+                "stage": "content_policy",
+                "detail": f"Generating researcher text policy for {code}",
+            })
+        try:
+            policy = generate_content_policy(
+                code=code,
+                provider=provider,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                generation=generation,
+                cancelled=cancelled,
+            )
+            saved = system_store.put_content_policy(code, policy)
+        except Exception as exc:
+            return {
+                "content_policy_ready": False,
+                "content_policy_error": str(exc),
+                "term_count": 0,
+                "contextual_count": 0,
+            }
+        return {
+            "content_policy_ready": True,
+            "term_count": len(saved.get("blocked_terms") or []),
+            "contextual_count": len(saved.get("contextual_terms") or []),
+        }
+
+    def _run_language_content_policy(self, job_id: str, body: LLMToolJobCreate) -> dict[str, Any]:
+        assert body.language is not None
+        config = body.language
+        code = normalize_locale_code(config.code)
+        if system_store.get_language(code) is None:
+            raise ValueError(f"Locale {code} is not installed. Install the dictionary before generating its researcher text policy.")
+        stored_profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
+        provider = str((stored_profile or {}).get("type") or config.provider)
+        model = str(config.model or (stored_profile or {}).get("model") or "").strip()
+        base_url = config.base_url or (stored_profile or {}).get("base_url")
+        api_key = config.api_key or (stored_profile or {}).get("api_key")
+        if not model:
+            raise ValueError("Select a model to generate the researcher text policy.")
+
+        def cancelled() -> bool:
+            with self._lock:
+                return bool(self._jobs[job_id]["cancel_requested"])
+
+        policy_result = self._generate_language_content_policy(
+            job_id,
+            code=code,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            generation=config.generation,
+            cancelled=cancelled,
+        )
+        if not policy_result.get("content_policy_ready"):
+            raise ValueError(policy_result.get("content_policy_error") or "Researcher text policy generation failed.")
+        language = system_store.get_language(code) or {}
+        return {
+            "code": code,
+            "name": str(language.get("name") or config.name or code),
+            "flag": str(language.get("flag") or config.flag or "🌐"),
+            **policy_result,
         }
 
     def _run(self, job_id: str, body: LLMToolJobCreate) -> None:
@@ -1752,6 +1852,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
                     result = self._run_grade_batch(job_id, body)
                 elif body.task == "language_dictionary":
                     result = self._run_language_dictionary(job_id, body)
+                elif body.task == "language_content_policy":
+                    result = self._run_language_content_policy(job_id, body)
                 elif body.task == "work_metadata":
                     def metadata_progress(completed: int, total: int, detail: str) -> None:
                         with self._lock:
@@ -1776,9 +1878,9 @@ class LLMToolJobManager(PersistentJobStateMixin):
                         job["stage_detail"] = "Cancelled"
                     else:
                         job["status"] = "completed"
-                        if body.task not in {"rag_grade_batch", "work_metadata", "language_dictionary"}:
+                        if body.task not in {"rag_grade_batch", "work_metadata", "language_dictionary", "language_content_policy"}:
                             job["completed"] = 1
-                        elif body.task in {"work_metadata", "language_dictionary"}:
+                        elif body.task in {"work_metadata", "language_dictionary", "language_content_policy"}:
                             job["completed"] = job["total"]
                         job["stage"] = "completed"
                         if body.task == "rag_grade_batch":

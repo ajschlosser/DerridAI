@@ -39,5 +39,8 @@ def test_all_declared_versions_agree():
     for path, found in declared.items():
         assert found, f"{path} does not declare a version"
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
+    notes = ROOT / "docs" / "notes" / f"{version}.md"
+    assert notes.is_file(), f"missing {notes.relative_to(ROOT)}"
+    assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} —")
 
 

@@ -6,9 +6,10 @@ import { useI18nStore } from "../stores/i18n";
 const props = withDefaults(defineProps<{
   languageCount?: number;
   keyCount?: number;
+  policyPendingCount?: number;
   title?: string;
   description?: string;
-}>(), { languageCount: 0, keyCount: 0, title: "", description: "" });
+}>(), { languageCount: 0, keyCount: 0, policyPendingCount: 0, title: "", description: "" });
 const emit = defineEmits<{ install: [] }>();
 const i18n = useI18nStore();
 const installButton = ref<HTMLButtonElement | null>(null);
@@ -26,6 +27,7 @@ defineExpose({ focusInstall: () => installButton.value?.focus() });
       <div class="language-workspace-stats" :aria-label="i18n.t('language.localization_summary','Localization summary')">
         <span><b>{{ props.languageCount }}</b>{{ i18n.t("language.locales", "Locales") }}</span>
         <span><b>{{ props.keyCount.toLocaleString(i18n.locale) }}</b>{{ i18n.t("language.source_strings", "English strings") }}</span>
+        <span v-if="props.policyPendingCount"><b>{{ props.policyPendingCount }}</b>{{ i18n.t("language.content_policy_needed", "Policy needed") }}</span>
       </div>
       <button ref="installButton" type="button" class="language-install-primary" @click="emit('install')"><AppIcon name="plus" />{{ i18n.t("language.install", "Install language") }}</button>
     </div>

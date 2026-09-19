@@ -79,17 +79,23 @@ from .models import (
     RolePermissionsUpdate,
     ResearcherProviderProfilesUpdate,
     LanguageDictionaryUpdate,
+    LanguageContentPolicyUpdate,
     LanguageInstallRequest,
 )
 from .pdf_tools import extract_pdf_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import translate_english_dictionary
-from .content_filter import enforce_researcher_text
+from .content_policy_generation import generate_content_policy
+from .content_filter import (
+    admin_content_policy_view,
+    enforce_researcher_text,
+    public_content_policy_mirror,
+)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="DerridAI API", version="0.61.0")
+app = FastAPI(title="DerridAI API", version="0.62.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -130,6 +136,10 @@ def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
     if path in {"/api/health", "/api/config"} and method == "GET":
         return True
     if path.startswith("/api/i18n/languages") and method == "GET":
+        if "/content-policy" in path:
+            return False
+        return role_has_capability(role, "i18n.read")
+    if path == "/api/i18n/content-policy" and method == "GET":
         return role_has_capability(role, "i18n.read")
     if path == "/api/system/researcher-providers" and method == "GET":
         return role_has_capability(role, "providers.researcher.use")
@@ -178,7 +188,11 @@ async def authentication_middleware(request: Request, call_next):
     path = request.url.path
     public_auth = {"/api/auth/status", "/api/auth/bootstrap", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
     public_i18n = request.method.upper() == "GET" and (
-        path == "/api/i18n/languages" or path.startswith("/api/i18n/languages/")
+        path == "/api/i18n/languages"
+        or (
+            path.startswith("/api/i18n/languages/")
+            and "/content-policy" not in path
+        )
     )
     if not path.startswith("/api/") or path == "/api/live" or path in public_auth or public_i18n:
         return await call_next(request)
@@ -570,7 +584,7 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Language translation failed: {exc}") from exc
-    return system_store.put_language(
+    saved = system_store.put_language(
         code,
         name=body.name or code,
         flag=body.flag or "🌐",
@@ -589,6 +603,61 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
             "key_count": int(translation_stats.get("key_count") or len(dictionary)),
         },
     )
+    try:
+        system_store.put_content_policy(
+            code,
+            generate_content_policy(
+                code=code,
+                provider=body.provider,
+                model=model,
+                base_url=body.base_url,
+                api_key=body.api_key,
+                generation=body.generation,
+            ),
+        )
+    except Exception:
+        # Dictionary installation still succeeds; the administrator can generate
+        # the researcher text policy from the Languages workspace.
+        pass
+    return system_store.get_language(code) or saved
+
+
+@app.get("/api/i18n/content-policy")
+def i18n_active_content_policy(request: Request):
+    """Hashed union of ready locale policies for the researcher client mirror."""
+    _request_user(request)
+    return public_content_policy_mirror(system_store.list_ready_content_policies())
+
+
+@app.get("/api/i18n/languages/{code}/content-policy")
+def i18n_language_content_policy(code: str, request: Request):
+    _require_admin(request)
+    try:
+        normalized = normalize_locale_code(code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if system_store.get_language(normalized) is None:
+        raise HTTPException(status_code=404, detail="Language dictionary not found.")
+    return admin_content_policy_view(system_store.get_content_policy(normalized), code=normalized)
+
+
+@app.put("/api/i18n/languages/{code}/content-policy")
+def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, request: Request):
+    _require_admin(request)
+    try:
+        normalized = normalize_locale_code(code)
+        return system_store.put_content_policy(
+            normalized,
+            {
+                "blocked_terms": body.blocked_terms,
+                "contextual_terms": body.contextual_terms,
+                "source": "admin-edited",
+            },
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Language dictionary not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/live")
@@ -1218,7 +1287,7 @@ async def create_full_backup(
         manifest = {
             "backup_type": "derridai-full-backup",
             "format_version": 1,
-            "app_version": "0.61.0",
+            "app_version": "0.62.0",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workspace": {
                 "file_count": len(files),
