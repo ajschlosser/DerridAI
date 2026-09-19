@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.48.1"
+    assert APP_VERSION == "0.49.0"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v11"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v7"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
@@ -214,8 +214,9 @@ def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
     assert "metadataDecision" in ui and "reviewDecision" in api
     assert 'reviewQueue.value="ready"' not in ui[ui.index("async function resolveMetadataField"):ui.index("function showMetadataSource")]
     assert "acceptButtonEl.value?.focus({preventScroll:true})" in ui
-    assert '@click="save(field)"' in panel
-    assert ':value="false"' in panel
+    field_editor=text("web/src/components/CorpusMetadataFieldEditor.vue")
+    assert '@click="save"' in field_editor
+    assert ':value="false"' in field_editor
     assert "metadataSavingField" in ui and "metadataSavedField" in ui
     assert 'aria-controls="review-panel-metadata"' in ui
     assert 'aria-labelledby="review-tab-metadata"' in ui

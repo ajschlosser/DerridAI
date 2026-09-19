@@ -39,8 +39,8 @@ def install(tmp_path:Path):
 
 
 def test_release_identity_and_quebec_i18n_parity():
-    assert APP_VERSION=='0.48.1'
-    assert '0.48.1 — Gifted Grungus' in text('README.md')
+    assert APP_VERSION=='0.49.0'
+    assert '0.49.0 — Hungry Hippo' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.initialization_title','pdf_corpus.source_issue_help_v48','pdf_corpus.confidence_not_reported','pdf_corpus.accept_clean_none_changed']:
         assert key in EN_US and key in FR_CA and FR_CA[key] != EN_US[key]
@@ -60,8 +60,9 @@ def test_source_issue_resolution_and_initialization_are_explicit_in_ui():
 def test_llm_suggestion_prefill_and_missing_confidence_are_not_fabricated_as_zero():
     panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
     backend=text('api/app/corpus_builder.py')
-    assert 'PROPOSAL_PREFILL_CONFIDENCE=.65' in panel
-    assert 'confidence_not_reported' in panel
+    field=text('web/src/components/CorpusMetadataFieldEditor.vue')
+    assert 'llm_suggestion_prefilled' in field
+    assert 'confidence_not_reported' in field
     assert 'confidence: float | None = Field(default=None' in backend
     assert 'region_type_consistency' in backend
 

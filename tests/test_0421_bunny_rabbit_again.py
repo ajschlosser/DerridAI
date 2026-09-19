@@ -15,7 +15,7 @@ def test_release_identity_and_profile():
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v11'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)
-    assert json.loads(text('web/package.json'))['version']=='0.48.1'
+    assert json.loads(text('web/package.json'))['version']=='0.49.0'
     assert 'Bunny Rabbit - Again' in text('README.md')
 
 def test_manifest_nullable_notes_are_normalized_not_rejected():
@@ -61,5 +61,5 @@ def test_request_validation_is_product_safe_and_optional_absence_is_reviewable()
     main=text('api/app/main.py')
     assert 'request_validation_error_handler' in main
     assert 'Pydantic' not in 'Some submitted data is invalid. Review the highlighted fields and try again.'
-    panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    assert 'confirm_no_value' in panel and 'confirmAbsent' in panel
+    panel=text('web/src/components/CorpusMetadataFieldEditor.vue')
+    assert 'confirm_no_value' in panel and "emit('save',null)" in panel
