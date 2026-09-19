@@ -60,7 +60,7 @@ def ready_record(rid: str, bid: str) -> dict:
 
 
 def test_release_contract_has_one_current_profile():
-    assert APP_VERSION == "0.59.0"
+    assert APP_VERSION == "0.60.0"
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
