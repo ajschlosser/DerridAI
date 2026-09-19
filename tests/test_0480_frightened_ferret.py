@@ -39,8 +39,8 @@ def install(tmp_path:Path):
 
 
 def test_release_identity_and_quebec_i18n_parity():
-    assert APP_VERSION=='0.57.5'
-    assert '0.57.5 — Quizzical Quacker' in text('README.md')
+    assert APP_VERSION=='0.57.6'
+    assert '0.57.6 — Quippy Quokka' in text('README.md')
     assert set(EN_US)==set(FR_CA)
     for key in ['pdf_corpus.initialization_title','pdf_corpus.source_issue_help_v48','pdf_corpus.confidence_not_reported','pdf_corpus.accept_clean_none_changed']:
         assert key in EN_US and key in FR_CA and FR_CA[key] != EN_US[key]

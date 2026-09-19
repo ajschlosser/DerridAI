@@ -13,9 +13,9 @@ def text(path: str) -> str:
 
 
 def test_0408_release_identity():
-    assert json.loads(text("web/package.json"))["version"] == "0.57.5"
-    assert 'APP_VERSION = "0.57.5"' in text("api/app/config.py")
-    assert "0.57.5 — Quizzical Quacker" in text("README.md")
+    assert json.loads(text("web/package.json"))["version"] == "0.57.6"
+    assert 'APP_VERSION = "0.57.6"' in text("api/app/config.py")
+    assert "0.57.6 — Quippy Quokka" in text("README.md")
 
 
 def test_segmentation_uses_deterministic_candidates_and_boundary_level_review():

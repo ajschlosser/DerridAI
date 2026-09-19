@@ -1,8 +1,10 @@
-# DerridAI Corpus Viewer 0.57.5
+# DerridAI Corpus Viewer 0.57.6
 
-**0.57.5 — Quizzical Quacker** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
+**0.57.6 — Quippy Quokka** turns PDF structure into a first-class, reviewer-controlled input to Corpus Builder. It adds an accessible source/transcription workspace, deterministic pagination and thread rules, faster non-blocking topology construction, endpoint-aware LLM execution, clearer live-enrichment model control, and stronger metadata auto-population/conflict handling. English/Québec French i18n and WCAG 2.0 AA-oriented components remain release requirements.
 
-## 0.57.5 — Quizzical Quacker
+## 0.57.6 — Quippy Quokka
+
+TypeScript build correction for the Document Structure configurator: deterministic defaults no longer duplicate spread properties, and two-up logical-page previews now use an explicit typed shape. The release was validated with the actual Vue TypeScript/Vite production build before handoff.
 
 - Replaces the narrow Focus View PDF iframe with a compact source navigator and a shared full-size **Source Viewer / transcription workspace** available from normal and Focus review. The original PDF is served inline, while PDF.js rendering avoids browser download behavior and supports manual transcription against immutable source blocks.
 - Promotes **Document structure & pagination** to a first-class build workspace with live PDF browsing, one-up/two-up layout, left/right reading order, main-text and bibliography anchors, printed-page anchors, and alternating thread patterns.

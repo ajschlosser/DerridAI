@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def text(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+def test_release_identity_0576():
+    assert json.loads(text("web/package.json"))["version"] == "0.57.6"
+    assert "0.57.6 — Quippy Quokka" in text("README.md")
+    assert 'APP_VERSION = "0.57.6"' in text("api/app/config.py")
+
+def test_document_structure_typescript_regression():
+    component = text("web/src/components/DocumentStructureConfigurator.vue")
+    assert "type LogicalPagePreview" in component
+    assert "computed<LogicalPagePreview[]>" in component
+    assert "page_layout:plan?.page_layout??'single'" in component
+    assert "page_layout:'single',reading_order:'left_to_right',thread_mode:'continuous',...(plan||{})" not in component
