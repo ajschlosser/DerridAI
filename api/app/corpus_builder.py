@@ -4117,50 +4117,60 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if existing_status.get("status") in {"human_confirmed", "human_override"}:
                     continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
-                    # Deterministic structure is fast and useful, but page-range
-                    # decisions can be imperfect. Preserve the deterministic value
-                    # while recording a semantic LLM corroboration/disagreement.
-                    if value is not None:
-                        corroborates = value == record.get(key)
-                        existing_status = dict(existing_status)
+                    # Structural classifications remain selected. The semantic
+                    # reader may corroborate or dispute them, but reviewer-owned
+                    # document structure is never replaced by an LLM proposal.
+                    assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
+                    result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
+                    key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
+                    confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
+                    deterministic_value = record.get(key)
+                    deterministic_method = str(existing_status.get("method") or "")
+                    strong_structure = deterministic_method in STRONG_STRUCTURAL_METHODS
+                    existing_status = dict(existing_status)
+                    existing_status["llm_checked"] = True
+                    existing_status["llm_value"] = value
+                    existing_status["llm_confidence"] = confidence
+                    if value is None:
+                        existing_status["llm_corroborates"] = None
+                        existing_status["llm_skip_reason"] = "Semantic LLM returned no supported value for this field."
+                    else:
+                        corroborates = value == deterministic_value
                         existing_status["llm_corroboration"] = value
                         existing_status["llm_corroborates"] = corroborates
                         existing_status["corroboration_method"] = "llm"
                         if not corroborates:
-                            deterministic_value = record.get(key)
-                            assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
-                            result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
-                            key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
-                            confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
                             deterministic_strength = float(existing_status.get("confidence") or 0.0)
-                            deterministic_method = str(existing_status.get("method") or "")
                             existing_status["status"] = "unresolved"
                             existing_status["method"] = "deterministic+llm"
                             existing_status["reason_code"] = "deterministic_llm_disagreement"
                             existing_status["deterministic_value"] = deterministic_value
-                            existing_status["llm_value"] = value
-                            existing_status["llm_confidence"] = confidence
                             existing_status["deterministic_reason"] = str(existing_status.get("reason") or f"Deterministic inference selected {deterministic_value!r}.")
                             existing_status["llm_reason"] = str(assessment.get("reason") or "Semantic LLM check selected a different value.")
-                            existing_status["reason"] = (
-                                f"Deterministic inference suggests {deterministic_value!r}; semantic LLM check suggests {value!r}"
-                                + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
-                                + ". The LLM suggestion is prefilled for reviewer confirmation."
-                            )
-                            # For interpretive conflicts, show the semantic reader's proposal in the
-                            # editable field while retaining both candidates and their reasons. Human
-                            # review remains required; hard constraints are re-applied below.
-                            strong_structure = deterministic_method in {"human_document_layout", "confirmed_manifest_page_range", "document_layout_rule"}
-                            weak_manifest_range = deterministic_method == "manifest_page_range"
-                            if key != "primary_text" and confidence is not None and float(confidence) > minimum and not strong_structure and (weak_manifest_range or deterministic_strength < 0.9):
-                                record[key] = value
-                                existing_status["prefilled_candidate"] = "llm"
-                                existing_status["auto_populated"] = True
-                            elif key != "primary_text" and not strong_structure:
+                            if strong_structure:
+                                existing_status["reason"] = (
+                                    f"Reviewer-defined document structure requires {deterministic_value!r}; semantic LLM check suggests {value!r}"
+                                    + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
+                                    + ". The structural value remains selected; the disagreement is retained for review."
+                                )
                                 existing_status["prefilled_candidate"] = "deterministic"
                                 existing_status["auto_populated"] = False
                             else:
-                                existing_status["prefilled_candidate"] = "deterministic"
+                                existing_status["reason"] = (
+                                    f"Deterministic inference suggests {deterministic_value!r}; semantic LLM check suggests {value!r}"
+                                    + (f" at {round(float(confidence)*100)}% confidence" if confidence is not None else "")
+                                    + ". Review both candidates."
+                                )
+                                weak_manifest_range = deterministic_method == "manifest_page_range"
+                                if key != "primary_text" and confidence is not None and float(confidence) > minimum and (weak_manifest_range or deterministic_strength < 0.9):
+                                    record[key] = value
+                                    existing_status["prefilled_candidate"] = "llm"
+                                    existing_status["auto_populated"] = True
+                                elif key != "primary_text":
+                                    existing_status["prefilled_candidate"] = "deterministic"
+                                    existing_status["auto_populated"] = False
+                                else:
+                                    existing_status["prefilled_candidate"] = "deterministic"
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
