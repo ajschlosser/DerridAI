@@ -5,6 +5,32 @@ import * as runtime from "../runtime/runtime.js";
 
 let languageEventBridgeInstalled = false;
 
+// These labels are deliberately context-free actions or responses.  Older
+// installed dictionaries may still contain their former feature-specific
+// keys, so resolve those first while new dictionaries use the shared key.
+const COMMON_KEY_ALIASES: Record<string, string> = {
+  "runtime.apply": "common.apply",
+  "runtime.cancel": "common.cancel",
+  "pdf_corpus.cancel": "common.cancel",
+  "runtime.clear": "common.clear",
+  "runtime.close": "common.close",
+  "runtime.delete": "common.delete",
+  "users.delete": "common.delete",
+  "runtime.next": "common.next",
+  "runtime.no": "common.no",
+  "runtime.previous": "common.previous",
+  "runtime.yes": "common.yes",
+  "ui.apply": "common.apply",
+  "ui.cancel": "common.cancel",
+  "ui.clear": "common.clear",
+  "ui.close": "common.close",
+  "ui.delete": "common.delete",
+  "ui.next": "common.next",
+  "ui.no": "common.no",
+  "ui.previous": "common.previous",
+  "ui.yes": "common.yes",
+};
+
 export const useI18nStore = defineStore("i18n", () => {
   const locale = ref(localStorage.getItem("derridai-locale") || "en-US");
   const languages = ref<LanguageInfo[]>([]);
@@ -13,7 +39,13 @@ export const useI18nStore = defineStore("i18n", () => {
   const loading = ref(false);
 
   function t(key: string, fallback?: string) {
-    return dictionary.value[key] || fallback || key;
+    const commonKey = COMMON_KEY_ALIASES[key];
+    return dictionary.value[key]
+      || (commonKey ? dictionary.value[commonKey] : undefined)
+      || baseDictionary.value[key]
+      || (commonKey ? baseDictionary.value[commonKey] : undefined)
+      || fallback
+      || key;
   }
 
   function tf(key: string, fallback: string, values: Record<string, string | number> = {}) {
