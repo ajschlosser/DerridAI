@@ -15,7 +15,7 @@ def test_clean_jsonl_and_repeatable_enrichment_contract():
     assert 'def rerun_metadata_enrichment' in src
     assert 'metadata_enrichment_runs' in src
     assert '/metadata/enrich' in api
-    assert '"corpus_build_details"' in src # explicit deny-list guard
+    assert '"corpus_build_details"' in text("api/app/corpus_publication.py") # explicit deny-list guard
     serializer=src[src.index('def _serialize_public_record'):src.index('def preview_record')]
     assert 'public["corpus_build_details"]' not in serializer
 
