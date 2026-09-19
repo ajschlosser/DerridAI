@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import RuntimeSurface from "../components/RuntimeSurface.vue";
+import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
@@ -18,6 +19,8 @@ const auth=useAuthStore();
 const i18n=useI18nStore();
 const isNativeResearch=computed(()=>route.name==="rag");
 const loading=ref(false);
+const noDatabase=ref(false);
+const canCreateDatabase=computed(()=>auth.can("page.vector"));
 const starting=ref(false);
 const workspace=ref<ResearchWorkspaceSnapshot|null>(null);
 const config=ref<ResearchConfig|null>(null);
@@ -120,18 +123,10 @@ async function loadWorkspace(refresh=true){
   try{
     const snapshot=await runtime.getResearchWorkspaceSnapshot({refresh}) as ResearchWorkspaceSnapshot;
     const requestedJobId=String(route.query.job||"").trim();
-    if(!(snapshot.stores||[]).length){
-      const canOpenDatabase=auth.can("page.vector");
-      runtime.notifyToast(i18n.t(
-        canOpenDatabase?"research.redirect_database":"research.redirect_database_denied",
-        canOpenDatabase
-          ?"Research needs a corpus database. Opening database creation now."
-          :"Research needs a corpus database, but your role cannot open Corpus database. Ask an administrator to configure one or grant access."
-      ),{tone:"info"});
-      if(canOpenDatabase)runtime.openDatabaseCreationFromResearch?.();
-      else await router.replace("/");
-      return;
-    }
+    // Explain the missing prerequisite in place; do not toast and bounce the
+    // user into an unrelated dialog or away from the page they chose.
+    noDatabase.value=!(snapshot.stores||[]).length;
+    if(noDatabase.value)return;
     hydrate(snapshot,{preserveDraft:Boolean(workspace.value),preserveActive:true});
     if(requestedJobId){
       activeJob.value=await runtime.getResearchJob(requestedJobId) as ResearchJob;
@@ -278,6 +273,7 @@ onBeforeUnmount(()=>{window.clearTimeout(pollTimer);window.clearTimeout(draftTim
   <RuntimeSurface v-if="!isNativeResearch" />
   <main v-else class="vue-native-page research-native-page" aria-labelledby="research-page-title">
     <div v-if="loading&&!workspace" class="research-loading" role="status"><span class="spinner"></span>{{i18n.t('research.loading_workspace','Loading Research workspace…')}}</div>
+    <AccessibleEmptyState v-else-if="noDatabase" icon="database" :title="i18n.t('research.empty_state_title','Research needs a corpus database')" :description="canCreateDatabase?i18n.t('research.empty_state_help','Create a vector collection from your loaded works, then return here to ask evidence-grounded questions.'):i18n.t('research.empty_state_denied','Ask an administrator to configure a corpus database or grant you access.')" :action-label="canCreateDatabase?i18n.t('research.empty_state_action','Create a collection'):''" @action="runtime.openDatabaseCreationFromResearch?.()"/>
     <template v-else-if="workspace&&config">
       <div class="research-page-intro"><div><span class="section-label">{{i18n.t('research.page_kicker','Evidence-grounded inquiry')}}</span><h1 id="research-page-title">{{i18n.t('research.page_title','Research workspace')}}</h1><p>{{i18n.t('research.page_subtitle','Ask the corpus, inspect the evidence, and keep provenance attached to the answer.')}}</p></div><div class="research-page-state"><span><i></i>{{stores.length}} {{i18n.t('dashboard.databases','databases')}}</span><span>{{selectedEvidence.length}} {{i18n.t('rag.selected_evidence','selected evidence')}}</span></div></div>
 

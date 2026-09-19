@@ -44,7 +44,7 @@ function taskLabel(task:string){return i18n.t(`pdf_corpus.metadata_task.${task}`
           <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_enrichment','Metadata enrichment')}}</span>
           <h2>{{stalled?i18n.t('pdf_corpus.metadata_stalled_title','Metadata progress may be stalled'):i18n.t('pdf_corpus.metadata_live_title','Automatic metadata is running')}}</h2>
         </div>
-        <strong class="status-count">{{settled}} / {{total}}</strong>
+        <strong class="status-count">{{settled}} / {{total}} <small>{{i18n.t('pdf_corpus.metadata_tasks_unit','tasks')}}</small></strong>
       </div>
       <p>{{i18n.tf('pdf_corpus.metadata_live_summary','{complete} complete · {running} active · {queued} queued · {failed} need review',{complete,running,queued,failed:failed+skipped})}}</p>
       <p class="status-secondary">{{i18n.t('pdf_corpus.elapsed','Elapsed')}}: {{elapsed}}<template v-if="eta"> · {{i18n.t('pdf_corpus.eta','ETA')}}: ~{{eta}}</template> · {{i18n.t('pdf_corpus.last_progress','Last settled task')}}: {{lastProgress}} · {{i18n.t('pdf_corpus.concurrency','Concurrency')}}: {{build.metadata_concurrency||1}}</p>

@@ -13,6 +13,12 @@ Two roles are currently available:
 
 Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by ` [...] ` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
+### Sign-in protection
+
+Repeated failed sign-ins lock that username for a fixed period (`AUTH_LOGIN_MAX_FAILURES`, default `5`; `AUTH_LOGIN_LOCKOUT_SECONDS`, default `300`). The counter is stored in the authentication database, is keyed by the case-folded username, and applies equally to usernames that do not exist, so the response never reveals whether an account exists. A locked username receives HTTP 429 with a `Retry-After` header, and the sign-in form says how many minutes to wait; this response is identical for existing and unknown usernames, and the correct password is also refused until the lock expires. A successful sign-in clears the counter. The lock is per username, not per IP address, so someone who knows a username can lock that account out for the lockout period.
+
+Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=true` only when browsers reach DerridAI through an HTTPS reverse proxy; leave it `false` (the default) for plain-HTTP local or Docker use, or browsers will not send the cookie.
+
 Browser workspace persistence is isolated for researcher accounts so a researcher using the same browser profile does not inherit an administrator's loaded JSONL tabs, provider credentials, or other IndexedDB workspace state. Full backups include the logical user database (roles and password hashes, but not active session tokens), so backup ZIPs should be treated as credential-sensitive.
 
 ## Dashboard
@@ -47,6 +53,8 @@ The `needs_review` historical chart reconstructs prior state from the current re
 ## Background operations
 
 Background operations are managed from Dashboard and also appear as stacked operation toasts.
+
+The operations panel floats at the bottom-right of the page. Minimize it to a small "Show operations" pill; while it is shown the page keeps extra scroll room beneath the content so it never permanently covers controls. Progress for a PDF corpus build is shown as "N% overall" because its overall progress blends several stages and has no meaningful item count. The Corpus Builder's metadata card shows its real count as "settled / total tasks".
 
 Supported operation types:
 
@@ -365,6 +373,18 @@ Back to JSONL:
 
 Export removes Chroma's internal `_chroma_id` field.
 
+## Corpus Builder metadata population
+
+The LLM returns each metadata field (or `null` when unsupported) together with a per-field confidence. The response schema requires every field, so a model cannot return confidence assessments without values.
+
+- A schema-valid value above the profile's confidence threshold (65% by default) is written to the record and marked **auto-populated**.
+- A value at or below the threshold, or with no reported confidence, is kept as a `proposed_value` suggestion and marked unresolved.
+- Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
+- If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
+- Reviewer-confirmed values are never overwritten by later enrichment.
+
+Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
+
 ## PDF Explorer
 
 PDF Explorer reads embedded PDF title/author metadata when available and presents the loaded PDF as a source → work → record relationship rather than as an isolated document viewer.
@@ -393,6 +413,10 @@ It supports:
 LLM page-to-record matching pre-ranks candidate records by PDF title/work overlap, page ranges, existing PDF links, and page/record text overlap before asking the selected provider to adjudicate the best match.
 
 Image-only PDFs still require an external OCR/vision workflow; DerridAI does not fabricate text when a page has no extractable text layer.
+
+## Empty states and shortcuts
+
+When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms).
 
 ## RAG Research
 

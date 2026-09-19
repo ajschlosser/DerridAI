@@ -38,6 +38,7 @@ const columnWidths=reactive<Record<string,number>>(loadColumnWidths());
 let localSearchTimer=0;
 let recentTimer=0;
 let redirectedForDatabase=false;
+const noDatabase=ref(false);
 
 const scope=computed<SearchScope>(()=>snapshot.value?.scope||"loaded");
 const databaseMode=computed(()=>scope.value==="database");
@@ -80,6 +81,11 @@ async function load(options:{refresh?:boolean;autoRun?:boolean}={}){
     if(!newFilterField.value||!next.filter_fields.some(field=>field.key===newFilterField.value))newFilterField.value=next.filter_fields[0]?.key||"work";
     shell.sync();
     const mustCreateDatabase=!next.has_database&&(next.scope==="database"||!next.has_loaded_records);
+    // With nothing to search anywhere, explain that in place instead of
+    // toasting and opening an unrelated dialog. A database-scoped search that
+    // still has loaded records keeps the guided redirect.
+    noDatabase.value=!next.has_database&&!next.has_loaded_records;
+    if(noDatabase.value)return;
     if(mustCreateDatabase&&next.capabilities.can_manage_database&&!redirectedForDatabase){redirectedForDatabase=true;runtime.notifyToast(i18n.t("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});runtime.openDatabaseCreationFromResearch();return}
     redirectedForDatabase=false;
   }catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{loading.value=false}
@@ -178,6 +184,7 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
   <main class="vue-native-page search-native-page" :aria-busy="loading" aria-labelledby="search-page-title">
     <div v-if="loading&&!snapshot" class="search-page-loading" role="status"><span class="spinner"></span>{{i18n.t('search.loading','Loading Search workspace…')}}</div>
     <section v-else-if="error" class="search-page-error"><h1>{{i18n.t('search.load_failed','Could not load Search')}}</h1><p>{{error}}</p><button type="button" class="btn" @click="load()">{{i18n.t('ui.retry','Retry')}}</button></section>
+    <AccessibleEmptyState v-else-if="noDatabase" icon="database" :title="i18n.t('search.nothing_to_search_title','Search needs something to search')" :description="snapshot?.capabilities.can_manage_database?i18n.t('search.nothing_to_search_help','Open a JSONL workspace or create a corpus collection, then search across your works, metadata, and annotations.'):i18n.t('search.empty_state_denied','Ask an administrator to configure a corpus database or grant you access.')" :action-label="snapshot?.capabilities.can_manage_database?i18n.t('search.empty_state_action','Create a collection'):''" @action="runtime.openDatabaseCreationFromResearch()"/>
     <template v-else-if="snapshot">
       <SearchWorkspaceHeader
         :scope="snapshot.scope"

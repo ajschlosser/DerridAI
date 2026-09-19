@@ -96,7 +96,14 @@ function goBreadcrumbForward(){
   }
   runtime.triggerForward();
 }
+// Operations is a panel shown over the dashboard, not a route, so track it
+// here to highlight the right nav item instead of "Home".
+const operationsActive=ref(false);
+// Navigating to Operations itself changes the route, so re-derive from whether the
+// panel is actually on screen after the new route settles.
+watch(()=>route.fullPath,()=>{window.setTimeout(()=>{operationsActive.value=Boolean(document.querySelector("#operationsPanel"))},250)});
 function navigate(view:string){
+  operationsActive.value=view==="operations";
   // Do not gate Research from the shell's cached database snapshot. ResearchView
   // refreshes the authoritative store list before deciding whether a redirect is
   // needed. This avoids a false “create a database” redirect immediately after
@@ -108,7 +115,7 @@ function navigate(view:string){
   nativeBackPath.value=null;nativeForwardPath.value=null;
   runtime.navigateView(view)
 }
-function isNavActive(item:ShellNavItem){if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
+function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="home")return false;if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
 function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function openHelp(){runtime.navigateView("faq")}
@@ -189,7 +196,7 @@ watch(()=>auth.user?.id,(id)=>{
       <div class="shell-brand-row"><button class="shell-brand-button" :title="i18n.t('nav.home','Home')" :aria-label="i18n.t('nav.home','Home')" @click="navigate('home')"><BrandMark :size="s.sidebarCollapsed?34:46" compact /><span v-if="!s.sidebarCollapsed" class="shell-brand-word">DerridAI</span></button><button class="sidebar-toggle" :title="s.sidebarCollapsed?i18n.t('ui.expand_sidebar','Expand sidebar'):i18n.t('ui.collapse_sidebar','Collapse sidebar')" @click="runtime.toggleSidebar()">{{s.sidebarCollapsed?'→':'←'}}</button></div>
       <nav class="side-nav shell-primary-nav" :aria-label="i18n.t('ui.primary_navigation','Primary navigation')">
         <span v-for="item in primaryNav" :key="item.id" class="nav-tooltip-wrap" :data-tooltip="item.disabledReason||''"><button :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></span>
-        <button v-if="auth.isAdmin" :title="i18n.t('ui.operations','Operations')" @click="navigate('operations')"><AppIcon name="history"/><span>{{i18n.t('ui.operations','Operations')}}</span></button>
+        <button v-if="auth.isAdmin" :class="{active:operationsActive}" :title="i18n.t('ui.operations','Operations')" @click="navigate('operations')"><AppIcon name="history"/><span>{{i18n.t('ui.operations','Operations')}}</span></button>
       </nav>
       <details v-if="utilityNav.length&&!s.sidebarCollapsed" class="shell-more-tools" :open="moreToolsOpen" @toggle="onMoreToolsToggle"><summary><span>{{i18n.t('nav.more_tools','More tools')}}</span><span>⌄</span></summary><div class="shell-more-tools-list"><button v-for="item in utilityNav" :key="item.id" :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></div></details>
       <div class="sidebar-spacer"></div>

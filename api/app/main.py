@@ -262,6 +262,19 @@ def auth_bootstrap(body: AuthBootstrapRequest, response: Response):
 
 @app.post("/api/auth/login")
 def auth_login(body: AuthLoginRequest, response: Response):
+    retry_after = auth_store.login_lockout_remaining(body.username)
+    if retry_after > 0:
+        # Locked usernames are reported identically whether or not the account
+        # exists, because unknown usernames are throttled with the same counter.
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": "Too many failed sign-in attempts. Try again later.",
+                "code": "login_locked",
+                "retry_after_seconds": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
     user = auth_store.authenticate(body.username, body.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password.")

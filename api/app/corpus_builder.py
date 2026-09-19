@@ -478,19 +478,21 @@ class CompactReconciliationResponseModel(BaseModel):
 
 
 class DiscourseMetadataModel(BaseModel):
+    # Every field is required (null when unsupported). Optional fields let
+    # schema-constrained decoders omit them, which small models do routinely.
     model_config = ConfigDict(extra="forbid")
-    language: str | None = None
-    region_type: Literal["front_matter", "main_text", "notes", "bibliography", "index", "appendix", "back_matter", "paratext", "unknown"] | None = None
-    region_author: str | None = None
-    primary_text: bool | None = None
-    speaker: str | None = None
-    position_holder: str | None = None
-    target: str | None = None
-    discourse_role: Literal["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary", "paratext", "bibliographic"] | None = None
-    proposition_status: str | None = None
-    semantic_function: list[str] = Field(default_factory=list, max_length=12)
-    stance: str | None = None
-    claim_scope: str | None = None
+    language: str | None
+    region_type: Literal["front_matter", "main_text", "notes", "bibliography", "index", "appendix", "back_matter", "paratext", "unknown"] | None
+    region_author: str | None
+    primary_text: bool | None
+    speaker: str | None
+    position_holder: str | None
+    target: str | None
+    discourse_role: Literal["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary", "paratext", "bibliographic"] | None
+    proposition_status: str | None
+    semantic_function: list[str] = Field(max_length=12)
+    stance: str | None
+    claim_scope: str | None
 
 
 class RecordFieldAssessmentModel(BaseModel):
@@ -504,7 +506,8 @@ class RecordFieldAssessmentModel(BaseModel):
 
 class DiscourseMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    metadata: DiscourseMetadataModel = Field(default_factory=DiscourseMetadataModel)
+    # Required so schema-constrained decoding cannot return assessments alone.
+    metadata: DiscourseMetadataModel
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
     field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
@@ -512,19 +515,20 @@ class DiscourseMetadataResponseModel(BaseModel):
 
 class QuotationMetadataModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    is_direct_quote: bool | None = None
-    quoted_speaker: list[str] = Field(default_factory=list, max_length=12)
-    quoted_author: list[str] = Field(default_factory=list, max_length=12)
-    quoted_work: list[str] = Field(default_factory=list, max_length=12)
-    quoted_position_holder: list[str] = Field(default_factory=list, max_length=12)
-    quoted_addressee: list[str] = Field(default_factory=list, max_length=12)
-    quoted_referent: list[str] = Field(default_factory=list, max_length=12)
-    quotation_chain: list[str] = Field(default_factory=list, max_length=16)
+    is_direct_quote: bool | None
+    quoted_speaker: list[str] = Field(max_length=12)
+    quoted_author: list[str] = Field(max_length=12)
+    quoted_work: list[str] = Field(max_length=12)
+    quoted_position_holder: list[str] = Field(max_length=12)
+    quoted_addressee: list[str] = Field(max_length=12)
+    quoted_referent: list[str] = Field(max_length=12)
+    quotation_chain: list[str] = Field(max_length=16)
 
 
 class QuotationMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    metadata: QuotationMetadataModel = Field(default_factory=QuotationMetadataModel)
+    # Required so schema-constrained decoding cannot return assessments alone.
+    metadata: QuotationMetadataModel
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
     field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
@@ -532,10 +536,10 @@ class QuotationMetadataResponseModel(BaseModel):
 
 class IndexMetadataModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    topics: list[str] = Field(default_factory=list, max_length=24)
-    concepts: list[str] = Field(default_factory=list, max_length=24)
-    persons: list[str] = Field(default_factory=list, max_length=24)
-    works_referenced: list[str] = Field(default_factory=list, max_length=24)
+    topics: list[str] = Field(max_length=24)
+    concepts: list[str] = Field(max_length=24)
+    persons: list[str] = Field(max_length=24)
+    works_referenced: list[str] = Field(max_length=24)
 
 
 class TextTouchupResponseModel(BaseModel):
@@ -547,7 +551,8 @@ class TextTouchupResponseModel(BaseModel):
 
 class IndexMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    metadata: IndexMetadataModel = Field(default_factory=IndexMetadataModel)
+    # Required so schema-constrained decoding cannot return assessments alone.
+    metadata: IndexMetadataModel
     field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
     review_reason: str = Field(default="", max_length=1000)
 
@@ -4258,6 +4263,15 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # proposal below the profile threshold is routed to the human
                 # exception queue even when the model forgot to set needs_review.
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
+            elif value in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and confidence is not None and confidence > minimum and not needs_human:
+                # A confident assessment with no value cannot be shown as an
+                # inference: there is nothing to display, populate, or cite. Keep it
+                # in the review queue (one click confirms a genuine absence).
+                field_status[field] = {
+                    "status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False,
+                    "proposed_value": None, "reason_code": "no_value_returned",
+                    "reason": f"The model reported {round(confidence * 100)}% confidence but returned no value. {reason}".strip(),
+                }
             elif needs_human or (value not in (None, "", []) and field in EVIDENCE_REQUIRED_FIELDS and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
                 field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
             else:

@@ -385,6 +385,23 @@ class AuthStore:
         seconds = max(1, int(getattr(settings, "auth_login_lockout_seconds", 300)))
         return limit, seconds
 
+    def login_lockout_remaining(self, username: str) -> int:
+        """Whole seconds until this username may try again, or 0 when not locked.
+
+        Keyed exactly like the failure counter, so a username that does not exist
+        is reported the same way as one that does.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT locked_until FROM login_failures WHERE username_key=?",
+                (self._login_key(username),),
+            ).fetchone()
+        locked_until = self._parse_auth_time(str(row["locked_until"]) if row and row["locked_until"] else None)
+        if locked_until is None:
+            return 0
+        remaining = (locked_until - datetime.now(timezone.utc)).total_seconds()
+        return int(remaining) + 1 if remaining > 0 else 0
+
     def authenticate(self, username: str, password: str) -> AuthUser | None:
         username_clean = username.strip()
         username_key = self._login_key(username_clean)
