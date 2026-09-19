@@ -78,8 +78,9 @@ def test_retry_ui_hides_blocked_action_while_build_is_running_and_syncs_rail():
     builder = text("web/src/components/PdfCorpusBuilder.vue")
     api = text("web/src/api/pdfCorpus.ts")
     assert "retrying_segmentation?: boolean" in api
-    assert "const segmentationNeedsReview=computed" in builder
-    assert "const retryingSegmentation=computed(()=>Boolean(buildRunning.value" in builder
+    lifecycle = text("web/src/composables/useCorpusBuildLifecycle.ts")
+    assert "const segmentationNeedsReview=computed" in lifecycle
+    assert "const retryingSegmentation=computed(()=>Boolean(buildRunning.value" in lifecycle
     assert 'v-if="retryingSegmentation"' in builder
     assert 'v-if="segmentationNeedsReview&&(!showReviewWorkspace||finishPhase)"' in builder
     assert "boundary decision(s) to review" in text("web/src/components/CorpusBuildProgress.vue")

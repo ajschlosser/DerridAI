@@ -209,7 +209,7 @@ def test_review_ui_is_exception_oriented_and_collaborative_during_enrichment():
     assert "CorpusMetadataLiveStatus" in ui
     assert "collaborative_review_settled" not in ui
     assert "textDraftKey" in ui
-    assert "structuralReviewLocked=computed(()=>buildRunning.value)" in ui
+    assert "structuralReviewLocked=computed(()=>buildRunning.value)" in text("web/src/composables/useCorpusBuildLifecycle.ts")
     assert "review-readonly-banner" in ui
     assert "metadataDecision" in ui and "reviewDecision" in api
     assert 'reviewQueue.value="ready"' not in ui[ui.index("async function resolveMetadataField"):ui.index("function showMetadataSource")]

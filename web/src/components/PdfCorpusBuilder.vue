@@ -44,6 +44,8 @@ import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
+import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
+import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -74,7 +76,6 @@ const reviewQueue=ref<ReviewQueue>("all");
 const reviewQueueCollapsed=ref(false);
 const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
 const reviewWorkspaceMode=ref<"record"|"metadata"|"source">("record");
-const reviewQueueCounts=computed(()=>currentBuild.value?.review_queue_counts||{});
 const recordQuery=ref("");
 const selectedReviewIds=ref<Set<string>>(new Set());
 const selectedReviewCount=computed(()=>selectedReviewIds.value.size);
@@ -137,6 +138,7 @@ const enrichmentMode=ref<"fast"|"deep">("fast");
 const semanticIndexing=ref(true);
 const autoCleanText=ref(true);
 const metadataRerunFamily=ref<"all"|"discourse"|"quotation"|"indexing">("all");
+const { reviewQueueCounts, pendingCount, issueCount, readyCount, topologyIssueCount, buildRunning, reviewLocked, structuralReviewLocked, canResume, segmentationNeedsReview, retryingSegmentation, canRetryMetadata, metadataIssueCount, metadataFieldIssueCount, metadataRetryRunning, awaitingManifestReview, hasRecordTopology, showBuildConfiguration, finishPhase, showReviewWorkspace } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue);
 let pollTimer:number|undefined;
 const DRAFT_KEY="derridai.pdf-corpus-builder.draft.v2";
 function restoreBuilderDraft(){
@@ -163,20 +165,6 @@ function persistBuilderDraft(){
 }
 function metadataDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`}
 function textDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`}
-function recordIssueKinds(record:CorpusRecord){
-  if(Array.isArray(record.review_issue_codes))return record.review_issue_codes.filter(code=>["source","metadata","topology"].includes(String(code)));
-  const issues:string[]=[];
-  if(record.source_quality_issues?.length)issues.push("source");
-  if((record.metadata_incomplete_fields||[]).length||(record.metadata_review_fields||[]).length)issues.push("metadata");
-  const reason=String(record.review_reason||"").toLowerCase();
-  if(record.needs_review&&["boundary","merge","split","topology"].some(token=>reason.includes(token)))issues.push("topology");
-  return issues;
-}
-function recordState(record:CorpusRecord){
-  const authoritative=String(record.review_state||"");
-  if(["ready","metadata","topology","source","accepted","rejected"].includes(authoritative))return authoritative;
-  if(record.accepted)return "accepted";if(record.rejected)return "rejected";const issues=recordIssueKinds(record);return issues[0]||"ready"
-}
 function recordStateLabel(record:CorpusRecord){const state=recordState(record);return i18n.t(`pdf_corpus.record_state.${state}`,state==="ready"?"Ready":state.replace(/_/g," "))}
 
 
@@ -208,12 +196,6 @@ const canPublish=computed(()=>Boolean(currentBuild.value?.publication_readiness?
 const selectedRecordIndex=computed(()=>records.value.findIndex(row=>row.record_id===selectedRecordId.value));
 const canMergePrevious=computed(()=>{const topo=Number(selectedRecord.value?.topology_index??-1);return topo>=0?topo>0:(recordOffset.value+Math.max(0,selectedRecordIndex.value))>0});
 const canMergeNext=computed(()=>{const index=Number(selectedRecord.value?.topology_index??-1),total=Number(selectedRecord.value?.topology_count??recordTotal.value);if(index>=0&&total>0)return index<total-1;const globalIndex=recordOffset.value+selectedRecordIndex.value;return globalIndex>=0&&globalIndex<recordTotal.value-1});
-const reviewRemaining=computed(()=>Math.max(0,Number(currentBuild.value?.record_count||0)-Number(currentBuild.value?.accepted_count||0)-Number(currentBuild.value?.rejected_count||0)));
-const pendingCount=computed(()=>Number(reviewQueueCounts.value.pending??reviewRemaining.value));
-const issueCount=computed(()=>Number(reviewQueueCounts.value.issues??currentBuild.value?.needs_review_count??0));
-const readyCount=computed(()=>Number(reviewQueueCounts.value.ready??Math.max(0,pendingCount.value-issueCount.value)));
-const topologyIssueCount=computed(()=>Number(reviewQueueCounts.value.topology??0));
-const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
 const activeBuilds=computed(()=>builds.value.filter(build=>["queued","running"].includes(String(build.status||""))));
 const activeBuildCount=computed(()=>activeBuilds.value.length);
 const selectedProfileActiveBuildCount=computed(()=>selectedProviderId.value?activeBuilds.value.filter(build=>String(build.request?.provider_profile_id||"")===selectedProviderId.value).length:0);
@@ -223,22 +205,10 @@ const canStartConcurrentBuild=computed(()=>Boolean(selectedAsset.value&&contextS
 const llmContribution=computed(()=>currentBuild.value?.llm_contribution||{});
 const transientNetworkError=computed(()=>Boolean(buildRunning.value&&/networkerror|failed to fetch|network error/i.test(error.value)));
 const displayError=computed(()=>transientNetworkError.value?i18n.t("pdf_corpus.status_refresh_failed","Status refresh failed. The build may still be running; DerridAI will retry automatically."):error.value);
-const reviewLocked=computed(()=>Boolean(buildRunning.value&&!['enriching','metadata_retry'].includes(String(currentBuild.value?.stage||''))));
-const structuralReviewLocked=computed(()=>buildRunning.value);
-const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
-const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
-const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
-const canRetryMetadata=computed(()=>Boolean(currentBuild.value && !currentBuild.value.publication && !buildRunning.value && Number(currentBuild.value.metadata_issue_summary?.auto_retry_fields||0)>0));
-const metadataIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.records_incomplete ?? 0));
-const metadataFieldIssueCount=computed(()=>Number(currentBuild.value?.metadata_issue_summary?.fields_unresolved ?? 0));
-const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const metadataEnrichedCount=computed(()=>Number(currentBuild.value?.metadata_enriched_count||0));
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const metadataEnrichmentTotal=computed(()=>Number(currentBuild.value?.metadata_enrichment_total||currentBuild.value?.record_count||0));
-const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
-const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
-const showBuildConfiguration=computed(()=>!currentBuild.value || (!buildRunning.value && !hasRecordTopology.value));
 const activeProviderProfileLabel=computed<string>(()=>{
   const build=currentBuild.value;
   if(!build)return "—";
@@ -267,9 +237,6 @@ const metadataKnownValues=computed<Record<string,string[]>>(()=>{const out:Recor
 const selectedMetadataBlocked=computed(()=>Boolean((selectedRecord.value?.metadata_review_fields||[]).length||(selectedRecord.value?.metadata_incomplete_fields||[]).length));
 const selectedMetadataBlockingFields=computed(()=>Array.from(new Set([...(selectedRecord.value?.metadata_incomplete_fields||[]),...(selectedRecord.value?.metadata_review_fields||[])])));
 const selectedMetadataBlockingLabel=computed(()=>selectedMetadataBlockingFields.value.map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", "));
-const reviewComplete=computed(()=>Boolean(currentBuild.value&&Number(currentBuild.value.record_count||0)>0&&reviewRemaining.value===0));
-const finishPhase=computed(()=>Boolean(currentBuild.value&&(reviewComplete.value||currentBuild.value.publication)));
-const showReviewWorkspace=computed(()=>Boolean(hasRecordTopology.value&&(!finishPhase.value||reviewQueue.value==="metadata"||reviewQueue.value==="rejected")));
 const selectedProfileModel=computed(()=>String(selectedProfile.value?.model||""));
 const profileGeneration=computed<Record<string,unknown>>(()=>{
   if(!selectedProviderId.value)return {};
