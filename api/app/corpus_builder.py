@@ -2284,6 +2284,7 @@ class PdfCorpusBuildManager:
 
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         metadata = asset.get("metadata") or {}
+        reviewed_layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) and asset.get("document_layout", {}).get("confirmed_by") == "human" else {}
         # Sample the whole document rather than assuming the front matter is
         # representative. Headings plus front/middle/end blocks reveal later
         # section transitions, notes and bibliographic regions without sending a
@@ -2324,6 +2325,7 @@ Use only evidence in the supplied PDF metadata and source blocks. Use null when 
 
 PDF metadata: {json.dumps(metadata, ensure_ascii=False)}
 Filename: {asset.get('filename')}
+Reviewer-confirmed document structure (authoritative where present): {json.dumps(reviewed_layout, ensure_ascii=False)}
 Strategic whole-document sample:
 {sample_text}
 
@@ -2347,6 +2349,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # Human-confirmed document structure outranks LLM page-range inference.
+        if reviewed_layout:
+            layout_start = reviewed_layout.get("main_text_pdf_start")
+            bibliography_start = reviewed_layout.get("bibliography_pdf_start")
+            if isinstance(layout_start, int):
+                result["main_text_start_page"] = layout_start
+            if isinstance(bibliography_start, int) and bibliography_start > 1:
+                result["main_text_end_page"] = bibliography_start - 1
         result["pdf_metadata"] = metadata
         result["source_asset_id"] = asset["asset_id"]
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
@@ -3712,13 +3722,17 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             inside = min(pdf_pages) >= start_page and (not isinstance(end_page, int) or max(pdf_pages) <= end_page)
             primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
             region_status = field_status.get("region_type") if isinstance(field_status.get("region_type"), dict) else {}
-            if primary_status.get("status") not in {"human_confirmed", "human_override"}:
+            primary_method = str(primary_status.get("method") or "")
+            region_method = str(region_status.get("method") or "")
+            primary_structure_owned = primary_method in STRONG_STRUCTURAL_METHODS
+            region_structure_owned = region_method in STRONG_STRUCTURAL_METHODS
+            if primary_status.get("status") not in {"human_confirmed", "human_override"} and not primary_structure_owned:
                 record["primary_text"] = inside
                 field_status["primary_text"] = {
                     "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
                     "reason": "Classified from the reviewed document main-text page range.",
                 }
-            if region_status.get("status") not in {"human_confirmed", "human_override"}:
+            if region_status.get("status") not in {"human_confirmed", "human_override"} and not region_structure_owned:
                 if inside:
                     inferred_region = "main_text"
                     region_reason = "Record lies entirely inside the reviewed main-text page range."
