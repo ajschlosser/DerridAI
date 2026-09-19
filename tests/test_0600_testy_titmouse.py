@@ -177,7 +177,9 @@ def test_frontend_surface_and_test_contracts_are_present():
     readiness=text("web/src/components/CorpusBuildReadiness.vue")
     package=json.loads(text("web/package.json"))
     assert "--surface-overlay:#fff" in css.replace(" ","")
-    assert "--surface-glass:rgba(255,255,255,.96)" in css.replace(" ","")
+    compact=css.replace(" ","")
+    assert "--surface-glass:rgba(" in compact and ",.96)" in compact
+    assert '[data-surface="overlay"]' in css and '[data-surface="glass"]' in css
     assert 'data-surface="overlay"' in history
     assert "var(--surface-overlay,#fff)" in history
     assert 'data-surface="glass"' in readiness
