@@ -15,6 +15,16 @@ from typing import Any
 import chromadb
 import httpx
 
+from .chroma_connection import (
+    DEFAULT_DATABASE,
+    DEFAULT_HTTP_URL,
+    DEFAULT_TENANT,
+    connection_identity,
+    http_client_kwargs,
+    normalize_mode,
+    parse_http_endpoint,
+    public_http_config,
+)
 from .config import APP_VERSION, settings
 
 
@@ -225,6 +235,13 @@ class ChromaStore:
         self._client = None
         self._data_root = Path(settings.chroma_data_root).expanduser().resolve()
         self._path = str(self._normalize_path(settings.chroma_path))
+        self._mode = normalize_mode(settings.chroma_mode)
+        self._http: dict[str, Any] = {
+            "url": str(settings.chroma_base_url or DEFAULT_HTTP_URL).rstrip("/"),
+            "token": str(settings.chroma_token or ""),
+            "tenant": str(settings.chroma_tenant or DEFAULT_TENANT),
+            "database": str(settings.chroma_database or DEFAULT_DATABASE),
+        }
         self.embeddings = Embeddings()
 
     def _normalize_path(self, path: str) -> Path:
@@ -250,50 +267,240 @@ class ChromaStore:
         return self._path
 
     @property
+    def mode(self) -> str:
+        return getattr(self, "_mode", "embedded")
+
+    def _http_display(self) -> str:
+        http = getattr(self, "_http", {}) or {}
+        try:
+            return str(parse_http_endpoint(str(http.get("url") or DEFAULT_HTTP_URL))["display"])
+        except ValueError:
+            return str(http.get("url") or "")
+
+    @property
     def client(self):
         if self._client is None:
-            target = Path(self._path).expanduser()
-            target.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(target))
+            self._client = self._open_client()
         return self._client
 
-    def set_path(self, path: str) -> dict[str, Any]:
-        target = self._normalize_path(path)
+    def _open_client(self):
+        if self.mode == "http":
+            return self._open_http_client(getattr(self, "_http", {}) or {})
+        target = Path(self._path).expanduser()
         target.mkdir(parents=True, exist_ok=True)
+        return chromadb.PersistentClient(path=str(target))
 
-        probe = target / ".derridai-write-test"
-        try:
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink()
-        except OSError as exc:
-            raise ValueError(f"Chroma path is not writable: {target}: {exc}") from exc
+    def _open_http_client(self, http: dict[str, Any]):
+        kwargs: dict[str, Any] = http_client_kwargs(str(http.get("url") or DEFAULT_HTTP_URL))
+        token = str(http.get("token") or "").strip()
+        if token:
+            kwargs["headers"] = {"Authorization": f"Bearer {token}"}
+        tenant = str(http.get("tenant") or "").strip()
+        database = str(http.get("database") or "").strip()
+        if tenant:
+            kwargs["tenant"] = tenant
+        if database:
+            kwargs["database"] = database
+        return chromadb.HttpClient(**kwargs)
 
-        client = chromadb.PersistentClient(path=str(target))
-        client.list_collections()
-        self._path = str(target)
-        self._client = client
-        return self.health()
+    def _probe_client(self, client) -> dict[str, Any]:
+        heartbeat_ok = False
+        version = getattr(chromadb, "__version__", None)
+        if hasattr(client, "heartbeat"):
+            client.heartbeat()
+            heartbeat_ok = True
+        if hasattr(client, "get_version"):
+            try:
+                version = client.get_version() or version
+            except Exception:
+                pass
+        collections = client.list_collections()
+        if not heartbeat_ok:
+            heartbeat_ok = True
+        return {
+            "heartbeat_ok": heartbeat_ok,
+            "chroma_version": str(version) if version else None,
+            "collection_count": len(collections),
+        }
+
+    def set_path(self, path: str) -> dict[str, Any]:
+        if self.mode != "embedded":
+            raise ValueError(
+                "A filesystem path is only used in embedded mode. "
+                "Switch the Chroma backend to embedded storage first."
+            )
+        return self.set_connection(mode="embedded", path=path)
+
+    def probe_connection(
+        self,
+        *,
+        mode: str,
+        path: str | None = None,
+        url: str | None = None,
+        token: str | None = None,
+        tenant: str | None = None,
+        database: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate a backend without replacing the live client."""
+        return self._connect(
+            mode=mode,
+            path=path,
+            url=url,
+            token=token,
+            tenant=tenant,
+            database=database,
+            commit=False,
+        )
+
+    def set_connection(
+        self,
+        *,
+        mode: str,
+        path: str | None = None,
+        url: str | None = None,
+        token: str | None = None,
+        tenant: str | None = None,
+        database: str | None = None,
+    ) -> dict[str, Any]:
+        """Probe then adopt a backend. Collections are not migrated."""
+        return self._connect(
+            mode=mode,
+            path=path,
+            url=url,
+            token=token,
+            tenant=tenant,
+            database=database,
+            commit=True,
+        )
+
+    def _connect(
+        self,
+        *,
+        mode: str,
+        path: str | None,
+        url: str | None,
+        token: str | None,
+        tenant: str | None,
+        database: str | None,
+        commit: bool,
+    ) -> dict[str, Any]:
+        normalized = normalize_mode(mode)
+        current_http = dict(getattr(self, "_http", {}) or {})
+        if normalized == "embedded":
+            target = self._normalize_path(path or self._path)
+            if (
+                not commit
+                and self.mode == "embedded"
+                and str(target) == self._path
+                and self._client is not None
+            ):
+                probed = self._probe_client(self._client)
+                return self._health_from(
+                    mode="embedded",
+                    path=str(target),
+                    probed=probed,
+                    error=None,
+                )
+            target.mkdir(parents=True, exist_ok=True)
+            probe = target / ".derridai-write-test"
+            try:
+                probe.write_text("ok", encoding="utf-8")
+                probe.unlink()
+            except OSError as exc:
+                raise ValueError(f"Chroma path is not writable: {target}: {exc}") from exc
+            client = chromadb.PersistentClient(path=str(target))
+            probed = self._probe_client(client)
+            if commit:
+                self._mode = "embedded"
+                self._path = str(target)
+                self._client = client
+            return self.health() if commit else self._health_from(
+                mode="embedded",
+                path=str(target),
+                probed=probed,
+                error=None,
+            )
+
+        next_http = {
+            "url": str(url or current_http.get("url") or DEFAULT_HTTP_URL).rstrip("/"),
+            "token": current_http.get("token") if token is None else str(token),
+            "tenant": str(tenant or current_http.get("tenant") or DEFAULT_TENANT).strip()
+            or DEFAULT_TENANT,
+            "database": str(
+                database or current_http.get("database") or DEFAULT_DATABASE
+            ).strip()
+            or DEFAULT_DATABASE,
+        }
+        client = self._open_http_client(next_http)
+        probed = self._probe_client(client)
+        if commit:
+            self._mode = "http"
+            self._http = next_http
+            self._client = client
+        return self.health() if commit else self._health_from(
+            mode="http",
+            path=None,
+            http=next_http,
+            probed=probed,
+            error=None,
+        )
+
+    def _health_from(
+        self,
+        *,
+        mode: str,
+        path: str | None,
+        probed: dict[str, Any] | None = None,
+        http: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        probed = probed or {}
+        http_public = public_http_config(http if mode == "http" else None)
+        host_hint = self._host_path_hint(Path(path)) if mode == "embedded" and path else None
+        identity = connection_identity(
+            mode=mode,
+            path=path,
+            host_path_hint=host_hint,
+            url=http_public.get("url"),
+            tenant=http_public.get("tenant"),
+            database=http_public.get("database"),
+        )
+        return {
+            "available": error is None,
+            "mode": mode,
+            "path": path if mode == "embedded" else None,
+            "host_path_hint": host_hint,
+            "data_root": str(self._data_root),
+            "url": http_public.get("url") if mode == "http" else None,
+            "tenant": http_public.get("tenant") if mode == "http" else None,
+            "database": http_public.get("database") if mode == "http" else None,
+            "token_configured": bool(http_public.get("token_configured")) if mode == "http" else False,
+            "writable": error is None,
+            "heartbeat_ok": bool(probed.get("heartbeat_ok")) if error is None else False,
+            "chroma_version": probed.get("chroma_version"),
+            "collection_count": probed.get("collection_count"),
+            "identity": identity,
+            "error": error,
+        }
 
     def health(self) -> dict[str, Any]:
+        mode = self.mode
         try:
-            self.client.list_collections()
-            return {
-                "available": True,
-                "path": self._path,
-                "host_path_hint": self._host_path_hint(),
-                "data_root": str(self._data_root),
-                "writable": True,
-                "error": None,
-            }
+            probed = self._probe_client(self.client)
+            return self._health_from(
+                mode=mode,
+                path=self._path if mode == "embedded" else None,
+                http=getattr(self, "_http", None),
+                probed=probed,
+                error=None,
+            )
         except Exception as exc:
-            return {
-                "available": False,
-                "path": self._path,
-                "host_path_hint": self._host_path_hint(),
-                "data_root": str(self._data_root),
-                "writable": False,
-                "error": str(exc),
-            }
+            return self._health_from(
+                mode=mode,
+                path=self._path if mode == "embedded" else None,
+                http=getattr(self, "_http", None),
+                error=str(exc),
+            )
 
     @staticmethod
     def _iso_now() -> str:
@@ -2032,6 +2239,7 @@ class ChromaStore:
 
     def nuke(self) -> dict[str, Any]:
         names: list[str] = []
+        mode = self.mode
         try:
             names = [
                 collection.name if hasattr(collection, "name") else str(collection)
@@ -2039,12 +2247,24 @@ class ChromaStore:
             ]
             for name in names:
                 self.client.delete_collection(name=name)
-        except Exception:
-            # Filesystem wipe below is the authoritative reset. A failed catalog
-            # listing must not leave user collections or sqlite files behind.
-            pass
+        except Exception as exc:
+            # Embedded NUKE still has a filesystem wipe as the authority.
+            # An HTTP server has no local catalog to delete; fail visibly.
+            if mode != "embedded":
+                raise RuntimeError(
+                    f"Could not reset the Chroma server: {exc}"
+                ) from exc
         self._client = None
         gc.collect()
+
+        if mode != "embedded":
+            return {
+                "deleted_collections": len(names),
+                "removed_paths": 0,
+                "mode": mode,
+                "path": None,
+                "url": self._http_display(),
+            }
 
         root = Path(self._path)
         removed_paths = 0
@@ -2065,7 +2285,9 @@ class ChromaStore:
         return {
             "deleted_collections": len(names),
             "removed_paths": removed_paths,
+            "mode": "embedded",
             "path": self._path,
+            "url": None,
         }
 
     def existing_ids(self, store: str, ids: list[str]) -> list[str]:

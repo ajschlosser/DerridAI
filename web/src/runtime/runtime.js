@@ -2164,6 +2164,7 @@ async function upsertRows(rows,labelText="records",{largeSyncConfirmed=false}={}
     state.jobs=[job,...state.jobs.filter(existing=>existing.id!==job.id)];
     syncJobProgressToasts();startJobPolling();
     toast(trf("operations.vector_build_queued","Queued {count} records for background build of {store}",{count:rows.length.toLocaleString(),store}),{tone:"success"});
+    notifyVectorStoresChanged();
     if(state.view==="home")refreshOperationsPanelOnly();
     return true;
   }catch(error){toast(`Could not start vector build: ${error.message}`);return false}
@@ -8252,6 +8253,9 @@ async function renderResearcherVector(main){
   decorateDisabledControls(main);
 }
 
+function notifyVectorStoresChanged(){
+  window.dispatchEvent(new CustomEvent("derridai:vector-stores-changed"));
+}
 function openDatabaseCreationFromResearch(){
   state.vectorAutoCreateRequested=true;
   window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/databases",runtimeView:"vector"}}));
@@ -8325,7 +8329,11 @@ function openCollectionCreationWizard({defaultProvider="ollama",defaultModel="bg
         const rows=selectedRows();close();
         const syncStarted=rows.length?await upsertRows(rows,trf("vector.selected_works_label","{count} selected works",{count:form.selectedWorks.size}),{largeSyncConfirmed:true}):false;
         toast(rows.length&&syncStarted?trf("vector.collection_created_build","Created {name}; background build queued.",{name:form.name}):trf("vector.collection_created","Created {name}",{name:form.name}),{tone:"success"});
-        if(state.view==="vector")renderVector(document.querySelector("#main"));
+        notifyVectorStoresChanged();
+        if(state.view==="vector"){
+          const main=document.querySelector("#main");
+          if(main)renderVector(main);
+        }
       }catch(error){button.disabled=false;button.textContent=tr("vector.create_collection","Create collection");openMessageModal({title:tr("vector.create_failed","Could not create collection"),message:error.message||String(error),tone:"danger"})}
     });
     decorateDisabledControls(dialog);
@@ -10876,6 +10884,12 @@ export {
   dbUnavailableReason,
   hasCorpusDb,
   openDatabaseCreationFromResearch,
+  notifyVectorStoresChanged,
+  openCollectionCreationWizard,
+  upsertRows,
+  exportStoreJsonl,
+  persistPrefs,
+  pendingUpsertRows,
   decorateDisabledControls,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,

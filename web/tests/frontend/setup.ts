@@ -1,6 +1,21 @@
 import { afterEach, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
+function ensureWebStorage() {
+  if (typeof globalThis.localStorage?.clear === "function") return;
+  const memory = new Map<string, string>();
+  const storage = {
+    getItem(key: string) { return memory.has(key) ? memory.get(key)! : null; },
+    setItem(key: string, value: string) { memory.set(String(key), String(value)); },
+    removeItem(key: string) { memory.delete(String(key)); },
+    clear() { memory.clear(); },
+    key(index: number) { return [...memory.keys()][index] ?? null; },
+    get length() { return memory.size; },
+  } as Storage;
+  Object.defineProperty(globalThis, "localStorage", {value: storage, configurable: true});
+}
+ensureWebStorage();
+
 class TestWorker {
   onmessage: ((event: MessageEvent) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;

@@ -7,7 +7,8 @@ This describes the code as it exists in 0.62.2. For feature behavior see the [Us
 
 - **web** — Vue 3 single-page app built by Vite and served by nginx (`web/nginx.conf`), which proxies `/api/` to the API. Storybook is an opt-in `dev` compose profile.
 - **api** — one FastAPI process (`api/app/main.py`). Background work runs on threads inside this process; there is no external queue or worker service.
-- **LLM backend** — Ollama or an OpenAI-compatible endpoint, reached over HTTP through provider profiles (`llm.py`). Not part of the compose stack.
+- **LLM backend** — Ollama or an OpenAI-compatible endpoint, reached over HTTP through provider profiles (`llm.py`). Optional compose profile `ollama`.
+- **Chroma backend** — embedded `PersistentClient` by default, or `HttpClient` to a running server (optional compose profile `chroma`, or `CHROMA_BASE_URL` like `OLLAMA_BASE_URL`).
 
 ## Backend modules (`api/app/`)
 
@@ -16,7 +17,7 @@ This describes the code as it exists in 0.62.2. For feature behavior see the [Us
 | `main.py` | Routes, auth dependency checks, role enforcement, backup/restore. Large; a router split is a documented follow-up. |
 | `auth.py` | `AuthStore` over SQLite: users, roles/permissions, hashed session tokens, failed-login throttle. PBKDF2 password hashes. |
 | `persistence.py`, `system_store.py` | SQLite repositories for provider profiles, annotations, languages, and the `jobs` table; locale dictionary store. |
-| `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. |
+| `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. Embedded `PersistentClient` or HTTP `HttpClient` (`chroma_connection.py`). |
 | `rag.py` | Retrieval, reranking (cross-encoder with lexical fallback that reports a warning), generation, evidence assembly. |
 | `jobs.py` | In-memory job managers for LLM review, RAG, LLM tools/translation, and Chroma upserts, mirrored to the `jobs` table. |
 | `llm.py`, `llm_tools.py`, `i18n_translation.py`, `content_policy_generation.py`, `bibliography.py` | Provider calls, tool workflows (catalog lookup, grading), locale translation, researcher text-policy generation, bibliographic helpers. |
@@ -34,7 +35,7 @@ All paths derive from `CHROMA_DATA_ROOT` (default `/data`, mounted from `./data`
 
 | Data | Location | Notes |
 | --- | --- | --- |
-| Vector collections, response cache | `CHROMA_PATH` (`/data/chroma`) | ChromaDB `PersistentClient`; one writer per path. |
+| Vector collections, response cache | `CHROMA_PATH` (`/data/chroma`) when `CHROMA_MODE=embedded`; otherwise a Chroma HTTP server (`CHROMA_BASE_URL`) | Embedded: `PersistentClient`, one writer per path. HTTP: `HttpClient` to the compose `chroma` profile or a host-run server. |
 | Users, roles, sessions, login failures | `AUTH_DB_PATH` (SQLite) | Session tokens are stored hashed; the throttle table is keyed by lower-cased username. |
 | Provider profiles, annotations, languages, jobs | `SYSTEM_DB_PATH` (SQLite) | WAL journaling. Created directly; no migrations. |
 | PDF assets, builds, checkpoints, publications | `<CHROMA_DATA_ROOT>/.home/pdf-corpus/{assets,builds,publications}` | JSON/JSONL files written atomically (temp file, `fsync`, `os.replace`). Builds hold `records.jsonl` and `checkpoints/<name>.json`. |
