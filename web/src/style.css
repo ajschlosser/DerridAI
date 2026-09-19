@@ -4789,3 +4789,273 @@ body{font-size:15px;line-height:1.55}
    instead of running underneath the status footer on short viewports. */
 .shell-sidebar>.shell-more-tools{min-height:0;overflow-y:auto}
 .shell-sidebar>.shell-sidebar-footer,.shell-sidebar>.shell-primary-nav{flex:none}
+
+/* Operations dock: bottom-center ambient activity, unmounted when empty. */
+.operation-progress-stack{
+  position:fixed;
+  z-index:11000;
+  left:50%;
+  right:auto;
+  bottom:max(14px, env(safe-area-inset-bottom, 0px));
+  translate:-50% 0;
+  width:min(380px, calc(100vw - 28px));
+  max-height:min(70vh, var(--operation-stack-max-height, 70vh));
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  pointer-events:auto;
+  border:1px solid var(--ref-line);
+  border-radius:16px;
+  background:var(--surface-overlay, #fffdf9);
+  box-shadow:0 10px 32px rgba(15,23,42,.12);
+}
+.operation-progress-stack.user-positioned{
+  right:auto!important;
+  bottom:auto!important;
+  translate:none;
+  max-height:var(--operation-stack-max-height,70vh)!important;
+}
+.operation-progress-stack.is-dragging{
+  translate:none;
+  will-change:transform;
+  transition:none!important;
+  user-select:none;
+  cursor:grabbing;
+}
+.operation-progress-stack.minimized{
+  width:max-content;
+  max-width:min(420px, calc(100vw - 28px));
+  max-height:none;
+  border-radius:999px;
+  background:var(--surface-glass, rgba(255,253,249,.96));
+  overflow:hidden;
+}
+.operation-progress-stack.minimized::after{
+  content:"";
+  display:block;
+  height:3px;
+  width:var(--operation-dock-progress, 0%);
+  max-width:100%;
+  background:var(--ui-accent);
+}
+.operation-progress-stack.minimized[data-tone="danger"]::after,
+.operation-progress-stack.minimized[data-tone="warning"]::after{width:100%}
+.operation-progress-stack.minimized[data-tone="danger"]::after{background:#8a2924}
+.operation-progress-stack.minimized[data-tone="warning"]::after{background:#9b6a00}
+.operation-progress-stack.minimized[data-tone="success"]::after{width:100%;background:#287a4c}
+.operation-stack-toolbar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--ref-line);
+  background:var(--surface-raised, #fffefa);
+  cursor:grab;
+  touch-action:none;
+}
+.operation-progress-stack.minimized .operation-stack-toolbar{
+  border-bottom:0;
+  background:transparent;
+  padding:5px 8px 5px 10px;
+}
+.operation-stack-toolbar.dragging,
+.operation-progress-stack.is-dragging .operation-stack-toolbar{cursor:grabbing}
+.operation-drag-grip{
+  width:12px;
+  height:22px;
+  flex:0 0 auto;
+  border-radius:3px;
+  background-image:radial-gradient(circle, var(--ref-muted, #5b6b80) 1.15px, transparent 1.25px);
+  background-size:6px 6px;
+  background-position:center;
+  opacity:.55;
+}
+.operation-dock-toggle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  flex:1 1 auto;
+  min-height:34px;
+  margin:0;
+  padding:4px 6px;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:var(--ref-text, #17233b);
+  text-align:left;
+  cursor:pointer;
+}
+.operation-dock-toggle:hover{background:var(--ui-accent-soft, #e8f0ec)}
+.operation-dock-copy{
+  display:grid;
+  gap:1px;
+  min-width:0;
+  flex:1 1 auto;
+}
+.operation-dock-title{
+  font-size:.8125rem;
+  font-weight:750;
+  line-height:1.3;
+  color:var(--ref-text, #17233b);
+}
+#operationStackCount{
+  color:var(--ref-muted, #5b6b80);
+  font-size:.8125rem;
+  font-weight:650;
+  line-height:1.3;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.operation-progress-stack.minimized .operation-dock-title{display:none}
+.operation-progress-stack.minimized #operationStackCount{
+  font-weight:750;
+  color:var(--ref-text, #17233b);
+}
+.operation-dock-dot{
+  width:9px;
+  height:9px;
+  flex:0 0 auto;
+  border-radius:50%;
+  background:#6b7280;
+}
+.operation-progress-stack[data-tone="info"] .operation-dock-dot{
+  background:var(--ui-accent);
+  box-shadow:0 0 0 4px var(--ui-accent-focus, rgba(53,95,82,.13));
+}
+.operation-progress-stack[data-tone="danger"] .operation-dock-dot{background:#8a2924;box-shadow:0 0 0 4px rgba(138,41,36,.12)}
+.operation-progress-stack[data-tone="warning"] .operation-dock-dot{background:#9b6a00;box-shadow:0 0 0 4px rgba(155,106,0,.12)}
+.operation-progress-stack[data-tone="success"] .operation-dock-dot{background:#287a4c}
+.operation-dock-chevron{
+  width:8px;
+  height:8px;
+  flex:0 0 auto;
+  margin-inline-start:4px;
+  border-right:2px solid var(--ref-muted, #5b6b80);
+  border-bottom:2px solid var(--ref-muted, #5b6b80);
+  transform:rotate(45deg);
+}
+.operation-progress-stack:not(.minimized) .operation-dock-chevron{transform:rotate(225deg);margin-top:4px}
+.operation-dock-clear{flex:0 0 auto}
+.operation-stack-items{
+  display:flex;
+  flex-direction:column-reverse;
+  gap:0;
+  overflow:auto;
+  max-height:min(56vh, 420px);
+}
+.operation-progress-stack.minimized .operation-stack-items,
+.operation-progress-stack.minimized .operation-dock-clear{display:none}
+.operation-progress-stack .operation-progress{
+  position:relative;
+  right:auto;
+  bottom:auto;
+  width:100%;
+  margin:0;
+  padding:10px 12px 12px;
+  border:0;
+  border-top:1px solid var(--ref-line);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  opacity:1;
+  transform:none;
+  pointer-events:auto;
+}
+.operation-progress-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.operation-progress-head>div{display:grid;gap:2px;min-width:0}
+.operation-progress-head b{font-size:.8125rem;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.operation-progress-provider,
+.operation-progress-head span,
+.operation-progress-detail{
+  font-size:.8125rem;
+  color:var(--ref-muted, #5b6b80);
+  line-height:1.4;
+}
+.operation-progress-track{
+  height:6px;
+  margin-top:8px;
+  border-radius:999px;
+  overflow:hidden;
+  background:var(--ui-accent-soft, #e8f0ec);
+}
+.operation-progress-track i{
+  display:block;
+  height:100%;
+  background:var(--ui-accent);
+  transition:width .2s ease;
+}
+.operation-progress-detail{
+  margin-top:6px;
+  min-height:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.operation-toast-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  margin-top:8px;
+}
+.operation-status-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:24px;
+  padding:2px 8px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--soft, #f7f9fc);
+  color:var(--muted);
+  font-size:.8125rem;
+  font-weight:700;
+  line-height:1.3;
+  white-space:nowrap;
+}
+.operation-status-dot{inline-size:8px;block-size:8px;border-radius:50%;background:#6b7280}
+.operation-status-badge[data-tone="info"]{background:#eef5fb;border-color:#cbddea;color:#35566c}
+.operation-status-badge[data-tone="info"] .operation-status-dot{background:#477596}
+.operation-status-badge[data-tone="success"]{background:#edf8f1;border-color:#b7d8c1;color:#285c39}
+.operation-status-badge[data-tone="success"] .operation-status-dot{background:#287a4c}
+.operation-status-badge[data-tone="warning"]{background:#fff6e5;border-color:#e5c98f;color:#68450f}
+.operation-status-badge[data-tone="warning"] .operation-status-dot{background:#9b6a00}
+.operation-status-badge[data-tone="danger"]{background:#fff8f7;border-color:#e3baba;color:#7d2f2f}
+.operation-status-badge[data-tone="danger"] .operation-status-dot{background:#8a2924}
+.operation-progress.failed{background:#fff8f7}
+.operation-progress.failed .operation-progress-track i{background:#8a2924}
+.operation-progress.operation-complete .operation-progress-track i{opacity:.85}
+body:has(#operationProgressStack.minimized) main,
+body:has(#operationProgressStack.minimized) .vue-native-page{padding-bottom:72px}
+body:has(#operationProgressStack:not(.minimized)) main,
+body:has(#operationProgressStack:not(.minimized)) .vue-native-page{padding-bottom:min(36vh, 280px)}
+@media(max-width:650px){
+  .operation-progress-stack:not(.user-positioned):not(.is-dragging){
+    left:8px;
+    right:8px;
+    width:auto;
+    translate:none;
+    bottom:calc(60px + env(safe-area-inset-bottom, 0px));
+    max-width:none;
+  }
+  .operation-progress-stack.minimized:not(.user-positioned):not(.is-dragging){
+    left:50%;
+    right:auto;
+    width:max-content;
+    translate:-50% 0;
+  }
+  body:has(#operationProgressStack.minimized) main,
+  body:has(#operationProgressStack.minimized) .vue-native-page{padding-bottom:120px}
+}
+@media(prefers-reduced-motion:reduce){
+  .operation-progress-stack[data-tone="info"] .operation-dock-dot{box-shadow:none}
+  .operation-progress-track i{transition:none}
+}

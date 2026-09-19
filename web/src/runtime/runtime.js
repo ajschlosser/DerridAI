@@ -2,6 +2,15 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
+import {
+  dockCollapsedSummary,
+  isActiveJobStatus,
+  isTerminalJobStatus,
+  jobIdsToPruneFromDock,
+  jobProgressPercent,
+  shouldMountOperationDock,
+  statusBadgeTone,
+} from "../domain/operationsDock";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -2498,33 +2507,188 @@ function breadcrumbHtml(){
   return `<div class="breadcrumbs"><div class="breadcrumb-nav"><button class="breadcrumb-back" id="breadcrumbBack" type="button" ${previous?"":"disabled"}>← Back</button><button class="breadcrumb-forward" id="breadcrumbForward" type="button" ${next?"":"disabled"}>Forward →</button></div><span class="crumb-path">${previous?`${esc(viewLabel(previous.view))} <span class="crumb-sep">›</span> `:"<span class=\"crumb-home\">DerridAI</span> <span class=\"crumb-sep\">›</span> "}<strong>${esc(current)}</strong>${next?` <span class="crumb-sep">›</span> ${esc(viewLabel(next.view))}`:""}</span></div>`;
 }
 
+let operationDockResizeWired=false;
+
 function applyOperationStackPosition(stack){
-  if(!stack)return;const position=state.operationStackPosition;
-  if(!position){stack.style.left="";stack.style.top="";stack.style.right="";stack.style.bottom="";stack.style.removeProperty("--operation-stack-max-height");stack.classList.remove("user-positioned");return}
-  const rect=stack.getBoundingClientRect(),maxLeft=Math.max(8,window.innerWidth-Math.max(rect.width,280)-8),maxTop=Math.max(8,window.innerHeight-52),left=Math.min(maxLeft,Math.max(8,Number(position.left)||8)),top=Math.min(maxTop,Math.max(8,Number(position.top)||8));state.operationStackPosition={left,top};stack.style.left=`${left}px`;stack.style.top=`${top}px`;stack.style.right="auto";stack.style.bottom="auto";stack.style.setProperty("--operation-stack-max-height",`${Math.max(120,window.innerHeight-top-8)}px`);stack.classList.add("user-positioned");
+  if(!stack)return;
+  const position=state.operationStackPosition;
+  if(!position){
+    stack.style.left="";
+    stack.style.top="";
+    stack.style.right="";
+    stack.style.bottom="";
+    stack.style.transform="";
+    stack.style.translate="";
+    stack.style.removeProperty("--operation-stack-max-height");
+    stack.classList.remove("user-positioned");
+    return;
+  }
+  const rect=stack.getBoundingClientRect();
+  const maxLeft=Math.max(8,window.innerWidth-Math.max(rect.width,280)-8);
+  const maxTop=Math.max(8,window.innerHeight-52);
+  const left=Math.min(maxLeft,Math.max(8,Number(position.left)||8));
+  const top=Math.min(maxTop,Math.max(8,Number(position.top)||8));
+  state.operationStackPosition={left,top};
+  stack.style.left=`${left}px`;
+  stack.style.top=`${top}px`;
+  stack.style.right="auto";
+  stack.style.bottom="auto";
+  stack.style.translate="none";
+  stack.style.setProperty("--operation-stack-max-height",`${Math.max(120,window.innerHeight-top-8)}px`);
+  stack.classList.add("user-positioned");
+}
+function setOperationDockMinimized(minimized){
+  state.operationToastsMinimized=Boolean(minimized);
+  persistPrefs();
+  const stack=document.querySelector("#operationProgressStack");
+  if(!stack)return;
+  stack.classList.toggle("minimized",state.operationToastsMinimized);
+  stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
+  const toggle=stack.querySelector("#operationStackToggle");
+  if(toggle){
+    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
+    toggle.setAttribute("aria-label",state.operationToastsMinimized
+      ?tr("operations.expand","Show operations")
+      :tr("operations.collapse","Hide operations"));
+  }
+  applyOperationStackPosition(stack);
+  updateOperationStackCount();
+}
+function announceOperationDock(message){
+  const live=document.querySelector("#operationStackLive");
+  if(!live||!message)return;
+  live.textContent="";
+  live.textContent=message;
+}
+function operationDockCardStats(stack){
+  let active=0,failed=0,finished=0,primaryLabel="",primaryPercent=null;
+  stack.querySelectorAll(".operation-progress").forEach(panel=>{
+    const job=panel.dataset.jobOperation?state.jobs.find(item=>item.id===panel.dataset.jobOperation):null;
+    if(job){
+      if(isActiveJobStatus(job.status)){
+        active+=1;
+        if(!primaryLabel){
+          primaryLabel=jobLabel(job);
+          primaryPercent=jobProgressPercent(job);
+        }
+      }else if(job.status==="failed")failed+=1;
+      else finished+=1;
+      return;
+    }
+    if(panel.classList.contains("failed")){failed+=1;return;}
+    if(panel.classList.contains("operation-complete")){finished+=1;return;}
+    active+=1;
+    if(!primaryLabel){
+      primaryLabel=panel.querySelector("b")?.textContent||"";
+      const width=panel.querySelector("[data-progress-bar], .operation-progress-track i")?.style?.width||"";
+      const parsed=Number.parseInt(width,10);
+      primaryPercent=Number.isNaN(parsed)?null:parsed;
+    }
+  });
+  return {active,failed,finished,primaryLabel,primaryPercent};
 }
 function wireOperationStackDrag(stack){
-  const handle=stack?.querySelector("[data-operation-drag]");if(!handle||handle.dataset.dragWired)return;handle.dataset.dragWired="1";
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  handle.addEventListener("pointerdown",event=>{if(event.button!==0||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width,maxLeft=Math.max(8,window.innerWidth-width-8),maxTop=Math.max(8,window.innerHeight-52);let nextLeft=startLeft,nextTop=startTop,frame=0;handle.classList.add("dragging");stack.classList.add("is-dragging");try{handle.setPointerCapture(event.pointerId)}catch{}const paint=()=>{frame=0;stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`};const move=e=>{nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));if(!frame)frame=requestAnimationFrame(paint)};const done=e=>{if(frame)cancelAnimationFrame(frame);stack.style.transform="";state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};applyOperationStackPosition(stack);handle.classList.remove("dragging");stack.classList.remove("is-dragging");window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",done);window.removeEventListener("pointercancel",done);try{handle.releasePointerCapture(e?.pointerId)}catch{}persistPrefs()};window.addEventListener("pointermove",move,{passive:true});window.addEventListener("pointerup",done,{once:true});window.addEventListener("pointercancel",done,{once:true})});
-  handle.addEventListener("dblclick",event=>{if(event.target.closest("button"))return;state.operationStackPosition=null;persistPrefs();applyOperationStackPosition(stack)});handle.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),step=event.shiftKey?40:12;let left=rect.left,top=rect.top;if(event.key==="ArrowLeft")left-=step;if(event.key==="ArrowRight")left+=step;if(event.key==="ArrowUp")top-=step;if(event.key==="ArrowDown")top+=step;state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};persistPrefs();applyOperationStackPosition(stack)});window.addEventListener("resize",()=>applyOperationStackPosition(stack),{passive:true});
+  const handle=stack?.querySelector("[data-operation-drag]");
+  if(!handle||handle.dataset.dragWired)return;
+  handle.dataset.dragWired="1";
+  handle.addEventListener("pointerdown",event=>{
+    if(event.button!==0||event.target.closest("button"))return;
+    event.preventDefault();
+    const rect=stack.getBoundingClientRect();
+    const startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width;
+    const maxLeft=Math.max(8,window.innerWidth-width-8);
+    const maxTop=Math.max(8,window.innerHeight-52);
+    let nextLeft=startLeft,nextTop=startTop,frame=0;
+    handle.classList.add("dragging");
+    stack.classList.add("is-dragging");
+    stack.style.translate="none";
+    stack.style.left=`${startLeft}px`;
+    stack.style.top=`${startTop}px`;
+    stack.style.right="auto";
+    stack.style.bottom="auto";
+    try{handle.setPointerCapture(event.pointerId)}catch{/* pointer capture is optional on this surface */}
+    const paint=()=>{
+      frame=0;
+      stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`;
+    };
+    const move=e=>{
+      nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));
+      nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));
+      if(!frame)frame=requestAnimationFrame(paint);
+    };
+    const done=e=>{
+      if(frame)cancelAnimationFrame(frame);
+      stack.style.transform="";
+      state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};
+      applyOperationStackPosition(stack);
+      handle.classList.remove("dragging");
+      stack.classList.remove("is-dragging");
+      window.removeEventListener("pointermove",move);
+      window.removeEventListener("pointerup",done);
+      window.removeEventListener("pointercancel",done);
+      try{handle.releasePointerCapture(e?.pointerId)}catch{/* pointer capture is optional on this surface */}
+      persistPrefs();
+    };
+    window.addEventListener("pointermove",move,{passive:true});
+    window.addEventListener("pointerup",done,{once:true});
+    window.addEventListener("pointercancel",done,{once:true});
+  });
+  handle.addEventListener("dblclick",event=>{
+    if(event.target.closest("button"))return;
+    state.operationStackPosition=null;
+    persistPrefs();
+    applyOperationStackPosition(stack);
+  });
+  handle.addEventListener("keydown",event=>{
+    if(event.key==="Escape"){
+      if(!state.operationToastsMinimized){
+        event.preventDefault();
+        setOperationDockMinimized(true);
+      }
+      return;
+    }
+    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;
+    event.preventDefault();
+    const rect=stack.getBoundingClientRect();
+    const step=event.shiftKey?40:12;
+    let left=rect.left,top=rect.top;
+    if(event.key==="ArrowLeft")left-=step;
+    if(event.key==="ArrowRight")left+=step;
+    if(event.key==="ArrowUp")top-=step;
+    if(event.key==="ArrowDown")top+=step;
+    state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};
+    persistPrefs();
+    applyOperationStackPosition(stack);
+  });
+  if(!operationDockResizeWired){
+    operationDockResizeWired=true;
+    window.addEventListener("resize",()=>applyOperationStackPosition(document.querySelector("#operationProgressStack")),{passive:true});
+  }
 }
 
 function progressStack(){
   let stack=document.querySelector("#operationProgressStack");
   if(!stack){
-    stack=document.createElement("div");
+    const dragHelp=tr("operations.drag_help","Drag anywhere · double-click to recenter");
+    const title=tr("operations.title","Operations");
+    stack=document.createElement("aside");
     stack.id="operationProgressStack";
-    stack.className=`operation-progress-stack ${state.operationToastsMinimized?"minimized":""}`;
-    stack.innerHTML=`<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(tr("operations.drag_help","Drag operations anywhere · double-click to reset"))}" title="${esc(tr("operations.drag_help","Drag operations anywhere · double-click to reset"))}"><span class="operation-drag-grip" aria-hidden="true">⠿</span><button class="btn tiny" id="operationStackToggle">${state.operationToastsMinimized?tr("operations.show","Show operations"):tr("operations.minimize","Minimize operations")}</button><span id="operationStackCount"></span></div><div class="operation-stack-items"></div>`;
+    stack.className=`operation-progress-stack${state.operationToastsMinimized?" minimized":""}`;
+    stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
+    stack.setAttribute("role","complementary");
+    stack.setAttribute("aria-label",title);
+    stack.innerHTML=`<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized?"false":"true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized?tr("operations.expand","Show operations"):tr("operations.collapse","Hide operations"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished","Clear finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
     document.body.appendChild(stack);
-    wireOperationStackDrag(stack);applyOperationStackPosition(stack);
-    stack.querySelector("#operationStackToggle").onclick=()=>{
-      state.operationToastsMinimized=!state.operationToastsMinimized;
-      persistPrefs();
-      stack.classList.toggle("minimized",state.operationToastsMinimized);
-      stack.querySelector("#operationStackToggle").textContent=state.operationToastsMinimized?tr("operations.show","Show operations"):tr("operations.minimize","Minimize operations");
-    };
+    wireOperationStackDrag(stack);
+    applyOperationStackPosition(stack);
+    stack.querySelector("#operationStackToggle").addEventListener("click",()=>setOperationDockMinimized(!state.operationToastsMinimized));
+    stack.querySelector("#operationStackClearFinished").addEventListener("click",()=>clearFinishedOperations());
+    stack.addEventListener("keydown",event=>{
+      if(event.key==="Escape"&&!state.operationToastsMinimized&&!event.target.closest("input,textarea,select")){
+        event.preventDefault();
+        setOperationDockMinimized(true);
+      }
+    });
   }
   return stack.querySelector(".operation-stack-items")||stack;
 }
@@ -2532,8 +2696,30 @@ function updateOperationStackCount(){
   const stack=document.querySelector("#operationProgressStack");
   if(!stack)return;
   const count=stack.querySelectorAll(".operation-progress").length;
+  if(!shouldMountOperationDock(count)){
+    stack.remove();
+    return;
+  }
+  const stats=operationDockCardStats(stack);
+  const summary=dockCollapsedSummary(stats);
   const label=stack.querySelector("#operationStackCount");
-  if(label)label.textContent=count?trf(count===1?"operations.count_one":"operations.count_other",count===1?"{count} operation":"{count} operations",{count}):"";
+  if(label)label.textContent=trf(summary.key,summary.fallback,summary.values);
+  stack.dataset.tone=summary.tone;
+  if(summary.percent==null)stack.style.removeProperty("--operation-dock-progress");
+  else stack.style.setProperty("--operation-dock-progress",`${summary.percent}%`);
+  const clear=stack.querySelector("#operationStackClearFinished");
+  if(clear){
+    const canClear=stats.failed+stats.finished>0;
+    clear.hidden=!canClear||state.operationToastsMinimized;
+    clear.disabled=!canClear;
+  }
+  const toggle=stack.querySelector("#operationStackToggle");
+  if(toggle){
+    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
+    toggle.setAttribute("aria-label",state.operationToastsMinimized
+      ?tr("operations.expand","Show operations")
+      :tr("operations.collapse","Hide operations"));
+  }
 }
 function showOperationProgress(title,total){
   const id=uid();
@@ -2570,7 +2756,7 @@ function hideOperationProgress(id,delay=200){
   const head=panel.querySelector(".operation-progress-head");
   if(head&&!head.querySelector("[data-dismiss-operation]")){
     const button=document.createElement("button");
-    button.className="btn tiny";button.dataset.dismissOperation=id;button.textContent="Dismiss";
+    button.className="btn tiny";button.dataset.dismissOperation=id;button.textContent=tr("ui.dismiss","Dismiss");
     button.onclick=()=>{panel.remove();delete state.operationProgress[id];updateOperationStackCount()};
     head.appendChild(button);
   }
@@ -2593,6 +2779,32 @@ function pruneClientJobState(jobId,{removeHistory=true}={}){
     state.ragConfig.run_history=state.ragConfig.run_history.filter(item=>item.job_id!==jobId);
   }
   updateOperationStackCount();
+}
+
+async function removeFinishedJob(jobId,{refresh=true}={}){
+  try{
+    await api(`/api/jobs/${encodeURIComponent(jobId)}`,{method:"DELETE"});
+    pruneClientJobState(jobId);
+    persistPrefs();
+    if(refresh)await refreshJobs({rerender:state.view==="home"});
+    else updateOperationStackCount();
+  }catch(error){
+    toast(trf("operations.remove_failed","Could not remove the operation: {message}",{message:error.message}));
+  }
+}
+
+async function clearFinishedOperations(){
+  try{
+    await api("/api/jobs",{method:"DELETE"});
+    document.querySelectorAll("#operationProgressStack [data-operation-id].operation-complete").forEach(panel=>{
+      delete state.operationProgress[panel.dataset.operationId];
+      panel.remove();
+    });
+    await refreshJobs({rerender:true});
+    updateOperationStackCount();
+  }catch(error){
+    toast(trf("operations.clear_failed","Could not clear jobs: {message}",{message:error.message}));
+  }
 }
 
 async function syncUpsertJobReceipts(job){
@@ -2786,17 +2998,18 @@ async function cancelBackgroundJob(jobId,{refresh=true}={}){
 function ensureJobProgressCard(job){
   const stack=progressStack();
   let panel=stack.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-  const wasOpen=Boolean(panel?.querySelector("details")?.open);
   if(!panel){
-    panel=document.createElement("div");
+    panel=document.createElement("article");
     panel.className="operation-progress show";
     panel.dataset.jobOperation=job.id;
     stack.appendChild(panel);
-    updateOperationStackCount();
   }
-  const pct=Math.round(job.total?job.completed/job.total*100:0);
-  const active=["queued","running","cancelling"].includes(job.status);
+  const pct=jobProgressPercent(job);
+  const active=isActiveJobStatus(job.status);
+  const tone=statusBadgeTone(job.status);
   panel.classList.toggle("failed",job.status==="failed");
+  panel.classList.toggle("operation-complete",isTerminalJobStatus(job.status));
+  panel.dataset.tone=tone;
   const cancellationDetail=job.type==="llm"||job.type==="llm_tool"
     ?"Cancellation requested · interrupting the active model stream."
     : job.type==="rag"
@@ -2807,7 +3020,11 @@ function ensureJobProgressCard(job){
   const detail=job.status==="cancelling"||job.cancel_requested
     ?cancellationDetail
     : job.status==="failed"
-      ? String(job.fatal_error||job.stage_detail||"Operation failed")
+      ? trf("operations.failed_help","Failed · {detail}",{detail:String(job.fatal_error||job.stage_detail||"Operation failed")})
+    : job.status==="completed"
+      ? tr("operations.completed_help","Completed · open the result or dismiss")
+    : job.status==="cancelled"
+      ? tr("operations.cancelled_help","Cancelled · partial results may still be available")
     : job.type==="rag"
       ? `${job.stage_detail||job.stage||"Running RAG pipeline"}`
       : job.type==="upsert"
@@ -2819,16 +3036,32 @@ function ensureJobProgressCard(job){
   const detailHtml=httpIndex>=0
     ? `${esc(String(detail).slice(0,httpIndex))}<strong>${esc(String(detail).slice(httpIndex))}</strong>`
     : esc(detail);
-  const detailRows=operationDetailPairs(job).map(([name,value])=>`<div><span>${esc(name)}</span><b>${esc(value)}</b></div>`).join("");
-  const recent=(job.events||[]).slice(-4).reverse().map(event=>`<div class="operation-toast-event"><time>${esc(formatTimestamp(event.timestamp))}</time><span>${esc(event.detail||event.stage||"")}</span></div>`).join("");
   const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status));
-  const resultActionLabel=job.type==="pdf_corpus"?tr("pdf_corpus.open_build","Open corpus build"):job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")?"View grade":"Open result";
-  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}${jobProviderSummary(job)?` · ${esc(jobProviderSummary(job))}`:""}</b><span>${esc(jobProgressText(job,"of"))} · ${esc(job.status)}</span></div><div class="operation-toast-actions">${active?(job.cancel_requested||job.status==="cancelling"?'<span class="cancel-pending">Cancelling…</span>':`<button class="btn tiny danger" data-toast-cancel-job="${job.id}">Cancel</button>`):`${canOpenResult?`<button class="btn tiny primary" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-dismiss-job="${job.id}">Dismiss</button>`}${active?'<div class="spinner small-spinner"></div>':""}</div></div><div class="operation-progress-track"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><details class="operation-toast-details" ${wasOpen?"open":""}><summary>Details</summary><div class="operation-toast-grid">${detailRows}</div>${recent?`<div class="operation-toast-events">${recent}</div>`:""}<div class="tools">${job.type==="llm"&&Number(job.pending_result_count||0)>0?`<button class="btn tiny primary" data-toast-review-results="${job.id}">Review ${Number(job.pending_result_count||0)} available</button>`:""}${canOpenResult?`<button class="btn tiny" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-open-details="${job.id}">Open full details</button></div></details>`;
+  const resultActionLabel=job.type==="pdf_corpus"
+    ?tr("pdf_corpus.open_build","Open corpus build")
+    :job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")
+      ?tr("operations.view_grade","View grade")
+      :tr("operations.open_result","Open result");
+  const statusLabel=tr(`operations.status.${job.status}`,job.status);
+  const provider=jobProviderSummary(job);
+  const pending=Number(job.pending_result_count||0);
+  const actions=[];
+  if(active){
+    if(job.cancel_requested||job.status==="cancelling")actions.push(`<span class="cancel-pending">${esc(tr("operations.cancelling","Cancelling…"))}</span>`);
+    else actions.push(`<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel","Cancel"))}</button>`);
+  }else{
+    if(canOpenResult)actions.push(`<button type="button" class="btn tiny primary" data-toast-open-result="${job.id}">${esc(resultActionLabel)}</button>`);
+    if(job.type==="llm"&&pending>0)actions.push(`<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available","Review {count} available",{count:pending}))}</button>`);
+    actions.push(`<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss","Dismiss"))}</button>`);
+  }
+  actions.push(`<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details","Full details"))}</button>`);
+  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}</b>${provider?`<small class="operation-progress-provider">${esc(provider)}</small>`:""}</div><span class="operation-status-badge" data-tone="${esc(tone)}"><span class="operation-status-dot" aria-hidden="true"></span>${esc(statusLabel)}</span></div><div class="operation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(jobProgressText(job,"of"))}"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><div class="operation-toast-actions">${actions.join("")}${active?'<div class="spinner small-spinner"></div>':""}</div>`;
   panel.querySelector("[data-toast-cancel-job]")?.addEventListener("click",()=>cancelBackgroundJob(job.id));
   panel.querySelector("[data-toast-review-results]")?.addEventListener("click",()=>openJobResults(job.id));
   panel.querySelectorAll("[data-toast-open-result]").forEach(button=>button.addEventListener("click",()=>openJobResults(job.id)));
   panel.querySelector("[data-toast-open-details]")?.addEventListener("click",()=>openJobDetails(job.id));
-  panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>{clearTimeout(completedJobToastTimers[job.id]);delete completedJobToastTimers[job.id];panel.remove();updateOperationStackCount()});
+  panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>removeFinishedJob(job.id));
+  updateOperationStackCount();
 }
 function jobProgressText(job,style){
   const total=Number(job.total||0),done=Number(job.completed||0),pct=Math.round(total?done/total*100:0);
@@ -2862,31 +3095,17 @@ function maybeDesktopNotify(job){
   }catch(error){console.warn("Desktop notification failed",error)}
 }
 function syncJobProgressToasts(previous=new Map()){
-  const runningIds=new Set();
   for(const job of state.jobs){
-    if(["queued","running","cancelling"].includes(job.status)){
-      runningIds.add(job.id);
+    if(isActiveJobStatus(job.status)){
+      if(previous.size&&!previous.has(job.id)){
+        announceOperationDock(trf("operations.live_started","{label} started",{label:jobLabel(job)}));
+      }
       ensureJobProgressCard(job);
       continue;
     }
     const transitioned=previous.get(job.id)&&previous.get(job.id)!==job.status&&["completed","cancelled","failed"].includes(job.status);
     const panel=document.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-    if(panel||transitioned){
-      ensureJobProgressCard(job);
-      const current=document.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-      const detail=current?.querySelector(".operation-progress-detail");
-      if(detail){
-        const detailText=job.status==="completed"
-          ?"Completed · open the result or dismiss"
-          :job.status==="cancelled"
-            ?"Cancelled · partial results may still be available"
-            :`Failed · ${job.fatal_error||job.stage_detail||"open details"}`;
-        const httpIndex=detailText.search(/\bHTTP\s+\d{3}\b/i);
-        if(job.status==="failed"&&httpIndex>=0){
-          detail.innerHTML=`${esc(detailText.slice(0,httpIndex))}<strong>${esc(detailText.slice(httpIndex))}</strong>`;
-        }else detail.textContent=detailText;
-      }
-    }
+    if(panel||transitioned)ensureJobProgressCard(job);
     if(transitioned&&!jobCompletionNotified[job.id]){
       jobCompletionNotified[job.id]=true;
       if(job.status==="completed"&&job.type==="llm_tool"&&(job.tool||job.mode)==="language_dictionary"){
@@ -2897,14 +3116,18 @@ function syncJobProgressToasts(previous=new Map()){
         const unit=job.type==="rag"?" stages":job.type==="llm_tool"&&(job.tool||job.mode)==="work_metadata"?" works":" records";
         toast(`${jobLabel(job)}${providerSummary?` · ${providerSummary}`:""} ${job.status}: ${job.completed}/${job.total}${unit}`);
       }
+      const liveKey=job.status==="failed"?"operations.live_failed":job.status==="cancelled"?"operations.live_cancelled":"operations.live_completed";
+      const liveFallback=job.status==="failed"?"{label} failed":job.status==="cancelled"?"{label} cancelled":"{label} completed";
+      announceOperationDock(trf(liveKey,liveFallback,{label:jobLabel(job)}));
       maybeDesktopNotify(job);
     }
   }
-  document.querySelectorAll("[data-job-operation]").forEach(panel=>{
-    if(!runningIds.has(panel.dataset.jobOperation)&&!state.jobs.some(job=>job.id===panel.dataset.jobOperation)){
-      panel.remove();
-    }
-  });
+  const liveIds=state.jobs.map(job=>job.id);
+  const visibleIds=[...document.querySelectorAll("[data-job-operation]")].map(panel=>panel.dataset.jobOperation);
+  for(const id of jobIdsToPruneFromDock(visibleIds,liveIds)){
+    document.querySelector(`[data-job-operation="${CSS.escape(id)}"]`)?.remove();
+  }
+  updateOperationStackCount();
 }
 function startJobPolling(){
   if(state.jobsPollTimer)return;
@@ -3593,23 +3816,11 @@ function wireOperationsPanel(){
   const panel=document.querySelector("#operationsPanel");
   if(!panel)return;
   panel.querySelector("#refreshJobs")?.addEventListener("click",()=>refreshJobs({rerender:true}));
-  panel.querySelector("#clearFinishedJobs")?.addEventListener("click",async()=>{
-    try{
-      await api("/api/jobs",{method:"DELETE"});
-      await refreshJobs({rerender:true});
-    }catch(error){toast(`Could not clear jobs: ${error.message}`)}
-  });
+  panel.querySelector("#clearFinishedJobs")?.addEventListener("click",()=>clearFinishedOperations());
   panel.querySelectorAll("[data-job-details]").forEach(button=>button.onclick=()=>openJobDetails(button.dataset.jobDetails));
   panel.querySelectorAll("[data-job-result]").forEach(button=>button.onclick=()=>openJobResults(button.dataset.jobResult));
   panel.querySelectorAll("[data-cancel-job]").forEach(button=>button.onclick=()=>cancelBackgroundJob(button.dataset.cancelJob));
-  panel.querySelectorAll("[data-remove-job]").forEach(button=>button.onclick=async()=>{
-    try{
-      await api(`/api/jobs/${encodeURIComponent(button.dataset.removeJob)}`,{method:"DELETE"});
-      pruneClientJobState(button.dataset.removeJob);
-      persistPrefs();
-      await refreshJobs({rerender:true});
-    }catch(error){toast(`Remove failed: ${error.message}`)}
-  });
+  panel.querySelectorAll("[data-remove-job]").forEach(button=>button.onclick=()=>removeFinishedJob(button.dataset.removeJob));
 }
 function refreshOperationsPanelOnly(){
   const current=document.querySelector("#operationsPanel");
