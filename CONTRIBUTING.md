@@ -44,5 +44,5 @@ mkdir -p .test-data/.home
 - Add a regression test for each behavior change. Test behavior, not text; do not hard-code the release version in tests.
 - Do not suppress an exception silently where it can affect segmentation, metadata, attribution, citation, evidence binding, or durable operation state: surface it as a build warning, failed status, or propagated error. If a swallow is genuinely harmless, comment why.
 - Suppressions for Ruff, mypy, or ESLint need a justification and an entry in `docs/STATIC_ANALYSIS_FOLLOWUPS.md`.
-- Release notes go in `docs/notes/<version>.md` and are indexed in `CHANGELOG.md`, not the README. When cutting a release, bump every declared version (see AGENTS.md); `tests/test_release_consistency.py` verifies them.
+- Release notes go in `docs/notes/<version>.md` and are indexed in `CHANGELOG.md`, not the README. When cutting a release, bump every declared version (see AGENTS.md), create an annotated git tag `v<version>` on that bump commit, and push the tag. `tests/test_release_consistency.py` verifies the declared strings and notes file; the tag is the git object that makes the release retrievable.
 - Never commit `.env`, `data/`, or provider API keys.

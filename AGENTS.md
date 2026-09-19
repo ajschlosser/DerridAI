@@ -38,6 +38,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Start each note with `# <version> — <Release Name>`, a short summary paragraph, then bullet-point changes. Add a `## Validation` section stating what was actually run and what could not be (for example, missing `node_modules` or Docker).
 - Do not claim a build is release-ready unless the production frontend build, Storybook build, and Docker builds actually passed.
 - When cutting a release, bump the version everywhere it is declared: `web/package.json`, `api/app/config.py`, `web/index.html`, and the README's "Current version" line. The API constructor, backup manifest, App.vue footer, and AuthScreen read those values (and the build's git commit) rather than duplicating the string. `tests/test_release_consistency.py` checks that they agree and that `docs/notes/<version>.md` exists.
+- **Tag the same commit.** After the bump commit exists and `APP_VERSION` on that commit is the new version, create an annotated tag `v<version>` with the notes title (for example `v0.62.3` / `0.62.3 - Vigilant Viper`) and push it: `git tag -a "v$VERSION" -m "$VERSION - $NAME"` then `git push origin "v$VERSION"`. Do not skip the tag, do not retag a name that already exists, and do not point `vX.Y.Z` at a tree whose declared version is something else. Notes without a matching `v*` tag are not a finished release.
 - Update `docs/USER_GUIDE.md` when user-visible behavior changes; it describes the current release, not history.
 
 ## Conventions
