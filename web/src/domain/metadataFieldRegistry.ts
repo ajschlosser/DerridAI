@@ -14,6 +14,23 @@ export const STANCE_VALUES=[
   'affirm','reject','criticize','question','qualify','suspend','neutral','describe'
 ];
 
+export const STANCE_ALIASES:Record<string,string>={
+  affirmed:'affirm',
+  rejected:'reject',
+  criticized:'criticize',
+  questioned:'question',
+  qualified:'qualify',
+  suspended:'suspend',
+  descriptive:'describe',
+};
+
+export function normalizeMetadataFieldValue(field:string,value:unknown):unknown{
+  if(field!=='stance'||typeof value!=='string')return value;
+  const normalized=value.trim().toLowerCase();
+  if(STANCE_VALUES.includes(normalized))return normalized;
+  return STANCE_ALIASES[normalized]??value;
+}
+
 export function metadataFieldSpec(field:string, regionTypes:string[], discourseRoles:string[]):MetadataFieldSpec{
   if(field==='region_type') return {control:'enum',allowedValues:regionTypes};
   if(field==='discourse_role') return {control:'enum',allowedValues:discourseRoles};
