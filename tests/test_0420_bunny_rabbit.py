@@ -1,3 +1,10 @@
+"""Release identity, source-quality gate, and publication schema (release 0.42.0, "Bunny Rabbit").
+
+Why: version identifiers are provenance; corrupted PDF text must stop enrichment;
+published JSONL must be namespaced, Unicode-safe, and use only allowed vocabulary.
+How: pure functions and small dicts; no LLM or disk.
+"""
+
 from __future__ import annotations
 
 import json
@@ -16,6 +23,7 @@ def text(path: str) -> str:
 
 
 def test_release_identity_and_legacy_profile_contract():
+    """Pin profile, prompt and publication schema ids; only one profile is registered."""
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
     assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
@@ -24,6 +32,12 @@ def test_release_identity_and_legacy_profile_contract():
 
 
 def test_source_quality_blocks_corruption_not_unicode():
+    """Real Unicode passes the quality gate; replacement characters do not.
+
+    Healthy text (accents, Greek, CJK) is valid for enrichment. OCR text with the
+    Unicode replacement character makes the page a blocking page (page 2).
+    Why: enriching garbled text would create confident but meaningless metadata.
+    """
     healthy = [{"page": 1, "text": "Hélène Cixous · Édouard Glissant · différance · Łódź · Ελληνικά · 東京", "extraction_method": "native"}]
     report = cb.PdfCorpusBuildManager._source_quality_report(healthy)
     assert report["valid_for_enrichment"] is True
@@ -35,6 +49,12 @@ def test_source_quality_blocks_corruption_not_unicode():
 
 
 def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
+    """A valid public record has no errors; an invented region type is rejected.
+
+    The record carries build details under corpus_build_details, non-ASCII text, and
+    allowed enum values. Changing region_type to "invented" must produce an error
+    naming region_type.
+    """
     public = {
         "record_id": "rec-1",
         "text": "Édouard Glissant writes of relation — 東京",

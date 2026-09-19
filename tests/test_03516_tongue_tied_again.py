@@ -1,3 +1,12 @@
+"""Translation failure tolerance, resume, and full RAG grade output (release 0.35.16).
+
+Why: translating thousands of UI strings with local models will sometimes miss a
+few. Small misses are tolerable (fall back to English), large ones must fail but keep
+partial work so an administrator can resume. RAG grades must keep the grader's full
+reasoning, not just numbers.
+How: stubs app.rag, re-imports app.i18n_translation, and fakes chat_complete.
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -15,6 +24,13 @@ LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
 
 
 def test_translation_tolerates_under_ten_percent_and_retains_partial_for_larger_failure(monkeypatch):
+    """Under 10% missing strings falls back; 10% or more fails but keeps partial results.
+
+    Case 1: 1 of 20 strings is omitted -> 1 failure/fallback, the English string is used
+    for that key, others translated.
+    Case 2: 1 of 10 (10%) omitted -> LanguageTranslationError naming the failed key,
+    carrying 9 partial translations, with the failure percentage in the message.
+    """
     rag_stub = ModuleType("app.rag")
     rag_stub._extract_json = lambda raw: json.loads(raw)
     rag_stub.chat_complete = lambda **kwargs: "{}"
@@ -55,6 +71,11 @@ def test_translation_tolerates_under_ten_percent_and_retains_partial_for_larger_
 
 
 def test_translation_resume_skips_validated_strings(monkeypatch):
+    """Resuming re-translates only the requested keys and reuses validated ones.
+
+    With 10 of 12 strings already translated and retry_keys for the other two, the model
+    sees only those two, the stats report 10 resumed, and the result has all 12.
+    """
     rag_stub = ModuleType("app.rag")
     rag_stub._extract_json = lambda raw: json.loads(raw)
     rag_stub.chat_complete = lambda **kwargs: "{}"
@@ -93,6 +114,14 @@ def test_translation_resume_skips_validated_strings(monkeypatch):
 
 
 def test_rag_grades_preserve_full_structured_output():
+    """The grade normalizer keeps category analyses, overall analysis, and the raw output.
+
+    Contract checks confirm the grader prompt/limits still exist in llm_tools.py (source
+    text). The behavior check feeds a full grader response and expects flat scores
+    (query_relevance 9, overall 8), per-category analyses, the overall analysis, and the
+    untouched raw_output. Why: graders explain themselves; discarding that loses the
+    audit trail.
+    """
     assert 'normalized["categories"] = categories' in LLM_TOOLS
     assert 'normalized["analysis"]' in LLM_TOOLS
     assert 'normalized["raw_output"] = original' in LLM_TOOLS
