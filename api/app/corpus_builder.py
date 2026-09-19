@@ -3757,7 +3757,15 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         "reason": region_reason,
                     }
             role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
-            if not inside and role_status.get("status") not in {"human_confirmed", "human_override"}:
+            # A stale/inferred manifest range must not make a reviewer-defined
+            # main-text record paratext. Region/primary structural ownership is
+            # the higher-order document fact; discourse role remains available
+            # for semantic classification.
+            strong_main_text = (
+                (region_structure_owned and record.get("region_type") == "main_text")
+                or (primary_structure_owned and record.get("primary_text") is True)
+            )
+            if not inside and not strong_main_text and role_status.get("status") not in {"human_confirmed", "human_override"}:
                 record["discourse_role"] = "paratext"
                 field_status["discourse_role"] = {
                     "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
@@ -4121,7 +4129,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
             if isinstance(result.get("field_assessments"), dict):
-                field_assessments.update({str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)})
+                assessed = {str(key): value for key, value in result.get("field_assessments", {}).items() if isinstance(value, dict)}
+                field_assessments.update(assessed)
+                llm_checked_fields.update(key for key in assessed if key in ALLOWED_METADATA_FIELDS)
             field_status = record.setdefault("metadata_field_status", {})
             for key, value in metadata.items():
                 if key not in ALLOWED_METADATA_FIELDS or key in SOURCE_BOUND_FIELDS:
