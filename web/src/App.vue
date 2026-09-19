@@ -23,7 +23,10 @@ const runtimeStarted=ref(false);
 const handlingAuthExpiry=ref(false);
 const topSearch=ref("");
 const commandSearch=ref<InstanceType<typeof CommandSearch>|null>(null);
-const moreToolsOpen=ref(false);
+const MORE_TOOLS_KEY="derridai.ui.moreToolsOpen";
+function storedMoreTools():boolean|null{try{const v=localStorage.getItem(MORE_TOOLS_KEY);return v==="1"?true:v==="0"?false:null}catch{return null}}
+// Open by default for administrators, but a choice the user has made is remembered.
+const moreToolsOpen=ref(storedMoreTools()??false);
 const nativeBackPath=ref<string|null>(null);
 const nativeForwardPath=ref<string|null>(null);
 const s=computed(()=>shell.snapshot);
@@ -35,6 +38,9 @@ try{const saved=localStorage.getItem("derridai.ui.theme")||"green";document.docu
 
 function languageDisplayName(_code:string,fallback:string){return fallback}
 const groupedNav=computed(()=>{
+  // Never draw a partial menu: the Vue-side admin items below are appended to the runtime's
+  // list, so show nothing until that list exists.
+  if(!shell.navReady)return [];
   const groups=shell.groupedNav.map(group=>({section:i18n.t(`section.${group.section.toLowerCase()}`,group.section),items:group.items.filter(item=>canNav(item.id)).map(item=>({...item,label:item.id==="home"?i18n.t("nav.home","Home"):(auth.isResearcher&&item.id==="vector"?i18n.t("research.corpus_search",item.label):i18n.t(`nav.${item.id}`,item.label))}))}));
   if(auth.isAdmin){
     const systemLabel=i18n.t("section.system","System");
@@ -120,12 +126,21 @@ function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="ho
 function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function openHelp(){runtime.navigateView("faq")}
-function onMoreToolsToggle(event:Event){moreToolsOpen.value=Boolean((event.currentTarget as HTMLDetailsElement)?.open)}
+function onMoreToolsToggle(event:Event){
+  const open=Boolean((event.currentTarget as HTMLDetailsElement)?.open);
+  // A programmatic change already matches the model; only a user toggle differs from it.
+  if(open===moreToolsOpen.value)return;
+  moreToolsOpen.value=open;
+  try{localStorage.setItem(MORE_TOOLS_KEY,open?"1":"0")}catch{/* preference is optional */}
+}
 async function startRuntime(){
   if(!auth.user||runtimeStarted.value)return;
   runtimeStarted.value=true;
   runtime.setUserContext(auth.user);
   runtime.setShellRefreshHook(()=>shell.sync());
+  // Menu membership needs only the user and static config, so publish it now rather than
+  // after the (potentially slow) bootstrap below finishes its first full snapshot.
+  shell.syncNav();
   runtime.setUrlSyncHook((href:string,options:{replace?:boolean})=>{
     // Runtime rendering requests URL synchronization frequently. Never send
     // Vue Router to the location it already owns.
@@ -181,9 +196,9 @@ onMounted(async()=>{
   if(!i18n.languages.length)await i18n.initialize();
   await startRuntime();
 });
-watch(()=>auth.isAdmin,value=>{moreToolsOpen.value=Boolean(value)},{immediate:true});
+watch(()=>auth.isAdmin,value=>{if(storedMoreTools()===null)moreToolsOpen.value=Boolean(value)},{immediate:true});
 watch(()=>auth.user?.id,(id)=>{
-  if(!id){runtime.pauseRuntime();runtimeStarted.value=false;return}
+  if(!id){runtime.pauseRuntime();runtimeStarted.value=false;shell.resetNav();return}
   void startRuntime()
 });
 </script>

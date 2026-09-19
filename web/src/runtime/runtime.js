@@ -9803,13 +9803,19 @@ function getShellSnapshot(){
     forwardLabel:state.navForward.length?viewLabel(state.navForward[state.navForward.length-1].view):"",
     selectedEvidenceCount:selectedEvidenceEntries().length,
     systemHtml:systemCardHtml(),
-    nav:viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
-      ...item,
-      label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
-      section:translatedSectionLabel(item.section),
-      disabledReason:viewDisabledReason(item.id),
-    })),
+    nav:getNavItems(),
   };
+}
+// Navigation membership depends only on the signed-in user, the static view list,
+// and translations, never on workspace/bootstrap state. The Vue shell calls this as
+// soon as a user exists so the menu is complete before the slow runtime bootstrap.
+function getNavItems(){
+  return viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
+    ...item,
+    label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
+    section:translatedSectionLabel(item.section),
+    disabledReason:viewDisabledReason(item.id),
+  }));
 }
 
 function toggleSidebar(){
@@ -10620,6 +10626,7 @@ function searchCurrentRecordMetadata(field,value,{contains=false}={}){return sea
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
 export {
+  getNavItems,
   jobProgressText,
   state,
   viewConfig,
