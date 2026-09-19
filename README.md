@@ -1,20 +1,30 @@
-# DerridAI Corpus Viewer 0.48.0
+# DerridAI Corpus Viewer 0.48.1
 
-**0.48.0 — Frightened Ferret** makes Corpus Builder review actions explicit and repairable: source extraction issues now have a concrete resolution workflow, metadata editing uses dedicated accessible workspaces, LLM proposals are visible and preselected at useful confidence, bulk review works during enrichment, initialization is presented as a clear stepper handoff, and review feedback is surfaced where the action occurs.
+**0.48.1 — Gifted Grungus** tightens the Corpus Builder review experience: initialization is visually isolated, source repair guidance appears once, text review has an explicit completion action, LLM enrichment state/confidence is clearer and more consistent across records, and bulk metadata editing now uses a focused autocomplete-driven workspace.
 
-## 0.48.0 — Frightened Ferret
+## 0.48.1 — Gifted Grungus
 
-- Source-quality findings now explain exactly how to resolve them inside Corpus Builder and provide direct actions to inspect source or correct reviewed text.
-- Metadata proposals at 65% confidence or higher are preselected for human confirmation; missing confidence is shown as unavailable rather than misleadingly rendered as 0%.
-- Deterministic consistency rules enforce that front matter, back matter, bibliography, index, and paratext are not primary text.
-- Metadata remains editable after a value is saved.
-- Bulk metadata editing and document metadata editing use dedicated accessible modal workspaces rather than dense inline panels.
-- Bulk dispositions are allowed once segmentation has persisted records, even while metadata enrichment continues, and human bulk decisions freeze later automatic overwrite.
-- Accept Clean now reports exactly how many records changed in the review workspace.
-- The Build button requires a real loaded PDF asset, not a stale saved asset id.
-- Pre-segmentation initialization is shown in a modal stepper that explains the handoff into the live record-review workspace.
-- Fixed the oversized authentication heading regression.
-- English and Québec French copy is complete for the new workflow.
+- The initialization stepper now visually owns the screen during extraction/segmentation, with a stronger opaque backdrop and stacking above global operation chrome so the handoff is unambiguous.
+- Removed the duplicate Source extraction issue panel from the Source inspector; resolution guidance now appears once, above the reviewed record text where the repair action occurs.
+- Reviewed record text now has an explicit **Mark reviewed** action and **Save & mark reviewed** workflow. Saving unchanged text records a human review without blocking later LLM enrichment; edit actions remain visible in a sticky footer.
+- Metadata review explicitly distinguishes records whose LLM enrichment is still queued/running from records whose model output has settled. Confidence and proposal controls no longer appear to simply stop after the first concurrently processed records.
+- Quotation and semantic-indexing responses now request and retain per-field confidence assessments as well as discourse metadata, giving later records the same confidence/preselection path where the model supplies a proposal.
+- Moved the LLM preselection indicator into the decision area beside confidence, using a compact badge rather than crowding the field-value row.
+- Removed the confusing global “record has settled while enrichment continues” banner; live enrichment status remains in the dedicated metadata status surface.
+- Rebuilt Bulk edit metadata as an opaque, focused modal with clearer scope selection, field grouping, enum dropdowns, and autocomplete from values already present in the loaded record set.
+- English and Québec French dictionaries include all new review, enrichment-state, and bulk-edit copy.
+- Added regression coverage for the 0.48.1 interaction changes and retained the release build/test gates.
+
+### Validation in this packaging environment
+
+- `pytest -q`: **384 passed**.
+- Python bytecode compilation succeeds.
+- Runtime JavaScript syntax checking succeeds.
+- `npm run build` was attempted but frontend dependencies are unavailable in this sandbox (`vue-tsc: not found`).
+- `npm run build-storybook` was attempted but Storybook is unavailable in this sandbox (`storybook: not found`).
+- Docker is unavailable in this sandbox.
+
+The release remains a build candidate until the normal production frontend, Storybook, and container build gates pass.
 
 ## 0.47.1 — Fatso
 
