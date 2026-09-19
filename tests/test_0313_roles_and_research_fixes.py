@@ -17,9 +17,9 @@ MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
 
 def test_release_version_is_0313():
     package = json.loads((ROOT / "web/package.json").read_text(encoding="utf-8"))
-    assert package["version"] == "0.59.0"
-    assert 'version="0.59.0"' in MAIN
-    assert "DerridAI 0.59.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
+    assert package["version"] == "0.60.0"
+    assert 'version="0.60.0"' in MAIN
+    assert "DerridAI 0.60.0" in (ROOT / "web/index.html").read_text(encoding="utf-8")
 
 
 def test_sidebar_tooltips_escape_sidebar_and_stack_above_workspace():
