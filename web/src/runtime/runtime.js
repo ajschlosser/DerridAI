@@ -2788,12 +2788,19 @@ function ensureJobProgressCard(job){
   const recent=(job.events||[]).slice(-4).reverse().map(event=>`<div class="operation-toast-event"><time>${esc(formatTimestamp(event.timestamp))}</time><span>${esc(event.detail||event.stage||"")}</span></div>`).join("");
   const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status));
   const resultActionLabel=job.type==="pdf_corpus"?tr("pdf_corpus.open_build","Open corpus build"):job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")?"View grade":"Open result";
-  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}${jobProviderSummary(job)?` · ${esc(jobProviderSummary(job))}`:""}</b><span>${job.completed.toLocaleString()} of ${job.total.toLocaleString()} (${pct}%) · ${esc(job.status)}</span></div><div class="operation-toast-actions">${active?(job.cancel_requested||job.status==="cancelling"?'<span class="cancel-pending">Cancelling…</span>':`<button class="btn tiny danger" data-toast-cancel-job="${job.id}">Cancel</button>`):`${canOpenResult?`<button class="btn tiny primary" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-dismiss-job="${job.id}">Dismiss</button>`}${active?'<div class="spinner small-spinner"></div>':""}</div></div><div class="operation-progress-track"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><details class="operation-toast-details" ${wasOpen?"open":""}><summary>Details</summary><div class="operation-toast-grid">${detailRows}</div>${recent?`<div class="operation-toast-events">${recent}</div>`:""}<div class="tools">${job.type==="llm"&&Number(job.pending_result_count||0)>0?`<button class="btn tiny primary" data-toast-review-results="${job.id}">Review ${Number(job.pending_result_count||0)} available</button>`:""}${canOpenResult?`<button class="btn tiny" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-open-details="${job.id}">Open full details</button></div></details>`;
+  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}${jobProviderSummary(job)?` · ${esc(jobProviderSummary(job))}`:""}</b><span>${esc(jobProgressText(job,"of"))} · ${esc(job.status)}</span></div><div class="operation-toast-actions">${active?(job.cancel_requested||job.status==="cancelling"?'<span class="cancel-pending">Cancelling…</span>':`<button class="btn tiny danger" data-toast-cancel-job="${job.id}">Cancel</button>`):`${canOpenResult?`<button class="btn tiny primary" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-dismiss-job="${job.id}">Dismiss</button>`}${active?'<div class="spinner small-spinner"></div>':""}</div></div><div class="operation-progress-track"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><details class="operation-toast-details" ${wasOpen?"open":""}><summary>Details</summary><div class="operation-toast-grid">${detailRows}</div>${recent?`<div class="operation-toast-events">${recent}</div>`:""}<div class="tools">${job.type==="llm"&&Number(job.pending_result_count||0)>0?`<button class="btn tiny primary" data-toast-review-results="${job.id}">Review ${Number(job.pending_result_count||0)} available</button>`:""}${canOpenResult?`<button class="btn tiny" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-open-details="${job.id}">Open full details</button></div></details>`;
   panel.querySelector("[data-toast-cancel-job]")?.addEventListener("click",()=>cancelBackgroundJob(job.id));
   panel.querySelector("[data-toast-review-results]")?.addEventListener("click",()=>openJobResults(job.id));
   panel.querySelectorAll("[data-toast-open-result]").forEach(button=>button.addEventListener("click",()=>openJobResults(job.id)));
   panel.querySelector("[data-toast-open-details]")?.addEventListener("click",()=>openJobDetails(job.id));
   panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>{clearTimeout(completedJobToastTimers[job.id]);delete completedJobToastTimers[job.id];panel.remove();updateOperationStackCount()});
+}
+function jobProgressText(job,style){
+  const total=Number(job.total||0),done=Number(job.completed||0),pct=Math.round(total?done/total*100:0);
+  // A PDF corpus build reports a synthetic count (source blocks x weighted
+  // stage progress), not a real tally, so show only the honest percentage.
+  if(job.type==="pdf_corpus")return trf("operations.progress_overall","{percent}% overall",{percent:pct});
+  return style==="of"?`${done.toLocaleString()} of ${total.toLocaleString()} (${pct}%)`:`${done}/${total} (${pct}%)`;
 }
 function maybeDesktopNotify(job){
   if(!state.appConfig.desktop_notifications)return;
@@ -3531,7 +3538,7 @@ function renderOperationsPanel(){
           <div class="operation-subtitle">${subtitle}</div>
           <div class="operation-facts">${primary}</div>
           <div class="operation-inline-progress"><i style="width:${pct}%"></i></div>
-          <div class="operation-progress-caption"><span>${job.completed}/${job.total} (${pct}%)</span><span>${job.finished_at?"Total":"Elapsed"}: ${esc(humanDuration(jobElapsedSeconds(job)))}</span></div>
+          <div class="operation-progress-caption"><span>${esc(jobProgressText(job))}</span><span>${job.finished_at?"Total":"Elapsed"}: ${esc(humanDuration(jobElapsedSeconds(job)))}</span></div>
         </div>
         <div class="tools operation-actions">
           <button class="btn small" data-job-details="${job.id}">Details</button>
