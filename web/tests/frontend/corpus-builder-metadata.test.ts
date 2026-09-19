@@ -22,7 +22,8 @@ describe("Corpus Builder metadata resolution",()=>{
   it("shows progressive enrichment as processing rather than falsely settled",()=>{
     const wrapper=mountPanel(record({metadata_enrichment_state:"running",metadata_incomplete_fields:["position_holder"],metadata_review_fields:["position_holder"],metadata_field_status:{position_holder:{status:"unresolved",method:"llm"}}}));
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("processing");
-    expect(wrapper.get('[role="status"]').text()).toContain("LLM enrichment pending");
+    expect(wrapper.get(".review-status").text()).toContain("LLM enrichment pending");
+    expect(wrapper.get('[role="status"]').text()).toContain("editable now");
   });
 
   it("separates inherited document metadata from record-level decisions",()=>{
