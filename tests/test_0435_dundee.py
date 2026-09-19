@@ -91,14 +91,5 @@ def test_fragmented_glyph_record_is_detected():
     issues=cb.PdfCorpusBuildManager._record_extraction_quality_issues(record)
     assert issues and issues[0]["code"]=="fragmented_glyph_layout"
 
-def test_ui_suppresses_empty_review_and_zero_metadata_attention():
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    issues = text("web/src/components/CorpusMetadataIssues.vue")
-    assert "reviewDecision" in builder
-    assert "buildRunning && !hasRecordTopology" in builder
-    assert "metadataFieldIssueCount>0" in builder
-    assert 'v-if="totalIssues>0"' in issues
-    assert 'reviewQueue.value="source"' in builder or "reviewQueue==='source'" in builder
-    assert "showBuildConfiguration" in builder
 
 

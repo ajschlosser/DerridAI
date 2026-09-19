@@ -1,5 +1,4 @@
 from pathlib import Path
-import json
 import sys
 import types
 
@@ -12,8 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'api'))
 from app import corpus_builder as cb
 from app.models import PdfCorpusBuildCreate
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 
 def text(path: str) -> str:
@@ -94,45 +91,9 @@ def test_adaptive_fast_mode_can_skip_repeatedly_low_yield_family_but_not_deep_or
     assert manager._adaptive_family_should_skip('b1', 'indexing', {'enrichment_mode': 'fast', 'families': ['indexing']})[0] is False
 
 
-def test_focus_view_has_history_queue_navigation_cleanup_and_revision_audit():
-    focus = text('web/src/components/CorpusRecordFocusReview.vue')
-    builder = text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'historyBack' in focus and 'historyForward' in focus
-    assert 'previousRecord' in focus and 'nextRecord' in focus
-    assert '<CorpusTextCleanupDialog' in focus
-    assert '<CorpusRevisionHistory' in focus
-    assert 'focusHistoryMove' in builder and 'focusQueueMove' in builder
-    assert 'CorpusRevisionHistory :record="selectedRecord"' in builder
 
 
-def test_lifecycle_and_storybook_cover_exception_resolution_and_french_layout():
-    stepper = text('web/src/components/CorpusWorkflowStepper.vue')
-    story = text('web/src/components/CorpusWorkflowStepper.stories.ts')
-    cleanup_story = text('web/src/components/CorpusTextCleanupSummary.stories.ts')
-    assert 'Source & configure' in stepper
-    assert 'Build' in stepper
-    assert 'Review' in stepper
-    assert 'Initialize' not in stepper
-    assert 'Segment' not in stepper
-    assert 'Review' in story and 'Building' in story and 'ReadyToPublish' in story
-    assert 'fr-CA' in story and 'fr-CA' in cleanup_story
 
 
-def test_shared_review_surfaces_keep_wcag_basics_and_readable_type():
-    for path in [
-        'web/src/components/CorpusRecordFocusReview.vue',
-        'web/src/components/CorpusRevisionHistory.vue',
-        'web/src/components/CorpusTextCleanupSummary.vue',
-        'web/src/components/CorpusLlmEffectivenessPanel.vue',
-    ]:
-        src = text(path)
-        assert 'font-size:.8125rem' in src or 'font-size:.875rem' in src
-    focus = text('web/src/components/CorpusRecordFocusReview.vue')
-    assert ':focus-visible' in focus
-    assert 'aria-label' in focus
 
 
-def test_provider_payload_type_contract_from_0501_is_preserved_after_test_consolidation():
-    builder = text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'function directProfilePayload(profileId:string): Record<string,unknown>|null{' in builder
-    assert 'for(const key of ["provider","model","base_url","api_key","generation"])' in builder

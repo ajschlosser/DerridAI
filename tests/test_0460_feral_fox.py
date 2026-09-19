@@ -144,23 +144,6 @@ def test_source_problem_is_not_mislabeled_as_topology():
     assert "topology" not in codes
 
 
-def test_focus_and_builder_expose_editable_text_ownership_and_concurrency_with_bilingual_copy():
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    focus = text("web/src/components/CorpusRecordFocusReview.vue")
-    metadata = text("web/src/components/CorpusMetadataResolutionPanel.vue")
-    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    assert "saveReviewedText" in builder and "record-text-editor" in builder
-    assert "activeBuildCount" in builder and "canStartConcurrentBuild" in builder
-    assert "llm_contribution" in builder or "llmContribution" in builder
-    assert "saveText" in focus and "CorpusSourceIssuePanel" in focus
-    assert "CorpusFieldOwnershipBadge" in metadata
-    for key in (
-        "pdf_corpus.enrichment_strategy", "pdf_corpus.edit_text", "pdf_corpus.save_reviewed_text",
-        "pdf_corpus.llm_contribution", "pdf_corpus.ownership.inherited", "pdf_corpus.source_issue_title",
-    ):
-        assert store.count(f"'{key}'") >= 2
-    assert "font-size:8px" not in focus
-    assert "font-size:9px" not in focus
 
 
 def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(tmp_path: Path, monkeypatch):

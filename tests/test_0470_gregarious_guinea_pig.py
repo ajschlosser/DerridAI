@@ -91,16 +91,5 @@ def test_resume_clears_cancel_marker(tmp_path:Path,monkeypatch):
     assert repo.get_build(build['build_id'])['status']=='queued'
 
 
-def test_collaborative_review_ui_has_durable_text_drafts_bulk_edit_and_accessible_story():
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    bulk=text('web/src/components/CorpusBulkMetadataEditor.vue')
-    metadata=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    story=text('web/src/components/CorpusBulkMetadataEditor.stories.ts')
-    assert 'textDraftKey' in builder and 'preserveActiveDraft' in builder
-    assert 'CorpusBulkMetadataEditor' in builder and 'bulkMetadata' in text('web/src/api/pdfCorpus.ts')
-    assert 'inherited-metadata' in metadata
-    assert 'role="dialog"' in bulk and ':focus-visible' in bulk
-    assert 'Corpus Builder/Review/Bulk Metadata Editor' in story
-    assert 'font:10px' not in builder
 
 

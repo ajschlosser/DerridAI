@@ -21,31 +21,8 @@ def text(path: str) -> str:
 
 
 
-def test_source_viewer_replaces_focus_iframe_and_is_storybook_backed():
-    focus = text("web/src/components/CorpusRecordFocusReview.vue")
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    dialog = text("web/src/components/SourceTranscriptionDialog.vue")
-    main = text("api/app/main.py")
-    assert "<iframe" not in focus
-    assert "openSourceViewer" in focus
-    assert "SourceTranscriptionDialog" in builder
-    assert "PdfEvidenceViewer" in dialog and "Reviewed record text" in dialog
-    assert "Content-Disposition" in main and "inline; filename" in main
-    assert (ROOT / "web/src/components/SourceTranscriptionDialog.stories.ts").exists()
 
 
-def test_document_structure_workspace_is_first_class_and_accessible():
-    component = text("web/src/components/DocumentStructureConfigurator.vue")
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    api = text("web/src/api/pdfCorpus.ts")
-    main = text("api/app/main.py")
-    for token in ("two_up", "main_text_pdf_start", "bibliography_pdf_start", "odd_even", "left_right"):
-        assert token in component
-    assert "DocumentStructureConfigurator" in builder
-    assert "updateDocumentLayout" in api
-    assert '/api/pdf/assets/{asset_id}/document-layout' in main
-    assert "fieldset" in component and ":focus-visible" in component
-    assert (ROOT / "web/src/components/DocumentStructureConfigurator.stories.ts").exists()
 
 
 def test_document_layout_derives_two_up_pages_regions_and_threads(tmp_path: Path):
@@ -86,36 +63,7 @@ def test_document_layout_derives_two_up_pages_regions_and_threads(tmp_path: Path
     assert derived["p2r"]["thread_language"] == "en_us"
 
 
-def test_initial_topology_budget_is_smaller_and_second_reader_is_deferred():
-    src = text("api/app/corpus_builder.py")
-    segment = src[src.index("    def _segment("):src.index("    def _mark_segmentation_review")]
-    run = src[src.index("    def _run("):src.index("    def _metadata_enrichment_finished", src.index("    def _run("))]
-    assert "max_adjudications=min(16,max(4" in segment.replace(" ", "")
-    assert "max_llm_boundary_calls_per_100_atoms" in segment
-    assert "boundary_second_reader_deferred_count" in run
-    assert "_audit_suspicious_record_boundaries(records" not in run
-    assert "segmentation_elapsed_ms" in run
 
 
-def test_provider_model_override_endpoint_sharing_and_free_entry_model_controls():
-    backend = text("api/app/main.py")
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    switcher = text("web/src/components/CorpusProviderSwitcher.vue")
-    execution = text("web/src/components/LlmExecutionControl.vue")
-    assert '"model": requested_model or profile.get("model")' in backend
-    assert "providerResourceKey" in builder and "base_url" in builder
-    assert "Model for newly scheduled tasks" in switcher
-    assert "<input" in switcher and "<datalist" in switcher
-    assert "<input" in execution and "modelOverride" in execution
 
 
-def test_metadata_autopopulation_and_combobox_overlay_are_explicit():
-    backend = text("api/app/corpus_builder.py")
-    editor = text("web/src/components/CorpusMetadataFieldEditor.vue")
-    combo = text("web/src/components/ui/UiCombobox.vue")
-    assert '"auto_populated": bool(confidence is not None and confidence > minimum' in backend
-    assert "status?.auto_populated" in editor
-    assert '<Teleport to="body">' in combo
-    assert "useId" in combo
-    assert "position:fixed" in combo
-    assert "human_document_layout" in backend

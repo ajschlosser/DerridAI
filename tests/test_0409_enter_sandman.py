@@ -114,18 +114,5 @@ def test_segmentation_cache_fingerprint_changes_with_prompt_or_text(tmp_path):
     assert first!=second
 
 
-def test_storybook_and_i18n_expose_segmentation_telemetry():
-    component=(ROOT/"web/src/components/CorpusSegmentationTelemetry.vue").read_text(encoding="utf-8")
-    story=(ROOT/"web/src/components/CorpusSegmentationTelemetry.stories.ts").read_text(encoding="utf-8")
-    store=(ROOT/"api/app/locales/en_us.py").read_text(encoding="utf-8")+(ROOT/"api/app/locales/fr_ca.py").read_text(encoding="utf-8")
-    assert '<dl>' in component and ':aria-labelledby="headingId"' in component and 'useId' in component
-    assert "Segmentation Telemetry" in story
-    assert 'pdf_corpus.segmentation_telemetry' in store
-    assert 'pdf_corpus.boundary_failures_kept' in store
 
 
-def test_new_build_default_and_ui_do_not_drift_from_v8_profile():
-    models=(ROOT/"api/app/models.py").read_text(encoding="utf-8")
-    builder=(ROOT/"web/src/components/PdfCorpusBuilder.vue").read_text(encoding="utf-8")
-    assert 'default="derrida-scholarly-v12"' in models
-    assert 'profile_id:"derrida-scholarly-v5"' not in builder

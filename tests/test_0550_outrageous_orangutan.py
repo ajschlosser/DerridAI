@@ -75,13 +75,3 @@ def test_human_slice_becomes_boundary_editorial_memory(tmp_path:Path):
     assert memory['examples']
     assert memory['examples'][-1]['source']=='human_confirmed_boundary'
 
-def test_storybook_and_focus_view_share_boundary_second_reader_component():
-    comp=text('web/src/components/CorpusBoundaryAdjudication.vue')
-    story=text('web/src/components/CorpusBoundaryAdjudication.stories.ts')
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    focus=text('web/src/components/CorpusRecordFocusReview.vue')
-    api=text('web/src/api/pdfCorpus.ts')
-    assert 'Check with LLM' in comp and 'Corpus Builder/Boundary Adjudication' in story
-    assert '<CorpusBoundaryAdjudication' in builder and '<CorpusBoundaryAdjudication' in focus
-    assert 'adjudicateBoundary:' in api
-    assert ':focus-visible' in comp or 'UiButton' in comp

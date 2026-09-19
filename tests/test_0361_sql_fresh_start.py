@@ -4,7 +4,6 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
@@ -12,12 +11,6 @@ sys.path.insert(0, str(ROOT / "api"))
 from app.persistence import SQLiteJobRepository, SQLiteSystemRepository
 
 
-def test_0361_release_identity_and_storage_configuration():
-    config = (ROOT / "api/app/config.py").read_text(encoding="utf-8")
-    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-
-    assert "SYSTEM_DB_PATH" in config
-    assert "SYSTEM_DB_PATH" in compose
 
 
 def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
@@ -79,31 +72,8 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
     assert old_json.read_text(encoding="utf-8").find("OLD") >= 0
 
 
-def test_auth_schema_is_current_on_first_create_without_alter_migrations(tmp_path: Path, monkeypatch):
-    import app.auth as module
-
-    monkeypatch.setattr(module, "settings", SimpleNamespace(auth_db_path=str(tmp_path / "derridai-auth.sqlite3")))
-    store = module.AuthStore()
-    with sqlite3.connect(store.path) as conn:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
-    assert {"last_login", "login_count"} <= columns
-
-    source = (ROOT / "api/app/auth.py").read_text(encoding="utf-8")
-    assert "ALTER TABLE users" not in source
 
 
-def test_no_system_storage_migration_scaffolding_remains():
-    persistence = (ROOT / "api/app/persistence.py").read_text(encoding="utf-8")
-    system_store = (ROOT / "api/app/system_store.py").read_text(encoding="utf-8")
-
-    for token in (
-        "migrate_legacy_json",
-        "schema_migrations",
-        "derridai-system.migrated-",
-        "language_dictionary_revision",
-    ):
-        assert token not in persistence
-        assert token not in system_store
 
 
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):

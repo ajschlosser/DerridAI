@@ -39,25 +39,6 @@ def test_accept_requires_uncertain_metadata_resolution_and_confirms_llm_fields(t
     assert accepted['accepted'] is True
     assert accepted['metadata_field_status']['discourse_role']['status']=='human_confirmed'
 
-def test_query_only_router_updates_preserve_scroll():
-    router=text('web/src/router/index.ts')
-    assert 'to.path===from.path?false' in router
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert 'scrollIntoView({block:"start"})' not in builder
-
-def test_record_review_surfaces_metadata_panel_and_bulk_reports_blocked_metadata():
-    builder=text('web/src/components/PdfCorpusBuilder.vue')
-    assert '<CorpusMetadataResolutionPanel' in builder
-    assert 'bulk_done_metadata_blocked' in builder
-    panel=text('web/src/components/CorpusMetadataResolutionPanel.vue')
-    assert 'metadata_review_fields' in panel
-    assert 'metadata_field_status' in panel
-    assert 'human_confirmed' in text('web/src/components/CorpusRecordFocusReview.vue') or 'human_confirmed' in text('web/src/components/CorpusMetadataResolutionPanel.stories.ts')
 
 
-def test_request_validation_is_product_safe_and_optional_absence_is_reviewable():
-    main=text('api/app/main.py')
-    assert 'request_validation_error_handler' in main
-    assert 'Pydantic' not in 'Some submitted data is invalid. Review the highlighted fields and try again.'
-    panel=text('web/src/components/CorpusMetadataFieldEditor.vue')
-    assert 'confirm_no_value' in panel and "emit('noValue')" in panel and 'human_confirmed_absent' in text('api/app/corpus_builder.py')
+

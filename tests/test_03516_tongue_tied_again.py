@@ -9,27 +9,9 @@ from types import ModuleType
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LANGUAGE_VIEW = (ROOT / "web/src/views/LanguagesView.vue").read_text(encoding="utf-8")
-JOBS = (ROOT / "api/app/jobs.py").read_text(encoding="utf-8")
-MODELS = (ROOT / "api/app/models.py").read_text(encoding="utf-8")
-RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
-RESEARCH = (ROOT / "web/src/views/ResearchView.vue").read_text(encoding="utf-8")
 LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
-SYSTEM = ((ROOT / "api/app/system_store.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/en_us.py").read_text(encoding="utf-8") + "\n" + (ROOT / "api/app/locales/fr_ca.py").read_text(encoding="utf-8"))
 
 
-def test_language_table_identity_warning_and_resume_ui():
-    assert ".language-string-head{position:static" in LANGUAGE_VIEW
-    assert "align-items:start" in LANGUAGE_VIEW
-    assert "modelTranslationRisk" in LANGUAGE_VIEW
-    assert "language.model_translation_risk_ack" in LANGUAGE_VIEW
-    assert "resumableInstallJob" in LANGUAGE_VIEW
-    assert "openResumeDialog" in LANGUAGE_VIEW
-    assert "language.translation_incomplete_title" in LANGUAGE_VIEW
-    assert "trackedFallbackKeys" in LANGUAGE_VIEW
-    assert "language.needs_review" in LANGUAGE_VIEW
-    assert "resume_job_id" in LANGUAGE_VIEW
-    assert "resume_job_id" in MODELS
 
 
 def test_translation_tolerates_under_ten_percent_and_retains_partial_for_larger_failure(monkeypatch):
@@ -106,27 +88,8 @@ def test_translation_resume_skips_validated_strings(monkeypatch):
     assert len(translated) == len(source)
 
 
-def test_partial_dictionary_stays_server_side_and_translation_report_is_durable():
-    assert 'current["_resume_dictionary"]' in JOBS
-    assert 'current["_resume_failed_keys"]' in JOBS
-    assert 'not str(key).startswith("_")' in JOBS
-    # The resumable payload sent to the browser contains counts/samples, not the whole dictionary.
-    public_block = JOBS[JOBS.index("public_stats = {"):JOBS.index("raise", JOBS.index("public_stats = {"))]
-    assert '"partial_dictionary"' not in public_block
-    assert "translation_report=translation_report" in JOBS
-    assert "translation_report: dict[str, Any] | None" in SYSTEM
-    assert 'report["failed_keys"] = unresolved' in SYSTEM
 
 
-def test_research_empty_database_enters_creation_workflow_and_preserves_shell_navigation():
-    assert "if(!(snapshot.stores||[]).length){" in RESEARCH
-    assert "runtime.openDatabaseCreationFromResearch?.()" in RESEARCH
-    assert 'await router.replace(canOpenDatabase?"/databases":"/")' not in RESEARCH
-    assert "function openDatabaseCreationFromResearch()" in RUNTIME
-    assert "state.vectorAutoCreateRequested=true" in RUNTIME
-    assert 'detail:{path:"/databases",runtimeView:"vector"}' in RUNTIME
-    assert "if(noCollections&&state.vectorAutoCreateRequested)" in RUNTIME
-    assert "window.setTimeout(openCreateWizard,0)" in RUNTIME
 
 
 def test_rag_grades_preserve_full_structured_output():

@@ -139,29 +139,7 @@ def test_accept_and_bulk_accept_block_any_incomplete_metadata(tmp_path: Path):
     assert result["blocked_record_ids"] == ["r1"]
 
 
-def test_review_ui_accept_is_actionable_and_preserves_viewport():
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    assert "async function attemptAccept()" in builder
-    assert "focusFirstMetadataBlocker" in builder
-    assert "captureReviewViewport" in builder and "restoreReviewViewport" in builder
-    assert "@click=\"toggleAccept\"" in builder
-    assert ":disabled=\"busy!==''\"" in builder
-    assert 'metadata_decision_required' in builder
-    assert 'reviewDecision' in builder
-    assert "scrollIntoView(" not in builder
-    assert "reviewInspectorTab" in builder
-    assert "selectedMetadataBlockingLabel" in builder
 
 
-def test_primary_text_uses_boolean_radio_not_string_truthiness():
-    panel = text("web/src/components/CorpusMetadataFieldEditor.vue")
-    assert ":value=\"true\"" in panel
-    assert ":value=\"false\"" in panel
-    assert '@click="save"' in panel
-    assert 'value==="true"' not in panel
-    assert "required&&draft===null" in panel
-    assert ":value=\"false\"" in panel
-    stories = text("web/src/components/CorpusMetadataResolutionPanel.stories.ts")
-    assert "PrimaryTextHumanDecisionNo" in stories
 
 

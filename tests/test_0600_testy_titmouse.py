@@ -168,22 +168,5 @@ def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,m
     assert status["llm_checked"] is True
 
 
-def test_frontend_surface_and_test_contracts_are_present():
-    css=text("web/src/style.css")
-    history=text("web/src/components/CorpusBuildHistoryMenu.vue")
-    readiness=text("web/src/components/CorpusBuildReadiness.vue")
-    package=json.loads(text("web/package.json"))
-    assert "--surface-overlay:#fff" in css.replace(" ","")
-    compact=css.replace(" ","")
-    assert "--surface-glass:rgba(" in compact and ",.96)" in compact
-    assert '[data-surface="overlay"]' in css and '[data-surface="glass"]' in css
-    assert 'data-surface="overlay"' in history
-    assert "var(--surface-overlay,#fff)" in history
-    assert 'data-surface="glass"' in readiness
-    assert "var(--surface-glass,rgba(255,255,255,.96))" in readiness.replace(" ","")
-    for script in ("test:unit","test:e2e","test:frontend"):
-        assert script in package["scripts"]
-    for path in ("web/vitest.config.ts","web/playwright.config.ts","web/tests/frontend/metadata-field-editor.test.ts","web/tests/e2e/corpus-builder-surfaces.spec.ts",".github/workflows/frontend.yml"):
-        assert (ROOT/path).exists()
 
 

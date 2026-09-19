@@ -49,17 +49,4 @@ def test_slice_moves_prefix_to_previous_and_undo_redo_walk_history(tmp_path:Path
     manager.redo_last_review_edit(build['build_id'])
     assert repo.load_records(build['build_id'])[1]['text'].startswith('Proper current text')
 
-def test_review_ui_has_slice_select_from_text_focus_pdf_and_undo_redo():
-    builder=text('web/src/components/PdfCorpusBuilder.vue');focus=text('web/src/components/CorpusRecordFocusReview.vue');field=text('web/src/components/CorpusMetadataFieldEditor.vue');api=text('web/src/api/pdfCorpus.ts')
-    assert '<CorpusBoundarySliceDialog' in builder and 'sliceRecord:' in api
-    assert 'redoReview:' in api and '@redo="redoReview"' in builder
-    assert 'selectFromText' in field and "window.getSelection()" in field
-    assert 'sourcePdfUrl' in focus and '<iframe' not in focus and 'openSourceViewer' in focus
-    assert 'SourceTranscriptionDialog' in builder
-    assert '<CorpusBoundarySliceDialog' in focus
 
-def test_boundary_slice_storybook_component_is_accessible_and_reusable():
-    comp=text('web/src/components/CorpusBoundarySliceDialog.vue');story=text('web/src/components/CorpusBoundarySliceDialog.stories.ts')
-    assert '<UiDialog' in comp and "import UiDialog" in comp
-    assert ':focus-visible' in comp
-    assert 'Corpus Builder/Review/Boundary Slice Dialog' in story

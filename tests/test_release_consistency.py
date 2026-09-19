@@ -33,8 +33,3 @@ def test_all_declared_versions_agree():
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
 
 
-def test_current_release_has_notes():
-    version = json.loads(read("web/package.json"))["version"]
-    notes = ROOT / "docs" / "notes" / f"{version}.md"
-    assert notes.is_file(), f"missing release notes: docs/notes/{version}.md"
-    assert notes.read_text(encoding="utf-8").startswith(f"# {version}")

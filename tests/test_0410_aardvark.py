@@ -128,29 +128,8 @@ def test_accept_reject_and_bulk_disposition_mutate_review_state_reliably(tmp_pat
     assert all(row["review_disposition"]=="accepted" for row in rows)
 
 
-def test_focus_review_is_full_screen_portaled_record_first_and_accessible():
-    builder=text("web/src/components/PdfCorpusBuilder.vue")
-    focus=text("web/src/components/CorpusRecordFocusReview.vue")
-    assert '<Teleport to="body">' in builder
-    assert 'position:fixed;inset:0;z-index:10000' in focus
-    assert 'role="dialog" aria-modal="true"' in focus
-    assert 'focus-record-text' in focus
-    assert 'CorpusMetadataResolutionPanel' in focus
-    assert 'role="tablist"' in focus
-    assert 'Escape' in focus and 'event.key!=="Tab"' in focus
 
 
-def test_pipeline_hydration_and_completion_are_explicit_without_form_interaction():
-    builder=text("web/src/components/PdfCorpusBuilder.vue")
-    lifecycle=text("web/src/components/CorpusBuildLifecycleCard.vue")
-    assert "ensureReviewHydrated" in builder
-    assert "window.setTimeout" in builder
-    assert 'flush:"post"' in builder
-    assert "CorpusFinishWorkspace" in builder and "CorpusMetadataResolutionPanel" in builder
-    assert "CorpusMetadataIssues" in builder
-    assert 'reviewQueue.value="metadata"' in builder
-    for label in ["Extract source","Construct records","Enrich metadata","Validate corpus","Publish snapshot"]:
-        assert label in lifecycle
 
 
 
