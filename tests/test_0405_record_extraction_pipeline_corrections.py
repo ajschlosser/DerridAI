@@ -18,8 +18,8 @@ def test_0405_release_identity_and_name():
 def test_0405_new_semantic_pipeline_is_provenance_versioned():
     builder=text("api/app/corpus_builder.py")
     assert 'SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"' in builder
-    assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v8"' in builder
-    assert 'PROFILE_VERSION = "derrida-scholarly-v11"' in builder
+    assert 'METADATA_PROMPT_VERSION = "derridai-record-metadata-v9"' in builder
+    assert 'PROFILE_VERSION = "derrida-scholarly-v12"' in builder
     assert "legacy" not in builder[builder.index("CORPUS_PROFILES:"):builder.index("class PdfCorpusBuildManager")]
 
 
