@@ -62,6 +62,9 @@ const state = {
   compareMode: "workspace",
   comparePasteA: "",
   comparePasteB: "",
+  compareSourceA: "library",
+  compareSourceB: "library",
+  compareFilter: "changed",
   stores: [],
   storesLastFetchedAt: 0,
   vectorAutoCreateRequested: false,
@@ -844,6 +847,9 @@ function workspacePrefs(){
     compareMode:state.compareMode,
     comparePasteA:state.comparePasteA,
     comparePasteB:state.comparePasteB,
+    compareSourceA:state.compareSourceA,
+    compareSourceB:state.compareSourceB,
+    compareFilter:state.compareFilter,
     activeStore:state.activeStore,
     storePage:state.storePage,
     storePageSize:state.storePageSize,
@@ -903,7 +909,7 @@ async function restoreWorkspace(){
     if(prefs){
       const preservedAppDefaults={...state.appConfig};
       const preservedLlmDefaults={...state.llmConfig};
-      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
+      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","compareSourceA","compareSourceB","compareFilter","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
         if(prefs[key]!==undefined)state[key]=prefs[key];
       }
       state.appConfig={...preservedAppDefaults,...(prefs.appConfig||{})};
@@ -7955,6 +7961,41 @@ function searchRecordOptions(query,limit=18){
 function lookupRecord(key){
   if(!key)return null;const [fid,i]=key.split("::");const f=state.files.find(x=>x.id===fid);return f?{file:f,index:+i,record:f.records[+i]}:null;
 }
+function getCompareLibrary(){
+  if(isResearcher()){
+    return researcherDbRecords().map(record=>{
+      const id=String(record._chroma_id||record.record_id||"");
+      const label=`${record.record_id||id} · ${record.work||""}`;
+      return {value:id,label,search:`${label} ${record.document_author||""}`.toLocaleLowerCase()};
+    });
+  }
+  return compareSearchIndex();
+}
+function getCompareRecord(key){
+  if(!key)return null;
+  if(isResearcher()){
+    const record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(key));
+    if(!record)return null;
+    const copy={...record};
+    delete copy._chroma_id;
+    delete copy._researcher_text_policy;
+    return {record:copy,label:`${record.record_id||key} · ${record.work||""}`};
+  }
+  const item=lookupRecord(key);
+  if(!item?.record)return null;
+  return {record:item.record,label:recordOptionLabel(item.file,item.record,item.index)};
+}
+async function ensureCompareLibrary(){
+  if(!isResearcher())return getCompareLibrary();
+  if(!state.activeStore){
+    try{await refreshStores()}catch{ /* stores may be unavailable */ }
+  }
+  if(!state.storeRecords.length&&state.activeStore){
+    state.storePageSize=Math.max(Number(state.storePageSize||50),100);
+    try{await loadStorePage()}catch{ /* page load is best-effort for Compare */ }
+  }
+  return getCompareLibrary();
+}
 function parsePastedRecord(value){
   let text=String(value||"").trim();
   if(!text)return null;
@@ -11028,6 +11069,12 @@ export {
   upsertRows,
   exportStoreJsonl,
   persistPrefs,
+  lookupRecord,
+  getCompareLibrary,
+  getCompareRecord,
+  ensureCompareLibrary,
+  copyJsonToClipboard,
+  copyCitation,
   flushWorkspacePrefs,
   applyUiTheme,
   applyAppearance,
