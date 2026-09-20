@@ -39,6 +39,7 @@ const i18n = useI18nStore();
 h1{margin:4px 0 0;font:600 1.75rem/1.2 Georgia,"Times New Roman",serif;color:var(--text)}
 p{margin:8px 0 0;max-width:70ch;color:var(--muted);font-size:.875rem;line-height:1.5}
 .records-hero-actions{display:flex;flex-wrap:wrap;gap:8px}
+.records-hero-actions :deep(svg){width:1rem;height:1rem;flex:0 0 1rem}
 .records-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:8px;margin:0;padding:0;list-style:none}
 .records-stats li{display:grid;gap:2px;min-height:3.5rem;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel,var(--card,#fff))}
 .records-stats b{font-size:.9375rem;line-height:1.3;overflow-wrap:anywhere}
