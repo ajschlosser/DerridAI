@@ -30,6 +30,8 @@ import {
   translateDynamicUiValue as translateDynamicUiValueCompat,
   translateLegacyDom as translateLegacyDomCompat,
 } from "./legacyCompat.js";
+import { FIELD_LABELS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
+import { esc, icon } from "../domain/html";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
@@ -63,78 +65,10 @@ function translateLegacyDom(root=document.querySelector("#main")){
   return translateLegacyDomCompat(state, root);
 }
 
-const labels = {
-  record_id:"Record ID",work:"Work",document_author:"Document author",edition:"Edition",year:"Year",
-  page_start:"Page start",page_end:"Page end",region_type:"Region type",region_author:"Region author",
-  primary_text:"Primary text",canonical_work_id:"Canonical work ID",speaker:"Speaker",
-  position_holder:"Position holder",target:"Target",discourse_role:"Discourse role",
-  proposition_status:"Proposition status",semantic_function:"Semantic function",stance:"Stance",
-  claim_scope:"Claim scope",is_direct_quote:"Direct quote",quoted_speaker:"Quoted speaker",
-  quoted_author:"Quoted author",quoted_work:"Quoted work",quoted_position_holder:"Quoted position holder",
-  quoted_addressee:"Quoted addressee",quoted_referent:"Quoted referent",quotation_chain:"Quotation chain",
-  topics:"Topics",concepts:"Concepts",persons:"Persons",works_referenced:"Works referenced",
-  attribution_confidence:"Attribution confidence",semantic_classification_confidence:"Semantic classification confidence",
-  extraction_quality:"Extraction quality",needs_review:"Needs review",review_reason:"Review reason",
-  document_language:"Document language",original_language:"Original language",document_is_translation:"Document is translation",
-  translator:"Translator",publisher:"Publisher",publication_year:"Publication year",publication_place:"Publication place",isbn:"ISBN",document_title:"Document title",short_title:"Short title",original_title:"Original title",cover_url:"Cover URL",inline_citation:"Inline citation",full_citation:"Full citation",text:"Extracted text",text_length:"Text length",updates:"Change history",pdf_file:"PDF file",pdf_page:"PDF page",pdf_pages:"PDF pages",pdf_links:"PDF links",__file:"File",__db_status:"DB status",_chroma_id:"Chroma ID"
-};
 
 
-const viewConfig = [
-  {id:"home", label:"Home", icon:"dashboard", section:"Overview"},
-  {id:"list", label:"Records", icon:"list", section:"Corpus"},
-  {id:"record", label:"Record View", icon:"record", section:"Corpus"},
-  {id:"works", label:"Works", icon:"books", section:"Corpus"},
-  {id:"global", label:"Search", icon:"search", section:"Corpus"},
-  {id:"annotations", label:"Annotations", icon:"record", section:"Corpus"},
-  {id:"pdf", label:"Corpus Builder", icon:"pdf", section:"Tools"},
-  {id:"compare", label:"Compare", icon:"compare", section:"Tools"},
-  {id:"vector", label:"Vector Stores", icon:"database", section:"Tools"},
-  {id:"rag", label:"Research", icon:"spark", section:"Research"},
-  {id:"faq", label:"Response Library", icon:"books", section:"Research"},
-  {id:"responsecache", label:"Response Cache", icon:"database", section:"Research"},
-  {id:"providers", label:"LLM Providers", icon:"spark", section:"System"},
-  {id:"config", label:"Settings", icon:"gear", section:"System"},
-];
 
-const TABLE_DEFAULTS={
-  // Record actions are rendered as a dedicated trailing column. Keep the default
-  // data columns compact enough to scan on a laptop and let users opt into the
-  // rest through the column chooser.
-  list:["__db_status","work","page_start","needs_review","text"],
-  global:["__db_status","work","page_start","needs_review","text"],
-  vector:["_chroma_id","record_id","work","page_start","speaker","needs_review"],
-};
-const SEARCH_LOADED_COLUMNS=["__db_status","work","page_start","needs_review","text"];
 
-function icon(name){
-  const paths={
-    dashboard:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    list:'<path d="M5 7h14M5 12h14M5 17h14"/><path d="M3 7h.01M3 12h.01M3 17h.01"/>',
-    record:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    books:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
-    search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
-    pdf:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M8.5 15h7M8.5 18h5"/>',
-    compare:'<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3"/>',
-    database:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20v-11"/><path d="M2 20h21"/>',
-    upload:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
-    download:'<path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 20h14"/>',
-    edit:'<path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
-    copy:'<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
-    filter:'<path d="M3 5h18l-7 8v5l-4 2v-7z"/>',
-    spark:'<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z"/><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z"/>',
-    broom:'<path d="m15 3 6 6-8 8-6-6z"/><path d="M7 11 3 15l6 6 4-4M5 17l2 2M8 14l4 4"/>',
-    plus:'<path d="M12 5v14M5 12h14"/>',
-    refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
-    check:'<path d="m5 12 4 4L19 6"/>',
-    history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
-    arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
-    close:'<path d="m6 6 12 12M18 6 6 18"/>',
-    gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
-  };
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.record}</svg>`;
-}
 
 function systemCardHtml(){
   const health=state.health;
@@ -197,8 +131,7 @@ async function stableJsonlFileIdentity(text){
   const hex=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,"0")).join("");
   return {id:`jsonl-${hex.slice(0,24)}`,content_hash:hex};
 }
-const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-const label = key => tr(`field.${key}`, labels[key] || key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase()));
+const label = key => tr(`field.${key}`, FIELD_LABELS[key] || key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase()));
 const display = value => {
   if(value === null || value === undefined || value === "") return "—";
   if(Array.isArray(value)) return value.length ? value.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ") : "—";
