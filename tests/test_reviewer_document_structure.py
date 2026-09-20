@@ -59,7 +59,7 @@ def make_build(repo:cb.PdfCorpusRepository):
 def test_profile_and_prompt_version_ids_are_pinned():
     """Pin the profile, metadata prompt, and document-manifest prompt version ids."""
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v10"
     assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
 
 

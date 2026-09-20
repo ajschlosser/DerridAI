@@ -410,6 +410,7 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
 - If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
 - Reviewer-confirmed values are never overwritten by later enrichment.
+- After a pass finishes, **Run another pass** is available in the review workspace immediately. You do not need to accept every record first. The next pass is given what the last pass inferred (working conventions on this build) and any reviewer decisions already made.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
 

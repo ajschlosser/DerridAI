@@ -3,7 +3,7 @@
 Why: enrichment passes may be chained while a reviewer keeps working. Human
 edits must never be lost, disagreements must be decided only when the model is
 confident, and what reviewers teach one pass must reach the next.
-How: `resolve_conflict` and `learn_from_review` are pure; the manager tests
+How: `resolve_conflict`, `learn_from_review`, and `learn_from_pass` are pure; the manager tests
 stub `_enrich_record` (no provider) and run the worker inline.
 """
 
@@ -101,6 +101,42 @@ def test_learn_from_review_counts_only_reviewer_decisions():
     learned = ec.learn_from_review(rows)
     assert learned["field_stats"] == {"stance": {"accepted": 1, "rejected": 1}}
     assert learned["rejected_examples"]["stance"] == [{"record_id": "b", "rejected_value": "critical", "chosen_value": "neutral"}]
+
+
+def test_learn_from_pass_uses_unreviewed_inferences_and_defers_to_reviewers():
+    """A later pass can learn from the last one before any reviewer has judged those fields."""
+    rows = [
+        {"record_id": "a", "discourse_role": "analysis", "speaker": "Derrida",
+         "metadata_field_status": {
+             "discourse_role": {"status": "llm_inferred", "confidence": 0.9},
+             "speaker": {"status": "llm_inferred", "confidence": 0.88},
+         }},
+        {"record_id": "b", "discourse_role": "analysis", "speaker": "Derrida",
+         "metadata_field_status": {
+             "discourse_role": {"status": "llm_inferred", "confidence": 0.8},
+             "speaker": {"status": "llm_inferred", "confidence": 0.91},
+         }},
+        {"record_id": "c", "discourse_role": "commentary", "stance": "critical",
+         "metadata_field_status": {
+             "discourse_role": {"status": "llm_inferred", "confidence": 0.4},
+             "stance": {"status": "human_confirmed"},
+         },
+         "metadata_disputes": [{"field": "stance", "existing": "neutral", "proposed": "critical"}]},
+        {"record_id": "d", "metadata_disputes": [{"field": "region_type", "existing": "main_text", "proposed": "note"}]},
+    ]
+    learned = ec.learn_from_pass(rows)
+    assert learned["field_stats"] == {"stance": {"accepted": 1, "rejected": 0}}
+    assert "stance" not in learned["prior_pass"]["inferred_conventions"]
+    assert learned["prior_pass"]["inferred_conventions"]["discourse_role"]["value"] == "analysis"
+    assert learned["prior_pass"]["inferred_conventions"]["discourse_role"]["records"] == 2
+    assert learned["prior_pass"]["inferred_conventions"]["speaker"]["value"] == "Derrida"
+    assert learned["prior_pass"]["disputed_fields"]["region_type"] == 1
+    assert "commentary" != learned["prior_pass"]["inferred_conventions"]["discourse_role"]["value"]
+    blocked = rows + [{
+        "record_id": "e", "discourse_role": "reported_position",
+        "metadata_field_status": {"discourse_role": {"status": "human_confirmed"}},
+    }]
+    assert "discourse_role" not in ec.learn_from_pass(blocked)["prior_pass"]["inferred_conventions"]
 
 
 def test_global_store_promotes_only_generalizable_conventions_seen_in_several_builds(tmp_path: Path):
@@ -218,3 +254,35 @@ def test_pass_ignores_confidence_telemetry_and_near_duplicate_lists(tmp_path: Pa
     assert row["topics"] == ["hospitality", "ethics", "borders", "asylum"]
     assert not row.get("metadata_disputes")
     assert row["stance"] == "critical"
+
+
+def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path: Path):
+    """Starting another pass does not require accepting records; it sees last-pass conventions."""
+    rows = [
+        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.9}}},
+        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.86}}},
+        {"discourse_role": "analysis", "review_disposition": "pending", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.84}}},
+    ]
+    manager, repo, build_id = make_manager(tmp_path, rows)
+    seen: list[dict] = []
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        seen.append(manager._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or "")))
+        return proposal(record, stance=("critical", 0.9))
+
+    manager._enrich_record = fake_enrich
+    manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all"})
+    conventions = [memory["pass_learning"]["prior_pass"]["inferred_conventions"] for memory in seen]
+    assert any(item.get("discourse_role", {}).get("value") == "analysis" for item in conventions)
+    dispositions = [str(row.get("review_disposition") or "pending") for row in repo.load_records(build_id)]
+    assert "accepted" not in dispositions[:2]
+    assert repo.get_build(build_id)["status"] == "awaiting_review"
+
+
+def test_initial_enrichment_operation_marks_the_first_pass_complete():
+    op = cb.PdfCorpusBuildManager._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
+    assert op["kind"] == "metadata_enrichment"
+    assert op["state"] == "completed"
+    assert op["passes_completed"] == 1
+    assert op["records_processed"] == 2
+    assert op["started_at"] == "t0"
