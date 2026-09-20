@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock, type DocumentLayoutPlan } from "../api/pdfCorpus";
+import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock, type DocumentLayoutPlan , type AutonomousPolicy} from "../api/pdfCorpus";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
@@ -46,6 +46,9 @@ import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
 import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
+import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
+import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
+import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { useSplitter } from "../composables/useSplitter";
@@ -83,6 +86,21 @@ const reviewQueue=ref<ReviewQueue>("all");
 const QUEUE_KEY="derridai.reviewQueueCollapsed";
 function initialQueueCollapsed():boolean{try{const stored=localStorage.getItem(QUEUE_KEY);if(stored==="1")return true;if(stored==="0")return false}catch{/* private mode: start open */}return false}
 const reviewQueueCollapsed=ref(initialQueueCollapsed());
+// Hands-free mode: nobody reviews, a stated policy decides (see the server's autonomous.py). Off unless turned on.
+const handsFree=ref<AutonomousPolicy>({enabled:false,passes:1,min_confidence:0.8,unresolved:"best_guess",accept_records:true,publish:false});
+const handsFreeOpen=ref(false);
+async function runHandsFree(){
+  if(!currentBuild.value)return;
+  busy.value="hands-free";
+  try{
+    const config=directProfilePayloadWithModel(llmActionProviderId.value||selectedProviderId.value||providerProfiles.value[0]?.id||"",llmActionModel.value)||providerPayload.value;
+    currentBuild.value=await pdfCorpusApi.runAutonomous(currentBuild.value.build_id,{...config,autonomous:{...handsFree.value,enabled:true}});
+    handsFreeOpen.value=false;
+    startPolling();
+    setMessage(i18n.t("pdf_corpus.hands_free_started","Hands-free run started. The report appears here when it finishes."));
+  }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
+function openHandsFreeException(recordId:string){reviewQueue.value="all";recordQuery.value=recordId}
 watch(reviewQueueCollapsed,value=>{try{localStorage.setItem(QUEUE_KEY,value?"1":"0")}catch{/* not remembering is fine */}});
 const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
 const reviewWorkspaceMode=ref<"record"|"metadata"|"source">("record");
@@ -249,10 +267,11 @@ const bulkActionItems=computed<CorpusActionMenuItem[]>(()=>{
   const rejectReason=busy.value!==""?i18n.t("pdf_corpus.reason.busy","Wait for the current action to finish."):reviewLocked.value?i18n.t("pdf_corpus.reason.review_locked","Review is unavailable while the build is running."):selectedReviewCount.value===0?i18n.t("pdf_corpus.reason.select_records_first","Select one or more records first."):undefined;
   return [
     {id:"edit",label:i18n.t("pdf_corpus.bulk_edit_metadata","Bulk edit metadata")},
+    {id:"hands-free",label:i18n.t("pdf_corpus.run_hands_free","Run hands-free…"),reason:busy.value!==""?i18n.t("pdf_corpus.reason.busy","Wait for the current action to finish."):reviewLocked.value?i18n.t("pdf_corpus.reason.review_locked","Review is unavailable while the build is running."):undefined},
     {id:"reject",label:i18n.tf("pdf_corpus.reject_selected_count","Reject selected ({count})",{count:selectedReviewCount.value}),reason:rejectReason},
   ];
 });
-function runBulkAction(id:string){if(id==="edit")bulkMetadataOpen.value=!bulkMetadataOpen.value;else if(id==="reject")bulkDisposition("rejected")}
+function runBulkAction(id:string){if(id==="edit")bulkMetadataOpen.value=!bulkMetadataOpen.value;else if(id==="hands-free")handsFreeOpen.value=true;else if(id==="reject")bulkDisposition("rejected")}
 const activeBuilds=computed(()=>builds.value.filter(build=>["queued","running"].includes(String(build.status||""))));
 const activeBuildCount=computed(()=>activeBuilds.value.length);
 const selectedProfileActiveBuildCount=computed(()=>selectedProviderId.value?activeBuilds.value.filter(build=>String(build.request?.provider_profile_id||"")===selectedProviderId.value).length:0);
@@ -591,7 +610,7 @@ async function savePageLabels(labels:Record<number,string|null>){if(!selectedAss
 async function saveDocumentLayout(plan:DocumentLayoutPlan){if(!selectedAssetId.value)return;busy.value="document-layout";try{const asset=await pdfCorpusApi.updateDocumentLayout(selectedAssetId.value,plan);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);const mapped=(asset.pages||[]).filter(page=>Boolean(String(page.printed_page_label??"").trim())||(page.logical_pages||[]).some(item=>Boolean(String(item.printed_page_label??"").trim()))).length;const exceptions=(asset.pages||[]).filter(page=>String(page.printed_page_label_source||"").includes("override")).length;setMessage(i18n.tf("pdf_corpus.document_structure_saved_impact","Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.",{mapped,total:asset.page_count,exceptions}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 
 async function useCurrentPdf(){const file=(runtime.state.pdf.file as File|null);if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
-async function startBuild(){if(!selectedAsset.value){setMessage(i18n.t("pdf_corpus.choose_pdf_before_build","Choose or load a source PDF before starting a corpus build."),"error");return;}busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function startBuild(){if(!selectedAsset.value){setMessage(i18n.t("pdf_corpus.choose_pdf_before_build","Choose or load a source PDF before starting a corpus build."),"error");return;}busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,auto_enrich_work_metadata:true,...providerPayload.value,...(handsFree.value.enabled?{autonomous:{...handsFree.value}}:{})};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
 async function retryIncompleteMetadata(){
   if(!currentBuild.value||!canRetryMetadata.value)return;
@@ -973,6 +992,10 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         <summary><span class="setup-step">4</span><span><b>{{i18n.t('pdf_corpus.record_construction','Record construction')}}</b><small>{{i18n.tf('pdf_corpus.readiness.sizing','{target} ± {tolerance} characters',{target:recordSizing.preferred_record_chars.toLocaleString(),tolerance:recordSizing.record_length_tolerance.toLocaleString()})}}</small></span></summary>
         <div class="setup-disclosure-body"><CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy!==''" /></div>
       </details>
+      <details class="setup-section setup-disclosure">
+        <summary><span class="setup-step">5</span><span><b>{{i18n.t('pdf_corpus.hands_free_title','Hands-free mode')}}</b><small>{{handsFree.enabled?i18n.t('pdf_corpus.hands_free_on','On: the build settles itself, then reports what is left'):i18n.t('pdf_corpus.hands_free_off','Off: you review every record')}}</small></span></summary>
+        <div class="setup-disclosure-body"><CorpusHandsFreeSettings v-model="handsFree" :disabled="busy!==''" /></div>
+      </details>
 
       <div class="setup-section execution-wrapper"><div class="setup-section-inline-head"><span class="setup-step">5</span><span><b>{{i18n.t('pdf_corpus.advanced_execution','Advanced execution')}}</b><small>{{i18n.t('pdf_corpus.advanced_execution_help','Provider generation parameters, concurrency, stage budgets, and deadlines.')}}</small></span></div><CorpusExecutionSettings class="execution-config" :generation="effectiveGeneration" :stage-limits="stageLimits" :stage-timeouts="stageTimeouts" :max-concurrent-requests="maxConcurrentRequests" :use-profile-defaults="useProfileDefaults" :disabled="busy!==''" @update:generation="generationOverrides=$event" @update:stage-limits="stageLimits=$event" @update:stage-timeouts="stageTimeouts=$event" @update:max-concurrent-requests="maxConcurrentRequests=$event" @update:use-profile-defaults="useProfileDefaults=$event" /></div>
 
@@ -1041,6 +1064,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusEnrichmentPassStatus v-if="currentBuild" :build="currentBuild" :disabled="busy!==''" @stop="cancelBuild" @run-another="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" />
+          <CorpusHandsFreeReport v-if="currentBuild" :report="currentBuild.autonomous_report" @open-record="openHandsFreeException" />
           <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
           <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
           <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
@@ -1142,6 +1166,10 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <CorpusJsonlPreviewDialog :open="jsonlPreviewOpen" :jsonl="jsonlPreview.jsonl" :validation-errors="jsonlPreview.validation_errors" :unresolved-fields="jsonlPreview.unresolved_fields" :would-publish="jsonlPreview.would_publish" :busy="busy!==''" @close="jsonlPreviewOpen=false" />
     <CorpusLlmTextTouchupDialog :open="llmTouchupOpen" :source-text="textDraft||selectedRecord?.text||''" :proposed-text="llmTouchupResult.proposed_text" :changes="llmTouchupResult.changes" :warnings="llmTouchupResult.warnings" :model="llmTouchupResult.model" :error="llmTouchupError" :busy="busy==='text-touchup'" :profiles="providerProfiles" :provider-profile-id="llmActionProviderId" :model-override="llmActionModel" :concurrency-risk="Boolean(providerProfiles.find(p=>p.id===llmActionProviderId)?.type==='ollama'&&llmActionConcurrentLoad+1>Number(providerProfiles.find(p=>p.id===llmActionProviderId)?.max_concurrent_requests||1))" :active-requests="llmActionConcurrentLoad" :concurrency-limit="Number(providerProfiles.find(p=>p.id===llmActionProviderId)?.max_concurrent_requests||1)" :record-id="selectedRecord?.record_id" @update:provider-profile-id="value=>llmActionProviderId=value" @update:model-override="value=>llmActionModel=value" @close="llmTouchupOpen=false" @run="runLlmTouchup" @apply="applyLlmTouchup" />
     <SourceTranscriptionDialog v-if="selectedRecord&&selectedAsset" :open="sourceTranscriptionOpen" :pdf-url="sourcePdfUrl" :page="selectedPdfPage" :page-count="selectedAsset.page_count" :printed-page="selectedRecord.page_start" :page-width="selectedPageMeta?.width||0" :page-height="selectedPageMeta?.height||0" :blocks="selectedPageBlocks" :text="String(selectedRecord.text||'')" :busy="busy!==''" @close="sourceTranscriptionOpen=false" @page-change="page=>selectedPdfPage=page" @save-text="saveSourceTranscription" />
+    <UiDialog v-if="handsFreeOpen" size="medium" :title="i18n.t('pdf_corpus.run_hands_free_title','Run hands-free')" :description="i18n.t('pdf_corpus.run_hands_free_help','Settle this build with the rules below, without reviewing each record.')" :close-label="i18n.t('ui.close','Close')" @close="handsFreeOpen=false">
+      <CorpusHandsFreeSettings v-model="handsFree" :disabled="busy!==''" :show-enable="false" />
+      <template #footer><button type="button" class="btn" @click="handsFreeOpen=false">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" :disabled="busy!==''" @click="runHandsFree">{{i18n.t('pdf_corpus.run_hands_free_action','Run hands-free')}}</button></template>
+    </UiDialog>
     <MetadataEnrichmentDialog :open="metadataEnrichmentOpen" :profiles="providerProfiles" :provider-profile-id="llmActionProviderId" :model-override="llmActionModel" :busy="busy==='metadata-enrichment'" :record-count="currentBuild?.record_count||0" :accepted-count="currentBuild?.accepted_count||0" @update:provider-profile-id="value=>llmActionProviderId=value" @update:model-override="value=>llmActionModel=value" @close="metadataEnrichmentOpen=false" @run="runMetadataEnrichment" />
     <Teleport to="body"><CorpusRecordFocusReview v-if="focusView&&selectedRecord" :record="selectedRecord" :source-blocks="visibleBlocks" :busy="busy!==''||reviewLocked" :can-merge-previous="canMergePrevious" :can-merge-next="canMergeNext" :can-accept="!selectedMetadataBlocked&&!Boolean(selectedRecord.source_quality_issues?.length)" :region-types="regionTypes" :discourse-roles="discourseRoles" :recurring-lines="recurringCleanupLines" :document-terms="cleanupDocumentTerms" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :source-pdf-url="selectedAsset?`${pdfCorpusApi.assetContentUrl(selectedAsset.asset_id)}#page=${selectedPdfPage||1}`:''" :source-pdf-page="selectedPdfPage" :source-pdf-page-count="selectedAsset?.page_count||0" :source-page-width="selectedPageMeta?.width||0" :source-page-height="selectedPageMeta?.height||0" :can-history-back="focusHistoryIndex>0" :can-history-forward="focusHistoryIndex>=0&&focusHistoryIndex<focusHistory.length-1" :can-previous-record="selectedRecordIndex>0||recordOffset>0" :can-next-record="selectedRecordIndex>=0&&(selectedRecordIndex<records.length-1||recordOffset+pageSize<recordTotal)" :provider-profiles="providerProfiles" :llm-provider-profile-id="llmActionProviderId||selectedProviderId" :llm-model-override="llmActionModel" @close="focusView=false" @history-back="focusHistoryMove(-1)" @history-forward="focusHistoryMove(1)" @previous-record="focusQueueMove(-1)" @next-record="focusQueueMove(1)" @save-text="saveTextFromFocus" @resolve-metadata="resolveMetadataField" @confirm-no-metadata-value="resolveMetadataNoValue" @metadata-dirty="handleMetadataDirty" @preview-jsonl="openJsonlPreview" @llm-touchup="openLlmTouchup" @accept="acceptFromFocus" @reject="setDisposition('rejected')" @skip="skipRecord" @undo="undoReview" @redo="redoReview" @slice="sliceRecord" @merge="merge" @update-llm-provider-profile="value=>llmActionProviderId=value" @update-llm-model="value=>llmActionModel=value" @adjudicate-boundary="adjudicateBoundary" @open-source-viewer="sourceTranscriptionOpen=true" /></Teleport>
   </section>
