@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { authApi, type CapabilityDefinition, type RoleDefinition, type UserRole } from "../api/auth";
 import { useI18nStore } from "../stores/i18n";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
-import * as runtime from "../runtime/runtime.js";
+import { notify } from "../composables/notifications";
 
 const i18n = useI18nStore();
 const roles = ref<RoleDefinition[]>([]);
@@ -43,7 +43,7 @@ async function save() {
     roles.value = result.roles;
     capabilities.value = result.capabilities;
     permissions.value = [...result.permissions];
-    runtime.notifyToast?.(i18n.t("roles.saved", "Role permissions saved."), {tone: "success"});
+    notify(i18n.t("roles.saved", "Role permissions saved."), "success");
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { saving.value = false; }
 }
@@ -53,13 +53,13 @@ async function createRole(){
   try{
     const result=await authApi.createRole({name:roleName.value.trim(),description:roleDescription.value.trim(),clone_from:cloneFrom.value});
     roles.value=result.roles;capabilities.value=result.capabilities;selectRole(result.role.id);createDialog.value?.close();
-    runtime.notifyToast?.(i18n.t("roles.created", "Role created."),{tone:"success"});
+    notify(i18n.t("roles.created", "Role created."),"success");
   }catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{creating.value=false}
 }
 async function deleteSelected(){
   const current=role.value;if(!current||current.builtin||current.locked)return;
   if(!window.confirm(i18n.t("roles.delete_confirm", `Delete role “${current.name}”? Users must be reassigned first.`)))return;
-  try{await authApi.deleteRole(current.id);runtime.notifyToast?.(i18n.t("roles.deleted","Role deleted."),{tone:"success"});await refresh("researcher")}catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}
+  try{await authApi.deleteRole(current.id);notify(i18n.t("roles.deleted","Role deleted."),"success");await refresh("researcher")}catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}
 }
 onMounted(()=>refresh());
 </script>

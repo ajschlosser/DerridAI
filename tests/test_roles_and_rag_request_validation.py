@@ -82,3 +82,30 @@ def test_custom_role_store_round_trip(tmp_path, monkeypatch):
     store.update_user(user.id, role="researcher")
     store.delete_role(created["id"])
     assert created["id"] not in store.role_ids()
+
+
+def test_legacy_role_column_is_backfilled_then_removed(tmp_path, monkeypatch):
+    """Opening a pre-assignment database preserves roles without retaining dual state."""
+    import sqlite3
+    import sys
+    sys.path.insert(0, str(ROOT / "api"))
+    from app import auth
+
+    path = tmp_path / "legacy-auth.sqlite3"
+    with sqlite3.connect(path) as conn:
+        conn.execute("""CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            password_salt TEXT NOT NULL, password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('admin','researcher')), active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_login TEXT, login_count INTEGER NOT NULL DEFAULT 0
+        )""")
+        conn.execute("INSERT INTO users(username,password_salt,password_hash,role,created_at,updated_at) VALUES('legacy-admin','00','00','admin','now','now')")
+    monkeypatch.setattr(auth, "settings", SimpleNamespace(auth_db_path=str(path)))
+    store = auth.AuthStore()
+    user = store.list_users()[0]
+    assert user.role == "admin"
+    with sqlite3.connect(path) as conn:
+        columns = {column[1] for column in conn.execute("PRAGMA table_info(users)")}
+        assignment = conn.execute("SELECT role FROM user_role_assignments WHERE user_id=?", (user.id,)).fetchone()
+    assert "role" not in columns
+    assert assignment == ("admin",)
