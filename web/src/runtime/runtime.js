@@ -9105,8 +9105,6 @@ export {
   openWorkAnnotations,
 
   getNavItems,
-  operationDetailPairs,
-  jobProgressText,
   state,
   viewConfig,
   setUserContext,
