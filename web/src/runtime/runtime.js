@@ -10391,7 +10391,10 @@ function setAnnotationsWorkspaceView(value) {
 }
 function openAnnotationsWorkspaceRecord(item) {
   if (item.server) {
-    openSharedAnnotationRecord(item.source, item.record_id);
+    state.activeStore = String(item.source || state.activeStore || "");
+    state.researcherRecordId = String(item.record_id || "");
+    persistPrefs();
+    navigateTo("record");
     return;
   }
   navigateTo("record", { fileId: item.local_file_id, index: item.local_index });
@@ -10400,6 +10403,12 @@ function openAnnotationsWorkspaceWork(work) {
   state.workOverview = String(work || "");
   persistPrefs();
   navigateTo("works");
+}
+function openWorkAnnotations(work) {
+  state.annotationSearch = String(work || "");
+  state.annotationView = "works";
+  persistPrefs();
+  navigateTo("annotations");
 }
 async function removeAnnotationsWorkspaceItem(item) {
   if (!item.removable) return;
@@ -10548,13 +10557,13 @@ export {
   searchWork,
   openWorkMetadataEditorForVue as openWorkMetadataEditor,
   openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
-  openWorkAnnotations,
   loadAnnotationsWorkspace,
   setAnnotationsWorkspaceQuery,
   setAnnotationsWorkspaceView,
   openAnnotationsWorkspaceRecord,
   openAnnotationsWorkspaceWork,
   removeAnnotationsWorkspaceItem,
+  openWorkAnnotations,
 
   getNavItems,
   operationViewModel,
@@ -10671,7 +10680,6 @@ export {
   searchWork,
   openWorkMetadataEditorForVue as openWorkMetadataEditor,
   openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
-  openWorkAnnotations,
   openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,
