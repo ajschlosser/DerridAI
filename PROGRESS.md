@@ -59,8 +59,8 @@ Full end-to-end suite (137 tests, about 8.5 minutes; use ports that are free, St
 APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-desktop --workers=2
 ```
 
-Full e2e (143 with the DOM baseline): 137 passed on the untouched build; 143 passed at the commit that added
-the Research/history/formatting helpers. A run at the fieldFormatting commit is in progress; re-run before the PR.
+Full e2e (143 tests including the DOM baseline): 137 passed on the untouched pre-refactor build, and 143 passed on
+the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
 ### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`)
 
