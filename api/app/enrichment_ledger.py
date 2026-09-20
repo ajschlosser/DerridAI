@@ -93,6 +93,11 @@ class EnrichmentLedger:
     def to_csv(self) -> str:
         """One row per event, one column per key; lists and objects are JSON text so no row is ragged."""
         rows = self.events()
+        # A value held back from a reviewer must not be readable in the export either, while it is still held. The
+        # decision rows (blind_label, recheck, second_label) carry both answers once they are in.
+        for row in rows:
+            if row.get("kind") == RECHECK_SEAL or (row.get("kind") == PROPOSED and row.get("blind")):
+                row["value"] = "[sealed]"
         lead = ["at", "kind", "run_id", "build_id", "record_id", "model", "field", "reviewer", "arm", "ablations", "gold", "model_version", "prompt_version", "code_version", "temperature", "seed"]
         columns = lead + sorted({key for row in rows for key in row} - set(lead))
         out = io.StringIO()

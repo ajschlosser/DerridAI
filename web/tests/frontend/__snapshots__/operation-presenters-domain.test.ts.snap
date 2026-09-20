@@ -1,0 +1,161 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`operation presenters > builds the Operations panel view model for each job type 1`] = `
+{
+  "cancelRequested": false,
+  "completed": 4,
+  "createdAt": null,
+  "error": "",
+  "facts": [
+    {
+      "name": "Model",
+      "value": "m",
+    },
+    {
+      "name": "Fields",
+      "value": "a",
+    },
+    {
+      "name": "Pending results",
+      "value": "2",
+    },
+    {
+      "name": "Pending changes",
+      "value": "0",
+    },
+  ],
+  "finishedAt": "2026-01-01T10:05:30Z",
+  "icon": "edit",
+  "id": "1",
+  "label": "LLM review",
+  "owner": "",
+  "progressLabel": "4 of 10 (40%)",
+  "result": {
+    "kind": "review-partial",
+  },
+  "startedAt": "2026-01-01T10:00:00Z",
+  "status": "running",
+  "subtitle": "4/10 records",
+  "total": 10,
+  "type": "llm",
+}
+`;
+
+exports[`operation presenters > builds the Operations panel view model for each job type 2`] = `
+{
+  "cancelRequested": false,
+  "completed": 0,
+  "createdAt": null,
+  "error": "",
+  "facts": [
+    {
+      "name": "Generation",
+      "value": "gen",
+    },
+    {
+      "name": "Embedding",
+      "value": "bge-m3",
+    },
+    {
+      "name": "Collection",
+      "value": "corpus",
+    },
+    {
+      "name": "Languages",
+      "value": "en",
+    },
+  ],
+  "finishedAt": "2026-01-01T10:01:00Z",
+  "icon": "spark",
+  "id": "2",
+  "label": "RAG pipeline",
+  "owner": "",
+  "progressLabel": "0 of 0 (0%)",
+  "result": {
+    "kind": "result",
+  },
+  "startedAt": "2026-01-01T10:00:00Z",
+  "status": "completed",
+  "subtitle": "queued",
+  "total": 0,
+  "type": "rag",
+}
+`;
+
+exports[`operation presenters > builds the Operations panel view model for each job type 3`] = `
+{
+  "cancelRequested": false,
+  "completed": 1,
+  "createdAt": null,
+  "error": "boom",
+  "facts": [
+    {
+      "name": "Source PDF",
+      "value": "x.pdf",
+    },
+    {
+      "name": "records",
+      "value": "0",
+    },
+    {
+      "name": "need review",
+      "value": "0",
+    },
+    {
+      "name": "Unresolved regions",
+      "value": "0",
+    },
+  ],
+  "finishedAt": null,
+  "icon": "pdf",
+  "id": "3",
+  "label": "PDF corpus build",
+  "owner": "",
+  "progressLabel": "25% overall",
+  "result": null,
+  "startedAt": null,
+  "status": "failed",
+  "subtitle": "x.pdf · segmenting",
+  "total": 4,
+  "type": "pdf_corpus",
+}
+`;
+
+exports[`operation presenters > builds the Operations panel view model for each job type 4`] = `
+{
+  "cancelRequested": false,
+  "completed": 0,
+  "createdAt": null,
+  "error": "",
+  "facts": [
+    {
+      "name": "Collection",
+      "value": "corpus",
+    },
+    {
+      "name": "Scope",
+      "value": "3 works",
+    },
+    {
+      "name": "Records",
+      "value": "9",
+    },
+    {
+      "name": "Committed",
+      "value": "0",
+    },
+  ],
+  "finishedAt": null,
+  "icon": "database",
+  "id": "4",
+  "label": "Chroma upsert",
+  "owner": "",
+  "progressLabel": "0 of 9 (0%)",
+  "result": null,
+  "startedAt": null,
+  "status": "queued",
+  "subtitle": "corpus · 0/9 committed",
+  "total": 9,
+  "type": "upsert",
+}
+`;

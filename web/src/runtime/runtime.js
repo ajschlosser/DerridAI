@@ -13,6 +13,13 @@ import {
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
+import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
+import { compressUrlState, decompressUrlState } from "../domain/urlState";
+import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../domain/recordQuery";
+import { DB_NAME, createWorkspaceDb, deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
+import { finiteResearchNumber, normalizedResearchConfig, researchEvidenceForUi, researchJobForUi, researchProfileForUi, sanitizeResearchGeneration } from "../domain/researchPayloads";
+import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
+import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
   applyAppearance as applyAppearanceCompat,
   applyUiTheme as applyUiThemeCompat,
@@ -23,190 +30,24 @@ import {
   translateDynamicUiValue as translateDynamicUiValueCompat,
   translateLegacyDom as translateLegacyDomCompat,
 } from "./legacyCompat.js";
+import { FIELD_LABELS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
+import { esc, icon } from "../domain/html";
+import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
+import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
+import { fullHttpErrorDetail } from "../domain/httpErrors";
+import { parsePastedRecord } from "../domain/pastedRecord";
+import { providerRequestConfig } from "../domain/providerRequest";
+import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
+import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
+import { createOperationPresenters } from "../domain/operationPresenters";
+import { createFieldFormatting } from "../domain/fieldFormatting";
+import { createCorpusAnalytics } from "../domain/corpusAnalytics";
+import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
-const state = {
-  userContext: null,
-  files: [],
-  activeFileId: null,
-  view: "home",
-  selected: {},
-  searches: {},
-  listFilters: {},
-  pages: {},
-  pageSize: 100,
-  sorts: {},
-  globalSearch: "",
-  globalFilters: [],
-  globalSort: { key: "__file", dir: 1 },
-  globalPage: 1,
-  globalSearchMode: "traditional",
-  dbSearchMethod: "similarity",
-  dbSearchWhere: {},
-  dbSearchFetchK: 100,
-  dbSearchLambda: 0.7,
-  globalAdvancedOpen: false,
-  searchFacetFilters: {},
-  searchDatabaseRan: false,
-  worksSearch: "",
-  workOverview: "",
-  researcherRecordId: "",
-  researcherCompareA: "",
-  researcherCompareB: "",
-  annotationView: "works",
-  annotationSearch: "",
-  serverAnnotations: [],
-  serverAnnotationsStore: "",
-  annotationsFetchedAt: 0,
-  dashboardMetricIndex: 0,
-  lastViewedRecord: null,
-  globalSearchAutoRun: false,
-  searchResultLayouts: {traditional:"compact",database:"cards"},
-  foregroundUpsertCancelRequested: false,
-  recordFind: "",
-  recordFindKey: "",
-  pdf: { doc: null, file: null, url: "", name: "", title: "", author: "", page: 1, rotation: 0, text: "", search: "", relatedSearch: "", extractError: "", extractionSource: "" },
-  compareA: "",
-  compareB: "",
-  compareMode: "workspace",
-  comparePasteA: "",
-  comparePasteB: "",
-  compareSourceA: "library",
-  compareSourceB: "library",
-  compareFilter: "changed",
-  stores: [],
-  storesLastFetchedAt: 0,
-  vectorAutoCreateRequested: false,
-  activeStore: "",
-  storeSearchResults: [],
-  storeSearchLoading: false,
-  storeSearchMessage: "",
-  storeSearchSort: {key:"similarity",dir:-1},
-  storeRecords: [],
-  storeCount: 0,
-  storePage: 1,
-  storePageSize: 50,
-  storeQuery: "",
-  storeSearchMode: "",
-  storeWork: "",
-  storeSort: {key:"",dir:1},
-  storeFilters: {},
-  storeWorks: [],
-  storeWorkStats: [],
-  storeWorksStore: "",
-  storeBrowseMode: "works",
-  vectorTab: "overview",
-  vectorCollectionFilter: "",
-  health: null,
-  llmStatus: null,
-  reviewSelection: new Set(),
-  selectedEvidence: {},
-  researcherProviderProfiles: [],
-  translations: {locale:"en-US",dictionary:{},base:{}},
-  navHistory: [],
-  navForward: [],
-  sidebarCollapsed: false,
-  collectionsCollapsed: false,
-  operationToastsMinimized: false,
-  operationStackPosition: null,
-  collapsedPanels: {},
-  providerStatuses: {},
-  providerWarmups: {},
-  tableColumns: {},
-  upsertState: {},
-  upsertIgnored: {},
-  storePresence: {},
-  storePresenceIds: {},
-  storePresenceCheckedAt: {},
-  operationProgress: {},
-  jobs: [],
-  jobsLastFetched: 0,
-  jobsPollTimer: null,
-  jobApplied: {},
-  upsertJobApplied: {},
-  foregroundUpsertActive: false,
-  warmup: {status:"idle",message:""},
-  faqSearch: "",
-  faqPage: 1,
-  faqExpanded: {},
-  ragConfig: {
-    source_collection: "",
-    locales: ["en","fr"],
-    search_types: ["similarity","lexical","mmr"],
-    k: 64,
-    fetch_k: 500,
-    lambda_mult: 0.7,
-    rrf_k: 60,
-    rerank_top_n: 24,
-    reranker: "cross_encoder",
-    cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    query_decomposition: true,
-    query_decomposition_num_predict: 768,
-    response_language: "auto",
-    evidence_record_char_limit: 12000,
-    evidence_total_char_limit: 120000,
-    bind_citations: true,
-    include_works_cited: true,
-    auto_grade: false,
-    auto_grade_provider_profile_id: "",
-    provider_profile_id: "",
-    skip_retrieval: false,
-    prompt: "",
-    instructions: "",
-    history: [],
-    run_history: []
-  },
-  appConfig: {
-    chat_provider: "ollama",
-    chat_model: "gemma4:e2b",
-    embedding_provider: "ollama",
-    embedding_model: "bge-m3:latest",
-    ollama_base_url: "http://host.docker.internal:11434",
-    ollama_rag_concurrency: 1,
-    openai_base_url: "http://host.docker.internal:3001/v1",
-    openai_model: "auto",
-    openai_model_mode: "auto",
-    openai_model_kind: "any",
-    openai_api_key: "",
-    default_review_preset: "text",
-    default_llm_run_mode: "foreground",
-    desktop_notifications: false,
-    ui_color_theme: "green",
-    ui_color_scheme: "system",
-    ui_contrast: "system",
-    default_provider_profile: "",
-    review_provider_profile: "",
-    provider_profiles: [],
-    background_llm: true,
-    openai_num_predict: 4096,
-    openai_temperature: 0,
-    openai_top_p: 1,
-    openai_seed: "",
-    openai_extra_options: "{}",
-    metadata_num_predict: 768,
-    text_num_predict: 4096
-  },
-  llmConfig: {
-    model: "gemma4:e2b",
-    num_ctx: 16384,
-    num_predict: "",
-    think: "false",
-    temperature: 0,
-    top_k: 0,
-    top_p: 1,
-    min_p: "",
-    repeat_penalty: 1.1,
-    seed: "",
-    mirostat: 0,
-    mirostat_eta: "",
-    mirostat_tau: "",
-    keep_alive: "10m",
-    extra_options: "{}"
-  },
-  storageReady: false,
-};
+const state = createRuntimeState();
 
 function syncColorScheme(){
   return syncColorSchemeCompat(state);
@@ -234,78 +75,20 @@ function translateLegacyDom(root=document.querySelector("#main")){
   return translateLegacyDomCompat(state, root);
 }
 
-const labels = {
-  record_id:"Record ID",work:"Work",document_author:"Document author",edition:"Edition",year:"Year",
-  page_start:"Page start",page_end:"Page end",region_type:"Region type",region_author:"Region author",
-  primary_text:"Primary text",canonical_work_id:"Canonical work ID",speaker:"Speaker",
-  position_holder:"Position holder",target:"Target",discourse_role:"Discourse role",
-  proposition_status:"Proposition status",semantic_function:"Semantic function",stance:"Stance",
-  claim_scope:"Claim scope",is_direct_quote:"Direct quote",quoted_speaker:"Quoted speaker",
-  quoted_author:"Quoted author",quoted_work:"Quoted work",quoted_position_holder:"Quoted position holder",
-  quoted_addressee:"Quoted addressee",quoted_referent:"Quoted referent",quotation_chain:"Quotation chain",
-  topics:"Topics",concepts:"Concepts",persons:"Persons",works_referenced:"Works referenced",
-  attribution_confidence:"Attribution confidence",semantic_classification_confidence:"Semantic classification confidence",
-  extraction_quality:"Extraction quality",needs_review:"Needs review",review_reason:"Review reason",
-  document_language:"Document language",original_language:"Original language",document_is_translation:"Document is translation",
-  translator:"Translator",publisher:"Publisher",publication_year:"Publication year",publication_place:"Publication place",isbn:"ISBN",document_title:"Document title",short_title:"Short title",original_title:"Original title",cover_url:"Cover URL",inline_citation:"Inline citation",full_citation:"Full citation",text:"Extracted text",text_length:"Text length",updates:"Change history",pdf_file:"PDF file",pdf_page:"PDF page",pdf_pages:"PDF pages",pdf_links:"PDF links",__file:"File",__db_status:"DB status",_chroma_id:"Chroma ID"
-};
+const {workIndex,dateKeys,topNeedsReviewWorkSeries,needsReviewTimeline,topFieldValues,publicationYearSeries,workRecordShares,averageRecordLengthForTopWorks,recentAuditChanges}=createCorpusAnalytics({allRows,memoCorpus});
+const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValue}=createFieldFormatting({tr});
+const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
+  tr,trf,
+  getLocale:()=>state.translations?.locale||"en-US",
+  getStores:()=>state.stores,
+  providerProfiles:()=>providerProfiles(),
+  providerDisplayName:profile=>providerDisplayName(profile),
+});
 
 
-const viewConfig = [
-  {id:"home", label:"Home", icon:"dashboard", section:"Overview"},
-  {id:"list", label:"Records", icon:"list", section:"Corpus"},
-  {id:"record", label:"Record View", icon:"record", section:"Corpus"},
-  {id:"works", label:"Works", icon:"books", section:"Corpus"},
-  {id:"global", label:"Search", icon:"search", section:"Corpus"},
-  {id:"annotations", label:"Annotations", icon:"record", section:"Corpus"},
-  {id:"pdf", label:"Corpus Builder", icon:"pdf", section:"Tools"},
-  {id:"compare", label:"Compare", icon:"compare", section:"Tools"},
-  {id:"vector", label:"Vector Stores", icon:"database", section:"Tools"},
-  {id:"rag", label:"Research", icon:"spark", section:"Research"},
-  {id:"faq", label:"Response Library", icon:"books", section:"Research"},
-  {id:"responsecache", label:"Response Cache", icon:"database", section:"Research"},
-  {id:"providers", label:"LLM Providers", icon:"spark", section:"System"},
-  {id:"config", label:"Settings", icon:"gear", section:"System"},
-];
 
-const TABLE_DEFAULTS={
-  // Record actions are rendered as a dedicated trailing column. Keep the default
-  // data columns compact enough to scan on a laptop and let users opt into the
-  // rest through the column chooser.
-  list:["__db_status","work","page_start","needs_review","text"],
-  global:["__db_status","work","page_start","needs_review","text"],
-  vector:["_chroma_id","record_id","work","page_start","speaker","needs_review"],
-};
-const SEARCH_LOADED_COLUMNS=["__db_status","work","page_start","needs_review","text"];
 
-function icon(name){
-  const paths={
-    dashboard:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    list:'<path d="M5 7h14M5 12h14M5 17h14"/><path d="M3 7h.01M3 12h.01M3 17h.01"/>',
-    record:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    books:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
-    search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
-    pdf:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M8.5 15h7M8.5 18h5"/>',
-    compare:'<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3"/>',
-    database:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20v-11"/><path d="M2 20h21"/>',
-    upload:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
-    download:'<path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 20h14"/>',
-    edit:'<path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
-    copy:'<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
-    filter:'<path d="M3 5h18l-7 8v5l-4 2v-7z"/>',
-    spark:'<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z"/><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z"/>',
-    broom:'<path d="m15 3 6 6-8 8-6-6z"/><path d="M7 11 3 15l6 6 4-4M5 17l2 2M8 14l4 4"/>',
-    plus:'<path d="M12 5v14M5 12h14"/>',
-    refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
-    check:'<path d="m5 12 4 4L19 6"/>',
-    history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
-    arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
-    close:'<path d="m6 6 12 12M18 6 6 18"/>',
-    gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
-  };
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.record}</svg>`;
-}
+
 
 function systemCardHtml(){
   const health=state.health;
@@ -368,15 +151,6 @@ async function stableJsonlFileIdentity(text){
   const hex=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,"0")).join("");
   return {id:`jsonl-${hex.slice(0,24)}`,content_hash:hex};
 }
-const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-const label = key => tr(`field.${key}`, labels[key] || key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase()));
-const display = value => {
-  if(value === null || value === undefined || value === "") return "—";
-  if(Array.isArray(value)) return value.length ? value.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ") : "—";
-  if(typeof value === "object") return JSON.stringify(value);
-  if(typeof value === "boolean") return value ? tr("runtime.yes","Yes") : tr("runtime.no","No");
-  return String(value);
-};
 const activeFile = () => state.files.find(f => f.id === state.activeFileId) || null;
 const selectedIndex = f => Math.max(0, Math.min((f?.records.length || 1)-1, state.selected[f?.id] ?? 0));
 const selectedRecord = () => {
@@ -506,99 +280,24 @@ function showAppModal(dialog){
   dialog.showModal();
 }
 
-const DB_NAME="derridai-corpus-viewer";
-const DB_VERSION=2;
 function workspaceDbName(){
   return isResearcher()&&state.userContext?.id?`${DB_NAME}-researcher-${state.userContext.id}`:DB_NAME;
 }
-let dbPromise=null;
 let prefsTimer=null;
 const fileTimers=new Map();
 
-function openWorkspaceDb(){
-  if(dbPromise)return dbPromise;
-  dbPromise=new Promise((resolve,reject)=>{
-    const request=indexedDB.open(workspaceDbName(),DB_VERSION);
-    request.onupgradeneeded=()=>{
-      const db=request.result;
-      if(!db.objectStoreNames.contains("files"))db.createObjectStore("files",{keyPath:"id"});
-      if(!db.objectStoreNames.contains("prefs"))db.createObjectStore("prefs",{keyPath:"key"});
-      if(!db.objectStoreNames.contains("assets"))db.createObjectStore("assets",{keyPath:"key"});
-    };
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-  return dbPromise;
-}
-function idbRequest(request){
-  return new Promise((resolve,reject)=>{
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-}
-async function idbGetAll(storeName){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).getAll());
-}
-async function idbGet(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).get(key));
-}
-async function idbPut(storeName,value){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).put(value));
-}
-async function idbDelete(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).delete(key));
-}
+const workspaceDb=createWorkspaceDb(workspaceDbName);
+const idbGetAll=workspaceDb.getAll;
+const idbGet=workspaceDb.get;
+const idbPut=workspaceDb.put;
+const idbDelete=workspaceDb.remove;
 async function deleteWorkspaceDatabase(){
   clearTimeout(prefsTimer);
   for(const timer of fileTimers.values())clearTimeout(timer);
   fileTimers.clear();
-  try{
-    const db=await openWorkspaceDb();
-    db.close();
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  }catch{}
-  dbPromise=null;
-  await new Promise((resolve,reject)=>{
-    const request=indexedDB.deleteDatabase(workspaceDbName());
-    request.onsuccess=()=>resolve();
-    request.onerror=()=>reject(request.error);
-    request.onblocked=()=>reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
-  });
+  await workspaceDb.drop();
 }
-function isDerridaiStorageKey(key){
-  return Boolean(key)&&((key.startsWith("derridai.")||key.startsWith("derridai-")||key==="derridai"));
-}
-async function deleteAllDerridaiBrowserState(){
-  await deleteWorkspaceDatabase().catch(()=>{});
-  if(typeof indexedDB.databases==="function"){
-    const dbs=await indexedDB.databases();
-    await Promise.all((dbs||[]).map(info=>new Promise(resolve=>{
-      const name=String(info?.name||"");
-      if(!name.startsWith("derridai"))return resolve();
-      const request=indexedDB.deleteDatabase(name);
-      request.onsuccess=()=>resolve();
-      request.onerror=()=>resolve();
-      request.onblocked=()=>resolve();
-    })));
-  }
-  try{
-    const keys=[];
-    for(let i=0;i<localStorage.length;i+=1){
-      const key=localStorage.key(i);
-      if(isDerridaiStorageKey(key))keys.push(key);
-    }
-    keys.forEach(key=>localStorage.removeItem(key));
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  }catch{}
-}
+const deleteAllDerridaiBrowserState=()=>deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
 async function persistCurrentPdfAsset(){
   if(!state.pdf.file)return;
   try{
@@ -659,15 +358,7 @@ async function restoreCurrentPdfAsset(){
 }
 
 function serializableFile(file){
-  return {
-    id:file.id,
-    name:file.name,
-    records:file.records,
-    errors:file.errors||[],
-    dirty:[...file.dirty],
-    imported_at:file.imported_at||new Date().toISOString(),
-    saved_at:new Date().toISOString(),
-  };
+  return serializableRecordsFile(file);
 }
 async function persistFileNow(file){
   invalidateCorpusCache();
@@ -828,45 +519,6 @@ function reviewItemFromKey(key){
 }
 function selectedReviewItems(){return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean)}
 
-function mlaAuthorName(value){
-  const name=String(value||"").trim();if(!name)return "";
-  if(name.includes(","))return name;const parts=name.split(/\s+/);if(parts.length<2)return name;return `${parts.pop()}, ${parts.join(" ")}`;
-}
-function mlaPageSpan(record,{prefix=true}={}){
-  const a=record?.page_start,b=record?.page_end;
-  if(a==null||a==="")return "";const span=b!=null&&b!==""&&String(b)!==String(a)?`${a}–${b}`:`${a}`;
-  return prefix?`${b!=null&&b!==""&&String(b)!==String(a)?"pp.":"p."} ${span}`:span;
-}
-function inlineCitation(record){
-  const author=String(record?.document_author||record?.author||"").trim();
-  const last=author.includes(",")?author.split(",")[0].trim():author.split(/\s+/).filter(Boolean).pop()||"";
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const a=record?.page_start,b=record?.page_end;
-  const page=a==null||a===""?"":(b!=null&&b!==""&&String(b)!==String(a)?`${a}-${b}`:`${a}`);
-  const head=[last,year].filter(Boolean).join(" ");
-  if(head&&page)return `(${head}: ${page})`;
-  if(head)return `(${head})`;
-  return page?`(${page})`:String(record?.record_id||"Record");
-}
-function mlaSentence(value){const text=String(value||"").trim();return text&&!/[.!?]$/.test(text)?`${text}.`:text}
-function fullCitation(record,{includePages=true}={}){
-  const author=mlaAuthorName(record?.document_author||record?.author);
-  const title=String(record?.work||record?.document_title||"").trim();
-  const translator=String(record?.translator||"").trim();
-  const edition=String(record?.edition||"").trim();
-  const publisher=String(record?.publisher||"").trim();
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const page=includePages?mlaPageSpan(record):"";
-  const opening=[author?mlaSentence(author):"",title?mlaSentence(title):""].filter(Boolean).join(" ");
-  const publication=[];
-  if(translator)publication.push(`Translated by ${translator}`);
-  if(edition)publication.push(edition);
-  if(publisher)publication.push(publisher);
-  if(year)publication.push(year);
-  if(page)publication.push(page);
-  const tail=publication.length?`${publication.join(", ")}.`:"";
-  return [opening,tail].filter(Boolean).join(" ").trim()||String(record?.record_id||"Record");
-}
 async function copyCitation(record,kind="inline"){
   const text=kind==="full"?fullCitation(record):inlineCitation(record);
   try{await navigator.clipboard.writeText(text);toast(`Copied ${kind} citation`,{tone:"success"})}
@@ -955,15 +607,6 @@ function clearReviewSelection(){
   state.reviewSelection.clear();
   persistPrefs();
 }
-function cloneAuditValue(value){
-  if(value===undefined)return null;
-  try{return structuredClone(value)}catch{
-    try{return JSON.parse(JSON.stringify(value))}catch{return String(value)}
-  }
-}
-function sameValue(a,b){
-  try{return JSON.stringify(a)===JSON.stringify(b)}catch{return Object.is(a,b)}
-}
 
 // 0.30.11 packet discipline: API boundaries receive only fields required by
 // the operation. Audit history is intentionally opt-in because it can dwarf
@@ -984,19 +627,6 @@ const RAG_EVIDENCE_TRANSPORT_FIELDS=[
   "persons","document_language","document_languages","quoted_speaker",
   "quoted_author","quoted_work","quoted_position_holder"
 ];
-function recordPayload(record,{fields=null,includeUpdates=false,includeChromaId=false}={}){
-  const source=record&&typeof record==="object"?record:{};
-  const keys=fields?[...new Set(fields)]:Object.keys(source);
-  const out={};
-  for(const key of keys){
-    if(!(key in source))continue;
-    if(key==="updates"&&!includeUpdates)continue;
-    if(key==="_updates_count"||key==="_researcher_text_policy")continue;
-    if(key==="_chroma_id"&&!includeChromaId)continue;
-    out[key]=source[key];
-  }
-  return out;
-}
 function upsertRecordPayload(record,chromaId=null){
   const out=recordPayload(record,{includeChromaId:false});
   if(chromaId)out._chroma_id=chromaId;
@@ -1098,54 +728,6 @@ function formatTimestamp(value){
   if(!value)return "";
   const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
-}
-function recordHistoryVersions(record){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const cleanSnapshot=value=>{
-    const copy=cloneAuditValue(value)||{};
-    if(copy&&typeof copy==="object")delete copy.updates;
-    return copy;
-  };
-  const baseline=cleanSnapshot(record);
-  for(let index=updates.length-1;index>=0;index--){
-    const update=updates[index]||{};
-    if(!update.field_name)continue;
-    baseline[update.field_name]=cloneAuditValue(update.old_value);
-  }
-  const versions=[{
-    index:0,
-    label:"Original",
-    timestamp:null,
-    source:"original",
-    changes:[],
-    record:cleanSnapshot(baseline),
-  }];
-  const groups=[];
-  for(let index=0;index<updates.length;index++){
-    const update=updates[index]||{};
-    const key=update.batch_id||update.timestamp||`change-${index}`;
-    const previous=groups.at(-1);
-    if(previous?.key===key)previous.items.push(update);
-    else groups.push({key,items:[update]});
-  }
-  let snapshot=cleanSnapshot(baseline);
-  for(const group of groups){
-    snapshot=cleanSnapshot(snapshot);
-    for(const update of group.items){
-      if(update?.field_name)snapshot[update.field_name]=cloneAuditValue(update.new_value);
-    }
-    const last=group.items.at(-1)||{};
-    versions.push({
-      index:versions.length,
-      label:`Version ${versions.length}`,
-      timestamp:last.timestamp||null,
-      source:last.source||"manual",
-      model:last.model||null,
-      changes:group.items,
-      record:cleanSnapshot(snapshot),
-    });
-  }
-  return versions;
 }
 function historyVersionChanges(previous,current){
   const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
@@ -1303,51 +885,13 @@ function toast(message,{tone="auto",duration=null}={}){
   resume();
 }
 
-function highlight(text, query){
-  const s=String(text ?? ""), q=String(query ?? "");
-  if(!q) return esc(s);
-  const low=s.toLocaleLowerCase(), needle=q.toLocaleLowerCase();
-  let out="", pos=0, i;
-  while((i=low.indexOf(needle,pos))>=0){
-    out += esc(s.slice(pos,i)) + "<mark>" + esc(s.slice(i,i+q.length)) + "</mark>";
-    pos=i+Math.max(1,q.length);
-  }
-  return out + esc(s.slice(pos));
-}
 
-function highlightTerms(text, query){
-  const source=String(text??"");
-  // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
-  const terms=[...new Set(String(query??"").trim().split(/\s+/).map(term=>term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g,"")).filter(term=>term.length>1))]
-    .sort((a,b)=>b.length-a.length);
-  if(!terms.length)return esc(source);
-  const pattern=new RegExp(`(${terms.map(term=>term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})`,"gi");
-  let out="",last=0,match;
-  while((match=pattern.exec(source))){out+=esc(source.slice(last,match.index))+`<mark>${esc(match[0])}</mark>`;last=match.index+match[0].length;if(!match[0].length)pattern.lastIndex++}
-  return out+esc(source.slice(last));
-}
-function semanticSimilarity(distance){
-  const d=Number(distance);
-  if(!Number.isFinite(d))return null;
-  // Chroma distances are not calibrated probabilities. This monotonic transform
-  // provides an intuitive 0..1 display while preserving the result ranking.
-  return 1/(1+Math.max(0,d));
-}
 function similarityHtml(distance){
   const score=semanticSimilarity(distance);
   if(score==null)return `<span class="similarity-score" title="${esc(tr("research.similarity_help","Similarity is derived from vector distance and is not a probability."))}">—</span>`;
   return `<span class="similarity-score" title="${esc(tr("research.similarity_help","A ranking signal derived from vector distance. Higher values indicate closer semantic proximity; it is not a probability or confidence score."))}"><b>${(score*100).toFixed(1)}%</b><small>d=${Number(distance).toFixed(4)}</small></span>`;
 }
 
-function snippet(text, query, max=430){
-  const s=String(text ?? "").replace(/\s+/g," ").trim();
-  if(!s) return "";
-  if(!query) return s.length>max?s.slice(0,max)+"…":s;
-  const i=s.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-  if(i<0) return s.length>max?s.slice(0,max)+"…":s;
-  const a=Math.max(0,i-Math.floor(max/2)), b=Math.min(s.length,a+max);
-  return (a?"…":"")+s.slice(a,b)+(b<s.length?"…":"");
-}
 
 let progressiveRenderToken=0;
 function nextProgressiveRenderToken(){return ++progressiveRenderToken}
@@ -1396,25 +940,6 @@ function pages(r){
   return r.page_end!=null && r.page_end!==r.page_start ? `${display(r.page_start)}–${display(r.page_end)}` : display(r.page_start);
 }
 
-function compareValues(a,b){
-  const ae=a==null||a==="", be=b==null||b==="";
-  if(ae&&be)return 0;if(ae)return 1;if(be)return -1;
-  if(Array.isArray(a))a=a.join("\u0000");if(Array.isArray(b))b=b.join("\u0000");
-  if(typeof a==="boolean"||typeof b==="boolean")return Number(a)-Number(b);
-  const na=Number(a),nb=Number(b);
-  if(Number.isFinite(na)&&Number.isFinite(nb)&&String(a).trim()!==""&&String(b).trim()!=="")return na-nb;
-  return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});
-}
-
-function sortRows(rows, sort){
-  if(!sort?.key) return rows;
-  return [...rows].sort((x,y)=>{
-    const av=sort.key==="__file"?x.file.name:x.record?.[sort.key];
-    const bv=sort.key==="__file"?y.file.name:y.record?.[sort.key];
-    const c=compareValues(av,bv);
-    return (c || x.index-y.index)*sort.dir;
-  });
-}
 function toggleSort(sort,key){if(sort.key===key)sort.dir*=-1;else{sort.key=key;sort.dir=1}}
 function sortHead(text,key,sort,className=""){const arrow=sort.key===key?(sort.dir===1?"▲":"▼"):"";return `<th${className?` class="${esc(className)}"`:""}><button data-sort="${esc(key)}">${esc(text)} ${arrow}</button></th>`}
 
@@ -1440,24 +965,9 @@ function wirePager(prefix,pg,setPage){
   });
 }
 
-function stableValue(value){
-  if(Array.isArray(value))return value.map(stableValue);
-  if(value&&typeof value==="object"){
-    const out={};
-    for(const key of Object.keys(value).filter(key=>key!=="updates"&&key!=="_updates_count"&&!key.startsWith("_chroma_")).sort())out[key]=stableValue(value[key]);
-    return out;
-  }
-  return value;
-}
 function recordFingerprint(record){
   if(record&&typeof record==="object"&&recordFingerprintCache.has(record))return recordFingerprintCache.get(record);
-  const text=JSON.stringify(stableValue(record));
-  let hash=2166136261;
-  for(let i=0;i<text.length;i++){
-    hash^=text.charCodeAt(i);
-    hash=Math.imul(hash,16777619);
-  }
-  const value=(hash>>>0).toString(16).padStart(8,"0");
+  const value=computeRecordFingerprint(record);
   if(record&&typeof record==="object")recordFingerprintCache.set(record,value);
   return value;
 }
@@ -1776,18 +1286,6 @@ function storeCellHtml(record,key){
   const value=record[key];if(metadataSearchable(key,value))return `<td><button class="table-metadata-link scroll-cell" type="button" data-meta-search-field="${esc(key)}" data-meta-search-value="${esc(Array.isArray(value)?value[0]:value)}" data-meta-search-contains="${Array.isArray(value)}" title="${esc(display(value))}">${esc(display(value))}</button></td>`;
   return `<td><div class="scroll-cell ${key==="record_id"?"id":""}" title="${esc(display(value))}">${esc(display(value))}</div></td>`;
 }
-function pdfLinks(record){
-  const file=String(record?.pdf_file||"");
-  if(file&&Array.isArray(record?.pdf_pages)){
-    return [...new Set(record.pdf_pages.map(Number).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b).map(pdf_page=>({pdf_file:file,pdf_page}));
-  }
-  const legacyPage=Number(record?.pdf_page);
-  if(file&&Number.isFinite(legacyPage)&&legacyPage>0)return [{pdf_file:file,pdf_page:legacyPage}];
-  if(Array.isArray(record?.pdf_links)){
-    return record.pdf_links.map(link=>({pdf_file:String(link?.pdf_file||""),pdf_page:Number(link?.pdf_page)})).filter(link=>link.pdf_file&&Number.isFinite(link.pdf_page)&&link.pdf_page>0);
-  }
-  return [];
-}
 
 function pdfDisplayTitle(){
   return state.pdf.title||state.pdf.name||"PDF";
@@ -1856,16 +1354,6 @@ function openLoadedPdfPage(page){
   openPdfExplorerWorkspace();
 }
 
-function normalizePdfLinkChanges(record,links){
-  const files=[...new Set(links.map(link=>link.pdf_file).filter(Boolean))];
-  if(files.length>1)throw new Error("A record can link to multiple pages of one PDF source, not multiple PDF files.");
-  const file=files[0]||null;
-  const pages=[...new Set(links.map(link=>Number(link.pdf_page)).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b);
-  const changes={pdf_file:file,pdf_pages:pages};
-  if(record.pdf_page!==undefined)changes.pdf_page=null;
-  if(record.pdf_links!==undefined)changes.pdf_links=null;
-  return changes;
-}
 function editableChipSection(field,values){
   const list=flattenValueList(values);
   const datalist=[...new Set(allRows().flatMap(row=>flattenValueList(row.record[field])).map(String))].sort((a,b)=>a.localeCompare(b));
@@ -1897,23 +1385,6 @@ function needsReviewItems(rows=null){
     return memoCorpus("needs-review-items",()=>allRows().filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)})));
   }
   return rows.filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)}));
-}
-function workIndex(){
-  return memoCorpus("work-index",()=>{
-    const map=new Map();
-    for(const {file,record:r,index} of allRows()){
-      const key=String(r.work||"(Untitled work)");
-      const item=map.get(key)||{work:key,count:0,review:0,files:new Set(),authors:new Set(),years:new Set(),rows:[]};
-      item.count++;
-      if(r.needs_review)item.review++;
-      item.files.add(file.name);
-      if(r.document_author)item.authors.add(r.document_author);
-      if(r.year!=null)item.years.add(r.year);
-      item.rows.push({file,record:r,index});
-      map.set(key,item);
-    }
-    return map;
-  });
 }
 function openMergeDialog(){
   if(state.files.length<2)return toast("Open at least two JSONL files to merge");
@@ -2017,38 +1488,6 @@ async function ensureStores(){
   }catch(error){
     console.warn("Could not refresh Chroma collections",error);
   }
-}
-function upsertAuditDelta(record,receipt,presence){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const updatesCount=updates.length;
-  if(receipt&&receipt.updates_count!==null&&receipt.updates_count!==undefined&&Number.isInteger(Number(receipt.updates_count))){
-    const previousCount=Math.max(0,Number(receipt.updates_count));
-    if(updatesCount<previousCount){
-      return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-    }
-    if(updatesCount>previousCount){
-      return {audit_entries:updates.slice(previousCount).map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-    return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
-  }
-  // Upgrade path for receipts created before 0.30.11: use the receipt timestamp
-  // to send only audit entries created after the last successful sync.
-  if(receipt?.timestamp){
-    const syncedAt=Date.parse(receipt.timestamp);
-    if(Number.isFinite(syncedAt)){
-      const delta=updates.filter(entry=>{
-        const timestamp=Date.parse(entry?.timestamp||"");
-        return Number.isFinite(timestamp)&&timestamp>syncedAt;
-      });
-      return {audit_entries:delta.map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-  }
-  // A genuinely new Chroma row needs its existing local history initialized
-  // once. Existing rows with no receipt preserve their server-side history.
-  if(presence===false&&updatesCount){
-    return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-  }
-  return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
 }
 
 async function buildUpsertItems(rows,store,{yieldEvery=0}={}){
@@ -2181,79 +1620,6 @@ const viewPathMap={home:"/",list:"/records",record:"/record",works:"/works",glob
 const pathViewMap=Object.fromEntries(Object.entries(viewPathMap).map(([view,path])=>[path,view]));
 let urlSyncHook=null;
 function setUrlSyncHook(hook){urlSyncHook=typeof hook==="function"?hook:null}
-function _base64UrlEncodeBinary(binary){
-  return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
-}
-function _base64UrlDecodeBinary(token){
-  let b64=String(token||"").replace(/-/g,"+").replace(/_/g,"/");
-  while(b64.length%4)b64+="=";
-  return atob(b64);
-}
-function compressUrlState(value){
-  try{
-    // Table state is frequently small. Fixed-width LZW is excellent once column
-    // and filter names repeat, but can expand a tiny payload. Generate both a
-    // raw UTF-8 base64url form and the 12-bit LZW form and keep whichever is
-    // shorter. The one-character prefix keeps decoding deterministic while the
-    // legacy unprefixed LZW path below preserves links created by early 0.23 builds.
-    const bytes=new TextEncoder().encode(JSON.stringify(value));
-    if(!bytes.length)return "";
-    const input=String.fromCharCode(...bytes);
-    const raw=`r${_base64UrlEncodeBinary(input)}`;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(String.fromCharCode(i),i);
-    let next=256,w="";const codes=[];
-    for(const c of input){
-      const wc=w+c;
-      if(dict.has(wc)){w=wc;continue}
-      if(w)codes.push(dict.get(w));
-      if(next<4096)dict.set(wc,next++);
-      w=c;
-    }
-    if(w)codes.push(dict.get(w));
-    const packed=[];let buffer=0,bits=0;
-    for(const code of codes){
-      buffer=(buffer<<12)|code;bits+=12;
-      while(bits>=8){bits-=8;packed.push((buffer>>bits)&255);buffer&=(1<<bits)-1}
-    }
-    if(bits)packed.push((buffer<<(8-bits))&255);
-    let binary="";for(const byte of packed)binary+=String.fromCharCode(byte);
-    const compressed=`z${_base64UrlEncodeBinary(binary)}`;
-    return compressed.length<raw.length?compressed:raw;
-  }catch(error){console.warn("Could not compress URL table state",error);return ""}
-}
-function decompressUrlState(token){
-  try{
-    const source=String(token||"");
-    if(!source)return null;
-    if(source[0]==="r"){
-      const raw=_base64UrlDecodeBinary(source.slice(1));
-      const bytes=Uint8Array.from(raw,ch=>ch.charCodeAt(0));
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-    // `z` is the current compressed representation. No prefix means the link
-    // came from the first 0.23 implementation and is decoded as legacy LZW.
-    const encoded=source[0]==="z"?source.slice(1):source;
-    const binary=_base64UrlDecodeBinary(encoded),codes=[];let buffer=0,bits=0;
-    for(let i=0;i<binary.length;i++){
-      buffer=(buffer<<8)|binary.charCodeAt(i);bits+=8;
-      while(bits>=12){bits-=12;codes.push((buffer>>bits)&4095);buffer&=(1<<bits)-1}
-    }
-    if(!codes.length)return null;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(i,String.fromCharCode(i));
-    let next=256,w=dict.get(codes[0]);if(w==null)return null;let output=w;
-    for(let i=1;i<codes.length;i++){
-      const code=codes[i];let entry=dict.get(code);
-      if(entry==null&&code===next)entry=w+w[0];
-      if(entry==null)return null;
-      output+=entry;
-      if(next<4096)dict.set(next++,w+entry[0]);
-      w=entry;
-    }
-    const bytes=Uint8Array.from(output,ch=>ch.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-  }catch(error){console.warn("Could not decode URL table state",error);return null}
-}
-
 function currentTableUrlState(view=state.view){
   // URL state is intentionally view-scoped. It is the public/shareable state
   // contract for a page; IndexedDB remains only a convenience for restoring a
@@ -2816,134 +2182,7 @@ async function refreshJobs({rerender=false}={}){
     return state.jobs;
   }
 }
-function jobLabel(job){
-  if(job.type==="rag")return tr("operations.job.rag","RAG pipeline");
-  if(job.type==="upsert")return tr("operations.job.upsert","Chroma upsert");
-  if(job.type==="pdf_corpus")return tr("pdf_corpus.operation_label","PDF corpus build");
-  if(job.type==="llm_tool"){
-    const known={
-      pdf_clean_text:tr("operations.job.pdf_clean_text","PDF · clean text"),
-      pdf_draft_record:tr("operations.job.pdf_draft_record","PDF · draft record"),
-      pdf_link_record:tr("operations.job.pdf_link_record","PDF · link record"),
-      rag_grade:tr("operations.job.rag_grade","RAG · grade response"),
-      rag_grade_batch:tr("operations.job.rag_grade_batch","RAG · grade response cache"),
-      work_metadata:tr("works.populate_metadata_llm","Populate metadata with LLM"),
-    };
-    return job.label||known[job.tool||job.mode]||tr("operations.job.llm_tool","LLM operation");
-  }
-  return job.mode==="auto"?tr("operations.job.auto","Auto-improve"):tr("operations.job.review","LLM review");
-}
-function jobProviderSummary(job){
-  if(job.type==="upsert")return [job.label,job.store_name||"collection"].filter(Boolean).join(" · ");
-  const profile=job.provider_profile_id?providerProfiles().find(item=>item.id===job.provider_profile_id):null;
-  const providerName=profile?providerDisplayName(profile):(job.provider||"");
-  const model=job.model||"";
-  return [providerName,model].filter(Boolean).join(" · ");
-}
-function jobElapsedSeconds(job){
-  const start=job.started_at?new Date(job.started_at).getTime():null;
-  if(!Number.isFinite(start))return 0;
-  const end=job.finished_at?new Date(job.finished_at).getTime():Date.now();
-  return Math.max(0,(end-start)/1000);
-}
-function humanDuration(seconds){
-  return formatDuration(seconds,state.translations?.locale||"en-US");
-}
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
-const OPERATION_FACT_NAMES={
-  started_by:["operations.fact.started_by","Started by"],
-  model:["operations.fact.model","Model"],
-  fields:["operations.fact.fields","Fields"],
-  current_record:["operations.fact.current_record","Current record"],
-  pending_results:["operations.fact.pending_results","Pending results"],
-  pending_changes:["operations.fact.pending_changes","Pending changes"],
-  unprocessed_records:["operations.fact.unprocessed_records","Unprocessed records"],
-  accepted:["operations.fact.accepted","Accepted"],
-  rejected:["operations.fact.rejected","Rejected"],
-  decision:["operations.fact.decision","Decision"],
-  generation:["operations.fact.generation","Generation"],
-  embedding:["operations.fact.embedding","Embedding"],
-  reranker:["operations.fact.reranker","Reranker"],
-  collection:["operations.fact.collection","Collection"],
-  stage:["operations.fact.stage","Stage"],
-  languages:["operations.fact.languages","Languages"],
-  retrieval:["operations.fact.retrieval","Retrieval"],
-  auto_grade:["operations.fact.auto_grade","Auto-grade"],
-  operation:["operations.fact.operation","Operation"],
-  provider:["operations.fact.provider","Provider"],
-  max_concurrent:["operations.fact.max_concurrent","Max concurrent"],
-  top_n:["operations.fact.top_n","Top N"],
-  pdf:["operations.fact.pdf","PDF"],
-  page:["operations.fact.page","Page"],
-  cached_response:["operations.fact.cached_response","Cached response"],
-  scope:["operations.fact.scope","Scope"],
-  records:["operations.fact.records","Records"],
-  committed:["operations.fact.committed","Committed"],
-  language_mirrors:["operations.fact.language_mirrors","Language mirrors"],
-  total_time:["operations.fact.total_time","Total time"],
-  elapsed:["operations.fact.elapsed","Elapsed"],
-};
-function fact(id){const [key,fallback]=OPERATION_FACT_NAMES[id];return tr(key,fallback)}
-function decisionLabel(state){
-  const id=String(state||"pending");
-  return tr(`operations.decision.${id}`,id.replaceAll("_"," "));
-}
-function operationDetailPairs(job){
-  const request=job.request||{};
-  const pairs=[];
-  if(job.owner)pairs.push([fact("started_by"),job.owner]);
-  if(job.type==="llm"){
-    pairs.push(
-      [fact("model"),job.model||job.provider||"—"],
-      [fact("fields"),(job.fields||[]).join(", ")||"—"],
-      [fact("current_record"),job.current_record_id||"—"],
-      [fact("pending_results"),job.pending_result_count??0],
-      [fact("pending_changes"),job.pending_change_count??0],
-      [fact("unprocessed_records"),job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0))],
-      [fact("accepted"),trf("operations.fact.result_field_counts","{results} result(s) · {fields} field(s)",{results:job.accepted_results||0,fields:job.accepted_fields||0})],
-      [fact("rejected"),trf("operations.fact.result_field_counts","{results} result(s) · {fields} field(s)",{results:job.rejected_results||0,fields:job.rejected_fields||0})],
-      [fact("decision"),decisionLabel(job.resolution_state||"pending")]
-    );
-    if(request.generation&&Object.keys(request.generation).length)pairs.push([fact("generation"),JSON.stringify(request.generation)]);
-  }else if(job.type==="rag"){
-    const sourceStore=state.stores.find(store=>store.name===job.source_collection);
-    pairs.push(
-      [fact("generation"),job.model||job.provider||"—"],
-      [fact("embedding"),sourceStore?.embedding_model||sourceStore?.embedding_provider||"—"],
-      [fact("reranker"),request.cross_encoder_model||request.reranker||"—"],
-      [fact("collection"),job.source_collection||"—"],
-      [fact("stage"),job.stage||"—"],
-      [fact("languages"),(request.locales||[]).join(", ")||"—"],
-      [fact("retrieval"),(request.search_types||[]).join(" + ")||"—"],
-      ["k / fetch_k",`${request.k??"—"} / ${request.fetch_k??"—"}`],
-      ["RRF k",request.rrf_k??"—"],
-      [fact("top_n"),request.rerank_top_n??"—"]
-    );
-    if(request.auto_grade){
-      const gradeProfile=request.auto_grade_provider_profile_id?providerProfiles().find(item=>item.id===request.auto_grade_provider_profile_id):null;
-      pairs.push([fact("auto_grade"),`${gradeProfile?providerDisplayName(gradeProfile):(request.auto_grade_provider||job.provider||"grader")} · ${request.auto_grade_model||job.model||"model"}`]);
-    }
-  }else if(job.type==="pdf_corpus"){
-    pairs.push(
-      [tr("pdf_corpus.source_pdf","Source PDF"),job.source_filename||"—"],
-      [tr("pdf_corpus.stage","Stage"),job.stage||"—"],
-      [tr("pdf_corpus.records","records"),job.record_count??0],
-      [tr("pdf_corpus.need_review","need review"),job.review_count??0],
-      [tr("pdf_corpus.unresolved_regions","Unresolved regions"),job.unresolved_regions??0],
-      [tr("pdf_corpus.concurrent_requests","max concurrent request(s)"),job.max_concurrent_requests??1]
-    );
-  }else if(job.type==="llm_tool"){
-    pairs.push([fact("operation"),job.label||job.tool||job.mode||"LLM tool"],[fact("provider"),job.provider||"—"],[fact("model"),job.model||"—"],[fact("stage"),job.stage||"—"],[fact("max_concurrent"),job.max_concurrent_requests??"—"]);
-    if(request.pdf_file)pairs.push([fact("pdf"),request.pdf_file],[fact("page"),request.pdf_page??"—"]);
-    if(request.response_record_id)pairs.push([fact("cached_response"),request.response_record_id]);
-  }else if(job.type==="upsert"){
-    pairs.push([fact("collection"),job.store_name||"—"],[fact("scope"),job.label||request.label||tr("operations.sub.records","records")],[fact("records"),job.total??0],[fact("committed"),job.completed??0],[fact("current_record"),job.current_record_id||"—"]);
-    const mirrors=Object.entries(job.mirrored||{}).map(([name,count])=>`${name}: ${count}`).join(" · ");
-    if(mirrors)pairs.push([fact("language_mirrors"),mirrors]);
-  }
-  pairs.push([fact(job.finished_at?"total_time":"elapsed"),humanDuration(jobElapsedSeconds(job))]);
-  return pairs;
-}
 async function cancelBackgroundJob(jobId,{refresh=true}={}){
   const job=state.jobs.find(item=>item.id===jobId);
   if(job?.cancel_requested)return;
@@ -3042,16 +2281,6 @@ function ensureJobProgressCard(job){
   panel.querySelector("[data-toast-open-details]")?.addEventListener("click",()=>openJobDetails(job.id));
   panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>removeFinishedJob(job.id));
   updateOperationStackCount();
-}
-function jobProgressText(job,style){
-  const total=Number(job.total||0),done=Number(job.completed||0),pct=Math.round(total?done/total*100:0);
-  // A PDF corpus build reports a synthetic count (source blocks x weighted
-  // stage progress), not a real tally, so show only the honest percentage.
-  if(job.type==="pdf_corpus"){
-    if(job.status==="completed")return tr("operations.progress_build_complete","Build complete · ready for review");
-    return trf("operations.progress_overall","{percent}% overall",{percent:pct});
-  }
-  return style==="of"?trf("operations.progress_of","{done} of {total} ({percent}%)",{done:done.toLocaleString(),total:total.toLocaleString(),percent:pct}):`${done}/${total} (${pct}%)`;
 }
 function maybeDesktopNotify(job){
   if(!state.appConfig.desktop_notifications)return;
@@ -3199,65 +2428,6 @@ async function submitBackgroundLlmJob(items,config,fields,instructions,mode){
   startJobPolling();
   toast(`${mode==="auto"?"Auto-improve":"LLM review"} started in background · ${items.length} records`);
   return job;
-}
-function flattenValueList(value){
-  if(value==null)return [];
-  if(Array.isArray(value))return value.flatMap(flattenValueList);
-  if(typeof value==="object")return Object.values(value).flatMap(flattenValueList);
-  const text=String(value).trim();
-  if(!text)return [];
-  if((text.startsWith("[")&&text.endsWith("]"))||(text.startsWith("{")&&text.endsWith("}"))){
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    try{return flattenValueList(JSON.parse(text))}catch{}
-  }
-  // Legacy corpus files have used newline, semicolon, pipe, and CSV-like
-  // encodings for list metadata. Normalize them once so every badge surface
-  // receives a stable list rather than rendering serialized arrays as a chip.
-  if(/[\n;|]/.test(text))return text.split(/[\n;|]+/).map(item=>item.trim()).filter(Boolean);
-  // Commas are intentionally not treated as a universal list separator: person
-  // names and bibliographic values commonly contain commas. Legacy list fields
-  // should use JSON arrays, semicolons, pipes, or line breaks.
-  return [text];
-}
-function topFieldValues(field,limit=5){
-  return memoCorpus(`top:${field}:${limit}`,()=>{
-    const counts=new Map();
-    for(const {record} of allRows()){
-      for(const value of flattenValueList(record[field])){
-        const key=value.trim();
-        if(!key)continue;
-        counts.set(key,(counts.get(key)||0)+1);
-      }
-    }
-    return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit);
-  });
-}
-function averageRecordLengthForTopWorks(limit=5){
-  return memoCorpus(`avg-record-length-by-work:${limit}`,()=>{
-    const groups=new Map();
-    for(const {record} of allRows()){
-      const work=String(record.work||"(Untitled work)").trim()||"(Untitled work)";
-      const stats=groups.get(work)||{count:0,total:0};
-      stats.count++;
-      stats.total+=String(record.text||"").length;
-      groups.set(work,stats);
-    }
-    return [...groups.entries()]
-      .sort((a,b)=>b[1].count-a[1].count||a[0].localeCompare(b[0]))
-      .slice(0,limit)
-      .map(([work,stats])=>({key:work,value:Math.round(stats.total/Math.max(1,stats.count)),count:stats.count}));
-  });
-}
-function recentAuditChanges(limit=10){
-  return memoCorpus(`recent-audit:${limit}`,()=>{
-  const changes=[];
-  for(const {file,record,index} of allRows()){
-    for(const update of Array.isArray(record.updates)?record.updates:[]){
-      changes.push({file,record,index,update});
-    }
-  }
-  return changes.sort((a,b)=>new Date(b.update.timestamp||0)-new Date(a.update.timestamp||0)).slice(0,limit);
-  });
 }
 
 function serverAnnotationItems(){
@@ -3410,17 +2580,6 @@ function timelineCounts(kind,days=30){
   return keys.map(key=>({key,value:counts.get(key)||0}));
   });
 }
-function dateKeys(days=30){
-  const today=new Date();
-  const keys=[];
-  for(let offset=days-1;offset>=0;offset--){
-    const d=new Date(today);
-    d.setHours(0,0,0,0);
-    d.setDate(d.getDate()-offset);
-    keys.push(d.toISOString().slice(0,10));
-  }
-  return keys;
-}
 function ragRunTimeline(days=30){
   const keys=dateKeys(days);
   const rows=new Map(keys.map(key=>[key,{key,ollama:0,freellm:0}]));
@@ -3448,130 +2607,7 @@ function ragRunTimeline(days=30){
   }
   return [...rows.values()];
 }
-function topNeedsReviewWorkSeries(days=30,limit=5){
-  const dayKey=new Date().toISOString().slice(0,10);
-  return memoCorpus(`review-work-series:${days}:${limit}:${dayKey}`,()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    if(!record.needs_review)continue;
-    const work=String(record.work||"(Untitled work)");
-    counts.set(work,(counts.get(work)||0)+1);
-  }
-  const top=[...counts.entries()]
-    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
-    .slice(0,limit)
-    .map(([work])=>work);
-  if(!top.length)return {rows:[],series:[]};
 
-  const recordsByWork=new Map(top.map(work=>[work,[]]));
-  for(const {record} of allRows()){
-    const work=String(record.work||"(Untitled work)");
-    if(!recordsByWork.has(work))continue;
-    const events=(Array.isArray(record.updates)?record.updates:[])
-      .filter(update=>update.field_name==="needs_review"&&update.timestamp)
-      .map(update=>({
-        time:new Date(update.timestamp).getTime(),
-        old:Boolean(update.old_value),
-      }))
-      .filter(event=>Number.isFinite(event.time))
-      .sort((a,b)=>b.time-a.time);
-    recordsByWork.get(work).push({
-      current:Boolean(record.needs_review),
-      events,
-    });
-  }
-
-  const keys=dateKeys(days);
-  const series=top.map((work,index)=>({
-    key:`work_${index}`,
-    label:work,
-    short_label:`${index+1}. ${work.length>18?`${work.slice(0,16)}…`:work}`,
-  }));
-  const rows=keys.map(key=>{
-    const end=new Date(`${key}T23:59:59.999Z`).getTime();
-    const row={key};
-    top.forEach((work,index)=>{
-      let count=0;
-      for(const history of recordsByWork.get(work)||[]){
-        let value=history.current;
-        for(const event of history.events){
-          if(event.time<=end)break;
-          value=event.old;
-        }
-        if(value)count++;
-      }
-      row[`work_${index}`]=count;
-    });
-    return row;
-  });
-  return {rows,series};
-  });
-}
-function multiLineChart(rows,title,seriesDefs,{note=""}={}){
-  if(!rows.length||!seriesDefs.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const width=540,height=185,left=46,right=14,top=18,bottom=28;
-  const values=rows.flatMap(row=>seriesDefs.map(series=>Number(row[series.key])||0));
-  const maxValue=Math.max(0,...values);
-  const scaleMax=Math.max(1,maxValue);
-  const plotWidth=width-left-right,plotHeight=height-top-bottom;
-  const xFor=index=>rows.length===1?left+plotWidth/2:left+(index/(rows.length-1))*plotWidth;
-  const yFor=value=>top+plotHeight-(Number(value||0)/scaleMax)*plotHeight;
-  const grades=[0,.25,.5,.75,1].map(fraction=>{
-    const value=Math.round(scaleMax*fraction);
-    const y=top+plotHeight-fraction*plotHeight;
-    return `<g class="chart-grade"><line x1="${left}" x2="${width-right}" y1="${y}" y2="${y}"/><text x="${left-7}" y="${y+3}" text-anchor="end">${value}</text></g>`;
-  }).join("");
-  const paths=seriesDefs.map((series,seriesIndex)=>{
-    const points=rows.map((row,index)=>({
-      x:xFor(index),
-      y:yFor(row[series.key]),
-      value:Number(row[series.key])||0,
-      key:row.key,
-    }));
-    const d=points.map((point,index)=>`${index?"L":"M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-    return `<path class="chart-line chart-series-${seriesIndex}" d="${d}"/>${points.map(point=>`<circle class="chart-dot chart-series-${seriesIndex}" data-chart-tip="${esc(`${series.label} · ${point.key}: ${point.value.toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(series.label)} · ${esc(point.key)}: ${point.value.toLocaleString()}</title></circle>`).join("")}`;
-  }).join("");
-  const mid=rows[Math.floor((rows.length-1)/2)]?.key||"";
-  return `<div class="dash-chart multi-line-chart">
-    <div class="dash-chart-head"><div><div class="dash-chart-title">${esc(title)}</div>${note?`<div class="dash-chart-note">${esc(note)}</div>`:""}</div><div class="chart-legend multi-chart-legend">${seriesDefs.map((series,index)=>`<span title="${esc(series.label)}"><i class="chart-series-${index}"></i>${esc(series.short_label||series.label)}</span>`).join("")}</div></div>
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
-      ${grades}
-      <path class="chart-axis" d="M${left},${top+plotHeight} H${width-right}"/>
-      ${paths}
-    </svg>
-    <div class="dash-chart-foot"><span>${esc(rows[0]?.key||"")}</span><span>${esc(mid)}</span><span>${esc(rows[rows.length-1]?.key||"")}</span></div>
-  </div>`;
-}
-
-function workRecordShares(limit=9){
-  return memoCorpus(`work-shares:${limit}`,()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    const work=String(record.work||"(Untitled work)");
-    counts.set(work,(counts.get(work)||0)+1);
-  }
-  const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-  const top=sorted.slice(0,limit);
-  const other=sorted.slice(limit).reduce((sum,[,count])=>sum+count,0);
-  if(other)top.push(["Other works",other]);
-  return top;
-  });
-}
-function pieChart(title,entries){
-  const total=entries.reduce((sum,[,value])=>sum+Number(value||0),0);
-  if(!total)return `<div class="dash-chart-empty">${esc(title)} · no records loaded</div>`;
-  const cx=90,cy=90,r=64,circ=2*Math.PI*r;
-  let offset=0;
-  const slices=entries.map(([name,value],index)=>{
-    const fraction=Number(value||0)/total;
-    const dash=fraction*circ;
-    const gap=Math.max(0,circ-dash);
-    const current=offset;
-    offset+=dash;
-    return `<circle class="pie-slice pie-series-${index%10}" data-chart-tip="${esc(`${name} · ${Number(value).toLocaleString()} records · ${(fraction*100).toFixed(1)}%`)}" cx="${cx}" cy="${cy}" r="${r}" pathLength="${circ}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-current}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(name)}: ${Number(value).toLocaleString()} (${(fraction*100).toFixed(1)}%)</title></circle>`;
-  }).join("");
-  return `<div class="dash-chart pie-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div></div><div class="pie-layout"><svg viewBox="0 0 180 180" role="img" aria-label="${esc(title)}"><circle class="pie-track" cx="${cx}" cy="${cy}" r="${r}"/>${slices}<text class="pie-total" x="${cx}" y="${cy-2}" text-anchor="middle">${total.toLocaleString()}</text><text class="pie-total-label" x="${cx}" y="${cy+15}" text-anchor="middle">records</text></svg><div class="pie-legend">${entries.map(([name,value],index)=>`<div title="${esc(name)}"><i class="pie-series-${index%10}"></i><span>${esc(name)}</span><b>${(Number(value)/total*100).toFixed(1)}%</b><small>${Number(value).toLocaleString()}</small></div>`).join("")}</div></div></div>`;
-}
 function recentRagRuns(limit=5){
   const jobMap=new Map(state.jobs.filter(job=>job.type==="rag").map(job=>[job.id,job]));
   const merged=[];
@@ -3593,86 +2629,6 @@ function recentRagRunsHtml(){
   </section>`;
 }
 
-function publicationYearSeries(){
-  return memoCorpus("publication-year-series",()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    const year=Number(record.year);
-    if(!Number.isFinite(year)||year<1000||year>3000)continue;
-    counts.set(year,(counts.get(year)||0)+1);
-  }
-  return [...counts.entries()].sort((a,b)=>a[0]-b[0]).map(([key,value])=>({key:String(key),value}));
-  });
-}
-function needsReviewTimeline(days=30){
-  const dayKey=new Date().toISOString().slice(0,10);
-  return memoCorpus(`needs-review-timeline:${days}:${dayKey}`,()=>{
-  const today=new Date();
-  today.setHours(23,59,59,999);
-  const dates=[];
-  for(let offset=days-1;offset>=0;offset--){
-    const d=new Date(today);
-    d.setDate(d.getDate()-offset);
-    dates.push(d);
-  }
-
-  const recordHistories=allRows().map(({record})=>{
-    const events=(Array.isArray(record.updates)?record.updates:[])
-      .filter(update=>update.field_name==="needs_review"&&update.timestamp)
-      .map(update=>({
-        time:new Date(update.timestamp).getTime(),
-        old:Boolean(update.old_value),
-        next:Boolean(update.new_value),
-      }))
-      .filter(event=>Number.isFinite(event.time))
-      .sort((a,b)=>b.time-a.time);
-    return {current:Boolean(record.needs_review),events};
-  });
-
-  return dates.map(date=>{
-    const end=date.getTime();
-    let count=0;
-    for(const history of recordHistories){
-      let value=history.current;
-      for(const event of history.events){
-        if(event.time<=end)break;
-        value=event.old;
-      }
-      if(value)count++;
-    }
-    return {key:date.toISOString().slice(0,10),value:count};
-  });
-  });
-}
-function lineChart(series,title,legendLabel=title){
-  if(!series.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const width=540,height=185,left=46,right=14,top=18,bottom=28;
-  const maxValue=Math.max(0,...series.map(item=>Number(item.value)||0));
-  const scaleMax=Math.max(1,maxValue);
-  const plotWidth=width-left-right,plotHeight=height-top-bottom;
-  const points=series.map((item,index)=>{
-    const x=series.length===1?left+plotWidth/2:left+(index/(series.length-1))*plotWidth;
-    const y=top+plotHeight-(Number(item.value||0)/scaleMax)*plotHeight;
-    return {x,y,...item};
-  });
-  const path=points.map((point,index)=>`${index?"L":"M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const grades=[0,.25,.5,.75,1].map(fraction=>{
-    const value=Math.round(scaleMax*fraction);
-    const y=top+plotHeight-fraction*plotHeight;
-    return `<g class="chart-grade"><line x1="${left}" x2="${width-right}" y1="${y}" y2="${y}"/><text x="${left-7}" y="${y+3}" text-anchor="end">${value}</text></g>`;
-  }).join("");
-  const mid=series[Math.floor((series.length-1)/2)]?.key||"";
-  return `<div class="dash-chart">
-    <div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(legendLabel)}</span></div></div>
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
-      ${grades}
-      <path class="chart-axis" d="M${left},${top+plotHeight} H${width-right}"/>
-      <path class="chart-line" d="${path}"/>
-      ${points.map(point=>`<circle class="chart-dot" data-chart-tip="${esc(`${legendLabel} · ${point.key}: ${Number(point.value||0).toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(point.key)}: ${Number(point.value||0).toLocaleString()}</title></circle>`).join("")}
-    </svg>
-    <div class="dash-chart-foot"><span>${esc(series[0]?.key||"")}</span><span>${esc(mid)}</span><span>${esc(series[series.length-1]?.key||"")}</span></div>
-  </div>`;
-}
 
 function pieShareSeries(items,valueField,limit=7){
   const sorted=[...items].map(item=>({key:item.work,value:Number(item[valueField]||0)})).filter(item=>item.value>0).sort((a,b)=>b.value-a.value);
@@ -3737,18 +2693,7 @@ function dashboardMetricBody(metric){
   return `<div class="dashboard-average-list">${ranking.map(item=>`<button class="dashboard-average-row" ${metric.field?`data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"`:`data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4,Math.round(Number(item.value)/maxRank*100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("")||`<div class="note">${esc(metric.field?tr("works.no_indexed_values","No indexed values in the loaded records."):tr("research.no_works","No works loaded yet."))}</div>`}</div>`;
 }
 
-function barChart(series,title,{valueLabel="Average characters"}={}){
-  if(!series.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const max=Math.max(1,...series.map(item=>Number(item.value)||0));
-  return `<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(valueLabel)}</span></div></div><div class="dash-bars">${series.map(item=>{
-    const pct=Math.max(2,Math.round((Number(item.value||0)/max)*100));
-    return `<div class="dash-bar-row" data-chart-tip="${esc(`${item.key} · ${Number(item.value||0).toLocaleString()} ${valueLabel.toLowerCase()} · ${Number(item.count||0).toLocaleString()} records`)}"><div class="dash-bar-label" title="${esc(item.key)}"><b>${esc(item.key)}</b><span>${Number(item.count||0).toLocaleString()} records</span></div><div class="dash-bar-track"><i style="width:${pct}%"></i></div><strong>${Number(item.value||0).toLocaleString()}</strong></div>`;
-  }).join("")}</div></section>`;
-}
 
-function statList(title,items){
-  return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value,count],index)=>`<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="Search the corpus for ${esc(value)}"><span>${index+1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("")||'<div class="note" style="padding:12px">No data</div>'}</div></section>`;
-}
 // ---- Operations panel bridge -------------------------------------------------------------
 // The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
 // job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
@@ -3758,52 +2703,6 @@ function notifyOperationsChanged(){
   for(const listener of [...operationsListeners]){
     try{listener()}catch(error){console.warn("Operations panel listener failed",error)}
   }
-}
-function operationIcon(job){
-  if(job.type==="pdf_corpus")return "pdf";
-  if(job.type==="upsert")return "database";
-  if(job.type==="rag")return "spark";
-  if(job.type==="llm_tool"){
-    const kind=String(job.tool||job.mode||job.label||"").toLowerCase();
-    if(kind.includes("policy"))return "lock";
-    if(kind.includes("language"))return "language";
-    if(kind.includes("pdf"))return "pdf";
-    return "gear";
-  }
-  return "edit";
-}
-function operationSubtitle(job){
-  if(job.status==="cancelling"||job.cancel_requested)return tr("operations.sub.cancelling","Cancellation requested · current call/batch is reaching a safe stopping point");
-  if(job.type==="rag")return String(job.stage_detail||job.stage||tr("operations.sub.queued","queued"));
-  if(job.type==="upsert")return `${job.store_name||tr("operations.sub.collection","collection")} · ${job.completed}/${job.total} ${tr("operations.sub.committed","committed")}${Object.keys(job.mirrored||{}).length?` · ${tr("operations.sub.mirrors_active","language mirrors active")}`:""}`;
-  if(job.type==="pdf_corpus")return `${job.source_filename||tr("pdf_corpus.source_pdf","Source PDF")} · ${job.stage_detail||job.stage||job.raw_status||tr("operations.sub.queued","queued")}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)")}`:""}`;
-  // Provider and model appear in the facts, and the label is the row title: say only what is new.
-  if(job.type==="llm_tool"){const detail=String(job.stage_detail||"");return detail&&detail!==jobLabel(job)?detail:""}
-  return `${job.completed}/${job.total} ${tr("operations.sub.records","records")}${job.current_record_id?` · ${tr("operations.sub.current","current:")} ${job.current_record_id}`:""}${job.failed?` · ${job.failed} ${tr("operations.sub.failed","failed")}`:""}`;
-}
-function operationResultKind(job){
-  const active=isActiveJobStatus(job.status);
-  if(job.type==="llm"&&Number(job.pending_result_count||0)>0)return active?"review-partial":"review";
-  if(["rag","llm_tool"].includes(job.type)&&job.status==="completed")return "result";
-  if(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status))return "build";
-  return null;
-}
-function operationViewModel(job){
-  // Facts already shown elsewhere in the row (owner, operation name, stage) are left out.
-  const skip=new Set([fact("started_by"),fact("operation"),fact("stage"),fact("total_time"),tr("pdf_corpus.stage","Stage")]);
-  const facts=operationDetailPairs(job)
-    .filter(([name,value])=>!skip.has(String(name))&&String(value??"").trim()!==""&&String(value).trim()!=="—")
-    .slice(0,4)
-    .map(([name,value])=>({name:String(name),value:String(value)}));
-  const failure=job.status==="failed"?String(job.fatal_error||job.error_message||job.error?.message||job.stage_detail||""):job.status==="blocked"?String(job.stage_detail||""):"";
-  const kind=operationResultKind(job);
-  return {
-    id:String(job.id),type:String(job.type||"llm"),status:String(job.status||""),
-    label:jobLabel(job),icon:operationIcon(job),subtitle:operationSubtitle(job),facts,
-    owner:String(job.owner||""),createdAt:job.created_at||null,startedAt:job.started_at||null,finishedAt:job.finished_at||null,
-    total:Number(job.total||0),completed:Number(job.completed||0),progressLabel:jobProgressText(job,"of"),
-    cancelRequested:Boolean(job.cancel_requested),error:failure,result:kind?{kind}:null,
-  };
 }
 function operationsBridge(){
   return {
@@ -5555,15 +4454,6 @@ async function importFiles(fileList){
   }else if(first)state.activeFileId=first;
   persistPrefs();shell();renderView();syncUrl({replace:true});toast(`Loaded ${total} records${errors?` · ${errors} parse issues`:""}`);
 }
-function parseJsonl(text){
-  const records=[],errors=[],trimmed=text.trim();
-  if(!trimmed)return{records,errors};
-  if(trimmed.startsWith("[")){
-    try{const value=JSON.parse(trimmed);if(!Array.isArray(value))throw Error("Root is not an array");value.forEach((x,i)=>typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Item ${i+1}: not an object`));return{records,errors}}catch(e){return{records,errors:[e.message]}}
-  }
-  text.split(/\r?\n/).forEach((line,i)=>{if(!line.trim())return;try{const x=JSON.parse(line);typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Line ${i+1}: not an object`)}catch(e){errors.push(`Line ${i+1}: ${e.message}`)}});
-  return{records,errors};
-}
 async function closeFile(id){
   const f=state.files.find(x=>x.id===id);if(!f)return;
   if(f.dirty.size && !await openMessageModal({title:"Close modified JSONL?",message:`${f.name} has modified records. Close anyway?`,tone:"danger",confirmLabel:"Close file",cancelLabel:"Keep open"}))return;
@@ -5848,13 +4738,6 @@ function renderRecord(main){
   decorateDisabledControls(main);
   refreshPresenceForRows([{file:f,record:r,index:i}]);
 }
-function countOccurrences(text,query){
-  if(!query)return 0;
-  const hay=String(text).toLocaleLowerCase(),needle=String(query).toLocaleLowerCase();
-  let i=0,count=0;
-  while((i=hay.indexOf(needle,i))>=0){count++;i+=Math.max(needle.length,1)}
-  return count;
-}
 
 function metadataSearchable(field,value){return value!==undefined&&value!==null&&String(value).trim()!==""&&!['text','record_id','inline_citation','full_citation','page_start','page_end'].includes(field)}
 function searchByMetadata(field,value,{contains=false}={}){
@@ -5921,26 +4804,6 @@ function workMetadataControl(field,rows){
     control=`<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed?"":esc(current??"")}" placeholder="${mixed?"Mixed values":""}">`;
   }
   return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply","Apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed?mixedWorkValueButton(rows,field,{compact:true}):""}</div>${control}</div>`;
-}
-function parseWorkMetadataValue(field,control,rows){
-  const exemplar=rows.map(row=>row.record[field]).find(value=>value!==undefined&&value!==null);
-  const raw=control.value;
-  if(typeof exemplar==="boolean"||field==="document_is_translation"){
-    if(raw==="")return null;
-    return raw==="true";
-  }
-  if(Array.isArray(exemplar)||exemplar&&typeof exemplar==="object"){
-    const parsed=JSON.parse(raw||"null");
-    if(exemplar&&Array.isArray(exemplar)&&!Array.isArray(parsed))throw new Error(`${label(field)} must be a JSON array.`);
-    return parsed;
-  }
-  if(typeof exemplar==="number"||["year","publication_year"].includes(field)){
-    if(raw.trim()==="")return null;
-    const value=Number(raw);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} must be numeric.`);
-    return value;
-  }
-  return raw;
 }
 function openWorkMetadataEditor(work,rows){
   if(!rows?.length)return toast("No records found for this work");
@@ -6087,33 +4950,6 @@ function openWorkMetadataProposalResult(job){
   });
 }
 
-function parseBulkFieldValue(field,raw,rows){
-  const sample=rows.map(row=>row.record?.[field]).find(value=>value!==undefined&&value!==null);
-  const text=String(raw??"");
-  if(text.trim()==="__NULL__")return null;
-  if(typeof sample==="boolean"){
-    const token=text.trim().toLowerCase();
-    if(["true","1","yes","on"].includes(token))return true;
-    if(["false","0","no","off"].includes(token))return false;
-    throw new Error(`Enter true or false for ${label(field)}.`);
-  }
-  if(typeof sample==="number"){
-    const value=Number(text);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} requires a number.`);
-    return value;
-  }
-  if(Array.isArray(sample)||sample&&typeof sample==="object"){
-    try{
-      const value=JSON.parse(text);
-      if(Array.isArray(sample)&&!Array.isArray(value))throw new Error("Expected JSON array.");
-      if(!Array.isArray(sample)&&(Array.isArray(value)||!value||typeof value!=="object"))throw new Error("Expected JSON object.");
-      return value;
-    }catch(error){
-      throw new Error(`${label(field)} requires valid JSON: ${error.message}`);
-    }
-  }
-  return text;
-}
 function bulkEditRowsForScope(scope){
   if(scope==="selected")return selectedReviewItems();
   if(scope==="active"){
@@ -6126,33 +4962,6 @@ function bulkEditRowsForScope(scope){
     return work?allRows().filter(row=>row.record.work===work):[];
   }
   return allRows();
-}
-function subsetValueText(value){
-  if(value===null||value===undefined)return "";
-  if(Array.isArray(value))return value.map(subsetValueText).join(" ");
-  if(typeof value==="object")return JSON.stringify(value);
-  return String(value);
-}
-function subsetRuleMatches(record,rule,caseSensitive=false){
-  const value=record?.[rule.field];
-  const raw=String(rule.value??"");
-  const normalize=text=>caseSensitive?String(text):String(text).toLocaleLowerCase();
-  const hay=normalize(subsetValueText(value));
-  const needle=normalize(raw);
-  switch(rule.operator){
-    case "equals": return Array.isArray(value)?value.some(item=>normalize(subsetValueText(item))===needle):hay===needle;
-    case "not_equals": return Array.isArray(value)?!value.some(item=>normalize(subsetValueText(item))===needle):hay!==needle;
-    case "contains": return hay.includes(needle);
-    case "not_contains": return !hay.includes(needle);
-    case "array_contains": return Array.isArray(value)&&value.some(item=>normalize(subsetValueText(item))===needle);
-    case "exists": return value!==undefined&&value!==null&&subsetValueText(value)!=="";
-    case "missing": return value===undefined||value===null||subsetValueText(value)==="";
-    case "truthy": return Boolean(value);
-    case "falsy": return !value;
-    case "regex":
-      try{return new RegExp(raw,caseSensitive?"":"i").test(subsetValueText(value))}catch{return false}
-    default:return false;
-  }
 }
 const SUBSET_PROFILE_STORAGE_KEY="derridai.subset-filter-profiles.v1";
 function loadSubsetProfiles(){
@@ -6580,13 +5389,6 @@ function recordFields(){
   allRows().forEach(x=>Object.keys(x.record).forEach(k=>set.add(k)));
   corpusCache.fields=[...set].sort();
   return corpusCache.fields;
-}
-function valueMatches(v,op,n){
-  const empty=v==null||v===""||(Array.isArray(v)&&!v.length);if(op==="empty")return empty;if(op==="notempty")return!empty;
-  const vals=Array.isArray(v)?v:[v],q=String(n??"").toLocaleLowerCase();
-  if(op==="eq")return vals.some(x=>String(x??"").toLocaleLowerCase()===q);if(op==="neq")return!vals.some(x=>String(x??"").toLocaleLowerCase()===q);
-  if(op==="has")return vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));if(op==="nhas")return!vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));
-  if(op==="gte")return vals.some(x=>+x>=+n);if(op==="lte")return vals.some(x=>+x<=+n);return true;
 }
 
 function dbFilterDisplayValue(value){return value&&typeof value==="object"&&"$contains" in value?`${tr("research.contains","contains")} ${value.$contains}`:String(value??"")}
@@ -7080,7 +5882,7 @@ function recordsListCell(row,key,query){
 }
 
 function getRecordsListSnapshot(){
-  const files=state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId}));
+  const files=state.files.map(file=>describeRecordsFile(file,state.activeFileId));
   const stores=recordStores();
   const shared=Boolean(new URLSearchParams(location.search).get("file"));
   const capabilities={
@@ -7118,7 +5920,7 @@ function getRecordsListSnapshot(){
   const columnKeys=getTableColumns("list",available);
   return {
     available:true,shared,files,
-    file:{id:f.id,name:f.name,count:f.records.length,dirty:f.dirty?.size||0},
+    file:describeRecordsFile(f,state.activeFileId),
     query,rows:slice.map(x=>{
       const key=reviewKey(f,x.index);
       const evidenceKey=workspaceEvidenceSelectionKey(f,x.index);
@@ -7495,37 +6297,6 @@ function openLlmToolResult(job){
   dialog.querySelector("#useToolText")?.addEventListener("click",()=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${job.model||result.model||"model"}`;close();if(state.view==="pdf")renderPdf(document.querySelector("#main"))});
   dialog.querySelector("#openToolDraft")?.addEventListener("click",()=>{close();openPdfDraftRecord(result.record||{})});
   dialog.querySelector("#applyToolLink")?.addEventListener("click",async()=>{await applyPdfLinkMatch(result.match||{});close()});
-}
-function normalizeRagGrade(value){
-  let grade=value;
-  if(grade&&typeof grade==="object"&&!Array.isArray(grade)){
-    if(grade.grade&&typeof grade.grade==="object"&&!Array.isArray(grade.grade))grade=grade.grade;
-    else if(grade.result&&typeof grade.result==="object"&&!Array.isArray(grade.result))grade=grade.result;
-  }
-  if(!grade||typeof grade!=="object"||Array.isArray(grade))grade={summary:grade==null?"":String(grade)};
-  const scores=grade.scores&&typeof grade.scores==="object"&&!Array.isArray(grade.scores)?grade.scores:{};
-  const list=value=>{
-    if(value==null||value==="")return [];
-    if(Array.isArray(value))return value.flatMap(item=>list(item));
-    if(typeof value==="object")return Object.entries(value).map(([key,item])=>`${label(key)}: ${display(item)}`);
-    return [String(value)];
-  };
-  const score=key=>{
-    const raw=grade[key]??scores[key];
-    if(raw==null||raw==="")return "—";
-    if(typeof raw==="object"){
-      const nested=raw.score??raw.value??raw.rating;
-      return nested==null?display(raw):nested;
-    }
-    return raw;
-  };
-  return {
-    raw:grade,score,
-    summary:String(grade.summary??grade.overall_summary??grade.assessment??""),
-    strengths:list(grade.strengths??grade.strength),
-    weaknesses:list(grade.weaknesses??grade.weakness),
-    unsupported_or_risky_claims:list(grade.unsupported_or_risky_claims??grade.risky_claims??grade.unsupported_claims),
-  };
 }
 function ragGradeHtml(grade={}){
   const normalized=normalizeRagGrade(grade);
@@ -8040,32 +6811,6 @@ async function ensureCompareLibrary(){
   }
   return getCompareLibrary();
 }
-function parsePastedRecord(value){
-  let text=String(value||"").trim();
-  if(!text)return null;
-  text=text.replace(/^```(?:json|jsonl)?\s*/i,"").replace(/\s*```$/,"").trim();
-  try{
-    const parsed=JSON.parse(text);
-    if(Array.isArray(parsed)){
-      if(parsed.length!==1||!parsed[0]||typeof parsed[0]!=="object"||Array.isArray(parsed[0])){
-        throw new Error("Paste exactly one JSON record, not an array of multiple records.");
-      }
-      return parsed[0];
-    }
-    if(!parsed||typeof parsed!=="object")throw new Error("Pasted value is not a JSON object.");
-    return parsed;
-  }catch(error){
-    const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-    const parsedLines=[];
-    for(const line of lines){
-      try{parsedLines.push(JSON.parse(line))}catch{throw error}
-    }
-    if(parsedLines.length!==1||!parsedLines[0]||typeof parsedLines[0]!=="object"||Array.isArray(parsedLines[0])){
-      throw new Error("Paste exactly one JSON/JSONL record on each side.");
-    }
-    return parsedLines[0];
-  }
-}
 function compareRecordTable(a,b,{titleA="Record A",titleB="Record B",rowKeyA="",rowKeyB=""}={}){
   if(!a||!b)return '<div class="empty mini"><p>Select or paste two records to compare them.</p></div>';
   const keys=[...new Set([...Object.keys(a),...Object.keys(b)])].filter(key=>key!=="updates").sort((x,y)=>{
@@ -8189,29 +6934,6 @@ function renderCompare(main){
 }
 
 const HTTP_ERROR_STORAGE_KEY="derridai.httpErrors.v1";
-function fullHttpErrorDetail(payload,text,statusText=""){
-  const detail=payload?.detail;
-  if(typeof detail==="string"&&detail.trim())return detail.trim();
-  if(Array.isArray(detail)){
-    const value=detail.map(item=>{
-      if(item&&typeof item==="object"){
-        const location=Array.isArray(item.loc)?item.loc.join("."):"";
-        const message=item.msg||item.message||JSON.stringify(item);
-        return location?`${location}: ${message}`:String(message);
-      }
-      return String(item);
-    }).filter(Boolean).join("; ");
-    if(value)return value;
-  }
-  if(detail&&typeof detail==="object"){
-    const message=detail.message||detail.error||detail.detail;
-    if(message)return String(message);
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    try{return JSON.stringify(detail)}catch{}
-  }
-  if(text&&String(text).trim())return String(text).trim();
-  return String(statusText||"Request failed");
-}
 function storeHttpError(entry){
   try{
     const current=JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY)||"[]");
@@ -8427,12 +7149,6 @@ function touchupFieldsForRecord(record){
   return known;
 }
 
-function modelOptionLabel(model){
-  const bits=[];
-  if(model.parameter_size)bits.push(model.parameter_size);
-  if(model.quantization_level)bits.push(model.quantization_level);
-  return bits.length?`${model.name} · ${bits.join(" · ")}`:model.name;
-}
 
 function jsonPretty(value){
   if(typeof value==="string")return value;
@@ -8535,42 +7251,6 @@ function providerDisplayName(profile){
   if(!profile)return "LLM provider";
   return profile.name||`${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${profile.model||"model"}`;
 }
-function providerRequestConfig(profile,{textReview=false}={}){
-  if(!profile)return null;
-  let extra={};
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{extra=JSON.parse(profile.extra_options||"{}")}catch{}
-  if(!extra||Array.isArray(extra)||typeof extra!=="object")extra={};
-  let think=null;
-  if(profile.type==="ollama"){
-    const raw=String(profile.think??"false");
-    think=raw==="true"?true:["low","medium","high"].includes(raw)?raw:false;
-  }
-  return {
-    provider_profile_id:profile.id,
-    max_concurrent_requests:Math.max(1,Math.min(64,Number(profile.max_concurrent_requests??(profile.type==="ollama"?1:32))||1)),
-    provider:profile.type,
-    model:profile.type==="openai"&&profile.model_mode==="auto"?"auto":(profile.model||""),
-    base_url:profile.base_url||null,
-    api_key:profile.type==="openai"?(profile.api_key||""):null,
-    ollama:{
-      num_ctx:profile.type==="ollama"&&profile.num_ctx!==""?Number(profile.num_ctx):null,
-      num_predict:Number(textReview?(profile.num_predict??4096):(profile.metadata_num_predict??profile.num_predict??768)),
-      think,
-      temperature:profile.temperature===""?null:Number(profile.temperature??0),
-      top_k:profile.type==="ollama"&&profile.top_k!==""?Number(profile.top_k):null,
-      top_p:profile.top_p===""?null:Number(profile.top_p??1),
-      min_p:profile.type==="ollama"&&profile.min_p!==""?Number(profile.min_p):null,
-      repeat_penalty:profile.type==="ollama"&&profile.repeat_penalty!==""?Number(profile.repeat_penalty):null,
-      seed:profile.seed===""?null:Number(profile.seed),
-      mirostat:profile.type==="ollama"&&profile.mirostat!==""?Number(profile.mirostat):null,
-      mirostat_eta:profile.type==="ollama"&&profile.mirostat_eta!==""?Number(profile.mirostat_eta):null,
-      mirostat_tau:profile.type==="ollama"&&profile.mirostat_tau!==""?Number(profile.mirostat_tau):null,
-      keep_alive:profile.type==="ollama"?(profile.keep_alive||null):null,
-      extra_options:extra,
-    },
-  };
-}
 async function refreshProviderStatuses(){
   const statuses={};
   await Promise.all(providerProfiles().map(async profile=>{
@@ -8600,17 +7280,6 @@ async function refreshProviderStatuses(){
   return statuses;
 }
 
-function openAiModelMatchesKind(name,kind){
-  if(!kind||kind==="any")return true;
-  const value=String(name||"").toLocaleLowerCase();
-  const patterns={
-    reasoning:["reason","deepseek","r1","qwq","o1","o3","thinking"],
-    coding:["code","coder","codex","devstral","starcoder"],
-    fast:["mini","small","flash","haiku","fast","3b","4b","7b","8b"],
-    general:["gpt","gemma","llama","qwen","mistral","claude","general","chat"],
-  };
-  return (patterns[kind]||[]).some(token=>value.includes(token));
-}
 
 async function legacyOpenTouchup(inputItems=null,initialMode="foreground"){
   const fallback=(()=>{
@@ -9391,7 +8060,7 @@ function getShellSnapshot(){
   return {
     view:state.view,
     sidebarCollapsed:state.sidebarCollapsed,
-    files:state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId})),
+    files:state.files.map(file=>describeRecordsFile(file,state.activeFileId)),
     context:ctx,
     totalLoaded,
     flagged,
@@ -9463,6 +8132,8 @@ function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   const profile=providerProfile(profileId);
   return profile?cloneAuditValue(providerRequestConfig(profile,{textReview})):null;
 }
+function getWarmOnStartForUi(){return state.appConfig.warm_default_provider_on_start===true}
+function setWarmOnStartForUi(value){state.appConfig.warm_default_provider_on_start=Boolean(value);persistPrefs();return getWarmOnStartForUi()}
 function getDefaultProviderProfileId(){return state.appConfig.default_provider_profile||defaultProviderProfile()?.id||""}
 function getProviderStatusesForUi(){return cloneAuditValue(state.providerStatuses||{})}
 function getProviderWarmupsForUi(){return cloneAuditValue(state.providerWarmups||{})}
@@ -9707,7 +8378,7 @@ async function bootstrapRuntime(){
   await refreshJobs({rerender:false});
   if(state.view==="home"&&document.querySelector("#main"))renderDashboard(document.querySelector("#main"));
   startJobPolling();
-  if(!isResearcher())warmupConfiguredLlm();
+  if(!isResearcher()&&state.appConfig.warm_default_provider_on_start===true)warmupConfiguredLlm();
 }
 
 
@@ -9717,66 +8388,6 @@ async function bootstrapRuntime(){
 // the sparse API contracts introduced in 0.30.11. Keep the bridge intentionally
 // operation-specific so native components never need to receive credentials,
 // full corpus records, or unrelated runtime state.
-function researchProfileForUi(profile){
-  if(!profile)return null;
-  const keys=[
-    "id","name","type","model","model_mode","model_kind","max_concurrent_requests",
-    "num_ctx","num_predict","think","temperature","top_k","top_p","min_p",
-    "repeat_penalty","seed","mirostat","mirostat_eta","mirostat_tau","keep_alive",
-    "extra_options",
-  ];
-  return Object.fromEntries(keys.filter(key=>profile[key]!==undefined).map(key=>[key,cloneAuditValue(profile[key])]));
-}
-function researchEvidenceForUi(item){
-  if(!item)return null;
-  return {
-    key:item.key,
-    kind:item.kind,
-    collection:item.collection||null,
-    chroma_id:item.chroma_id||null,
-    record_id:item.record_id||"",
-    work:item.work||"",
-    page_start:item.page_start??null,
-    page_end:item.page_end??null,
-    speaker:item.speaker||null,
-    position_holder:item.position_holder||null,
-    stance:item.stance||null,
-    discourse_role:item.discourse_role||null,
-    target:item.target||null,
-    proposition_status:item.proposition_status||null,
-    inline_citation:item.inline_citation||null,
-    text_preview:item.text_preview||"",
-    label:item.label||"",
-  };
-}
-function researchJobForUi(job){
-  if(!job)return null;
-  const result=job.result&&typeof job.result==="object"?job.result:null;
-  return {
-    id:job.id,
-    type:job.type,
-    status:job.status,
-    stage:job.stage||"",
-    stage_detail:job.stage_detail||"",
-    prompt:job.prompt||result?.prompt||"",
-    provider:job.provider||result?.provider||"",
-    provider_profile_id:job.provider_profile_id||null,
-    model:job.model||result?.model||"",
-    source_collection:job.source_collection||"",
-    owner:job.owner||"",
-    created_at:job.created_at||null,
-    started_at:job.started_at||null,
-    finished_at:job.finished_at||null,
-    updated_at:job.updated_at||null,
-    completed:Number(job.completed||0),
-    total:Number(job.total||0),
-    cancel_requested:Boolean(job.cancel_requested),
-    fatal_error:job.fatal_error||null,
-    request:job.request?cloneAuditValue(job.request):null,
-    result:result?cloneAuditValue(result):null,
-    events:Array.isArray(job.events)?cloneAuditValue(job.events):[],
-  };
-}
 function researchConfigForUi(){
   return cloneAuditValue(state.ragConfig||{});
 }
@@ -9887,65 +8498,6 @@ async function deleteResearchJob(jobId){
 function generationFromProfile(profile){
   const cfg=providerRequestConfig(profile,{textReview:true});
   return cloneAuditValue(cfg?.ollama||{});
-}
-function finiteResearchNumber(value,fallback,{integer=false,min=-Infinity,max=Infinity}={}){
-  if(value===null||value===undefined||value==="")return fallback;
-  const parsed=integer?Number.parseInt(String(value),10):Number(value);
-  if(!Number.isFinite(parsed))return fallback;
-  return Math.min(max,Math.max(min,parsed));
-}
-function sanitizeResearchGeneration(input={}){
-  const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
-  const out={};
-  const specs={
-    num_ctx:{integer:true,min:512,max:262144},num_predict:{integer:true,min:16,max:32768},
-    temperature:{min:0,max:2},top_k:{integer:true,min:0,max:1000},top_p:{min:0,max:1},min_p:{min:0,max:1},
-    repeat_penalty:{min:0,max:5},seed:{integer:true},mirostat:{integer:true,min:0,max:2},mirostat_eta:{min:0},mirostat_tau:{min:0},
-  };
-  for(const [key,spec] of Object.entries(specs)){
-    const raw=source[key];
-    if(raw===null||raw===undefined||raw==="")continue;
-    const value=finiteResearchNumber(raw,null,spec);
-    if(value!==null&&Number.isFinite(value))out[key]=value;
-  }
-  const think=source.think;
-  if(typeof think==="boolean")out.think=think;
-  else if(["low","medium","high"].includes(String(think||"").toLowerCase()))out.think=String(think).toLowerCase();
-  else if(String(think||"").toLowerCase()==="true")out.think=true;
-  else if(String(think||"").toLowerCase()==="false")out.think=false;
-  if(source.keep_alive!==null&&source.keep_alive!==undefined&&String(source.keep_alive).trim())out.keep_alive=String(source.keep_alive).trim();
-  if(Array.isArray(source.stop))out.stop=source.stop.map(item=>String(item)).filter(Boolean);
-  let extra=source.extra_options;
-  if(typeof extra==="string"){try{extra=JSON.parse(extra||"{}")}catch{extra={}}}
-  out.extra_options=extra&&typeof extra==="object"&&!Array.isArray(extra)?extra:{};
-  return out;
-}
-function normalizedResearchConfig(cfg={}){
-  const locales=Array.isArray(cfg.locales)?[...new Set(cfg.locales.map(String).filter(value=>["en","fr"].includes(value)))]:["en","fr"];
-  const searchTypes=Array.isArray(cfg.search_types)?[...new Set(cfg.search_types.map(String).filter(value=>["mmr","similarity","lexical"].includes(value)))]:["similarity","lexical","mmr"];
-  const reranker=["cross_encoder","lexical","none"].includes(String(cfg.reranker||""))?String(cfg.reranker):"cross_encoder";
-  const responseLanguage=["auto","en","fr"].includes(String(cfg.response_language||""))?String(cfg.response_language):"auto";
-  return {
-    ...cfg,
-    k:finiteResearchNumber(cfg.k,64,{integer:true,min:1,max:500}),
-    fetch_k:finiteResearchNumber(cfg.fetch_k,500,{integer:true,min:1,max:5000}),
-    lambda_mult:finiteResearchNumber(cfg.lambda_mult,.7,{min:0,max:1}),
-    rrf_k:finiteResearchNumber(cfg.rrf_k,60,{integer:true,min:1,max:10000}),
-    rerank_top_n:finiteResearchNumber(cfg.rerank_top_n,24,{integer:true,min:1,max:500}),
-    reranker,
-    cross_encoder_model:String(cfg.cross_encoder_model||"cross-encoder/ms-marco-MiniLM-L-6-v2").trim()||"cross-encoder/ms-marco-MiniLM-L-6-v2",
-    query_decomposition:Boolean(cfg.query_decomposition),
-    query_decomposition_num_predict:finiteResearchNumber(cfg.query_decomposition_num_predict,768,{integer:true,min:64,max:8192}),
-    response_language:responseLanguage,
-    evidence_record_char_limit:finiteResearchNumber(cfg.evidence_record_char_limit,12000,{integer:true,min:500,max:100000}),
-    evidence_total_char_limit:finiteResearchNumber(cfg.evidence_total_char_limit,120000,{integer:true,min:5000,max:1000000}),
-    locales,
-    search_types:searchTypes,
-    bind_citations:cfg.bind_citations!==false,
-    include_works_cited:cfg.include_works_cited!==false,
-    auto_grade:Boolean(cfg.auto_grade),
-    skip_retrieval:Boolean(cfg.skip_retrieval),
-  };
 }
 async function startResearchRun(input={}){
   if(!hasCapability("rag.run"))throw new Error(tr("permissions.rag_denied","Your role cannot run Research pipelines."));
@@ -10070,18 +8622,6 @@ function prepareResearchRerun(job){
 // only the current record data and actions needed by that workspace. Audit
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
-function compactRecordHistory(record,limit=80){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  return updates.slice(-Math.max(1,limit)).reverse().map((update,index)=>({
-    id:`history-${updates.length-index-1}`,
-    field_name:String(update?.field_name||""),
-    timestamp:update?.timestamp||null,
-    source:String(update?.source||"manual"),
-    initiated_by:update?.initiated_by||null,
-    model:update?.model||null,
-    reason:update?.reason||null,
-  }));
-}
 function recordWorkspaceRecord(record){
   const out=recordPayload(record,{includeChromaId:true});
   delete out.updates;
@@ -10358,6 +8898,8 @@ export {
   setDefaultProviderProfileForUi,
   testProviderProfileForUi,
   warmProviderProfileForUi,
+  getWarmOnStartForUi,
+  setWarmOnStartForUi,
   syncResearcherProviderProfiles,
   notifyToast,
   registerExternalJob,

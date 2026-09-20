@@ -1,7 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, useId } from "vue";
-import type { UiMenuItem } from "../ui/UiMenu.vue";
 import AppBuildInfo from "../AppBuildInfo.vue";
 import AppIcon from "../AppIcon.vue";
 import UiButton from "../ui/UiButton.vue";
@@ -19,7 +18,6 @@ const props = withDefaults(
     languages?: { code: string; name: string }[];
     locale?: string;
     localeLoading?: boolean;
-    workspaceItems?: UiMenuItem[];
   }>(),
   {
     roleName: "",
@@ -29,7 +27,6 @@ const props = withDefaults(
     languages: () => [],
     locale: "",
     localeLoading: false,
-    workspaceItems: () => [],
   },
 );
 const emit = defineEmits<{
@@ -37,7 +34,6 @@ const emit = defineEmits<{
   help: [];
   navigate: [view: string];
   locale: [code: string];
-  workspace: [id: string];
 }>();
 
 const i18n = useI18nStore();
@@ -107,11 +103,6 @@ function onPanelKey(event: KeyboardEvent) {
     event.preventDefault();
     first.focus();
   }
-}
-function chooseWorkspace(id: string, reason?: string) {
-  if (reason) return;
-  close(true);
-  emit("workspace", id);
 }
 function go(view: string) {
   close(true);
@@ -196,18 +187,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
               <span>{{ language.name }}</span>
             </label>
           </div>
-        </div>
-        <div v-if="compact && workspaceItems.length" class="topbar-account-workspace">
-          <p>{{ i18n.t("ui.workspace_menu", "Workspace") }}</p>
-          <UiButton
-            v-for="item in workspaceItems"
-            :key="item.id"
-            :label="item.label"
-            :icon="item.icon"
-            :disabled="Boolean(item.reason)"
-            :disabled-reason="item.reason"
-            @click="chooseWorkspace(item.id, item.reason)"
-          />
         </div>
         <UiButton variant="danger" :label="i18n.t('ui.sign_out', 'Sign out')" @click="signOut" />
       </div>
@@ -303,15 +282,13 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 .topbar-account-actions :deep(.ui-button) {
   justify-content: flex-start;
 }
-.topbar-account-locale,
-.topbar-account-workspace {
+.topbar-account-locale {
   display: grid;
   gap: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--line);
 }
-.topbar-account-locale p,
-.topbar-account-workspace p {
+.topbar-account-locale p {
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;

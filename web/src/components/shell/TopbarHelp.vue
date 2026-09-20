@@ -45,7 +45,7 @@ function go(view: string) {
     @close="closeHelp"
   >
     <p>{{ i18n.t("ui.help_search", "Command search focuses with Ctrl K (⌘K on Apple platforms).") }}</p>
-    <p>{{ i18n.t("ui.help_compact", "On a narrow screen, language, help, and workspace tools move into the account menu.") }}</p>
+    <p>{{ i18n.t("ui.help_compact", "On a narrow screen, language and help move into the account menu.") }}</p>
     <template #footer>
       <div class="help-footer-actions">
         <UiButton

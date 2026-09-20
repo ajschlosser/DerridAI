@@ -80,13 +80,10 @@ const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back","Ba
 const breadcrumbForwardLabel=computed(()=>nativeForwardPath.value?i18n.t("ui.forward","Forward"):s.value.forwardLabel);
 
 function onImport(files:FileList){if(auth.isAdmin)runtime.triggerImport(files)}
-function onWorkspaceAction(id:string){
-  if(id==="merge")runtime.triggerMerge();
-  else if(id==="subset")runtime.triggerSubset();
-  else if(id==="bulk")runtime.triggerBulkEdit();
-  else if(id==="ocr")runtime.triggerOcrClean();
-  else if(id==="flagged")runtime.triggerReviewFlagged();
-  else if(id==="export")runtime.triggerExport();
+function onFiles(event:Event){
+  const input=event.target as HTMLInputElement;
+  if(input.files?.length)onImport(input.files);
+  input.value="";
 }
 function navigateNative(path:string,runtimeView?:string){
   const current=router.currentRoute.value.fullPath;
@@ -142,7 +139,6 @@ function navigate(view:string){
   runtime.navigateView(view)
 }
 function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="home")return false;if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
-function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function onMoreToolsToggle(open:boolean){
   // A programmatic change already matches the model; only a user toggle differs from it.
@@ -243,9 +239,8 @@ watch(()=>auth.user?.id,(id)=>{
     </aside>
 
     <section class="workspace shell-workspace">
-      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder','Search the corpus, works, concepts, or annotations…')" @submit="submitTopSearch"/><div class="shell-top-actions"><TopbarChrome :is-admin="auth.isAdmin" :can-faq="auth.can('page.faq')" :can-settings="auth.can('page.settings')" :username="auth.user.username" :role="auth.user.role" :role-name="auth.user.role_name" :file-count="s.files.length" :flagged="s.flagged" :languages="i18n.languages" :locale="i18n.locale" :locale-loading="i18n.loading" @import="onImport" @action="onWorkspaceAction" @navigate="navigate" @logout="logout" @locale="i18n.setLocale($event)" /></div></header>
+      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder','Search the corpus, works, concepts, or annotations…')" @submit="submitTopSearch"/><div class="shell-top-actions"><input id="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple hidden @change="onFiles"/><TopbarChrome :is-admin="auth.isAdmin" :can-faq="auth.can('page.faq')" :can-settings="auth.can('page.settings')" :username="auth.user.username" :role="auth.user.role" :role-name="auth.user.role_name" :languages="i18n.languages" :locale="i18n.locale" :locale-loading="i18n.loading" @navigate="navigate" @logout="logout" @locale="i18n.setLocale($event)" /></div></header>
       <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
-      <div v-if="auth.isAdmin&&s.files.length" class="file-tabs shell-file-tabs"><div v-for="file in s.files" :key="file.id" class="tab" :class="{active:file.active}" @click="runtime.activateFile(file.id)"><span v-if="file.dirty" class="dot"></span><span class="tn">{{file.name}}</span><span class="badge">{{file.count.toLocaleString(i18n.locale)}}</span><button class="x" :title="i18n.t('ui.close_file','Close file')" @click="closeFile($event,file.id)">×</button></div></div>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
     </section>
   </div>

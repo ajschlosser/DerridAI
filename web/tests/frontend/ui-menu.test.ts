@@ -5,7 +5,7 @@ import UiMenu from "../../src/components/ui/UiMenu.vue";
 
 const items = [
   {id: "open", label: "Open JSONL"},
-  {id: "merge", label: "Merge tabs", reason: "Load at least two JSONL tabs to merge them."},
+  {id: "merge", label: "Merge files", reason: "Load at least two JSONL files to merge them."},
   {id: "export", label: "Export"},
 ];
 const mountMenu = () => mount(UiMenu, {props: {label: "Workspace", items}, attachTo: document.body});
@@ -29,7 +29,7 @@ describe("UiMenu", () => {
     const trigger = wrapper.get("button[aria-haspopup='menu']");
     await trigger.trigger("click");
     await key(wrapper, "[role=menu]", "ArrowDown");
-    expect(document.activeElement?.textContent).toContain("Merge tabs");
+    expect(document.activeElement?.textContent).toContain("Merge files");
     await key(wrapper, "[role=menu]", "Escape");
     expect(wrapper.find("[role=menu]").exists()).toBe(false);
     expect(document.activeElement).toBe(trigger.element);

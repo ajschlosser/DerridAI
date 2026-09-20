@@ -22,4 +22,4 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
-export const Empty: Story = {args: {modelValue: "", options: [], emptyHint: "Load JSONL tabs or browse the corpus database first."}};
+export const Empty: Story = {args: {modelValue: "", options: [], emptyHint: "Load JSONL files or browse the corpus database first."}};
