@@ -5061,3 +5061,55 @@ body:has(#operationProgressStack:not(.minimized)) .vue-native-page{padding-botto
 }
 
 #operationsPanelHost{display:contents}
+
+html[data-color-scheme="dark"]{
+  --bg:#161a18;
+  --panel:#1e2420;
+  --panel-2:#242b27;
+  --card:#1e2420;
+  --soft:#242b27;
+  --surface-solid:#1e2420;
+  --surface-raised:#242b27;
+  --surface-overlay:#222924;
+  --surface-glass:rgba(30,36,32,.96);
+  --text:#e8ebe6;
+  --muted:#a7aea8;
+  --line:#3a433e;
+  --line-strong:#526058;
+  --warn:#e0b15a;
+  --warn-bg:#3a2e16;
+  --danger:#e08a8a;
+  --danger-bg:#3a1f1f;
+  --ok:#7dba96;
+  --ref-bg:#161a18;
+  --ref-card:#1e2420;
+  --ref-line:#3a433e;
+  --ref-line-strong:#526058;
+  --ref-text:#e8ebe6;
+  --ref-muted:#a7aea8;
+}
+html[data-contrast="more"]{
+  --muted:#4a524c;
+  --line:#9aa39b;
+  --line-strong:#6b746d;
+  --text:#141714;
+}
+html[data-color-scheme="dark"][data-contrast="more"]{
+  --muted:#c5cdc6;
+  --line:#c5cdc6;
+  --line-strong:#e8ebe6;
+  --text:#fff;
+}
+@media (prefers-contrast: more){
+  :root{
+    --muted:#4a524c;
+    --line:#8b948c;
+  }
+}
+@media (forced-colors: active){
+  .settings-nav-item[aria-selected="true"],
+  .theme-choice.selected{
+    outline:2px solid CanvasText;
+  }
+}
+

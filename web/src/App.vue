@@ -34,7 +34,15 @@ const currentLocaleInfo=computed(()=>i18n.languages.find(language=>language.code
 const userInitials=computed(()=>String(auth.user?.username||"U").split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"U");
 const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",providers:"page.providers",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
 function canNav(id:string){const capability=pageCapability[id];return !capability||auth.can(capability)}
-try{const saved=localStorage.getItem("derridai.ui.theme")||"green";document.documentElement.dataset.uiTheme=["green","blue","slate"].includes(saved)?saved:"green"}catch{document.documentElement.dataset.uiTheme="green"}
+try{
+  const saved=localStorage.getItem("derridai.ui.theme")||"green";
+  document.documentElement.dataset.uiTheme=["green","blue","slate"].includes(saved)?saved:"green";
+  const scheme=localStorage.getItem("derridai.ui.scheme")||"system";
+  const contrast=localStorage.getItem("derridai.ui.contrast")||"system";
+  const dark=scheme==="dark"||(scheme!=="light"&&window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.colorScheme=dark?"dark":"light";
+  if(contrast==="more"||(contrast==="system"&&window.matchMedia?.("(prefers-contrast: more)").matches))document.documentElement.dataset.contrast="more";
+}catch{document.documentElement.dataset.uiTheme="green"}
 
 function languageDisplayName(_code:string,fallback:string){return fallback}
 const groupedNav=computed(()=>{
@@ -59,8 +67,8 @@ const primaryNav=computed(()=>{
   return order.map(id=>byId.get(id)).filter((item):item is ShellNavItem=>Boolean(item));
 });
 const utilityNav=computed(()=>{const ids=new Set(primaryNav.value.map(item=>item.id));return flatNav.value.filter(item=>!ids.has(item.id))});
-const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):s.value.context.title||i18n.t("nav.home","Home"));
-const breadcrumbMeta=computed(()=>["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
+const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):s.value.context.title||i18n.t("nav.home","Home"));
+const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
 const canBreadcrumbForward=computed(()=>Boolean(nativeForwardPath.value)||s.value.canGoForward);
 const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back","Back"):s.value.backLabel);
