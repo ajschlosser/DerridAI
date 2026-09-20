@@ -1595,7 +1595,7 @@ class PdfCorpusBuildManager:
                 record[field] = [] if isinstance(record.get(field), list) else None
                 record.setdefault("metadata_field_status", {})[field] = {
                     "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
-                    "reason": "Quality check: enter your value again without looking back. Your earlier answer is shown after you save.",
+                    "reason": "",
                 }
                 del scheduled[field]
                 record["accepted"] = False
@@ -4492,7 +4492,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 record[field] = [] if isinstance(shown[field], list) else None
                 field_status[field] = proposed_status = {
                     "status": "unresolved", "method": "llm", "blind": True, "reason_code": "blind_review", "auto_populated": False,
-                    "reason": "Blind review: enter your own value. The model's suggestion is shown after you save.",
+                    "reason": "",
                 }
                 self._scrub_sealed_field(record, field)
             if proposed_status.get("method") == "llm":
