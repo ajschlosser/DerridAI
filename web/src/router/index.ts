@@ -12,13 +12,14 @@ import SettingsView from "../views/SettingsView.vue";
 import UsersView from "../views/UsersView.vue";
 import LanguagesView from "../views/LanguagesView.vue";
 import RolesView from "../views/RolesView.vue";
+import WorksView from "../views/WorksView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: DashboardView, meta: { view: "home", capability: "page.dashboard" } },
   { path: "/records", name: "list", component: CorpusView, meta: { view: "list", capability: "page.records", adminOnly: true } },
   { path: "/record", name: "record", component: RecordView, meta: { view: "record", capability: "page.record", vueNative: true } },
-  { path: "/works", name: "works", component: CorpusView, meta: { view: "works", capability: "page.works" } },
+  { path: "/works", name: "works", component: WorksView, meta: { view: "works", capability: "page.works", vueNative: true } },
   { path: "/search", name: "global", component: SearchView, meta: { view: "global", capability: "page.search", vueNative: true } },
   { path: "/annotations", name: "annotations", component: CorpusView, meta: { view: "annotations", capability: "page.annotations" } },
   { path: "/pdf", name: "pdf", component: ToolsView, meta: { view: "pdf", capability: "page.pdf", adminOnly: true } },
