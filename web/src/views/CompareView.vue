@@ -235,7 +235,7 @@ onMounted(async () => {
 <style scoped>
 .compare-page{display:grid;gap:18px;max-width:1280px}
 .compare-hero,.compare-board-head,.compare-pane-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
-.compare-kicker{margin:0 0 4px;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2,var(--accent))}
+.compare-kicker{margin:0 0 4px;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
 h1{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:2rem;line-height:1.2}
 h2{margin:0;font-size:1.15rem;line-height:1.3}
 .compare-hero p,.compare-note,.compare-scratch-help,.compare-empty span{margin:6px 0 0;max-width:70ch;color:var(--muted);font-size:.875rem;line-height:1.5}

@@ -122,7 +122,7 @@ defineExpose({open, close});
 .records-columns-dialog::backdrop{background:rgba(21,27,24,.42)}
 .records-columns-head,.records-columns-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px}
 .records-columns-head{border-bottom:1px solid var(--line)}
-.records-columns-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2,var(--accent))}
+.records-columns-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
 h2{margin:4px 0 0;font:600 1.125rem/1.3 Georgia,"Times New Roman",serif}
 .records-columns-body{display:grid;gap:12px;max-height:calc(82vh - 9rem);overflow:auto;padding:14px 16px}
 .records-columns-body>p{margin:0;color:var(--muted);font-size:.875rem;line-height:1.45}
