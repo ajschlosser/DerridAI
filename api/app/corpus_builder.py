@@ -5407,7 +5407,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         records = self.repo.load_records(build_id)
         if records:
             for record in records:
-                before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"))
+                # The page range also classifies the record (main text, front matter, back matter), so a change to it
+                # must count as a change here even though those fields are not inherited from the manifest.
+                before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"), record.get("primary_text"), record.get("region_type"))
                 field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 for field in MANIFEST_INHERITED_FIELDS:
                     info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
@@ -5421,7 +5423,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
-                after = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, inline, full)
+                after = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, inline, full, record.get("primary_text"), record.get("region_type"))
                 # A record whose inherited values did not actually change has nothing new to review: leave its
                 # acceptance alone instead of reopening every record for an edit that did not touch it.
                 if after == before:

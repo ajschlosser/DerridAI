@@ -77,3 +77,23 @@ def test_only_records_whose_inherited_values_changed_are_reopened(tmp_path: Path
     # Saving the same publisher again changes nothing any record inherits.
     manager.patch_manifest(build_id, {"publisher": "First Press"})
     assert all(row["accepted"] is True for row in repo.load_records(build_id))
+
+
+def test_a_page_range_change_reopens_exactly_the_records_it_reclassifies(tmp_path: Path):
+    """The start page classifies records (front matter vs main text); a reclassified record must be reopened."""
+    manager, repo, build_id = make(tmp_path)
+    rows = repo.load_records(build_id)
+    for row, page in zip(rows, (1, 30)):
+        row.update(pdf_pages=[page], primary_text=True, region_type="main_text")
+    repo.save_records(build_id, rows)
+    manager.patch_manifest(build_id, {"publisher": "First Press"})  # settle the inherited fields first
+    rows = repo.load_records(build_id)
+    for row in rows:
+        row.update(accepted=True, needs_review=False, review_disposition="accepted")
+    repo.save_records(build_id, rows)
+
+    manager.patch_manifest(build_id, {"main_text_start_page": 20})
+    by_id = {row["record_id"]: row for row in repo.load_records(build_id)}
+    assert by_id["r1"]["region_type"] == "front_matter" and by_id["r1"]["primary_text"] is False
+    assert by_id["r1"]["accepted"] is False, "page 1 is before the new start page, so it was reclassified"
+    assert by_id["r2"]["region_type"] == "main_text" and by_id["r2"]["accepted"] is True, "page 30 is unaffected"
