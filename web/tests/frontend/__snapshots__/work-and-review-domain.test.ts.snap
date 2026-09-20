@@ -1,0 +1,100 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`review presentation > builds diff sides and pretty JSON 1`] = `
+{
+  "left": "a <span class="del">b</span> c",
+  "right": "a <span class="ins">x</span> c",
+}
+`;
+
+exports[`review presentation > builds diff sides and pretty JSON 2`] = `null`;
+
+exports[`review presentation > builds diff sides and pretty JSON 3`] = `
+"{
+  "a": 1
+}"
+`;
+
+exports[`review presentation > renders a RAG answer as escaped paragraphs 1`] = `"<p>one</p><p>two &lt;i&gt;</p>"`;
+
+exports[`touch-up fields > offers known groups first, then the record's own fields 1`] = `
+[
+  "text",
+  "speaker",
+  "position_holder",
+  "target",
+  "is_direct_quote",
+  "quoted_speaker",
+  "quoted_author",
+  "quoted_work",
+  "quoted_position_holder",
+  "quoted_addressee",
+  "quoted_referent",
+  "quotation_chain",
+  "discourse_role",
+  "proposition_status",
+  "semantic_function",
+  "stance",
+  "claim_scope",
+  "topics",
+  "concepts",
+  "persons",
+  "works_referenced",
+  "attribution_confidence",
+  "semantic_classification_confidence",
+  "extraction_quality",
+  "needs_review",
+  "review_reason",
+  "custom",
+]
+`;
+
+exports[`work metadata helpers > summarizes a work's rows 1`] = `
+[
+  {},
+  [],
+  "",
+]
+`;
+
+exports[`work metadata helpers > summarizes a work's rows 2`] = `
+[
+  {},
+  [],
+  "",
+]
+`;
+
+exports[`work metadata helpers > summarizes a work's rows 3`] = `
+[
+  {
+    "cover_url": "http://x/c.jpg",
+    "document_author": "A",
+    "work": "W",
+    "year": 1967,
+  },
+  [
+    {
+      "field": "document_author",
+      "mixed": true,
+      "value": null,
+    },
+    {
+      "field": "year",
+      "mixed": true,
+      "value": null,
+    },
+  ],
+  "http://x/c.jpg",
+]
+`;
+
+exports[`work metadata helpers > summarizes a work's rows 4`] = `
+[
+  {
+    "work": "X",
+  },
+  [],
+  "",
+]
+`;

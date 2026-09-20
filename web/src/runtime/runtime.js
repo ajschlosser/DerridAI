@@ -30,8 +30,12 @@ import {
   translateDynamicUiValue as translateDynamicUiValueCompat,
   translateLegacyDom as translateLegacyDomCompat,
 } from "./legacyCompat.js";
+import { TOUCHUP_CREATABLE_FIELDS, TOUCHUP_GROUPS, WORK_METADATA_LLM_FIELDS } from "../domain/runtimeConstants";
 import { FIELD_LABELS, SEARCH_AUTOCOMPLETE_EXCLUDED, SEARCH_FACET_FIELDS, SEARCH_FILTER_FIELDS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
+import { annotationMatches, jsonPretty, llmDiffSides, ragAnswerHtml, reviewDiffSides } from "../domain/reviewPresentation";
+import { touchupFieldsForRecord } from "../domain/touchupFields";
+import { commonWorkValue, representativeWorkMetadata, workCoverUrl, workOverviewMetadataRows } from "../domain/workMetadata";
 import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
 import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
 import { fullHttpErrorDetail } from "../domain/httpErrors";
@@ -2472,11 +2476,6 @@ function annotationTimeline(days=14){
   }
   return keys.map(key=>({key,value:counts.get(key)||0}));
 }
-function annotationMatches(item,query){
-  const q=String(query||"").trim().toLocaleLowerCase();if(!q)return true;
-  const annotation=item.annotation||{};
-  return [item.work,item.record?.record_id,item.file?.name,item.store,annotation.note,annotation.quote,annotation.author,annotation.initiated_by,...(annotation.tags||[])].some(value=>String(value||"").toLocaleLowerCase().includes(q));
-}
 function annotationItemHtml(item){
   const annotation=item.annotation||{};
   const tags=(annotation.tags||[]).map(tag=>`<span class="chip">${esc(tag)}</span>`).join("");
@@ -2920,14 +2919,6 @@ function openReviewRecordPreview(local,result){
   };
 }
 
-function reviewDiffSides(current,proposed){
-  const leftText=jsonPretty(current);
-  const rightText=jsonPretty(proposed);
-  const parts=diffWordsWithSpace(leftText,rightText);
-  const left=parts.filter(part=>!part.added).map(part=>part.removed?`<span class="del">${esc(part.value)}</span>`:esc(part.value)).join("");
-  const right=parts.filter(part=>!part.removed).map(part=>part.added?`<span class="ins">${esc(part.value)}</span>`:esc(part.value)).join("");
-  return {left,right};
-}
 
 async function openJobResults(jobId){
   let job;
@@ -3468,17 +3459,6 @@ async function renderFaq(main){
   decorateDisabledControls(main);
 }
 
-function ragAnswerHtml(text){
-  const value=String(text||"").trim();
-  if(!value)return '<div class="llm-empty">No answer returned.</div>';
-  return value.split(/\n{2,}/).map(block=>{
-    const trimmed=block.trim();
-    if(!trimmed)return "";
-    if(/^\*\*Works Cited\*\*/i.test(trimmed))return `<h3>Works Cited</h3>`;
-    if(/^\d+\.\s/.test(trimmed))return `<div class="rag-bibliography">${trimmed.split(/\n/).map(line=>`<div>${esc(line)}</div>`).join("")}</div>`;
-    return `<p>${esc(trimmed).replace(/\n/g,"<br>")}</p>`;
-  }).join("");
-}
 function ragEvidencePreview(item,index){
   const record=item.record||{};
   const metadata=[
@@ -4749,13 +4729,6 @@ const WORK_METADATA_FIELDS=[
   "publisher","publication_place","translator","document_language","original_language","document_is_translation",
   "canonical_work_id","isbn","doi","url","full_citation","cover_url"
 ];
-function commonWorkValue(rows,field){
-  const values=rows.map(row=>row.record[field]);
-  if(!values.length)return {mixed:false,value:null};
-  const first=JSON.stringify(values[0]??null);
-  const mixed=values.some(value=>JSON.stringify(value??null)!==first);
-  return {mixed,value:mixed?null:values[0]};
-}
 function uniqueWorkValues(rows,field){
   const values=new Map();
   for(const row of rows||[]){
@@ -4834,32 +4807,6 @@ function openWorkMetadataEditor(work,rows){
 }
 
 
-const WORK_METADATA_LLM_FIELDS=[
-  "source_type","document_type","document_title","short_title","document_author","container_title","journal_title",
-  "editor","edition","volume","issue","pages","year","publication_year","publisher","publication_place",
-  "translator","document_language","document_is_translation","isbn","doi","url","full_citation","cover_url"
-];
-function representativeWorkMetadata(rows){
-  const metadata={};
-  for(const field of WORK_METADATA_LLM_FIELDS){
-    const values=rows.map(row=>row.record?.[field]).filter(value=>value!==undefined&&value!==null&&value!=="");
-    if(!values.length)continue;
-    const counts=new Map();
-    for(const value of values){const key=JSON.stringify(value);counts.set(key,(counts.get(key)||0)+1)}
-    const [winner]=[...counts.entries()].sort((a,b)=>b[1]-a[1])[0]||[];
-    if(winner!==undefined){try{metadata[field]=JSON.parse(winner)}catch{metadata[field]=values[0]}}
-  }
-  const work=rows[0]?.record?.work;
-  if(work)metadata.work=work;
-  return metadata;
-}
-function workCoverUrl(rows){
-  return String(rows.map(row=>row.record?.cover_url).find(Boolean)||"").trim();
-}
-function workOverviewMetadataRows(rows){
-  const fields=["document_title","document_author","edition","year","publication_year","publisher","publication_place","translator","isbn","document_language","original_language","canonical_work_id","full_citation"];
-  return fields.map(field=>({field,...commonWorkValue(rows,field)})).filter(item=>item.mixed||item.value!==undefined&&item.value!==null&&item.value!=="");
-}
 function workflowProviderSelectHtml(selectedId){
   const profiles=providerProfiles();
   const selected=providerProfile(selectedId)||profiles[0]||null;
@@ -6005,6 +5952,7 @@ function openEditor(){
   };
 }
 
+
 function fieldEditor(k,v){
   const t=Array.isArray(v)?"array":v===null?"null":typeof v;
   const full=["text","edition","review_reason","full_citation","quotation_chain"].includes(k);
@@ -6014,7 +5962,6 @@ function fieldEditor(k,v){
   if(t==="array"||t==="object")return `<div class="${cls}"><label>${esc(label(k))} · JSON</label><textarea data-key="${esc(k)}" data-type="json">${esc(JSON.stringify(v,null,2))}</textarea></div>`;
   return `<div class="${cls}"><label>${esc(label(k))}</label><input data-key="${esc(k)}" data-type="${t}" ${t==="number"?'type="number" step="any"':""} value="${esc(v??"")}"></div>`;
 }
-
 function parseEditor(el){if(el.dataset.type==="boolean")return el.checked;if(el.dataset.type==="number")return el.value===""?null:+el.value;if(el.dataset.type==="null")return el.value===""?null:el.value;if(el.dataset.type==="json")return JSON.parse(el.value);return el.value}
 
 function exportMenu(){
@@ -6987,51 +6934,12 @@ const vectorCollectionBridge=createVectorCollectionBridge({
 function notifyVectorStoresChanged(){return vectorCollectionBridge.notifyVectorStoresChanged()}
 function openDatabaseCreationFromResearch(){return vectorCollectionBridge.openDatabaseCreationFromResearch()}
 function openCollectionCreationWizard(options={}){return vectorCollectionBridge.openCollectionCreationWizard(options)}
-const TOUCHUP_GROUPS = [
-  {name:"Text quality", fields:["text"]},
-  {name:"Attribution", fields:["speaker","position_holder","target"]},
-  {name:"Quotation provenance", fields:["is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain"]},
-  {name:"Discourse semantics", fields:["discourse_role","proposition_status","semantic_function","stance","claim_scope"]},
-  {name:"Indexing", fields:["topics","concepts","persons","works_referenced"]},
-  {name:"Review / quality", fields:["attribution_confidence","semantic_classification_confidence","extraction_quality","needs_review","review_reason"]},
-  {name:"Source / edition", fields:["work","document_author","edition","year","page_start","page_end","region_type","region_author","primary_text","document_language","original_language","document_is_translation","translator","inline_citation","full_citation","canonical_work_id"]},
-];
 
 const HIGH_RISK_TOUCHUP_FIELDS = new Set(["text","record_id","canonical_work_id","inline_citation","full_citation","edition","year","page_start","page_end"]);
-const TOUCHUP_CREATABLE_FIELDS = new Set([
-  "speaker","position_holder","target","discourse_role","proposition_status","semantic_function","stance","claim_scope",
-  "is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain",
-  "topics","concepts","persons","works_referenced","attribution_confidence","semantic_classification_confidence","extraction_quality","needs_review","review_reason"
-]);
-
-function touchupFieldsForRecord(record){
-  const known=[];
-  for(const group of TOUCHUP_GROUPS){
-    for(const field of group.fields){
-      if(field in record || TOUCHUP_CREATABLE_FIELDS.has(field)){
-        if(!known.includes(field))known.push(field);
-      }
-    }
-  }
-  for(const field of Object.keys(record)){
-    if(!known.includes(field) && field!=="text_length" && !field.startsWith("_"))known.push(field);
-  }
-  return known;
-}
 
 
-function jsonPretty(value){
-  if(typeof value==="string")return value;
-  try{return JSON.stringify(value,null,2)}catch{return String(value)}
-}
 
-function llmDiffSides(field,current,proposed){
-  if(field!=="text")return null;
-  const parts=diffWordsWithSpace(String(current??""),String(proposed??""));
-  const left=parts.filter(part=>!part.added).map(part=>part.removed?`<span class="del">${esc(part.value)}</span>`:esc(part.value)).join("");
-  const right=parts.filter(part=>!part.removed).map(part=>part.added?`<span class="ins">${esc(part.value)}</span>`:esc(part.value)).join("");
-  return {left,right};
-}
+
 
 
 function ensureProviderProfiles(){
