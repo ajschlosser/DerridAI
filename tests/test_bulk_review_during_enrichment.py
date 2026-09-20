@@ -9,9 +9,9 @@ How: `install` creates a running two-record build with queued enrichment stages.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401

@@ -1,8 +1,11 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 """Pure public JSONL schema validation and internal-field filtering."""
 
 from __future__ import annotations
+
 from typing import Any
-from .corpus_metadata import REGION_TYPES, DISCOURSE_ROLES
+
+from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
 
 
 def validate_publication_record(record: dict[str, Any]) -> list[str]:

@@ -15,7 +15,7 @@ import io
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +39,7 @@ class EnrichmentLedger:
 
     def append(self, kind: str, *, model: str, field: str, build_id: str = "", record_id: str = "", run_id: str = "", **extra: Any) -> None:
         row = {
-            "at": datetime.now(timezone.utc).isoformat(), "kind": kind, "run_id": run_id, "build_id": build_id,
+            "at": datetime.now(UTC).isoformat(), "kind": kind, "run_id": run_id, "build_id": build_id,
             "record_id": record_id, "model": model, "field": field, **extra,
         }
         if kind in HUMAN_EVENTS and "reviewer" not in row:

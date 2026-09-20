@@ -8,13 +8,28 @@ import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TypeAlias
 
 from .config import settings
 
-Role: TypeAlias = str
+type Role = str
+
+_USER_SELECT_WHERES = frozenset(
+    {
+        "",
+        "WHERE u.id=?",
+        "WHERE u.username=? COLLATE NOCASE",
+        "JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1",
+    }
+)
+_USER_SELECT_ORDERS = frozenset(
+    {
+        "",
+        "ORDER BY u.username COLLATE NOCASE",
+        "ORDER BY u.id",
+    }
+)
 
 # Authorization contract shared with the API and frontend. Every navigable
 # page and meaningful feature has a named capability. Administrator access is
@@ -76,7 +91,7 @@ _DUMMY_PASSWORD_HASH = "00" * 32
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
@@ -259,14 +274,19 @@ class AuthStore:
 
     @staticmethod
     def _user_select(where: str = "", order: str = "") -> str:
-        return f"""
-            SELECT u.*, a.role, r.name AS role_name
-            FROM users u
-            JOIN user_role_assignments a ON a.user_id=u.id
-            JOIN roles r ON r.id=a.role
-            {where}
-            {order}
-        """
+        if where not in _USER_SELECT_WHERES or order not in _USER_SELECT_ORDERS:
+            raise ValueError("Unsupported user query clause.")
+        parts = [
+            "SELECT u.*, a.role, r.name AS role_name",
+            "FROM users u",
+            "JOIN user_role_assignments a ON a.user_id=u.id",
+            "JOIN roles r ON r.id=a.role",
+        ]
+        if where:
+            parts.append(where)
+        if order:
+            parts.append(order)
+        return " ".join(parts)
 
     def bootstrap_required(self) -> bool:
         with self._connect() as conn:
@@ -421,8 +441,8 @@ class AuthStore:
         except ValueError:
             return None
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     @staticmethod
     def _login_throttle_settings() -> tuple[int, int]:
@@ -444,14 +464,14 @@ class AuthStore:
         locked_until = self._parse_auth_time(str(row["locked_until"]) if row and row["locked_until"] else None)
         if locked_until is None:
             return 0
-        remaining = (locked_until - datetime.now(timezone.utc)).total_seconds()
+        remaining = (locked_until - datetime.now(UTC)).total_seconds()
         return int(remaining) + 1 if remaining > 0 else 0
 
     def authenticate(self, username: str, password: str) -> AuthUser | None:
         username_clean = username.strip()
         username_key = self._login_key(username_clean)
         limit, lockout_seconds = self._login_throttle_settings()
-        now_dt = datetime.now(timezone.utc)
+        now_dt = datetime.now(UTC)
         now = now_dt.isoformat()
         with self._lock, self._connect() as conn:
             # Serialize failure-counter updates across AuthStore instances, not
@@ -533,7 +553,7 @@ class AuthStore:
 
     def create_session(self, user_id: int) -> str:
         token = secrets.token_urlsafe(48)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(days=SESSION_DAYS)
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now.isoformat(),))
@@ -584,15 +604,19 @@ class AuthStore:
         if current.role == "admin" and current.active and (next_role != "admin" or not next_active):
             if self._active_admin_count() <= 1:
                 raise ValueError("At least one active administrator is required.")
-        clauses = ["active=?", "updated_at=?"]
-        values: list[object] = [int(next_active), _iso_now()]
-        if password is not None:
-            salt, digest = _hash_password(password)
-            clauses.extend(["password_salt=?", "password_hash=?"])
-            values.extend([salt, digest])
-        values.append(user_id)
+        now = _iso_now()
         with self._lock, self._connect() as conn:
-            conn.execute(f"UPDATE users SET {', '.join(clauses)} WHERE id=?", values)
+            if password is not None:
+                salt, digest = _hash_password(password)
+                conn.execute(
+                    "UPDATE users SET active=?, updated_at=?, password_salt=?, password_hash=? WHERE id=?",
+                    (int(next_active), now, salt, digest, user_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET active=?, updated_at=? WHERE id=?",
+                    (int(next_active), now, user_id),
+                )
             conn.execute(
                 "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
                 (user_id, next_role),

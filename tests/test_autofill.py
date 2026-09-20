@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from app import autofill as af
-from app.enrichment_ledger import ACCEPTED, CORRECTED, PROPOSED, REJECTED, EnrichmentLedger
+from app.enrichment_ledger import (
+    ACCEPTED,
+    CORRECTED,
+    PROPOSED,
+    REJECTED,
+    EnrichmentLedger,
+)
 
 
 def test_without_history_confidence_is_the_models_own():

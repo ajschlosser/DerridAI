@@ -5,15 +5,16 @@ import copy
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .config import settings
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _json_dumps(value: Any) -> str:
@@ -491,7 +492,8 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",
+                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
+                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
             conn.commit()
@@ -517,7 +519,8 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",
+                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
+                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
             for raw in jobs or []:

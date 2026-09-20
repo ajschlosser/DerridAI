@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff==0.16.8
-      - run: ruff check api/app
+      - run: ruff check api/app tests
 
   backend-types:
     runs-on: ubuntu-latest

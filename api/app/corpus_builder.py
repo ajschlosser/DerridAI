@@ -7,57 +7,117 @@ import hashlib
 import json
 import os
 import re
-import threading
 import tempfile
+import threading
 import time
-import uuid
 import unicodedata
+import uuid
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 import fitz
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from .config import APP_VERSION, settings
-from .corpus_pipeline import BuildScope
-from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
-from .corpus_publication import validate_publication_record, serialize_public_record
-from .error_severity import severity as error_severity
-from .reviewer_context import current_reviewer
-from .autofill import decide as decide_autofill, in_audit_sample
 from . import experiment
-from .enrichment_metrics import compute as compute_enrichment_metrics
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, RECHECK, RECHECK_SEAL, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
-from .main_text_start import infer_main_text_start
-from .sentence_boundaries import snap_boundaries_to_sentences
+from .autofill import decide as decide_autofill
+from .autofill import in_audit_sample
+from .config import APP_VERSION, settings
+
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
     ALLOWED_METADATA_FIELDS as ALLOWED_METADATA_FIELDS,
+)
+from .corpus_metadata import (
     ATTRIBUTION_EVIDENCE_FIELDS as ATTRIBUTION_EVIDENCE_FIELDS,
-    DISCOURSE_ROLES as DISCOURSE_ROLES,
+)
+from .corpus_metadata import (
     DISCOURSE_ROLE_DEFINITIONS as DISCOURSE_ROLE_DEFINITIONS,
+)
+from .corpus_metadata import (
+    DISCOURSE_ROLES as DISCOURSE_ROLES,
+)
+from .corpus_metadata import (
     EVIDENCE_REQUIRED_FIELDS as EVIDENCE_REQUIRED_FIELDS,
+)
+from .corpus_metadata import (
     HUMAN_EDITABLE_METADATA_FIELDS as HUMAN_EDITABLE_METADATA_FIELDS,
+)
+from .corpus_metadata import (
     HYBRID_REQUIRED_FIELDS as HYBRID_REQUIRED_FIELDS,
+)
+from .corpus_metadata import (
     MANIFEST_INHERITED_FIELDS as MANIFEST_INHERITED_FIELDS,
+)
+from .corpus_metadata import (
     METADATA_FAMILY_FIELDS as METADATA_FAMILY_FIELDS,
+)
+from .corpus_metadata import (
     NON_PRIMARY_REGION_TYPES as NON_PRIMARY_REGION_TYPES,
+)
+from .corpus_metadata import (
     PROPOSITION_STATUS_VALUES as PROPOSITION_STATUS_VALUES,
+)
+from .corpus_metadata import (
     REGION_TYPES as REGION_TYPES,
+)
+from .corpus_metadata import (
     REVIEW_METADATA_FIELDS as REVIEW_METADATA_FIELDS,
+)
+from .corpus_metadata import (
     SOURCE_BOUND_FIELDS as SOURCE_BOUND_FIELDS,
+)
+from .corpus_metadata import (
     STANCE_ALIASES as STANCE_ALIASES,
+)
+from .corpus_metadata import (
     STANCE_VALUES as STANCE_VALUES,
+)
+from .corpus_metadata import (
     STRONG_STRUCTURAL_METHODS as STRONG_STRUCTURAL_METHODS,
+)
+from .corpus_metadata import (
     _normalize_semantic_value as _normalize_semantic_value,
+)
+from .corpus_metadata import (
     apply_metadata_constraints as apply_metadata_constraints,
 )
-
+from .corpus_pipeline import BuildScope
+from .corpus_publication import serialize_public_record, validate_publication_record
+from .enrichment_cycles import (
+    CONFIDENCE_FIELDS,
+    HUMAN_OWNED_STATUSES,
+    MAX_PASSES,
+    GlobalLearningStore,
+    learn_from_pass,
+    resolve_conflict,
+    same_value,
+)
+from .enrichment_ledger import (
+    ACCEPTED,
+    AUTOFILLED,
+    BLIND_LABEL,
+    CALL,
+    CORRECTED,
+    PROPOSED,
+    RECHECK,
+    RECHECK_SEAL,
+    REJECTED,
+    RESUMED,
+    SUSPENDED,
+    EnrichmentLedger,
+)
+from .enrichment_metrics import compute as compute_enrichment_metrics
+from .error_severity import severity as error_severity
+from .main_text_start import infer_main_text_start
 from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
+from .reviewer_context import current_reviewer
+from .sentence_boundaries import snap_boundaries_to_sentences
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
@@ -606,7 +666,7 @@ def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
     return count
 
 def iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_filename(value: str) -> str:
@@ -805,7 +865,7 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
         # Infer missing Arabic printed labels only when at least two visible folios
         # corroborate the same physical-to-printed offset. Every inferred value is
         # marked as such and remains editable in the source manifest.
-        offsets = Counter()
+        offsets: Counter[int] = Counter()
         for page_info in pages:
             if page_info.get("printed_page_label_source") != "visible_folio":
                 continue
@@ -1304,11 +1364,10 @@ def _serialize_record_mutation(method):
     manager lock as metadata checkpoint persistence or a stale reviewer snapshot
     can overwrite a newer metadata checkpoint.
     """
+    @wraps(method)
     def wrapped(self, *args, **kwargs):
         with self._lock:
             return method(self, *args, **kwargs)
-    wrapped.__name__ = getattr(method, "__name__", "wrapped")
-    wrapped.__doc__ = getattr(method, "__doc__")
     return wrapped
 
 
@@ -2127,7 +2186,7 @@ class PdfCorpusBuildManager:
         }
         return build
 
-    def _update(self, build_id: str, *, stage: str | None = None, progress: float | None = None, **changes: Any) -> dict[str, Any]:
+    def _update(self, build_id: str, **changes: Any) -> dict[str, Any]:
         # Metadata workers update telemetry and warnings concurrently. Serialize
         # read/modify/write of build.json so one worker cannot erase another
         # worker's metric, progress, or recovery flag.
@@ -2135,6 +2194,8 @@ class PdfCorpusBuildManager:
             build = self.repo.get_build(build_id)
             prior_stage = str(build.get("stage") or "")
             prior_status = str(build.get("status") or "")
+            stage = changes.get("stage")
+            progress = changes.get("progress")
             if stage is not None:
                 build["stage"] = stage
             if progress is not None:
@@ -2177,9 +2238,7 @@ class PdfCorpusBuildManager:
             raise ValueError("LLM returned an empty response.")
         try:
             return _extract_json(value)
-        except Exception:
-            # Safe: this is the strict first pass; the fence-stripping and
-            # brace-scanning recovery below raises if nothing parses.
+        except Exception:  # noqa: S110 — strict first pass; recovery below raises if nothing parses.
             pass
         value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
         value = re.sub(r"\s*```$", "", value)
@@ -3523,7 +3582,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         scored=[]
         heading_types={"heading","title","subtitle","section","chapter"}
         speaker_re=re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
-        for idx,(left,right) in enumerate(zip(span,span[1:])):
+        for left, right in zip(span, span[1:]):
             cumulative+=len(str(left.get("text") or ""))
             distance=abs(cumulative-target)/max(target,1)
             structural=0.0
@@ -4292,12 +4351,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if not decision["autofill"]:
                 return None
             audit = in_audit_sample(str(record.get("record_id") or ""), field)
-            self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=decision["confidence"], self_reported=confidence, audit=audit, **conditions)
+            filled_confidence = decision["confidence"] or 0.0
+            self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=filled_confidence, self_reported=confidence, audit=audit, **conditions)
             return {
-                "status": "llm_inferred", "method": "llm", "model": model, "confidence": decision["confidence"],
+                "status": "llm_inferred", "method": "llm", "model": model, "confidence": filled_confidence,
                 "self_reported_confidence": confidence, "auto_populated": True, "autofilled": True, "audit_sample": audit,
                 "proposed_value": value, "reason_code": "resolved",
-                "reason": f"Filled in automatically at {round(float(decision['confidence']) * 100)}% confidence, with cited evidence.",
+                "reason": f"Filled in automatically at {round(filled_confidence * 100)}% confidence, with cited evidence.",
             }
         allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
         allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
@@ -5588,7 +5648,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # Measure automation by useful, persisted contribution rather than merely
         # counting successful HTTP/model calls. These metrics let the UI make the
         # cost/benefit of enrichment visible to reviewers.
-        contribution = Counter()
+        contribution: Counter[str] = Counter()
         llm_elapsed_ms = 0
         llm_family_calls = 0
         for record in records:
@@ -6929,7 +6989,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
-            return self._enrich_record(candidate, manifest, {**request, "families": families, "_interactive_provider_override": True}, build_id=build_id, **neighbors)
+            return self._enrich_record(
+                candidate,
+                manifest,
+                {**request, "families": families, "_interactive_provider_override": True},
+                build_id=build_id,
+                previous_text=neighbors["previous_text"],
+                next_text=neighbors["next_text"],
+            )
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
             futures = {pool.submit(candidate_for, index): index for index in indices}

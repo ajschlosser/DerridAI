@@ -24,7 +24,12 @@ sys.path.insert(0, str(ROOT / "api"))
 
 import app.content_policy_generation as module  # noqa: E402
 from app.content_filter import normalize_content_policy  # noqa: E402
-from app.content_policy_generation import CATEGORIES, MIN_PER_CATEGORY, generate_content_policy, language_label  # noqa: E402
+from app.content_policy_generation import (  # noqa: E402
+    CATEGORIES,
+    MIN_PER_CATEGORY,
+    generate_content_policy,
+    language_label,
+)
 
 AUDIT = "derridai_policy_language_audit"
 

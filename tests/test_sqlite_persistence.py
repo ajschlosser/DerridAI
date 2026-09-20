@@ -20,8 +20,6 @@ sys.path.insert(0, str(ROOT / "api"))
 from app.persistence import SQLiteJobRepository, SQLiteSystemRepository
 
 
-
-
 def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
     """Saved system state loads back identically, with WAL mode and no migration tables.
 

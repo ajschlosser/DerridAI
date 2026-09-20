@@ -18,6 +18,13 @@ values is flagged for a spot check, so a wrong-but-confident model is still caug
 from __future__ import annotations
 
 import hashlib
+from typing import TypedDict
+
+
+class AutofillDecision(TypedDict):
+    autofill: bool
+    confidence: float | None
+    suspended: bool
 
 AUTOFILL_THRESHOLD = 0.9
 PRIOR_REVIEWS = 20
@@ -41,7 +48,7 @@ def in_audit_sample(record_id: str, field: str, rate: float = AUDIT_RATE) -> boo
     return int.from_bytes(digest[:4], "big") / 2**32 < rate
 
 
-def decide(self_report: float | None, reviews: int, accepted: int) -> dict[str, object]:
+def decide(self_report: float | None, reviews: int, accepted: int) -> AutofillDecision:
     """Whether the model's value may be autofilled, and the confidence that decided it."""
     if self_report is None:
         return {"autofill": False, "confidence": None, "suspended": False}

@@ -32,7 +32,6 @@ from app.content_policy_generation import generate_content_policy
 from app.persistence import SQLiteSystemRepository
 from app.system_store import SystemStore
 
-
 _READY = {
     "status": "ready",
     "blocked_terms": [

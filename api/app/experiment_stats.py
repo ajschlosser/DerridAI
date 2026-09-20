@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 Z95 = 1.959963984540054
 
@@ -30,7 +30,7 @@ def wilson(successes: int, n: int, z: float = Z95) -> dict[str, float | int | No
 def bootstrap_ci(values: Sequence[float], stat: Callable[[Sequence[float]], float] = lambda v: sum(v) / len(v), *, rounds: int = 2000, seed: int = 0) -> dict[str, float | int | None]:
     if not values:
         return {"estimate": None, "low": None, "high": None, "n": 0}
-    rng = random.Random(seed)  # fixed seed: the same data gives the same interval
+    rng = random.Random(seed)  # noqa: S311  # fixed seed: the same data gives the same interval
     n = len(values)
     draws = sorted(stat([values[rng.randrange(n)] for _ in range(n)]) for _ in range(rounds))
     return {"estimate": round(stat(values), 4), "low": round(draws[int(0.025 * rounds)], 4), "high": round(draws[int(0.975 * rounds) - 1], 4), "n": n}

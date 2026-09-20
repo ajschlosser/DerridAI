@@ -8,8 +8,12 @@ record starts with text that belongs to the record before it.
 """
 
 from __future__ import annotations
-import json, sys, types
+
+import json
+import sys
+import types
 from pathlib import Path
+
 try:
     import chromadb  # type: ignore  # noqa
 except ModuleNotFoundError:
@@ -18,6 +22,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
+
 
 def install(tmp_path:Path):
     """Create a temp repository with three records where r2 begins with misplaced text.

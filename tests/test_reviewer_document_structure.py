@@ -11,9 +11,9 @@ PDF page 3; the LLM (`_chat_json`) is replaced with canned replies.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]

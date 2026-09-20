@@ -7,9 +7,9 @@ enrichment may skip families that are not paying off (never when explicitly aske
 How: pure helpers and PdfCorpusBuildManager methods called with small dicts.
 """
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401

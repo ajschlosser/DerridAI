@@ -19,10 +19,14 @@ English-contaminated policy is never saved but an otherwise good one is not thro
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from .content_filter import POLICY_VERSION, normalize_content_policy, normalize_policy_term
+from .content_filter import (
+    POLICY_VERSION,
+    normalize_content_policy,
+    normalize_policy_term,
+)
 from .models import OllamaTouchupOptions
 from .rag import _extract_json, chat_complete
 
@@ -204,6 +208,14 @@ def _audit(
     raise ValueError(f"The language check for {label} did not return a usable answer.")
 
 
+def _term_passes_language_audit(term: str, suspects: set[str], verdicts: Mapping[str, bool]) -> bool:
+    # A suspect (also in another locale's policy) must be affirmatively confirmed; anything
+    # else is dropped only when the audit says it is not a word of this language.
+    if term in suspects:
+        return verdicts.get(term) is True
+    return verdicts.get(term, True)
+
+
 def generate_content_policy(
     *,
     code: str,
@@ -271,18 +283,11 @@ def generate_content_policy(
         suspects = {term for term in to_audit if term in other_terms}
         verdicts = _audit(label=label, terms=to_audit, suspects=suspects, call=call)
 
-        def passes(term: str) -> bool:
-            # A suspect (also in another locale's policy) must be affirmatively confirmed; anything
-            # else is dropped only when the audit says it is not a word of this language.
-            if term in suspects:
-                return verdicts.get(term) is True
-            return verdicts.get(term, True)
-
         for category, terms in candidates.items():
             for term in terms:
-                (accepted[category] if passes(term) else rejected).append(term)
+                (accepted[category] if _term_passes_language_audit(term, suspects, verdicts) else rejected).append(term)
         for term, item in new_contextual.items():
-            if passes(term):
+            if _term_passes_language_audit(term, suspects, verdicts):
                 contextual[term] = item
             else:
                 rejected.append(term)
@@ -306,7 +311,7 @@ def generate_content_policy(
         {"blocked_terms": flat, "contextual_terms": list(contextual.values())},
         require_ready=True,
     )
-    policy["generated_at"] = datetime.now(timezone.utc).isoformat()
+    policy["generated_at"] = datetime.now(UTC).isoformat()
     policy["source"] = "llm-generated"
     policy["provider"] = provider
     policy["model"] = model

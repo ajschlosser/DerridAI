@@ -11,24 +11,37 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .llm import TouchupFailure, propose_touchup
 from .chroma_store import ChromaStore
 from .config import settings
-from .models import LLMJobCreate, LLMToolJobCreate, RAGGradeRequest, RAGRunRequest, UpsertJobCreate
-from .rag import run_rag_pipeline
-from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
-from .system_store import system_store, normalize_locale_code
-from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
 from .content_policy_generation import generate_policy_for_installed_language
+from .i18n_translation import (
+    LanguageTranslationError,
+    LanguageTranslationInterrupted,
+    translate_english_dictionary,
+)
+from .llm import TouchupFailure, propose_touchup
+from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
+from .models import (
+    LLMJobCreate,
+    LLMToolJobCreate,
+    RAGGradeRequest,
+    RAGRunRequest,
+    UpsertJobCreate,
+)
 from .persistence import job_repository
+from .rag import run_rag_pipeline
+from .system_store import normalize_locale_code, system_store
+
+JobPayload = dict[str, Any]
+JobPayloadList = list[JobPayload]
 
 
 def iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _error_details(exc: Exception | dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +91,8 @@ class PersistentJobStateMixin:
     """
 
     JOB_TYPE = "operation"
+    _lock: threading.RLock
+    _jobs: dict[str, JobPayload]
 
     def _start_persistent_state(self) -> None:
         persisted = job_repository.load(self.JOB_TYPE)
@@ -406,7 +421,7 @@ class LLMJobManager(PersistentJobStateMixin):
         with self._lock:
             return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [
                 self._copy(job, include_results=False)
@@ -426,7 +441,7 @@ class LLMJobManager(PersistentJobStateMixin):
         job_id: str,
         *,
         action: str,
-        items: list[dict[str, Any]],
+        items: JobPayloadList,
         dismiss_job: bool = False,
     ) -> dict[str, Any]:
         if action not in {"accept", "reject"}:
@@ -439,7 +454,7 @@ class LLMJobManager(PersistentJobStateMixin):
             if not requested:
                 return self._copy(job, include_results=True)
 
-            kept: list[dict[str, Any]] = []
+            kept: JobPayloadList = []
             resolved_records = 0
             resolved_fields = 0
             for result in job["results"]:
@@ -523,7 +538,7 @@ class LLMJobManager(PersistentJobStateMixin):
             job = self._jobs[job_id]
             pending_records = len(job["results"])
             pending_fields = sum(
-                len(((result.get("proposal") or {}).get("changes") or {}))
+                len((result.get("proposal") or {}).get("changes") or {})
                 for result in job["results"]
             )
             job["results"] = []
@@ -552,7 +567,7 @@ class LLMJobManager(PersistentJobStateMixin):
             job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_results=True))
@@ -561,7 +576,7 @@ class LLMJobManager(PersistentJobStateMixin):
                 and not job.get("dismissed")
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -666,7 +681,7 @@ class LLMJobManager(PersistentJobStateMixin):
         ]
         out["pending_result_count"] = len(pending_results)
         out["pending_change_count"] = sum(
-            len(((result.get("proposal") or {}).get("changes") or {}))
+            len((result.get("proposal") or {}).get("changes") or {})
             for result in pending_results
         )
         out["failure_result_count"] = sum(
@@ -1154,7 +1169,7 @@ class RAGJobManager(PersistentJobStateMixin):
                                 deadline = time.monotonic() + delay
                                 while time.monotonic() < deadline:
                                     if cancelled():
-                                        raise InterruptedError()
+                                        raise InterruptedError() from None
                                     time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
                         if grade_payload is None:
                             raise RuntimeError("Auto-grade did not return a result.")
@@ -1284,7 +1299,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, include_result=False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -1295,7 +1310,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], include_result=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_result=True))
@@ -1303,7 +1318,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -1938,7 +1953,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -1949,7 +1964,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         # Raw copies intentionally retain hidden language-translation checkpoints
         # so a full backup can restore an incomplete/resumable dictionary job.
         with self._lock:
@@ -1959,7 +1974,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -2282,7 +2297,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                         break
 
                 batch_items = body.items[start:start + body.batch_size]
-                records: list[dict[str, Any]] = []
+                records: JobPayloadList = []
                 audit_entries_by_id: dict[str, list[dict[str, Any]]] = {}
                 replace_updates_by_id: dict[str, list[dict[str, Any]]] = {}
                 for item in batch_items:
@@ -2404,7 +2419,7 @@ class UpsertJobManager(PersistentJobStateMixin):
             if terminal:
                 self._remove_spool(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, include_results=False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -2415,7 +2430,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], include_results=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_results=True))
@@ -2423,7 +2438,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {

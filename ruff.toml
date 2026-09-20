@@ -1,7 +1,17 @@
 target-version = "py312"
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "S"]
+ignore = [
+  # FastAPI/Query/File/Form defaults are evaluated once on purpose.
+  "B008",
+  # zip(..., strict=True) needs per-call length proofs; enable later.
+  "B905",
+  # Asserts document internal invariants, not test-only checks.
+  "S101",
+  # `git` on PATH is the documented lookup fallback in config.py.
+  "S607",
+]
 
 [lint.per-file-ignores]
 # SA-01: legacy compact statements. Keep the first gate focused on correctness;
@@ -11,3 +21,7 @@ select = ["E4", "E7", "E9", "F"]
 "api/app/chroma_store.py" = ["E701", "E702"]
 "api/app/corpus_builder.py" = ["E701", "E702"]
 "api/app/llm_tools.py" = ["E701"]
+# Tests import the app after conftest sets storage paths, and keep some
+# compact statements from the same SA-01 pass. Bugbear/Bandit land on
+# api/app first; remaining test style is SA-20.
+"tests/*.py" = ["E401", "E402", "E701", "E702", "E731", "B", "S"]

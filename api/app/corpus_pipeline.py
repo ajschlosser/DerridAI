@@ -1,3 +1,4 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 """Explicit context passed between corpus construction stages."""
 from __future__ import annotations
 

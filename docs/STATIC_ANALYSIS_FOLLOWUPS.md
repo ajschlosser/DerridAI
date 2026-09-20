@@ -1,25 +1,38 @@
 # Static-analysis follow-ups (0.61.0)
 
-The initial gates run across `api/app` and `web/src`; they do not replace any
+The initial gates run across `api/app`, `tests/`, and `web/src`; they do not replace any
 runtime tests. These items are tracked debt, not evidence that the underlying
 code is correct. Resolve each with an isolated change and remove its suppression.
+
+Ruff currently enables pyflakes (`F`), selected pycodestyle (`E4`, `E7`, `E9`),
+isort (`I`), pyupgrade (`UP`), bugbear (`B`), and bandit (`S`). Mypy type-checks
+unannotated function bodies (`check_untyped_defs`) but still allows missing
+signatures (`disallow_untyped_defs = False`). Module-specific error-code
+suppressions for models, Chroma, RAG, LLM tools, corpus builder, jobs, and
+`main` have been removed.
 
 ## Backend
 
 - [ ] SA-01: expand compact Python statements per module (Ruff E701/E702).
 - [ ] SA-02: enable mypy strict optional checking after typing nullable payloads.
-- [ ] SA-03: type Pydantic literal-list default factories (`models`).
-- [ ] SA-04: annotate lazy Chroma clients and accumulators; remove branch-local redefinitions.
-- [ ] SA-05: give RAG query/evidence payloads TypedDict contracts.
-- [ ] SA-06: validate and type external catalog/provider JSON in `llm_tools`.
+- [x] SA-03: type Pydantic literal-list default factories (`models`).
+- [x] SA-04: annotate lazy Chroma clients and accumulators; remove branch-local redefinitions.
+- [x] SA-05: give RAG query/evidence payloads TypedDict contracts (`record_types.py`).
+- [x] SA-06: validate and type external catalog/provider JSON in `llm_tools`.
 - [ ] SA-07: type enrichment schema families and checkpoint dictionaries.
-- [ ] SA-08: qualify builtin list types shadowed by job-manager methods; type mixin locks.
-- [ ] SA-09: use covariant sequence interfaces at language-store boundaries.
+- [x] SA-08: qualify builtin list types shadowed by job-manager methods; type mixin locks.
+- [x] SA-09: use covariant sequence interfaces at language-store boundaries.
+- [ ] SA-17: replace `dict[str, Any]` HTTP returns in `main.py` with operation-specific response models.
+- [ ] SA-18: enable Ruff `B905` (`zip(..., strict=True)`) after proving equal lengths.
+- [ ] SA-19: run `ruff format` per module (paired with SA-01).
+- [x] SA-20: apply Ruff `I`/`UP` to `tests/` (`B`/`S` still deferred).
 
-`mypy.ini` scopes temporary error-code suppressions to these modules. Undefined
-names and other enabled diagnostics still fail. Missing third-party stubs are
-ignored; untyped definitions are allowed. Newly extracted modules inherit no
-module-specific suppressions and should opt into strict optional checking.
+`mypy.ini` no longer disables error codes per module. Undefined names and
+other enabled diagnostics still fail. Missing third-party stubs are ignored.
+Newly extracted modules inherit no module-specific suppressions and should
+opt into strict optional checking. `experiment_stats.bootstrap_ci` uses a
+seeded stdlib RNG (`noqa: S311`) so the same sample yields the same interval;
+it is not cryptographic.
 
 ## Frontend
 

@@ -1,6 +1,8 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
 from typing import Any
+
 
 def _mla_author_name(value: str | None) -> str:
     name = str(value or "").strip()

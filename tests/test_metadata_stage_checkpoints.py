@@ -11,9 +11,9 @@ LLM reply per family. Other helpers in this module are reused by later test file
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401
@@ -138,6 +138,7 @@ def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
     two complete sets. Why: writes use a temp file and atomic replace under a lock.
     """
     import threading
+
     from app.corpus_builder import PdfCorpusRepository
 
     repo = PdfCorpusRepository(root=tmp_path / "pdf-corpus")

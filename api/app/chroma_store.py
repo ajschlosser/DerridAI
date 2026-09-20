@@ -4,12 +4,14 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import logging
 import math
 import re
 import shutil
 import uuid
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from typing import Any
 
 import chromadb
@@ -27,6 +29,7 @@ from .chroma_connection import (
 )
 from .config import APP_VERSION, settings
 
+logger = logging.getLogger(__name__)
 
 _JSON_PREFIX = "__json__:"
 
@@ -115,7 +118,7 @@ def compact_nested_record_payloads(value: Any) -> Any:
 
 class Embeddings:
     def __init__(self) -> None:
-        self._default = None
+        self._default: Any = None
 
     def embed(
         self,
@@ -232,7 +235,7 @@ class ChromaStore:
     _BUILD_HISTORY_KEY = "__derridai_build_history"
 
     def __init__(self) -> None:
-        self._client = None
+        self._client: Any = None
         self._data_root = Path(settings.chroma_data_root).expanduser().resolve()
         self._path = str(self._normalize_path(settings.chroma_path))
         self._mode = normalize_mode(settings.chroma_mode)
@@ -313,7 +316,7 @@ class ChromaStore:
             try:
                 version = client.get_version() or version
             except Exception:
-                pass
+                logger.debug("Chroma get_version() failed; using package version", exc_info=True)
         collections = client.list_collections()
         if not heartbeat_ok:
             heartbeat_ok = True
@@ -504,7 +507,7 @@ class ChromaStore:
 
     @staticmethod
     def _iso_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def preflight_embedding(
         self,
@@ -794,7 +797,7 @@ class ChromaStore:
     def _infer_language_metadata(
         cls,
         name: str,
-        language_codes: list[str] | None,
+        language_codes: Sequence[str] | None,
         collection_role: str | None,
     ) -> tuple[list[str], str]:
         if language_codes is not None:
@@ -933,7 +936,7 @@ class ChromaStore:
         self,
         name: str,
         *,
-        language_codes: list[str],
+        language_codes: Sequence[str],
         collection_role: str | None = None,
     ) -> dict[str, Any]:
         collection = self._collection(name)
@@ -1021,7 +1024,7 @@ class ChromaStore:
         retrieval_mode: str = "hybrid",
         text_field: str = "text",
         filter_fields: list[str] | None = None,
-        language_codes: list[str] | None = None,
+        language_codes: Sequence[str] | None = None,
         collection_role: str | None = None,
         protected: bool = False,
     ) -> dict[str, Any]:
@@ -1503,10 +1506,10 @@ class ChromaStore:
                 "filters": filters,
             }
 
-        kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        scan_kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if work:
-            kwargs["where"] = {"work": work}
-        payload = col.get(**kwargs)
+            scan_kwargs["where"] = {"work": work}
+        payload = col.get(**scan_kwargs)
         records = self._decode_result(payload, include_updates=include_updates)
 
         def searchable(value: Any) -> str:
@@ -1605,15 +1608,14 @@ class ChromaStore:
 
     @staticmethod
     def _flatten_language_values(value: Any) -> list[str]:
+        output: list[str] = []
         if value is None:
-            return []
+            return output
         if isinstance(value, list):
-            output: list[str] = []
             for item in value:
                 output.extend(ChromaStore._flatten_language_values(item))
             return output
         if isinstance(value, dict):
-            output: list[str] = []
             for item in value.values():
                 output.extend(ChromaStore._flatten_language_values(item))
             return output
@@ -1710,7 +1712,7 @@ class ChromaStore:
                 else embeddings
             ) or []
 
-            buckets = {
+            buckets: dict[str, dict[str, list[Any]]] = {
                 code: {
                     "ids": [],
                     "documents": [],
@@ -1993,7 +1995,7 @@ class ChromaStore:
         record = dict(decoded[0])
         clean = dict(record)
         chroma_id = str(clean.pop("_chroma_id", response_record_id))
-        graded_at = datetime.now(timezone.utc).isoformat()
+        graded_at = datetime.now(UTC).isoformat()
         entry = {
             "graded_at": graded_at,
             "provider": provider,
@@ -2132,6 +2134,46 @@ class ChromaStore:
             })
         return inventory
 
+    @staticmethod
+    def _flush_logical_restore_batch(
+        collection: Any,
+        name: str,
+        ids: list[str],
+        docs: list[str | None],
+        metas: list[dict[str, Any] | None],
+        embeddings: list[list[float] | None],
+    ) -> None:
+        if not ids:
+            return
+        grouped: dict[tuple[bool, bool, bool], list[int]] = {}
+        for row_index in range(len(ids)):
+            key = (
+                docs[row_index] is not None,
+                metas[row_index] is not None,
+                embeddings[row_index] is not None,
+            )
+            grouped.setdefault(key, []).append(row_index)
+        for (has_doc, has_meta, has_embedding), indexes in grouped.items():
+            kwargs: dict[str, Any] = {
+                "ids": [ids[index] for index in indexes],
+            }
+            if has_doc:
+                kwargs["documents"] = [docs[index] for index in indexes]
+            if has_meta:
+                kwargs["metadatas"] = [metas[index] for index in indexes]
+            if has_embedding:
+                kwargs["embeddings"] = [embeddings[index] for index in indexes]
+            elif has_doc:
+                raise ValueError(
+                    f"Collection {name!r} backup row is missing its stored embedding; "
+                    "restore refuses to silently re-embed it."
+                )
+            collection.add(**kwargs)
+        ids.clear()
+        docs.clear()
+        metas.clear()
+        embeddings.clear()
+
     def restore_logical_backup(
         self,
         root: Path,
@@ -2174,35 +2216,6 @@ class ChromaStore:
             metas: list[dict[str, Any] | None] = []
             embeddings: list[list[float] | None] = []
 
-            def flush() -> None:
-                if not ids:
-                    return
-                grouped: dict[tuple[bool, bool, bool], list[int]] = {}
-                for row_index in range(len(ids)):
-                    key = (
-                        docs[row_index] is not None,
-                        metas[row_index] is not None,
-                        embeddings[row_index] is not None,
-                    )
-                    grouped.setdefault(key, []).append(row_index)
-                for (has_doc, has_meta, has_embedding), indexes in grouped.items():
-                    kwargs: dict[str, Any] = {
-                        "ids": [ids[index] for index in indexes],
-                    }
-                    if has_doc:
-                        kwargs["documents"] = [docs[index] for index in indexes]
-                    if has_meta:
-                        kwargs["metadatas"] = [metas[index] for index in indexes]
-                    if has_embedding:
-                        kwargs["embeddings"] = [embeddings[index] for index in indexes]
-                    elif has_doc:
-                        raise ValueError(
-                            f"Collection {name!r} backup row is missing its stored embedding; "
-                            "restore refuses to silently re-embed it."
-                        )
-                    collection.add(**kwargs)
-                ids.clear(); docs.clear(); metas.clear(); embeddings.clear()
-
             with file_path.open("r", encoding="utf-8") as handle:
                 for line_number, line in enumerate(handle, start=1):
                     if not line.strip():
@@ -2226,8 +2239,10 @@ class ChromaStore:
                     metas.append(row.get("metadata"))
                     embeddings.append(embedding)
                     if len(ids) >= 500:
-                        flush()
-                flush()
+                        self._flush_logical_restore_batch(
+                            collection, name, ids, docs, metas, embeddings
+                        )
+                self._flush_logical_restore_batch(collection, name, ids, docs, metas, embeddings)
             actual = collection.count()
             expected = int(entry.get("count") or 0)
             if expected != actual:
@@ -2641,7 +2656,7 @@ class ChromaStore:
             record[document_field]=docs[index] if index < len(docs) else ""; record["_chroma_id"]=chroma_id
             record=compact_record_payload(record,include_updates=False)
             candidates.append({"id":chroma_id,"distance":distances[index] if index < len(distances) else None,"record":record,"embedding":embeddings[index] if index < len(embeddings) else None})
-        selected=[]; remaining=list(candidates)
+        selected: list[dict[str, Any]] = []; remaining=list(candidates)
         while remaining and len(selected)<n_results:
             best_index=0; best_score=-float("inf")
             for index,candidate in enumerate(remaining):

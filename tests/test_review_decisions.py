@@ -10,9 +10,9 @@ How: `install_repo` builds a temp repository with the given record dicts and
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401

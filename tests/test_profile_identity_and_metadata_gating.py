@@ -7,12 +7,16 @@ How: exercises PdfCorpusRepository / PdfCorpusBuildManager on a temporary direct
 """
 
 from __future__ import annotations
+
+import json
+import sys
 from pathlib import Path
-import json, sys
+
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.models import PdfCorpusBuildCreate
+
 
 def test_profile_and_prompt_ids_are_pinned():
     """Pin the active corpus profile and prompt version identifiers.

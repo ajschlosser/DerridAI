@@ -7,13 +7,16 @@ How: `_install_publishable` creates a build with one accepted, complete record
 ready to publish; individual tests modify it.
 """
 
-from pathlib import Path
 import json
-import sys, types
+import sys
+import types
+from pathlib import Path
+
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+
 
 def _install_publishable(repo: cb.PdfCorpusRepository):
     """Create an asset, a ready build, and one accepted record that can be published."""

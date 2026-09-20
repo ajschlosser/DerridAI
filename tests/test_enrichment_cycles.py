@@ -9,9 +9,9 @@ stub `_enrich_record` (no provider) and run the worker inline.
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
