@@ -3813,6 +3813,7 @@ Hybrid classification fields are constrained:
 - proposition_status describes the character/status of the proposition, not a boolean. Prefer one of: {json.dumps(PROPOSITION_STATUS_VALUES, ensure_ascii=False)}
 - stance describes the position holder's orientation toward the target/proposition. Prefer one of: {json.dumps(STANCE_VALUES, ensure_ascii=False)}
 - Independently assess region_type and primary_text even when deterministic document-structure metadata already exists. Return the semantically supported value and confidence. DerridAI will retain reviewer-defined structural facts as authoritative while recording any disagreement for review; do not suppress a disagreement merely because structure metadata exists.
+- For target, claim_scope, speaker, position_holder, and related referenced entities, prefer short named entities or noun phrases, not full sentences or explanatory clauses. Example: target="cities of refuge" is correct; target="The concept and practice of 'cities of refuge' as a form of cosmopolitics distinct from state sovereignty." is not acceptable.
 
 Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
@@ -3832,7 +3833,7 @@ For every populated quoted_* or quotation_chain field, include field_evidence us
 Also return field_assessments for is_direct_quote and every quotation field you populate. Each assessment must include confidence 0..1, needs_review, and a concise reason.
 """
         indexing_prompt = f"""Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.
-Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage.
+Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage; emit brief noun phrases or proper names, not full sentences or explanatory clauses. Example: concepts=["cities of refuge"] is acceptable; concepts=["The concept and practice of 'cities of refuge' as a form of cosmopolitics distinct from state sovereignty."] is not.
 
 {base_context}
 Return field_assessments for topics, concepts, persons, and works_referenced whenever you populate those fields. Each assessment must include confidence 0..1, needs_review, and a concise reason.

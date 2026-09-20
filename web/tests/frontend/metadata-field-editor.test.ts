@@ -69,4 +69,40 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("main_text");
     wrapper.unmount();
   });
+
+  it("deduplicates option suggestions for multi-value metadata fields", async () => {
+    const wrapper=mount(CorpusMetadataFieldEditor,{
+      props:{
+        field:"concepts",
+        value:"",
+        control:"multi-combobox",
+        options:["cities of refuge","cities of refuge","hospitality","cities of refuge"],
+        open:true,
+        status:{status:"llm_inferred",method:"llm",confidence:.82,auto_populated:true},
+      },
+    });
+    await nextTick();
+    const values=[...wrapper.findAll("datalist option")].map(option=>option.attributes("value"));
+    expect(values).toEqual(["cities of refuge","hospitality"]);
+    wrapper.unmount();
+  });
+
+  it("allows adding multiple unique values from the autocomplete list", async () => {
+    const wrapper=mount(CorpusMetadataFieldEditor,{
+      props:{
+        field:"concepts",
+        value:"cities of refuge",
+        control:"multi-combobox",
+        options:["cities of refuge","hospitality","cosmopolitanism"],
+        open:true,
+        status:{status:"llm_inferred",method:"llm",confidence:.72,auto_populated:true},
+      },
+    });
+    const input=wrapper.get("input");
+    await input.setValue("cities of refuge, hospitality");
+    await input.trigger("change");
+    await nextTick();
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("cities of refuge, hospitality");
+    wrapper.unmount();
+  });
 });
