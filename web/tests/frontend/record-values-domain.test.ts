@@ -1,12 +1,26 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it } from "vitest";
-import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows, stableValue } from "../../src/domain/recordValues";
+import {
+  cloneAuditValue,
+  compareValues,
+  computeRecordFingerprint,
+  sameValue,
+  sortRows,
+  stableValue,
+} from "../../src/domain/recordValues";
 
 // The golden values below were produced by running the original functions from the legacy runtime.js.
 describe("record values", () => {
   it("fingerprints records identically to the legacy runtime", () => {
     const records = [
-      { record_id: "a", text: "x", topics: ["b", "a"], updates: [1], _chroma_id: "z", nested: { z: 1, a: 2 } },
+      {
+        record_id: "a",
+        text: "x",
+        topics: ["b", "a"],
+        updates: [1],
+        _chroma_id: "z",
+        nested: { z: 1, a: 2 },
+      },
       { a: 1 },
       { text: "héllo" },
     ];
@@ -14,13 +28,26 @@ describe("record values", () => {
   });
 
   it("ignores key order, update history and Chroma bookkeeping", () => {
-    expect(stableValue({ b: 1, a: { d: 1, c: 2 }, updates: [1], _updates_count: 1, _chroma_id: "x" })).toEqual({ a: { c: 2, d: 1 }, b: 1 });
+    expect(
+      stableValue({ b: 1, a: { d: 1, c: 2 }, updates: [1], _updates_count: 1, _chroma_id: "x" }),
+    ).toEqual({ a: { c: 2, d: 1 }, b: 1 });
     expect(Object.keys(stableValue({ b: 1, a: 2 }) as object)).toEqual(["a", "b"]);
   });
 
   it("compares values identically to the legacy runtime", () => {
-    const pairs: Array<[unknown, unknown]> = [[null, 1], [2, 10], ["a", "B"], [true, false], [["a", "b"], ["a"]], ["", "x"], ["10", "9"], ["item2", "item10"]];
-    expect(pairs.map(([a, b]) => Math.sign(compareValues(a, b)))).toEqual([1, -1, -1, 1, 1, 1, 1, -1]);
+    const pairs: Array<[unknown, unknown]> = [
+      [null, 1],
+      [2, 10],
+      ["a", "B"],
+      [true, false],
+      [["a", "b"], ["a"]],
+      ["", "x"],
+      ["10", "9"],
+      ["item2", "item10"],
+    ];
+    expect(pairs.map(([a, b]) => Math.sign(compareValues(a, b)))).toEqual([
+      1, -1, -1, 1, 1, 1, 1, -1,
+    ]);
   });
 
   it("sorts rows identically to the legacy runtime", () => {

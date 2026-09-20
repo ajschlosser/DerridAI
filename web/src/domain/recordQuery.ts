@@ -4,7 +4,8 @@
 
 type JsonObject = Record<string, unknown>;
 
-const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 export function parseJsonl(text: string): { records: JsonObject[]; errors: string[] } {
   const records: JsonObject[] = [];
@@ -16,7 +17,9 @@ export function parseJsonl(text: string): { records: JsonObject[]; errors: strin
       const value = JSON.parse(trimmed);
       if (!Array.isArray(value)) throw Error("Root is not an array");
       value.forEach((x, i) =>
-        typeof x === "object" && x && !Array.isArray(x) ? records.push(x) : errors.push(`Item ${i + 1}: not an object`),
+        typeof x === "object" && x && !Array.isArray(x)
+          ? records.push(x)
+          : errors.push(`Item ${i + 1}: not an object`),
       );
       return { records, errors };
     } catch (e) {
@@ -27,7 +30,9 @@ export function parseJsonl(text: string): { records: JsonObject[]; errors: strin
     if (!line.trim()) return;
     try {
       const x = JSON.parse(line);
-      typeof x === "object" && x && !Array.isArray(x) ? records.push(x) : errors.push(`Line ${i + 1}: not an object`);
+      typeof x === "object" && x && !Array.isArray(x)
+        ? records.push(x)
+        : errors.push(`Line ${i + 1}: not an object`);
     } catch (e) {
       errors.push(`Line ${i + 1}: ${errorMessage(e)}`);
     }
@@ -41,7 +46,10 @@ export function flattenValueList(value: unknown): string[] {
   if (typeof value === "object") return Object.values(value as object).flatMap(flattenValueList);
   const text = String(value).trim();
   if (!text) return [];
-  if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+  if (
+    (text.startsWith("[") && text.endsWith("]")) ||
+    (text.startsWith("{") && text.endsWith("}"))
+  ) {
     try {
       return flattenValueList(JSON.parse(text));
     } catch {
@@ -105,23 +113,34 @@ export interface SubsetRule {
   value?: unknown;
 }
 
-export function subsetRuleMatches(record: JsonObject | null | undefined, rule: SubsetRule, caseSensitive = false): boolean {
+export function subsetRuleMatches(
+  record: JsonObject | null | undefined,
+  rule: SubsetRule,
+  caseSensitive = false,
+): boolean {
   const value = record?.[rule.field];
   const raw = String(rule.value ?? "");
-  const normalize = (text: unknown) => (caseSensitive ? String(text) : String(text).toLocaleLowerCase());
+  const normalize = (text: unknown) =>
+    caseSensitive ? String(text) : String(text).toLocaleLowerCase();
   const hay = normalize(subsetValueText(value));
   const needle = normalize(raw);
   switch (rule.operator) {
     case "equals":
-      return Array.isArray(value) ? value.some((item) => normalize(subsetValueText(item)) === needle) : hay === needle;
+      return Array.isArray(value)
+        ? value.some((item) => normalize(subsetValueText(item)) === needle)
+        : hay === needle;
     case "not_equals":
-      return Array.isArray(value) ? !value.some((item) => normalize(subsetValueText(item)) === needle) : hay !== needle;
+      return Array.isArray(value)
+        ? !value.some((item) => normalize(subsetValueText(item)) === needle)
+        : hay !== needle;
     case "contains":
       return hay.includes(needle);
     case "not_contains":
       return !hay.includes(needle);
     case "array_contains":
-      return Array.isArray(value) && value.some((item) => normalize(subsetValueText(item)) === needle);
+      return (
+        Array.isArray(value) && value.some((item) => normalize(subsetValueText(item)) === needle)
+      );
     case "exists":
       return value !== undefined && value !== null && subsetValueText(value) !== "";
     case "missing":

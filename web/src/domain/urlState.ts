@@ -8,7 +8,9 @@ function base64UrlEncodeBinary(binary: string): string {
 }
 
 function base64UrlDecodeBinary(token: unknown): string {
-  let b64 = String(token || "").replace(/-/g, "+").replace(/_/g, "/");
+  let b64 = String(token || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   while (b64.length % 4) b64 += "=";
   return atob(b64);
 }

@@ -1,13 +1,23 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it } from "vitest";
-import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../../src/domain/recordQuery";
+import {
+  countOccurrences,
+  flattenValueList,
+  parseJsonl,
+  subsetRuleMatches,
+  subsetValueText,
+  valueMatches,
+} from "../../src/domain/recordQuery";
 
 // These behaviors were checked against the original legacy runtime.js functions across a wide input matrix.
 describe("record query helpers", () => {
   it("parses JSONL and JSON arrays", () => {
     expect(parseJsonl("")).toEqual({ records: [], errors: [] });
     expect(parseJsonl('{"a":1}\n\n{"b":2}')).toEqual({ records: [{ a: 1 }, { b: 2 }], errors: [] });
-    expect(parseJsonl('[{"a":1},2]')).toEqual({ records: [{ a: 1 }], errors: ["Item 2: not an object"] });
+    expect(parseJsonl('[{"a":1},2]')).toEqual({
+      records: [{ a: 1 }],
+      errors: ["Item 2: not an object"],
+    });
     expect(parseJsonl('{"a":1}\n[1]').errors).toEqual(["Line 2: not an object"]);
     expect(parseJsonl("[1,").records).toEqual([]);
     expect(parseJsonl("[1,").errors).toHaveLength(1);
@@ -37,9 +47,18 @@ describe("record query helpers", () => {
 
   it("matches subset rules", () => {
     expect(subsetValueText(["a", { b: 1 }])).toBe('a {"b":1}');
-    expect(subsetRuleMatches({ f: ["Alpha", "Beta"] }, { field: "f", operator: "equals", value: "beta" })).toBe(true);
-    expect(subsetRuleMatches({ f: "Alpha" }, { field: "f", operator: "contains", value: "LPH" }, true)).toBe(false);
-    expect(subsetRuleMatches({ f: "x" }, { field: "f", operator: "regex", value: "[" })).toBe(false);
+    expect(
+      subsetRuleMatches(
+        { f: ["Alpha", "Beta"] },
+        { field: "f", operator: "equals", value: "beta" },
+      ),
+    ).toBe(true);
+    expect(
+      subsetRuleMatches({ f: "Alpha" }, { field: "f", operator: "contains", value: "LPH" }, true),
+    ).toBe(false);
+    expect(subsetRuleMatches({ f: "x" }, { field: "f", operator: "regex", value: "[" })).toBe(
+      false,
+    );
     expect(subsetRuleMatches(null, { field: "f", operator: "missing" })).toBe(true);
     expect(subsetRuleMatches({ f: 1 }, { field: "f", operator: "bogus" })).toBe(false);
   });

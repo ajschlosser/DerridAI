@@ -24,9 +24,12 @@ export function createWorkspaceDb(getName: () => string) {
       const request = indexedDB.open(getName(), DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains("files")) db.createObjectStore("files", { keyPath: "id" });
-        if (!db.objectStoreNames.contains("prefs")) db.createObjectStore("prefs", { keyPath: "key" });
-        if (!db.objectStoreNames.contains("assets")) db.createObjectStore("assets", { keyPath: "key" });
+        if (!db.objectStoreNames.contains("files"))
+          db.createObjectStore("files", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("prefs"))
+          db.createObjectStore("prefs", { keyPath: "key" });
+        if (!db.objectStoreNames.contains("assets"))
+          db.createObjectStore("assets", { keyPath: "key" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -71,7 +74,8 @@ export function createWorkspaceDb(getName: () => string) {
       const request = indexedDB.deleteDatabase(getName());
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
+      request.onblocked = () =>
+        reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
     });
   }
 
@@ -79,11 +83,16 @@ export function createWorkspaceDb(getName: () => string) {
 }
 
 export function isDerridaiStorageKey(key: string | null): boolean {
-  return Boolean(key) && (key!.startsWith("derridai.") || key!.startsWith("derridai-") || key === "derridai");
+  return (
+    Boolean(key) &&
+    (key!.startsWith("derridai.") || key!.startsWith("derridai-") || key === "derridai")
+  );
 }
 
 /** Removes every DerridAI database and localStorage key from this browser. */
-export async function deleteAllDerridaiBrowserState(dropWorkspaceDatabase: () => Promise<void>): Promise<void> {
+export async function deleteAllDerridaiBrowserState(
+  dropWorkspaceDatabase: () => Promise<void>,
+): Promise<void> {
   await dropWorkspaceDatabase().catch(() => {});
   if (typeof indexedDB.databases === "function") {
     const dbs = await indexedDB.databases();
