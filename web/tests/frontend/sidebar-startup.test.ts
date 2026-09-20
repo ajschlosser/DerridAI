@@ -119,4 +119,23 @@ describe("sidebar at sign-in", () => {
     await signIn("admin");
     expect(localStorage.getItem("derridai.ui.moreToolsOpen")).toBeNull();
   });
+
+  it("marks the active nav item for assistive tech and gives every item an accessible name", async () => {
+    const { wrapper } = await signIn();
+    const buttons = wrapper.findAll(".shell-primary-nav button");
+    const home = buttons.find(b => b.text() === "Home");
+    const research = buttons.find(b => b.text() === "Research");
+    expect(home?.attributes("aria-current")).toBe("page");
+    expect(research?.attributes("aria-current")).toBeUndefined();
+    for (const button of buttons) expect(button.attributes("aria-label")).toBe(button.text());
+  });
+
+  it("keeps the collapse toggle and more-tools disclosure operable by assistive tech", async () => {
+    const { wrapper } = await signIn();
+    const toggle = wrapper.get(".sidebar-toggle");
+    expect(toggle.attributes("aria-label")).toBeTruthy();
+    expect(toggle.attributes("aria-pressed")).toBe("false");
+    const summary = wrapper.get(".shell-more-tools summary");
+    expect(summary.attributes("aria-expanded")).toBe("true");
+  });
 });

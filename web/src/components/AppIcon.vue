@@ -29,6 +29,9 @@ const paths: Record<string,string> = {
   unlock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M16 10V7a4 4 0 0 0-8 0"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
   close:'<path d="M6 6l12 12M18 6 6 18"/>',
+  "chevron-left":'<path d="m14.5 6-6 6 6 6"/>',
+  "chevron-right":'<path d="m9.5 6 6 6-6 6"/>',
+  "chevron-down":'<path d="m6 9.5 6 6 6-6"/>',
 };
 </script>
 <template>

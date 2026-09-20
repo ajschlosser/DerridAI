@@ -4,13 +4,16 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
-import AppIcon from "./components/AppIcon.vue";
 import UiButton from "./components/ui/UiButton.vue";
 import AuthScreen from "./components/AuthScreen.vue";
-import BrandMark from "./components/BrandMark.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import LanguageFlag from "./components/LanguageFlag.vue";
 import AppBuildInfo from "./components/AppBuildInfo.vue";
+import SidebarBrand from "./components/shell/SidebarBrand.vue";
+import SidebarPrimaryNav from "./components/shell/SidebarPrimaryNav.vue";
+import SidebarMoreTools from "./components/shell/SidebarMoreTools.vue";
+import SidebarStatus from "./components/shell/SidebarStatus.vue";
+import type { SidebarNavEntry } from "./components/shell/sidebarNav";
 import * as runtime from "./runtime/runtime.js";
 
 const router=useRouter();
@@ -67,6 +70,12 @@ const primaryNav=computed(()=>{
   return order.map(id=>byId.get(id)).filter((item):item is ShellNavItem=>Boolean(item));
 });
 const utilityNav=computed(()=>{const ids=new Set(primaryNav.value.map(item=>item.id));return flatNav.value.filter(item=>!ids.has(item.id))});
+const primaryNavItems=computed<SidebarNavEntry[]>(()=>{
+  const items:SidebarNavEntry[]=primaryNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason}));
+  if(auth.isAdmin)items.push({id:"operations",label:i18n.t("ui.operations","Operations"),icon:"history",active:operationsActive.value});
+  return items;
+});
+const utilityNavItems=computed<SidebarNavEntry[]>(()=>utilityNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason})));
 const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):route.name==="compare"?i18n.t("nav.compare","Compare"):route.name==="list"?i18n.t("nav.records","Records"):s.value.context.title||i18n.t("nav.home","Home"));
 const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):route.name==="compare"?i18n.t("context.compare.meta","Inspect field and text differences"):route.name==="list"?i18n.t("context.list.meta","Open a JSONL file"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
@@ -134,8 +143,7 @@ function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="ho
 function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function openHelp(){runtime.navigateView("faq")}
-function onMoreToolsToggle(event:Event){
-  const open=Boolean((event.currentTarget as HTMLDetailsElement)?.open);
+function onMoreToolsToggle(open:boolean){
   // A programmatic change already matches the model; only a user toggle differs from it.
   if(open===moreToolsOpen.value)return;
   moreToolsOpen.value=open;
@@ -217,14 +225,20 @@ watch(()=>auth.user?.id,(id)=>{
   <div v-else class="app-shell app-shell-modern" :class="{'sidebar-collapsed':s.sidebarCollapsed}">
     <a class="skip-link" href="#appContent">{{ i18n.t("ui.skip_to_content","Skip to main content") }}</a>
     <aside class="sidebar shell-sidebar">
-      <div class="shell-brand-row"><button class="shell-brand-button" :title="i18n.t('nav.home','Home')" :aria-label="i18n.t('nav.home','Home')" @click="navigate('home')"><BrandMark :size="s.sidebarCollapsed?34:46" compact /><span v-if="!s.sidebarCollapsed" class="shell-brand-word">DerridAI</span></button><button class="sidebar-toggle" :title="s.sidebarCollapsed?i18n.t('ui.expand_sidebar','Expand sidebar'):i18n.t('ui.collapse_sidebar','Collapse sidebar')" @click="runtime.toggleSidebar()">{{s.sidebarCollapsed?'→':'←'}}</button></div>
-      <nav class="side-nav shell-primary-nav" :aria-label="i18n.t('ui.primary_navigation','Primary navigation')">
-        <span v-for="item in primaryNav" :key="item.id" class="nav-tooltip-wrap" :data-tooltip="item.disabledReason||''"><button :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></span>
-        <button v-if="auth.isAdmin" :class="{active:operationsActive}" :title="i18n.t('ui.operations','Operations')" @click="navigate('operations')"><AppIcon name="history"/><span>{{i18n.t('ui.operations','Operations')}}</span></button>
-      </nav>
-      <details v-if="utilityNav.length&&!s.sidebarCollapsed" class="shell-more-tools" :open="moreToolsOpen" @toggle="onMoreToolsToggle"><summary><span>{{i18n.t('nav.more_tools','More tools')}}</span><span>⌄</span></summary><div class="shell-more-tools-list"><button v-for="item in utilityNav" :key="item.id" :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></div></details>
+      <SidebarBrand :collapsed="s.sidebarCollapsed" @navigate-home="navigate('home')" @toggle="runtime.toggleSidebar()" />
+      <SidebarPrimaryNav :items="primaryNavItems" @navigate="navigate" />
+      <SidebarMoreTools v-if="utilityNavItems.length&&!s.sidebarCollapsed" :items="utilityNavItems" :open="moreToolsOpen" @update:open="onMoreToolsToggle" @navigate="navigate" />
       <div class="sidebar-spacer"></div>
-      <div v-if="!s.sidebarCollapsed" class="shell-sidebar-footer"><div class="shell-mini-status"><template v-if="auth.isAdmin"><span><i :class="['status-dot',s.hasCorpusDb?'ok':'']"></i>{{s.totalLoaded.toLocaleString(i18n.locale)}} {{i18n.t('dynamic.records','records')}}</span><span v-if="s.corpusStoreCount">{{s.corpusStoreCount}} {{i18n.t('ui.corpus_dbs','corpus DBs')}}</span></template><template v-else><span><i :class="['status-dot',s.hasCorpusDb?'ok':'']"></i>{{s.activeStore||i18n.t('research.none_selected','No database selected')}}</span><span>{{s.dbRecords.toLocaleString(i18n.locale)}} {{i18n.t('dynamic.records','records')}} · {{s.selectedEvidenceCount}} {{i18n.t('dynamic.selected_evidence','selected evidence')}}</span></template></div></div>
+      <SidebarStatus
+        v-if="!s.sidebarCollapsed"
+        :is-admin="auth.isAdmin"
+        :has-corpus-db="s.hasCorpusDb"
+        :total-loaded="s.totalLoaded"
+        :corpus-store-count="s.corpusStoreCount"
+        :active-store="s.activeStore"
+        :db-records="s.dbRecords"
+        :selected-evidence-count="s.selectedEvidenceCount"
+      />
     </aside>
 
     <section class="workspace shell-workspace">
