@@ -564,6 +564,10 @@ The **Response Library** page provides:
 - re-run with the original parameters
 - re-grade with any configured LLM provider
 
+## Compare
+
+Compare is a Vue-native two-column workspace at **Tools → Compare**. Each column can independently show a **library** record (loaded JSONL tabs for administrators, corpus-database summaries for researchers) or an **editable copy**. Use **Load into editor** to populate A or B from any existing record, then edit the JSON/JSONL without changing the source until you copy it elsewhere. **Copy A into B** makes a working duplicate. Field differences update as soon as both sides parse as a single JSON object. Audit `updates` history is excluded from the comparison. Researcher accounts cannot mutate corpus records from this page.
+
 ## Settings
 
 Settings is a Vue-native control center at **System → Settings**. A contents rail (a collapsible **Contents** control on smaller screens) groups:
