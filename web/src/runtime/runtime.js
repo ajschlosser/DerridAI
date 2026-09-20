@@ -2044,6 +2044,70 @@ function workIndex(){
     return map;
   });
 }
+function getWorksWorkspaceSnapshot(){
+  const map=workIndex();
+  const coreFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
+  return {
+    activeStore:String(state.activeStore||""),
+    selectedWork:String(state.workOverview||""),
+    works:[...map.values()].map(item=>({
+      work:item.work,
+      count:item.count,
+      review:item.review,
+      files:[...item.files],
+      authors:[...item.authors],
+      years:[...item.years],
+      cover:workCoverUrl(item.rows),
+      status:workDbStatus(item.rows,item.work).kind,
+      metadata:coreFields.map(field=>{const value=commonWorkValue(item.rows,field);return {field,mixed:value.mixed,value:value.value};}),
+      citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
+      insights:workInsightMetrics(item.rows,item.work).map(metric=>({id:metric.id,field:metric.field,type:metric.type,values:metric.values.map(value=>({key:value.key,value:Number(value.value||0),other:Boolean(value.other)}))})),
+    })).sort((a,b)=>String(a.work).localeCompare(String(b.work))),
+  };
+}
+function openWorksSearch(work,{needsReview=false}={}){
+  state.globalSearchMode="traditional";
+  state.globalSearch="";
+  state.globalFilters=[{id:uid(),field:"work",op:"eq",value:work},...(needsReview?[{id:uid(),field:"needs_review",op:"eq",value:"true"}]:[])];
+  state.globalPage=1;
+  persistPrefs();
+  navigateTo("global");
+}
+function openWorksInsight(work,field,value){
+  state.globalSearchMode="traditional";
+  state.globalSearch="";
+  state.globalFilters=[{id:uid(),field:"work",op:"eq",value:work},{id:uid(),field,op:"eq",value}];
+  state.globalPage=1;
+  persistPrefs();
+  navigateTo("global");
+}
+function openWorksMetadataEditor(work){
+  const item=workIndex().get(work);
+  if(item)openWorkMetadataEditor(work,item.rows);
+}
+function openWorksMetadataLlm(work){
+  const item=workIndex().get(work);
+  if(item)openWorkMetadataLlmDialog([item]);
+}
+async function syncWorks(work){
+  const item=workIndex().get(work);
+  return item?upsertRows(item.rows,`work "${work}"`):false;
+}
+function openWorksSeparate(){openSeparateWorksModal()}
+function openWorksBulkMetadataLlm(){
+  const items=[...workIndex().values()].sort((a,b)=>a.work.localeCompare(b.work));
+  if(items.length)openWorkMetadataLlmDialog(items);
+}
+function openWorksRemove(work){
+  const item=workIndex().get(work);
+  if(item)openRemoveWorkModal(work,item.rows);
+}
+function openWorksAnnotations(work){
+  state.annotationSearch=work;
+  state.annotationView="works";
+  persistPrefs();
+  navigateTo("annotations");
+}
 function openMergeDialog(){
   if(state.files.length<2)return toast("Open at least two JSONL files to merge");
   const dialog=document.createElement("dialog");
@@ -6594,7 +6658,7 @@ async function openRemoveWorkModal(work,rows){
         if(state.storePresenceIds[dbStore])state.storePresenceIds[dbStore]={};
         await refreshStores();
       }
-      close();persistPrefs();shell();renderView();
+      close();persistPrefs();shell();renderView();window.dispatchEvent(new CustomEvent("derridai:works-changed"));
       toast(`Removed “${work}” · ${localDeleted.toLocaleString()} local record${localDeleted===1?"":"s"}${removeDb?` · ${dbDeleted.toLocaleString()} DB${mirrored?` · ${mirrored.toLocaleString()} language mirror`:""}`:""}`);
     }catch(error){button.disabled=false;button.textContent="Remove work";openMessageModal({title:"Could not remove work",message:error.message,tone:"danger"})}
   };
@@ -6610,7 +6674,7 @@ async function openSeparateWorksModal(){
   const source=()=>state.files.find(file=>file.id===dialog.querySelector("#separateWorksSource").value);
   const renderList=()=>{const file=source();const groups=new Map();for(const record of file?.records||[]){const work=String(record?.work||record?.document_title||"").trim()||"(Untitled work)";if(!groups.has(work))groups.set(work,[]);groups.get(work).push(record)}dialog.querySelector("#separateWorksList").innerHTML=[...groups.entries()].map(([work,records])=>`<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work==="(Untitled work)"?"":"checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} records</small></span></label>`).join("")};
   dialog.querySelector("#separateWorksSource").addEventListener("change",renderList);renderList();
-  dialog.querySelector("#separateWorksCreate").onclick=async()=>{const file=source();const selected=[...dialog.querySelectorAll("[data-separate-work]:checked")].map(box=>box.dataset.separateWork);if(!selected.length)return toast("Select at least one work");const selectedSet=new Set(selected);const created=[];for(const work of selected){const records=file.records.filter(record=>(String(record?.work||record?.document_title||"").trim()||"(Untitled work)")===work).map(cloneAuditValue);if(!records.length)continue;const stem=work.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,80)||"untitled-work";const derived={id:uid(),name:`${stem}.jsonl`,records,errors:[],dirty:new Set(),imported_at:new Date().toISOString(),derived_from:{type:"work_separation",source_file:file.name,work}};state.files.push(derived);await persistFileNow(derived);created.push(derived)}if(dialog.querySelector("#separateWorksRemove").checked){file.records=file.records.filter(record=>!selectedSet.has(String(record?.work||record?.document_title||"").trim()||"(Untitled work)"));file.dirty=new Set(file.records.map((_,index)=>index));await persistFileNow(file)}if(created.length)state.activeFileId=created[0].id;close();corpusCache.fields=null;persistPrefs();shell();renderView();toast(`Created ${created.length} work JSONL tab${created.length===1?"":"s"}`,{tone:"success"})};
+  dialog.querySelector("#separateWorksCreate").onclick=async()=>{const file=source();const selected=[...dialog.querySelectorAll("[data-separate-work]:checked")].map(box=>box.dataset.separateWork);if(!selected.length)return toast("Select at least one work");const selectedSet=new Set(selected);const created=[];for(const work of selected){const records=file.records.filter(record=>(String(record?.work||record?.document_title||"").trim()||"(Untitled work)")===work).map(cloneAuditValue);if(!records.length)continue;const stem=work.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,80)||"untitled-work";const derived={id:uid(),name:`${stem}.jsonl`,records,errors:[],dirty:new Set(),imported_at:new Date().toISOString(),derived_from:{type:"work_separation",source_file:file.name,work}};state.files.push(derived);await persistFileNow(derived);created.push(derived)}if(dialog.querySelector("#separateWorksRemove").checked){file.records=file.records.filter(record=>!selectedSet.has(String(record?.work||record?.document_title||"").trim()||"(Untitled work)"));file.dirty=new Set(file.records.map((_,index)=>index));await persistFileNow(file)}if(created.length)state.activeFileId=created[0].id;close();corpusCache.fields=null;persistPrefs();shell();renderView();window.dispatchEvent(new CustomEvent("derridai:works-changed"));toast(`Created ${created.length} work JSONL tab${created.length===1?"":"s"}`,{tone:"success"})};
 }
 
 async function renderWorks(main){
@@ -11272,6 +11336,16 @@ export {
   gradeResponseFaqRecord,
   rerunResponseFaqRecord,
   getRecordWorkspaceSnapshot,
+  getWorksWorkspaceSnapshot,
+  openWorksSearch,
+  openWorksInsight,
+  openWorksMetadataEditor,
+  openWorksMetadataLlm,
+  syncWorks,
+    openWorksSeparate,
+    openWorksBulkMetadataLlm,
+    openWorksRemove,
+    openWorksAnnotations,
   recordWorkspaceNavigate,
   setRecordWorkspaceFind,
   toggleCurrentRecordEvidence,
