@@ -119,7 +119,8 @@ test.describe("Corpus Builder composed workflow",()=>{
   test("metadata review distinguishes ambiguous and inherited states",async({page})=>{
     await page.goto(story("corpus-builder-review-metadata-resolution--ambiguous-fields"));
     await expect(page.locator(".review-status")).toContainText(/decision/i);
-    await expect(page.locator('.metadata-grid[role="list"]')).toBeVisible();
+    // The tab lists what needs review first; "Add more details" below it has a list of its own.
+    await expect(page.locator('.metadata-grid[role="list"]').first()).toBeVisible();
     await expectWcag2AA(page,".metadata-review");
     await page.goto(story("corpus-builder-review-metadata-resolution--inherited-and-overridden-bibliography"));
     await expect(page.locator(".inherited-metadata")).toBeVisible();

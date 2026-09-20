@@ -2423,6 +2423,16 @@ def export_pdf_corpus_enrichment_ledger():
     return Response(pdf_corpus_builds.enrichment_ledger_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="enrichment-ledger.csv"'})
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/autonomous/run")
+def run_pdf_corpus_autonomous(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.start_autonomous(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")
 def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:

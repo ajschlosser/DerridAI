@@ -28,6 +28,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from . import experiment
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
+from .autonomous import Policy as AutonomousPolicy
+from .autonomous import may_accept, settle_record
 from .config import APP_VERSION, settings
 
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -1912,6 +1914,96 @@ class PdfCorpusBuildManager:
             "state": state, "task": oldest["task"], "model": oldest["model"], "provider": oldest["provider"],
             "seconds": round(time.monotonic() - oldest["since"], 1), "calls_in_flight": len(calls),
         }
+
+    def start_autonomous(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Run hands-free mode on an existing build, in the background."""
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Wait for the active corpus operation to finish before running hands-free mode.")
+        if build.get("status") == "published":
+            raise ValueError("Published builds are immutable.")
+        self._update(build_id, status="running", stage="autonomous", error=None, autonomous_report=None, resumable=False)
+
+        def work() -> None:
+            try:
+                self.run_autonomous(build_id, request)
+            except InterruptedError as exc:
+                self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True)
+            except Exception as exc:  # noqa: BLE001 - reported on the build, like any other stage failure
+                self._update(build_id, status="failed", stage="failed", finished_at=iso_now(), error=str(exc), resumable=True)
+
+        self._executor.submit(work)
+        return self.repo.get_build(build_id)
+
+    def run_autonomous(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Hands-free finish: more enrichment passes, then settle what is waiting by policy, accept, optionally publish.
+
+        Blocks until done, so it runs on a worker thread. Every decision is the policy's and is recorded as such (see
+        autonomous.py); what it could not settle is left for a person and listed in the report on the build.
+        """
+        policy = AutonomousPolicy.from_request({"autonomous": {**(request.get("autonomous") or {}), "enabled": True}})
+        notes: list[str] = []
+        passes_run = 0
+        if policy.passes and request.get("model"):
+            try:
+                self.rerun_metadata_enrichment(build_id, {**request, "passes": policy.passes})
+                passes_run = policy.passes
+                while True:  # the passes run on another worker; wait for them, honouring cancellation
+                    if self._cancelled(build_id):
+                        raise InterruptedError("Corpus build cancelled")
+                    current = self.repo.get_build(build_id)
+                    if not (current.get("status") in {"queued", "running"} and current.get("stage") == "metadata_enrichment_rerun"):
+                        break
+                    time.sleep(2.0)
+            except ValueError as exc:
+                notes.append(f"Extra enrichment passes were skipped: {exc}")
+        report = self._autonomous_settle(build_id, policy)
+        report.update({"passes_run": passes_run, "notes": notes, "policy": policy.public(), "ran_at": iso_now()})
+        if policy.publish:
+            try:
+                if report["left_for_review"] == 0:
+                    self.publish(build_id)
+                    report["published"] = True
+                else:
+                    report["published"] = False
+                    notes.append("Not published: some records still need a person.")
+            except ValueError as exc:
+                report["published"] = False
+                notes.append(f"Not published: {exc}")
+        self._update(build_id, autonomous_report=report)
+        return report
+
+    @_serialize_record_mutation
+    def _autonomous_settle(self, build_id: str, policy: AutonomousPolicy) -> dict[str, Any]:
+        records = self.repo.load_records(build_id)
+        profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        filled_total = accepted = 0
+        exceptions: list[dict[str, Any]] = []
+        for record in records:
+            if str(record.get("review_disposition") or "") in {"accepted", "rejected"} or self._human_touched(record):
+                continue  # a person already decided this record
+            outcome = settle_record(record, policy)
+            filled_total += len(outcome["filled"])
+            self._sync_record_metadata_state(record, profile)
+            ok, reasons = may_accept(record)
+            if policy.accept_records and ok:
+                record["review_disposition"] = "accepted"
+                record["accepted"] = True
+                record["rejected"] = False
+                record["needs_review"] = False
+                record["review_reason"] = ""
+                record["accepted_by"] = "autonomous"
+                record["autonomous_decision"] = {"at": iso_now(), "filled": [f["field"] for f in outcome["filled"]]}
+                record["record_revision"] = int(record.get("record_revision") or 1) + 1
+                accepted += 1
+            else:
+                exceptions.append({"record_id": record.get("record_id"), "reasons": (reasons or [item["reason"] for item in outcome["left"]] or ["left for review by policy"])[:6]})
+        self._rewrite_and_validate(build_id, records)
+        return {"records": len(records), "fields_filled": filled_total, "accepted": accepted, "left_for_review": len(exceptions), "exceptions": exceptions[:200]}
+
+    @staticmethod
+    def _human_touched(record: dict[str, Any]) -> bool:
+        return bool(record.get("human_touched_fields"))
 
     def enrichment_ledger_csv(self) -> str:
         return self._ledger.to_csv()
@@ -5088,6 +5180,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             records = self._construct_build_topology(build_id, request, resume, scope)
             records = self._schedule_build_enrichment(build_id, request, scope.manifest, records)
             self._finalize_build_review(build_id, scope, records)
+            if AutonomousPolicy.from_request(request).enabled:
+                self.run_autonomous(build_id, request)
         except InterruptedError as exc:
             self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
         except Exception as exc:
