@@ -91,6 +91,15 @@ describe("accent as text", () => {
   }
 });
 
+describe("highlighter", () => {
+  it("dark text on the highlight fill is at least 4.5:1, and the pair is the same in both schemes", () => {
+    expect(
+      contrast(hex(value(light, "--mark-fg")), hex(value(light, "--mark-bg"))),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(dark).not.toMatch(/--mark-(bg|fg)/); // a highlighter does not change with the theme
+  });
+});
+
 describe("neutral text steps", () => {
   it("secondary text meets 4.5:1 on the surface in both schemes", () => {
     expect(contrast(hex(value(light, "--text-2")), surfaces.light)).toBeGreaterThanOrEqual(4.5);

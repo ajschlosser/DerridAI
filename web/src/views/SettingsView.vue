@@ -707,7 +707,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .settings-hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .settings-hero h1{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(1.6rem,3vw,2.1rem);line-height:1.15}
 .settings-hero p{margin:6px 0 0;max-width:68ch;color:var(--muted);line-height:1.5}
-.settings-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2)}
+.settings-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
 .settings-toolbar{display:grid;gap:8px}
 .settings-contents-toggle{display:none}
 .settings-layout{display:grid;grid-template-columns:minmax(196px,240px) minmax(0,1fr);gap:20px;align-items:start}

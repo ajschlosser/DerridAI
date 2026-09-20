@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const storybookPort = process.env.STORYBOOK_PORT || "6006";
+const appPort = process.env.APP_PORT || "5199";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -19,10 +20,20 @@ export default defineConfig({
     { name: "chromium-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "chromium-laptop", use: { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 768 } } },
   ],
-  webServer: {
-    command: `npm run storybook -- --ci --no-open -p ${storybookPort}`,
-    url: `http://127.0.0.1:${storybookPort}`,
-    reuseExistingServer: !process.env.CI && !process.env.STORYBOOK_PORT,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: `npm run storybook -- --ci --no-open -p ${storybookPort}`,
+      url: `http://127.0.0.1:${storybookPort}`,
+      reuseExistingServer: !process.env.CI && !process.env.STORYBOOK_PORT,
+      timeout: 120_000,
+    },
+    {
+      // The real app from the production build (run `npm run build` first). Its /api/ calls are
+      // answered by the mock backend in tests/e2e/support, so no API is needed.
+      command: `npx vite preview --host 127.0.0.1 --port ${appPort} --strictPort`,
+      url: `http://127.0.0.1:${appPort}`,
+      reuseExistingServer: !process.env.CI && !process.env.APP_PORT,
+      timeout: 60_000,
+    },
+  ],
 });

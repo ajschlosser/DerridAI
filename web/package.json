@@ -1,7 +1,7 @@
 {
   "name": "derridai",
   "private": true,
-  "version": "0.62.6",
+  "version": "0.62.7",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

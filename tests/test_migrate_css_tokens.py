@@ -54,6 +54,14 @@ def test_white_is_a_surface_as_a_background_and_a_knockout_as_text():
     assert out == ".a{background:var(--card)}.b{color:var(--accent-on)}"
 
 
+def test_a_translucent_white_background_follows_the_surface():
+    """rgba(255,255,255,.82) is a pale slab on a dark surface; it becomes a mix of the card colour."""
+    assert run(".a{background:rgba(255,255,255,.82)}") == ".a{background:color-mix(in srgb,var(--card) 82%,transparent)}"
+    assert run(".a{background: rgb(255 255 255 / 58%)}") == ".a{background: color-mix(in srgb,var(--card) 58%,transparent)}"
+    # A dark scrim and a shadow are theme-independent, and a white shadow is not a background.
+    assert run(".a{background:rgba(15,23,42,.38)}.b{box-shadow:0 0 0 1px rgba(255,255,255,.8)}") == ".a{background:rgba(15,23,42,.38)}.b{box-shadow:0 0 0 1px rgba(255,255,255,.8)}"
+
+
 def test_fallbacks_shadows_dark_fills_and_pale_text_are_left_alone():
     css = ".a{color:var(--x,#123456)}.b{box-shadow:0 1px #123456}.c{background:#17233b}.d{color:#eeeeee}"
     assert run(css) == css

@@ -11,7 +11,8 @@ does, not just how it looks:
   - by hue and lightness: a neutral, or an info / ok / warn / danger tone
   - by selector: a tint inside a rule named .risk, .warn, .error, .ok and so on takes that tone
 Dark or saturated fills, colours inside a var() fallback, shadows, and gradients other than
-backgrounds are left alone and counted as "left for hand review". font-size in px becomes rem
+backgrounds are left alone and counted as "left for hand review". A translucent white background
+becomes a mix of --card. font-size in px becomes rem
 (sizes under 12px are left alone). Accent colours used as text become var(--accent-fg).
 
 Usage (from the repository root; a dry run unless --apply is given):
@@ -19,7 +20,7 @@ Usage (from the repository root; a dry run unless --apply is given):
     python3 scripts/migrate-css-tokens.py web/src/style.css web/src/components/Foo.vue
     python3 scripts/migrate-css-tokens.py --apply $(find web/src/components -name '*.vue')
 
-It is a heuristic. It does not handle rgba()/hsl() or opacity, so review the diff, then check
+It is a heuristic. It does not handle other rgba()/hsl() colours or opacity, so review the diff, then check
 the result in light and dark: run the token and usage tests and the Corpus Builder theme sweep,
 and look at the screens (axe cannot judge text over a gradient).
 """
@@ -59,6 +60,10 @@ TONE_HUE = {
 
 HEX = re.compile(r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b")
 DECLARATION = re.compile(r"([a-zA-Z-]+)(\s*:\s*)([^;{}]+)")
+# A translucent white overlay, as a whole background value: rgba(255,255,255,.82) or rgb(255 255 255 / 82%).
+WHITE_OVERLAY = re.compile(
+    r"\s*rgba?\(\s*255\s*[, ]\s*255\s*[, ]\s*255\s*[,/]\s*(\d*\.?\d+)(%?)\s*\)\s*(?:!important)?\s*"
+)
 ACCENT_TEXT = re.compile(
     r"\s*var\(--(?:accent|accent-2|ui-accent|ui-accent-dark)"
     r"(?:\s*,\s*(?:#[0-9a-fA-F]{3,6}|var\(--[a-z0-9-]+\)))?\)\s*(?:!important)?\s*"
@@ -159,6 +164,14 @@ def rewrite_value(prop: str, value: str, selector: str) -> str:
         stats["accent-text"] += 1
         lead = value[: len(value) - len(value.lstrip())]
         return lead + "var(--accent-fg)" + (" !important" if "!important" in value else "")
+
+    overlay = WHITE_OVERLAY.fullmatch(value) if prop.lower().startswith("background") else None
+    if overlay:
+        # White over the surface is a lighter surface; over a dark surface it must not stay white.
+        alpha = float(overlay.group(1)) * (1 if overlay.group(2) else 100)
+        stats["white-overlay"] += 1
+        lead = value[: len(value) - len(value.lstrip())]
+        return f"{lead}color-mix(in srgb,var(--card) {alpha:g}%,transparent)" + (" !important" if "!important" in value else "")
 
     fallbacks = [(m.start(), m.end()) for m in re.finditer(r"var\([^)]*\)", value)]
     lowered = value.lower()
