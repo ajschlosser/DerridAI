@@ -16,6 +16,7 @@ const editing=ref(Boolean(props.open));
 const draft=ref<unknown>("");
 const confidence=computed(()=>typeof props.status?.confidence==='number'&&Number.isFinite(props.status.confidence)?Number(props.status.confidence):null);
 const isLlm=computed(()=>String(props.status?.method||'').includes('llm'));
+const isMultiCombobox=computed(()=>props.control==='multi-combobox');
 const hasValue=(value:unknown)=>!(value===undefined||value===null||value===''||(Array.isArray(value)&&!value.length));
 const resolvedValue=computed(()=>{
   const status=props.status||{};
@@ -64,8 +65,8 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
       <select v-if="control==='enum'" v-model="draft" class="control" :aria-label="i18n.t(`record.${field}`,field.replaceAll('_',' '))" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options||[]" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
       <fieldset v-else-if="control==='boolean'" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
       <UiCombobox v-else-if="control==='combobox'" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" @update:model-value="value=>{draft=value;markDirty()}"/>
-      <UiCombobox v-else-if="control==='multi-combobox'" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" :multiple="true" @update:model-value="value=>{draft=value;markDirty()}"/>
-      <input v-else v-model="draft" class="control" :type="control==='number'?'number':'text'" :list="control==='multi-combobox'&&options?.length?`${field}-suggestions`:undefined" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty"><datalist v-if="control==='multi-combobox'&&options?.length" :id="`${field}-suggestions`"><option v-for="option in [...new Set((options||[]).map(v=>String(v).trim()).filter(Boolean))]" :key="option" :value="option"/></datalist>
+      <UiCombobox v-else-if="isMultiCombobox" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" :multiple="true" @update:model-value="value=>{draft=value;markDirty()}"/>
+      <input v-else v-model="draft" class="control" :type="control==='number'?'number':'text'" :list="isMultiCombobox&&options?.length?`${field}-suggestions`:undefined" :aria-label="i18n.t(`record.${field}`,field)" @input="markDirty"><datalist v-if="isMultiCombobox&&options?.length" :id="`${field}-suggestions`"><option v-for="option in [...new Set((options||[]).map(v=>String(v).trim()).filter(Boolean))]" :key="option" :value="option"/></datalist>
     </div>
     <div class="editor-actions">
       <button type="button" class="btn primary" :disabled="busy||draft===''||draft===undefined||(required&&draft===null)" @click="save">{{saving?i18n.t('pdf_corpus.saving_decision','Saving…'):i18n.t('pdf_corpus.save_field_value','Save value')}}</button>
