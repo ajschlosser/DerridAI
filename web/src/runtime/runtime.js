@@ -160,6 +160,8 @@ const state = {
     default_llm_run_mode: "foreground",
     desktop_notifications: false,
     ui_color_theme: "green",
+    ui_color_scheme: "system",
+    ui_contrast: "system",
     default_provider_profile: "",
     review_provider_profile: "",
     provider_profiles: [],
@@ -193,8 +195,50 @@ const state = {
 };
 
 const UI_COLOR_THEMES=new Set(["green","blue","slate"]);
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{}try{localStorage.setItem("derridai.ui.theme",next)}catch{}return next}
+const UI_COLOR_SCHEMES=new Set(["system","light","dark"]);
+const UI_CONTRAST_PREFS=new Set(["system","more"]);
+let appearanceMediaWired=false;
+function mediaMatches(query){
+  try{return Boolean(window.matchMedia?.(query)?.matches)}catch{return false}
+}
+function syncColorScheme(){
+  const pref=UI_COLOR_SCHEMES.has(String(state.appConfig.ui_color_scheme||""))?String(state.appConfig.ui_color_scheme):"system";
+  const contrastPref=UI_CONTRAST_PREFS.has(String(state.appConfig.ui_contrast||""))?String(state.appConfig.ui_contrast):"system";
+  const scheme=pref==="light"||pref==="dark"?pref:(mediaMatches("(prefers-color-scheme: dark)")?"dark":"light");
+  const contrast=contrastPref==="more"||(contrastPref==="system"&&mediaMatches("(prefers-contrast: more)"))?"more":"default";
+  try{
+    document.documentElement.dataset.uiTheme=state.appConfig.ui_color_theme||"green";
+    document.documentElement.dataset.colorScheme=scheme;
+    if(contrast==="more")document.documentElement.dataset.contrast="more";
+    else delete document.documentElement.dataset.contrast;
+  }catch{ /* document may be unavailable during early bootstrap */ }
+  return {scheme,contrast};
+}
+function wireAppearanceMedia(){
+  if(appearanceMediaWired||typeof window==="undefined"||!window.matchMedia)return;
+  appearanceMediaWired=true;
+  const sync=()=>syncColorScheme();
+  try{
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",sync);
+    window.matchMedia("(prefers-contrast: more)").addEventListener("change",sync);
+  }catch{ /* matchMedia listeners are best-effort in non-browser test hosts */ }
+}
+function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{ /* document may be unavailable during early bootstrap */ }try{localStorage.setItem("derridai.ui.theme",next)}catch{ /* localStorage can be blocked */ }syncColorScheme();return next}
+function applyAppearance(patch={}){
+  if(patch.ui_color_theme!=null)applyUiTheme(patch.ui_color_theme);
+  if(patch.ui_color_scheme!=null){
+    const next=UI_COLOR_SCHEMES.has(String(patch.ui_color_scheme))?String(patch.ui_color_scheme):"system";
+    state.appConfig.ui_color_scheme=next;
+    try{localStorage.setItem("derridai.ui.scheme",next)}catch{ /* localStorage can be blocked */ }
+  }
+  if(patch.ui_contrast!=null){
+    const next=UI_CONTRAST_PREFS.has(String(patch.ui_contrast))?String(patch.ui_contrast):"system";
+    state.appConfig.ui_contrast=next;
+    try{localStorage.setItem("derridai.ui.contrast",next)}catch{ /* localStorage can be blocked */ }
+  }
+  wireAppearanceMedia();
+  return syncColorScheme();
+}
 
 function setTranslationDictionary(locale,dictionary={},base={},info={}){
   const canonical=base||{};
@@ -839,6 +883,11 @@ function persistPrefs(){
   clearTimeout(prefsTimer);
   prefsTimer=setTimeout(()=>idbPut("prefs",workspacePrefs()).catch(error=>console.error("IndexedDB preference persistence failed",error)),400);
 }
+async function flushWorkspacePrefs(){
+  if(!state.storageReady)throw new Error("Workspace storage is not ready yet.");
+  clearTimeout(prefsTimer);
+  await idbPut("prefs",workspacePrefs());
+}
 async function restoreWorkspace(){
   try{
     const [savedFiles,prefs]=await Promise.all([idbGetAll("files"),idbGet("prefs","workspace")]);
@@ -1146,11 +1195,11 @@ async function clearRecordUpdates(file,index,{confirmFirst=true}={}){
   persistFile(file);
   return true;
 }
-async function clearAllUpdates(){
+async function clearAllUpdates({confirmed=false}={}){
   const rows=allRows().filter(row=>Array.isArray(row.record.updates)&&row.record.updates.length);
   if(!rows.length)return toast("No loaded records have updates history");
   const entries=rows.reduce((sum,row)=>sum+row.record.updates.length,0);
-  if(!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
   const files=new Set();
   for(const row of rows){
     row.file.records[row.index]={...row.record,updates:[]};
@@ -9494,16 +9543,19 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
   renderSetup();
 }
 
-async function downloadFullBackup(){
+function backupContainsCredentials(){
+  return providerProfiles().some(profile=>Boolean(profile.api_key));
+}
+async function downloadFullBackup({confirmed=false}={}){
   const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
   if(activeJobs.length){
     return toast(`Wait for or cancel ${activeJobs.length} active background operation${activeJobs.length===1?"":"s"} before backing up.`);
   }
-  const hasCredentials=providerProfiles().some(profile=>Boolean(profile.api_key));
+  const hasCredentials=backupContainsCredentials();
   const warning=hasCredentials
     ? "This full backup contains provider API keys/credentials configured in DerridAI. Treat the ZIP as sensitive. Continue?"
     : "Create a full DerridAI backup containing all loaded JSONL records, configuration, audit history, UI workspace state, the current PDF, and every Chroma collection with its stored embeddings?";
-  if(!await openMessageModal({title:"Create full backup?",message:warning,tone:hasCredentials?"danger":"info",confirmLabel:"Create backup",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Create full backup?",message:warning,tone:hasCredentials?"danger":"info",confirmLabel:"Create backup",cancelLabel:"Cancel"}))return;
   const button=document.querySelector("#downloadFullBackup");
   if(button){button.disabled=true;button.textContent="Creating backup…"}
   try{
@@ -9554,11 +9606,11 @@ async function downloadFullBackup(){
     if(current){current.disabled=false;current.textContent="Download full backup"}
   }
 }
-async function restoreFullBackup(file){
+async function restoreFullBackup(file,{confirmed=false}={}){
   if(!file)return;
   const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
   if(activeJobs.length)return toast("Cancel or wait for all background operations before restoring a backup.");
-  if(!await openMessageModal({title:"Restore full DerridAI backup?",message:"This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",tone:"danger",confirmLabel:"Restore backup",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Restore full DerridAI backup?",message:"This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",tone:"danger",confirmLabel:"Restore backup",cancelLabel:"Cancel"}))return;
   const button=document.querySelector("#restoreFullBackup");
   if(button){button.disabled=true;button.textContent="Restoring…"}
   try{
@@ -10317,7 +10369,15 @@ function wireTabScrollPreservation(){
 async function bootstrapRuntime(){
   wireTabScrollPreservation();wireMetadataSearchDelegation();
   await restoreWorkspace();
-  applyUiTheme(state.appConfig.ui_color_theme);
+  try{
+    if(!state.appConfig.ui_color_scheme)state.appConfig.ui_color_scheme=localStorage.getItem("derridai.ui.scheme")||"system";
+    if(!state.appConfig.ui_contrast)state.appConfig.ui_contrast=localStorage.getItem("derridai.ui.contrast")||"system";
+  }catch{ /* localStorage can be blocked */ }
+  applyAppearance({
+    ui_color_theme:state.appConfig.ui_color_theme,
+    ui_color_scheme:state.appConfig.ui_color_scheme||"system",
+    ui_contrast:state.appConfig.ui_contrast||"system",
+  });
   try{
     const providerData=await api("/api/system/researcher-providers");
     state.researcherProviderProfiles=Array.isArray(providerData.profiles)?providerData.profiles:[];
@@ -10968,6 +11028,14 @@ export {
   upsertRows,
   exportStoreJsonl,
   persistPrefs,
+  flushWorkspacePrefs,
+  applyUiTheme,
+  applyAppearance,
+  downloadFullBackup,
+  restoreFullBackup,
+  clearAllUpdates,
+  deleteAllDerridaiBrowserState,
+  backupContainsCredentials,
   pendingUpsertRows,
   decorateDisabledControls,
   getResearchWorkspaceSnapshot,

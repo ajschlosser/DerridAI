@@ -564,6 +564,21 @@ The **Response Library** page provides:
 - re-run with the original parameters
 - re-grade with any configured LLM provider
 
+## Settings
+
+Settings is a Vue-native control center at **System → Settings**. A contents rail (a collapsible **Contents** control on smaller screens) groups:
+
+- **Workspace and appearance** — accent theme, light/dark/system color scheme, and contrast. These are stored in this browser workspace, not on the server.
+- **Language and accessibility** — interface language, applied immediately. Dictionary editing remains on **Languages**.
+- **Research defaults** — response language for generated answers. Per-run generation still lives on **Research**.
+- **Review and AI behavior** — default provider profile, review preset, and interactive vs background LLM review.
+- **Providers and models** — readiness summary only; credentials and endpoints stay on **LLM Providers**.
+- **Vector stores and retrieval** — default embedding provider/model (browser-local) and RAG retrieval budgets, with advanced MMR/RRF options behind a disclosure. The current Chroma path is read-only here; change the backend on **Vector Stores**.
+- **Security, users, and permissions** — links to **Users** and **Roles & permissions**.
+- **System and operations** — backup/restore, viewer resets, desktop notifications, and NUKE.
+
+Each group saves on its own. Unsaved changes warn before leaving the page. Search matches translated labels. Researcher accounts see appearance (when permitted), language, and research defaults. Administrative retrieval, providers, security, backup, and NUKE stay off that account.
+
 ## Configuration reset
 
 Configuration includes:

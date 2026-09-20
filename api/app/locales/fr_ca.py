@@ -3621,22 +3621,240 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'section.storage': 'Stockage',
  'section.system': 'Système',
  'section.tools': 'Outils',
+ 'settings.a11y_note': 'Les indicateurs de focus restent visibles dans chaque thème. Les animation'
+                                       's sont réduites lorsque l’appareil le demande. Le mode con'
+                                       'traste élevé utilise des bordures plus marquées plutôt que'
+                                       ' la couleur seulement.',
+ 'settings.action_complete': 'Action terminée',
+ 'settings.active_jobs': 'opérations actives',
+ 'settings.advanced_retrieval': 'Repérage avancé',
  'settings.appearance': 'Apparence',
  'settings.appearance_help': 'Choisissez le thème de couleur de votre espace de travail.',
  'settings.appearance_saved': 'Apparence enregistrée',
- 'settings.browser_workspace_note': 'Les préférences de thème sont enregistrées dans cet espace de travail du '
-                                    'navigateur.',
+ 'settings.appearance_unavailable': 'Votre rôle ne peut pas modifier l’apparence de l’espace de tr'
+                                       'avail.',
+ 'settings.backup': 'Sauvegarde et restauration',
+ 'settings.backup_confirm_message': 'Créer une sauvegarde complète de cet espace de travail, des n'
+                                       'otices, de la configuration et des collections vectorielle'
+                                       's.',
+ 'settings.backup_confirm_title': 'Créer une sauvegarde complète?',
+ 'settings.backup_help': 'Une archive portable de l’espace de travail du navigateur, des notices c'
+                                       'hargées, de la configuration, du PDF courant et des collec'
+                                       'tions Chroma avec leurs vecteurs.',
+ 'settings.backup_keys_warning': 'Cette sauvegarde complète peut contenir des clés d’API de fourni'
+                                       'sseurs. Rangez le fichier ZIP en lieu sûr. Les fichiers de'
+                                       ' modèles installés ne sont pas copiés.',
+ 'settings.browser_workspace_note': 'Les préférences de thème sont enregistrées dans cet espace de'
+                                       ' travail du navigateur.',
+ 'settings.chroma_path': 'Chemin Chroma actuel',
+ 'settings.chroma_path_help': 'Rapporté par l’API en cours. Changez le serveur depuis Magasins vec'
+                                       'toriels.',
+ 'settings.clear_updates': 'Effacer toutes les mises à jour de notices',
+ 'settings.clear_updates_message': 'Ceci supprime définitivement les historiques d’audit locaux de'
+                                       's notices chargées.',
+ 'settings.clear_updates_title': 'Effacer tous les historiques de mises à jour?',
+ 'settings.color_scheme': 'Schéma de couleurs',
+ 'settings.color_scheme_help': 'Clair, sombre, ou suivre cet appareil. Enregistré dans ce navigate'
+                                       'ur.',
  'settings.color_theme': 'Thème de couleur',
+ 'settings.columns_reset': 'Colonnes du tableau réinitialisées',
+ 'settings.contents': 'Sommaire',
+ 'settings.contrast': 'Contraste',
+ 'settings.contrast_help': 'Augmente le contraste des bordures et du texte atténué dans cet espace'
+                                       ' de travail.',
+ 'settings.contrast_more': 'Plus de contraste',
+ 'settings.contrast_system': 'Suivre l’appareil',
+ 'settings.default_provider': 'Profil de fournisseur par défaut',
+ 'settings.default_provider_help': 'Utilisé lorsqu’un flux ne choisit pas lui-même de profil. Les '
+                                       'identifiants restent sur la page Fournisseurs.',
+ 'settings.desktop_notifications': 'Notifications de bureau',
+ 'settings.download_backup': 'Télécharger une sauvegarde complète',
+ 'settings.embedding_model': 'Modèle d’intégration par défaut',
+ 'settings.embedding_provider': 'Fournisseur d’intégration par défaut',
+ 'settings.error.rag_fetch_k': 'Le fetch_k MMR doit être au moins aussi grand que le k de repérage'
+                                       '.',
+ 'settings.error.rag_locales': 'Sélectionnez au moins une langue de document.',
+ 'settings.error.rag_routes': 'Sélectionnez au moins une voie de repérage.',
+ 'settings.error.rag_total_chars': 'Le total de caractères de preuve doit être au moins égal à la '
+                                       'limite par notice.',
+ 'settings.expand_panels': 'Développer tous les panneaux',
+ 'settings.expand_sidebar': 'Développer la barre de navigation',
+ 'settings.interface_language': 'Langue de l’interface',
+ 'settings.interface_language_help': 'S’applique immédiatement aux libellés, dates et nombres dans'
+                                       ' ce navigateur.',
+ 'settings.jsonl_tabs': 'onglets JSONL',
+ 'settings.lang_auto': 'Auto',
+ 'settings.lang_en': 'Anglais',
+ 'settings.lang_fr': 'Français',
+ 'settings.language_changed': 'La langue de l’interface est maintenant {name}.',
+ 'settings.language_help': 'La langue de l’interface s’applique immédiatement. Les dictionnaires s'
+                                       'e modifient à la page Langues.',
+ 'settings.language_title': 'Langue et accessibilité',
+ 'settings.last_checked': 'Dernière vérification : {time}',
+ 'settings.leave_message': 'Vos modifications de Paramètres non enregistrées seront perdues si vou'
+                                       's quittez cette page.',
+ 'settings.leave_title': 'Abandonner les paramètres non enregistrés?',
+ 'settings.max_concurrent': 'max {count}',
+ 'settings.nav.language': 'Langue et accessibilité',
+ 'settings.nav.language_help': 'Langue de l’interface et préférences de lecture.',
+ 'settings.nav.providers': 'Fournisseurs et modèles',
+ 'settings.nav.providers_help': 'Les points de terminaison, modèles et limites de concurrence se g'
+                                       'èrent à la page Fournisseurs.',
+ 'settings.nav.research': 'Valeurs de recherche par défaut',
+ 'settings.nav.research_help': 'Points de départ pour les exécutions de recherche fondées sur des '
+                                       'preuves.',
+ 'settings.nav.retrieval': 'Magasins vectoriels et repérage',
+ 'settings.nav.retrieval_help': 'Valeurs d’intégration par défaut et budgets de repérage RAG.',
+ 'settings.nav.review': 'Révision et comportement de l’IA',
+ 'settings.nav.review_help': 'Fournisseur par défaut, préréglage de révision et mode d’exécution d'
+                                       'e la révision LLM.',
+ 'settings.nav.security': 'Sécurité, comptes et permissions',
+ 'settings.nav.security_help': 'Les comptes et les capacités des rôles se gèrent sur des pages déd'
+                                       'iées.',
+ 'settings.nav.system': 'Système et opérations',
+ 'settings.nav.system_help': 'Sauvegarde, restauration, réinitialisation de l’espace de travail et'
+                                       ' commandes destructives.',
+ 'settings.nav.workspace': 'Espace de travail et apparence',
+ 'settings.nav.workspace_help': 'Thème, schéma de couleurs et contraste pour ce navigateur.',
+ 'settings.no_providers': 'Aucun profil de fournisseur LLM n’est configuré.',
+ 'settings.not_checked': 'Pas encore vérifié',
+ 'settings.not_configured': 'Non configuré',
+ 'settings.notifications_enabled': 'Notifications de bureau activées',
+ 'settings.notifications_help': 'L’autorisation du navigateur est requise. Les notifications reste'
+                                       'nt locales à ce navigateur.',
+ 'settings.notifications_off': 'Désactivées',
+ 'settings.notifications_on': 'Activées à la fin des opérations en arrière-plan',
+ 'settings.notifications_permission': 'Autorisation de notification : {status}',
+ 'settings.notifications_saved': 'Préférence de notification enregistrée',
+ 'settings.notifications_unsupported': 'Ce navigateur ne prend pas en charge les notifications de '
+                                       'bureau.',
+ 'settings.open_providers': 'Ouvrir les fournisseurs LLM',
+ 'settings.openai_compatible': 'Compatible OpenAI',
+ 'settings.page_help': 'Contrôlez l’apparence de l’espace de travail, les valeurs de recherche par'
+                                       ' défaut et les outils d’exploitation. Chaque groupe s’enre'
+                                       'gistre séparément; quitter avec des modifications non enre'
+                                       'gistrées demandera confirmation.',
+ 'settings.page_help_short': 'Espace de travail, recherche et opérations',
+ 'settings.panels_expanded': 'Tous les panneaux de l’interface sont développés',
+ 'settings.persist.backend': 'Opération serveur',
+ 'settings.persist.browser': 'Enregistré dans ce navigateur',
+ 'settings.persist.link': 'Géré ailleurs',
+ 'settings.persist.readonly': 'Lecture seule',
+ 'settings.preset_attribution': 'Attribution',
+ 'settings.preset_semantic': 'Sémantique',
+ 'settings.preset_text': 'Nettoyage OCR / texte',
+ 'settings.provider_not_ready': 'Non prêt',
+ 'settings.provider_ollama': 'Ollama',
+ 'settings.provider_ready': 'Prêt',
+ 'settings.providers_help': 'Les points de terminaison, identifiants, modèles, limites de concurre'
+                                       'nce et préchauffages se configurent à la page Fournisseurs'
+                                       '. Les secrets ne sont jamais affichés ici.',
+ 'settings.providers_title': 'Fournisseurs et modèles',
+ 'settings.rag_auto_grade': 'Noter automatiquement la réponse de recherche après la mise en cache',
+ 'settings.rag_auto_grade_help': 'Choisissez le fournisseur de notation dans Recherche. L’auto-not'
+                                       'ation y est signalée.',
+ 'settings.rag_cross_encoder': 'Modèle de cross-encodeur',
+ 'settings.rag_decompose': 'Jetons max. de décomposition de requête',
+ 'settings.rag_decompose_help': 'Limite supérieure de l’étape facultative de découpage de la quest'
+                                       'ion avant le repérage.',
+ 'settings.rag_fetch_k': 'fetch_k MMR',
+ 'settings.rag_fetch_k_help': 'Taille du bassin de candidats avant le classement par diversité. Do'
+                                       'it être au moins égal au k de repérage.',
+ 'settings.rag_help': 'Valeurs par défaut de repérage, fusion, reclassement et budget de preuves. '
+                                       'Ces valeurs sont conservées avec chaque exécution pour en '
+                                       'permettre l’audit.',
+ 'settings.rag_k': 'k de repérage',
+ 'settings.rag_k_help': 'Nombre de passages à conserver après le classement. Les exécutions savant'
+                                       'es typiques utilisent 24–64.',
+ 'settings.rag_lambda': 'lambda MMR',
+ 'settings.rag_lambda_help': '0 favorise la diversité; 1 favorise la pertinence par rapport à la q'
+                                       'uestion.',
+ 'settings.rag_locales': 'Langues des documents',
+ 'settings.rag_record_chars': 'Caractères max. par notice de preuve',
+ 'settings.rag_record_chars_help': 'Limite chaque passage pour que le modèle ne puisse pas avaler '
+                                       'un chapitre entier comme une seule preuve.',
+ 'settings.rag_reranker': 'Reclassement par défaut',
+ 'settings.rag_response_language': 'Langue de la réponse',
+ 'settings.rag_response_language_help': 'Oriente les réponses générées. Les étiquettes de langue d'
+                                       'es notices sources ne changent pas.',
+ 'settings.rag_routes': 'Voies de repérage',
+ 'settings.rag_rrf_k': 'k RRF',
+ 'settings.rag_rrf_k_help': 'Constante de lissage pour la fusion par rang réciproque. 60 est une v'
+                                       'aleur courante.',
+ 'settings.rag_title': 'Valeurs par défaut du pipeline RAG',
+ 'settings.rag_top_n': 'N de reclassement',
+ 'settings.rag_top_n_help': 'Nombre de candidats inspectés par le reclassement.',
+ 'settings.rag_total_chars': 'Caractères totaux de preuve',
+ 'settings.request_notifications': 'Demander l’autorisation de notification',
+ 'settings.reranker_ce': 'Cross-encodeur',
+ 'settings.reranker_lexical': 'Lexical/vectoriel',
+ 'settings.reranker_none': 'Aucun',
+ 'settings.research_help': 'Langue de réponse et présentation des preuves. La génération par exécu'
+                                       'tion reste dans Recherche.',
+ 'settings.research_title': 'Valeurs de recherche par défaut',
  'settings.researcher_workspace': 'Espace de recherche',
- 'settings.researcher_workspace_help': 'Les comptes chercheur utilisent du texte de corpus résumé et n’affichent pas '
-                                       'les contrôles de gestion des bases ou des sources.',
+ 'settings.researcher_workspace_help': 'Les comptes chercheur utilisent du texte de corpus résumé '
+                                       'et n’affichent pas les contrôles de gestion des bases ou d'
+                                       'es sources.',
+ 'settings.reset_appearance': 'Réinitialiser l’apparence',
+ 'settings.reset_columns': 'Réinitialiser les colonnes du tableau',
+ 'settings.reset_rag': 'Réinitialiser le repérage',
+ 'settings.restore_backup': 'Charger depuis une sauvegarde',
+ 'settings.restore_confirm_message': 'Ceci remplace l’espace de travail du navigateur et chaque co'
+                                       'llection de la base Chroma active.',
+ 'settings.restore_confirm_title': 'Restaurer une sauvegarde complète DerridAI?',
+ 'settings.restore_upsert': 'Restaurer les éléments retirés de la file d’insertion',
+ 'settings.review_help': 'Choix du fournisseur, préréglage de révision et exécution interactive ou'
+                                       ' en arrière-plan.',
+ 'settings.review_preset': 'Préréglage de révision par défaut',
+ 'settings.review_title': 'Révision et comportement de l’IA',
+ 'settings.route_lexical': 'Lexical (BM25)',
+ 'settings.route_mmr': 'MMR',
+ 'settings.run_background': 'Révision en arrière-plan',
+ 'settings.run_foreground': 'Premier plan interactif',
+ 'settings.run_mode': 'Mode d’exécution par défaut',
+ 'settings.run_mode_help': 'La révision interactive reste à l’écran. La révision en arrière-plan s'
+                                       '’annule depuis Opérations.',
  'settings.save_appearance': 'Enregistrer l’apparence',
+ 'settings.save_embedding': 'Enregistrer l’intégration',
+ 'settings.save_rag': 'Enregistrer les valeurs RAG',
+ 'settings.save_research': 'Enregistrer la recherche',
+ 'settings.save_review': 'Enregistrer le comportement de révision',
+ 'settings.scheme_dark': 'Sombre',
+ 'settings.scheme_light': 'Clair',
+ 'settings.scheme_system': 'Suivre l’appareil',
+ 'settings.search_count_many': '{count} paramètres correspondants',
+ 'settings.search_count_one': '{count} paramètre correspondant',
+ 'settings.search_empty': 'Aucun paramètre ne correspond à cette recherche.',
+ 'settings.search_help': 'La recherche utilise les libellés traduits. Les flèches parcourent les r'
+                                       'ésultats; Entrée ouvre la section.',
+ 'settings.search_label': 'Rechercher dans les paramètres',
+ 'settings.search_placeholder': 'Trouver un paramètre',
+ 'settings.security_help': 'Les comptes et les capacités des rôles sont appliqués par l’API, pas s'
+                                       'eulement cette page.',
+ 'settings.security_title': 'Sécurité, comptes et permissions',
+ 'settings.sidebar_expanded': 'Barre de navigation développée',
+ 'settings.status.readonly': 'Lecture seule',
+ 'settings.status.save_failed': 'Échec de l’enregistrement',
+ 'settings.status.saved': 'Enregistré',
+ 'settings.status.saved_ok': 'Enregistrement réussi',
+ 'settings.status.saving': 'Enregistrement',
+ 'settings.status.unsaved': 'Modifications non enregistrées',
  'settings.theme_blue': 'Bleu de référence',
  'settings.theme_blue_help': 'La palette bleue utilisée dans la référence visuelle.',
  'settings.theme_green': 'Vert DerridAI',
  'settings.theme_green_help': 'La palette verte sobre d’origine.',
  'settings.theme_slate': 'Ardoise',
  'settings.theme_slate_help': 'Une palette de recherche neutre, bleu graphite.',
+ 'settings.upsert_restored': 'Éléments retirés de la file d’insertion restaurés',
+ 'settings.validation_summary': 'Certaines valeurs de repérage n’ont pas pu être enregistrées.',
+ 'settings.vector_help': 'Les nouvelles collections utilisent par défaut les intégrations Ollama a'
+                                       'vec bge-m3:latest. Modifier une collection déjà peuplée ex'
+                                       'ige une nouvelle construction.',
+ 'settings.vector_title': 'Valeurs de base vectorielle par défaut',
+ 'settings.viewer_help': 'Réinitialiser les choix d’interface ou retirer l’historique d’audit sans'
+                                       ' supprimer les notices.',
+ 'settings.viewer_title': 'Configuration de l’afficheur',
  'storage.advanced_deployment': 'Paramètre de déploiement avancé.',
  'storage.apply_path': 'Appliquer le chemin',
  'storage.change_location': 'Modifier l’emplacement des données',
