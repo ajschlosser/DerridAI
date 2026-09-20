@@ -10,6 +10,7 @@ import re
 import threading
 import tempfile
 import time
+import urllib.request
 import uuid
 import unicodedata
 from collections import Counter
@@ -608,6 +609,16 @@ class IndexMetadataResponseModel(BaseModel):
 
 
 
+
+
+def metric_stage_of(schema_name: str) -> str:
+    """Which part of a build a model call belongs to, for words in the UI."""
+    return (
+        "manifest" if "manifest" in schema_name else
+        "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
+        "metadata" if "record_" in schema_name else
+        "other"
+    )
 
 
 def _same_label(a: Any, b: Any) -> bool:
@@ -1380,6 +1391,9 @@ class PdfCorpusBuildManager:
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
+        # Model calls in flight per build, so the UI can say what it is waiting for instead of showing a frozen bar.
+        self._llm_inflight: dict[str, dict[int, dict[str, Any]]] = {}
+        self._loaded_models_cache: tuple[float, str, set[str]] = (0.0, "", set())
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
 
@@ -1749,6 +1763,55 @@ class PdfCorpusBuildManager:
         self._ledger.append(RECHECK, model="", field=field, build_id=build_id, record_id=record_id, value=first, new_value=value, agreed=agreed, first_reviewer=first_reviewer or "", same_reviewer=(first_reviewer or "") == current_reviewer.get(), severity=None if agreed else error_severity(first, value))
         record.setdefault("recheck_results", {})[field] = {"first": first, "second": value, "agreed": agreed}
         return True
+
+    def _note_llm_call_start(self, build_id: str, task: str, provider: str, model: str, base_url: str) -> int:
+        token = time.monotonic_ns()
+        if build_id:
+            with self._lock:
+                self._llm_inflight.setdefault(build_id, {})[token] = {"since": time.monotonic(), "task": task, "provider": provider, "model": model, "base_url": base_url}
+        return token
+
+    def _note_llm_call_end(self, build_id: str, token: int) -> None:
+        if build_id:
+            with self._lock:
+                calls = self._llm_inflight.get(build_id)
+                if calls is not None:
+                    calls.pop(token, None)
+                    if not calls:
+                        self._llm_inflight.pop(build_id, None)
+
+    def _ollama_loaded_models(self, base_url: str) -> set[str] | None:
+        """Names Ollama has in memory right now (its /api/ps), cached for a few seconds. None if it cannot be asked."""
+        now = time.monotonic()
+        cached_at, cached_url, cached = self._loaded_models_cache
+        if cached_url == base_url and now - cached_at < 3.0:
+            return cached
+        try:
+            with urllib.request.urlopen(base_url.rstrip("/") + "/api/ps", timeout=1.5) as response:  # noqa: S310 - the operator's configured Ollama URL
+                names = {str(m.get("name") or m.get("model") or "") for m in json.loads(response.read()).get("models", []) if isinstance(m, dict)}
+        except Exception:  # noqa: BLE001 - the status line is a courtesy; never let it break a build read
+            return None
+        self._loaded_models_cache = (now, base_url, names)
+        return names
+
+    def llm_activity(self, build_id: str) -> dict[str, Any] | None:
+        """What the build is waiting on, for the status line: the oldest model call in flight and whether the model is loaded."""
+        with self._lock:
+            calls = list(self._llm_inflight.get(build_id, {}).values())
+        if not calls:
+            return None
+        oldest = min(calls, key=lambda call: call["since"])
+        state = "working"
+        if oldest["provider"] == "ollama":
+            loaded = self._ollama_loaded_models(str(oldest["base_url"] or settings.ollama_base_url))
+            if loaded is None:
+                state = "unknown"
+            elif not any(oldest["model"] == name or name.startswith(oldest["model"] + ":") for name in loaded):
+                state = "loading_model"
+        return {
+            "state": state, "task": oldest["task"], "model": oldest["model"], "provider": oldest["provider"],
+            "seconds": round(time.monotonic() - oldest["since"], 1), "calls_in_flight": len(calls),
+        }
 
     def enrichment_ledger_csv(self) -> str:
         return self._ledger.to_csv()
@@ -2378,20 +2441,24 @@ class PdfCorpusBuildManager:
                         "quotation" if "record_quotation" in schema_name else
                         "indexing" if "record_indexing" in schema_name else "indexing"
                     )
-                    raw = chat_complete(
-                        provider=provider,
-                        model=model,
-                        base_url=base_url,
-                        api_key=api_key,
-                        prompt=prompt + retry_note,
-                        options=generation,
-                        json_mode=True,
-                        json_schema=schema,
-                        schema_name=schema_name,
-                        max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
-                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                        timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
-                    )
+                    call_token = self._note_llm_call_start(build_id, metric_stage_of(schema_name), provider, model, base_url)
+                    try:
+                        raw = chat_complete(
+                            provider=provider,
+                            model=model,
+                            base_url=base_url,
+                            api_key=api_key,
+                            prompt=prompt + retry_note,
+                            options=generation,
+                            json_mode=True,
+                            json_schema=schema,
+                            schema_name=schema_name,
+                            max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
+                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                            timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
+                        )
+                    finally:
+                        self._note_llm_call_end(build_id, call_token)
                 except InterruptedError:
                     raise
                 except Exception as exc:

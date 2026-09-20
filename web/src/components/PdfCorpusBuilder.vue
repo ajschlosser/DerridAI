@@ -45,6 +45,7 @@ import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
 import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
+import CorpusModelActivity from "./CorpusModelActivity.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { useSplitter } from "../composables/useSplitter";
@@ -921,6 +922,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     </div>
 
     <CorpusWorkflowStepper :stage="currentBuild?.stage||''" :status="currentBuild?.status||''" :published="Boolean(currentBuild?.publication)" :has-asset="Boolean(selectedAsset)" :has-manifest="Boolean(currentBuild?.manifest&&Object.keys(currentBuild.manifest).length)" :accepted-count="currentBuild?.accepted_count||0" :record-count="currentBuild?.record_count||0" :blocker-count="currentBuild?.publication_readiness?.blockers?.length||0" :can-publish="Boolean(currentBuild?.publication_readiness?.can_publish)" />
+    <CorpusModelActivity v-if="currentBuild&&buildRunning" :activity="currentBuild.llm_activity" />
     <CorpusInitializationDialog v-if="currentBuild&&buildRunning&&!hasRecordTopology" :build="currentBuild" :disabled="busy!==''" @cancel="cancelBuild" />
 
     <section v-if="showBuildConfiguration" class="builder-setup" :aria-labelledby="'pdf-corpus-config-title'">
