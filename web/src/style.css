@@ -3212,7 +3212,7 @@ code{overflow-wrap:anywhere}
 .provider-profile-name{max-width:360px;font-weight:800}
 .provider-meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .provider-status-pill,
-.provider-endpoint-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;font-size:.6875rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.provider-endpoint-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;font-size:.75rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .provider-status-pill{border:1px solid var(--line);background:var(--soft);color:var(--text-2)}
 .provider-status-pill.ready{background:var(--tone-ok-bg);border-color:var(--tone-ok-edge);color:var(--tone-ok-fg)}
 .provider-status-pill.needs-attention{background:var(--warn-bg);border-color:var(--tone-warn-edge);color:var(--tone-warn-fg)}
