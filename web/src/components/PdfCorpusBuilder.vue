@@ -79,7 +79,11 @@ const sourceBlocks=ref<SourceBlock[]>([]);
 const selectedEvidenceField=ref("");
 const selectedPdfPage=ref(1);
 const reviewQueue=ref<ReviewQueue>("all");
-const reviewQueueCollapsed=ref(false);
+// Whether the queue is hidden is remembered, so a person who wants the whole width for the record keeps it that way.
+const QUEUE_KEY="derridai.reviewQueueCollapsed";
+function initialQueueCollapsed():boolean{try{const stored=localStorage.getItem(QUEUE_KEY);if(stored==="1")return true;if(stored==="0")return false}catch{/* private mode: start open */}return false}
+const reviewQueueCollapsed=ref(initialQueueCollapsed());
+watch(reviewQueueCollapsed,value=>{try{localStorage.setItem(QUEUE_KEY,value?"1":"0")}catch{/* not remembering is fine */}});
 const reviewInspectorTab=ref<"metadata"|"evidence"|"source">("metadata");
 const reviewWorkspaceMode=ref<"record"|"metadata"|"source">("record");
 const recordQuery=ref("");
@@ -1074,10 +1078,17 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <header class="record-review-head"><div><button v-if="reviewQueueCollapsed" type="button" class="link-button queue-toggle" @click="reviewQueueCollapsed=false">{{i18n.t('pdf_corpus.show_queue','Show queue')}}</button><span class="eyebrow">{{i18n.t('pdf_corpus.proposed_record','Proposed record')}}</span><h3 id="review-record-title">{{selectedRecord.record_id}}</h3><p>{{i18n.t('pdf_corpus.pages','pp.')}} {{selectedRecord.page_start}}–{{selectedRecord.page_end}} · {{selectedRecord.text_length.toLocaleString()}} {{i18n.t('pdf_corpus.characters','chars')}}</p></div><div class="record-head-actions"><div class="decision-history" role="group" :aria-label="i18n.t('pdf_corpus.record_history','Review history')"><button type="button" class="btn small" @click="undoReview" :disabled="busy!==''"><AppIcon name="history"/><span class="btn-text">{{i18n.t('pdf_corpus.undo','Undo')}}</span></button><button type="button" class="btn small" @click="redoReview" :disabled="busy!==''"><AppIcon name="history" class="flip-inline"/><span class="btn-text">{{i18n.t('pdf_corpus.redo','Redo')}}</span></button></div><button type="button" class="btn small" @click="openFocusView">{{i18n.t('pdf_corpus.focus_view','Focus view')}}</button></div></header>
                 <CorpusSourceIssuePanel v-if="selectedRecord.source_quality_issues?.length" :issues="selectedRecord.source_quality_issues" interactive @edit-text="beginTextEdit" @open-source="reviewInspectorTab='source'" />
                 <aside v-else-if="selectedRecord.review_reason&&selectedRecord.review_reason.toLowerCase()!=='pending human review.'" class="review-reason" role="note"><b>{{recordIssueKinds(selectedRecord).length?recordIssueKinds(selectedRecord).map(kind=>i18n.t(`pdf_corpus.record_state.${kind}`,kind)).join(' · '):i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
-                <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="editingText" type="button" class="btn small" @click="llmTouchupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.llm_touchup','LLM touch-up')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label><div><span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span><button type="button" class="btn" @click="cancelTextEdit">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" @click="saveReviewedText()" :disabled="busy!==''||!textDraft.trim()">{{busy==='text'?i18n.t('ui.saving','Saving…'):i18n.t('pdf_corpus.save_and_mark_reviewed','Save & mark reviewed')}}</button></div></div></section>
+                <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="editingText" type="button" class="btn small" @click="llmTouchupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.llm_touchup','LLM touch-up')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText&&selectedRecord.source_quality_issues?.length" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label></div></section>
                 <footer class="record-decision-dock">
                   <p v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker" role="status"><b>{{i18n.t('pdf_corpus.metadata_decision_required','Metadata decision required')}}</b> {{i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields','Confirm {fields} before accepting this record.',{fields:selectedMetadataBlockingLabel})}}</p>
-                  <div class="decision-bar" role="group" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')">
+                  <div v-if="editingText" class="decision-bar text-edit-bar" role="group" :aria-label="i18n.t('pdf_corpus.edit_text','Edit text')">
+                    <span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span>
+                    <div class="decision-actions">
+                      <button type="button" class="btn small" @click="cancelTextEdit">{{i18n.t('ui.cancel','Cancel')}}</button>
+                      <button type="button" class="btn small primary" @click="saveReviewedText()" :disabled="busy!==''||!textDraft.trim()">{{busy==='text'?i18n.t('ui.saving','Saving…'):i18n.t('pdf_corpus.save_and_mark_reviewed','Save & mark reviewed')}}</button>
+                    </div>
+                  </div>
+                  <div v-else class="decision-bar" role="group" :aria-label="i18n.t('pdf_corpus.record_decision','Record decision')">
                     <CorpusActionMenu :label="i18n.t('pdf_corpus.more_actions','More actions')" :menu-label="i18n.t('pdf_corpus.more_record_actions','More record actions')" :items="recordActionItems" :disabled="busy!==''" placement="top" @select="runRecordAction"/>
                     <div class="decision-actions">
                       <button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button>
@@ -1262,6 +1273,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 .review-frame .record-review-pane{display:flex;flex-direction:column;container:record/inline-size}
 .record-decision-dock{position:sticky;bottom:0;z-index:5;margin-block-start:auto;border-top:1px solid var(--line);background:var(--card)}
 .record-decision-dock .metadata-accept-blocker{margin:0;padding:.5rem .875rem;border-bottom:1px solid var(--line);background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem;line-height:1.45}
+.record-decision-dock .text-edit-bar .text-save-hint{flex:1 1 14rem;font-size:.8125rem;color:var(--muted)}
 .record-decision-dock .decision-bar{position:static;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem .75rem;min-height:0;padding:.625rem .875rem;border-top:0;background:transparent;backdrop-filter:none}
 .decision-history,.decision-actions{display:flex;align-items:center;gap:.5rem}
 .decision-actions{margin-inline-start:auto}
@@ -1319,4 +1331,19 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 .review-frame .records-pane .pane-head>.select-visible{grid-area:select;display:inline-flex;align-items:center;gap:.5rem;min-height:1.5rem}
 .review-frame .records-pane .pane-head>.queue-toggle{grid-area:hide;justify-self:end}
 @media (max-width:650px){.record-decision-dock{bottom:52px}}
+/* Compact review. A 768-pixel laptop should show a record, its controls and its decisions without scrolling the page: the
+   headings that repeat what the queue row already says give way to the text, and the actions stay on one line. */
+.review-frame .record-review-head{padding:10px 16px}
+.review-frame .record-review-head .eyebrow{display:none}
+.review-frame .record-review-head h3{margin:0;font-size:1rem}
+.review-frame .record-review-head p{margin:2px 0 0}
+.review-frame .record-text-review>header{flex-wrap:nowrap;padding:6px 10px}
+.review-frame .record-text-review>header b{white-space:nowrap}
+.review-frame .record-text-head-actions{display:flex;flex-wrap:nowrap;gap:6px;flex:none}
+.review-frame .record-text-head-actions .btn{white-space:nowrap}
+.review-frame .record-decision-dock .metadata-accept-blocker{padding:.375rem .875rem}
+@media (max-height:860px){
+  .review-frame .record-decision-dock .metadata-accept-blocker b{display:none}
+  .review-frame .record-review-head p{font-size:.75rem}
+}
 </style>
