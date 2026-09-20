@@ -1,4 +1,4 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+﻿/* Copyright 2026 Aaron John Schlosser, PhD. */
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
@@ -8788,40 +8788,267 @@ function searchWorkOverview(work){
 }
 function openWorkMetadataEditorForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataEditor(item.work,item.rows)}
 function openWorkMetadataLlmDialogForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataLlmDialog([item])}
-function populateAllWorksMetadata(){
-  openWorkMetadataLlmDialog([...workIndex().values()].sort((a,b)=>a.work.localeCompare(b.work)));
+function getAnnotationsWorkspaceSnapshot() {
+  const all = allAnnotations();
+  const query = String(state.annotationSearch || "")
+    .trim()
+    .toLocaleLowerCase();
+  const filtered = all.filter((item) => annotationMatches(item, query));
+  const byWork = new Map();
+  for (const item of filtered) {
+    if (!byWork.has(item.work)) byWork.set(item.work, []);
+    byWork.get(item.work).push(item);
+  }
+  return {
+    query: String(state.annotationSearch || ""),
+    view: state.annotationView === "recent" ? "recent" : "works",
+    annotations: filtered.map(annotationWorkspaceItem),
+    groups: [...byWork.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([work, items]) => ({
+        work,
+        annotations: items.map(annotationWorkspaceItem),
+        records: new Set(items.map((item) => item.record?.record_id || item.index)).size,
+      })),
+    total: filtered.length,
+  };
 }
-function openWorkAnnotations(work){state.annotationSearch=String(work||"");state.annotationView="works";persistPrefs();navigateTo("annotations")}
-function inspectWorksMixedField(work,field){
-  const item=workIndex().get(String(work||""));
-  if(item)openMixedWorkValuesDialog(item.work,field,item.rows);
+function annotationWorkspaceItem(item) {
+  const annotation = item.annotation || {};
+  const canDeleteServer =
+    item.server &&
+    (state.userContext?.role === "admin" ||
+      Number(annotation.user_id || 0) === Number(state.userContext?.id || -1));
+  const canDeleteLocal = !item.server && canUse("editLocalRecords");
+  return {
+    id: String(
+      annotation.id || `${item.file?.id || "annotation"}-${item.index}-${item.annotationIndex}`,
+    ),
+    record_id: String(item.record?.record_id || tr("nav.record", "Record")),
+    work: item.work,
+    field: annotation.field
+      ? label(annotation.field)
+      : tr("annotations.record_note", "Record note"),
+    quote: String(annotation.quote || ""),
+    note: String(annotation.note || ""),
+    tags: Array.isArray(annotation.tags) ? annotation.tags.map(String) : [],
+    author: String(
+      annotation.initiated_by ||
+        annotation.author ||
+        tr("annotations.unknown_author", "Unknown author"),
+    ),
+    source: item.server
+      ? annotation.store || tr("annotations.shared", "Shared annotation")
+      : String(item.file?.name || ""),
+    created_at: annotation.created_at || null,
+    server: Boolean(item.server),
+    removable: Boolean(canDeleteServer || canDeleteLocal),
+    local_file_id: item.file?.id || null,
+    local_index: item.index == null ? null : Number(item.index),
+    local_annotation_index: item.annotationIndex == null ? null : Number(item.annotationIndex),
+    shared_annotation_id: annotation.shared_annotation_id || null,
+  };
 }
-function searchWorksInsight(field,value){
-  searchByMetadata(field,value,{contains:["persons","concepts","topics"].includes(field)});
+async function loadAnnotationsWorkspace(force = false) {
+  if (isResearcher() && !state.activeStore) {
+    try {
+      await refreshStores();
+      state.activeStore = recordStores()[0]?.name || "";
+    } catch (error) {
+      console.warn("Could not select an annotations store", error);
+    }
+  }
+  await refreshServerAnnotations(
+    force || (isResearcher() && state.serverAnnotationsStore !== String(state.activeStore || "")),
+  );
+  return getAnnotationsWorkspaceSnapshot();
 }
-function reviewFlaggedWork(work){
-  openTouchup(needsReviewItems(workIndex().get(String(work||""))?.rows||[]));
-}
-function autoImproveWork(work){
-  openTouchup(needsReviewItems(workIndex().get(String(work||""))?.rows||[]),"auto");
-}
-function removeEntireWork(work){
-  const item=workIndex().get(String(work||""));
-  if(item)return openRemoveWorkModal(item.work,item.rows);
-}
-function browseResearcherWork(work){
-  state.storeWork=String(work||state.workOverview||"");
-  state.storeBrowseMode="records";
-  state.storePage=1;
+function setAnnotationsWorkspaceQuery(value) {
+  state.annotationSearch = String(value || "");
   persistPrefs();
-  navigateTo("vector");
+  syncUrl({ replace: true });
+}
+function setAnnotationsWorkspaceView(value) {
+  state.annotationView = value === "recent" ? "recent" : "works";
+  persistPrefs();
+  syncUrl({ replace: true });
+}
+function openAnnotationsWorkspaceRecord(item) {
+  if (item.server) {
+    state.activeStore = String(item.source || state.activeStore || "");
+    state.researcherRecordId = String(item.record_id || "");
+    persistPrefs();
+    navigateTo("record");
+    return;
+  }
+  navigateTo("record", { fileId: item.local_file_id, index: item.local_index });
+}
+function openAnnotationsWorkspaceWork(work) {
+  state.workOverview = String(work || "");
+  persistPrefs();
+  navigateTo("works");
+}
+function openWorkAnnotations(work) {
+  state.annotationSearch = String(work || "");
+  state.annotationView = "works";
+  persistPrefs();
+  navigateTo("annotations");
+}
+async function removeAnnotationsWorkspaceItem(item) {
+  if (!item.removable) return;
+  if (item.server) {
+    await api(`/api/annotations/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+  } else {
+    const local = reviewItemFromKey(reviewKey(item.local_file_id, item.local_index));
+    const annotations = Array.isArray(local?.record?.annotations) ? local.record.annotations : [];
+    const annotationIndex = Number(item.local_annotation_index);
+    const annotation = Number.isInteger(annotationIndex) ? annotations[annotationIndex] : null;
+    if (!local || !annotation) return;
+    const sharedId = String(annotation.shared_annotation_id || "").trim();
+    if (sharedId) {
+      try {
+        await api(`/api/annotations/${encodeURIComponent(sharedId)}`, { method: "DELETE" });
+      } catch (error) {
+        if (Number(error?.status || 0) !== 404) throw error;
+      }
+    }
+    applyRecordChanges(
+      local.file,
+      local.index,
+      { annotations: annotations.filter((_, index) => index !== annotationIndex) },
+      { source: "annotation-delete" },
+    );
+    await persistFileNow(local.file);
+  }
+  state.annotationsFetchedAt = 0;
+  await refreshServerAnnotations(true);
+  notifyToast(tr("annotations.removed", "Annotation removed."), { tone: "success" });
 }
 
 export {
-  getNavItems,
   operationViewModel,
   operationDetailPairs,
   jobProgressText,
+  state,
+  viewConfig,
+  setUserContext,
+  setTranslationDictionary,
+  getShellSnapshot,
+  setShellRefreshHook,
+  setUrlSyncHook,
+  pauseRuntime,
+  viewPathMap,
+  pathViewMap,
+  bootstrapRuntime,
+  renderView,
+  navigateView,
+  toggleSidebar,
+  activateFile,
+  closeWorkspaceFile,
+  triggerImport,
+  triggerMerge,
+  triggerSubset,
+  triggerBulkEdit,
+  triggerOcrClean,
+  triggerReviewFlagged,
+  triggerAutoImproveFlagged,
+  openTouchup,
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
+  triggerUpsertQueue,
+  triggerOperations,
+  triggerExport,
+  triggerEdit,
+  triggerBack,
+  triggerForward,
+  getProviderProfilesForUi,
+  getProviderRequestConfigForUi,
+  getDefaultProviderProfileId,
+  getProviderStatusesForUi,
+  getProviderWarmupsForUi,
+  saveProviderProfilesForUi,
+  addProviderProfileForUi,
+  removeProviderProfileForUi,
+  setDefaultProviderProfileForUi,
+  testProviderProfileForUi,
+  warmProviderProfileForUi,
+  syncResearcherProviderProfiles,
+  notifyToast,
+  registerExternalJob,
+  dbUnavailableReason,
+  hasCorpusDb,
+  openDatabaseCreationFromResearch,
+  notifyVectorStoresChanged,
+  openCollectionCreationWizard,
+  upsertRows,
+  exportStoreJsonl,
+  persistPrefs,
+  lookupRecord,
+  getCompareLibrary,
+  getCompareRecord,
+  ensureCompareLibrary,
+  copyJsonToClipboard,
+  copyCitation,
+  flushWorkspacePrefs,
+  applyUiTheme,
+  applyAppearance,
+  downloadFullBackup,
+  restoreFullBackup,
+  clearAllUpdates,
+  deleteAllDerridaiBrowserState,
+  backupContainsCredentials,
+  pendingUpsertRows,
+  decorateDisabledControls,
+  getResearchWorkspaceSnapshot,
+  updateResearchConfig,
+  removeResearchEvidence,
+  clearResearchEvidence,
+  discoverResearchModels,
+  refreshResearchJobs,
+  getResearchJob,
+  cancelResearchJob,
+  deleteResearchJob,
+  startResearchRun,
+  gradeResearchJob,
+  prepareResearchRerun,
+  getResponseFaqPage,
+  gradeResponseFaqRecord,
+  rerunResponseFaqRecord,
+  getRecordWorkspaceSnapshot,
+  recordWorkspaceNavigate,
+  setRecordWorkspaceFind,
+  toggleCurrentRecordEvidence,
+  toggleCurrentRecordReviewSelection,
+  copyCurrentRecordCitation,
+  copyCurrentRecordJson,
+  saveCurrentRecordChanges,
+  addCurrentRecordAnnotation,
+  removeCurrentRecordAnnotation,
+  currentRecordPrimaryAction,
+  searchCurrentRecordMetadata,
+  navigateRecordWorkspace,
+  getWorksWorkspaceSnapshot,
+  setWorksSearch,
+  setWorksOverview,
+  setWorksStore,
+  syncWork,
+  syncAllWorks,
+  searchWork,
+  openWorkMetadataEditorForVue as openWorkMetadataEditor,
+  openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
+  loadAnnotationsWorkspace,
+  setAnnotationsWorkspaceQuery,
+  setAnnotationsWorkspaceView,
+  openAnnotationsWorkspaceRecord,
+  openAnnotationsWorkspaceWork,
+  removeAnnotationsWorkspaceItem,
+  openWorkAnnotations,
+
+  getNavItems,
   state,
   viewConfig,
   setUserContext,
@@ -8938,14 +9165,6 @@ export {
   searchWorkOverview,
   openWorkMetadataEditorForVue as openWorkMetadataEditor,
   openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
-  populateAllWorksMetadata,
-  openWorkAnnotations,
-  inspectWorksMixedField,
-  searchWorksInsight,
-  reviewFlaggedWork,
-  autoImproveWork,
-  removeEntireWork,
-  browseResearcherWork,
   openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,
