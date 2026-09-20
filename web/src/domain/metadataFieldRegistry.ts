@@ -1,3 +1,4 @@
+import { isPlaceholderValue } from './metadataValues';
 export type MetadataControl = 'enum'|'combobox'|'multi-combobox'|'boolean'|'number'|'text';
 export interface MetadataFieldSpec { control:MetadataControl; allowedValues?:string[]; suggestionFields?:string[]; allowCustom?:boolean }
 
@@ -53,8 +54,8 @@ export function metadataSuggestions(record:Record<string,unknown>, fields:string
   const out=new Set<string>();
   for(const field of fields){
     const value=record[field];
-    if(typeof value==='string'&&value.trim()) out.add(value.trim());
-    if(Array.isArray(value)) for(const item of value) if(typeof item==='string'&&item.trim()) out.add(item.trim());
+    if(typeof value==='string'&&!isPlaceholderValue(value)) out.add(value.trim());
+    if(Array.isArray(value)) for(const item of value) if(typeof item==='string'&&!isPlaceholderValue(item)) out.add(item.trim());
   }
   return [...out].sort((a,b)=>a.localeCompare(b));
 }

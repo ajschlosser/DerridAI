@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isPlaceholderValue } from "../domain/metadataValues";
 import { computed } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
@@ -27,7 +28,7 @@ const llmSuggestions=computed(()=>{const out:Record<string,unknown>={};for(const
 const llmSuggestionCount=computed(()=>Object.keys(llmSuggestions.value).length);
 function status(field:string){return (props.record.metadata_field_status?.[field]||{}) as Record<string,unknown>}
 function spec(field:string){return metadataFieldSpec(field,props.regionTypes,props.discourseRoles)}
-function options(field:string){const item=spec(field);if(item.allowedValues)return item.allowedValues;const out=new Set(metadataSuggestions(props.record as Record<string,unknown>,item.suggestionFields||[]));for(const source of item.suggestionFields||[field])for(const value of props.knownValues?.[source]||[])if(value.trim())out.add(value.trim());return [...out].sort((a,b)=>a.localeCompare(b))}
+function options(field:string){const item=spec(field);if(item.allowedValues)return item.allowedValues;const out=new Set(metadataSuggestions(props.record as Record<string,unknown>,item.suggestionFields||[]));for(const source of item.suggestionFields||[field])for(const value of props.knownValues?.[source]||[])if(!isPlaceholderValue(value))out.add(value.trim());return [...out].sort((a,b)=>a.localeCompare(b))}
 function constraint(field:string){const item=constraints.value.find(row=>row.field===field);return item?{value:item.value,reason:i18n.t(item.reasonKey,item.reasonKey)}:null}
 
 function calibrated(field:string){

@@ -20,6 +20,9 @@ const props = withDefaults(
 const emit = defineEmits<{ select: [id: string] }>();
 
 const open = ref(false);
+// Where the list actually opens. It starts where the placement says and flips if that would leave the window.
+const alignEnd = ref(false);
+const flipped = ref(false);
 const root = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
@@ -33,6 +36,20 @@ function focusItem(index: number) {
   const buttons = itemButtons();
   if (buttons.length) buttons[(index + buttons.length) % buttons.length].focus();
 }
+function keepInWindow() {
+  const list = menu.value;
+  if (!list) return;
+  const margin = 8;
+  let box = list.getBoundingClientRect();
+  if (box.right > window.innerWidth - margin) {
+    alignEnd.value = true;
+    box = list.getBoundingClientRect();
+  }
+  // In a right-to-left layout, or on a narrow window, the end-aligned list can itself run off the start edge.
+  if (box.left < margin) alignEnd.value = false;
+  const vertical = list.getBoundingClientRect();
+  if (vertical.bottom > window.innerHeight - margin || vertical.top < margin) flipped.value = true;
+}
 function outside(event: Event) {
   if (root.value && !root.value.contains(event.target as Node)) close(false);
 }
@@ -40,7 +57,10 @@ async function show(at: "first" | "last") {
   if (props.disabled) return;
   open.value = true;
   document.addEventListener("pointerdown", outside, true);
+  alignEnd.value = false;
+  flipped.value = false;
   await nextTick();
+  keepInWindow();
   focusItem(at === "first" ? 0 : -1);
 }
 function close(returnFocus: boolean) {
@@ -83,7 +103,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 </script>
 
 <template>
-  <div ref="root" class="action-menu" :data-placement="placement">
+  <div ref="root" class="action-menu" :data-placement="flipped ? (placement === 'top' ? 'bottom' : 'top') : placement" :data-align="alignEnd ? 'end' : 'start'">
     <button
       ref="trigger"
       type="button"
@@ -145,7 +165,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   z-index: 30;
   inset-inline-start: 0;
   min-inline-size: 16rem;
-  max-inline-size: min(22rem, 86vw);
+  max-inline-size: min(22rem, calc(100vw - 16px));
   margin: 0;
   padding: 6px;
   list-style: none;
@@ -153,6 +173,10 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   border-radius: 12px;
   background: var(--surface-overlay, var(--card));
   box-shadow: var(--elev-3, 0 12px 32px rgba(0, 0, 0, 0.2));
+}
+.action-menu[data-align="end"] .action-menu-list {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
 }
 .action-menu[data-placement="top"] .action-menu-list {
   inset-block-end: calc(100% + 6px);

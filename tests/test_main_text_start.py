@@ -68,3 +68,33 @@ def test_extraction_records_the_outline_and_inference(tmp_path):
     result = extract_source_document(pdf.tobytes(), filename="b.pdf")
     assert result["outline"] == [{"page": 3, "title": "Chapter One"}]
     assert result["main_text_start_inference"]["page"] == 3
+
+
+def test_numbered_first_chapter_headings_count():
+    b, p = doc([["Title"], ["Contents", "1 Beginnings .... 3"], ["1. Beginnings", "It starts here and goes on."]])
+    assert infer(b, p, [])["page"] == 3
+    b, p = doc([["Title"], ["I think this matters."], ["I. The Question", "Words follow."]])
+    result = infer(b, p, [])
+    assert result["page"] == 3 and len(result["clues"]) == 1  # "I think" is not a heading
+
+
+def test_bookmarks_after_the_front_matter_agree_with_a_numbering_restart():
+    b, p = doc([["Title"], ["Words"], ["Words"], ["Words"], ["Words"], ["Words"]], {2: "i", 3: "ii", 4: "1"})
+    outline = [(2, "Contents"), (3, "Preface"), (3, "Introduction"), (4, "The Argument")]
+    result = infer(b, p, outline)
+    kinds = {c["kind"] for c in result["clues"]}
+    assert result["page"] == 4 and {"outline_after_front_matter", "page_numbering_restarts"} <= kinds
+
+
+def test_an_older_asset_gets_the_inference_when_first_read(tmp_path):
+    import json
+    from app import corpus_builder as cb
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    blocks = [{"block_id": f"b{i}", "page": p, "text": t, "type": "body"} for i, (p, t) in enumerate([(1, "Title"), (2, "Preface"), (3, "Chapter One"), (3, "The argument begins here.")])]
+    (repo.root / "assets" / "pdf-old.blocks.jsonl").write_text("\n".join(json.dumps(b) for b in blocks))
+    meta = {"asset_id": "pdf-old", "filename": "o.pdf", "pages": [{"pdf_page": n, "printed_page_label": None} for n in (1, 2, 3)]}
+    (repo.root / "assets" / "pdf-old.json").write_text(json.dumps(meta))
+    first = repo.get_asset("pdf-old")
+    assert first["main_text_start_inference"]["page"] == 3
+    assert "main_text_start_inference" in json.loads((repo.root / "assets" / "pdf-old.json").read_text())  # kept
