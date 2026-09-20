@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
-from .enrichment_cycles import HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_review, resolve_conflict
+from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_review, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -5184,6 +5184,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
     def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         automation_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") in {"enriching", "metadata_retry"}
+        # A re-run pass overlaps review too. Its records already finished their first
+        # enrichment, so it only needs the running state preserved (below), not the
+        # per-record "still enriching" handling that automation_running drives.
+        pass_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") == "metadata_enrichment_rerun"
         for record in records:
             if not record.get("review_disposition"):
                 record["review_disposition"] = "accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"
@@ -5342,7 +5346,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # but a review mutation must never make the build look as though the
         # background enrichment job has stopped. Preserve the running stage until
         # the coordinator itself performs the final handoff to review.
-        if automation_running:
+        if automation_running or pass_running:
             build["status"] = "running"
             build["stage"] = str(build.get("stage") or "enriching")
             build["progress"] = max(float(build.get("progress") or 0.42), 0.42)
@@ -6479,7 +6483,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         live_evidence[field] = cand_evidence[field]
                     added.append(field)
                     continue
-                if new == old:
+                if field in CONFIDENCE_FIELDS:
+                    continue
+                if same_value(old, new):
                     if field in cand_evidence:
                         live_evidence[field] = cand_evidence[field]
                     continue
