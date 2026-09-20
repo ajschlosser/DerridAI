@@ -32,6 +32,10 @@ import {
 } from "./legacyCompat.js";
 import { FIELD_LABELS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
+import { fullHttpErrorDetail } from "../domain/httpErrors";
+import { parsePastedRecord } from "../domain/pastedRecord";
+import { providerRequestConfig } from "../domain/providerRequest";
+import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
@@ -730,54 +734,6 @@ function formatTimestamp(value){
   if(!value)return "";
   const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
-}
-function recordHistoryVersions(record){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const cleanSnapshot=value=>{
-    const copy=cloneAuditValue(value)||{};
-    if(copy&&typeof copy==="object")delete copy.updates;
-    return copy;
-  };
-  const baseline=cleanSnapshot(record);
-  for(let index=updates.length-1;index>=0;index--){
-    const update=updates[index]||{};
-    if(!update.field_name)continue;
-    baseline[update.field_name]=cloneAuditValue(update.old_value);
-  }
-  const versions=[{
-    index:0,
-    label:"Original",
-    timestamp:null,
-    source:"original",
-    changes:[],
-    record:cleanSnapshot(baseline),
-  }];
-  const groups=[];
-  for(let index=0;index<updates.length;index++){
-    const update=updates[index]||{};
-    const key=update.batch_id||update.timestamp||`change-${index}`;
-    const previous=groups.at(-1);
-    if(previous?.key===key)previous.items.push(update);
-    else groups.push({key,items:[update]});
-  }
-  let snapshot=cleanSnapshot(baseline);
-  for(const group of groups){
-    snapshot=cleanSnapshot(snapshot);
-    for(const update of group.items){
-      if(update?.field_name)snapshot[update.field_name]=cloneAuditValue(update.new_value);
-    }
-    const last=group.items.at(-1)||{};
-    versions.push({
-      index:versions.length,
-      label:`Version ${versions.length}`,
-      timestamp:last.timestamp||null,
-      source:last.source||"manual",
-      model:last.model||null,
-      changes:group.items,
-      record:cleanSnapshot(snapshot),
-    });
-  }
-  return versions;
 }
 function historyVersionChanges(previous,current){
   const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
@@ -1615,38 +1571,6 @@ async function ensureStores(){
   }catch(error){
     console.warn("Could not refresh Chroma collections",error);
   }
-}
-function upsertAuditDelta(record,receipt,presence){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const updatesCount=updates.length;
-  if(receipt&&receipt.updates_count!==null&&receipt.updates_count!==undefined&&Number.isInteger(Number(receipt.updates_count))){
-    const previousCount=Math.max(0,Number(receipt.updates_count));
-    if(updatesCount<previousCount){
-      return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-    }
-    if(updatesCount>previousCount){
-      return {audit_entries:updates.slice(previousCount).map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-    return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
-  }
-  // Upgrade path for receipts created before 0.30.11: use the receipt timestamp
-  // to send only audit entries created after the last successful sync.
-  if(receipt?.timestamp){
-    const syncedAt=Date.parse(receipt.timestamp);
-    if(Number.isFinite(syncedAt)){
-      const delta=updates.filter(entry=>{
-        const timestamp=Date.parse(entry?.timestamp||"");
-        return Number.isFinite(timestamp)&&timestamp>syncedAt;
-      });
-      return {audit_entries:delta.map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-  }
-  // A genuinely new Chroma row needs its existing local history initialized
-  // once. Existing rows with no receipt preserve their server-side history.
-  if(presence===false&&updatesCount){
-    return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-  }
-  return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
 }
 
 async function buildUpsertItems(rows,store,{yieldEvery=0}={}){
@@ -7406,32 +7330,6 @@ async function ensureCompareLibrary(){
   }
   return getCompareLibrary();
 }
-function parsePastedRecord(value){
-  let text=String(value||"").trim();
-  if(!text)return null;
-  text=text.replace(/^```(?:json|jsonl)?\s*/i,"").replace(/\s*```$/,"").trim();
-  try{
-    const parsed=JSON.parse(text);
-    if(Array.isArray(parsed)){
-      if(parsed.length!==1||!parsed[0]||typeof parsed[0]!=="object"||Array.isArray(parsed[0])){
-        throw new Error("Paste exactly one JSON record, not an array of multiple records.");
-      }
-      return parsed[0];
-    }
-    if(!parsed||typeof parsed!=="object")throw new Error("Pasted value is not a JSON object.");
-    return parsed;
-  }catch(error){
-    const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-    const parsedLines=[];
-    for(const line of lines){
-      try{parsedLines.push(JSON.parse(line))}catch{throw error}
-    }
-    if(parsedLines.length!==1||!parsedLines[0]||typeof parsedLines[0]!=="object"||Array.isArray(parsedLines[0])){
-      throw new Error("Paste exactly one JSON/JSONL record on each side.");
-    }
-    return parsedLines[0];
-  }
-}
 function compareRecordTable(a,b,{titleA="Record A",titleB="Record B",rowKeyA="",rowKeyB=""}={}){
   if(!a||!b)return '<div class="empty mini"><p>Select or paste two records to compare them.</p></div>';
   const keys=[...new Set([...Object.keys(a),...Object.keys(b)])].filter(key=>key!=="updates").sort((x,y)=>{
@@ -7555,29 +7453,6 @@ function renderCompare(main){
 }
 
 const HTTP_ERROR_STORAGE_KEY="derridai.httpErrors.v1";
-function fullHttpErrorDetail(payload,text,statusText=""){
-  const detail=payload?.detail;
-  if(typeof detail==="string"&&detail.trim())return detail.trim();
-  if(Array.isArray(detail)){
-    const value=detail.map(item=>{
-      if(item&&typeof item==="object"){
-        const location=Array.isArray(item.loc)?item.loc.join("."):"";
-        const message=item.msg||item.message||JSON.stringify(item);
-        return location?`${location}: ${message}`:String(message);
-      }
-      return String(item);
-    }).filter(Boolean).join("; ");
-    if(value)return value;
-  }
-  if(detail&&typeof detail==="object"){
-    const message=detail.message||detail.error||detail.detail;
-    if(message)return String(message);
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    try{return JSON.stringify(detail)}catch{}
-  }
-  if(text&&String(text).trim())return String(text).trim();
-  return String(statusText||"Request failed");
-}
 function storeHttpError(entry){
   try{
     const current=JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY)||"[]");
@@ -7900,42 +7775,6 @@ function defaultProviderProfile(){
 function providerDisplayName(profile){
   if(!profile)return "LLM provider";
   return profile.name||`${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${profile.model||"model"}`;
-}
-function providerRequestConfig(profile,{textReview=false}={}){
-  if(!profile)return null;
-  let extra={};
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{extra=JSON.parse(profile.extra_options||"{}")}catch{}
-  if(!extra||Array.isArray(extra)||typeof extra!=="object")extra={};
-  let think=null;
-  if(profile.type==="ollama"){
-    const raw=String(profile.think??"false");
-    think=raw==="true"?true:["low","medium","high"].includes(raw)?raw:false;
-  }
-  return {
-    provider_profile_id:profile.id,
-    max_concurrent_requests:Math.max(1,Math.min(64,Number(profile.max_concurrent_requests??(profile.type==="ollama"?1:32))||1)),
-    provider:profile.type,
-    model:profile.type==="openai"&&profile.model_mode==="auto"?"auto":(profile.model||""),
-    base_url:profile.base_url||null,
-    api_key:profile.type==="openai"?(profile.api_key||""):null,
-    ollama:{
-      num_ctx:profile.type==="ollama"&&profile.num_ctx!==""?Number(profile.num_ctx):null,
-      num_predict:Number(textReview?(profile.num_predict??4096):(profile.metadata_num_predict??profile.num_predict??768)),
-      think,
-      temperature:profile.temperature===""?null:Number(profile.temperature??0),
-      top_k:profile.type==="ollama"&&profile.top_k!==""?Number(profile.top_k):null,
-      top_p:profile.top_p===""?null:Number(profile.top_p??1),
-      min_p:profile.type==="ollama"&&profile.min_p!==""?Number(profile.min_p):null,
-      repeat_penalty:profile.type==="ollama"&&profile.repeat_penalty!==""?Number(profile.repeat_penalty):null,
-      seed:profile.seed===""?null:Number(profile.seed),
-      mirostat:profile.type==="ollama"&&profile.mirostat!==""?Number(profile.mirostat):null,
-      mirostat_eta:profile.type==="ollama"&&profile.mirostat_eta!==""?Number(profile.mirostat_eta):null,
-      mirostat_tau:profile.type==="ollama"&&profile.mirostat_tau!==""?Number(profile.mirostat_tau):null,
-      keep_alive:profile.type==="ollama"?(profile.keep_alive||null):null,
-      extra_options:extra,
-    },
-  };
 }
 async function refreshProviderStatuses(){
   const statuses={};
