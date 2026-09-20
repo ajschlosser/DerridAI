@@ -27,7 +27,7 @@ Backend tests need no environment setup: `tests/conftest.py` points storage at a
 | Frontend unit | `cd web && npm run test:unit` (Vitest) |
 | Production build | `cd web && npm run build` |
 | Storybook build | `cd web && npm run build-storybook` |
-| Composed UI, opacity, WCAG 2.0 AA | `cd web && npx playwright install chromium && npm run test:e2e` (Playwright + axe) |
+| Composed UI, opacity, WCAG 2.2 AA (light and dark) | `cd web && npx playwright install chromium && npm run test:e2e` (Playwright + axe) |
 
 `cd web && npm run test:frontend` chains typecheck, unit, build, Storybook build, and e2e. If port 6006 is busy, use a Playwright config that points at another Storybook port; do not weaken a gate to get past a local problem.
 

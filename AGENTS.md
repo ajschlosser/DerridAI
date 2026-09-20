@@ -15,7 +15,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
 - `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
-- `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics), `.github/workflows/frontend.yml` (CI).
+- `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics, and `migrate-css-tokens.py` for moving styles onto design tokens), `.github/workflows/frontend.yml` (CI).
 
 ## Commands
 
@@ -45,7 +45,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 
 - Every source file carries `Copyright 2026 Aaron John Schlosser, PhD.` (comment header). New files should too.
 - **Internationalization:** English (`en-US`) and French (`fr-CA`) are first-class. Any new user-facing string must be added to both `api/app/locales` / frontend locale modules with identical key sets and placeholders; parity is regression-tested. No hard-coded UI strings.
-- **Accessibility:** keyboard operability, visible focus, semantic status communication, a 12px minimum type size, and WCAG 2.0 AA. Add or update Storybook stories for new components; the a11y addon and axe tests are gates.
+- **Accessibility:** keyboard operability, visible focus, semantic status communication, a 12px minimum type size, and WCAG 2.2 AA in light and dark. Colours, type sizes and status styles come from tokens (`web/src/styles/tokens.css`, see `docs/DESIGN_TOKENS.md`); do not add literal hex colours to component styles, which a Vitest ratchet enforces. Add or update Storybook stories for new components; the a11y addon and axe tests are gates.
 - **Surfaces:** floating panels use the solid/raised/overlay/glass surface tokens; overlays must be opaque and glass at least 90% opaque. No text may bleed through popovers.
 - **Scholarly provenance is the core requirement.** The chain is source → passage → speaker → position holder → stance → proposition → exact evidence → citation → claim. Preserve it.
   - Never flatten `speaker`, `quoted_speaker`, and `position_holder` into "Derrida says". A passage Derrida wrote often states another philosopher's position, and editors' or translators' text is not Derrida's.

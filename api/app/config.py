@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_VERSION = "0.62.5"
+APP_VERSION = "0.62.6"
 
 
 _GIT_COMMIT_FILE = Path("/app/git-commit")

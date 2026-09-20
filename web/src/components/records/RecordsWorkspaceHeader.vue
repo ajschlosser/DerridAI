@@ -35,7 +35,7 @@ const i18n = useI18nStore();
 </template>
 <style scoped>
 .records-hero{display:grid;gap:16px}
-.records-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2,var(--accent))}
+.records-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color: var(--accent-fg)}
 h1{margin:4px 0 0;font:600 1.75rem/1.2 Georgia,"Times New Roman",serif;color:var(--text)}
 p{margin:8px 0 0;max-width:70ch;color:var(--muted);font-size:.875rem;line-height:1.5}
 .records-hero-actions{display:flex;flex-wrap:wrap;gap:8px}

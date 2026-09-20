@@ -480,7 +480,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 .ops-chip[aria-pressed="true"] {
   background: var(--ops-accent);
   border-color: var(--ops-accent);
-  color: #fff;
+  color: var(--accent-on);
 }
 .ops-chip-count {
   display: inline-grid;
@@ -495,7 +495,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   font-variant-numeric: tabular-nums;
 }
 .ops-chip[aria-pressed="true"] .ops-chip-count {
-  background: #fff;
+  background: var(--accent-on);
   color: var(--ops-accent);
 }
 .ops-chip.is-attention:not([aria-pressed="true"]) .ops-chip-count {
@@ -539,7 +539,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 .ops-btn.is-primary {
   background: var(--ops-accent);
   border-color: var(--ops-accent);
-  color: #fff;
+  color: var(--accent-on);
 }
 .ops-btn.is-primary:hover:not(:disabled) {
   filter: brightness(0.94);
@@ -787,7 +787,7 @@ svg.ops-status-icon {
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: #dfe6ee;
+  background: var(--soft);
   overflow: hidden;
 }
 .ops-progress-fill {
