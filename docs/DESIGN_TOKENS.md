@@ -50,3 +50,14 @@ npm run test:e2e -- tests/e2e/corpus-builder-theme-sweep.spec.ts   # every Corpu
 ```
 
 `design-tokens.test.ts` reads the CSS itself, so changing a token value that breaks contrast fails there before it ships. The sweep runs axe over every Corpus Builder story in both colour schemes. Axe cannot judge text over a gradient or image, so also look at a changed screen in dark mode.
+
+## Migrating old styles
+
+`scripts/migrate-css-tokens.py` rewrites literal colours and `px` font sizes in CSS and Vue styles to these tokens. It reads each declaration with its selector, so a tint inside a `.risk`, `.warn`, `.error` or `.ok` rule becomes that tone, near-black text stays neutral text, and pale outlines stay hairlines. It is a dry run unless you pass `--apply`:
+
+```bash
+python3 scripts/migrate-css-tokens.py web/src/components/Foo.vue          # show what would change
+python3 scripts/migrate-css-tokens.py --apply web/src/components/Foo.vue  # write it
+```
+
+It is a heuristic: it does not touch `rgba()`, `hsl()`, opacity, shadows, dark or saturated fills, or the fallback inside a `var()`, and it reports what it left. Review the diff, then check the result in dark as well as light. `tests/test_migrate_css_tokens.py` pins the mappings that earlier versions got wrong.

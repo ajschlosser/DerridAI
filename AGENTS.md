@@ -15,7 +15,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
 - `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
-- `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics), `.github/workflows/frontend.yml` (CI).
+- `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics, and `migrate-css-tokens.py` for moving styles onto design tokens), `.github/workflows/frontend.yml` (CI).
 
 ## Commands
 
