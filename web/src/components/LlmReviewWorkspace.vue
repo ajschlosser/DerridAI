@@ -10,13 +10,23 @@ type JsonRecord = Record<string, unknown>;
 type TouchupProfile = { id: string; name?: string; model?: string; [key: string]: unknown };
 type TouchupProposal = { changes?: Record<string, unknown>; rationale?: Record<string, string>; [key: string]: unknown };
 type TouchupStatus = { available?: boolean; configured_model?: string; [key: string]: unknown };
+type TouchupConfig = { model?: string; [key: string]: unknown };
 type TouchupItem = { file: { name?: string; records: JsonRecord[] }; index: number; record: JsonRecord; key: string };
 type TouchupResult = { item: TouchupItem; proposal: TouchupProposal | null; error?: unknown };
 type WorkspaceInfo = { items: TouchupItem[]; initialMode: string; availableFields: string[]; attributionPreset: string[]; semanticPreset: string[]; defaultSelection: string[]; groups: { name: string; fields: string[] }[]; highRiskFields: string[]; fieldLabels: Record<string, string>; profiles: TouchupProfile[]; providerProfileId: string; defaultMode: string };
+const EMPTY_PROPOSAL: TouchupProposal = { changes: {}, rationale: {} };
+const touchupRuntime = runtime as unknown as {
+  touchupWorkspaceInfo(items: TouchupItem[], initialMode: string): WorkspaceInfo;
+  touchupProviderStatus(profileId: string): Promise<TouchupStatus>;
+  touchupRequestConfig(profileId: string, model: string, fields: string[]): TouchupConfig | null;
+  touchupRequest(item: TouchupItem, fields: string[], config: TouchupConfig, instructions: string): Promise<TouchupProposal>;
+  touchupSubmitBackground(items: TouchupItem[], config: TouchupConfig, fields: string[], instructions: string, mode: string): Promise<unknown>;
+  touchupApplyResults(items: TouchupItem[], results: Record<string, TouchupResult>, approvals: Record<string, string[]>, all?: boolean, reviewOnly?: boolean): unknown;
+};
 
 const i18n = useI18nStore();
 const open = ref(false);
-const info = ref<WorkspaceInfo | null>(null);
+const info = ref<WorkspaceInfo>({ items: [], initialMode: "foreground", availableFields: [], attributionPreset: [], semanticPreset: [], defaultSelection: [], groups: [], highRiskFields: [], fieldLabels: {}, profiles: [], providerProfileId: "", defaultMode: "foreground" });
 const mode = ref<"foreground" | "background" | "auto">("foreground");
 const profileId = ref("");
 const model = ref("");
@@ -44,7 +54,7 @@ const statusLabel = computed(() => {
 });
 
 function reset(next: { items: TouchupItem[]; initialMode: string }) {
-  info.value = runtime.touchupWorkspaceInfo(next.items, next.initialMode) as WorkspaceInfo;
+  info.value = touchupRuntime.touchupWorkspaceInfo(next.items, next.initialMode);
   mode.value = next.initialMode === "auto" ? "auto" : (info.value.defaultMode as typeof mode.value);
   profileId.value = info.value.providerProfileId;
   selection.value = [...info.value.defaultSelection];
@@ -68,7 +78,7 @@ function onOpen(event: Event) {
 function close() { stopped.value = true; open.value = false; }
 async function refreshStatus() {
   if (!profileId.value) return;
-  status.value = await runtime.touchupProviderStatus(profileId.value);
+  status.value = await touchupRuntime.touchupProviderStatus(profileId.value);
   if (!model.value) model.value = String(status.value?.configured_model || profile.value?.model || "");
 }
 function setMode(value: string) { mode.value = value as typeof mode.value; if (mode.value !== "auto") runtime.state.appConfig.default_llm_run_mode = mode.value; runtime.persistPrefs(); }
@@ -84,7 +94,9 @@ function choosePreset(preset: string) {
 function isExpanded(key: string) { return expanded.value.includes(key); }
 function toggleExpanded(key: string) { expanded.value = isExpanded(key) ? expanded.value.filter(item => item !== key) : [...expanded.value, key]; }
 function pretty(value: unknown) { if (typeof value === "string") return value; try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
+function displayValue(value: unknown) { return value == null || value === "" ? "—" : String(value); }
 function fieldsFor(result: TouchupResult) { return Object.keys(result.proposal?.changes || {}); }
+function proposalFor(key: string) { return results.value[key]?.proposal || EMPTY_PROPOSAL; }
 function checked(item: TouchupItem, field: string) { return (approvals.value[item.key] || []).includes(field); }
 function setChecked(item: TouchupItem, field: string, value: boolean) {
   const fields = new Set(approvals.value[item.key] || []);
@@ -94,12 +106,12 @@ function setChecked(item: TouchupItem, field: string, value: boolean) {
 async function run() {
   if (running.value || !canRun.value) return;
   if (selection.value.includes("text") && selection.value.length > 1) { error.value = i18n.t("llm.text_review_separate", "Text review must run separately from metadata."); return; }
-  const config = runtime.touchupRequestConfig(profileId.value, model.value.trim(), selection.value);
+  const config = touchupRuntime.touchupRequestConfig(profileId.value, model.value.trim(), selection.value);
   if (!config?.model) { error.value = i18n.t("llm.model_required", "No model selected."); return; }
   error.value = "";
   if (mode.value !== "foreground") {
     running.value = true;
-    try { await runtime.touchupSubmitBackground(items.value, config, selection.value, instructions.value, mode.value); close(); }
+    try { await touchupRuntime.touchupSubmitBackground(items.value, config, selection.value, instructions.value, mode.value); close(); }
     catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); running.value = false; }
     return;
   }
@@ -112,7 +124,7 @@ async function run() {
     activeIndex.value = index;
     const item = items.value[index];
     try {
-      const proposal = await runtime.touchupRequest(item, selection.value, config, instructions.value);
+      const proposal = await touchupRuntime.touchupRequest(item, selection.value, config, instructions.value);
       results.value[item.key] = { item, proposal };
       approvals.value[item.key] = Object.keys(proposal.changes || {}).filter(field => field !== "text");
     } catch (exc) {
@@ -128,7 +140,7 @@ function reviewAgain() { results.value = {}; approvals.value = {}; stopped.value
 function selectAllChanges() { for (const result of Object.values(results.value)) if (result.proposal) approvals.value[result.item.key] = fieldsFor(result); }
 function clearChanges() { for (const result of Object.values(results.value)) approvals.value[result.item.key] = []; }
 function apply(all = false, reviewOnly = false) {
-  runtime.touchupApplyResults(items.value, results.value, approvals.value, all, reviewOnly);
+  touchupRuntime.touchupApplyResults(items.value, results.value, approvals.value, all, reviewOnly);
   close();
 }
 onMounted(() => window.addEventListener("derridai:open-touchup", onOpen));
@@ -137,7 +149,7 @@ watch(profileId, () => { if (open.value && !status.value) void refreshStatus(); 
 </script>
 
 <template>
-  <UiDialog v-if="info" :open="open" size="xlarge" :title="title" :description="i18n.tf('llm.review_workspace_summary','{count} record(s) · review proposals before applying changes.',{count:items.length})" :close-label="i18n.t('ui.close','Close')" @close="close">
+  <UiDialog :open="open" size="xlarge" :title="title" :description="i18n.tf('llm.review_workspace_summary','{count} record(s) · review proposals before applying changes.',{count:items.length})" :close-label="i18n.t('ui.close','Close')" @close="close">
     <div class="workspace-grid">
       <aside class="workspace-config">
         <section class="workspace-section">
@@ -171,11 +183,11 @@ watch(profileId, () => { if (open.value && !status.value) void refreshStatus(); 
         <template v-else>
           <header class="queue-header"><div><b>{{ running ? i18n.t('llm.review_in_progress','Review in progress') : mode === 'auto' ? i18n.t('llm.auto_results','Auto-improve results') : i18n.t('llm.review_queue','Review queue') }}</b><span>{{ Object.keys(results).length }} / {{ items.length }} · {{ proposedCount }} {{ i18n.t('llm.proposed_changes','proposed changes') }}</span></div><div class="queue-tools"><UiButton size="small" :label="i18n.t('llm.expand_all','Expand all')" @click="expanded = items.map(item => item.key)"/><UiButton size="small" :label="i18n.t('llm.collapse_all','Collapse all')" @click="expanded = []"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_all_changes','Select all changes')" @click="selectAllChanges"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_none','Select none')" @click="clearChanges"/></div></header>
           <section v-for="(item, index) in items" :key="item.key" class="queue-card" :class="{active: running && activeIndex === index, error: results[item.key]?.error}">
-            <button type="button" class="queue-summary" @click="toggleExpanded(item.key)"><span class="queue-index">{{ index + 1 }}</span><span><b>{{ item.record.record_id || `Record ${index + 1}` }}</b><small>{{ item.record.work || item.file.name }} · {{ item.record.page_start || '?' }}</small></span><span class="queue-status">{{ results[item.key]?.error ? i18n.t('llm.failed','Failed') : results[item.key] ? `${Object.keys(results[item.key].proposal?.changes || {}).length} ${i18n.t('llm.changes','changes')}` : running && activeIndex === index ? i18n.t('llm.reviewing','Reviewing') : i18n.t('llm.queued','Queued') }}</span><span aria-hidden="true">{{ isExpanded(item.key) ? '▾' : '▸' }}</span></button>
+            <button type="button" class="queue-summary" @click="toggleExpanded(item.key)"><span class="queue-index">{{ index + 1 }}</span><span><b>{{ displayValue(item.record.record_id) || `Record ${index + 1}` }}</b><small>{{ displayValue(item.record.work) || item.file.name }} · {{ displayValue(item.record.page_start) || '?' }}</small></span><span class="queue-status">{{ results[item.key]?.error ? i18n.t('llm.failed','Failed') : results[item.key] ? `${Object.keys(proposalFor(item.key).changes || {}).length} ${i18n.t('llm.changes','changes')}` : running && activeIndex === index ? i18n.t('llm.reviewing','Reviewing') : i18n.t('llm.queued','Queued') }}</span><span aria-hidden="true">{{ isExpanded(item.key) ? '▾' : '▸' }}</span></button>
             <div v-if="isExpanded(item.key)" class="queue-body">
               <div v-if="!results[item.key]" class="empty-result">{{ running && activeIndex === index ? i18n.t('llm.waiting_model','Waiting for model…') : i18n.t('llm.waiting_queue','Waiting in queue.') }}</div>
               <div v-else-if="results[item.key].error" class="llm-error" role="alert">{{ results[item.key].error instanceof Error ? results[item.key].error.message : String(results[item.key].error) }}</div>
-              <template v-else><div class="record-actions"><UiButton size="small" :label="i18n.t('llm.select_record_changes','Select record changes')" @click="approvals[item.key] = fieldsFor(results[item.key])"/><UiButton size="small" :label="i18n.t('llm.clear_record','Clear record')" @click="approvals[item.key] = []"/></div><article v-for="field in fieldsFor(results[item.key])" :key="field" class="proposal"><header><label><input type="checkbox" :checked="checked(item, field)" @change="setChecked(item, field, ($event.target as HTMLInputElement).checked)"> {{ info.fieldLabels[field] || field }}</label><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify','verify carefully') }}</small></header><div class="proposal-grid"><div><b>{{ i18n.t('llm.current','Current') }}</b><pre>{{ pretty(item.record[field]) }}</pre></div><div><b>{{ i18n.t('llm.proposed','Proposed') }}</b><pre>{{ pretty(results[item.key].proposal.changes[field]) }}</pre></div></div><p>{{ results[item.key].proposal.rationale?.[field] || i18n.t('llm.no_rationale','No rationale supplied.') }}</p></article></template>
+              <template v-else><div class="record-actions"><UiButton size="small" :label="i18n.t('llm.select_record_changes','Select record changes')" @click="approvals[item.key] = fieldsFor(results[item.key])"/><UiButton size="small" :label="i18n.t('llm.clear_record','Clear record')" @click="approvals[item.key] = []"/></div><article v-for="field in fieldsFor(results[item.key])" :key="field" class="proposal"><header><label><input type="checkbox" :checked="checked(item, field)" @change="setChecked(item, field, ($event.target as HTMLInputElement).checked)"> {{ info.fieldLabels[field] || field }}</label><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify','verify carefully') }}</small></header><div class="proposal-grid"><div><b>{{ i18n.t('llm.current','Current') }}</b><pre>{{ pretty(item.record[field]) }}</pre></div><div><b>{{ i18n.t('llm.proposed','Proposed') }}</b><pre>{{ pretty(proposalFor(item.key).changes?.[field]) }}</pre></div></div><p>{{ proposalFor(item.key).rationale?.[field] || i18n.t('llm.no_rationale','No rationale supplied.') }}</p></article></template>
             </div>
           </section>
         </template>
