@@ -4,6 +4,7 @@ export interface PdfAsset {
   asset_id: string;
   sha256: string;
   filename: string;
+  main_text_start_inference?: { page: number | null; confidence: number; clues: { kind: string; detail: string }[]; offered: boolean };
   created_at: string;
   page_count: number;
   block_count: number;

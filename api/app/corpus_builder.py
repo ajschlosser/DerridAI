@@ -923,6 +923,25 @@ class PdfCorpusRepository:
         meta = _json_read(self.asset_meta_path(asset_id))
         if not isinstance(meta, dict):
             raise KeyError(asset_id)
+        return self._with_start_inference(meta)
+
+    def _with_start_inference(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Assets extracted before the inference existed get it the first time they are read, and keep it."""
+        if "main_text_start_inference" in meta or not meta.get("asset_id"):
+            return meta
+        asset_id = str(meta["asset_id"])
+        try:
+            outline: list[tuple[int, str]] = []
+            pdf_path = self.asset_pdf_path(asset_id)
+            if pdf_path.exists():
+                with fitz.open(pdf_path) as doc:
+                    outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
+            meta["outline"] = [{"page": page, "title": title} for page, title in outline[:400]]
+            meta["main_text_start_inference"] = infer_main_text_start(self.load_blocks(asset_id), meta.get("pages") or [], outline)
+            with self._lock:
+                _json_write(self.asset_meta_path(asset_id), meta)
+        except Exception:  # noqa: BLE001 - a failed inference must never make an asset unreadable
+            meta["main_text_start_inference"] = {"page": None, "confidence": 0.0, "clues": [], "offered": False}
         return meta
 
     def list_assets(self) -> list[dict[str, Any]]:
@@ -930,7 +949,7 @@ class PdfCorpusRepository:
         for path in sorted((self.root / "assets").glob("pdf-*.json"), reverse=True):
             item = _json_read(path)
             if isinstance(item, dict):
-                items.append(item)
+                items.append(self._with_start_inference(item))
         return items
 
     def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:

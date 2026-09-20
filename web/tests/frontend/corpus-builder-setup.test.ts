@@ -85,6 +85,22 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(wrapper.get("#corpus-concurrency").attributes("disabled")).toBeUndefined();
   });
 
+  it("prefills a suggested first main-text page with its clues, and leaves a confirmed one alone", async () => {
+    const base:any={
+      asset_id:"asset-2",sha256:"sha",filename:"clean.pdf",created_at:"",page_count:12,block_count:42,ocr_pages:0,warnings:[],metadata:{},
+      pages:Array.from({length:12},(_,index)=>({pdf_page:index+1,width:612,height:792})),
+      main_text_start_inference:{page:7,confidence:0.93,offered:true,clues:[{kind:"outline_first_chapter",detail:"Bookmark “Chapter One” points to PDF page 7."}]},
+    };
+    const mountWith=(asset:any)=>mount(DocumentStructureConfigurator,{props:{asset,pdfUrl:"/c.pdf",blocks:[]},global:{stubs:{PdfEvidenceViewer:true,PdfPageLabelEditor:true}}});
+    const suggested=mountWith({...base,document_layout:null});
+    expect((suggested.get('.anchor input').element as HTMLInputElement).value).toBe("7");
+    expect(suggested.text()).toContain("93% confident");
+    expect(suggested.text()).toContain("Chapter One");
+    expect(buttonByText(suggested,"Save document structure").attributes("disabled")).toBeUndefined(); // the reviewer confirms it by saving
+    const confirmed=mountWith({...base,document_layout:{page_layout:"single",reading_order:"left_to_right",thread_mode:"continuous",main_text_pdf_start:9,confirmed_by:"human"}});
+    expect(confirmed.text()).not.toContain("confident");
+  });
+
   it("tracks document-structure edits as dirty and saves the reviewer-owned plan", async () => {
     const asset:any={
       asset_id:"asset-1",sha256:"sha",filename:"book.pdf",created_at:"",page_count:12,block_count:42,ocr_pages:0,warnings:[],metadata:{},
