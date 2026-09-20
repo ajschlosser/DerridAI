@@ -7,7 +7,6 @@ import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
-import type { WorksSnapshot } from "../types/works";
 import runtime from "../runtime/runtimeBridge";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 
@@ -84,12 +83,6 @@ function applyQuery(value: string) {
     decorate();
   }, 80);
 }
-function onCardKeydown(work: string, event: KeyboardEvent) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  selectWork(work);
-}
-
 function selectWork(work: string) {
   const y = window.scrollY;
   works.setOverview(work);
