@@ -32,7 +32,36 @@ GENERALIZABLE_FIELDS = ("discourse_role", "region_type")
 GLOBAL_PROMOTION_MIN_BUILDS = 2
 GLOBAL_PROMOTION_MIN_CONFIRMATIONS = 2
 
+# The model's self-reported certainty about a classification. It is telemetry about
+# the value, not a scholarly value, so a pass never disputes or replaces it.
+CONFIDENCE_FIELDS = frozenset({"attribution_confidence", "semantic_classification_confidence"})
+NUMBER_TOLERANCE = 0.05
+LIST_OVERLAP = 0.6
+
 Resolution = Literal["keep_existing", "replace", "keep_both"]
+
+
+def _normalized(item: Any) -> str:
+    text = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+    return " ".join(text.casefold().split())
+
+
+def same_value(old: Any, new: Any) -> bool:
+    """True when a proposal restates the existing value closely enough that it is not a disagreement.
+
+    Wording, case and spacing differences, a numeric wobble, and a list that shares
+    most of its items are agreement. Reviewers should only see real disagreements.
+    """
+    if old == new:
+        return True
+    if isinstance(old, (int, float)) and isinstance(new, (int, float)) and not isinstance(old, bool) and not isinstance(new, bool):
+        return abs(float(old) - float(new)) <= NUMBER_TOLERANCE
+    if isinstance(old, str) and isinstance(new, str):
+        return _normalized(old) == _normalized(new)
+    if isinstance(old, list) and isinstance(new, list):
+        left, right = {_normalized(item) for item in old}, {_normalized(item) for item in new}
+        return bool(left | right) and len(left & right) / len(left | right) >= LIST_OVERLAP
+    return False
 
 
 def _confidence(info: dict[str, Any]) -> float | None:

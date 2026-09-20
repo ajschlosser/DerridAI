@@ -13,6 +13,8 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
+
 try:
     import chromadb  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
@@ -32,10 +34,17 @@ class InlineExecutor:
         fn(*args, **kwargs)
 
 
-def make_manager(tmp_path: Path, rows: list[dict]):
+def make_manager(tmp_path: Path, rows: list[dict], *, real_validation: bool = False):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    asset_id = "a"
+    if real_validation:
+        import fitz
+
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), "A short source page.")
+        asset_id = repo.save_asset(doc.tobytes(), filename="t.pdf", ocr_mode="off")["asset_id"]
     build = repo.create_build({
-        "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1,
+        "asset_id": asset_id, "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1,
         "source_block_count": len(rows), "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION,
         "profile_version": 11, "app_version": APP_VERSION, "provider": "ollama", "model": "m",
         "request": {"provider": "ollama", "model": "m"}, "manifest": {"title": "Book"},
@@ -50,8 +59,9 @@ def make_manager(tmp_path: Path, rows: list[dict]):
     manager = cb.PdfCorpusBuildManager(repo)
     manager._executor = InlineExecutor()
     manager._validate_execution_budget = lambda request: None
-    # Whole-build validation needs the real source asset; it is not under test here.
-    manager._rewrite_and_validate = lambda build_id, records: repo.get_build(build_id)
+    if not real_validation:
+        # Whole-build validation needs the real source asset; it is not under test here.
+        manager._rewrite_and_validate = lambda build_id, records: repo.get_build(build_id)
     return manager, repo, build["build_id"]
 
 
@@ -153,3 +163,58 @@ def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_conver
     op = repo.get_build(build_id)["metadata_operation"]
     assert op["passes_completed"] == 2 and op["converged"] is True
     assert op["state"] == "completed", op.get("error")
+
+
+def test_review_action_during_a_pass_does_not_end_the_running_state(tmp_path: Path):
+    """Every review action revalidates the build; that must not flip a running pass to review.
+
+    Why: found in a live run. The build went to awaiting_review at the reviewer's first
+    edit, so the UI lost the run and a second pass could start alongside the first.
+    """
+    manager, repo, build_id = make_manager(tmp_path, [{}, {}], real_validation=True)
+    seen: dict = {}
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        if record["record_id"] == "r1" and not seen:
+            manager.metadata_decision(build_id, "r2", "stance", "chosen by reviewer")
+            during = repo.get_build(build_id)
+            seen["status"], seen["stage"] = during["status"], during["stage"]
+            with pytest.raises(ValueError, match="active corpus operation"):
+                manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all"})
+        return proposal(record, stance=("critical", 0.9))
+
+    manager._enrich_record = fake_enrich
+    manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all"})
+    assert seen == {"status": "running", "stage": "metadata_enrichment_rerun"}
+    rows = {row["record_id"]: row for row in repo.load_records(build_id)}
+    assert rows["r2"]["stance"] == "chosen by reviewer"
+    assert repo.get_build(build_id)["status"] == "awaiting_review"
+
+
+def test_same_value_treats_restatements_as_agreement_and_real_changes_as_disagreement():
+    """Found live: a 0.9917 vs 0.99 wobble and a one-item list difference are not disagreements."""
+    assert ec.same_value("Critical", " critical ")
+    assert ec.same_value(0.9917, 0.99)
+    assert ec.same_value(["a", "b", "c", "d"], ["A", "b", "c", "d", "e"])
+    assert not ec.same_value("critical", "affirmative")
+    assert not ec.same_value(0.5, 0.9)
+    assert not ec.same_value(["a", "b"], ["c", "d"])
+    assert not ec.same_value(["a"], "a")
+
+
+def test_pass_ignores_confidence_telemetry_and_near_duplicate_lists(tmp_path: Path):
+    """Neither a self-reported confidence nor a near-identical topic list raises a dispute."""
+    rows = [{
+        "semantic_classification_confidence": 0.9917, "topics": ["hospitality", "ethics", "borders", "asylum"],
+        "metadata_field_status": {"topics": {"status": "llm_inferred", "confidence": 1.0}, "semantic_classification_confidence": {"status": "llm_inferred"}},
+    }]
+    manager, repo, build_id = make_manager(tmp_path, rows)
+    manager._enrich_record = lambda record, manifest, request, **kw: proposal(
+        record, topics=(["hospitality", "ethics", "borders", "asylum", "law"], 1.0), semantic_classification_confidence=(0.6, 1.0), stance=("critical", 0.9),
+    )
+    manager.rerun_metadata_enrichment(build_id, {"families": ["discourse", "indexing"], "scope": "all"})
+    row = repo.load_records(build_id)[0]
+    assert row["semantic_classification_confidence"] == 0.9917
+    assert row["topics"] == ["hospitality", "ethics", "borders", "asylum"]
+    assert not row.get("metadata_disputes")
+    assert row["stance"] == "critical"
