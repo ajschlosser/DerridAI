@@ -441,7 +441,6 @@ class PdfCorpusBuildCreate(BaseModel):
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
-    review_manifest_before_segmentation: bool = False
     auto_enrich_work_metadata: bool = True
     auto_clean_text: bool = True
     text_cleanup_rules: list[Literal[

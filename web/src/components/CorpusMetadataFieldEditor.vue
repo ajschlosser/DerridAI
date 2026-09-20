@@ -54,7 +54,7 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
 <template>
 <article class="metadata-field" :data-attention="status?.status==='unresolved'||status?.status==='invalid'?'true':'false'">
   <div class="field-topline">
-    <div class="field-name"><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')"/></div>
+    <div class="field-name"><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :audit="Boolean(status?.audit_sample)"/></div>
     <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing;if(!editing)emit('dirty',false)">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
   </div>
   <div v-if="!editing" class="field-current">{{display(resolvedValue)}}</div>

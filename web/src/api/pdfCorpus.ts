@@ -140,7 +140,7 @@ export interface CorpusRecord {
   source_block_ids: string[];
   source_spans: Array<{block_id:string;page:number;bbox?:number[];extraction_method?:string}>;
   metadata_evidence?: Record<string,{block_ids?:string[];confidence?:number;reason?:string;reviewed_by?:string;reviewed_at?:string}>;
-  metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number;reason?:string}>;
+  metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number;reason?:string;autofilled?:boolean;audit_sample?:boolean;self_reported_confidence?:number;model?:string}>;
   metadata_incomplete_fields?: string[];
   metadata_review_fields?: string[];
   metadata_reviewed_at?: string;
