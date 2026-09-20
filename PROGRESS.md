@@ -50,7 +50,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 403 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 406 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -123,7 +123,18 @@ time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
 - `scripts/runtime-refactor/deps.py fn1,fn2` lists the runtime names and state fields a group uses; use it to
   choose groups before extracting.
 
+## Blocker found on `origin/development` (not from this branch)
+
+At `e9f42f3` the merged tree does not build: `runtime.js` has duplicate names in its `export {}` block ("Duplicate
+export state/viewConfig/..."), `WorksView.vue` declares `selectWork` twice, `useWorksWorkspace.ts` calls runtime
+functions that are not exported (`populateAllWorksMetadata`, ...), and `router/index.ts` has an unused import.
+Unit tests pass except `works-view.test.ts`. Because of this the last extraction (`recordPresenters`) has unit +
+differential verification but no e2e run. Fix these on `development` first, then run the full e2e.
+
 ## Gotchas learned
+
+- `mk_factory.py` must not indent function bodies: lines inside multi-line template literals must stay
+  byte-identical (an earlier version added 2 spaces and a differential test caught it).
 
 - Factory call sites in `runtime.js` must come after the `const` helpers they receive (`label`, `display`, ...):
   passing a `const` declared later throws "Cannot access X before initialization" and breaks ~26 test files at
