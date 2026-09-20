@@ -232,6 +232,8 @@ Multiple JSONL files remain open as editable tabs and persist through browser In
 
 Persistence is browser-origin-specific.
 
+**Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Administrators load JSONL from the empty state or the Actions menu. Researcher accounts do not use this page.
+
 ### Merge tabs
 
 Users can merge all tabs or any subset. Selected source tabs are replaced in the workspace by the merged tab; unselected tabs remain. Source files on disk are not deleted.

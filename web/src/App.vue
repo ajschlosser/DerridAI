@@ -67,8 +67,8 @@ const primaryNav=computed(()=>{
   return order.map(id=>byId.get(id)).filter((item):item is ShellNavItem=>Boolean(item));
 });
 const utilityNav=computed(()=>{const ids=new Set(primaryNav.value.map(item=>item.id));return flatNav.value.filter(item=>!ids.has(item.id))});
-const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):route.name==="compare"?i18n.t("nav.compare","Compare"):s.value.context.title||i18n.t("nav.home","Home"));
-const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):route.name==="compare"?i18n.t("context.compare.meta","Inspect field and text differences"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
+const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):route.name==="compare"?i18n.t("nav.compare","Compare"):route.name==="list"?i18n.t("nav.records","Records"):s.value.context.title||i18n.t("nav.home","Home"));
+const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):route.name==="compare"?i18n.t("context.compare.meta","Inspect field and text differences"):route.name==="list"?i18n.t("context.list.meta","Open a JSONL file"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
 const canBreadcrumbForward=computed(()=>Boolean(nativeForwardPath.value)||s.value.canGoForward);
 const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back","Back"):s.value.backLabel);

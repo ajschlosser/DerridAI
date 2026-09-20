@@ -1872,8 +1872,9 @@ function rowMatchesListFilters(row,filters){
     const filter=String(raw??"").trim().toLocaleLowerCase();
     if(!filter)continue;
     if(key==="__db_status"){
-      const status=recordDbStatus(row.file,row.index,row.record).label.toLocaleLowerCase();
-      if(!status.includes(filter))return false;
+      const info=recordDbStatus(row.file,row.index,row.record);
+      const haystack=`${info.kind} ${info.label}`.toLocaleLowerCase();
+      if(!haystack.includes(filter))return false;
       continue;
     }
     if(key==="needs_review"){
@@ -7189,6 +7190,176 @@ function restoreSearchViewFromHref(href){
   const url=new URL(String(href||""),location.origin);const token=url.searchParams.get("ts");state.view="global";if(token)applyCompressedTableUrlState(decompressUrlState(token),"global");const store=url.searchParams.get("store");if(store)state.activeStore=store;state.storeSearchResults=[];state.searchDatabaseRan=false;if(searchScope()==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;persistPrefs();syncUrl({replace:false});shell();return getSearchWorkspaceSnapshot({refresh:true,autoRun:true});
 }
 
+function recordsListCell(row,key,query){
+  const record=row.record;
+  if(key==="__db_status"){
+    const info=recordDbStatus(row.file,row.index,record);
+    return {key,kind:"status",text:info.label,title:info.title||"",status_kind:info.kind};
+  }
+  if(key==="page_start")return {key,kind:"pages",text:pages(record),title:""};
+  if(key==="needs_review")return {key,kind:"review",text:record.needs_review?"yes":"no",title:""};
+  if(key==="text")return {key,kind:"text",text:snippet(record.text,query),title:""};
+  if(key==="inline_citation")return {key,kind:"plain",text:inlineCitation(record),title:""};
+  if(key==="full_citation")return {key,kind:"plain",text:fullCitation(record),title:""};
+  if(key==="record_id")return {key,kind:"id",text:display(record[key]),title:""};
+  const value=record[key];
+  return {key,kind:metadataSearchable(key,value)?"metadata":"plain",text:display(value),title:"",meta_value:Array.isArray(value)?String(value[0]??""):String(value??""),meta_contains:Array.isArray(value)};
+}
+
+function getRecordsListSnapshot(){
+  const files=state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId}));
+  const stores=recordStores();
+  const shared=Boolean(new URLSearchParams(location.search).get("file"));
+  const capabilities={
+    can_select:canUse("editLocalRecords"),
+    can_review:canUse("editLocalRecords"),
+    can_bulk_edit:canUse("editLocalRecords"),
+    can_upsert:canUse("manageCorpus")&&hasCorpusDb(),
+    can_import:canUse("manageCorpus"),
+    can_select_evidence:hasCapability("evidence.select"),
+  };
+  const f=activeFile();
+  if(!f){
+    return {
+      available:false,shared,files,file:null,query:"",rows:[],columns:[],available_columns:[],
+      sort:{key:"page_start",dir:1},filters:{},page:1,pages:1,page_size:state.pageSize,start:0,end:0,
+      matched:0,total:0,flagged:0,selection_count:state.reviewSelection.size,page_selected:false,
+      stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
+      active_store:state.activeStore||"",has_database:stores.length>0,
+      db_unavailable_reason:dbUnavailableReason(),capabilities,
+    };
+  }
+  const query=state.searches[f.id]||"";
+  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
+  const filters=state.listFilters[f.id]||{};
+  let rows=f.records.map((record,index)=>({file:f,record,index}))
+    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    .filter(x=>rowMatchesListFilters(x,filters));
+  rows=sortRows(rows,sort);
+  const pg=pageInfo(rows.length,state.pages[f.id]||1);state.pages[f.id]=pg.page;
+  const slice=rows.slice(pg.start,pg.end);
+  try{refreshPresenceForRows(slice)}catch{/* presence is best-effort */}
+  const flagged=needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))).length;
+  const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(f,x.index)));
+  const available=tableAvailableFields(f.records.map((record,index)=>({file:f,record,index})),["__db_status","work","page_start","needs_review","text"]);
+  const columnKeys=getTableColumns("list",available);
+  return {
+    available:true,shared,files,
+    file:{id:f.id,name:f.name,count:f.records.length,dirty:f.dirty?.size||0},
+    query,rows:slice.map(x=>{
+      const key=reviewKey(f,x.index);
+      const evidenceKey=workspaceEvidenceSelectionKey(f,x.index);
+      const status=recordDbStatus(f,x.index,x.record);
+      return {
+        index:x.index,key,record_id:String(x.record.record_id||`#${x.index+1}`),
+        work:String(x.record.work||""),selected:state.reviewSelection.has(key),
+        evidence_selected:evidenceIsSelected(evidenceKey),
+        db_status:{kind:status.kind,label:status.label,title:status.title||""},
+        cells:columnKeys.map(column=>recordsListCell(x,column,query)),
+      };
+    }),
+    columns:columnKeys.map(key=>({key,label:label(key)})),
+    available_columns:available.map(key=>({key,label:label(key)})),
+    sort:{key:sort.key,dir:sort.dir},filters:{...filters},
+    page:pg.page,pages:pg.pages,page_size:state.pageSize,start:pg.start,end:pg.end,
+    matched:rows.length,total:f.records.length,flagged,selection_count:state.reviewSelection.size,
+    page_selected:pageSelected,
+    stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
+    active_store:state.activeStore||"",has_database:stores.length>0,
+    db_unavailable_reason:dbUnavailableReason(),capabilities,
+  };
+}
+function setRecordsListQuery(value){
+  const f=activeFile();if(!f)return;
+  state.searches[f.id]=String(value||"");state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListStore(name){setActiveStore(name);shell()}
+function setRecordsListPage(page){
+  const f=activeFile();if(!f)return;
+  state.pages[f.id]=Math.max(1,Number(page)||1);persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListPageSize(size){
+  const f=activeFile();if(!f)return;
+  state.pageSize=Number(size)||state.pageSize;state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListSort(key){
+  const f=activeFile();if(!f)return;
+  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
+  toggleSort(sort,key);state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListFilter(key,value){
+  const f=activeFile();if(!f)return;
+  setListFilterValue(f.id,key,value);state.pages[f.id]=1;syncUrl({replace:true});
+}
+function clearRecordsListFilters(){
+  const f=activeFile();if(!f)return;
+  state.listFilters[f.id]={};state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListRowSelected(index,selected){
+  const f=activeFile();if(!f)return;
+  setReviewSelected(f,index,selected);syncUrl({replace:true});
+}
+function setRecordsListPageSelected(selected){
+  const snapshot=getRecordsListSnapshot();
+  const f=activeFile();if(!f)return;
+  for(const row of snapshot.rows)setReviewSelected(f,row.index,selected);
+  syncUrl({replace:true});
+}
+function selectRecordsListMatches(){
+  const f=activeFile();if(!f)return;
+  const query=state.searches[f.id]||"";
+  const filters=state.listFilters[f.id]||{};
+  const rows=f.records.map((record,index)=>({file:f,record,index}))
+    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    .filter(x=>rowMatchesListFilters(x,filters));
+  for(const x of rows)state.reviewSelection.add(reviewKey(f,x.index));
+  persistPrefs();syncUrl({replace:true});
+}
+function clearRecordsListSelection(){clearReviewSelection();syncUrl({replace:true})}
+function openRecordsListRecord(index){
+  const f=activeFile();if(!f)return;
+  navigateTo("record",{fileId:f.id,index});
+}
+function copyRecordsListJson(index){
+  const f=activeFile();const record=f?.records?.[index];
+  if(record)copyJsonToClipboard(record,record.record_id||"record");
+}
+function copyRecordsListCitation(index,kind){
+  const f=activeFile();const record=f?.records?.[index];
+  if(record)copyCitation(record,kind||"inline");
+}
+function toggleRecordsListEvidence(index){
+  const f=activeFile();if(!f)return;
+  toggleWorkspaceEvidence(f,index);shell();
+}
+function recordsListMetadataSearch(field,value,contains){
+  return searchByMetadata(field,value,{contains:Boolean(contains)});
+}
+function setRecordsListColumns(keys){
+  const list=Array.isArray(keys)?keys.filter(Boolean):[];
+  if(list.length)state.tableColumns.list=list;
+  persistPrefs();syncUrl({replace:true});
+}
+function resetRecordsListColumns(){
+  state.tableColumns.list=[...TABLE_DEFAULTS.list];
+  persistPrefs();syncUrl({replace:true});
+}
+function getRecordsListShareHref(){const path=urlFromState();return new URL(path,location.origin).href}
+function recordsListCommand(name){
+  const f=activeFile();
+  if(name==="import"){document.querySelector("#fileInput")?.click();return Promise.resolve()}
+  if(name==="ocr")return Promise.resolve(canUse("editLocalRecords")?openOcrCleanupDialog():toast("Your role does not have permission to edit records."));
+  if(!f)return Promise.resolve();
+  if(name==="reviewSelected")return Promise.resolve(openTouchup(selectedReviewItems()));
+  if(name==="improveSelected")return Promise.resolve(openTouchup(selectedReviewItems(),"auto"));
+  if(name==="bulkSelected")return Promise.resolve(openBulkFieldEditor({rows:selectedReviewItems(),title:tr("search.bulk_edit_selected","Bulk edit selected records")}));
+  if(name==="upsertSelected")return upsertRows(rowsFromReviewSelection(),"selected records");
+  if(name==="reviewFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index})))));
+  if(name==="improveFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))),"auto"));
+  if(name==="upsertFile")return upsertRows(f.records.map((record,index)=>({file:f,record,index})),"records");
+  return Promise.resolve();
+}
+
 const ligatures={"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"};
 function cleanText(text){
   let s=String(text??""),before=s;
@@ -11138,4 +11309,25 @@ export {
   runSearchSelectionAction,
   getSearchShareHref,
   restoreSearchViewFromHref,
+  getRecordsListSnapshot,
+  setRecordsListQuery,
+  setRecordsListStore,
+  setRecordsListPage,
+  setRecordsListPageSize,
+  setRecordsListSort,
+  setRecordsListFilter,
+  clearRecordsListFilters,
+  setRecordsListRowSelected,
+  setRecordsListPageSelected,
+  selectRecordsListMatches,
+  clearRecordsListSelection,
+  openRecordsListRecord,
+  copyRecordsListJson,
+  copyRecordsListCitation,
+  toggleRecordsListEvidence,
+  recordsListMetadataSearch,
+  setRecordsListColumns,
+  resetRecordsListColumns,
+  getRecordsListShareHref,
+  recordsListCommand,
 };
