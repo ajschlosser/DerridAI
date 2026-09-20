@@ -14,6 +14,7 @@ import {
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
 import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
+import { compressUrlState, decompressUrlState } from "../domain/urlState";
 import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
@@ -2096,79 +2097,6 @@ const viewPathMap={home:"/",list:"/records",record:"/record",works:"/works",glob
 const pathViewMap=Object.fromEntries(Object.entries(viewPathMap).map(([view,path])=>[path,view]));
 let urlSyncHook=null;
 function setUrlSyncHook(hook){urlSyncHook=typeof hook==="function"?hook:null}
-function _base64UrlEncodeBinary(binary){
-  return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
-}
-function _base64UrlDecodeBinary(token){
-  let b64=String(token||"").replace(/-/g,"+").replace(/_/g,"/");
-  while(b64.length%4)b64+="=";
-  return atob(b64);
-}
-function compressUrlState(value){
-  try{
-    // Table state is frequently small. Fixed-width LZW is excellent once column
-    // and filter names repeat, but can expand a tiny payload. Generate both a
-    // raw UTF-8 base64url form and the 12-bit LZW form and keep whichever is
-    // shorter. The one-character prefix keeps decoding deterministic while the
-    // legacy unprefixed LZW path below preserves links created by early 0.23 builds.
-    const bytes=new TextEncoder().encode(JSON.stringify(value));
-    if(!bytes.length)return "";
-    const input=String.fromCharCode(...bytes);
-    const raw=`r${_base64UrlEncodeBinary(input)}`;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(String.fromCharCode(i),i);
-    let next=256,w="";const codes=[];
-    for(const c of input){
-      const wc=w+c;
-      if(dict.has(wc)){w=wc;continue}
-      if(w)codes.push(dict.get(w));
-      if(next<4096)dict.set(wc,next++);
-      w=c;
-    }
-    if(w)codes.push(dict.get(w));
-    const packed=[];let buffer=0,bits=0;
-    for(const code of codes){
-      buffer=(buffer<<12)|code;bits+=12;
-      while(bits>=8){bits-=8;packed.push((buffer>>bits)&255);buffer&=(1<<bits)-1}
-    }
-    if(bits)packed.push((buffer<<(8-bits))&255);
-    let binary="";for(const byte of packed)binary+=String.fromCharCode(byte);
-    const compressed=`z${_base64UrlEncodeBinary(binary)}`;
-    return compressed.length<raw.length?compressed:raw;
-  }catch(error){console.warn("Could not compress URL table state",error);return ""}
-}
-function decompressUrlState(token){
-  try{
-    const source=String(token||"");
-    if(!source)return null;
-    if(source[0]==="r"){
-      const raw=_base64UrlDecodeBinary(source.slice(1));
-      const bytes=Uint8Array.from(raw,ch=>ch.charCodeAt(0));
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-    // `z` is the current compressed representation. No prefix means the link
-    // came from the first 0.23 implementation and is decoded as legacy LZW.
-    const encoded=source[0]==="z"?source.slice(1):source;
-    const binary=_base64UrlDecodeBinary(encoded),codes=[];let buffer=0,bits=0;
-    for(let i=0;i<binary.length;i++){
-      buffer=(buffer<<8)|binary.charCodeAt(i);bits+=8;
-      while(bits>=12){bits-=12;codes.push((buffer>>bits)&4095);buffer&=(1<<bits)-1}
-    }
-    if(!codes.length)return null;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(i,String.fromCharCode(i));
-    let next=256,w=dict.get(codes[0]);if(w==null)return null;let output=w;
-    for(let i=1;i<codes.length;i++){
-      const code=codes[i];let entry=dict.get(code);
-      if(entry==null&&code===next)entry=w+w[0];
-      if(entry==null)return null;
-      output+=entry;
-      if(next<4096)dict.set(next++,w+entry[0]);
-      w=entry;
-    }
-    const bytes=Uint8Array.from(output,ch=>ch.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-  }catch(error){console.warn("Could not decode URL table state",error);return null}
-}
-
 function currentTableUrlState(view=state.view){
   // URL state is intentionally view-scoped. It is the public/shareable state
   // contract for a page; IndexedDB remains only a convenience for restoring a
