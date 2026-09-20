@@ -66,3 +66,23 @@ def test_a_rejection_is_recorded_and_shown_to_the_next_pass(tmp_path):
     assert m._ledger.review_counts("qwen", "discourse_role") == (1, 0)
     learned = learn_from_review([{**record, "discourse_role": "critique", "metadata_field_status": {}}])
     assert learned["rejected_examples"]["discourse_role"][0]["rejected_value"] == "assertion"
+
+
+def test_the_concurrency_limit_refuses_an_extra_run(tmp_path, monkeypatch):
+    m = manager(tmp_path)
+    monkeypatch.setattr(m, "active_enrichment_runs", lambda: 1)
+    monkeypatch.setattr(m, "_validate_execution_budget", lambda request: None)
+    build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
+                                 "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "m", "request": {}})
+    build.update(status="awaiting_review")
+    m.repo.save_build(build)
+    import pytest
+    with pytest.raises(ValueError, match="already working"):
+        m.rerun_metadata_enrichment(build["build_id"], {"model": "m"})
+
+
+def test_metrics_endpoint_payload_reports_the_limit(tmp_path):
+    m = manager(tmp_path)
+    m._ledger.append("accepted", model="q", field="f", run_id="r", confidence=0.9)
+    payload = m.enrichment_metrics()
+    assert payload["concurrency"]["limit"] >= 1 and payload["models"]["q"]["acceptance_rate"] == 1.0

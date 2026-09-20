@@ -220,6 +220,7 @@ export const pdfCorpusApi = {
   split: (buildId:string, recordId:string, afterBlockId:string, expectedRevision?:number) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId,expected_revision:expectedRevision})}),
   retryMetadata: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/metadata/retry`, {method:"POST",body:JSON.stringify(payload)}),
   rerunMetadata: (buildId:string, recordId:string, payload:Record<string,unknown>) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`, {method:"POST",body:JSON.stringify(payload)}),
+  enrichmentMetrics: (buildId:string) => apiRequest<EnrichmentMetrics>(`/api/pdf/corpus-enrichment-metrics?build_id=${encodeURIComponent(buildId)}`),
   rerunMetadataEnrichment: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/metadata/enrich`, {method:"POST",body:JSON.stringify(payload)}),
   editorialMemory: (buildId:string) => apiRequest<{conventions:Record<string,{value:unknown;confirmed_records:number}>;examples:Record<string,Array<{record_id:string;value:unknown;similarity:number;excerpt:string}>>;reset_at?:string|null;convention_count:number;example_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/editorial-memory`),
   resetEditorialMemory: (buildId:string) => apiRequest<{conventions:Record<string,{value:unknown;confirmed_records:number}>;examples:Record<string,Array<{record_id:string;value:unknown;similarity:number;excerpt:string}>>;reset_at?:string|null;convention_count:number;example_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/editorial-memory`,{method:"DELETE"}),
@@ -232,3 +233,13 @@ export const pdfCorpusApi = {
   publish: (buildId:string) => apiRequest<{publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/publish`, {method:"POST",body:JSON.stringify({require_acceptance:true})}),
   publicationUrl: (publicationId:string) => `/api/pdf/publications/${encodeURIComponent(publicationId)}/download`,
 };
+
+export interface EnrichmentModelMetrics {
+  proposals:number;reviews:number;autofilled:number;acceptance_rate:number|null;brier_score:number|null;correction_rate:number|null;rejection_rate:number|null;
+  autofill_precision:number|null;stability:number|null;touched_share:number|null;grounded_rate:number|null;ms_per_accepted_field:number|null;
+  precision_at_threshold:{threshold:number;reviews:number;precision:number|null;coverage:number|null}[];learning_curve:{reviews_before:number;acceptance:number|null}[];
+}
+export interface EnrichmentMetrics {
+  models:Record<string,EnrichmentModelMetrics>;inter_model_agreement:{compared:number;agreement:number|null};unresolved_remaining:number|null;
+  runs:string[];concurrency:{limit:number;working:number};
+}

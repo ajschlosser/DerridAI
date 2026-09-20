@@ -2309,6 +2309,14 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.get("/api/pdf/corpus-enrichment-metrics")
+def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = ""):
+    try:
+        return pdf_corpus_builds.enrichment_metrics(build_id, run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")
 def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun):
     try:

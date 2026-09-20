@@ -17,8 +17,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# What can happen to a value. The first two are the model's doing, the rest are human decisions.
-PROPOSED, AUTOFILLED = "proposed", "autofilled"
+# What can happen to a value. PROPOSED and AUTOFILLED are the model's doing, CALL is one model request
+# (its cost), and the rest are human decisions.
+PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
 

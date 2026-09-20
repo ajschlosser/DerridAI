@@ -44,6 +44,7 @@ import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
+import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { useSplitter } from "../composables/useSplitter";
@@ -1023,6 +1024,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusEnrichmentPassStatus v-if="currentBuild" :build="currentBuild" :disabled="busy!==''" @stop="cancelBuild" @run-another="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" />
+          <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
           <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
           <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
 

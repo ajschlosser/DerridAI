@@ -26,7 +26,8 @@ from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
 from .autofill import decide as decide_autofill, in_audit_sample
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, CORRECTED, REJECTED, EnrichmentLedger
+from .enrichment_metrics import compute as compute_enrichment_metrics
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, EnrichmentLedger
 from .main_text_start import infer_main_text_start
 from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -1542,6 +1543,18 @@ class PdfCorpusBuildManager:
         build["stage"] = "document_review"
         self.repo.save_build(build)
         return self.resume(build_id, request)
+
+    def enrichment_metrics(self, build_id: str = "", run_id: str = "") -> dict[str, Any]:
+        """The ten enrichment measures for the whole ledger, one build, or one run."""
+        records = self.repo.load_records(build_id) if build_id else None
+        return {
+            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id),
+            "concurrency": {"limit": max(1, int(settings.enrichment_max_concurrent_runs)), "working": self.active_enrichment_runs()},
+        }
+
+    def active_enrichment_runs(self) -> int:
+        listing = self.repo.list_builds(offset=0, limit=10000)
+        return sum(1 for b in listing["items"] if b.get("status") in {"queued", "running"} and b.get("stage") == "metadata_enrichment_rerun")
 
     def active_count(self) -> int:
         listing = self.repo.list_builds(offset=0, limit=10000)
@@ -4051,6 +4064,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True)
                 self._record_family_effectiveness(
                     build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
                     provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
@@ -4067,6 +4081,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False)
                 if stage_callback:
                     stage_callback(record, task_name, "failed", str(exc))
                 if build_id:
@@ -4083,7 +4098,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
     ) -> dict[str, Any]:
         """Bind proposals to source evidence while retaining reviewer-owned values."""
         model = str((request or {}).get("model") or "")
-        run_id = str((request or {}).get("run_id") or "")
+        run_id = str((request or {}).get("run_id") or (f"build-{build_id}" if build_id else ""))
 
         def autofill(field: str, value: Any, confidence: float | None, evidence_info: dict[str, Any]) -> dict[str, Any] | None:
             """The status for a value the model is sure enough about to fill in, or None.
@@ -4371,6 +4386,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if checked_field in raw_llm_values:
                     checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
 
+        for field in sorted(llm_populated_fields):
+            proposed_status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            assessed = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            self._ledger.append(
+                PROPOSED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id,
+                value=record.get(field), self_reported=assessed.get("confidence"),
+                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"),
+            )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
         review_reasons.extend(model_review_reasons)
@@ -6558,6 +6581,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if build.get("status") in {"queued", "running"}:
             raise ValueError("Wait for the active corpus operation to finish before starting metadata enrichment.")
         self._validate_execution_budget(request)
+        limit = max(1, int(settings.enrichment_max_concurrent_runs))
+        working = self.active_enrichment_runs()
+        if working >= limit:
+            raise ValueError(f"{working} metadata enrichment run(s) are already working (the limit is {limit}). Wait for one to finish.")
         scope = str(request.get("scope") or "all")
         families = [str(v) for v in request.get("families") or [] if str(v) in METADATA_FAMILY_FIELDS] or ["discourse", "quotation", "indexing"]
         passes = max(1, min(MAX_PASSES, int(request.get("passes") or 1)))
@@ -6581,7 +6608,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         build["metadata_operation"] = run.copy()
         self.repo.save_build(build)
         self._update(build_id, status="running", stage="metadata_enrichment_rerun", error=None, resumable=False, metadata_operation=run)
-        self._executor.submit(self._metadata_enrichment_rerun_worker, build_id, request, operation_id, scope, families, passes)
+        # The operation id tags every ledger event this run writes, so runs never blur together.
+        self._executor.submit(self._metadata_enrichment_rerun_worker, build_id, {**request, "run_id": operation_id}, operation_id, scope, families, passes)
         return self.repo.get_build(build_id)
 
     def _share_generalizable_learning(self, build_id: str) -> None:
