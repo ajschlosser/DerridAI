@@ -42,7 +42,12 @@ export interface AutonomousReport {
   records: number; accepted: number; fields_filled: number; left_for_review: number; passes_run: number; ran_at: string;
   exceptions: { record_id: string; reasons: string[] }[]; notes: string[]; policy: AutonomousPolicy; published?: boolean;
 }
+import type { MetadataSchema } from "./metadataSchemas";
 export interface CorpusBuild {
+  /** The metadata schema this build was started with: its own copy, unaffected by later edits to the saved one. */
+  schema?: MetadataSchema | null;
+  schema_id?: string;
+  schema_name?: string;
   /** What the last hands-free run settled and left. */
   autonomous_report?: AutonomousReport | null;
   /** A live reading of the oldest model call in flight; not stored with the build. */

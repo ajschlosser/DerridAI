@@ -1,4 +1,5 @@
 import { isPlaceholderValue } from './metadataValues';
+import type { SchemaField } from '../api/metadataSchemas';
 export type MetadataControl = 'enum'|'combobox'|'multi-combobox'|'boolean'|'number'|'text';
 export interface MetadataFieldSpec { control:MetadataControl; allowedValues?:string[]; suggestionFields?:string[]; allowCustom?:boolean }
 
@@ -32,7 +33,20 @@ export function normalizeMetadataFieldValue(field:string,value:unknown):unknown{
   return STANCE_ALIASES[normalized]??value;
 }
 
-export function metadataFieldSpec(field:string, regionTypes:string[], discourseRoles:string[]):MetadataFieldSpec{
+/** How a field defined by a metadata schema is edited. The locked core fields are handled by metadataFieldSpec itself. */
+export function schemaFieldSpec(field:SchemaField):MetadataFieldSpec{
+  if(field.type==='boolean')return {control:'boolean'};
+  if(field.type==='number')return {control:'number'};
+  if(field.type==='list')return {control:'multi-combobox',suggestionFields:[field.name],allowCustom:true};
+  if(field.type==='choice'){
+    const values=field.values.map(v=>v.value);
+    return field.strict?{control:'enum',allowedValues:values}:{control:'combobox',allowedValues:values,allowCustom:true};
+  }
+  return {control:'combobox',suggestionFields:[field.name],allowCustom:true};
+}
+
+export function metadataFieldSpec(field:string, regionTypes:string[], discourseRoles:string[], schemaField?:SchemaField):MetadataFieldSpec{
+  if(schemaField&&!['region_type','primary_text','discourse_role'].includes(field))return schemaFieldSpec(schemaField);
   if(field==='region_type') return {control:'enum',allowedValues:regionTypes};
   if(field==='discourse_role') return {control:'enum',allowedValues:discourseRoles};
   if(field==='proposition_status') return {control:'enum',allowedValues:PROPOSITION_STATUS_VALUES};
