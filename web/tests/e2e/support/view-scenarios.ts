@@ -12,6 +12,8 @@ export interface Scenario {
   fixtures?: Fixtures;
   /** Something that is visible once the state has been reached. */
   ready: (page: Page) => Locator;
+  /** Limit the axe scan to this selector, when the rest of the page is not the subject of the state. */
+  scan?: string;
   /** Interactions that reach the state, after the page has loaded. */
   steps?: (page: Page) => Promise<void>;
 }
@@ -122,6 +124,43 @@ export const scenarios: Scenario[] = [
         .getByRole("button", { name: /Browse saved research/ })
         .first()
         .click();
+    },
+  },
+  // Corpus Builder review workspace
+  {
+    id: "corpus-review",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.locator(".review-grid"),
+  },
+  // The whole page from the top, before the workspace scrolls into place.
+  {
+    id: "corpus-review-page",
+    path: "/pdf",
+    ready: (p) => p.locator(".review-grid"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.evaluate(() => scrollTo(0, 0));
+    },
+  },
+  {
+    id: "corpus-review-menu-open",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.getByRole("menu"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.getByRole("button", { name: /More (record )?actions/ }).click();
+    },
+  },
+  {
+    id: "corpus-review-metadata-workspace",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.locator(".review-grid.detail-mode.metadata-workspace"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.getByRole("button", { name: "Metadata workspace" }).click();
     },
   },
   // Settings, Compare, and Roles

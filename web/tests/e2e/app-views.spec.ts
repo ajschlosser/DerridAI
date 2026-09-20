@@ -38,7 +38,11 @@ for (const scheme of ["light", "dark"] as const) {
       const page = await context.newPage();
       await openScenario(page, scenario);
       await expect(page.locator("html")).toHaveAttribute("data-color-scheme", scheme);
-      const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+      const { violations } = await (
+        scenario.scan ? new AxeBuilder({ page }).include(scenario.scan) : new AxeBuilder({ page })
+      )
+        .withTags(TAGS)
+        .analyze();
       expect(
         violations,
         JSON.stringify(
