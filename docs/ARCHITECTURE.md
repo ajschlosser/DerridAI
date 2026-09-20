@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 # Architecture overview
 
-This describes the code as it exists in 0.62.16. For feature behavior see the [User Guide](USER_GUIDE.md); for storage history see [STORAGE_0.36.1.md](STORAGE_0.36.1.md).
+This describes the code as it exists in 0.62.17. For feature behavior see the [User Guide](USER_GUIDE.md); for storage history see [STORAGE_0.36.1.md](STORAGE_0.36.1.md).
 
 ## Processes
 

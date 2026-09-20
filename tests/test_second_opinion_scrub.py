@@ -12,10 +12,9 @@ try:
 except ModuleNotFoundError:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
-from starlette.responses import JSONResponse
-
 from app import main
 from app.reviewer_context import current_reviewer
+from starlette.responses import JSONResponse
 
 
 def record(**over):
@@ -80,3 +79,139 @@ def test_through_the_real_app_an_accept_response_hides_the_first_answer(monkeypa
     response = asyncio.run(call())
     assert response.status_code == 200
     assert "assertion" not in response.text and response.json()["record_id"] == "r1"
+
+
+# ---- channels a walk over the response JSON cannot see -------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from app import corpus_builder as cb  # noqa: E402
+from app.config import APP_VERSION  # noqa: E402
+
+
+def _manager(tmp_path: Path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = repo.create_build({
+        "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
+        "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
+        "provider": "ollama", "model": "m", "request": {},
+    })
+    return cb.PdfCorpusBuildManager(repo), repo, build["build_id"]
+
+
+def test_the_rest_of_the_record_stops_repeating_the_first_answer(tmp_path):
+    rec = record(
+        llm_rejections=[{"field": "discourse_role", "rejected_value": "commentary", "chosen_value": "assertion"}, {"field": "speaker", "rejected_value": "x", "chosen_value": "y"}],
+        recheck_results={"discourse_role": {"first": "assertion", "second": "assertion", "agreed": True}},
+        blind_reveals={"discourse_role": "assertion"}, recheck_scheduled={"discourse_role": {"due": 3}},
+    )
+    token = current_reviewer.set("user-2")
+    try:
+        main.scrub_second_opinions({"record": rec})
+    finally:
+        current_reviewer.reset(token)
+    assert "assertion" not in json.dumps(rec)
+    assert rec["llm_rejections"] == [{"field": "speaker", "rejected_value": "x", "chosen_value": "y"}]  # other fields keep theirs
+
+
+def test_the_record_preview_is_built_from_what_this_reviewer_may_see(tmp_path):
+    m, repo, bid = _manager(tmp_path)
+    repo.save_records(bid, [record(review_disposition="pending")])
+    token = current_reviewer.set("user-2")
+    try:
+        out = m.preview_record(bid, "r1")
+    finally:
+        current_reviewer.reset(token)
+    assert "assertion" not in out["jsonl"] and "assertion" not in json.dumps(out)
+
+
+def test_editorial_examples_do_not_teach_a_second_reviewer_the_first_answer(tmp_path):
+    m, repo, bid = _manager(tmp_path)
+    rows = [record(record_id=f"rec-{i}") for i in range(3)]
+    repo.save_records(bid, rows)
+    token = current_reviewer.set("user-1")
+    try:
+        mine = json.dumps(m.editorial_memory(bid))
+    finally:
+        current_reviewer.reset(token)
+    token = current_reviewer.set("user-2")
+    try:
+        theirs = json.dumps(m.editorial_memory(bid))
+    finally:
+        current_reviewer.reset(token)
+    assert "assertion" in mine and "assertion" not in theirs
+
+
+def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
+    from app.enrichment_ledger import EnrichmentLedger
+
+    ledger = EnrichmentLedger(tmp_path / "l.jsonl")
+    ledger.append("proposed", model="m", field="f", value="the model said this", blind=True)
+    ledger.append("proposed", model="m", field="f", value="shown value", blind=False)
+    ledger.append("recheck_seal", model="", field="f", value="first answer")
+    ledger.append("blind_label", model="m", field="f", value="the model said this", new_value="reviewer said this", agreed=False)
+    text = ledger.to_csv()
+    assert "the model said this" in text  # only the decision row, after the fact
+    assert text.count("the model said this") == 1 and "first answer" not in text and "shown value" in text
+
+
+# ---- a guard: a new corpus-build route has to be looked at ---------------------------------------------------------
+
+# Routes whose responses can carry a record or values derived from one. Each passes through the response filter, which
+# hides a pending second opinion in any record it finds, and the channels tested above cover what it cannot see.
+CARRIES_RECORDS = {
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/disposition"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/metadata"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/review/undo"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/review/redo"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/rerun-metadata"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/publish"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/second-opinions"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/second-opinion"),
+}
+# Routes that return only build-level state (status, counters, manifest) or start work.
+BUILD_LEVEL = {
+    ("POST", "/api/pdf/corpus-builds"),
+    ("GET", "/api/pdf/corpus-builds"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/manifest/regenerate"),
+    ("PATCH", "/api/pdf/corpus-builds/{build_id}/manifest"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/confirm-manifest"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/cancel"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/settle-metadata"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/resume"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/retry"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/enrich"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+}
+
+
+def test_every_corpus_build_route_has_been_considered_for_second_opinion_leaks():
+    seen = {
+        (method, route.path)
+        for route in main.app.routes
+        if getattr(route, "path", "").startswith("/api/pdf/corpus-builds")
+        for method in getattr(route, "methods", set()) - {"HEAD", "OPTIONS"}
+    }
+    assert len(seen) > 25  # the route table was actually read
+    unreviewed = sorted(seen - CARRIES_RECORDS - BUILD_LEVEL)
+    assert not unreviewed, (
+        "New corpus-build route(s) not classified in tests/test_second_opinion_scrub.py: " + ", ".join(f"{m} {p}" for m, p in unreviewed)
+        + ". Decide whether the response can carry a record or a value derived from one, and add it to CARRIES_RECORDS or BUILD_LEVEL."
+    )
