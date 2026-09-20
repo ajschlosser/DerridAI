@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useId, watch } from "vue";
 import UiButton from "./UiButton.vue";
 
 const props = withDefaults(defineProps<{
@@ -22,7 +22,17 @@ const dialogId = useId();
 const titleId = `${dialogId}-title`;
 const descriptionId = `${dialogId}-description`;
 const heading = ref<HTMLElement | null>(null);
+const body = ref<HTMLElement | null>(null);
+// A region that scrolls must be reachable from the keyboard, but a tab stop on a body that
+// fits would be noise, so it is focusable only while its content overflows.
+const scrollable = ref(false);
+let bodyObserver: ResizeObserver | undefined;
 let priorActive: HTMLElement | null = null;
+
+function measureBody() {
+  const node = body.value;
+  scrollable.value = !!node && node.scrollHeight > node.clientHeight + 1;
+}
 
 function focusable(): HTMLElement[] {
   if (!panel.value) return [];
@@ -54,12 +64,19 @@ watch(() => props.open, async value => {
   if (value) { priorActive = document.activeElement as HTMLElement | null; await focusDialog(); }
   else priorActive?.focus?.({ preventScroll: true });
 });
+onUpdated(measureBody);
 onMounted(async () => {
+  if (typeof ResizeObserver !== "undefined" && body.value) {
+    bodyObserver = new ResizeObserver(measureBody);
+    bodyObserver.observe(body.value);
+  }
+  measureBody();
   priorActive = document.activeElement as HTMLElement | null;
   document.addEventListener("keydown", onKeydown);
   if (props.open) await focusDialog();
 });
 onBeforeUnmount(() => {
+  bodyObserver?.disconnect();
   document.removeEventListener("keydown", onKeydown);
   priorActive?.focus?.({ preventScroll: true });
 });
@@ -92,7 +109,7 @@ onBeforeUnmount(() => {
             @click="emit('close')"
           />
         </header>
-        <div class="ui-dialog-body"><slot /></div>
+        <div ref="body" class="ui-dialog-body" :tabindex="scrollable ? 0 : undefined" :role="scrollable ? 'region' : undefined" :aria-labelledby="scrollable ? titleId : undefined"><slot /></div>
         <footer v-if="$slots.footer" class="ui-dialog-footer"><slot name="footer" /></footer>
       </section>
     </div>

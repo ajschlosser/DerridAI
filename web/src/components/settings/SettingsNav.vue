@@ -53,7 +53,7 @@ function onKey(event: KeyboardEvent, index: number) {
 .settings-nav{min-width:0}
 .settings-nav-list{display:grid;gap:4px}
 .settings-nav-item{min-height:40px;width:100%;display:flex;align-items:flex-start;text-align:left;padding:8px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--muted);font-size:.875rem;font-weight:700;line-height:1.35}
-.settings-nav-item[aria-selected="true"]{background:var(--accent-soft);border-color:var(--line-strong);color:var(--accent-2);box-shadow:inset 3px 0 0 var(--accent)}
+.settings-nav-item[aria-selected="true"]{background:var(--accent-soft);border-color:var(--line-strong);color: var(--accent-fg);box-shadow:inset 3px 0 0 var(--accent)}
 .settings-nav-item:hover:not([aria-selected="true"]){background:var(--panel-2);color:var(--text)}
 .settings-nav-item:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
 @media (forced-colors: active){

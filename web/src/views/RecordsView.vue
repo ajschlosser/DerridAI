@@ -360,7 +360,7 @@ onMounted(() => {
 .records-table.compact th,.records-table.compact td{padding:6px 10px}
 .records-table tbody tr{cursor:pointer}
 .records-table tbody tr:hover,.records-table tbody tr:focus-visible{background:var(--accent-soft,#eef6f1);outline:none}
-.records-table tbody tr.selected{background:#f3f8f5}
+.records-table tbody tr.selected{background:var(--soft)}
 .records-sort{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
 .text-col{min-width:18rem;max-width:36rem}
 .actions-col{min-width:14rem;position:sticky;right:0;background:inherit;box-shadow:-8px 0 12px rgba(20,30,24,.04)}

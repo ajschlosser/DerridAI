@@ -27,8 +27,10 @@ function next(){if(offset.value+pageSize<props.pages.length)offset.value+=pageSi
       <div class="page-row page-head" role="row"><span role="columnheader">{{i18n.t('pdf_corpus.physical_pdf_page','Physical PDF page')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.printed_label','Printed label')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.label_source','Source')}}</span></div>
       <div v-for="page in visible" :key="page.pdf_page" class="page-row" role="row">
         <span role="cell">{{page.pdf_page}}</span>
-        <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{i18n.tf('pdf_corpus.printed_label_for_page','Printed label for physical PDF page {page}',{page:page.pdf_page})}}</label>
-        <input :id="`pdf-label-${page.pdf_page}`" class="control compact" :value="draft[page.pdf_page]||''" :disabled="disabled" @input="update(page.pdf_page,($event.target as HTMLInputElement).value)">
+        <span role="cell">
+          <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{i18n.tf('pdf_corpus.printed_label_for_page','Printed label for physical PDF page {page}',{page:page.pdf_page})}}</label>
+          <input :id="`pdf-label-${page.pdf_page}`" class="control compact" :value="draft[page.pdf_page]||''" :disabled="disabled" @input="update(page.pdf_page,($event.target as HTMLInputElement).value)">
+        </span>
         <span role="cell"><span class="source-pill">{{page.printed_page_label_source||i18n.t('pdf_corpus.unknown','unknown')}}</span></span>
       </div>
     </div>
@@ -38,4 +40,5 @@ function next(){if(offset.value+pageSize<props.pages.length)offset.value+=pageSi
 
 <style scoped>
 .page-label-editor{display:grid;gap:9px;padding:10px 0}.page-label-editor>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.page-label-editor b{font-size:.8125rem}.page-label-editor p{margin:3px 0 0;color:var(--muted);font-size:.8125rem;line-height:1.4;max-width:720px}.page-table{border:1px solid var(--line);border-radius:9px;overflow:hidden}.page-row{display:grid;grid-template-columns:140px minmax(120px,1fr) minmax(120px,1fr);gap:10px;align-items:center;padding:6px 9px;border-bottom:1px solid var(--line);font-size:.8125rem}.page-row:last-child{border-bottom:0}.page-head{background:var(--soft);font-weight:800}.compact{min-height:30px;padding:5px 7px}.source-pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.8125rem}.page-label-editor>footer{display:flex;justify-content:flex-end;gap:8px;align-items:center;font-size:.8125rem;color:var(--muted)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.control:focus-visible,.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:650px){.page-row{grid-template-columns:70px 1fr}.page-row>*:last-child{grid-column:2}.page-label-editor>header{flex-direction:column}}
+.page-row>[role=cell]:has(>input){min-width:0}.page-row>[role=cell]>input{width:100%}
 </style>

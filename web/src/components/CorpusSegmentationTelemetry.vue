@@ -44,5 +44,5 @@ const description=computed(()=>i18n.t("pdf_corpus.segmentation_telemetry_help","
 <style scoped>
 .segmentation-telemetry{display:grid;gap:8px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
 .telemetry-heading{display:grid;gap:2px}.telemetry-heading h3{margin:0;font-size:.8125rem}.telemetry-heading span,.telemetry-note{font-size:.8125rem;line-height:1.45;color:var(--muted)}
-dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:6px;margin:0}.metric{display:grid;gap:2px;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:0;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}.telemetry-note{display:flex;gap:10px;flex-wrap:wrap;margin:0}@media(max-width:640px){dl{grid-template-columns:1fr 1fr}}
+dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:6px;margin:0}.metric{display:grid;gap:2px;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}dt{font-size:.8125rem;color:var(--muted)}dd{margin:0;font-size:0.9375rem;font-weight:800;font-variant-numeric:tabular-nums}.telemetry-note{display:flex;gap:10px;flex-wrap:wrap;margin:0}@media(max-width:640px){dl{grid-template-columns:1fr 1fr}}
 </style>

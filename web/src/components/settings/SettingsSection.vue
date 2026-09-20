@@ -35,7 +35,7 @@ withDefaults(defineProps<{
 <style scoped>
 .settings-section{display:grid;gap:16px;padding:20px}
 .settings-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
-.settings-kicker{margin:0 0 4px;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2)}
+.settings-kicker{margin:0 0 4px;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color: var(--accent-fg)}
 .settings-section-head :is(h2,h3){margin:0;font-family:Georgia,"Times New Roman",serif;font-size:1.25rem;line-height:1.25;font-weight:650}
 .settings-section-copy{margin:6px 0 0;max-width:68ch;color:var(--muted);font-size:.875rem;line-height:1.5}
 .settings-section-body{display:grid;gap:14px}

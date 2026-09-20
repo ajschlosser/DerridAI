@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { lightTokens, resolveHex } from "./helpers/css-tokens";
 
 // WCAG 1.4.3 (text >= 4.5:1) and 1.4.11 (UI components and graphics >= 3:1) for every colour pair the
 // Operations panel uses. axe cannot judge count badges, gradients, or non-text contrast, so the tokens
@@ -69,9 +70,12 @@ describe("Operations panel contrast", () => {
 
   it("the count inside a pressed chip is solid white with accent text, not a translucent overlay", () => {
     // A translucent white chip over the accent lowers the contrast of white text below 4.5:1 on every theme.
-    expect(compact).toMatch(
-      /\.ops-chip\[aria-pressed="true"\]\.ops-chip-count\{background:#fff;color:var\(--ops-accent\);?\}/,
+    const rule = compact.match(
+      /\.ops-chip\[aria-pressed="true"\]\.ops-chip-count\{background:([^;}]+);color:var\(--ops-accent\);?\}/,
     );
+    expect(rule, "the pressed-chip count rule").not.toBeNull();
+    // --accent-on is white in every colour scheme, so the pill stays a solid white knockout in dark mode too.
+    expect(resolveHex(rule![1])).toBe("#ffffff");
   });
 
   it.each(Object.entries(ACCENTS))(
@@ -84,7 +88,12 @@ describe("Operations panel contrast", () => {
   it.each(Object.entries(ACCENTS))(
     "on the %s theme, the progress fill is distinguishable from its track (1.4.11)",
     (_name, accent) => {
-      const track = rgb(compact.match(/\.ops-progress\{[^}]*background:(#[0-9a-fA-F]{6})/)![1]);
+      const track = rgb(
+        resolveHex(
+          compact.match(/\.ops-progress\{[^}]*background:([^;}]+)/)![1],
+          lightTokens(source),
+        ),
+      );
       expect(ratio(rgb(accent), track)).toBeGreaterThanOrEqual(3);
     },
   );
