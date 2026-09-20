@@ -86,3 +86,76 @@ def test_metrics_endpoint_payload_reports_the_limit(tmp_path):
     m._ledger.append("accepted", model="q", field="f", run_id="r", confidence=0.9)
     payload = m.enrichment_metrics()
     assert payload["concurrency"]["limit"] >= 1 and payload["models"]["q"]["acceptance_rate"] == 1.0
+
+
+def reconcile_with(m, request, record_id="rec-1"):
+    record = {"record_id": record_id, "text": "x", "metadata_field_status": {}}
+    result = {
+        "metadata": {"discourse_role": "assertion"},
+        "field_assessments": {"discourse_role": {"confidence": 0.95, "needs_review": True}},
+        "field_evidence": {"discourse_role": {"block_ids": ["b1"], "confidence": 0.95}},
+    }
+    profile = cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
+    out = m._reconcile_metadata_results(record, profile, ["b1"], [("discourse", result, None)], False, request=request, build_id="b")
+    return out["metadata_field_status"]["discourse_role"]
+
+
+def test_the_autofill_ablation_is_the_no_autofill_baseline(tmp_path):
+    status = reconcile_with(manager(tmp_path), {"model": "q", "ablations": ["autofill"]})
+    assert status["status"] == "unresolved" and not status.get("autofilled")
+
+
+def test_the_blend_ablation_ignores_reviewer_history(tmp_path):
+    m = manager(tmp_path)
+    for _ in range(20):
+        m._ledger.append(CORRECTED, model="q", field="discourse_role")
+    assert reconcile_with(m, {"model": "q"})["status"] == "unresolved"  # history drags the blend down
+    assert reconcile_with(m, {"model": "q", "ablations": ["blended_confidence"]})["autofilled"] is True
+
+
+def test_events_carry_the_conditions_they_ran_under(tmp_path):
+    m = manager(tmp_path)
+    reconcile_with(m, {"model": "q", "arm": "B", "run_id": "run7", "ablations": ["rejection_memory"], "generation": {"temperature": 0.1, "seed": 3}})
+    row = next(e for e in m._ledger.events() if e["kind"] == "proposed")
+    assert (row["arm"], row["run_id"], row["seed"], row["ablations"]) == ("B", "run7", 3, ["rejection_memory"])
+    assert row["code_version"] and row["prompt_version"]
+
+
+def test_gold_records_never_feed_the_blend(tmp_path):
+    m = manager(tmp_path)
+    m._ledger.append(CORRECTED, model="q", field="f", gold=True)
+    m._ledger.append(ACCEPTED, model="q", field="f", gold=False)
+    assert m._ledger.review_counts("q", "f") == (1, 1)
+
+
+def test_blind_records_seal_the_models_value_and_score_the_reviewers_own(tmp_path):
+    m = manager(tmp_path)
+    request = {"model": "q", "blind_rate": 1.0}
+    record = {"record_id": "rec-9", "text": "x", "metadata_field_status": {}}
+    result = {
+        "metadata": {"discourse_role": "assertion"},
+        "field_assessments": {"discourse_role": {"confidence": 0.99, "needs_review": False}},
+        "field_evidence": {"discourse_role": {"block_ids": ["b1"], "confidence": 0.99}},
+    }
+    profile = cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
+    out = m._reconcile_metadata_results(record, profile, ["b1"], [("discourse", result, None)], False, request=request, build_id="b")
+    status = out["metadata_field_status"]["discourse_role"]
+    # Nothing the browser receives says what the model thought, and nothing is autofilled.
+    assert out["discourse_role"] is None and status["blind"] is True and status["status"] == "unresolved"
+    assert "assertion" not in str(out) and "proposed_value" not in status and not status.get("autofilled")
+    assert m._ledger.sealed_value("b", "rec-9", "discourse_role") == "assertion"
+    # The reviewer decides without seeing it; then it is revealed and the agreement is logged.
+    m._record_human_llm_feedback("b", "discourse_role", None, "critique", status, out)
+    label = next(e for e in m._ledger.events() if e["kind"] == "blind_label")
+    assert label["agreed"] is False and label["value"] == "assertion" and label["new_value"] == "critique"
+    assert out["blind_reveals"]["discourse_role"] == "assertion"
+
+
+def test_anchoring_compares_seen_and_blind_agreement():
+    from app.enrichment_metrics import compute
+
+    rows = [{"kind": "accepted", "model": "m", "field": "f", "confidence": 0.9}] * 9 + [{"kind": "corrected", "model": "m", "field": "f", "confidence": 0.9}]
+    rows += [{"kind": "blind_label", "model": "m", "field": "f", "agreed": i < 5} for i in range(10)]
+    m = compute(rows)["models"]["m"]
+    assert m["blind_labels"] == 10 and m["blind_agreement_ci"]["rate"] == 0.5
+    assert m["anchoring"]["difference"] == 0.4 and m["anchoring"]["p_value"] < 0.1

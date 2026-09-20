@@ -1946,6 +1946,10 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     are stripped by the build manager before the public build manifest is saved.
     """
     resolved = dict(payload)
+    # Experiment conditions travel as flat request keys inside the pipeline.
+    experiment = resolved.pop("experiment", None)
+    if isinstance(experiment, dict):
+        resolved.update({key: value for key, value in experiment.items() if value not in (None, [], "")})
     # Build-level generation overrides are intentionally distinct from the saved
     # profile.  Resolve server-owned credentials/options first, then layer only
     # the explicitly supplied per-build values over the profile defaults.
@@ -2310,11 +2314,17 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
 
 
 @app.get("/api/pdf/corpus-enrichment-metrics")
-def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = ""):
+def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = "", arm: str = "", group_by: str = ""):
     try:
-        return pdf_corpus_builds.enrichment_metrics(build_id, run_id)
+        return pdf_corpus_builds.enrichment_metrics(build_id, run_id, arm, group_by)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.get("/api/pdf/corpus-enrichment-ledger.csv")
+def export_pdf_corpus_enrichment_ledger():
+    """Every ledger event as one CSV row with its experiment columns, for analysis outside the app."""
+    return Response(pdf_corpus_builds.enrichment_ledger_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="enrichment-ledger.csv"'})
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")

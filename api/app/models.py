@@ -425,6 +425,22 @@ class PdfCorpusRecordSizing(BaseModel):
             raise ValueError("absolute_record_chars must be at least long_record_chars")
 
 
+class PdfCorpusExperimentArm(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    ablations: list[Literal["autofill", "blended_confidence", "rejection_memory", "reviewer_conventions", "cross_build_learning"]] = Field(default_factory=list)
+
+
+class PdfCorpusExperiment(BaseModel):
+    """Optional experiment conditions. Absent, a run behaves normally and records the default arm."""
+
+    ablations: list[Literal["autofill", "blended_confidence", "rejection_memory", "reviewer_conventions", "cross_build_learning"]] = Field(default_factory=list)
+    arms: list[PdfCorpusExperimentArm] = Field(default_factory=list, max_length=8)
+    arm_salt: str = Field(default="", max_length=60)
+    blind_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    model_version: str | None = Field(default=None, max_length=120)
+
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
     profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
@@ -442,6 +458,7 @@ class PdfCorpusBuildCreate(BaseModel):
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     auto_enrich_work_metadata: bool = True
+    experiment: PdfCorpusExperiment | None = None
     auto_clean_text: bool = True
     text_cleanup_rules: list[Literal[
         "page_numbers", "repeated_short_lines", "line_hyphenation",
@@ -573,6 +590,7 @@ class PdfCorpusRecordRerun(BaseModel):
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     enrichment_mode: Literal["fast", "deep"] = "fast"
+    experiment: PdfCorpusExperiment | None = None
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
     scope: Literal["all", "accepted", "pending"] = "all"

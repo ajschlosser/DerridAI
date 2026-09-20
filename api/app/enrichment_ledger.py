@@ -10,6 +10,8 @@ cannot interleave inside a line.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import threading
@@ -20,6 +22,8 @@ from typing import Any
 # What can happen to a value. PROPOSED and AUTOFILLED are the model's doing, CALL is one model request
 # (its cost), and the rest are human decisions.
 PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
+BLIND_LABEL = "blind_label"  # a person's value for a field whose model value they could not see
+SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
 
@@ -58,11 +62,33 @@ class EnrichmentLedger:
                 rows.append(row)
         return rows
 
+    def sealed_value(self, build_id: str, record_id: str, field: str) -> Any:
+        """The model's value for a blind field. It lives only here, never in the record the browser receives."""
+        found = None
+        for row in self.events():
+            if row.get("kind") == PROPOSED and row.get("blind") and (row.get("build_id"), row.get("record_id"), row.get("field")) == (build_id, record_id, field):
+                found = row.get("value")
+        return found
+
     def review_counts(self, model: str, field: str) -> tuple[int, int]:
         """(reviews, accepted) for one model on one field, across every build and run."""
         reviews = accepted = 0
         for row in self.events():
+            if row.get("gold"):
+                continue  # gold records are scored, never learned from
             if row.get("model") == model and row.get("field") == field and row.get("kind") in REVIEW_EVENTS:
                 reviews += 1
                 accepted += row["kind"] == ACCEPTED
         return reviews, accepted
+
+    def to_csv(self) -> str:
+        """One row per event, one column per key; lists and objects are JSON text so no row is ragged."""
+        rows = self.events()
+        lead = ["at", "kind", "run_id", "build_id", "record_id", "model", "field", "arm", "ablations", "gold", "model_version", "prompt_version", "code_version", "temperature", "seed"]
+        columns = lead + sorted({key for row in rows for key in row} - set(lead))
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: (json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v) for k, v in row.items()})
+        return out.getvalue()
