@@ -490,6 +490,29 @@ def _context_string(
     return "\n\n".join(blocks), works, evidence
 
 
+def evidence_sufficiency_issues(evidence: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Return deterministic provenance failures before generation can begin."""
+    issues: list[dict[str, str]] = []
+    for item in evidence:
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        evidence_id = str(item.get("evidence_id") or "unknown")
+        missing = [
+            field
+            for field, value in {
+                "record_id": record.get("record_id"),
+                "work": record.get("work"),
+                "document_author": record.get("document_author"),
+                "exact_text": record.get("text"),
+                "inline_citation": item.get("inline_citation"),
+                "full_citation": item.get("full_citation"),
+            }.items()
+            if not str(value or "").strip()
+        ]
+        if missing:
+            issues.append({"evidence_id": evidence_id, "missing": ", ".join(missing)})
+    return issues
+
+
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
     citation_map = {
         item["evidence_id"]: item["inline_citation"]
@@ -1160,15 +1183,25 @@ def run_rag_pipeline(
         record_char_limit=request.evidence_record_char_limit,
         total_char_limit=request.evidence_total_char_limit,
     )
+    sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
         "name": "retrieval_context",
         "seconds": time.perf_counter() - stage_start,
         "detail": {
             "evidence_count": len(evidence),
             "characters": len(retrieval_context),
+            "sufficiency_issues": sufficiency_issues,
         },
     })
     update("context", 1, 1, f"{len(evidence)} evidence records packaged")
+    if not evidence:
+        raise ValueError("RAG evidence sufficiency failed: retrieval produced no evidence records.")
+    if sufficiency_issues:
+        detail = "; ".join(
+            f"{item['evidence_id']} missing {item['missing']}"
+            for item in sufficiency_issues
+        )
+        raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
 
     # Step 6: generate answer.
@@ -1260,5 +1293,6 @@ def run_rag_pipeline(
             "response_language": request.response_language,
             "evidence_record_char_limit": request.evidence_record_char_limit,
             "evidence_total_char_limit": request.evidence_total_char_limit,
+            "evidence_sufficiency": {"passed": True, "issues": []},
         },
     }
