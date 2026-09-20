@@ -24,7 +24,7 @@ def test_all_declared_versions_agree():
     """Every place that declares the app version must equal web/package.json, and the release needs notes.
 
     Checked: api/app/config.py, web/index.html title, and README.md "Current version".
-    The FastAPI constructor, backup manifest, AppBuildInfo (sign-in, user menu,
+    The FastAPI constructor, backup manifest, AppBuildInfo (sign-in, account menu,
     and Settings), and AuthScreen read APP_VERSION / the Vite-injected build stamp
     rather than duplicating the string.
     docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
@@ -46,7 +46,7 @@ def test_all_declared_versions_agree():
     assert "version=app_version_label()" in main
     assert '"app_version": APP_VERSION' in main
     assert '"git_commit": APP_GIT_COMMIT or None' in main
-    assert "AppBuildInfo" in read("web/src/App.vue")
+    assert "AppBuildInfo" in read("web/src/components/shell/TopbarAccount.vue")
     assert "AppBuildInfo" in read("web/src/components/AuthScreen.vue")
     assert "AppBuildInfo" in read("web/src/views/SettingsView.vue")
     assert "APP_VERSION" in read("web/src/components/AppBuildInfo.vue")
