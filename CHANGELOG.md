@@ -3,6 +3,30 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.14 — Tidy Tern
+
+Corpus Builder fixes: preparing the workspace no longer blocks the page, a redesigned bulk edit, no more clipped record text or cut-off menus, working LLM touch-up, and no placeholder values. See [0.62.14](docs/notes/0.62.14.md).
+
+## 0.62.13 — Fair Falcon
+
+Human reliability can now be measured: reviewer re-checks, blind second opinions and reviewer ids in the ledger. See [0.62.13](docs/notes/0.62.13.md).
+
+## 0.62.12 — Rigorous Robin
+
+Enrichment experiments can be run and analysed: conditions are recorded on every event, ablations and arms are real switches, there is a frozen gold set, more measures with intervals, and a CSV export. See [0.62.12](docs/notes/0.62.12.md).
+
+## 0.62.11 — Measured Marmot
+
+Enrichment is now measured: every model proposal and call is ledgered, ten measures are computed per model and field, runs carry ids, and concurrent runs are limited. See [0.62.11](docs/notes/0.62.11.md).
+
+## 0.62.10 — Careful Crane
+
+Records no longer start or end mid-sentence, the main-text start page has one source of truth and is suggested from the document's own structure, and confident LLM values are filled in with an audit trail. See [0.62.10](docs/notes/0.62.10.md).
+
+## 0.62.9 — Steady Swift
+
+Scrolling no longer gets stuck in the review workspace, and edits to document metadata are no longer lost or refused. See [0.62.9](docs/notes/0.62.9.md).
+
 ## 0.62.8 — Spacious Stork
 
 The Corpus Builder review workspace fills the screen, keeps its decisions in one row within reach, and its panes can be resized from the keyboard. See [0.62.8](docs/notes/0.62.8.md).

@@ -4,14 +4,12 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
-import UiButton from "./components/ui/UiButton.vue";
 import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
-import LanguageFlag from "./components/LanguageFlag.vue";
-import AppBuildInfo from "./components/AppBuildInfo.vue";
 import AppNotifications from "./components/AppNotifications.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
+import TopbarChrome from "./components/shell/TopbarChrome.vue";
 import SidebarPrimaryNav from "./components/shell/SidebarPrimaryNav.vue";
 import SidebarMoreTools from "./components/shell/SidebarMoreTools.vue";
 import SidebarStatus from "./components/shell/SidebarStatus.vue";
@@ -23,7 +21,6 @@ const route=useRoute();
 const shell=useShellStore();
 const auth=useAuthStore();
 const i18n=useI18nStore();
-const fileInput=ref<HTMLInputElement|null>(null);
 const runtimeStarted=ref(false);
 const handlingAuthExpiry=ref(false);
 const topSearch=ref("");
@@ -35,8 +32,6 @@ const moreToolsOpen=ref(storedMoreTools()??false);
 const nativeBackPath=ref<string|null>(null);
 const nativeForwardPath=ref<string|null>(null);
 const s=computed(()=>shell.snapshot);
-const currentLocaleInfo=computed(()=>i18n.languages.find(language=>language.code===i18n.locale));
-const userInitials=computed(()=>String(auth.user?.username||"U").split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"U");
 const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",providers:"page.providers",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
 function canNav(id:string){const capability=pageCapability[id];return !capability||auth.can(capability)}
 try{
@@ -49,7 +44,6 @@ try{
   if(contrast==="more"||(contrast==="system"&&window.matchMedia?.("(prefers-contrast: more)").matches))document.documentElement.dataset.contrast="more";
 }catch{document.documentElement.dataset.uiTheme="green"}
 
-function languageDisplayName(_code:string,fallback:string){return fallback}
 const groupedNav=computed(()=>{
   // Never draw a partial menu: the Vue-side admin items below are appended to the runtime's
   // list, so show nothing until that list exists.
@@ -85,9 +79,15 @@ const canBreadcrumbForward=computed(()=>Boolean(nativeForwardPath.value)||s.valu
 const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back","Back"):s.value.backLabel);
 const breadcrumbForwardLabel=computed(()=>nativeForwardPath.value?i18n.t("ui.forward","Forward"):s.value.forwardLabel);
 
-function invoke(action:()=>unknown){return action()}
-function chooseFiles(){if(auth.isAdmin)fileInput.value?.click()}
-function onFiles(event:Event){if(!auth.isAdmin)return;const input=event.target as HTMLInputElement;if(input.files?.length)runtime.triggerImport(input.files);input.value=""}
+function onImport(files:FileList){if(auth.isAdmin)runtime.triggerImport(files)}
+function onWorkspaceAction(id:string){
+  if(id==="merge")runtime.triggerMerge();
+  else if(id==="subset")runtime.triggerSubset();
+  else if(id==="bulk")runtime.triggerBulkEdit();
+  else if(id==="ocr")runtime.triggerOcrClean();
+  else if(id==="flagged")runtime.triggerReviewFlagged();
+  else if(id==="export")runtime.triggerExport();
+}
 function navigateNative(path:string,runtimeView?:string){
   const current=router.currentRoute.value.fullPath;
   if(current===path)return;
@@ -144,7 +144,6 @@ function navigate(view:string){
 function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="home")return false;if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
 function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
-function openHelp(){runtime.navigateView("faq")}
 function onMoreToolsToggle(open:boolean){
   // A programmatic change already matches the model; only a user toggle differs from it.
   if(open===moreToolsOpen.value)return;
@@ -244,12 +243,7 @@ watch(()=>auth.user?.id,(id)=>{
     </aside>
 
     <section class="workspace shell-workspace">
-      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder','Search the corpus, works, concepts, or annotations…')" @submit="submitTopSearch"/><div class="shell-top-actions">
-        <details v-if="auth.isAdmin" class="shell-actions-menu"><summary>{{i18n.t('ui.admin_actions','Actions')}}</summary><div class="shell-actions-popover"><input id="fileInput" ref="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple hidden @change="onFiles"><UiButton :label="i18n.t('ui.open_jsonl','Open JSONL')" icon="upload" @click="chooseFiles"/><UiButton :label="i18n.t('ui.merge_tabs','Merge tabs')" icon="plus" :disabled="s.files.length<2" :disabled-reason="i18n.t('ui.need_two_tabs_merge','Load at least two JSONL tabs to merge them.')" @click="invoke(runtime.triggerMerge)"/><UiButton :label="i18n.t('ui.create_subset','Create subset')" icon="filter" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_subset','Load JSONL records before creating a subset.')" @click="invoke(runtime.triggerSubset)"/><UiButton :label="i18n.t('ui.bulk_edit','Bulk edit field')" icon="edit" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_bulk_edit','Load JSONL records before bulk editing.')" @click="invoke(runtime.triggerBulkEdit)"/><UiButton :label="i18n.t('ui.clean_ocr','Clean OCR Artifacts')" icon="broom" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_ocr','Load JSONL records before cleaning OCR artifacts.')" @click="invoke(runtime.triggerOcrClean)"/><UiButton v-if="s.flagged" :label="i18n.t('ui.review_flagged','Review flagged')" icon="spark" :count="s.flagged" @click="invoke(runtime.triggerReviewFlagged)"/><UiButton :label="i18n.t('ui.operations','Operations')" icon="history" :count="s.activeJobs" @click="invoke(runtime.triggerOperations)"/><UiButton :label="i18n.t('ui.export','Export')" icon="download" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_export','Load JSONL records before exporting.')" @click="invoke(runtime.triggerExport)"/></div></details>
-        <button class="shell-icon-button" type="button" :title="i18n.t('nav.faq','Help')" @click="openHelp">?</button>
-        <div class="language-switcher shell-language-switcher"><LanguageFlag :code="i18n.locale" :symbol="currentLocaleInfo?.flag" :label="currentLocaleInfo?.name" size="small"/><select id="localePicker" :aria-label="i18n.t('dashboard.interface_language','Interface language')" :value="i18n.locale" :disabled="i18n.loading" @change="i18n.setLocale(($event.target as HTMLSelectElement).value)"><option v-for="language in i18n.languages" :key="language.code" :value="language.code">{{languageDisplayName(language.code,language.name)}}</option></select></div>
-        <details class="shell-user-menu"><summary><span class="shell-avatar">{{userInitials}}</span><span class="shell-user-copy"><b>{{auth.user.username}}</b><small>{{auth.user.role_name||auth.user.role}}</small></span><span>⌄</span></summary><div class="shell-user-popover"><AppBuildInfo compact :show-commit="auth.isAdmin"/><button class="btn" type="button" @click="logout">{{i18n.t('ui.sign_out','Sign out')}}</button></div></details>
-      </div></header>
+      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder','Search the corpus, works, concepts, or annotations…')" @submit="submitTopSearch"/><div class="shell-top-actions"><TopbarChrome :is-admin="auth.isAdmin" :can-faq="auth.can('page.faq')" :can-settings="auth.can('page.settings')" :username="auth.user.username" :role="auth.user.role" :role-name="auth.user.role_name" :file-count="s.files.length" :flagged="s.flagged" :languages="i18n.languages" :locale="i18n.locale" :locale-loading="i18n.loading" @import="onImport" @action="onWorkspaceAction" @navigate="navigate" @logout="logout" @locale="i18n.setLocale($event)" /></div></header>
       <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
       <div v-if="auth.isAdmin&&s.files.length" class="file-tabs shell-file-tabs"><div v-for="file in s.files" :key="file.id" class="tab" :class="{active:file.active}" @click="runtime.activateFile(file.id)"><span v-if="file.dirty" class="dot"></span><span class="tn">{{file.name}}</span><span class="badge">{{file.count.toLocaleString(i18n.locale)}}</span><button class="x" :title="i18n.t('ui.close_file','Close file')" @click="closeFile($event,file.id)">×</button></div></div>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>

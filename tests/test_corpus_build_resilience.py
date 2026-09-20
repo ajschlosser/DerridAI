@@ -191,7 +191,7 @@ def test_run_stops_before_record_construction_when_segmentation_is_unresolved(mo
     _install_asset(repo,blocks)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_build(repo,blocks=len(blocks))
-    manager._run(build["build_id"], {"provider":"ollama","model":"test","review_manifest_before_segmentation":False})
+    manager._run(build["build_id"], {"provider":"ollama","model":"test"})
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["status"]=="awaiting_review"
     assert refreshed["record_count"]>0
@@ -297,34 +297,6 @@ def test_cosmopolitanism_scale_empty_segmentation_cannot_collapse_to_one_record(
     refreshed = repo.get_build(build["build_id"])
     assert refreshed["segmentation_blocked"] is False
     assert all(item.get("kind") == "provisional_size_split" for item in refreshed["segmentation_unresolved_regions"])
-
-
-def test_manifest_review_checkpoint_stops_before_segmentation_and_confirm_resumes(monkeypatch, tmp_path: Path):
-    """With manifest review enabled the build pauses before segmentation until confirmed.
-
-    The build waits in "awaiting_manifest_review" without calling segmentation; confirming queues
-    it and records the confirmed manifest revision.
-    """
-    repo=cb.PdfCorpusRepository(tmp_path/"repo")
-    blocks=_blocks(8)
-    _install_asset(repo,blocks)
-    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    build=_build(repo,blocks=len(blocks))
-    monkeypatch.setattr(manager,"_document_manifest",lambda *args,**kwargs:{"title":"Test","document_author":"Jacques Derrida"})
-    called={"segment":0}
-    monkeypatch.setattr(manager,"_segment",lambda *args,**kwargs: called.__setitem__("segment",called["segment"]+1) or [])
-    manager._run(build["build_id"], {"provider":"ollama","model":"test","review_manifest_before_segmentation":True})
-    paused=repo.get_build(build["build_id"])
-    assert paused["status"]=="awaiting_manifest_review"
-    assert paused["stage"]=="document_review"
-    assert called["segment"]==0
-    # Confirming records the reviewed manifest revision before queueing resume.
-    monkeypatch.setattr(manager._executor,"submit",lambda *args,**kwargs: None)
-    queued=manager.confirm_manifest(build["build_id"], {"provider":"ollama","model":"test","review_manifest_before_segmentation":True})
-    assert queued["status"]=="queued"
-    confirmed=repo.get_build(build["build_id"])
-    assert confirmed.get("manifest_confirmed_at")
-    assert confirmed.get("manifest_confirmed_revision")==1
 
 
 def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(monkeypatch, tmp_path: Path):

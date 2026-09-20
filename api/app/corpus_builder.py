@@ -25,6 +25,14 @@ from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
+from .error_severity import severity as error_severity
+from .reviewer_context import current_reviewer
+from .autofill import decide as decide_autofill, in_audit_sample
+from . import experiment
+from .enrichment_metrics import compute as compute_enrichment_metrics
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, RECHECK, RECHECK_SEAL, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
+from .main_text_start import infer_main_text_start
+from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
     ALLOWED_METADATA_FIELDS as ALLOWED_METADATA_FIELDS,
@@ -63,9 +71,43 @@ PROFILE_VERSION = "derrida-scholarly-v12"
 
 
 
+_PROMPT_TAG_RE = re.compile(r"</?\s*SOURCE[_ ]?TEXT\s*/?\s*>", re.I)
+_EDGE_TAG_RE = re.compile(r"^\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*|\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*$")
+_EDGE_LABEL_RE = re.compile(r"^\s*(?:\[?\s*(?:SOURCE[_ ]TEXT|TOUCHED[- _]?UP(?: TEXT)?|CORRECTED(?: TEXT)?|OUTPUT|RESULT)\s*\]?\s*:)\s*", re.I)
+
+
+def _strip_added_markup(proposed: str, source: str) -> str:
+    """Trim tags and labels a model echoed from the prompt around its answer.
+
+    The test is the one a person would use: material at the very start or end of the answer that is not at the
+    start or end of the source was added by the model. So a tag or label is removed only when the source does not
+    itself begin or end with it; a real "<b>" in the text is kept.
+    """
+    value = proposed
+    # The prompt's own delimiter is never text, wherever the model put it (a small model may even write it self-closing).
+    if not _PROMPT_TAG_RE.search(source):
+        value = _PROMPT_TAG_RE.sub("", value)
+    for _ in range(6):  # a tag, then a label, then another tag: peel until nothing more is added
+        before = value
+        label = _EDGE_LABEL_RE.match(value)
+        if label and not source.lstrip().lower().startswith(label.group(0).strip().lower()):
+            value = value[label.end():]
+        for match in (_EDGE_TAG_RE.search(value),):
+            if not match:
+                continue
+            tag = (match.group(1) or match.group(2) or "").strip()
+            at_start = bool(match.group(1))
+            if tag and not (source.lstrip().startswith(tag) if at_start else source.rstrip().endswith(tag)):
+                value = value[match.end():] if at_start else value[: match.start()]
+        value = value.strip()
+        if value == before:
+            break
+    return value
+
+
 def _sanitize_touchup_output(proposed: str, source: str) -> str:
     """Remove model-added outer wrappers without touching source punctuation."""
-    value = str(proposed or "").strip()
+    value = _strip_added_markup(str(proposed or "").strip(), str(source or "").strip())
     source_value = str(source or "").strip()
     lines = value.splitlines()
     source_lines = source_value.splitlines()
@@ -568,6 +610,10 @@ class IndexMetadataResponseModel(BaseModel):
 
 
 
+def _same_label(a: Any, b: Any) -> bool:
+    return json.dumps(a, sort_keys=True, default=str) == json.dumps(b, sort_keys=True, default=str)
+
+
 def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
     # Flag likely sentence/paragraph cuts between adjacent records without
     # automatically rewriting scholarly boundaries on weak heuristics.
@@ -845,7 +891,13 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
             if is_page_number or len(header_pages.get(normalized, set())) >= repeat_threshold:
                 block["excluded_reason"] = "page_number" if is_page_number else "repeated_header_footer"
                 excluded_count += 1
+        try:
+            outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
+        except Exception:  # noqa: BLE001 - a broken outline only removes one clue
+            outline = []
         return {
+            "main_text_start_inference": infer_main_text_start(blocks, pages, outline),
+            "outline": [{"page": page, "title": title} for page, title in outline[:400]],
             "filename": _safe_filename(filename),
             "page_count": doc.page_count,
             "metadata": metadata,
@@ -905,6 +957,25 @@ class PdfCorpusRepository:
         meta = _json_read(self.asset_meta_path(asset_id))
         if not isinstance(meta, dict):
             raise KeyError(asset_id)
+        return self._with_start_inference(meta)
+
+    def _with_start_inference(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Assets extracted before the inference existed get it the first time they are read, and keep it."""
+        if "main_text_start_inference" in meta or not meta.get("asset_id"):
+            return meta
+        asset_id = str(meta["asset_id"])
+        try:
+            outline: list[tuple[int, str]] = []
+            pdf_path = self.asset_pdf_path(asset_id)
+            if pdf_path.exists():
+                with fitz.open(pdf_path) as doc:
+                    outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
+            meta["outline"] = [{"page": page, "title": title} for page, title in outline[:400]]
+            meta["main_text_start_inference"] = infer_main_text_start(self.load_blocks(asset_id), meta.get("pages") or [], outline)
+            with self._lock:
+                _json_write(self.asset_meta_path(asset_id), meta)
+        except Exception:  # noqa: BLE001 - a failed inference must never make an asset unreadable
+            meta["main_text_start_inference"] = {"page": None, "confidence": 0.0, "clues": [], "offered": False}
         return meta
 
     def list_assets(self) -> list[dict[str, Any]]:
@@ -912,7 +983,7 @@ class PdfCorpusRepository:
         for path in sorted((self.root / "assets").glob("pdf-*.json"), reverse=True):
             item = _json_read(path)
             if isinstance(item, dict):
-                items.append(item)
+                items.append(self._with_start_inference(item))
         return items
 
     def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:
@@ -1235,6 +1306,7 @@ class PdfCorpusRepository:
                 if total >= offset and len(items) < limit:
                     record["topology_index"] = topology_index
                     PdfCorpusBuildManager._decorate_review_state(record)
+                    PdfCorpusBuildManager._present_for_reviewer(record)
                     items.append(record)
                 total += 1
         for record in items:
@@ -1306,6 +1378,9 @@ class PdfCorpusBuildManager:
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
+        self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
+        self._suspended: set[tuple[str, str]] = set()
+        self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
 
     def reset_in_memory_state(self) -> None:
@@ -1411,6 +1486,7 @@ class PdfCorpusBuildManager:
                 elif key in {"review_provider_profile_id", "_review_provider"} and key in merged and key not in request:
                     merged.pop(key, None)
             self._runtime_requests[build_id] = merged
+            self._provider_epoch[build_id] = self._provider_epoch.get(build_id, 0) + 1
             public = dict(build.get("request") or {})
             for key in ("provider", "model", "base_url", "generation", "provider_profile_id", "review_provider_profile_id"):
                 if key in merged:
@@ -1531,6 +1607,172 @@ class PdfCorpusBuildManager:
         build["stage"] = "document_review"
         self.repo.save_build(build)
         return self.resume(build_id, request)
+
+    def _request_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None:
+        """Mark some decisions to be labelled again by a different reviewer, who will not see this answer."""
+        reviewer = current_reviewer.get()
+        if not reviewer or value in (None, "", []) or not experiment.needs_second_opinion(str(record.get("record_id") or ""), field, self._experiment_rate(build_id, "iaa_rate")):
+            return
+        # A later edit by the first reviewer replaces the answer, so an earlier second opinion no longer compares like with like.
+        record.setdefault("second_opinion", {})[field] = {"first_reviewer": reviewer}
+
+    def pending_second_opinions(self, build_id: str) -> list[dict[str, Any]]:
+        """Fields the current reviewer is asked to label without seeing the first reviewer's answer."""
+        me = current_reviewer.get()
+        if not me:
+            return []
+        out = []
+        for record in self.repo.load_records(build_id):
+            for field, item in (record.get("second_opinion") or {}).items():
+                if isinstance(item, dict) and not item.get("done") and item.get("first_reviewer") and item["first_reviewer"] != me:
+                    out.append({"record_id": record.get("record_id"), "field": field, "text": record.get("text"), "page_start": record.get("page_start"), "page_end": record.get("page_end")})
+        return out
+
+    @_serialize_record_mutation
+    def submit_second_opinion(self, build_id: str, record_id: str, field: str, value: Any) -> dict[str, Any]:
+        me = current_reviewer.get()
+        records = self.repo.load_records(build_id)
+        record = next((r for r in records if r.get("record_id") == record_id), None)
+        if record is None:
+            raise KeyError(record_id)
+        item = (record.get("second_opinion") or {}).get(field)
+        if not isinstance(item, dict) or item.get("done") or not me or item.get("first_reviewer") == me:
+            raise ValueError("There is no second opinion for you to give on this field.")
+        agreed = self._log_second_opinion(build_id, record, field, value, item)
+        self.repo.save_records(build_id, records)
+        return {"record_id": record_id, "field": field, "agreed": agreed}
+
+    def _log_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any, item: dict[str, Any]) -> bool:
+        first = record.get(field)
+        agreed = _same_label(first, value)
+        self._ledger.append(
+            "second_label", model="", field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=first, new_value=value,
+            agreed=agreed, first_reviewer=item["first_reviewer"], severity=None if agreed else error_severity(first, value),
+        )
+        item["done"] = True
+        item["agreed"] = agreed
+        return agreed
+
+    @staticmethod
+    def _second_opinion_owed(record: dict[str, Any], field: str) -> dict[str, Any] | None:
+        """The pending second-opinion entry for this field if the current reviewer, not the first, is the one asked."""
+        me = current_reviewer.get()
+        item = (record.get("second_opinion") or {}).get(field)
+        if me and isinstance(item, dict) and not item.get("done") and item.get("first_reviewer") and item["first_reviewer"] != me:
+            return item
+        return None
+
+    @classmethod
+    def _present_for_reviewer(cls, record: dict[str, Any]) -> None:
+        """Hide, from a second reviewer, the answer they are about to independently give.
+
+        Applied where records are served, never before saving: it must not reach storage.
+        """
+        for field in list((record.get("second_opinion") or {}).keys()):
+            if cls._second_opinion_owed(record, field):
+                record[field] = [] if isinstance(record.get(field), list) else None
+                record.setdefault("metadata_field_status", {})[field] = {
+                    "status": "unresolved", "method": "human", "blind": True, "reason_code": "second_opinion", "auto_populated": False, "reason": "",
+                }
+                for entry in record.get("metadata_decisions") or []:
+                    if isinstance(entry, dict) and entry.get("field") == field:
+                        entry["value"] = None  # the decision log holds the first answer too
+                cls._scrub_sealed_field(record, field)
+
+    @staticmethod
+    def _scrub_sealed_field(record: dict[str, Any], field: str) -> None:
+        """Remove every copy of a sealed value, and the confidence and reasoning that would give it away, from the record."""
+        evidence = record.get("metadata_evidence")
+        if isinstance(evidence, dict) and isinstance(evidence.get(field), dict):
+            evidence[field] = {"block_ids": evidence[field].get("block_ids") or []}
+        for result in (record.get("metadata_stage_results") or {}).values():
+            if isinstance(result, dict):
+                for section in ("metadata", "field_assessments", "field_evidence"):
+                    if isinstance(result.get(section), dict):
+                        result[section].pop(field, None)
+
+    def _experiment_rate(self, build_id: str, key: str) -> float:
+        build = self.repo.get_build(build_id)
+        for source in (build.get("experiment"), build.get("request")):
+            if isinstance(source, dict) and source.get(key):
+                return float(source[key])
+        return 0.0
+
+    def _recheck_rate(self, build_id: str) -> float:
+        return self._experiment_rate(build_id, "recheck_rate")
+
+    def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None:
+        """Pick some of a reviewer's decisions to be asked again later, blind."""
+        if value in (None, "", []) or not experiment.is_recheck(str(record.get("record_id") or ""), field, self._recheck_rate(build_id)):
+            return
+        build = self.repo.get_build(build_id)
+        due = int(build.get("human_decision_count") or 0) + experiment.RECHECK_SPACING
+        record.setdefault("recheck_scheduled", {})[field] = {"due": due, "reviewer": current_reviewer.get()}
+
+    def _reopen_due_rechecks(self, build_id: str, records: list[dict[str, Any]], just_decided: dict[str, Any], profile: dict[str, Any]) -> None:
+        """Count this decision, then reopen, blind, any earlier decision whose turn has come."""
+        build = self.repo.get_build(build_id)
+        count = int(build.get("human_decision_count") or 0) + 1
+        build["human_decision_count"] = count
+        self.repo.save_build(build)
+        for record in records:
+            scheduled = record.get("recheck_scheduled")
+            if record is just_decided or not isinstance(scheduled, dict):
+                continue
+            for field, item in list(scheduled.items()):
+                if not isinstance(item, dict) or int(item.get("due") or 0) > count:
+                    continue
+                self._ledger.append(RECHECK_SEAL, model="", field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=record.get(field), reviewer=str(item.get("reviewer") or ""))
+                for entry in record.get("metadata_decisions") or []:
+                    if isinstance(entry, dict) and entry.get("field") == field:
+                        entry["value"] = None  # the earlier answer must not travel with the record
+                        entry["sealed"] = True
+                record[field] = [] if isinstance(record.get(field), list) else None
+                record.setdefault("metadata_field_status", {})[field] = {
+                    "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
+                    "reason": "",
+                }
+                del scheduled[field]
+                record["accepted"] = False
+                record["needs_review"] = True
+                self._sync_record_metadata_state(record, profile)
+
+    def _score_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any, prior_status: dict[str, Any]) -> bool:
+        """If this decision answers a re-check, log whether it matches the first answer and reveal that answer."""
+        if not prior_status.get("recheck"):
+            return False
+        record_id = str(record.get("record_id") or "")
+        first = self._ledger.sealed_value(build_id, record_id, field, RECHECK_SEAL)
+        agreed = first == value
+        first_reviewer = self._ledger.sealed_value(build_id, record_id, field, RECHECK_SEAL, column="reviewer")
+        # Self-consistency only means something when the same person answers both times.
+        self._ledger.append(RECHECK, model="", field=field, build_id=build_id, record_id=record_id, value=first, new_value=value, agreed=agreed, first_reviewer=first_reviewer or "", same_reviewer=(first_reviewer or "") == current_reviewer.get(), severity=None if agreed else error_severity(first, value))
+        record.setdefault("recheck_results", {})[field] = {"first": first, "second": value, "agreed": agreed}
+        return True
+
+    def enrichment_ledger_csv(self) -> str:
+        return self._ledger.to_csv()
+
+    def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None:
+        """Log the moment autofill is switched off or back on for a model and field, once, not on every value."""
+        with self._lock:
+            was = (model, field) in self._suspended
+            if suspended == was:
+                return
+            (self._suspended.add if suspended else self._suspended.discard)((model, field))
+        self._ledger.append(SUSPENDED if suspended else RESUMED, model=model, field=field, build_id=build_id, run_id=run_id, reviews=reviews, accepted=accepted)
+
+    def enrichment_metrics(self, build_id: str = "", run_id: str = "", arm: str = "", group_by: str = "") -> dict[str, Any]:
+        """The ten enrichment measures for the whole ledger, one build, or one run."""
+        records = self.repo.load_records(build_id) if build_id else None
+        return {
+            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id, arm=arm, group_by=group_by),
+            "concurrency": {"limit": max(1, int(settings.enrichment_max_concurrent_runs)), "working": self.active_enrichment_runs()},
+        }
+
+    def active_enrichment_runs(self) -> int:
+        listing = self.repo.list_builds(offset=0, limit=10000)
+        return sum(1 for b in listing["items"] if b.get("status") in {"queued", "running"} and b.get("stage") == "metadata_enrichment_rerun")
 
     def active_count(self) -> int:
         listing = self.repo.list_builds(offset=0, limit=10000)
@@ -1743,16 +1985,31 @@ class PdfCorpusBuildManager:
             build["llm_model_effectiveness"] = model_stats
             self.repo.save_build(build)
 
-    def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None) -> None:
+    def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None) -> None:
         info = prior_status or {}
         method = str(info.get("method") or "")
         state = str(info.get("status") or "")
         if "llm" not in method and state != "llm_inferred":
             return
+        if info.get("blind") and info.get("model") and record is not None:
+            sealed = self._ledger.sealed_value(build_id, str(record.get("record_id") or ""), field)
+            self._ledger.append(BLIND_LABEL, model=str(info["model"]), field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=sealed, new_value=new_value, agreed=sealed == new_value, severity=None if sealed == new_value else error_severity(sealed, new_value), **(info.get("conditions") or {}))
+            record.setdefault("blind_reveals", {})[field] = sealed  # now that they have decided, the reviewer may see it
+            return
+        kept = prior_value == new_value
+        if info.get("model"):
+            kind = ACCEPTED if kept else (REJECTED if new_value in (None, "", []) else CORRECTED)
+            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=prior_value, new_value=new_value, severity=None if kept else error_severity(prior_value, new_value), **(info.get("conditions") or {}))
+        if record is not None and not kept and prior_value not in (None, "", []):
+            # Remembered: the next pass is shown this as a value people turned down, and it lowers the
+            # model's blended confidence on this field through the ledger.
+            rejections = [r for r in record.get("llm_rejections") or [] if isinstance(r, dict)]
+            rejections.append({"field": field, "rejected_value": prior_value, "chosen_value": new_value, "model": info.get("model"), "at": iso_now()})
+            record["llm_rejections"] = rejections[-40:]
         family = next((name for name, fields in METADATA_FAMILY_FIELDS.items() if field in fields), None)
         if not family:
             return
-        key = "human_accepted_fields" if prior_value == new_value else "human_corrected_fields"
+        key = "human_accepted_fields" if kept else "human_corrected_fields"
         with self._lock:
             try:
                 build = self.repo.get_build(build_id)
@@ -2234,6 +2491,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # A deterministic start-page inference (only present when it is more than 90% sure) outranks
+        # the model's guess; the clues travel with the value so the reviewer can check them.
+        inferred = asset.get("main_text_start_inference")
+        if isinstance(inferred, dict) and inferred.get("offered") and isinstance(inferred.get("page"), int):
+            result["main_text_start_page"] = inferred["page"]
+            result["main_text_start_inference"] = {key: inferred.get(key) for key in ("page", "confidence", "clues")}
         # Human-confirmed document structure outranks LLM page-range inference.
         if reviewed_layout:
             layout_start = reviewed_layout.get("main_text_pdf_start")
@@ -3640,6 +3903,20 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
                         "reason": region_reason,
                     }
+            # A record that begins before the main text and runs into it cannot be labelled by
+            # page alone: the reviewer chooses main text, front matter, or splits it.
+            issues = [i for i in record.get("boundary_quality_issues") or [] if not (isinstance(i, dict) and i.get("code") == "main_text_start_straddle")]
+            if min(pdf_pages) < start_page <= max(pdf_pages) and region_status.get("status") not in {"human_confirmed", "human_override"}:
+                reason = f"This record starts before the main text (PDF page {start_page}) and continues into it. Choose main text, front matter, or split it."
+                issues.append({"code": "main_text_start_straddle", "edge": "record", "reason": reason})
+                record["needs_review"] = True
+                if not record.get("review_reason") or str(record.get("review_reason")).lower() == "pending human review.":
+                    record["review_reason"] = reason
+            if not any(isinstance(i, dict) and i.get("code") == "main_text_start_straddle" for i in issues) and str(record.get("review_reason") or "").endswith("Choose main text, front matter, or split it."):
+                record["review_reason"] = ""
+                record["needs_review"] = bool(issues)
+            if issues or record.get("boundary_quality_issues"):
+                record["boundary_quality_issues"] = issues
             role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
             # A stale/inferred manifest range must not make a reviewer-defined
             # main-text record paratext. Region/primary structural ownership is
@@ -3694,10 +3971,18 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 manifest = current_manifest
             profile_id = str(current_build.get("profile_id") or PROFILE_VERSION)
             if not bool(request.get("_interactive_provider_override")):
-                request = self._latest_runtime_request(build_id, request)
+                # The runtime request carries the provider; the run's own identity and experiment switches stay.
+                kept: dict[str, Any] = {key: request[key] for key in ("run_id", "arms", "arm_salt", "ablations", "arm", "model_version") if key in request}
+                request = {**self._latest_runtime_request(build_id, request), **kept}
+        request = experiment.with_arm(request, str(record.get("record_id") or ""))
+        off = experiment.disabled(request)
         self._apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record)
-        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or "")) if build_id else {"conventions": {}, "examples": {}}
+        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or ""), use_global="cross_build_learning" not in off) if build_id else {"conventions": {}, "examples": {}}
+        if "reviewer_conventions" in off:
+            editorial_memory = {**editorial_memory, "conventions": {}, "examples": {}}
+        if "rejection_memory" in off:
+            editorial_memory = {**editorial_memory, "pass_learning": None}
         editorial_context = editorial_memory.get("conventions", {}) if isinstance(editorial_memory, dict) else {}
         editorial_examples = editorial_memory.get("examples", {}) if isinstance(editorial_memory, dict) else {}
         record["editorial_memory_used"] = {
@@ -3718,7 +4003,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             pass_learning=editorial_memory.get("pass_learning") if isinstance(editorial_memory, dict) else None,
         )
         stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
-        return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus)
+        return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id)
 
     @staticmethod
     def _metadata_source_quality_gate(
@@ -3825,7 +4110,7 @@ Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
 
 For discourse_role, explicitly discriminate among the two or three closest plausible roles before choosing. In the discourse_role field assessment reason, briefly state why the selected role fits better than its nearest alternative. Pay special attention to the difference between the surrounding author's analysis and a reported_position held by someone else, and between critique, qualification, and commentary. Human-confirmed examples above are style/taxonomy guidance, not evidence.
-If a field is genuinely unsupported, return null rather than inventing a value.
+If a field is genuinely unsupported, return null rather than inventing a value. Never answer with a placeholder or a description of a role ("null", "N/A", "unknown", "the author of the current record", "the speaker", "this passage"): name the person, work or concept the text itself names, or return null.
 
 {base_context}
 For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.
@@ -4010,6 +4295,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
                 self._record_family_effectiveness(
                     build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
                     provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
@@ -4026,6 +4312,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
                 if stage_callback:
                     stage_callback(record, task_name, "failed", str(exc))
                 if build_id:
@@ -4037,8 +4324,36 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         self, record: dict[str, Any], profile: dict[str, Any], source_ids: list[str],
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]],
         obvious_apparatus: bool,
+        request: dict[str, Any] | None = None,
+        build_id: str = "",
     ) -> dict[str, Any]:
         """Bind proposals to source evidence while retaining reviewer-owned values."""
+        model = str((request or {}).get("model") or "")
+        run_id = str((request or {}).get("run_id") or (f"build-{build_id}" if build_id else ""))
+        off = experiment.disabled(request)
+        conditions = experiment.context(request, model=model, record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION)
+
+        def autofill(field: str, value: Any, confidence: float | None, evidence_info: dict[str, Any]) -> dict[str, Any] | None:
+            """The status for a value the model is sure enough about to fill in, or None.
+
+            The blended confidence (see autofill.py) outranks the model's own needs_review flag, but
+            never the absence of a cited source block or a self-report at or below the profile floor.
+            """
+            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
+                return None
+            reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
+            decision = decide_autofill(confidence, reviews, accepted)
+            self._note_suspension(model, field, bool(decision["suspended"]), reviews, accepted, build_id, run_id)
+            if not decision["autofill"]:
+                return None
+            audit = in_audit_sample(str(record.get("record_id") or ""), field)
+            self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=decision["confidence"], self_reported=confidence, audit=audit, **conditions)
+            return {
+                "status": "llm_inferred", "method": "llm", "model": model, "confidence": decision["confidence"],
+                "self_reported_confidence": confidence, "auto_populated": True, "autofilled": True, "audit_sample": audit,
+                "proposed_value": value, "reason_code": "resolved",
+                "reason": f"Filled in automatically at {round(float(decision['confidence']) * 100)}% confidence, with cited evidence.",
+            }
         allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
         allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
@@ -4242,6 +4557,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
             needs_human = bool(assessment.get("needs_review"))
+            auto = autofill(field, record.get(field), confidence, evidence_info) 
+            if auto:
+                field_status[field] = auto
+                continue
             field_status[field] = {
                 "status": "unresolved" if needs_human else "llm_inferred",
                 "method": "llm",
@@ -4269,7 +4588,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # made no assessment and proposed no value, do not manufacture an
                 # uncertainty item merely because the field exists in the schema.
                 continue
-            if field in required_metadata_fields and value in (None, "", []):
+            auto = autofill(field, value, confidence, evidence_info) 
+            if auto:
+                field_status[field] = auto
+            elif field in required_metadata_fields and value in (None, "", []):
                 field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # Model self-confidence is never publication authority. Any LLM
@@ -4298,8 +4620,35 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if checked_field in raw_llm_values:
                     checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
 
+        shown: dict[str, Any] = {}
+        for field in sorted(llm_populated_fields):
+            proposed_status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            shown[field] = record.get(field)
+            if conditions["blind"] and proposed_status.get("method") == "llm" and proposed_status.get("status") in {"llm_inferred", "unresolved"}:
+                # Blind review: the model's value is sealed in the ledger and the reviewer sees an empty field.
+                record[field] = [] if isinstance(shown[field], list) else None
+                field_status[field] = proposed_status = {
+                    "status": "unresolved", "method": "llm", "blind": True, "reason_code": "blind_review", "auto_populated": False,
+                    "reason": "",
+                }
+                self._scrub_sealed_field(record, field)
+            if proposed_status.get("method") == "llm":
+                # Later human decisions on this value are attributed to the model and conditions that produced it.
+                proposed_status.setdefault("model", model)
+                proposed_status["conditions"] = conditions
+            assessed = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            self._ledger.append(
+                PROPOSED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id,
+                value=shown.get(field), self_reported=assessed.get("confidence"),
+                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"),
+                supported=experiment.supported_in_text(shown.get(field), str(record.get("text") or "")) if field in experiment.FREE_TEXT_FIELDS else None, **conditions,
+            )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
+        if any(isinstance(info, dict) and info.get("blind") for info in field_status.values()):
+            # These aggregates are the model's own confidence in a record whose values are sealed.
+            record["semantic_classification_confidence"] = None
+            record["attribution_confidence"] = None
         review_reasons.extend(model_review_reasons)
         if review_reasons:
             record["metadata_needs_attention"] = True
@@ -4610,18 +4959,6 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
         manifest_build = self.repo.get_build(build_id)
         prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
-        if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
-            self._update(
-                build_id,
-                status="awaiting_manifest_review",
-                stage="document_review",
-                progress=0.12,
-                finished_at=iso_now(),
-                resumable=True,
-                error=None,
-            )
-            return None
-
         # The reviewed manifest defines the semantic-analysis region. Source
         # blocks outside it remain in the persisted source asset for audit.
         manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
@@ -4680,6 +5017,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if self._cancelled(build_id):
             raise InterruptedError("Corpus build cancelled")
         self._update(build_id, retrying_segmentation=False)
+        # Whoever proposed the boundaries (the model, a checkpoint, a heuristic), a record must not
+        # start or end mid-sentence. This is deterministic and idempotent, so it also repairs
+        # checkpoints written before it existed.
+        soft_max = int(CORPUS_PROFILES[str(previous_build.get("profile_id") or PROFILE_VERSION)].get("soft_max_chars") or 3500)
+        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=soft_max * 3)
+        self._update(build_id, sentence_boundary_report={key: len(value) for key, value in sentence_report.items()})
         self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
         self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
@@ -5374,11 +5717,31 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         self.repo.save_build(build)
         return build
 
+    @_serialize_record_mutation
+    def _write_start_page_to_layout(self, asset_id: str, start_page: Any) -> None:
+        """Keep one answer for "where does the main text start" per PDF.
+
+        The reviewer-confirmed layout plan on the source asset is the authority (it also drives
+        printed page numbers and region labels), so a start page edited on the document manifest is
+        written through to it. A PDF with no confirmed layout has only the manifest value.
+        """
+        try:
+            layout = self.repo.get_asset(asset_id).get("document_layout")
+        except Exception:  # noqa: BLE001 - a missing asset means there is no layout to keep in step
+            return
+        if not isinstance(layout, dict) or layout.get("confirmed_by") != "human":
+            return
+        if layout.get("main_text_pdf_start") == start_page:
+            return
+        self.repo.update_document_layout(asset_id, {**layout, "main_text_pdf_start": start_page})
+
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
+        # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
+        # pass merging results at the same moment must not have its results overwritten by a stale copy.
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
             stage = str(build.get("stage") or "")
-            if stage not in {"enriching", "metadata_retry"}:
+            if stage not in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}:
                 raise ValueError("Document metadata becomes editable after segmentation is complete.")
             if {"main_text_start_page", "main_text_end_page"} & set(changes):
                 raise ValueError("Main-text page boundaries are structural and cannot change while background enrichment is running.")
@@ -5395,6 +5758,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         validated = DocumentManifestModel.model_validate(candidate).model_dump(mode="json")
         manifest = {**current, **validated}
         manifest["source_asset_id"] = build.get("asset_id")
+        start_changed = "main_text_start_page" in changes and validated.get("main_text_start_page") != current.get("main_text_start_page")
+        if start_changed:
+            manifest.pop("main_text_start_inference", None)  # its clues describe a value that is no longer the one in use
+            self._write_start_page_to_layout(str(build.get("asset_id") or ""), validated.get("main_text_start_page"))
         build["manifest"] = manifest
         build["manifest_revision"] = current_revision + 1
         build["manifest_reviewed_at"] = iso_now()
@@ -5404,7 +5771,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         records = self.repo.load_records(build_id)
         if records:
             for record in records:
+                # The page range also classifies the record (main text, front matter, back matter), so a change to it
+                # must count as a change here even though those fields are not inherited from the manifest.
+                before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"), record.get("primary_text"), record.get("region_type"))
                 field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                if start_changed:
+                    # The layout plan labelled these records from the old start page; the new one relabels them.
+                    for field in ("region_type", "primary_text"):
+                        info = field_status.get(field)
+                        if isinstance(info, dict) and info.get("method") == "human_document_layout":
+                            field_status.pop(field, None)
                 for field in MANIFEST_INHERITED_FIELDS:
                     info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
                     if str(info.get("status") or "") in {"human_override", "human_confirmed"}:
@@ -5417,6 +5793,11 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
+                after = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, inline, full, record.get("primary_text"), record.get("region_type"))
+                # A record whose inherited values did not actually change has nothing new to review: leave its
+                # acceptance alone instead of reopening every record for an edit that did not touch it.
+                if after == before:
+                    continue
                 record["accepted"] = False
                 record["needs_review"] = True
                 record["review_reason"] = "Document manifest changed during human review; inherited metadata and citations were regenerated."
@@ -5444,7 +5825,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if token not in stop
         }
 
-    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "") -> dict[str, Any]:
+    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
         Only human-confirmed/overridden fields are eligible as conventions and few-shot
@@ -5469,6 +5850,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 continue
             if reset_at and str(row.get("human_touched_at") or "") <= reset_at:
                 continue
+            if experiment.is_gold(str(row.get("record_id") or "")):
+                continue  # the frozen gold set is scored, never learned from
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
                 if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
@@ -5516,7 +5899,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 examples[field] = kept
         # Conventions confirmed in other builds fill gaps only; this build's own
         # reviewers always take precedence over the shared ones.
-        for field, convention in self._global_learning.conventions(exclude_build_id=build_id).items():
+        for field, convention in (self._global_learning.conventions(exclude_build_id=build_id).items() if use_global else []):
             conventions.setdefault(field, convention)
         return {"conventions": conventions, "examples": examples, "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id])}
 
@@ -5647,6 +6030,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             for field in REVIEW_METADATA_FIELDS:
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
                 if info and info.get("status") == "llm_inferred":
+                    if info.get("model"):
+                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=target.get(field), new_value=target.get(field), **(info.get("conditions") or {}))
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
                     info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()
@@ -5932,11 +6317,22 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
         self._push_review_history(build_id, records, action="metadata_edit", selected_record_id=record_id)
         decision_log = list(target.get("metadata_decisions") or [])
+        skipped: set[str] = set()
         for key, value in changes.items():
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
-            self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status)
+            owed = self._second_opinion_owed(target, key)
+            if owed:
+                # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
+                self._log_second_opinion(build_id, target, key, value, owed)
+                skipped.add(key)
+                continue
+            answered_again = self._score_recheck(build_id, target, key, value, prior_status)
+            if not answered_again:
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
+                self._schedule_recheck(build_id, target, key, value)
+                self._request_second_opinion(build_id, target, key, value)
             target[key] = value
             if key in HUMAN_EDITABLE_METADATA_FIELDS:
                 is_override = key in MANIFEST_INHERITED_FIELDS
@@ -5953,14 +6349,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
-        self._mark_human_touch(target, list(changes))
+        self._mark_human_touch(target, [key for key in changes if key not in skipped])
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._reopen_due_rechecks(build_id, records, target, profile)
         self._sync_record_metadata_state(target, profile)
         target["record_revision"] = current_revision + 1
         _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
         self._decorate_review_state(persisted)
+        self._present_for_reviewer(persisted)
         return persisted
 
     @_serialize_record_mutation
@@ -6002,7 +6400,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             for key, value in changes.items():
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
-                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status)
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
                 record[key] = value
                 override = key in MANIFEST_INHERITED_FIELDS
                 statuses[key] = {
@@ -6047,7 +6445,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             current_revision = self._assert_record_revision(target, expected_revision)
             self._push_review_history(build_id, records, action="metadata_confirm_absent", selected_record_id=record_id)
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
-            self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status)
+            self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
             target[field] = None
             target.setdefault("metadata_field_status", {})[field] = {"status":"human_confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"human_confirmed_absent"})
@@ -6451,6 +6849,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if build.get("status") in {"queued", "running"}:
             raise ValueError("Wait for the active corpus operation to finish before starting metadata enrichment.")
         self._validate_execution_budget(request)
+        limit = max(1, int(settings.enrichment_max_concurrent_runs))
+        working = self.active_enrichment_runs()
+        if working >= limit:
+            raise ValueError(f"{working} metadata enrichment run(s) are already working (the limit is {limit}). Wait for one to finish.")
         scope = str(request.get("scope") or "all")
         families = [str(v) for v in request.get("families") or [] if str(v) in METADATA_FAMILY_FIELDS] or ["discourse", "quotation", "indexing"]
         passes = max(1, min(MAX_PASSES, int(request.get("passes") or 1)))
@@ -6469,12 +6871,16 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             "families": families, "scope": scope,
             "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
         }
+        for key in ("recheck_rate", "iaa_rate"):
+            if request.get(key) is not None:
+                build["experiment"] = {**(build.get("experiment") or {}), key: float(request[key])}
         runs = list(build.get("metadata_enrichment_runs") or []) + [run.copy()]
         build["metadata_enrichment_runs"] = runs[-30:]
         build["metadata_operation"] = run.copy()
         self.repo.save_build(build)
         self._update(build_id, status="running", stage="metadata_enrichment_rerun", error=None, resumable=False, metadata_operation=run)
-        self._executor.submit(self._metadata_enrichment_rerun_worker, build_id, request, operation_id, scope, families, passes)
+        # The operation id tags every ledger event this run writes, so runs never blur together.
+        self._executor.submit(self._metadata_enrichment_rerun_worker, build_id, {**request, "run_id": operation_id}, operation_id, scope, families, passes)
         return self.repo.get_build(build_id)
 
     def _share_generalizable_learning(self, build_id: str) -> None:
@@ -6563,6 +6969,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         indices = self._enrichment_pass_indices(snapshot, scope)
         max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
+        epoch_at_start = self._provider_epoch.get(build_id, 0)
+        provider_keys = ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider")
+
+        def effective_request() -> dict[str, Any]:
+            """This run's request, with the provider the reviewer switched to since it started, if they did.
+
+            A switch applies to records not yet started; requests already in flight finish on the old model.
+            Each event in the ledger names the model that actually answered, so the metrics show both.
+            """
+            if self._provider_epoch.get(build_id, 0) == epoch_at_start:
+                return request
+            live = self._latest_runtime_request(build_id, request)
+            return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
         def candidate_for(index: int) -> dict[str, Any]:
             candidate = json.loads(json.dumps(snapshot[index]))
@@ -6578,7 +6997,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
-            return self._enrich_record(candidate, manifest, {**request, "families": families, "_interactive_provider_override": True}, build_id=build_id, **neighbors)
+            return self._enrich_record(candidate, manifest, {**effective_request(), "families": families, "_interactive_provider_override": True}, build_id=build_id, **neighbors)
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
             futures = {pool.submit(candidate_for, index): index for index in indices}

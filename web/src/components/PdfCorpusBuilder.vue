@@ -44,6 +44,7 @@ import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
+import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { useSplitter } from "../composables/useSplitter";
@@ -329,7 +330,7 @@ function directProfilePayload(profileId:string): Record<string,unknown>|null{
     model:config.model,
     base_url:config.base_url,
     api_key:config.api_key,
-    max_concurrent_requests:Number(config.max_concurrent_requests||1),
+    max_concurrent_requests:Math.max(1,Math.min(16,Number(config.max_concurrent_requests||1))),
     generation:ollama&&typeof ollama==="object"?ollama:undefined,
   };
 }
@@ -585,7 +586,7 @@ async function savePageLabels(labels:Record<number,string|null>){if(!selectedAss
 async function saveDocumentLayout(plan:DocumentLayoutPlan){if(!selectedAssetId.value)return;busy.value="document-layout";try{const asset=await pdfCorpusApi.updateDocumentLayout(selectedAssetId.value,plan);assets.value=assets.value.map(item=>item.asset_id===asset.asset_id?asset:item);const mapped=(asset.pages||[]).filter(page=>Boolean(String(page.printed_page_label??"").trim())||(page.logical_pages||[]).some(item=>Boolean(String(item.printed_page_label??"").trim()))).length;const exceptions=(asset.pages||[]).filter(page=>String(page.printed_page_label_source||"").includes("override")).length;setMessage(i18n.tf("pdf_corpus.document_structure_saved_impact","Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.",{mapped,total:asset.page_count,exceptions}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 
 async function useCurrentPdf(){const file=(runtime.state.pdf.file as File|null);if(!file){setMessage(i18n.t("pdf_corpus.open_pdf_first","Open a PDF in Explorer first, or choose a source PDF here."),"error");return}await upload(file)}
-async function startBuild(){if(!selectedAsset.value){setMessage(i18n.t("pdf_corpus.choose_pdf_before_build","Choose or load a source PDF before starting a corpus build."),"error");return;}busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,review_manifest_before_segmentation:false,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function startBuild(){if(!selectedAsset.value){setMessage(i18n.t("pdf_corpus.choose_pdf_before_build","Choose or load a source PDF before starting a corpus build."),"error");return;}busy.value="build";setMessage("");reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;records.value=[];recordTotal.value=0;selectedRecord.value=null;sourceBlocks.value=[];try{const payload={asset_id:selectedAssetId.value,auto_enrich_work_metadata:true,...providerPayload.value};const build=await pdfCorpusApi.createBuild(payload);selectedBuildId.value=build.build_id;currentBuild.value=build;registerBuildOperation(build);await refreshBuilds();startPolling();setMessage(i18n.t("pdf_corpus.build_started","Corpus build started. Progress and completed checkpoints are persisted server-side."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resumeBuild(){if(!currentBuild.value)return;if(buildRunning.value){setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."));return}busy.value="build";try{currentBuild.value=await pdfCorpusApi.resume(currentBuild.value.build_id,providerPayload.value);syncBuildInRail(currentBuild.value);registerBuildOperation(currentBuild.value);startPolling();setMessage(i18n.t("pdf_corpus.build_resumed","Build resumed from its last completed checkpoint."))}catch(exc){const message=exc instanceof Error?exc.message:String(exc);if(message.includes("already running")){await refreshBuild();if(currentBuild.value)registerBuildOperation(currentBuild.value);setMessage(i18n.t("pdf_corpus.already_running","This build is already running. Its live status is shown below."))}else setMessage(message,"error")}finally{busy.value=""}}
 async function retryIncompleteMetadata(){
   if(!currentBuild.value||!canRetryMetadata.value)return;
@@ -1023,6 +1024,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusEnrichmentPassStatus v-if="currentBuild" :build="currentBuild" :disabled="busy!==''" @stop="cancelBuild" @run-another="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" />
+          <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
           <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
           <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
 
@@ -1200,7 +1202,11 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 .review-frame .review-grid.detail-mode.queue-collapsed{grid-template-columns:minmax(0,1fr)}
 /* Each pane is its own positioned scroll box. An unpositioned pane let the queue's visually-hidden
    labels escape its clipping and stretch the whole page by several thousand pixels. */
-.review-frame .records-pane,.review-frame .record-review-pane,.review-frame .review-inspector{position:relative;height:100%;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}
+/* Scrolling passes to the page at the edge of a pane. The frame fills the window, so a pane that swallowed
+   the wheel would leave everything above the workspace unreachable. */
+.review-frame .records-pane,.review-frame .record-review-pane,.review-frame .review-inspector{position:relative;height:100%;min-height:0;max-height:none;overflow:auto;overscroll-behavior:auto}
+/* The text card is a flex item with overflow:hidden, which lets it shrink below its content and clip the end of a long record. It keeps its full height and the pane scrolls instead. */
+.review-frame .record-text-review{flex:none;margin-block-end:14px}
 .review-frame .record-text-review .record-primary-text{max-height:none;overflow:visible}
 .review-splitter{position:relative;cursor:col-resize;touch-action:none;background:var(--card);border-inline:1px solid var(--line)}
 .review-splitter::before{content:"";position:absolute;inset-block:0;inset-inline:-.5rem}

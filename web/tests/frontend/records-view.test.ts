@@ -7,35 +7,73 @@ function baseSnapshot() {
   return {
     available: true,
     shared: false,
-    files: [{id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true}],
-    file: {id: "f1", name: "tab.jsonl", count: 2, dirty: 0},
+    files: [{ id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true }],
+    file: { id: "f1", name: "tab.jsonl", count: 2, dirty: 0 },
     query: "",
-    rows: [{
-      index: 0, key: "f1::0", record_id: "r-1", work: "Glas", selected: false, evidence_selected: false,
-      db_status: {kind: "synced", label: "Synced", title: "ok"},
-      cells: [
-        {key: "__db_status", kind: "status", text: "Synced", status_kind: "synced", title: "ok"},
-        {key: "work", kind: "plain", text: "Glas"},
-        {key: "text", kind: "text", text: "différance"},
-      ],
-    }],
-    columns: [{key: "__db_status", label: "DB status"}, {key: "work", label: "Work"}, {key: "text", label: "Text"}],
-    available_columns: [{key: "__db_status", label: "DB status"}, {key: "work", label: "Work"}, {key: "text", label: "Text"}, {key: "speaker", label: "Speaker"}],
-    sort: {key: "page_start", dir: 1},
+    rows: [
+      {
+        index: 0,
+        key: "f1::0",
+        record_id: "r-1",
+        work: "Glas",
+        selected: false,
+        evidence_selected: false,
+        db_status: { kind: "synced", label: "Synced", title: "ok" },
+        cells: [
+          {
+            key: "__db_status",
+            kind: "status",
+            text: "Synced",
+            status_kind: "synced",
+            title: "ok",
+          },
+          { key: "work", kind: "plain", text: "Glas" },
+          { key: "text", kind: "text", text: "différance" },
+        ],
+      },
+    ],
+    columns: [
+      { key: "__db_status", label: "DB status" },
+      { key: "work", label: "Work" },
+      { key: "text", label: "Text" },
+    ],
+    available_columns: [
+      { key: "__db_status", label: "DB status" },
+      { key: "work", label: "Work" },
+      { key: "text", label: "Text" },
+      { key: "speaker", label: "Speaker" },
+    ],
+    sort: { key: "page_start", dir: 1 },
     filters: {},
-    page: 1, pages: 3, page_size: 100, start: 0, end: 1, matched: 1, total: 2, flagged: 0, selection_count: 0, page_selected: false,
-    stores: [{name: "derrida-primary", count: 10}],
+    page: 1,
+    pages: 3,
+    page_size: 100,
+    start: 0,
+    end: 1,
+    matched: 1,
+    total: 2,
+    flagged: 0,
+    selection_count: 0,
+    page_selected: false,
+    stores: [{ name: "derrida-primary", count: 10 }],
     active_store: "derrida-primary",
     has_database: true,
     db_unavailable_reason: "",
-    capabilities: {can_select: true, can_review: true, can_bulk_edit: true, can_upsert: true, can_import: true, can_select_evidence: true},
+    capabilities: {
+      can_select: true,
+      can_review: true,
+      can_bulk_edit: true,
+      can_upsert: true,
+      can_import: true,
+      can_select_evidence: true,
+    },
   };
 }
 
 const runtime = vi.hoisted(() => ({
-  state: {view: "home"},
+  state: { view: "home" },
   getRecordsListSnapshot: vi.fn(),
-  getShellSnapshot: vi.fn(() => ({files: []})),
+  getShellSnapshot: vi.fn(() => ({ files: [] })),
   setRecordsListQuery: vi.fn(),
   recordsListCommand: vi.fn(async () => undefined),
   getRecordsListShareHref: vi.fn(() => "http://localhost/records?file=f1"),
@@ -58,17 +96,21 @@ const runtime = vi.hoisted(() => ({
   setTranslationDictionary: vi.fn(),
   sync: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({...runtime}));
+vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 
 import RecordsView from "../../src/views/RecordsView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
 
-HTMLDialogElement.prototype.showModal = function showModal() { this.setAttribute("open", ""); };
-HTMLDialogElement.prototype.close = function close() { this.removeAttribute("open"); };
+HTMLDialogElement.prototype.showModal = function showModal() {
+  this.setAttribute("open", "");
+};
+HTMLDialogElement.prototype.close = function close() {
+  this.removeAttribute("open");
+};
 
 async function mountRecords() {
-  const wrapper = mount(RecordsView, {attachTo: document.body});
+  const wrapper = mount(RecordsView, { attachTo: document.body });
   await flushPromises();
   return wrapper;
 }
@@ -79,8 +121,11 @@ describe("RecordsView", () => {
     setActivePinia(createPinia());
     const snap = baseSnapshot();
     runtime.getRecordsListSnapshot.mockReturnValue(snap);
-    runtime.getShellSnapshot.mockReturnValue({files: snap.files});
-    useI18nStore().languages = [{code: "en-US", name: "English", flag: ""}, {code: "fr-CA", name: "Français", flag: ""}] as never;
+    runtime.getShellSnapshot.mockReturnValue({ files: snap.files });
+    useI18nStore().languages = [
+      { code: "en-US", name: "English", flag: "" },
+      { code: "fr-CA", name: "Français", flag: "" },
+    ] as never;
     useShellStore().snapshot.files = snap.files;
   });
 
@@ -115,7 +160,11 @@ describe("RecordsView", () => {
   });
 
   it("runs selection actions including upsert", async () => {
-    runtime.getRecordsListSnapshot.mockReturnValue({...baseSnapshot(), selection_count: 3, page_selected: true});
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      selection_count: 3,
+      page_selected: true,
+    });
     const wrapper = await mountRecords();
     expect(wrapper.text()).toContain("Review with LLM");
     expect(wrapper.text()).toContain("Auto-improve");
@@ -142,14 +191,29 @@ describe("RecordsView", () => {
   });
 
   it("shows the empty workspace and shared-file restore copy", async () => {
-    runtime.getRecordsListSnapshot.mockReturnValue({...baseSnapshot(), available: false, file: null, rows: [], total: 0, matched: 0});
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      available: false,
+      file: null,
+      rows: [],
+      total: 0,
+      matched: 0,
+    });
     const wrapper = await mountRecords();
     expect(wrapper.text()).toContain("Open a corpus workspace");
     await wrapper.get(".accessible-empty-state button").trigger("click");
     expect(runtime.recordsListCommand).toHaveBeenCalledWith("import");
     wrapper.unmount();
 
-    runtime.getRecordsListSnapshot.mockReturnValue({...baseSnapshot(), available: false, shared: true, file: null, rows: [], total: 0, matched: 0});
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      available: false,
+      shared: true,
+      file: null,
+      rows: [],
+      total: 0,
+      matched: 0,
+    });
     const shared = await mountRecords();
     expect(shared.text()).toContain("Open the shared corpus workspace");
     expect(shared.text()).toContain("browser-local");
@@ -163,18 +227,33 @@ describe("RecordsView", () => {
       "records.search_in_file": "Rechercher le texte dans ce fichier",
       "records.status.synced": "Synchronisée",
       "records.filter_placeholder": "Filtrer…",
+      "records.column.work": "Œuvre",
+      "records.sort_column": "Trier par {column}",
       "ui.add_evidence": "Ajouter aux preuves",
     };
     const wrapper = await mountRecords();
-    expect(wrapper.get(".records-search input").attributes("placeholder")).toBe("Rechercher le texte dans ce fichier");
+    expect(wrapper.get(".records-search input").attributes("placeholder")).toBe(
+      "Rechercher le texte dans ce fichier",
+    );
     expect(wrapper.get(".db-status").text()).toBe("Synchronisée");
     expect(wrapper.get("#records-filter-work").attributes("placeholder")).toBe("Filtrer…");
+    expect(wrapper.get(".records-sort").text()).toContain("Œuvre");
+    wrapper.unmount();
+  });
+
+  it("exposes sortable table headers to assistive technology", async () => {
+    const wrapper = await mountRecords();
+    const workHeader = wrapper.get("thead tr:first-child th:nth-child(3)");
+    expect(workHeader.attributes("scope")).toBe("col");
+    expect(workHeader.attributes("aria-sort")).toBe("none");
+    await wrapper.get(".records-sort").trigger("click");
+    expect(runtime.setRecordsListSort).toHaveBeenCalledWith("work");
     wrapper.unmount();
   });
 
   it("opens a record from the keyboard and operates selection and columns", async () => {
     const wrapper = await mountRecords();
-    await wrapper.get("tbody tr").trigger("keydown", {key: "Enter"});
+    await wrapper.get("tbody tr").trigger("keydown", { key: "Enter" });
     expect(runtime.openRecordsListRecord).toHaveBeenCalledWith(0);
     await wrapper.get(".select-col input").setValue(true);
     expect(runtime.setRecordsListPageSelected).toHaveBeenCalledWith(true);
@@ -185,7 +264,12 @@ describe("RecordsView", () => {
     expect(wrapper.get("#records-columns-title").text()).toContain("Configure columns");
     await wrapper.get(".records-columns-add").trigger("click");
     await wrapper.get(".records-columns-foot .btn.primary").trigger("click");
-    expect(runtime.setRecordsListColumns).toHaveBeenCalledWith(["__db_status", "work", "text", "speaker"]);
+    expect(runtime.setRecordsListColumns).toHaveBeenCalledWith([
+      "__db_status",
+      "work",
+      "text",
+      "speaker",
+    ]);
     wrapper.unmount();
   });
 

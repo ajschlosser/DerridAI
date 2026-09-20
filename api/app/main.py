@@ -48,6 +48,7 @@ from .models import (
     PdfCorpusTextTouchupRequest,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
+    PdfCorpusSecondOpinion,
     PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
     PdfCorpusBulkDisposition, PdfCorpusBulkMetadataPatch,
     PdfCorpusRecordMerge,
@@ -84,6 +85,7 @@ from .models import (
     LanguageInstallRequest,
 )
 from .pdf_tools import extract_pdf_text
+from .reviewer_context import current_reviewer, reviewer_id
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import translate_english_dictionary
@@ -201,6 +203,7 @@ async def authentication_middleware(request: Request, call_next):
     if user is None:
         return JSONResponse(status_code=401, content={"detail": "Authentication required."})
     request.state.user = user
+    current_reviewer.set(reviewer_id(user.id))
     if user.role != "admin" and not _non_admin_route_allowed(user.role, path, request.method):
         return JSONResponse(status_code=403, content={"detail": "Your role does not have permission to use this API feature."})
     return await call_next(request)
@@ -1946,6 +1949,10 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     are stripped by the build manager before the public build manifest is saved.
     """
     resolved = dict(payload)
+    # Experiment conditions travel as flat request keys inside the pipeline.
+    experiment = resolved.pop("experiment", None)
+    if isinstance(experiment, dict):
+        resolved.update({key: value for key, value in experiment.items() if value not in (None, [], "")})
     # Build-level generation overrides are intentionally distinct from the saved
     # profile.  Resolve server-owned credentials/options first, then layer only
     # the explicitly supplied per-build values over the profile defaults.
@@ -2143,6 +2150,24 @@ def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCor
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.get("/api/pdf/corpus-builds/{build_id}/second-opinions")
+def list_pdf_corpus_second_opinions(build_id: str):
+    try:
+        return {"items": pdf_corpus_builds.pending_second_opinions(build_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/second-opinion")
+def submit_pdf_corpus_second_opinion(build_id: str, record_id: str, body: PdfCorpusSecondOpinion):
+    try:
+        return pdf_corpus_builds.submit_second_opinion(build_id, record_id, body.field, body.value)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept")
 def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordAccept):
     try:
@@ -2307,6 +2332,20 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/corpus-enrichment-metrics")
+def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = "", arm: str = "", group_by: str = ""):
+    try:
+        return pdf_corpus_builds.enrichment_metrics(build_id, run_id, arm, group_by)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.get("/api/pdf/corpus-enrichment-ledger.csv")
+def export_pdf_corpus_enrichment_ledger():
+    """Every ledger event as one CSV row with its experiment columns, for analysis outside the app."""
+    return Response(pdf_corpus_builds.enrichment_ledger_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="enrichment-ledger.csv"'})
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")

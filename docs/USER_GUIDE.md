@@ -236,7 +236,7 @@ Multiple JSONL files remain open as editable tabs and persist through browser In
 
 Persistence is browser-origin-specific.
 
-**Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Administrators load JSONL from the empty state or the Actions menu. Researcher accounts do not use this page.
+**Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Administrators load JSONL from the empty state or **Workspace** in the top bar. Researcher accounts do not use this page.
 
 ### Merge tabs
 
@@ -460,7 +460,7 @@ Image-only PDFs still require an external OCR/vision workflow; DerridAI does not
 
 ## Empty states and shortcuts
 
-When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
+When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). **Help** opens a short orientation dialog (not Response Library). **Workspace** holds JSONL file actions for administrators. Interface language is a named control showing the language, not a flag. The account menu shows your translated role, Settings, and Sign out. On a narrow screen, language, help, and workspace tools move into that account menu rather than disappearing. The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
 
 ## RAG Research
 

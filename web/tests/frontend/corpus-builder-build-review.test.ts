@@ -46,12 +46,14 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get(".warnings").text()).toContain("build warning");
   });
 
-  it("keeps initialization modal state and cancellation explicit", async () => {
+  it("shows initialization as an inline panel, not a modal, with explicit cancellation", async () => {
     const wrapper=mount(CorpusInitializationDialog,{
       props:{build:{...buildBase,status:"running",stage:"segmenting",progress:.18,record_count:0,accepted_count:0}},
       global:{stubs:{Teleport:true}},
     });
-    expect(wrapper.get('[role="dialog"]').attributes("aria-modal")).toBe("true");
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-modal]').exists()).toBe(false);
+    expect(wrapper.get("section").attributes("aria-labelledby")).toBe("corpus-init-title");
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("18");
     expect(wrapper.findAll("li")[1].attributes("data-state")).toBe("current");
     await buttonByText(wrapper,"Cancel build").trigger("click");

@@ -11,6 +11,8 @@ disk, so the rules are unit-testable in isolation.
 
 from __future__ import annotations
 
+from .experiment import is_gold
+
 import json
 import os
 import tempfile
@@ -130,8 +132,16 @@ def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
                 })
 
     for record in records:
+        if is_gold(str(record.get("record_id") or "")):
+            continue  # the frozen gold set is scored, never learned from
         statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
         decided: set[str] = set()
+        # Values a person turned down after a model filled them in, whichever pass or build step did it.
+        for turned_down in record.get("llm_rejections") or []:
+            if isinstance(turned_down, dict) and turned_down.get("field"):
+                field = str(turned_down["field"])
+                decided.add(field)
+                tally(field, False, {**record, field: turned_down.get("chosen_value")}, turned_down.get("rejected_value"))
         for dispute in record.get("metadata_disputes") or []:
             if not isinstance(dispute, dict):
                 continue
