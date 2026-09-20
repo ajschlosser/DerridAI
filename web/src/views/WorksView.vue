@@ -183,7 +183,7 @@ onUnmounted(() => window.removeEventListener("derridai:works-changed", onWorksCh
             <UiButton size="small" :label="i18n.t('works.edit_metadata', 'Edit metadata')" @click="editMetadata(work)" />
             <UiButton size="small" variant="soft" :label="i18n.t('works.populate_metadata_llm', 'Populate metadata with LLM')" @click="populateMetadata(work)" />
             <UiButton v-if="work.review" size="small" :label="i18n.tf('works.review_flagged', 'Review flagged ({count})', {count: work.review.toLocaleString(i18n.locale)})" @click="openRecords(work, true)" />
-            <UiButton size="small" :label="i18n.t('works.view_annotations', 'Annotations')" @click="openAnnotations(work)" />
+            <UiButton size="small" :label="i18n.t('works.annotations', 'Annotations')" @click="openAnnotations(work)" />
             <UiButton size="small" variant="danger" :label="i18n.t('works.remove_entire', 'Remove entire work')" @click="removeWork(work)" />
           </div>
         </article>
@@ -240,4 +240,7 @@ onUnmounted(() => window.removeEventListener("derridai:works-changed", onWorksCh
 @media(max-width:900px){.works-layout{grid-template-columns:1fr}.works-selection{position:static}.works-page-header{align-items:start;flex-direction:column}.works-page-summary{grid-template-columns:auto auto}}
 @media(max-width:620px){.works-native-page{width:calc(100% - 16px);margin-top:10px}.works-toolbar{align-items:stretch;flex-direction:column}.works-search{min-width:0}.works-toolbar-actions{justify-content:space-between}.works-library{grid-template-columns:1fr}.work-card-actions .btn{flex:1}.work-card-stats{gap:4px}}
 .works-metadata-grid dt,.works-citation dt,.works-insight-card h4{font-size:.75rem}
+.works-layout{display:flex;flex-direction:column;gap:16px}.works-selection{order:1;position:static;width:100%;display:grid;grid-template-columns:142px minmax(0,1fr);gap:16px}.works-library{order:2;width:100%}.works-selection-cover{grid-column:1;grid-row:1 / span 6;width:142px;height:208px}.works-selection .page-kicker,.works-selection>h2,.works-selection>p:not(.page-kicker),.works-selection>.works-metadata-grid,.works-selection>.works-citation,.works-selection>.works-insights,.works-selection>.works-selection-actions{grid-column:2}.works-selection .page-kicker{grid-row:1}.works-selection h2{font-size:1.65rem}.works-metadata-grid{grid-template-columns:repeat(5,minmax(120px,1fr))}.works-insights-grid{grid-template-columns:repeat(5,minmax(150px,1fr));overflow-x:auto}.works-selection-actions{font-size:0;color:transparent}.works-selection-actions :deep(button){font-size:.8125rem}
+@media(max-width:900px){.works-selection{grid-template-columns:96px minmax(0,1fr)}.works-selection-cover{width:94px;height:138px}.works-metadata-grid{grid-template-columns:repeat(3,minmax(120px,1fr))}}
+@media(max-width:620px){.works-selection{grid-template-columns:1fr}.works-selection-cover{grid-column:1;grid-row:auto;width:96px;height:142px}.works-selection .page-kicker,.works-selection>h2,.works-selection>p:not(.page-kicker),.works-selection>.works-metadata-grid,.works-selection>.works-citation,.works-selection>.works-insights,.works-selection>.works-selection-actions{grid-column:1}.works-metadata-grid{grid-template-columns:1fr}}
 </style>
