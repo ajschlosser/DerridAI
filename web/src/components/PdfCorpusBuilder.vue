@@ -1200,7 +1200,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 .review-frame .review-grid.detail-mode.queue-collapsed{grid-template-columns:minmax(0,1fr)}
 /* Each pane is its own positioned scroll box. An unpositioned pane let the queue's visually-hidden
    labels escape its clipping and stretch the whole page by several thousand pixels. */
-.review-frame .records-pane,.review-frame .record-review-pane,.review-frame .review-inspector{position:relative;height:100%;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}
+/* Scrolling passes to the page at the edge of a pane. The frame fills the window, so a pane that swallowed
+   the wheel would leave everything above the workspace unreachable. */
+.review-frame .records-pane,.review-frame .record-review-pane,.review-frame .review-inspector{position:relative;height:100%;min-height:0;max-height:none;overflow:auto;overscroll-behavior:auto}
 .review-frame .record-text-review .record-primary-text{max-height:none;overflow:visible}
 .review-splitter{position:relative;cursor:col-resize;touch-action:none;background:var(--card);border-inline:1px solid var(--line)}
 .review-splitter::before{content:"";position:absolute;inset-block:0;inset-inline:-.5rem}

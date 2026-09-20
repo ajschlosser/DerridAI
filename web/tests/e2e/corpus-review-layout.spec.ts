@@ -90,6 +90,23 @@ test.describe("at a wide desktop", () => {
     expect(await page.evaluate(() => scrollY)).toBe(before);
   });
 
+  test("scrolling passes to the page at the edge of a pane, so nothing above the workspace is out of reach", async ({
+    page,
+  }) => {
+    await open(page);
+    const before = await page.evaluate(() => scrollY);
+    expect(before, "the workspace is scrolled into place").toBeGreaterThan(0);
+    for (const selector of [".records-pane", ".record-review-pane", ".review-inspector"]) {
+      await page.evaluate((y) => scrollTo(0, y), before);
+      const box = (await page.locator(selector).first().boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
+      await page.mouse.wheel(0, -1200); // each pane is already at its top
+      await expect
+        .poll(() => page.evaluate(() => scrollY), { message: `wheel over ${selector}` })
+        .toBeLessThan(before);
+    }
+  });
+
   test("a record's state is shown by a shape and its name, not by colour alone", async ({
     page,
   }) => {
