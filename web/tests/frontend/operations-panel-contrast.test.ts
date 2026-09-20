@@ -11,9 +11,9 @@ const source = readFileSync(resolve(process.cwd(), "src/components/OperationsPan
 const compact = source.replace(/\s+/g, "");
 const token = (name: string): string => {
   const match = source.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,6})\\b`));
-  if (!match) throw new Error(`token --${name} not found`);
-  const hex = match[1];
-  return hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join("")}` : hex;
+  const alias = source.match(new RegExp(`--${name}:\\s*([^;]+);`));
+  if (!match && !alias) throw new Error(`token --${name} not found`);
+  return resolveHex(match?.[1] ?? alias![1], lightTokens(source));
 };
 const rgb = (hex: string): [number, number, number] =>
   [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
@@ -88,12 +88,7 @@ describe("Operations panel contrast", () => {
   it.each(Object.entries(ACCENTS))(
     "on the %s theme, the progress fill is distinguishable from its track (1.4.11)",
     (_name, accent) => {
-      const track = rgb(
-        resolveHex(
-          compact.match(/\.ops-progress\{[^}]*background:([^;}]+)/)![1],
-          lightTokens(source),
-        ),
-      );
+      const track = rgb(token("ops-sunken"));
       expect(ratio(rgb(accent), track)).toBeGreaterThanOrEqual(3);
     },
   );

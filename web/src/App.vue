@@ -6,6 +6,7 @@ import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
 import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
+import AppNotifications from "./components/AppNotifications.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
 import TopbarChrome from "./components/shell/TopbarChrome.vue";
 import SidebarPrimaryNav from "./components/shell/SidebarPrimaryNav.vue";
@@ -247,5 +248,5 @@ watch(()=>auth.user?.id,(id)=>{
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
     </section>
   </div>
-  <div id="toast" class="toast"></div>
+  <AppNotifications />
 </template>

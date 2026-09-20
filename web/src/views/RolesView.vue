@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { onBeforeRouteLeave } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { authApi, type AuthUser, type CapabilityDefinition, type RoleDefinition, type UserRole } from "../api/auth";
 import {
   expandPermissions,
@@ -10,18 +10,19 @@ import {
 import { useI18nStore } from "../stores/i18n";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
+import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
-import * as runtime from "../runtime/runtime.js";
 import type { SaveStatus } from "../domain/settings";
 
 type ConfirmKind = "delete" | "leave" | "switch";
 
 const i18n = useI18nStore();
+const router = useRouter();
 const roles = ref<RoleDefinition[]>([]);
 const capabilities = ref<CapabilityDefinition[]>([]);
 const users = ref<AuthUser[]>([]);
@@ -143,7 +144,7 @@ async function save() {
     capabilities.value = result.capabilities;
     permissions.value = expandPermissions(result.permissions, capabilityIds.value);
     announce(i18n.t("roles.saved", "Role permissions saved."));
-    runtime.notifyToast?.(i18n.t("roles.saved", "Role permissions saved."), {tone: "success"});
+    notify(i18n.t("roles.saved", "Role permissions saved."), "success");
     return true;
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -180,7 +181,7 @@ async function createRole() {
     createOpen.value = false;
     applyRole(result.role.id);
     announce(i18n.t("roles.created", "Role created."));
-    runtime.notifyToast?.(i18n.t("roles.created", "Role created."), {tone: "success"});
+    notify(i18n.t("roles.created", "Role created."), "success");
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -211,7 +212,7 @@ async function deleteSelected() {
     await authApi.deleteRole(current.id);
     confirm.value = null;
     announce(i18n.t("roles.deleted", "Role deleted."));
-    runtime.notifyToast?.(i18n.t("roles.deleted", "Role deleted."), {tone: "success"});
+    notify(i18n.t("roles.deleted", "Role deleted."), "success");
     await refresh("researcher");
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -270,7 +271,7 @@ function closeConfirm() {
 }
 
 function openUsers() {
-  window.dispatchEvent(new CustomEvent("derridai:navigate-native", {detail: {path: "/users"}}));
+  void router.push({name: "users"});
 }
 
 function onBeforeUnload(event: BeforeUnloadEvent) {
