@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 function alphaFromCssColor(value:string):number {
@@ -10,8 +10,17 @@ function alphaFromCssColor(value:string):number {
   return Number.isFinite(alpha)?alpha:1;
 }
 
-async function expectWcag2AA(page:any, include:string){
-  const results=await new AxeBuilder({page}).include(include).withTags(["wcag2a","wcag2aa"]).analyze();
+async function expectWcag2AA(page:Page, include:string){
+  let results;
+  for(let attempt=0;;attempt++){
+    try{
+      results=await new AxeBuilder({page}).include(include).withTags(["wcag2a","wcag2aa"]).analyze();
+      break;
+    }catch(error){
+      if(attempt>=10||!String(error).includes("already running"))throw error;
+      await page.waitForTimeout(400);
+    }
+  }
   expect(results.violations, JSON.stringify(results.violations,null,2)).toEqual([]);
 }
 
