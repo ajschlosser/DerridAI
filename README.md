@@ -92,4 +92,4 @@ CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, the backend tests
 
 ## License
 
-No license file is currently included. Source files carry `Copyright 2026 Aaron John Schlosser, PhD.` The UI footer reads `© 2026 The New England Transcendental Club of California`.
+No license file is currently included. Source files carry `Copyright 2026 Aaron John Schlosser, PhD.` The sign-in screen, account menu, and Settings → About DerridAI show `© 2026 The New England Transcendental Club of California`.

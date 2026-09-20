@@ -98,6 +98,18 @@ describe("SettingsView", () => {
     expect(wrapper.text()).not.toContain("Save RAG defaults");
   });
 
+  it("shows copyright and version without a git commit for researchers", async () => {
+    const {wrapper} = await mountView("researcher", {section: "workspace"});
+    expect(wrapper.text()).toContain("About DerridAI");
+    expect(wrapper.text()).toContain("The New England Transcendental Club of California");
+    expect(wrapper.text()).not.toContain("Build vitest");
+  });
+
+  it("shows the git commit on About for administrators", async () => {
+    const {wrapper} = await mountView("admin", {section: "workspace"});
+    expect(wrapper.text()).toContain("Build vitest");
+  });
+
   it("deep-links an admin section from the URL", async () => {
     const {wrapper} = await mountView("admin", {section: "retrieval"});
     expect(wrapper.get("#settings-section-retrieval").isVisible()).toBe(true);

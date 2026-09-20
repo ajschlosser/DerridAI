@@ -24,8 +24,9 @@ def test_all_declared_versions_agree():
     """Every place that declares the app version must equal web/package.json, and the release needs notes.
 
     Checked: api/app/config.py, web/index.html title, and README.md "Current version".
-    The FastAPI constructor, backup manifest, App.vue footer, and AuthScreen read
-    APP_VERSION / the Vite-injected build stamp rather than duplicating the string.
+    The FastAPI constructor, backup manifest, AppBuildInfo (sign-in, user menu,
+    and Settings), and AuthScreen read APP_VERSION / the Vite-injected build stamp
+    rather than duplicating the string.
     docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
     release, bump the declared copies and create annotated git tag v<version> on that
     commit (see AGENTS.md). This test checks the working tree, not git tags. Do not
@@ -45,8 +46,10 @@ def test_all_declared_versions_agree():
     assert "version=app_version_label()" in main
     assert '"app_version": APP_VERSION' in main
     assert '"git_commit": APP_GIT_COMMIT or None' in main
-    assert "appVersionLabel" in read("web/src/App.vue")
-    assert "appVersionLabel" in read("web/src/components/AuthScreen.vue")
+    assert "AppBuildInfo" in read("web/src/App.vue")
+    assert "AppBuildInfo" in read("web/src/components/AuthScreen.vue")
+    assert "AppBuildInfo" in read("web/src/views/SettingsView.vue")
+    assert "APP_VERSION" in read("web/src/components/AppBuildInfo.vue")
     notes = ROOT / "docs" / "notes" / f"{version}.md"
     assert notes.is_file(), f"missing {notes.relative_to(ROOT)}"
     assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} —")
