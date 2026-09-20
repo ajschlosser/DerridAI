@@ -177,6 +177,8 @@ const state = {
     ui_color_scheme: "system",
     ui_contrast: "system",
     default_provider_profile: "",
+    // Loading a model takes memory and time, and evicts whichever model is in use, so it is not done until asked for.
+    warm_default_provider_on_start: false,
     review_provider_profile: "",
     provider_profiles: [],
     background_llm: true,
@@ -9463,6 +9465,8 @@ function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   const profile=providerProfile(profileId);
   return profile?cloneAuditValue(providerRequestConfig(profile,{textReview})):null;
 }
+function getWarmOnStartForUi(){return state.appConfig.warm_default_provider_on_start===true}
+function setWarmOnStartForUi(value){state.appConfig.warm_default_provider_on_start=Boolean(value);persistPrefs();return getWarmOnStartForUi()}
 function getDefaultProviderProfileId(){return state.appConfig.default_provider_profile||defaultProviderProfile()?.id||""}
 function getProviderStatusesForUi(){return cloneAuditValue(state.providerStatuses||{})}
 function getProviderWarmupsForUi(){return cloneAuditValue(state.providerWarmups||{})}
@@ -9707,7 +9711,7 @@ async function bootstrapRuntime(){
   await refreshJobs({rerender:false});
   if(state.view==="home"&&document.querySelector("#main"))renderDashboard(document.querySelector("#main"));
   startJobPolling();
-  if(!isResearcher())warmupConfiguredLlm();
+  if(!isResearcher()&&state.appConfig.warm_default_provider_on_start===true)warmupConfiguredLlm();
 }
 
 
@@ -10358,6 +10362,8 @@ export {
   setDefaultProviderProfileForUi,
   testProviderProfileForUi,
   warmProviderProfileForUi,
+  getWarmOnStartForUi,
+  setWarmOnStartForUi,
   syncResearcherProviderProfiles,
   notifyToast,
   registerExternalJob,

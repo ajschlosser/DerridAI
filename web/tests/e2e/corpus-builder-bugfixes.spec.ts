@@ -166,3 +166,22 @@ for (const scheme of ["light", "dark"] as const) {
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the hands-free dialog is clear and accessible in ${scheme} mode`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.setAttribute("data-color-scheme", "dark"));
+    await page.getByRole("button", { name: /bulk actions/i }).first().click();
+    await page.getByRole("menuitem", { name: /run hands-free/i }).click();
+    const dialog = page.getByRole("dialog", { name: /run hands-free/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/no one reviews the records in this mode/i)).toBeVisible();
+    await expect(dialog.getByLabel(/extra enrichment passes/i)).toBeEnabled();
+    await expect(dialog.getByRole("checkbox", { name: /publish when every record is accepted/i })).not.toBeChecked();
+    await dialog.screenshot({ path: `test-results/hands-free-${scheme}.png` });
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
+  });
+}
