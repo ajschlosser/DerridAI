@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
-import { pdfCorpusApi, type EnrichmentMetrics, type EnrichmentModelMetrics } from "../api/pdfCorpus";
+import { pdfCorpusApi, type EnrichmentMetrics, type EnrichmentModelMetrics, type Interval } from "../api/pdfCorpus";
 import UiButton from "./ui/UiButton.vue";
 
 // Measurements of enrichment for one build, loaded on request: this is analysis, not part of the
@@ -17,6 +17,9 @@ const na = computed(() => i18n.t("pdf_corpus.enrich_metrics.na", "not enough dat
 const pct = (value: number | null | undefined) => (value == null ? na.value : `${Math.round(value * 100)}%`);
 const seconds = (value: number | null | undefined) => (value == null ? na.value : `${(value / 1000).toFixed(1)} s`);
 const brier = (value: number | null | undefined) => (value == null ? na.value : value.toFixed(3));
+const span = (value: Interval | undefined) =>
+  !value || value.rate == null ? na.value : `${Math.round(value.rate * 100)}% (${Math.round((value.low ?? 0) * 100)}–${Math.round((value.high ?? 0) * 100)}%, n=${value.n})`;
+const minutes = (value: number | null | undefined) => (value == null ? na.value : `${Math.round(value)} s`);
 const at90 = (m: EnrichmentModelMetrics) => m.precision_at_threshold.find((t) => t.threshold === 0.9);
 const t = (key: string, fallback: string) => i18n.t(`pdf_corpus.enrich_metrics.${key}`, fallback);
 
@@ -78,6 +81,40 @@ async function load() {
           </tbody>
         </table>
       </div>
+      <div class="enrich-scroll" tabindex="0" role="region" :aria-label="t('trust_title', 'Trust, effort and cost')">
+        <table>
+          <caption>{{ t("trust_title", "Trust, effort and cost") }}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ t("model", "Model") }}</th>
+              <th scope="col">{{ t("acceptance_ci", "Kept as proposed (95% range)") }}</th>
+              <th scope="col">{{ t("substantive", "Substantively wrong (95% range)") }}</th>
+              <th scope="col">{{ t("autofill_precision", "Autofilled values that held up") }}</th>
+              <th scope="col">{{ t("spot_checks", "Spot checks still to do") }}</th>
+              <th scope="col">{{ t("repeats", "Repeated a rejected value") }}</th>
+              <th scope="col">{{ t("supported", "Names found in the text") }}</th>
+              <th scope="col">{{ t("review_time", "Review time per decision") }}</th>
+              <th scope="col">{{ t("first_value", "Time to first useful value") }}</th>
+              <th scope="col">{{ t("suspensions", "Autofill switched off / on") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="[model, m] in rows" :key="model">
+              <th scope="row">{{ model || "—" }}</th>
+              <td>{{ span(m.acceptance_ci) }}</td>
+              <td>{{ span(m.substantive_error_rate) }}</td>
+              <td>{{ span(m.autofill_precision_ci) }}</td>
+              <td>{{ m.spot_checks_still_needed }}</td>
+              <td>{{ pct(m.repeat_rate) }} ({{ m.proposals_after_a_rejection }})</td>
+              <td>{{ pct(m.supported_rate) }} ({{ m.supported_checked }})</td>
+              <td>{{ minutes(m.review_seconds_per_decision) }}</td>
+              <td>{{ minutes(m.seconds_to_first_useful_value) }}</td>
+              <td>{{ m.autofill_suspensions }} / {{ m.autofill_resumptions }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="enrich-export"><a href="/api/pdf/corpus-enrichment-ledger.csv" download>{{ t("export", "Download every event as CSV") }}</a></p>
       <dl class="enrich-facts">
         <div><dt>{{ t("agreement", "Models agreeing on the same field") }}</dt><dd>{{ pct(metrics.inter_model_agreement.agreement) }} ({{ metrics.inter_model_agreement.compared }})</dd></div>
         <div><dt>{{ t("unresolved", "Fields still waiting for a person") }}</dt><dd>{{ metrics.unresolved_remaining ?? na }}</dd></div>
@@ -97,6 +134,9 @@ th, td { padding: 0.375rem 0.625rem; border-block-end: 1px solid var(--line); te
 thead th { color: var(--text-2); font-weight: 650; white-space: normal; min-inline-size: 6rem; vertical-align: bottom; }
 .enrich-facts { display: grid; gap: 0.25rem; margin: 0.5rem 0 0.25rem; font-size: 0.8125rem; }
 .enrich-facts div { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.enrich-export { margin: 0.5rem 0 0; font-size: 0.8125rem; }
+.enrich-export a { color: var(--accent-fg); font-weight: 700; }
+caption { text-align: start; font-weight: 700; padding-block: 0.375rem; }
 .enrich-facts dt { color: var(--text-2); }
 .enrich-facts dd { margin: 0; font-weight: 700; }
 </style>
