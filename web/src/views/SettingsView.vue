@@ -17,6 +17,7 @@ import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
   APPEARANCE_DEFAULTS,
   RAG_DEFAULTS,
@@ -445,6 +446,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_appearance', 'Save appearance')" :disabled="!canAppearance || groupStatus.appearance === 'saving'" @click="saveAppearance" />
               <UiButton :label="i18n.t('settings.reset_appearance', 'Reset appearance defaults')" :disabled="!canAppearance" @click="resetAppearance" />
             </template>
+          </SettingsSection>
+          <SettingsSection
+            section-id="about"
+            :title="i18n.t('about.title', 'About DerridAI')"
+            :description="i18n.t('about.help', 'Release version of this instance. The git commit is shown for administrators and on the sign-in screen.')"
+            :persistence="persistKind('readonly')"
+            status="readonly"
+            :status-label="statusLabel('readonly')"
+          >
+            <AppBuildInfo :show-commit="isAdmin" />
           </SettingsSection>
         </div>
 
