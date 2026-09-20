@@ -4,18 +4,31 @@ import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 
+const ENRICHMENT_KINDS = new Set(["metadata_enrichment", "metadata_enrichment_rerun"]);
+
 const props = defineProps<{ build: CorpusBuild; disabled?: boolean }>();
 const emit = defineEmits<{ "run-another": []; stop: [] }>();
 const i18n = useI18nStore();
 const dismissedId = ref("");
 const operation = computed(() => props.build.metadata_operation || {});
-const isPass = computed(
+const status = computed(() => String(props.build.status || ""));
+const stage = computed(() => String(props.build.stage || ""));
+const buildRunning = computed(() => ["queued", "running"].includes(status.value));
+const initialEnriching = computed(() => buildRunning.value && stage.value === "enriching");
+const isEnrichmentOp = computed(
   () =>
-    operation.value.kind === "metadata_enrichment_rerun" &&
-    operation.value.operation_id !== dismissedId.value,
+    ENRICHMENT_KINDS.has(String(operation.value.kind || "")) &&
+    String(operation.value.operation_id || "") !== dismissedId.value,
 );
+const idleReady = computed(() => {
+  if (initialEnriching.value || buildRunning.value) return false;
+  if (props.build.publication) return false;
+  if (Number(props.build.record_count || 0) <= 0) return false;
+  return ["awaiting_review", "ready", "blocked"].includes(status.value) || stage.value === "review";
+});
+const visible = computed(() => !initialEnriching.value && (isEnrichmentOp.value || idleReady.value));
 const state = computed(() => String(operation.value.state || ""));
-const running = computed(() => ["queued", "running"].includes(state.value));
+const running = computed(() => isEnrichmentOp.value && ["queued", "running"].includes(state.value));
 const passesRun = computed(() => Number(operation.value.passes_completed || 0));
 const currentPass = computed(() => Math.max(1, Number(operation.value.current_pass || 1)));
 const totalPasses = computed(() => Math.max(1, Number(operation.value.passes_requested || 1)));
@@ -43,27 +56,32 @@ const heading = computed(() => {
       current: currentPass.value,
       total: totalPasses.value,
     });
-  if (state.value === "failed")
+  if (isEnrichmentOp.value && state.value === "failed")
     return i18n.t("pdf_corpus.enrichment_pass_failed", "Enrichment failed");
-  if (state.value === "cancelled")
+  if (isEnrichmentOp.value && state.value === "cancelled")
     return i18n.tf(
       "pdf_corpus.enrichment_pass_cancelled",
       "Enrichment was stopped. Passes completed: {passes}.",
       { passes: passesRun.value },
     );
-  return i18n.tf(
-    "pdf_corpus.enrichment_pass_complete",
-    "Enrichment finished. Passes run: {passes}.",
-    { passes: passesRun.value },
+  if (isEnrichmentOp.value)
+    return i18n.tf(
+      "pdf_corpus.enrichment_pass_complete",
+      "Enrichment finished. Passes run: {passes}.",
+      { passes: passesRun.value },
+    );
+  return i18n.t(
+    "pdf_corpus.enrichment_pass_idle",
+    "The last enrichment pass has finished. You can start another without reviewing every record.",
   );
 });
 </script>
 
 <template>
   <section
-    v-if="isPass"
+    v-if="visible"
     class="pass-status"
-    :data-state="state"
+    :data-state="running ? state : isEnrichmentOp ? state : 'idle'"
     role="status"
     aria-live="polite"
     aria-labelledby="pass-status-title"
@@ -99,8 +117,8 @@ const heading = computed(() => {
           )
         }}</small>
       </template>
-      <span v-else-if="state === 'failed'">{{ operation.error }}</span>
-      <template v-else>
+      <span v-else-if="isEnrichmentOp && state === 'failed'">{{ operation.error }}</span>
+      <template v-else-if="isEnrichmentOp">
         <span>{{
           i18n.tf(
             "pdf_corpus.enrichment_pass_changes",
@@ -115,6 +133,12 @@ const heading = computed(() => {
           )
         }}</small>
       </template>
+      <small v-else>{{
+        i18n.t(
+          "pdf_corpus.enrichment_pass_idle_help",
+          "The next pass uses what the last pass inferred and any reviewer decisions already made.",
+        )
+      }}</small>
     </div>
     <div class="pass-actions">
       <UiButton
@@ -131,6 +155,7 @@ const heading = computed(() => {
           @click="emit('run-another')"
         />
         <UiButton
+          v-if="isEnrichmentOp"
           :label="i18n.t('pdf_corpus.enrichment_dismiss', 'Dismiss')"
           @click="dismissedId = String(operation.operation_id || '')"
         />

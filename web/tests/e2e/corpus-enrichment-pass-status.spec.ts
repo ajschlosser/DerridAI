@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const STORIES = ["running", "completed-converged", "stopped", "failed"];
+const STORIES = ["running", "completed-converged", "stopped", "failed", "idle-after-initial"];
 // WCAG 2.0, 2.1 and 2.2 at levels A and AA.
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const url = (story: string) =>
@@ -74,6 +74,14 @@ test("keyboard: the actions are reachable with a visible focus ring", async ({ p
   expect(outline).not.toBe("none");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Dismiss" })).toBeFocused();
+});
+
+test("idle after the first pass offers another pass without a dismiss-only trap", async ({ page }) => {
+  await page.goto(url("idle-after-initial"));
+  const region = page.getByRole("status");
+  await expect(region).toContainText("without reviewing every record");
+  await expect(region.getByRole("button", { name: "Run another pass" })).toBeVisible();
+  await expect(region.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 });
 
 const dialogUrl =

@@ -202,6 +202,6 @@ def test_editorial_memory_failure_is_recorded_as_build_warning(tmp_path: Path, m
 
     memory = manager._editorial_memory(build["build_id"])
 
-    assert memory == {"conventions": {}, "examples": {}}
+    assert memory == {"conventions": {}, "examples": {}, "pass_learning": {}}
     warnings = repo.get_build(build["build_id"])["warnings"]
     assert any("Editorial memory was unavailable" in item and "records unavailable" in item for item in warnings)

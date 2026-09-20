@@ -58,6 +58,80 @@ describe("Metadata enrichment passes", () => {
     expect(wrapper.find("section").exists()).toBe(false);
   });
 
+  it("offers another pass after the first enrichment without waiting for review", async () => {
+    const wrapper = mount(CorpusEnrichmentPassStatus, {
+      props: {
+        build: {
+          build_id: "b",
+          status: "awaiting_review",
+          stage: "review",
+          record_count: 12,
+        } as any,
+      },
+    });
+    expect(wrapper.text()).toContain("without reviewing every record");
+    expect(wrapper.findAll("button").some((node: any) => node.text().includes("Dismiss"))).toBe(false);
+    await buttonByText(wrapper, "Run another pass").trigger("click");
+    expect(wrapper.emitted("run-another")).toHaveLength(1);
+  });
+
+  it("keeps Run another pass after a completed pass is dismissed when review is still open", async () => {
+    const wrapper = mount(CorpusEnrichmentPassStatus, {
+      props: {
+        build: {
+          ...build({
+            state: "completed",
+            passes_completed: 1,
+          }),
+          status: "awaiting_review",
+          stage: "review",
+          record_count: 12,
+        },
+      },
+    });
+    await buttonByText(wrapper, "Dismiss").trigger("click");
+    expect(wrapper.text()).toContain("without reviewing every record");
+    await buttonByText(wrapper, "Run another pass").trigger("click");
+    expect(wrapper.emitted("run-another")).toHaveLength(1);
+  });
+
+  it("hides while the book-scale first pass is still running", () => {
+    const wrapper = mount(CorpusEnrichmentPassStatus, {
+      props: {
+        build: {
+          build_id: "b",
+          status: "running",
+          stage: "enriching",
+          record_count: 12,
+        } as any,
+      },
+    });
+    expect(wrapper.find("section").exists()).toBe(false);
+  });
+
+  it("treats the completed first pass as an enrichment operation", async () => {
+    const wrapper = mount(CorpusEnrichmentPassStatus, {
+      props: {
+        build: {
+          build_id: "b",
+          status: "awaiting_review",
+          stage: "review",
+          record_count: 12,
+          metadata_operation: {
+            operation_id: "initial",
+            kind: "metadata_enrichment",
+            state: "completed",
+            passes_completed: 1,
+            records_total: 12,
+          },
+        } as any,
+      },
+    });
+    expect(wrapper.text()).toContain("Passes run: 1");
+    await buttonByText(wrapper, "Run another pass").trigger("click");
+    expect(wrapper.emitted("run-another")).toHaveLength(1);
+  });
+
   it("ignores builds whose last operation is not an enrichment pass", () => {
     const wrapper = mount(CorpusEnrichmentPassStatus, {
       props: { build: build({ kind: "metadata_retry", state: "running" }) },

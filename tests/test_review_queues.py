@@ -69,7 +69,7 @@ def ready_record(rid: str, bid: str) -> dict:
 def test_one_current_profile_is_registered():
     """Pin profile and prompt ids, and that a single profile is registered."""
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v9"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v10"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
 

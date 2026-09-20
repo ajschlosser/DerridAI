@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
-from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_review, resolve_conflict, same_value
+from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -53,7 +53,7 @@ from .rag import _citation_strings, _extract_json, chat_complete
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v9"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v10"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
 PROFILE_VERSION = "derrida-scholarly-v12"
@@ -3801,7 +3801,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         base_context = f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
 Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(editorial_examples, ensure_ascii=False)}
-How reviewers treated earlier enrichment proposals in this build (per-field accepted/rejected counts and rejected proposals to avoid repeating; advisory only): {json.dumps(pass_learning or {}, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(pass_learning or {}, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 Current source block IDs: {source_id_json}
@@ -5003,6 +5003,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # until review/acceptance and publication finish. Keep a clear 90%
         # handoff into human review instead of declaring 100% prematurely.
         status = "awaiting_review"
+        current = self.repo.get_build(build_id)
+        existing_op = current.get("metadata_operation") if isinstance(current.get("metadata_operation"), dict) else {}
+        if str(existing_op.get("state") or "") in {"queued", "running"}:
+            operation = existing_op
+        else:
+            operation = self._initial_enrichment_operation(
+                build_id, records, started_at=str(current.get("metadata_started_at") or "") or None,
+            )
         self._update(
             build_id,
             status=status,
@@ -5018,6 +5026,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             validation=validation,
             resumable=False,
             retrying_segmentation=False,
+            metadata_operation=operation,
         )
 
     @staticmethod
@@ -5436,13 +5445,13 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         }
 
     def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "") -> dict[str, Any]:
-        """Build an auditable, build-local few-shot memory from human decisions.
+        """Build advisory context from human decisions and the last enrichment pass.
 
-        Only human-confirmed/overridden fields are eligible. Repeated values become
-        advisory conventions after two confirmations; record-level examples are
-        retrieved by lightweight lexical similarity and never copied as truth. This
-        gives local models useful corpus-specific examples without hidden online
-        training or propagation of one-off mistakes.
+        Only human-confirmed/overridden fields are eligible as conventions and few-shot
+        examples. Repeated values become advisory conventions after two confirmations.
+        ``pass_learning`` also includes last-pass LLM inferences on two or more records
+        (working conventions, not confirmed) so a later pass can start before every
+        record has been reviewed. Nothing here is copied as truth.
         """
         try:
             rows = self.repo.load_records(build_id)
@@ -5451,7 +5460,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             # Editorial memory only supplies advisory few-shot context; records
             # are never altered by it. Proceed without it but say so on the build.
             self._append_warning(build_id, f"Editorial memory was unavailable; enrichment ran without reviewer examples ({exc}).")
-            return {"conventions": {}, "examples": {}}
+            return {"conventions": {}, "examples": {}, "pass_learning": {}}
         reset_at = str(build.get("editorial_memory_reset_at") or "")
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
         eligible: list[tuple[dict[str, Any], str, Any]] = []
@@ -5509,7 +5518,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         # reviewers always take precedence over the shared ones.
         for field, convention in self._global_learning.conventions(exclude_build_id=build_id).items():
             conventions.setdefault(field, convention)
-        return {"conventions": conventions, "examples": examples, "pass_learning": learn_from_review([row for row in rows if str(row.get("record_id") or "") != exclude_record_id])}
+        return {"conventions": conventions, "examples": examples, "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id])}
 
     def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
         # Retained as the small conventions-only API used by older internal tests;
@@ -6279,6 +6288,25 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         records[index:index + 1] = pieces
         self._rewrite_and_validate(build_id, records)
         return {"records": pieces}
+
+    @staticmethod
+    def _initial_enrichment_operation(build_id: str, records: list[dict[str, Any]], *, started_at: str | None = None) -> dict[str, Any]:
+        """Describe the book-scale first pass so the review workspace can start another immediately."""
+        total = len(records)
+        return {
+            "operation_id": f"metadata-enrichment-initial-{str(build_id)[:12]}",
+            "kind": "metadata_enrichment",
+            "state": "completed",
+            "started_at": started_at,
+            "finished_at": iso_now(),
+            "records_total": total,
+            "records_processed": total,
+            "passes_requested": 1,
+            "passes_completed": 1,
+            "current_pass": 1,
+            "converged": False,
+            "pass_results": [{"pass": 1, "records_processed": total}],
+        }
 
     def retry_incomplete_metadata(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Retry only automatically-retryable metadata issues.
