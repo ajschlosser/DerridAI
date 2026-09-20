@@ -131,18 +131,19 @@ def test_gold_records_never_feed_the_blend(tmp_path):
 def test_blind_records_seal_the_models_value_and_score_the_reviewers_own(tmp_path):
     m = manager(tmp_path)
     request = {"model": "q", "blind_rate": 1.0}
-    record = {"record_id": "rec-9", "text": "x", "metadata_field_status": {}}
     result = {
         "metadata": {"discourse_role": "assertion"},
-        "field_assessments": {"discourse_role": {"confidence": 0.99, "needs_review": False}},
-        "field_evidence": {"discourse_role": {"block_ids": ["b1"], "confidence": 0.99}},
+        "field_assessments": {"discourse_role": {"confidence": 0.99, "needs_review": False, "reason": "it asserts"}},
+        "field_evidence": {"discourse_role": {"block_ids": ["b1"], "confidence": 0.99, "reason": "it asserts"}},
     }
+    # Execution stores the model's full answer on the record; blind review must scrub it too.
+    record = {"record_id": "rec-9", "text": "x", "metadata_field_status": {}, "metadata_stage_results": {"discourse": __import__("copy").deepcopy(result)}}
     profile = cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     out = m._reconcile_metadata_results(record, profile, ["b1"], [("discourse", result, None)], False, request=request, build_id="b")
     status = out["metadata_field_status"]["discourse_role"]
     # Nothing the browser receives says what the model thought, and nothing is autofilled.
     assert out["discourse_role"] is None and status["blind"] is True and status["status"] == "unresolved"
-    assert "assertion" not in str(out) and "proposed_value" not in status and not status.get("autofilled")
+    assert "assertion" not in str(out) and "it asserts" not in str(out) and "0.99" not in str(out) and "proposed_value" not in status and not status.get("autofilled")
     assert m._ledger.sealed_value("b", "rec-9", "discourse_role") == "assertion"
     # The reviewer decides without seeing it; then it is revealed and the agreement is logged.
     m._record_human_llm_feedback("b", "discourse_role", None, "critique", status, out)

@@ -117,6 +117,8 @@ async function load() {
       <p class="enrich-export"><a href="/api/pdf/corpus-enrichment-ledger.csv" download>{{ t("export", "Download every event as CSV") }}</a></p>
       <dl class="enrich-facts">
         <div><dt>{{ t("agreement", "Models agreeing on the same field") }}</dt><dd>{{ pct(metrics.inter_model_agreement.agreement) }} ({{ metrics.inter_model_agreement.compared }})</dd></div>
+        <div><dt>{{ t("self_consistency", "Reviewer gave the same answer when asked again") }}</dt><dd>{{ span(metrics.self_consistency) }}</dd></div>
+        <div><dt>{{ t("inter_annotator", "Two reviewers agreed (second one blind)") }}</dt><dd>{{ span(metrics.inter_annotator) }}<template v-if="metrics.inter_annotator?.kappa != null"> · κ {{ metrics.inter_annotator.kappa.toFixed(2) }}</template></dd></div>
         <div><dt>{{ t("unresolved", "Fields still waiting for a person") }}</dt><dd>{{ metrics.unresolved_remaining ?? na }}</dd></div>
         <div><dt>{{ t("concurrency", "Runs working now / limit") }}</dt><dd>{{ metrics.concurrency.working }} / {{ metrics.concurrency.limit }}</dd></div>
       </dl>

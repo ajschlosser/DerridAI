@@ -48,6 +48,7 @@ from .models import (
     PdfCorpusTextTouchupRequest,
     PdfCorpusEvidencePatch,
     PdfCorpusRecordAccept,
+    PdfCorpusSecondOpinion,
     PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
     PdfCorpusBulkDisposition, PdfCorpusBulkMetadataPatch,
     PdfCorpusRecordMerge,
@@ -84,6 +85,7 @@ from .models import (
     LanguageInstallRequest,
 )
 from .pdf_tools import extract_pdf_text
+from .reviewer_context import current_reviewer, reviewer_id
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .system_store import system_store, normalize_locale_code
 from .i18n_translation import translate_english_dictionary
@@ -201,6 +203,7 @@ async def authentication_middleware(request: Request, call_next):
     if user is None:
         return JSONResponse(status_code=401, content={"detail": "Authentication required."})
     request.state.user = user
+    current_reviewer.set(reviewer_id(user.id))
     if user.role != "admin" and not _non_admin_route_allowed(user.role, path, request.method):
         return JSONResponse(status_code=403, content={"detail": "Your role does not have permission to use this API feature."})
     return await call_next(request)
@@ -2141,6 +2144,24 @@ def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCor
         return pdf_corpus_builds.patch_evidence(
             build_id, record_id, body.field, body.block_ids, body.confidence, body.reason, body.expected_revision
         )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}/second-opinions")
+def list_pdf_corpus_second_opinions(build_id: str):
+    try:
+        return {"items": pdf_corpus_builds.pending_second_opinions(build_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/second-opinion")
+def submit_pdf_corpus_second_opinion(build_id: str, record_id: str, body: PdfCorpusSecondOpinion):
+    try:
+        return pdf_corpus_builds.submit_second_opinion(build_id, record_id, body.field, body.value)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

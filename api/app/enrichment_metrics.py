@@ -16,8 +16,8 @@ from typing import Any
 
 from datetime import datetime
 
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, REVIEW_EVENTS, SUSPENDED
-from .experiment_stats import two_proportion, wilson
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, RECHECK, CORRECTED, PROPOSED, REJECTED, RESUMED, REVIEW_EVENTS, SUSPENDED
+from .experiment_stats import cohens_kappa, two_proportion, wilson
 
 THRESHOLDS = (0.7, 0.8, 0.9, 0.95)
 LEARNING_BUCKET = 10  # reviews per point on the learning curve
@@ -257,7 +257,29 @@ def compute(
             out[model] = {**_model_metrics(model_rows), "by_field": {f: _model_metrics(r) for f, r in sorted(fields.items()) if f}}
         return out
 
+    seconds = [e for e in rows if e["kind"] == "second_label"] + [e for e in rows if e["kind"] == RECHECK and not e.get("same_reviewer", True)]
+    second_by_field: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for e in seconds:
+        second_by_field[str(e.get("field") or "")].append(e)
+    rechecks = [e for e in rows if e["kind"] == RECHECK and e.get("same_reviewer", True)]
+    by_field: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for e in rechecks:
+        by_field[str(e.get("field") or "")].append(e)
     result: dict[str, Any] = {
+        # Reviewer self-consistency: how often the same person, asked again without seeing their earlier answer, gives it again.
+        "self_consistency": {
+            **_ci(sum(1 for e in rechecks if e.get("agreed")), len(rechecks)),
+            "by_field": {f: _ci(sum(1 for e in v if e.get("agreed")), len(v)) for f, v in sorted(by_field.items()) if f},
+        },
+        # Inter-annotator agreement: two different reviewers labelling the same field, the second not seeing the first.
+        "inter_annotator": {
+            **_ci(sum(1 for e in seconds if e.get("agreed")), len(seconds)),
+            "kappa": cohens_kappa([_key(e.get("value")) for e in seconds], [_key(e.get("new_value")) for e in seconds]),
+            "by_field": {
+                f: {**_ci(sum(1 for e in v if e.get("agreed")), len(v)), "kappa": cohens_kappa([_key(e.get("value")) for e in v], [_key(e.get("new_value")) for e in v])}
+                for f, v in sorted(second_by_field.items()) if f
+            },
+        },
         "models": per_model(rows),
         "inter_model_agreement": inter_model_agreement(rows),
         "contested": contested_outcomes(rows),

@@ -244,6 +244,6 @@ export interface EnrichmentModelMetrics {
 }
 export interface Interval { rate:number|null;low:number|null;high:number|null;n:number }
 export interface EnrichmentMetrics {
-  models:Record<string,EnrichmentModelMetrics>;inter_model_agreement:{compared:number;agreement:number|null};unresolved_remaining:number|null;
+  self_consistency?:Interval;inter_annotator?:Interval&{kappa:number|null};models:Record<string,EnrichmentModelMetrics>;inter_model_agreement:{compared:number;agreement:number|null};unresolved_remaining:number|null;
   runs:string[];concurrency:{limit:number;working:number};
 }
