@@ -47,6 +47,11 @@ def is_recheck(record_id: str, field: str, rate: float) -> bool:
     return rate > 0 and _unit("recheck", record_id, field) < rate
 
 
+def needs_second_opinion(record_id: str, field: str, rate: float) -> bool:
+    """A random share of decisions is also labelled by a second reviewer, blind, to measure agreement between people."""
+    return rate > 0 and _unit("second", record_id, field) < rate
+
+
 def assign_arm(record_id: str, arms: list[dict[str, Any]], salt: str = "") -> dict[str, Any]:
     """Pick one arm uniformly at random for a record, the same way every time."""
     return arms[min(len(arms) - 1, int(_unit("arm", salt, record_id) * len(arms)))]

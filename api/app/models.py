@@ -438,6 +438,7 @@ class PdfCorpusExperiment(BaseModel):
     arm_salt: str = Field(default="", max_length=60)
     blind_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     recheck_rate: float = Field(default=0.0, ge=0.0, le=0.5)
+    iaa_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     model_version: str | None = Field(default=None, max_length=120)
 
 
@@ -764,3 +765,8 @@ class RoleCreateRequest(BaseModel):
 
 class RolePermissionsUpdate(BaseModel):
     permissions: list[str] = Field(default_factory=list, max_length=200)
+
+
+class PdfCorpusSecondOpinion(BaseModel):
+    field: str = Field(min_length=1, max_length=80)
+    value: Any = None
