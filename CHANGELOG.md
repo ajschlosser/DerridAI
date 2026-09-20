@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.17 — Watertight Weasel
+
+Closes the remaining ways a second reviewer could see the first reviewer's answer, and repairs master's failing checks. See [0.62.17](docs/notes/0.62.17.md).
+
 ## 0.62.16 — Discreet Dormouse
 
 The changes an enrichment pass makes are now shown, and a second reviewer's blind answer is hidden in every response. See [0.62.16](docs/notes/0.62.16.md).

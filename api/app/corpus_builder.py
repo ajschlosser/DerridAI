@@ -1748,6 +1748,11 @@ class PdfCorpusBuildManager:
                     if isinstance(entry, dict) and entry.get("field") == field:
                         entry["value"] = None  # the decision log holds the first answer too
                 cls._scrub_sealed_field(record, field)
+                # Everything else on the record that repeats the first reviewer's answer for this field.
+                record["llm_rejections"] = [r for r in record.get("llm_rejections") or [] if not (isinstance(r, dict) and r.get("field") == field)]
+                for key in ("recheck_results", "blind_reveals", "recheck_scheduled"):
+                    if isinstance(record.get(key), dict):
+                        record[key].pop(field, None)
 
     @staticmethod
     def _scrub_sealed_field(record: dict[str, Any], field: str) -> None:
@@ -6048,6 +6053,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             for field, info in statuses.items():
                 if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
                     continue
+                if self._second_opinion_owed(row, field):
+                    continue  # a conventions list or example must not tell a second reviewer what the first one answered
                 value = row.get(field)
                 if value in (None, "", []):
                     continue
@@ -7342,6 +7349,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
+        self._present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
         preview_id = f"preview-{build_id.removeprefix('build-')}"
         created_at = iso_now()
         public = self._serialize_public_record(build, record, preview_id, created_at)

@@ -6,7 +6,7 @@ import logging
 import math
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -490,7 +490,7 @@ def _context_string(
     return "\n\n".join(blocks), works, evidence
 
 
-def evidence_sufficiency_issues(evidence: list[dict[str, Any]]) -> list[dict[str, str]]:
+def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     """Return deterministic provenance failures before generation can begin."""
     issues: list[dict[str, str]] = []
     for item in evidence:
