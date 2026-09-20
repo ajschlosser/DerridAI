@@ -29,7 +29,7 @@ from .error_severity import severity as error_severity
 from .autofill import decide as decide_autofill, in_audit_sample
 from . import experiment
 from .enrichment_metrics import compute as compute_enrichment_metrics
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, RECHECK, RECHECK_SEAL, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
 from .main_text_start import infer_main_text_start
 from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -1546,6 +1546,72 @@ class PdfCorpusBuildManager:
         build["stage"] = "document_review"
         self.repo.save_build(build)
         return self.resume(build_id, request)
+
+    @staticmethod
+    def _scrub_sealed_field(record: dict[str, Any], field: str) -> None:
+        """Remove every copy of a sealed value, and the confidence and reasoning that would give it away, from the record."""
+        evidence = record.get("metadata_evidence")
+        if isinstance(evidence, dict) and isinstance(evidence.get(field), dict):
+            evidence[field] = {"block_ids": evidence[field].get("block_ids") or []}
+        for result in (record.get("metadata_stage_results") or {}).values():
+            if isinstance(result, dict):
+                for section in ("metadata", "field_assessments", "field_evidence"):
+                    if isinstance(result.get(section), dict):
+                        result[section].pop(field, None)
+
+    def _recheck_rate(self, build_id: str) -> float:
+        build = self.repo.get_build(build_id)
+        for source in (build.get("experiment"), build.get("request")):
+            if isinstance(source, dict) and source.get("recheck_rate"):
+                return float(source["recheck_rate"])
+        return 0.0
+
+    def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None:
+        """Pick some of a reviewer's decisions to be asked again later, blind."""
+        if value in (None, "", []) or not experiment.is_recheck(str(record.get("record_id") or ""), field, self._recheck_rate(build_id)):
+            return
+        build = self.repo.get_build(build_id)
+        due = int(build.get("human_decision_count") or 0) + experiment.RECHECK_SPACING
+        record.setdefault("recheck_scheduled", {})[field] = {"due": due}
+
+    def _reopen_due_rechecks(self, build_id: str, records: list[dict[str, Any]], just_decided: dict[str, Any], profile: dict[str, Any]) -> None:
+        """Count this decision, then reopen, blind, any earlier decision whose turn has come."""
+        build = self.repo.get_build(build_id)
+        count = int(build.get("human_decision_count") or 0) + 1
+        build["human_decision_count"] = count
+        self.repo.save_build(build)
+        for record in records:
+            scheduled = record.get("recheck_scheduled")
+            if record is just_decided or not isinstance(scheduled, dict):
+                continue
+            for field, item in list(scheduled.items()):
+                if not isinstance(item, dict) or int(item.get("due") or 0) > count:
+                    continue
+                self._ledger.append(RECHECK_SEAL, model="", field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=record.get(field))
+                for entry in record.get("metadata_decisions") or []:
+                    if isinstance(entry, dict) and entry.get("field") == field:
+                        entry["value"] = None  # the earlier answer must not travel with the record
+                        entry["sealed"] = True
+                record[field] = [] if isinstance(record.get(field), list) else None
+                record.setdefault("metadata_field_status", {})[field] = {
+                    "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
+                    "reason": "Quality check: enter your value again without looking back. Your earlier answer is shown after you save.",
+                }
+                del scheduled[field]
+                record["accepted"] = False
+                record["needs_review"] = True
+                self._sync_record_metadata_state(record, profile)
+
+    def _score_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any, prior_status: dict[str, Any]) -> bool:
+        """If this decision answers a re-check, log whether it matches the first answer and reveal that answer."""
+        if not prior_status.get("recheck"):
+            return False
+        record_id = str(record.get("record_id") or "")
+        first = self._ledger.sealed_value(build_id, record_id, field, RECHECK_SEAL)
+        agreed = first == value
+        self._ledger.append(RECHECK, model="", field=field, build_id=build_id, record_id=record_id, value=first, new_value=value, agreed=agreed, severity=None if agreed else error_severity(first, value))
+        record.setdefault("recheck_results", {})[field] = {"first": first, "second": value, "agreed": agreed}
+        return True
 
     def enrichment_ledger_csv(self) -> str:
         return self._ledger.to_csv()
@@ -4428,6 +4494,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "status": "unresolved", "method": "llm", "blind": True, "reason_code": "blind_review", "auto_populated": False,
                     "reason": "Blind review: enter your own value. The model's suggestion is shown after you save.",
                 }
+                self._scrub_sealed_field(record, field)
             if proposed_status.get("method") == "llm":
                 # Later human decisions on this value are attributed to the model and conditions that produced it.
                 proposed_status.setdefault("model", model)
@@ -4441,6 +4508,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
+        if any(isinstance(info, dict) and info.get("blind") for info in field_status.values()):
+            # These aggregates are the model's own confidence in a record whose values are sealed.
+            record["semantic_classification_confidence"] = None
+            record["attribution_confidence"] = None
         review_reasons.extend(model_review_reasons)
         if review_reasons:
             record["metadata_needs_attention"] = True
@@ -6113,7 +6184,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
-            self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
+            answered_again = self._score_recheck(build_id, target, key, value, prior_status)
+            if not answered_again:
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
+                self._schedule_recheck(build_id, target, key, value)
             target[key] = value
             if key in HUMAN_EDITABLE_METADATA_FIELDS:
                 is_override = key in MANIFEST_INHERITED_FIELDS
@@ -6132,6 +6206,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         target["metadata_reviewed_at"] = iso_now()
         self._mark_human_touch(target, list(changes))
         profile = CORPUS_PROFILES.get(str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
+        self._reopen_due_rechecks(build_id, records, target, profile)
         self._sync_record_metadata_state(target, profile)
         target["record_revision"] = current_revision + 1
         _ = self._rewrite_and_validate(build_id, records)
@@ -6650,6 +6725,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             "families": families, "scope": scope,
             "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
         }
+        if request.get("recheck_rate") is not None:
+            build["experiment"] = {**(build.get("experiment") or {}), "recheck_rate": float(request["recheck_rate"])}
         runs = list(build.get("metadata_enrichment_runs") or []) + [run.copy()]
         build["metadata_enrichment_runs"] = runs[-30:]
         build["metadata_operation"] = run.copy()

@@ -39,6 +39,14 @@ def is_blind(record_id: str, rate: float) -> bool:
     return rate > 0 and _unit("blind", record_id) < rate
 
 
+RECHECK_SPACING = 8  # human decisions between a decision and its re-check, so it is not answered from memory
+
+
+def is_recheck(record_id: str, field: str, rate: float) -> bool:
+    """A small random share of a reviewer's decisions is asked again, blind, to measure their consistency."""
+    return rate > 0 and _unit("recheck", record_id, field) < rate
+
+
 def assign_arm(record_id: str, arms: list[dict[str, Any]], salt: str = "") -> dict[str, Any]:
     """Pick one arm uniformly at random for a record, the same way every time."""
     return arms[min(len(arms) - 1, int(_unit("arm", salt, record_id) * len(arms)))]

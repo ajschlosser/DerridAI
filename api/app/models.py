@@ -437,6 +437,7 @@ class PdfCorpusExperiment(BaseModel):
     arms: list[PdfCorpusExperimentArm] = Field(default_factory=list, max_length=8)
     arm_salt: str = Field(default="", max_length=60)
     blind_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    recheck_rate: float = Field(default=0.0, ge=0.0, le=0.5)
     model_version: str | None = Field(default=None, max_length=120)
 
 

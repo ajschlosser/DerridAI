@@ -23,6 +23,7 @@ from typing import Any
 # (its cost), and the rest are human decisions.
 PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
 BLIND_LABEL = "blind_label"  # a person's value for a field whose model value they could not see
+RECHECK_SEAL, RECHECK = "recheck_seal", "recheck"  # a decision set aside to be asked again, and the second answer
 SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
@@ -62,11 +63,14 @@ class EnrichmentLedger:
                 rows.append(row)
         return rows
 
-    def sealed_value(self, build_id: str, record_id: str, field: str) -> Any:
-        """The model's value for a blind field. It lives only here, never in the record the browser receives."""
+    def sealed_value(self, build_id: str, record_id: str, field: str, kind: str = PROPOSED) -> Any:
+        """A value held back from the reviewer: the model's for a blind field, their own first answer for a re-check.
+
+        It lives only here, never in the record the browser receives.
+        """
         found = None
         for row in self.events():
-            if row.get("kind") == PROPOSED and row.get("blind") and (row.get("build_id"), row.get("record_id"), row.get("field")) == (build_id, record_id, field):
+            if row.get("kind") == kind and (kind != PROPOSED or row.get("blind")) and (row.get("build_id"), row.get("record_id"), row.get("field")) == (build_id, record_id, field):
                 found = row.get("value")
         return found
 

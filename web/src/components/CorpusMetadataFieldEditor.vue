@@ -8,7 +8,7 @@ import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
   control?:"enum"|"combobox"|"multi-combobox"|"boolean"|"number"|"text"; allowCustom?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
-  revealed?:unknown; constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
+  revealed?:unknown; recheck?:{first:unknown;second:unknown;agreed:boolean}; constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
 }>();
 const emit=defineEmits<{save:[value:unknown];noValue:[];source:[];dirty:[dirty:boolean]}>();
 const i18n=useI18nStore();
@@ -57,6 +57,8 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
     <div class="field-name"><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :audit="Boolean(status?.audit_sample)"/></div>
     <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing;if(!editing)emit('dirty',false)">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
   </div>
+  <p v-if="status?.recheck" class="blind-note" role="status">{{i18n.t('pdf_corpus.recheck_prompt','Quality check: enter your value again without looking back. Your earlier answer is shown after you save.')}}</p>
+  <p v-else-if="recheck" class="blind-note" role="status">{{recheck.agreed?i18n.t('pdf_corpus.recheck_same','You gave the same answer as before.'):i18n.tf('pdf_corpus.recheck_changed','Your earlier answer was: {value}. The new one is kept.',{value:display(recheck.first)})}}</p>
   <p v-if="status?.blind" class="blind-note" role="status">{{i18n.t('pdf_corpus.blind_review','Blind review: choose your own value first. The model’s suggestion is shown once you save.')}}</p>
   <p v-else-if="hasValue(revealed)" class="blind-note" role="status">{{i18n.tf('pdf_corpus.blind_revealed','The model had suggested: {value}',{value:display(revealed)})}}</p>
   <div v-if="!editing" class="field-current">{{display(resolvedValue)}}</div>
