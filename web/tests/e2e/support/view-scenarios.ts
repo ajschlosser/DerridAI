@@ -144,6 +144,15 @@ export const scenarios: Scenario[] = [
     },
   },
   {
+    id: "record-find",
+    path: "/record",
+    role: "researcher",
+    ready: (p) => p.locator("mark.search-hit").first(),
+    steps: async (p) => {
+      await p.getByRole("textbox", { name: /Find in record text/ }).fill("hospitality");
+    },
+  },
+  {
     id: "record-annotations",
     path: "/record",
     role: "researcher",

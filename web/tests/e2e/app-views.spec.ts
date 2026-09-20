@@ -56,3 +56,45 @@ for (const scheme of ["light", "dark"] as const) {
     });
   }
 }
+
+test("the provider card keeps its name readable in a narrow column", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium-desktop",
+    "The view scan runs once, at desktop width.",
+  );
+  // The card sits in a column about 350px wide on the Languages page; its three-column grid used to
+  // squeeze the name to nothing and overlap the stat boxes with the DEFAULT badge.
+  await openScenario(
+    page,
+    scenarios.find((s) => s.id === "languages-default")!,
+  );
+  const card = page.locator(".provider-summary-card");
+  await expect(card).toBeVisible();
+  const box = async (selector: string) => (await card.locator(selector).first().boundingBox())!;
+  const title = await box(".provider-summary-title");
+  const stats = await box(".provider-stat-group");
+  expect(title.width).toBeGreaterThan(100);
+  expect(stats.y, "the stats sit below the title, not on top of it").toBeGreaterThanOrEqual(
+    title.y + title.height - 1,
+  );
+});
+
+test("the saved answer's heading is heading-sized, not display-sized", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium-desktop",
+    "The view scan runs once, at desktop width.",
+  );
+  // The shared answer heading was declared at 112px, so a saved question filled the screen.
+  await openScenario(
+    page,
+    scenarios.find((s) => s.id === "faq-records")!,
+  );
+  const size = await page
+    .locator(".research-answer-heading h2")
+    .first()
+    .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeLessThanOrEqual(32);
+  expect(size).toBeGreaterThanOrEqual(16);
+});

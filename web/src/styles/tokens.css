@@ -34,6 +34,11 @@
   --tone-warn-edge: color-mix(in srgb, var(--tone-warn-border) 45%, var(--card, #fff));
   --tone-danger-edge: color-mix(in srgb, var(--tone-danger-border) 45%, var(--card, #fff));
 
+  /* A text highlighter (search hits): the same yellow with dark text in every scheme, because a
+     yellow fill needs dark text whatever the theme's own text colour is. */
+  --mark-bg: #fff1a8;
+  --mark-fg: #1f1a00;
+
   /* Secondary text: between --text and --muted. */
   --text-2: #40516b;
 
