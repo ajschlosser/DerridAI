@@ -4,6 +4,8 @@ import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import MetadataFormSection from "./MetadataFormSection.vue";
+import MetadataFormFooter from "./MetadataFormFooter.vue";
 
 const props=withDefaults(defineProps<{manifest?:Record<string,unknown>;disabled?:boolean;affectedRecords?:number}>(),{manifest:()=>({}),disabled:false,affectedRecords:0});
 const emit=defineEmits<{save:[changes:Record<string,unknown>]} >();
@@ -73,9 +75,7 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
       <UiStatusBadge v-if="props.affectedRecords>0" tone="info" :label="i18n.tf('pdf_corpus.document_defaults_records','{count} records inherit document defaults',{count:props.affectedRecords})" :show-dot="false"/>
     </section>
 
-    <section v-for="group in groups" :key="group.key" class="manifest-section" :aria-labelledby="`manifest-${group.key}`">
-      <header><h3 :id="`manifest-${group.key}`">{{group.title}}</h3><p>{{group.description}}</p></header>
-      <div class="manifest-grid">
+    <MetadataFormSection v-for="group in groups" :key="group.key" :title="group.title" :description="group.description">
         <UiField v-for="field in group.fields" :key="field.key" :wide="field.wide" :label="field.label" :hint="field.hint||''">
           <textarea v-if="field.type==='textarea'" v-model="draft[field.key]" class="control" rows="4" :disabled="props.disabled"></textarea>
           <input v-else v-model="draft[field.key]" class="control" :type="field.type==='number'?'number':'text'" :inputmode="field.type==='number'?'numeric':undefined" :min="field.type==='number'?1:undefined" :disabled="props.disabled">
@@ -88,13 +88,11 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
         <UiField v-if="group.key==='language'" :label="i18n.t('pdf_corpus.manifest_translation','Translation status')">
           <select v-model="translationDraft" class="control" :disabled="props.disabled"><option value="">{{i18n.t('pdf_corpus.manifest_unknown','Unknown')}}</option><option value="yes">{{i18n.t('ui.yes','Yes')}}</option><option value="no">{{i18n.t('ui.no','No')}}</option></select>
         </UiField>
-      </div>
-    </section>
+    </MetadataFormSection>
 
-    <footer class="manifest-actions" aria-live="polite">
-      <div class="manifest-change-summary"><b>{{dirty?i18n.tf('pdf_corpus.manifest_changes_count','{count} unsaved change(s)',{count:changedCount}):i18n.t('pdf_corpus.manifest_no_changes','No unsaved changes')}}</b><span v-if="dirty&&props.affectedRecords">{{i18n.tf('pdf_corpus.manifest_propagation_preview','Saving updates inherited values for up to {count} records and reopens the records whose inherited values change; explicit record overrides remain unchanged.',{count:props.affectedRecords})}}</span></div>
-      <div class="manifest-action-buttons"><UiButton :label="i18n.t('ui.reset','Reset')" :disabled="props.disabled||!dirty" @click="reset"/><UiButton type="submit" variant="primary" :label="i18n.t('pdf_corpus.save_manifest_changes','Save document changes')" :disabled="props.disabled||!dirty"/></div>
-    </footer>
+    <MetadataFormFooter sticky :summary="dirty?i18n.tf('pdf_corpus.manifest_changes_count','{count} unsaved change(s)',{count:changedCount}):i18n.t('pdf_corpus.manifest_no_changes','No unsaved changes')" :detail="dirty&&props.affectedRecords?i18n.tf('pdf_corpus.manifest_propagation_preview','Saving updates inherited values for up to {count} records and reopens the records whose inherited values change; explicit record overrides remain unchanged.',{count:props.affectedRecords}):''">
+      <UiButton :label="i18n.t('ui.reset','Reset')" :disabled="props.disabled||!dirty" @click="reset"/><UiButton type="submit" variant="primary" :label="i18n.t('pdf_corpus.save_manifest_changes','Save document changes')" :disabled="props.disabled||!dirty"/>
+    </MetadataFormFooter>
   </form>
 </template>
 

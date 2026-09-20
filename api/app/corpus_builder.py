@@ -71,9 +71,43 @@ PROFILE_VERSION = "derrida-scholarly-v12"
 
 
 
+_PROMPT_TAG_RE = re.compile(r"</?\s*SOURCE[_ ]?TEXT\s*/?\s*>", re.I)
+_EDGE_TAG_RE = re.compile(r"^\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*|\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*$")
+_EDGE_LABEL_RE = re.compile(r"^\s*(?:\[?\s*(?:SOURCE[_ ]TEXT|TOUCHED[- _]?UP(?: TEXT)?|CORRECTED(?: TEXT)?|OUTPUT|RESULT)\s*\]?\s*:)\s*", re.I)
+
+
+def _strip_added_markup(proposed: str, source: str) -> str:
+    """Trim tags and labels a model echoed from the prompt around its answer.
+
+    The test is the one a person would use: material at the very start or end of the answer that is not at the
+    start or end of the source was added by the model. So a tag or label is removed only when the source does not
+    itself begin or end with it; a real "<b>" in the text is kept.
+    """
+    value = proposed
+    # The prompt's own delimiter is never text, wherever the model put it (a small model may even write it self-closing).
+    if not _PROMPT_TAG_RE.search(source):
+        value = _PROMPT_TAG_RE.sub("", value)
+    for _ in range(6):  # a tag, then a label, then another tag: peel until nothing more is added
+        before = value
+        label = _EDGE_LABEL_RE.match(value)
+        if label and not source.lstrip().lower().startswith(label.group(0).strip().lower()):
+            value = value[label.end():]
+        for match in (_EDGE_TAG_RE.search(value),):
+            if not match:
+                continue
+            tag = (match.group(1) or match.group(2) or "").strip()
+            at_start = bool(match.group(1))
+            if tag and not (source.lstrip().startswith(tag) if at_start else source.rstrip().endswith(tag)):
+                value = value[match.end():] if at_start else value[: match.start()]
+        value = value.strip()
+        if value == before:
+            break
+    return value
+
+
 def _sanitize_touchup_output(proposed: str, source: str) -> str:
     """Remove model-added outer wrappers without touching source punctuation."""
-    value = str(proposed or "").strip()
+    value = _strip_added_markup(str(proposed or "").strip(), str(source or "").strip())
     source_value = str(source or "").strip()
     lines = value.splitlines()
     source_lines = source_value.splitlines()
@@ -1346,6 +1380,7 @@ class PdfCorpusBuildManager:
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
+        self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
 
     def reset_in_memory_state(self) -> None:
@@ -1451,6 +1486,7 @@ class PdfCorpusBuildManager:
                 elif key in {"review_provider_profile_id", "_review_provider"} and key in merged and key not in request:
                     merged.pop(key, None)
             self._runtime_requests[build_id] = merged
+            self._provider_epoch[build_id] = self._provider_epoch.get(build_id, 0) + 1
             public = dict(build.get("request") or {})
             for key in ("provider", "model", "base_url", "generation", "provider_profile_id", "review_provider_profile_id"):
                 if key in merged:
@@ -4074,7 +4110,7 @@ Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
 
 For discourse_role, explicitly discriminate among the two or three closest plausible roles before choosing. In the discourse_role field assessment reason, briefly state why the selected role fits better than its nearest alternative. Pay special attention to the difference between the surrounding author's analysis and a reported_position held by someone else, and between critique, qualification, and commentary. Human-confirmed examples above are style/taxonomy guidance, not evidence.
-If a field is genuinely unsupported, return null rather than inventing a value.
+If a field is genuinely unsupported, return null rather than inventing a value. Never answer with a placeholder or a description of a role ("null", "N/A", "unknown", "the author of the current record", "the speaker", "this passage"): name the person, work or concept the text itself names, or return null.
 
 {base_context}
 For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.
@@ -6933,6 +6969,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         indices = self._enrichment_pass_indices(snapshot, scope)
         max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
+        epoch_at_start = self._provider_epoch.get(build_id, 0)
+        provider_keys = ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider")
+
+        def effective_request() -> dict[str, Any]:
+            """This run's request, with the provider the reviewer switched to since it started, if they did.
+
+            A switch applies to records not yet started; requests already in flight finish on the old model.
+            Each event in the ledger names the model that actually answered, so the metrics show both.
+            """
+            if self._provider_epoch.get(build_id, 0) == epoch_at_start:
+                return request
+            live = self._latest_runtime_request(build_id, request)
+            return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
         def candidate_for(index: int) -> dict[str, Any]:
             candidate = json.loads(json.dumps(snapshot[index]))
@@ -6948,7 +6997,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
-            return self._enrich_record(candidate, manifest, {**request, "families": families, "_interactive_provider_override": True}, build_id=build_id, **neighbors)
+            return self._enrich_record(candidate, manifest, {**effective_request(), "families": families, "_interactive_provider_override": True}, build_id=build_id, **neighbors)
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
             futures = {pool.submit(candidate_for, index): index for index in indices}

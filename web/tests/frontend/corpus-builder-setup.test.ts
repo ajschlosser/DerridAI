@@ -101,6 +101,17 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(confirmed.text()).not.toContain("confident");
   });
 
+  it("puts Save document structure below the PDF, not above it", () => {
+    const asset:any={
+      asset_id:"asset-3",sha256:"sha",filename:"book.pdf",created_at:"",page_count:12,block_count:42,ocr_pages:0,warnings:[],metadata:{},document_layout:null,
+      pages:Array.from({length:12},(_,index)=>({pdf_page:index+1,width:612,height:792})),
+    };
+    const wrapper=mount(DocumentStructureConfigurator,{props:{asset,pdfUrl:"/book.pdf",blocks:[]},global:{stubs:{PdfEvidenceViewer:{template:'<div data-test="pdf"/>'},PdfPageLabelEditor:true}}});
+    const html=wrapper.html();
+    expect(html.indexOf('data-test="pdf"')).toBeGreaterThan(-1);
+    expect(html.indexOf("Save document structure")).toBeGreaterThan(html.indexOf('data-test="pdf"'));
+  });
+
   it("tracks document-structure edits as dirty and saves the reviewer-owned plan", async () => {
     const asset:any={
       asset_id:"asset-1",sha256:"sha",filename:"book.pdf",created_at:"",page_count:12,block_count:42,ocr_pages:0,warnings:[],metadata:{},

@@ -1,10 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from .enrichment_cycles import MAX_PASSES
 
@@ -14,6 +14,18 @@ CollectionRole = Literal["primary", "language", "general"]
 RetrievalMode = Literal["semantic", "hybrid", "lexical"]
 DistanceMetric = Literal["cosine", "l2", "ip"]
 
+
+
+def _clamp_concurrency(value: Any) -> Any:
+    """A provider profile may allow more parallel requests (a FreeLLM profile defaults to 32) than one corpus operation
+    uses. Clamp to the operation's ceiling instead of rejecting the whole request with a 422."""
+    try:
+        return max(1, min(16, int(value)))
+    except (TypeError, ValueError):
+        return value
+
+
+ClampedConcurrency = Annotated[int, BeforeValidator(_clamp_concurrency)]
 
 class ChromaPathUpdate(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
@@ -455,7 +467,7 @@ class PdfCorpusBuildCreate(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
@@ -587,7 +599,7 @@ class PdfCorpusRecordRerun(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
@@ -610,7 +622,7 @@ class PdfCorpusTextTouchupRequest(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     instructions: str = Field(default="", max_length=2000)

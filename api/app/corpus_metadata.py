@@ -6,6 +6,7 @@ No repository, model-provider, or job-manager dependency is permitted here.
 from __future__ import annotations
 
 from typing import Any
+from .metadata_values import clean as clean_value, is_placeholder
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",
@@ -47,6 +48,10 @@ def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     The raw model value is returned separately for audit. We deliberately avoid
     semantic synonym expansion: only direct inflectional variants are normalized.
     """
+    if isinstance(value, str) and is_placeholder(value):
+        return None, value  # the raw text is kept for audit; it is not a value
+    if isinstance(value, list) and any(is_placeholder(item) for item in value):
+        return clean_value(value), value
     if field != "stance" or not isinstance(value, str):
         return value, None
     raw = value
