@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.16 — Discreet Dormouse
+
+The changes an enrichment pass makes are now shown, and a second reviewer's blind answer is hidden in every response. See [0.62.16](docs/notes/0.62.16.md).
+
 ## 0.62.15 — Patient Pelican
 
 The build says what it is waiting for, a model load is no longer abandoned, dropped connections are retried, and the providers page has its model list back. See [0.62.15](docs/notes/0.62.15.md).
