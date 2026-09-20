@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from .enrichment_cycles import MAX_PASSES
+from .metadata_schema import MetadataSchema
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -485,6 +486,17 @@ class PdfCorpusExperiment(BaseModel):
 
 
 
+class PdfCorpusAutonomy(BaseModel):
+    """Hands-free mode: nobody reviews the records, so a stated policy makes the decisions. Off unless enabled."""
+
+    enabled: bool = False
+    passes: int = Field(default=1, ge=0, le=3)
+    min_confidence: float = Field(default=0.8, ge=0.5, le=0.99)
+    unresolved: Literal["best_guess", "leave"] = "best_guess"
+    accept_records: bool = True
+    publish: bool = False
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
     profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
@@ -503,6 +515,8 @@ class PdfCorpusBuildCreate(BaseModel):
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
+    schema_id: str = Field(default="default", min_length=1, max_length=64)
+    autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
@@ -629,6 +643,7 @@ class PdfCorpusRecordRerun(BaseModel):
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     experiment: PdfCorpusExperiment | None = None
+    autonomous: PdfCorpusAutonomy | None = None
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
     scope: Literal["all", "accepted", "pending"] = "all"
@@ -806,3 +821,12 @@ class RolePermissionsUpdate(BaseModel):
 class PdfCorpusSecondOpinion(BaseModel):
     field: str = Field(min_length=1, max_length=80)
     value: Any = None
+
+
+class MetadataSchemaPreview(PdfCorpusRecordRerun):
+    """Try one group of a schema on a passage of text, without a build."""
+
+    schema_: MetadataSchema = Field(alias="schema")
+    group: str = Field(min_length=1, max_length=24)
+    text: str = Field(min_length=1, max_length=20000)
+    run: bool = False  # false: show the prompt only, without calling a model

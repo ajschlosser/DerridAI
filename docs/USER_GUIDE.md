@@ -23,7 +23,7 @@ Repeated failed sign-ins lock that username for a fixed period (`AUTH_LOGIN_MAX_
 
 Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=true` only when browsers reach DerridAI through an HTTPS reverse proxy; leave it `false` (the default) for plain-HTTP local or Docker use, or browsers will not send the cookie.
 
-Browser workspace persistence is isolated for researcher accounts so a researcher using the same browser profile does not inherit an administrator's loaded JSONL tabs, provider credentials, or other IndexedDB workspace state. Full backups include the logical user database (roles and password hashes, but not active session tokens), so backup ZIPs should be treated as credential-sensitive.
+Browser workspace persistence is isolated for researcher accounts so a researcher using the same browser profile does not inherit an administrator's loaded JSONL files, provider credentials, or other IndexedDB workspace state. Full backups include the logical user database (roles and password hashes, but not active session tokens), so backup ZIPs should be treated as credential-sensitive.
 
 Researcher-authored text (queries, notes, tags, and filters) is checked against a per-locale forbidden-term policy. Those terms are not shipped in the application source. After the first administrator account exists, generate a policy for each built-in locale from **System → Languages** using a provider profile. Installing a new interface language generates a policy as part of that job. Until at least one locale has a ready policy, the API rejects researcher-authored text. Enforcement uses the union of every generated locale list, so English and French (or any later locale) are checked together. Administrators can review, edit, and regenerate the stored terms; researcher sessions receive only hashed terms for immediate browser feedback.
 
@@ -36,7 +36,7 @@ Dashboard shows:
 - loaded records
 - distinct works
 - records currently needing review
-- loaded JSONL tabs
+- loaded JSONL files
 - ChromaDB collection count
 - total records across databases
 - tracked changes
@@ -223,7 +223,7 @@ After workspace restoration and API health checks, the configured default model 
 
 ## JSONL workspace
 
-Multiple JSONL files remain open as editable tabs and persist through browser IndexedDB, including:
+Multiple JSONL files remain open as a local working set and persist through browser IndexedDB, including:
 
 - unsaved edits
 - active file/view/record
@@ -236,11 +236,11 @@ Multiple JSONL files remain open as editable tabs and persist through browser In
 
 Persistence is browser-origin-specific.
 
-**Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Administrators load JSONL from the empty state or **Workspace** in the top bar. Researcher accounts do not use this page.
+**Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Loaded JSONL files appear in a local-file rail on this page, with origin (imported, subset, merge, split by work, or from a collection) and whether the file has been edited since it was loaded. Administrators open, merge, subset, export, and close files from that rail, or from the empty state. Researcher accounts do not use this page.
 
-### Merge tabs
+### Merge files
 
-Users can merge all tabs or any subset. Selected source tabs are replaced in the workspace by the merged tab; unselected tabs remain. Source files on disk are not deleted.
+Users can merge all loaded JSONL files or any subset. Selected source files are replaced in the workspace by the merged file; unselected files remain. Source files on disk are not deleted.
 
 ## Record audit history
 
@@ -444,7 +444,7 @@ It supports:
 - LLM cleanup of the current extracted page without paraphrasing it
 - LLM-assisted draft-record creation from the current page
 - explicit review/edit of the generated draft before saving
-- saving a draft to any loaded JSONL tab, any Chroma collection, or both
+- saving a draft to any loaded JSONL file, any Chroma collection, or both
 - LLM-assisted page-to-record matching against loaded JSONL records
 - searchable record autocomplete
 - multiple PDF pages linked to one record
@@ -460,7 +460,7 @@ Image-only PDFs still require an external OCR/vision workflow; DerridAI does not
 
 ## Empty states and shortcuts
 
-When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). **Help** opens a short orientation dialog (not Response Library). **Workspace** holds JSONL file actions for administrators. Interface language is a named control showing the language, not a flag. The account menu shows your translated role, Settings, and Sign out. On a narrow screen, language, help, and workspace tools move into that account menu rather than disappearing. The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
+When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). **Help** opens a short orientation dialog (not Response Library). JSONL file actions for administrators live on **Records**. Interface language is a named control showing the language, not a flag. The account menu shows your translated role, Settings, and Sign out. On a narrow screen, language and help move into that account menu rather than disappearing. The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
 
 ## RAG Research
 
@@ -562,7 +562,7 @@ FreeLLM/OpenAI-compatible includes model routing, model-kind filtering, output t
 - attribution/provenance metadata
 - exact evidence text
 - citations
-- load evidence into a new JSONL tab
+- load evidence into a new JSONL file
 - cached-response identifier
 - **Re-run with parameters**, which repopulates RAG Research with the original run configuration so it can be modified before launch
 - **Analyze & grade**, which asks the selected LLM provider to evaluate query relevance, source binding, claim traceability, attribution/source discrimination, claim/evidence fidelity, conceptual precision, coverage, interpretive usefulness, and overall quality
@@ -584,7 +584,7 @@ The **Response Library** page provides:
 
 ## Compare
 
-Compare is a Vue-native two-column workspace at **Tools → Compare**. Each column can independently show a **library** record (loaded JSONL tabs for administrators, corpus-database summaries for researchers) or an **editable copy**. Use **Load into editor** to populate A or B from any existing record, then edit the JSON/JSONL without changing the source until you copy it elsewhere. **Copy A into B** makes a working duplicate. Field differences update as soon as both sides parse as a single JSON object. Audit `updates` history is excluded from the comparison. Researcher accounts cannot mutate corpus records from this page.
+Compare is a Vue-native two-column workspace at **Tools → Compare**. Each column can independently show a **library** record (loaded JSONL files for administrators, corpus-database summaries for researchers) or an **editable copy**. Use **Load into editor** to populate A or B from any existing record, then edit the JSON/JSONL without changing the source until you copy it elsewhere. **Copy A into B** makes a working duplicate. Field differences update as soon as both sides parse as a single JSON object. Audit `updates` history is excluded from the comparison. Researcher accounts cannot mutate corpus records from this page.
 
 ## Settings
 
@@ -683,7 +683,7 @@ Configuration contains a **Backup & restore** section.
 
 **Download full backup** creates one ZIP archive containing:
 
-- every loaded JSONL tab and unsaved browser-workspace record state
+- every loaded JSONL file and unsaved browser-workspace record state
 - record audit histories / `updates`
 - UI preferences, table columns, filters, navigation state, and RAG question/run history
 - all configured LLM provider profiles and their generation defaults

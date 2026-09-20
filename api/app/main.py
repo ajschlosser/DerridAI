@@ -40,6 +40,8 @@ from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
+from .metadata_schema import MetadataSchema, SchemaImportError
+from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
     AnnotationCreateRequest,
     AuthBootstrapRequest,
@@ -58,6 +60,7 @@ from .models import (
     LLMStatusRequest,
     LLMToolJobCreate,
     LLMWarmupRequest,
+    MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
     PdfCorpusBulkDisposition,
@@ -2082,6 +2085,81 @@ def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Qu
     return pdf_corpus_repository.list_builds(offset=offset, limit=limit, asset_id=asset_id)
 
 
+metadata_schemas = SchemaStore(pdf_corpus_repository.root)
+
+
+def _schema_errors(exc: Exception) -> HTTPException:
+    if isinstance(exc, SchemaNotFound):
+        return HTTPException(status_code=404, detail="Metadata schema not found")
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/pdf/metadata-schemas")
+def list_metadata_schemas():
+    return {"items": metadata_schemas.list()}
+
+
+@app.post("/api/pdf/metadata-schemas/import")
+def import_metadata_schema(payload: dict[str, Any]):
+    try:
+        return metadata_schemas.import_(payload).model_dump(mode="json")
+    except (SchemaImportError, SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.post("/api/pdf/metadata-schemas")
+def create_metadata_schema(body: MetadataSchema):
+    try:
+        return metadata_schemas.save(body).model_dump(mode="json")
+    except (SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.post("/api/pdf/metadata-schemas/preview")
+def preview_metadata_schema_group(body: MetadataSchemaPreview):
+    try:
+        payload = body.model_dump(exclude_none=True, by_alias=False)
+        for key in ("schema_", "group", "text", "run"):
+            payload.pop(key, None)
+        request = _resolve_pdf_corpus_provider(payload) if body.run else {}
+        return pdf_corpus_builds.preview_schema_group(body.schema_, body.group, body.text, request, body.run)
+    except (ValueError, TouchupFailure) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/metadata-schemas/{schema_id}")
+def get_metadata_schema(schema_id: str):
+    try:
+        return metadata_schemas.get(schema_id).model_dump(mode="json")
+    except SchemaNotFound as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.get("/api/pdf/metadata-schemas/{schema_id}/export")
+def export_metadata_schema(schema_id: str):
+    try:
+        return JSONResponse(metadata_schemas.export(schema_id), headers={"Content-Disposition": f'attachment; filename="{schema_id}.derridai-schema.json"'})
+    except SchemaNotFound as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.put("/api/pdf/metadata-schemas/{schema_id}")
+def update_metadata_schema(schema_id: str, body: MetadataSchema):
+    try:
+        return metadata_schemas.save(body, schema_id).model_dump(mode="json")
+    except (SchemaNotFound, SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.delete("/api/pdf/metadata-schemas/{schema_id}")
+def delete_metadata_schema(schema_id: str):
+    try:
+        metadata_schemas.delete(schema_id)
+        return {"deleted": schema_id}
+    except (SchemaNotFound, SchemaLocked) as exc:
+        raise _schema_errors(exc) from exc
+
+
 @app.get("/api/pdf/corpus-builds/{build_id}")
 def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     try:
@@ -2421,6 +2499,16 @@ def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = "", arm:
 def export_pdf_corpus_enrichment_ledger():
     """Every ledger event as one CSV row with its experiment columns, for analysis outside the app."""
     return Response(pdf_corpus_builds.enrichment_ledger_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="enrichment-ledger.csv"'})
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/autonomous/run")
+def run_pdf_corpus_autonomous(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.start_autonomous(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")

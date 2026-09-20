@@ -22,8 +22,6 @@ const meta = {
     isAdmin: true,
     canFaq: true,
     canSettings: true,
-    fileCount: 2,
-    flagged: 3,
     languages,
     locale: "en-US",
   },
@@ -32,7 +30,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Administrator: Story = {};
 export const Researcher: Story = {
-  args: {role: "researcher", roleName: "Researcher", isAdmin: false, canFaq: false, fileCount: 0, flagged: 0},
+  args: {role: "researcher", roleName: "Researcher", isAdmin: false, canFaq: false},
 };
 export const French: Story = {
   parameters: {locale: "fr-CA"},

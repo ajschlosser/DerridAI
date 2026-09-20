@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { usableOptions } from "../domain/metadataValues";
+import type { MetadataSchema } from "../api/metadataSchemas";
 import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
 import MetadataFormSection from "./MetadataFormSection.vue";
@@ -11,7 +12,7 @@ import MetadataFormFooter from "./MetadataFormFooter.vue";
 // Change one or more fields on many records at once. It reads and looks like Edit document metadata: fields in
 // titled groups, a field is changed simply by giving it a value, and the footer says in words what will change.
 // A field left empty is left alone; "Clear this field" is the deliberate way to blank it on every record.
-const props=withDefaults(defineProps<{selectedCount:number;totalCount:number;records?:CorpusRecord[];regionTypes?:string[];discourseRoles?:string[];disabled?:boolean}>(),{records:()=>[],regionTypes:()=>[],discourseRoles:()=>[],disabled:false});
+const props=withDefaults(defineProps<{selectedCount:number;totalCount:number;records?:CorpusRecord[];regionTypes?:string[];discourseRoles?:string[];disabled?:boolean;schema?:MetadataSchema|null}>(),{records:()=>[],regionTypes:()=>[],discourseRoles:()=>[],disabled:false,schema:null});
 const emit=defineEmits<{apply:[payload:{changes:Record<string,unknown>;applyToAll:boolean}];close:[]} >();
 const i18n=useI18nStore();
 const applyToAll=ref(false);
@@ -21,20 +22,28 @@ const query=ref("");
 const titleEl=ref<HTMLElement|null>(null);
 // Document details (title, author, publisher…) are set once for the whole document in Edit document metadata and
 // inherited by every record. They stay here for the rarer case of overriding them on chosen records.
-const groups=[
+type BulkGroup={key:string;label:string;fallback:string;help:string;helpFallback:string;fields:string[]};
+const legacyGroups:BulkGroup[]=[
   {key:"discourse",label:"pdf_corpus.bulk_group_discourse",fallback:"Discourse & attribution",help:"pdf_corpus.bulk_group_discourse_help",helpFallback:"Who is speaking, what the passage does, and what it is about.",fields:["region_type","region_author","speaker","position_holder","target","discourse_role","proposition_status","stance","claim_scope","primary_text"]},
   {key:"indexing",label:"pdf_corpus.bulk_group_indexing",fallback:"Semantic indexing",help:"pdf_corpus.bulk_group_indexing_help",helpFallback:"Topics, concepts, people and works the passages mention.",fields:["topics","concepts","persons","works_referenced"]},
   {key:"identity",label:"pdf_corpus.bulk_group_identity",fallback:"Document details on these records",help:"pdf_corpus.bulk_group_identity_help",helpFallback:"These are inherited from Edit document metadata. Change them here only to override them on the chosen records.",fields:["work","document_title","document_author","translator","publisher","publication_place","publication_year","edition","isbn","document_language"]},
-] as const;
-const listFields=new Set(["topics","concepts","persons","works_referenced","document_language"]);
-const booleanFields=new Set(["primary_text"]);
-const enumValues=computed<Record<string,string[]>>(()=>({region_type:props.regionTypes||[],discourse_role:props.discourseRoles||[]}));
-const name=(field:string)=>i18n.t(`record.${field}`,field.replaceAll('_',' '));
-const filteredGroups=computed(()=>{const q=query.value.trim().toLowerCase();if(!q)return groups;return groups.map(group=>({...group,fields:group.fields.filter(field=>name(field).toLowerCase().includes(q))})).filter(group=>group.fields.length)});
+] as unknown as BulkGroup[];
+const identityGroup=legacyGroups.find(group=>group.key==="identity")!;
+// With a schema, the groups and fields are the schema's (the locked core first, in the discourse group); document details stay last.
+const groups=computed<BulkGroup[]>(()=>props.schema?[
+  ...props.schema.groups.map(group=>({key:group.key,label:group.label,fallback:group.label,help:"pdf_corpus.bulk_schema_group_help",helpFallback:"",fields:[...(group.key==="discourse"?["region_type","primary_text","discourse_role"]:[]),...props.schema!.fields.filter(field=>field.group===group.key).map(field=>field.name)]})),
+  identityGroup,
+]:legacyGroups);
+const schemaFieldMap=computed(()=>Object.fromEntries((props.schema?.fields||[]).map(field=>[field.name,field])));
+const listFields=computed(()=>props.schema?new Set([...(props.schema.fields.filter(f=>f.type==="list").map(f=>f.name)),"document_language"]):new Set(["topics","concepts","persons","works_referenced","document_language"]));
+const booleanFields=computed(()=>props.schema?new Set(["primary_text",...props.schema.fields.filter(f=>f.type==="boolean").map(f=>f.name)]):new Set(["primary_text"]));
+const enumValues=computed<Record<string,string[]>>(()=>({region_type:props.regionTypes||[],discourse_role:props.discourseRoles||[],...Object.fromEntries((props.schema?.fields||[]).filter(f=>f.type==="choice"&&f.strict).map(f=>[f.name,f.values.map(v=>v.value)]))}));
+const name=(field:string)=>i18n.t(`record.${field}`,schemaFieldMap.value[field]?.label||field.replaceAll('_',' '));
+const filteredGroups=computed(()=>{const q=query.value.trim().toLowerCase();if(!q)return groups.value;return groups.value.map(group=>({...group,fields:group.fields.filter(field=>name(field).toLowerCase().includes(q))})).filter(group=>group.fields.length)});
 // Existing corpus values to autocomplete from, without placeholders such as "null".
 const suggestions=computed(()=>{
   const out:Record<string,string[]>={};
-  for(const group of groups)for(const field of group.fields){
+  for(const group of groups.value)for(const field of group.fields){
     const seen:unknown[]=[];
     for(const row of props.records||[]){const value=(row as Record<string,unknown>)[field];if(Array.isArray(value))seen.push(...value);else seen.push(value)}
     out[field]=usableOptions(seen).sort((a,b)=>a.localeCompare(b)).slice(0,80);
@@ -43,14 +52,14 @@ const suggestions=computed(()=>{
 });
 function valueFor(field:string):unknown{
   const raw=(values[field]||"").trim();
-  if(cleared[field])return listFields.has(field)?[]:null;
-  if(booleanFields.has(field))return raw==="true"?true:raw==="false"?false:undefined;
+  if(cleared[field])return listFields.value.has(field)?[]:null;
+  if(booleanFields.value.has(field))return raw==="true"?true:raw==="false"?false:undefined;
   if(!raw)return undefined;
-  if(listFields.has(field))return raw.split(/[,\n]/).map(v=>v.trim()).filter(Boolean);
+  if(listFields.value.has(field))return raw.split(/[,\n]/).map(v=>v.trim()).filter(Boolean);
   if(field==="publication_year")return /^\d{4}$/.test(raw)?Number(raw):raw;
   return raw;
 }
-const changes=computed(()=>{const result:Record<string,unknown>={};for(const group of groups)for(const field of group.fields){const value=valueFor(field);if(value!==undefined)result[field]=value}return result});
+const changes=computed(()=>{const result:Record<string,unknown>={};for(const group of groups.value)for(const field of group.fields){const value=valueFor(field);if(value!==undefined)result[field]=value}return result});
 const activeCount=computed(()=>Object.keys(changes.value).length);
 function apply(){if(activeCount.value)emit("apply",{changes:changes.value,applyToAll:applyToAll.value})}
 function reset(){for(const key of Object.keys(values))delete values[key];for(const key of Object.keys(cleared))delete cleared[key];applyToAll.value=false}
