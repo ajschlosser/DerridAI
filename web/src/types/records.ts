@@ -1,12 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-export interface RecordsFileTab {
-  id: string;
-  name: string;
-  count: number;
-  dirty: number;
-  active?: boolean;
-}
+import type { RecordsFileTab } from "../domain/recordsFiles";
+
+export type { RecordsFileOrigin, RecordsFileTab } from "../domain/recordsFiles";
 
 export interface RecordsColumn {
   key: string;

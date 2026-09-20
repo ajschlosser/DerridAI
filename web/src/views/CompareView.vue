@@ -166,7 +166,7 @@ onMounted(async () => {
             :label="t('compare.search_label', 'Find a loaded record')"
             :placeholder="t('compare.picker_placeholder', 'Type record ID, work, author, or file…')"
             :selected-hint="t('compare.selected', 'Selected · {label}')"
-            :empty-hint="library.length ? t('compare.library_help', 'Start typing to search loaded records.') : t('compare.library_empty', 'Load JSONL tabs or browse the corpus database first.')"
+            :empty-hint="library.length ? t('compare.library_help', 'Start typing to search loaded records.') : t('compare.library_empty', 'Load JSONL files or browse the corpus database first.')"
             :no-matches="t('compare.no_matches', 'No matching records.')"
             :clear-label="t('ui.clear', 'Clear')"
             @update:model-value="value => side === 'A' ? keyA = value : keyB = value"

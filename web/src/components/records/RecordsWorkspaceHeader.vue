@@ -26,7 +26,7 @@ const i18n = useI18nStore();
       <button type="button" class="btn soft" @click="emit('share')"><AppIcon name="copy"/>{{ i18n.t("records.copy_link", "Copy link") }}</button>
     </div>
     <ul class="records-stats" :aria-label="i18n.t('records.workspace_stats', 'Workspace statistics')">
-      <li><b>{{ props.fileName || i18n.t("records.no_file", "No file") }}</b><span>{{ i18n.t("records.active_tab", "Active tab") }}</span></li>
+      <li><b>{{ props.fileName || i18n.t("records.no_file", "No file") }}</b><span>{{ i18n.t("records.active_tab", "Active file") }}</span></li>
       <li><b>{{ props.matched.toLocaleString(i18n.locale) }} / {{ props.total.toLocaleString(i18n.locale) }}</b><span>{{ i18n.t("records.visible_of_loaded", "Visible of loaded") }}</span></li>
       <li><b>{{ props.flagged.toLocaleString(i18n.locale) }}</b><span>{{ i18n.t("records.needs_review_count", "Need review") }}</span></li>
       <li><b>{{ props.selected.toLocaleString(i18n.locale) }}</b><span>{{ i18n.t("search.selected_records", "selected records") }}</span></li>
