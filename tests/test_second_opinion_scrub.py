@@ -198,6 +198,7 @@ BUILD_LEVEL = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/resume"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/retry"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/enrich"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/autonomous/run"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
 }
 
