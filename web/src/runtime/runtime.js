@@ -15,6 +15,7 @@ import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelH
 import { formatDuration } from "../domain/operationsPanel";
 import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
 import { compressUrlState, decompressUrlState } from "../domain/urlState";
+import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../domain/recordQuery";
 import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
@@ -3043,25 +3044,6 @@ async function submitBackgroundLlmJob(items,config,fields,instructions,mode){
   toast(`${mode==="auto"?"Auto-improve":"LLM review"} started in background · ${items.length} records`);
   return job;
 }
-function flattenValueList(value){
-  if(value==null)return [];
-  if(Array.isArray(value))return value.flatMap(flattenValueList);
-  if(typeof value==="object")return Object.values(value).flatMap(flattenValueList);
-  const text=String(value).trim();
-  if(!text)return [];
-  if((text.startsWith("[")&&text.endsWith("]"))||(text.startsWith("{")&&text.endsWith("}"))){
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    try{return flattenValueList(JSON.parse(text))}catch{}
-  }
-  // Legacy corpus files have used newline, semicolon, pipe, and CSV-like
-  // encodings for list metadata. Normalize them once so every badge surface
-  // receives a stable list rather than rendering serialized arrays as a chip.
-  if(/[\n;|]/.test(text))return text.split(/[\n;|]+/).map(item=>item.trim()).filter(Boolean);
-  // Commas are intentionally not treated as a universal list separator: person
-  // names and bibliographic values commonly contain commas. Legacy list fields
-  // should use JSON arrays, semicolons, pipes, or line breaks.
-  return [text];
-}
 function topFieldValues(field,limit=5){
   return memoCorpus(`top:${field}:${limit}`,()=>{
     const counts=new Map();
@@ -5398,15 +5380,6 @@ async function importFiles(fileList){
   }else if(first)state.activeFileId=first;
   persistPrefs();shell();renderView();syncUrl({replace:true});toast(`Loaded ${total} records${errors?` · ${errors} parse issues`:""}`);
 }
-function parseJsonl(text){
-  const records=[],errors=[],trimmed=text.trim();
-  if(!trimmed)return{records,errors};
-  if(trimmed.startsWith("[")){
-    try{const value=JSON.parse(trimmed);if(!Array.isArray(value))throw Error("Root is not an array");value.forEach((x,i)=>typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Item ${i+1}: not an object`));return{records,errors}}catch(e){return{records,errors:[e.message]}}
-  }
-  text.split(/\r?\n/).forEach((line,i)=>{if(!line.trim())return;try{const x=JSON.parse(line);typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Line ${i+1}: not an object`)}catch(e){errors.push(`Line ${i+1}: ${e.message}`)}});
-  return{records,errors};
-}
 async function closeFile(id){
   const f=state.files.find(x=>x.id===id);if(!f)return;
   if(f.dirty.size && !await openMessageModal({title:"Close modified JSONL?",message:`${f.name} has modified records. Close anyway?`,tone:"danger",confirmLabel:"Close file",cancelLabel:"Keep open"}))return;
@@ -5691,13 +5664,6 @@ function renderRecord(main){
   decorateDisabledControls(main);
   refreshPresenceForRows([{file:f,record:r,index:i}]);
 }
-function countOccurrences(text,query){
-  if(!query)return 0;
-  const hay=String(text).toLocaleLowerCase(),needle=String(query).toLocaleLowerCase();
-  let i=0,count=0;
-  while((i=hay.indexOf(needle,i))>=0){count++;i+=Math.max(needle.length,1)}
-  return count;
-}
 
 function metadataSearchable(field,value){return value!==undefined&&value!==null&&String(value).trim()!==""&&!['text','record_id','inline_citation','full_citation','page_start','page_end'].includes(field)}
 function searchByMetadata(field,value,{contains=false}={}){
@@ -5969,33 +5935,6 @@ function bulkEditRowsForScope(scope){
     return work?allRows().filter(row=>row.record.work===work):[];
   }
   return allRows();
-}
-function subsetValueText(value){
-  if(value===null||value===undefined)return "";
-  if(Array.isArray(value))return value.map(subsetValueText).join(" ");
-  if(typeof value==="object")return JSON.stringify(value);
-  return String(value);
-}
-function subsetRuleMatches(record,rule,caseSensitive=false){
-  const value=record?.[rule.field];
-  const raw=String(rule.value??"");
-  const normalize=text=>caseSensitive?String(text):String(text).toLocaleLowerCase();
-  const hay=normalize(subsetValueText(value));
-  const needle=normalize(raw);
-  switch(rule.operator){
-    case "equals": return Array.isArray(value)?value.some(item=>normalize(subsetValueText(item))===needle):hay===needle;
-    case "not_equals": return Array.isArray(value)?!value.some(item=>normalize(subsetValueText(item))===needle):hay!==needle;
-    case "contains": return hay.includes(needle);
-    case "not_contains": return !hay.includes(needle);
-    case "array_contains": return Array.isArray(value)&&value.some(item=>normalize(subsetValueText(item))===needle);
-    case "exists": return value!==undefined&&value!==null&&subsetValueText(value)!=="";
-    case "missing": return value===undefined||value===null||subsetValueText(value)==="";
-    case "truthy": return Boolean(value);
-    case "falsy": return !value;
-    case "regex":
-      try{return new RegExp(raw,caseSensitive?"":"i").test(subsetValueText(value))}catch{return false}
-    default:return false;
-  }
 }
 const SUBSET_PROFILE_STORAGE_KEY="derridai.subset-filter-profiles.v1";
 function loadSubsetProfiles(){
@@ -6423,13 +6362,6 @@ function recordFields(){
   allRows().forEach(x=>Object.keys(x.record).forEach(k=>set.add(k)));
   corpusCache.fields=[...set].sort();
   return corpusCache.fields;
-}
-function valueMatches(v,op,n){
-  const empty=v==null||v===""||(Array.isArray(v)&&!v.length);if(op==="empty")return empty;if(op==="notempty")return!empty;
-  const vals=Array.isArray(v)?v:[v],q=String(n??"").toLocaleLowerCase();
-  if(op==="eq")return vals.some(x=>String(x??"").toLocaleLowerCase()===q);if(op==="neq")return!vals.some(x=>String(x??"").toLocaleLowerCase()===q);
-  if(op==="has")return vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));if(op==="nhas")return!vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));
-  if(op==="gte")return vals.some(x=>+x>=+n);if(op==="lte")return vals.some(x=>+x<=+n);return true;
 }
 
 function dbFilterDisplayValue(value){return value&&typeof value==="object"&&"$contains" in value?`${tr("research.contains","contains")} ${value.$contains}`:String(value??"")}
