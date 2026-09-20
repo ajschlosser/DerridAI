@@ -16,6 +16,7 @@ import { formatDuration } from "../domain/operationsPanel";
 import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
 import { compressUrlState, decompressUrlState } from "../domain/urlState";
 import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../domain/recordQuery";
+import { DB_NAME, createWorkspaceDb, deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
 import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
@@ -513,99 +514,24 @@ function showAppModal(dialog){
   dialog.showModal();
 }
 
-const DB_NAME="derridai-corpus-viewer";
-const DB_VERSION=2;
 function workspaceDbName(){
   return isResearcher()&&state.userContext?.id?`${DB_NAME}-researcher-${state.userContext.id}`:DB_NAME;
 }
-let dbPromise=null;
 let prefsTimer=null;
 const fileTimers=new Map();
 
-function openWorkspaceDb(){
-  if(dbPromise)return dbPromise;
-  dbPromise=new Promise((resolve,reject)=>{
-    const request=indexedDB.open(workspaceDbName(),DB_VERSION);
-    request.onupgradeneeded=()=>{
-      const db=request.result;
-      if(!db.objectStoreNames.contains("files"))db.createObjectStore("files",{keyPath:"id"});
-      if(!db.objectStoreNames.contains("prefs"))db.createObjectStore("prefs",{keyPath:"key"});
-      if(!db.objectStoreNames.contains("assets"))db.createObjectStore("assets",{keyPath:"key"});
-    };
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-  return dbPromise;
-}
-function idbRequest(request){
-  return new Promise((resolve,reject)=>{
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-}
-async function idbGetAll(storeName){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).getAll());
-}
-async function idbGet(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).get(key));
-}
-async function idbPut(storeName,value){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).put(value));
-}
-async function idbDelete(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).delete(key));
-}
+const workspaceDb=createWorkspaceDb(workspaceDbName);
+const idbGetAll=workspaceDb.getAll;
+const idbGet=workspaceDb.get;
+const idbPut=workspaceDb.put;
+const idbDelete=workspaceDb.remove;
 async function deleteWorkspaceDatabase(){
   clearTimeout(prefsTimer);
   for(const timer of fileTimers.values())clearTimeout(timer);
   fileTimers.clear();
-  try{
-    const db=await openWorkspaceDb();
-    db.close();
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  }catch{}
-  dbPromise=null;
-  await new Promise((resolve,reject)=>{
-    const request=indexedDB.deleteDatabase(workspaceDbName());
-    request.onsuccess=()=>resolve();
-    request.onerror=()=>reject(request.error);
-    request.onblocked=()=>reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
-  });
+  await workspaceDb.drop();
 }
-function isDerridaiStorageKey(key){
-  return Boolean(key)&&((key.startsWith("derridai.")||key.startsWith("derridai-")||key==="derridai"));
-}
-async function deleteAllDerridaiBrowserState(){
-  await deleteWorkspaceDatabase().catch(()=>{});
-  if(typeof indexedDB.databases==="function"){
-    const dbs=await indexedDB.databases();
-    await Promise.all((dbs||[]).map(info=>new Promise(resolve=>{
-      const name=String(info?.name||"");
-      if(!name.startsWith("derridai"))return resolve();
-      const request=indexedDB.deleteDatabase(name);
-      request.onsuccess=()=>resolve();
-      request.onerror=()=>resolve();
-      request.onblocked=()=>resolve();
-    })));
-  }
-  try{
-    const keys=[];
-    for(let i=0;i<localStorage.length;i+=1){
-      const key=localStorage.key(i);
-      if(isDerridaiStorageKey(key))keys.push(key);
-    }
-    keys.forEach(key=>localStorage.removeItem(key));
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  }catch{}
-}
+const deleteAllDerridaiBrowserState=()=>deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
 async function persistCurrentPdfAsset(){
   if(!state.pdf.file)return;
   try{
