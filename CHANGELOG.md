@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.9 — Steady Swift
+
+Scrolling no longer gets stuck in the review workspace, and edits to document metadata are no longer lost or refused. See [0.62.9](docs/notes/0.62.9.md).
+
 ## 0.62.8 — Spacious Stork
 
 The Corpus Builder review workspace fills the screen, keeps its decisions in one row within reach, and its panes can be resized from the keyboard. See [0.62.8](docs/notes/0.62.8.md).
