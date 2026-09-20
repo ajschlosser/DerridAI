@@ -1,0 +1,322 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`search facets > counts and builds facets for workspace rows and database records 1`] = `
+[
+  {
+    "field": "work",
+    "label": "L(work)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Of Grammatology",
+        "selected": true,
+        "value": "Of Grammatology",
+      },
+    ],
+  },
+  {
+    "field": "needs_review",
+    "label": "L(needs_review)",
+    "values": [
+      {
+        "count": 1,
+        "label": "À revoir",
+        "selected": false,
+        "value": "true",
+      },
+    ],
+  },
+  {
+    "field": "__db_status",
+    "label": "L(__db_status)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Not in DB",
+        "selected": false,
+        "value": "absent",
+      },
+    ],
+  },
+  {
+    "field": "document_author",
+    "label": "L(document_author)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Derrida",
+        "selected": false,
+        "value": "Derrida",
+      },
+    ],
+  },
+  {
+    "field": "speaker",
+    "label": "L(speaker)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Derrida",
+        "selected": false,
+        "value": "Derrida",
+      },
+    ],
+  },
+  {
+    "field": "topics",
+    "label": "L(topics)",
+    "values": [
+      {
+        "count": 1,
+        "label": "a",
+        "selected": true,
+        "value": "a",
+      },
+      {
+        "count": 1,
+        "label": "b",
+        "selected": false,
+        "value": "b",
+      },
+    ],
+  },
+]
+`;
+
+exports[`search facets > counts and builds facets for workspace rows and database records 2`] = `
+[
+  {
+    "field": "work",
+    "label": "L(work)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Of Grammatology",
+        "selected": true,
+        "value": "Of Grammatology",
+      },
+    ],
+  },
+  {
+    "field": "needs_review",
+    "label": "L(needs_review)",
+    "values": [
+      {
+        "count": 1,
+        "label": "À revoir",
+        "selected": false,
+        "value": "true",
+      },
+    ],
+  },
+  {
+    "field": "document_author",
+    "label": "L(document_author)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Derrida",
+        "selected": false,
+        "value": "Derrida",
+      },
+    ],
+  },
+  {
+    "field": "speaker",
+    "label": "L(speaker)",
+    "values": [
+      {
+        "count": 1,
+        "label": "Derrida",
+        "selected": false,
+        "value": "Derrida",
+      },
+    ],
+  },
+  {
+    "field": "topics",
+    "label": "L(topics)",
+    "values": [
+      {
+        "count": 1,
+        "label": "a",
+        "selected": true,
+        "value": "a",
+      },
+      {
+        "count": 1,
+        "label": "b",
+        "selected": false,
+        "value": "b",
+      },
+    ],
+  },
+]
+`;
+
+exports[`search facets > counts and builds facets for workspace rows and database records 3`] = `
+{
+  "concepts": [
+    "y",
+  ],
+  "document_author": [
+    "Derrida",
+  ],
+  "needs_review": [
+    "false",
+    "true",
+  ],
+  "speaker": [
+    "Derrida",
+    "S1",
+    "S2",
+  ],
+  "topics": [
+    "a",
+    "a;c",
+    "b",
+  ],
+  "work": [
+    "Glas",
+    "Of Grammatology",
+  ],
+  "year": [
+    "1967",
+    "1974",
+  ],
+}
+`;
+
+exports[`search facets > describes filters and matches list filters 1`] = `
+{
+  "field": "year",
+  "field_label": "L(year)",
+  "id": "uid",
+  "op": "gte",
+  "op_label": "at least",
+  "value": "1",
+}
+`;
+
+exports[`search facets > describes filters and matches list filters 2`] = `
+[
+  {
+    "field": "speaker",
+    "field_label": "L(speaker)",
+    "id": "db:speaker",
+    "op": "eq",
+    "op_label": "equals",
+    "value": "Derrida",
+  },
+]
+`;
+
+exports[`search facets > describes filters and matches list filters 3`] = `
+[
+  false,
+  false,
+  false,
+  false,
+]
+`;
+
+exports[`search facets > describes filters and matches list filters 4`] = `
+[
+  "Text match",
+]
+`;
+
+exports[`search facets > reads and displays facet values 1`] = `
+[
+  [
+    [
+      "Of Grammatology",
+    ],
+    [
+      "true",
+    ],
+    [
+      "synced",
+    ],
+    [
+      "Derrida",
+    ],
+    [],
+    [
+      "Derrida",
+    ],
+    [],
+    [],
+    [],
+    [
+      "a",
+      "b",
+    ],
+    [],
+  ],
+  [
+    [
+      "Glas",
+    ],
+    [
+      "false",
+    ],
+    [
+      "synced",
+    ],
+    [
+      "Derrida",
+    ],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+      "a;c",
+    ],
+    [],
+  ],
+  [
+    [
+      "Glas",
+    ],
+    [
+      "false",
+    ],
+    [
+      "synced",
+    ],
+    [],
+    [],
+    [
+      "S1",
+      "S2",
+    ],
+    [],
+    [],
+    [],
+    [],
+    [
+      "y",
+    ],
+  ],
+  [
+    [],
+    [
+      "false",
+    ],
+    [
+      "synced",
+    ],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+]
+`;

@@ -3,6 +3,16 @@
 
 Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview, [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) for the scholarly rationale and which capabilities are implemented versus intended.
 
+## Multi-agent collaboration
+
+Copilot, Claude, Cursor/Grok, and ChatGPT/Codex may work on this repository concurrently. Treat the working tree, shared APIs, schemas, prompts, and documentation as shared contracts:
+
+- Inspect current changes before editing; preserve unrelated work and never reset, rewrite, or delete another agent's changes.
+- Keep commits focused and communicate cross-cutting contract changes in the relevant code or documentation. Avoid drive-by formatting and speculative refactors.
+- Prefer small, composable changes that are easy to review and merge. Resolve conflicts by preserving behavior and provenance, not by choosing one agent's version wholesale.
+- Do not assume an agent's plan or documentation reflects implementation; verify the actual code and tests.
+- Coordinate changes to generated files, migrations, release metadata, locale parity, and public API schemas so only one authoritative edit is made.
+
 ## What this project is
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). PDFs become structured JSONL records via the Corpus Builder; records are reviewed with human and LLM input, stored in ChromaDB, and queried through an evidence-grounded RAG pipeline. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
@@ -77,3 +87,28 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
 - Run the relevant checks before reporting done, and report honestly which checks could not run.
 - Commit as the repository owner: Aaron Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
+
+## Saving tokens and execution time
+
+- Act on the first reasonable plan. Do not re-derive settled decisions or narrate options that will not be taken.
+- Prefer scripts and one combined command over repeated hand edits and small commands.
+- Limit command output with `tail`, `grep -E`, `cut -c1-160`, and `head`. Read large files by line range; `runtime.js` is about 9,000 lines.
+- Run long jobs in the background and poll once. Do not use short sleep-poll loops.
+- After an edit succeeds, do not re-read the entire file; inspect only when validation or an uncertain merge requires it.
+- Write tests once against the legacy behavior, then make a focused implementation change rather than iterating through avoidable failures.
+- Batch type-check fixes, preferably with one scripted transformation when signatures share the same cause.
+- Do not spawn subagents unless asked. Use Explore only for broad searches that cannot be handled with targeted local search.
+- If the work is consuming substantial context or tokens, ask whether to continue before starting another broad investigation.
+- When usage nears 85%, update `PROGRESS.md`, commit and push the progress, then stop.
+
+## Design and engineering principles
+
+- Prefer simple, explicit designs with one source of truth, narrow interfaces, stable contracts, and deterministic behavior.
+- Separate domain logic from transport, persistence, presentation, and provider integrations; keep side effects at boundaries.
+- Make invalid states difficult to represent: validate at boundaries, use precise schemas and types, and fail explicitly with actionable errors.
+- Preserve backward compatibility deliberately. Version migrations, API/schema changes, prompt contracts, and persisted data; document intentional breaks.
+- Favor idempotent, cancellable, observable operations with bounded resource use. Never hide errors that affect data integrity, provenance, security, or user decisions.
+- Design for secure defaults: least privilege, server-side authorization, strict input validation, safe secret handling, dependency hygiene, and no sensitive data in logs.
+- Treat accessibility, internationalization, responsive behavior, and keyboard operation as acceptance criteria, not polish.
+- Optimize only after measuring. Prefer readable code, deterministic tests, and maintainable abstractions over cleverness or premature caching.
+- Keep changes reversible and auditable: meaningful names, focused diffs, regression coverage for behavior, and documentation for user-visible or operational changes.
