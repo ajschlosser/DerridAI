@@ -40,6 +40,8 @@ from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
+from .metadata_schema import MetadataSchema, SchemaImportError
+from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
     AnnotationCreateRequest,
     AuthBootstrapRequest,
@@ -2080,6 +2082,69 @@ def create_pdf_corpus_build(body: PdfCorpusBuildCreate) -> dict[str, Any]:
 @app.get("/api/pdf/corpus-builds")
 def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200), asset_id: str | None = None) -> dict[str, Any]:
     return pdf_corpus_repository.list_builds(offset=offset, limit=limit, asset_id=asset_id)
+
+
+metadata_schemas = SchemaStore(pdf_corpus_repository.root)
+
+
+def _schema_errors(exc: Exception) -> HTTPException:
+    if isinstance(exc, SchemaNotFound):
+        return HTTPException(status_code=404, detail="Metadata schema not found")
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/pdf/metadata-schemas")
+def list_metadata_schemas():
+    return {"items": metadata_schemas.list()}
+
+
+@app.post("/api/pdf/metadata-schemas/import")
+def import_metadata_schema(payload: dict[str, Any]):
+    try:
+        return metadata_schemas.import_(payload).model_dump(mode="json")
+    except (SchemaImportError, SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.post("/api/pdf/metadata-schemas")
+def create_metadata_schema(body: MetadataSchema):
+    try:
+        return metadata_schemas.save(body).model_dump(mode="json")
+    except (SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.get("/api/pdf/metadata-schemas/{schema_id}")
+def get_metadata_schema(schema_id: str):
+    try:
+        return metadata_schemas.get(schema_id).model_dump(mode="json")
+    except SchemaNotFound as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.get("/api/pdf/metadata-schemas/{schema_id}/export")
+def export_metadata_schema(schema_id: str):
+    try:
+        return JSONResponse(metadata_schemas.export(schema_id), headers={"Content-Disposition": f'attachment; filename="{schema_id}.derridai-schema.json"'})
+    except SchemaNotFound as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.put("/api/pdf/metadata-schemas/{schema_id}")
+def update_metadata_schema(schema_id: str, body: MetadataSchema):
+    try:
+        return metadata_schemas.save(body, schema_id).model_dump(mode="json")
+    except (SchemaNotFound, SchemaLocked, ValueError) as exc:
+        raise _schema_errors(exc) from exc
+
+
+@app.delete("/api/pdf/metadata-schemas/{schema_id}")
+def delete_metadata_schema(schema_id: str):
+    try:
+        metadata_schemas.delete(schema_id)
+        return {"deleted": schema_id}
+    except (SchemaNotFound, SchemaLocked) as exc:
+        raise _schema_errors(exc) from exc
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}")
