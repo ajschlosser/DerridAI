@@ -6,6 +6,8 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
+from .enrichment_cycles import MAX_PASSES
+
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -575,6 +577,8 @@ class PdfCorpusRecordRerun(BaseModel):
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
     scope: Literal["all", "accepted", "pending"] = "all"
+    # 1 runs a single pass; more chains passes, each learning from the last.
+    passes: int = Field(default=1, ge=1, le=MAX_PASSES)
 
 
 class PdfCorpusTextTouchupRequest(BaseModel):
