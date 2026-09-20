@@ -22,3 +22,12 @@ describe("model activity line", () => {
     expect(mount(CorpusModelActivity, { props: { activity: null } }).find("p").exists()).toBe(false);
   });
 });
+
+describe("a load that runs long", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  it("suggests restarting Ollama only after three minutes", () => {
+    expect(mount(CorpusModelActivity, { props: { activity: activity({ seconds: 100 }) } }).text()).not.toContain("longer than usual");
+    expect(mount(CorpusModelActivity, { props: { activity: activity({ seconds: 240 }) } }).text()).toContain("longer than usual");
+    expect(mount(CorpusModelActivity, { props: { activity: activity({ state: "working", seconds: 240 }) } }).text()).not.toContain("longer than usual");
+  });
+});

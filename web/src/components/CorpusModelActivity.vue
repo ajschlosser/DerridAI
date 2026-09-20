@@ -21,6 +21,9 @@ const elapsed = computed(() => {
   const total = Math.max(0, Math.round(props.activity.seconds + (tick.value - receivedAt.value) / 1000));
   return total >= 60 ? `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, "0")} s` : `${total} s`;
 });
+// A load that takes minutes is normal for a big model the first time; several minutes with the same model already on
+// the GPU usually means Ollama is stuck, and every request behind it waits too.
+const slowLoad = computed(() => props.activity?.state === "loading_model" && props.activity.seconds + (tick.value - receivedAt.value) / 1000 > 180);
 const task = computed(() => {
   const kind = props.activity?.task ?? "other";
   const fallback = { manifest: "the document structure", segmentation: "the record boundaries", metadata: "record metadata", other: "this step" }[kind];
@@ -37,12 +40,17 @@ const message = computed(() => {
 </script>
 
 <template>
-  <p v-if="activity" class="model-activity" :data-state="activity.state" role="status">
-    <span class="model-activity-dot" aria-hidden="true"></span>{{ message }}
-  </p>
+  <div v-if="activity" class="model-activity" :data-state="activity.state" role="status">
+    <span class="model-activity-dot" aria-hidden="true"></span>
+    <span>
+      {{ message }}
+      <span v-if="slowLoad" class="model-activity-hint">{{ i18n.t("pdf_corpus.model_loading_slow", "This is taking longer than usual. If it does not finish, restart Ollama and cancel any other builds waiting on it; they share its one model load.") }}</span>
+    </span>
+  </div>
 </template>
 
 <style scoped>
+.model-activity-hint { display: block; margin-block-start: 0.25rem; font-size: 0.8125rem; }
 .model-activity { display: flex; align-items: center; gap: 0.625rem; margin: 0; padding: 0.5rem 0.875rem; border: 1px solid var(--tone-info-border); border-radius: 10px; background: var(--tone-info-bg); color: var(--tone-info-fg); font-size: 0.875rem; line-height: 1.45; }
 .model-activity[data-state="loading_model"] { border-color: var(--tone-warn-border); background: var(--tone-warn-bg); color: var(--tone-warn-fg); }
 .model-activity-dot { flex: none; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background: currentColor; animation: model-activity-pulse 1.4s ease-in-out infinite; }
