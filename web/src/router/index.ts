@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import DashboardView from "../views/DashboardView.vue";
 import CorpusView from "../views/CorpusView.vue";
 import RecordsView from "../views/RecordsView.vue";
+import WorksView from "../views/WorksView.vue";
 import ResearchView from "../views/ResearchView.vue";
 import SearchView from "../views/SearchView.vue";
 import RecordView from "../views/RecordView.vue";
@@ -19,7 +20,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: DashboardView, meta: { view: "home", capability: "page.dashboard" } },
   { path: "/records", name: "list", component: RecordsView, meta: { view: "list", capability: "page.records", adminOnly: true, vueNative: true } },
   { path: "/record", name: "record", component: RecordView, meta: { view: "record", capability: "page.record", vueNative: true } },
-  { path: "/works", name: "works", component: CorpusView, meta: { view: "works", capability: "page.works" } },
+  { path: "/works", name: "works", component: WorksView, meta: { view: "works", capability: "page.works", vueNative: true } },
   { path: "/search", name: "global", component: SearchView, meta: { view: "global", capability: "page.search", vueNative: true } },
   { path: "/annotations", name: "annotations", component: CorpusView, meta: { view: "annotations", capability: "page.annotations" } },
   { path: "/pdf", name: "pdf", component: ToolsView, meta: { view: "pdf", capability: "page.pdf", adminOnly: true } },
