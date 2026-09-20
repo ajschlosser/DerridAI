@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
@@ -9,6 +9,7 @@ import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
 import type { RecordWorkspaceSnapshot } from "../types/record";
+import { useAnnotations } from "../composables/useAnnotations";
 
 const i18n=useI18nStore();
 const shell=useShellStore();
@@ -26,6 +27,7 @@ const annotationNote=ref("");
 const annotationTags=ref("");
 const annotationField=ref("text");
 const annotationError=ref("");
+const annotationsApi=useAnnotations();
 
 const record=computed(()=>snapshot.value.record||{});
 const work=computed(()=>String(record.value.work||record.value.document_title||i18n.t('record.untitled','Untitled record')));
@@ -60,8 +62,8 @@ async function quickChange(changes:Record<string,unknown>){await refreshAfter(()
 function metadataSearch(field:string,value:string,contains=false){runtime.searchCurrentRecordMetadata(field,value,{contains})}
 function openAnnotation(selection?:{field:string;quote:string}){annotationField.value=selection?.field||'text';annotationQuote.value=selection?.quote||'';annotationNote.value='';annotationTags.value='';annotationError.value='';void nextTick(()=>{if(annotationDialog.value&&!annotationDialog.value.open)annotationDialog.value.showModal();annotationDialog.value?.querySelector<HTMLTextAreaElement>('#recordAnnotationNote')?.focus()})}
 function closeAnnotation(){annotationDialog.value?.close()}
-async function saveAnnotation(){annotationError.value='';try{await runtime.addCurrentRecordAnnotation({field:annotationField.value,quote:annotationQuote.value,note:annotationNote.value,tags:annotationTags.value.split(',').map(v=>v.trim()).filter(Boolean)});closeAnnotation();await load()}catch(exc){annotationError.value=exc instanceof Error?exc.message:String(exc)}}
-async function removeAnnotation(id:string){await refreshAfter(()=>runtime.removeCurrentRecordAnnotation(id))}
+async function saveAnnotation(){annotationError.value='';try{const current=record.value;await annotationsApi.create({store:snapshot.value.collection||null,record_id:String(snapshot.value.record_id||current._chroma_id||""),work:String(current.work||current.document_title||""),page_start:(current.page_start as number|string|null)||null,page_end:(current.page_end as number|string|null)||null,field:annotationField.value,quote:annotationQuote.value,note:annotationNote.value,tags:annotationTags.value.split(',').map(v=>v.trim()).filter(Boolean)});closeAnnotation();await load()}catch(exc){annotationError.value=exc instanceof Error?exc.message:String(exc)}}
+async function removeAnnotation(id:string){await refreshAfter(()=>annotationsApi.remove(id))}
 async function action(name:string,payload:Record<string,unknown>={}){await refreshAfter(()=>runtime.currentRecordPrimaryAction(name,payload))}
 function startResize(event:PointerEvent){if(window.innerWidth<1180)return;dragging.value=true;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);document.body.classList.add('record-resizing');window.addEventListener('pointermove',resize);window.addEventListener('pointerup',stopResize,{once:true})}
 function resize(event:PointerEvent){if(!dragging.value)return;const workspace=document.querySelector('.record-workspace-grid')?.getBoundingClientRect();if(!workspace)return;const width=Math.max(310,Math.min(440,workspace.right-event.clientX));inspectorWidth.value=width}

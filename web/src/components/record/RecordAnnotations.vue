@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
 import type { RecordAnnotationItem } from "../../types/record";
 const props=withDefaults(defineProps<{annotations:RecordAnnotationItem[];canAdd?:boolean}>(),{canAdd:false});

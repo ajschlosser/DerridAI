@@ -1,5 +1,8 @@
-export interface RecordAnnotationItem {
+import type { Annotation } from "./annotations";
+
+export type RecordAnnotationItem = Partial<Annotation> & {
   id: string;
+  record_id?: string;
   field: string;
   quote: string;
   note: string;
@@ -8,7 +11,7 @@ export interface RecordAnnotationItem {
   created_at?: string | null;
   removable: boolean;
   shared_annotation_id?: string | null;
-}
+};
 
 export interface RecordHistoryItem {
   id: string;

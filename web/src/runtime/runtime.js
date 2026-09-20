@@ -56,10 +56,6 @@ const state = {
   researcherRecordId: "",
   researcherCompareA: "",
   researcherCompareB: "",
-  annotationView: "works",
-  annotationSearch: "",
-  serverAnnotations: [],
-  serverAnnotationsStore: "",
   annotationsFetchedAt: 0,
   dashboardMetricIndex: 0,
   lastViewedRecord: null,
@@ -252,7 +248,6 @@ const labels = {
   document_language:"Document language",original_language:"Original language",document_is_translation:"Document is translation",
   translator:"Translator",publisher:"Publisher",publication_year:"Publication year",publication_place:"Publication place",isbn:"ISBN",document_title:"Document title",short_title:"Short title",original_title:"Original title",cover_url:"Cover URL",inline_citation:"Inline citation",full_citation:"Full citation",text:"Extracted text",text_length:"Text length",updates:"Change history",pdf_file:"PDF file",pdf_page:"PDF page",pdf_pages:"PDF pages",pdf_links:"PDF links",__file:"File",__db_status:"DB status",_chroma_id:"Chroma ID"
 };
-
 
 const viewConfig = [
   {id:"home", label:"Home", icon:"dashboard", section:"Overview"},
@@ -450,7 +445,6 @@ function canAccessPage(view){const capability=pageCapabilities[view];return !cap
 function setUserContext(user){
   const priorId=state.userContext?.id;
   state.userContext=user||null;
-  if(priorId!==state.userContext?.id){state.serverAnnotations=[];state.serverAnnotationsStore="";state.annotationsFetchedAt=0}
   if(!canAccessPage(state.view))state.view="home";
   void refreshResearcherContentPolicy();
 }
@@ -1216,7 +1210,6 @@ function openRecordHistoryBrowser(file,index){
   };
   document.body.appendChild(dialog);showAppModal(dialog);render();
 }
-
 
 function openMessageModal({
   title="Notice",
@@ -2260,7 +2253,6 @@ function currentTableUrlState(view=state.view){
   if(view==="global")return {c:state.tableColumns.global||null,s:state.globalSort,f:state.globalFilters,sf:state.searchFacetFilters||{},p:state.globalPage,z:state.pageSize,q:state.globalSearch,m:state.globalSearchMode,dm:state.dbSearchMethod,dw:state.dbSearchWhere,dk:state.dbSearchFetchK,dl:state.dbSearchLambda,ao:Boolean(state.globalAdvancedOpen),l:state.searchResultLayouts};
   if(view==="vector")return {c:state.tableColumns.vector||null,s:state.storeSort,f:state.storeFilters,p:state.storePage,z:state.storePageSize,w:state.storeWork,b:state.storeBrowseMode,ss:state.storeSearchSort,q:state.storeQuery};
   if(view==="works")return {q:state.worksSearch||"",w:state.workOverview||""};
-  if(view==="annotations")return {q:state.annotationSearch||"",m:state.annotationView||"works"};
   if(view==="home")return {m:Number(state.dashboardMetricIndex)||0,sm:state.globalSearchMode||"traditional",q:state.globalSearch||""};
   if(view==="record")return {q:state.recordFind||"",rr:state.researcherRecordId||""};
   if(view==="faq")return {q:state.faqSearch||"",p:state.faqPage||1};
@@ -2305,9 +2297,6 @@ function applyCompressedTableUrlState(value,view=state.view){
   }else if(view==="works"){
     if(typeof value.q==="string")state.worksSearch=value.q;
     if(typeof value.w==="string")state.workOverview=value.w;
-  }else if(view==="annotations"){
-    if(typeof value.q==="string")state.annotationSearch=value.q;
-    if(["works","recent"].includes(value.m))state.annotationView=value.m;
   }else if(view==="home"){
     if(Number.isFinite(+value.m))state.dashboardMetricIndex=Math.max(0,+value.m);
     if(["traditional","database"].includes(value.sm))state.globalSearchMode=value.sm;
@@ -2691,7 +2680,6 @@ function hideOperationProgress(id,delay=200){
   }
   state.operationProgress[id]={...(state.operationProgress[id]||{}),finished:true};
 }
-
 
 const jobCompletionNotified={};
 const completedJobToastTimers={};
@@ -3253,117 +3241,6 @@ function recentAuditChanges(limit=10){
   }
   return changes.sort((a,b)=>new Date(b.update.timestamp||0)-new Date(a.update.timestamp||0)).slice(0,limit);
   });
-}
-
-function serverAnnotationItems(){
-  return (state.serverAnnotations||[]).map(annotation=>({
-    file:null,
-    record:{record_id:annotation.record_id,work:annotation.work||"",page_start:annotation.page_start,page_end:annotation.page_end,_chroma_id:annotation.record_id},
-    index:null,
-    annotation,
-    annotationIndex:null,
-    work:String(annotation.work||"(Untitled work)"),
-    server:true,
-    store:annotation.store||"",
-  }));
-}
-async function refreshServerAnnotations(force=false){
-  if(isResearcher()&&!hasCapability("annotations.read")){state.serverAnnotations=[];state.serverAnnotationsStore="";return []}
-  const storeName=isResearcher()?String(state.activeStore||""):"";
-  if(!force&&Date.now()-Number(state.annotationsFetchedAt||0)<15000&&(!isResearcher()||state.serverAnnotationsStore===storeName))return state.serverAnnotations||[];
-  try{
-    const suffix=storeName?`?store=${encodeURIComponent(storeName)}`:"";
-    const data=await api(`/api/annotations${suffix}`);
-    state.serverAnnotations=data.annotations||[];
-    state.serverAnnotationsStore=storeName;
-    state.annotationsFetchedAt=Date.now();
-  }catch(error){console.warn("Could not load shared annotations",error)}
-  return state.serverAnnotations||[];
-}
-function allAnnotations(){
-  const local=isResearcher()?[]:memoCorpus("annotations-all",()=>{
-    const items=[];
-    for(const {file,record,index} of allRows()){
-      const annotations=Array.isArray(record.annotations)?record.annotations:[];
-      annotations.forEach((annotation,annotationIndex)=>items.push({file,record,index,annotation,annotationIndex,work:String(record.work||"(Untitled work)"),server:false}));
-    }
-    return items;
-  });
-  // Administrator annotations are mirrored to the shared annotation store so
-  // researcher accounts can see them. Avoid showing the local + shared copy
-  // twice in an administrator workspace.
-  const mirroredIds=new Set(local.map(item=>String(item.annotation?.shared_annotation_id||"")).filter(Boolean));
-  const shared=serverAnnotationItems().filter(item=>!mirroredIds.has(String(item.annotation?.id||"")));
-  return [...local,...shared].sort((a,b)=>new Date(b.annotation.created_at||0)-new Date(a.annotation.created_at||0));
-}
-function recentAnnotations(limit=10){return allAnnotations().slice(0,limit)}
-function annotationTimeline(days=14){
-  const keys=dateKeys(days),counts=new Map(keys.map(key=>[key,0]));
-  for(const item of allAnnotations()){
-    const key=String(item.annotation?.created_at||"").slice(0,10);
-    if(counts.has(key))counts.set(key,(counts.get(key)||0)+1);
-  }
-  return keys.map(key=>({key,value:counts.get(key)||0}));
-}
-function annotationMatches(item,query){
-  const q=String(query||"").trim().toLocaleLowerCase();if(!q)return true;
-  const annotation=item.annotation||{};
-  return [item.work,item.record?.record_id,item.file?.name,item.store,annotation.note,annotation.quote,annotation.author,annotation.initiated_by,...(annotation.tags||[])].some(value=>String(value||"").toLocaleLowerCase().includes(q));
-}
-function annotationItemHtml(item){
-  const annotation=item.annotation||{};
-  const tags=(annotation.tags||[]).map(tag=>`<span class="chip">${esc(tag)}</span>`).join("");
-  const open=item.server?`<button class="annotation-open-record" data-server-annotation-record="${esc(annotation.record_id||"")}" data-server-annotation-store="${esc(annotation.store||"")}" title="${esc(tr("annotations.open_record","Open record"))}">${icon("record")}</button>`:`<button class="annotation-open-record" data-annotation-file="${esc(item.file.id)}" data-annotation-index="${item.index}" title="${esc(tr("annotations.open_record","Open record"))}">${icon("record")}</button>`;
-  const source=item.server?(annotation.store||tr("annotations.shared","Shared annotation")):(item.file?.name||"");
-  const canDeleteServer=item.server&&(state.userContext?.role==="admin"||Number(annotation.user_id||0)===Number(state.userContext?.id||-1));
-  const canDeleteLocal=!item.server&&canUse("editLocalRecords");
-  const removeButton=canDeleteServer
-    ?`<button class="btn tiny danger" data-delete-server-annotation="${esc(annotation.id)}">${esc(tr("ui.remove","Remove"))}</button>`
-    :canDeleteLocal
-      ?`<button class="btn tiny danger" data-delete-local-annotation="${esc(reviewKey(item.file,item.index))}" data-local-annotation-index="${item.annotationIndex}">${esc(tr("ui.remove","Remove"))}</button>`
-      :"";
-  return `<article class="annotation-feed-item">${open}<div class="annotation-feed-copy"><div class="annotation-feed-meta"><b>${esc(item.record?.record_id||tr("nav.record","Record"))}</b><span>${esc(annotation.field?label(annotation.field):tr("annotations.record_note","Record note"))}</span><time>${esc(formatTimestamp(annotation.created_at))}</time></div>${annotation.quote?`<blockquote>${esc(annotation.quote)}</blockquote>`:""}${annotation.note?`<p>${esc(annotation.note)}</p>`:""}${tags?`<div class="annotation-tags">${tags}</div>`:""}<small>${esc(annotation.initiated_by||annotation.author||tr("annotations.unknown_author","Unknown author"))} · ${esc(source)}</small></div>${removeButton}</article>`;
-}
-async function renderAnnotations(main){
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  if(isResearcher()&&!state.activeStore){try{await refreshStores();state.activeStore=recordStores()[0]?.name||""}catch{}}
-  await refreshServerAnnotations(isResearcher()&&state.serverAnnotationsStore!==String(state.activeStore||""));
-  const all=allAnnotations();
-  const filtered=all.filter(item=>annotationMatches(item,state.annotationSearch));
-  const byWork=new Map();for(const item of filtered){if(!byWork.has(item.work))byWork.set(item.work,[]);byWork.get(item.work).push(item)}
-  const groups=[...byWork.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
-  main.innerHTML=`<section class="page-heading legacy-page-heading"><div><p>${esc(tr("section.corpus","Corpus"))}</p><h1>${esc(tr("nav.annotations","Annotations"))}</h1><span>${esc(tr("annotations.page_help","Review annotations across the corpus. The default view groups discussion by work; switch to Recent for a chronological stream."))}</span></div></section><section class="card annotations-index-card"><div class="annotations-toolbar"><div class="search"><input id="annotationSearch" value="${esc(state.annotationSearch)}" placeholder="${esc(tr("annotations.search_placeholder","Search annotations, tags, quotes, records, or works…"))}"></div><div class="view-tabs"><button class="view-tab ${state.annotationView==="works"?"active":""}" data-annotation-view="works">${esc(tr("annotations.by_work","By work"))}</button><button class="view-tab ${state.annotationView==="recent"?"active":""}" data-annotation-view="recent">${esc(tr("annotations.recent","Recent"))}</button></div><span class="note">${filtered.length.toLocaleString()} ${esc(tr("annotations.annotation_count","annotations"))} · ${groups.length.toLocaleString()} ${esc(tr("dynamic.works","works"))}</span></div></section>${state.annotationView==="recent"?`<section class="card annotations-recent-card"><div class="cardhead"><div><b>${esc(tr("annotations.recent_annotations","Recent annotations"))}</b><div class="note">${esc(tr("annotations.recent_help","Newest annotations across all loaded works."))}</div></div></div><div class="annotation-feed">${filtered.map(annotationItemHtml).join("")||`<div class="llm-empty">${esc(tr("annotations.empty","No annotations match the current search."))}</div>`}</div></section>`:`<section class="annotation-work-groups">${groups.map(([work,items])=>`<details class="card annotation-work-group" open><summary><span><b>${esc(work)}</b><small>${items.length.toLocaleString()} ${esc(tr("annotations.annotation_count","annotations"))} · ${new Set(items.map(item=>item.record.record_id||item.index)).size.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></span><button type="button" class="btn tiny" data-annotation-work="${esc(work)}">${esc(tr("works.open_overview","Open work overview"))}</button></summary><div class="annotation-feed">${items.map(annotationItemHtml).join("")}</div></details>`).join("")||`<div class="card llm-empty">${esc(tr("annotations.empty","No annotations match the current search."))}</div>`}</section>`}`;
-  const input=main.querySelector("#annotationSearch");let timer=null;input?.addEventListener("input",event=>{const value=event.target.value,pos=event.target.selectionStart;state.annotationSearch=value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>{if(state.view!=="annotations")return;renderAnnotations(main);requestAnimationFrame(()=>{const next=main.querySelector("#annotationSearch");if(next){next.focus();next.setSelectionRange(pos,pos)}})},150)});
-  main.querySelectorAll("[data-annotation-view]").forEach(button=>button.onclick=()=>{state.annotationView=button.dataset.annotationView;persistPrefs();syncUrl({replace:true});renderAnnotations(main)});
-  main.querySelectorAll("[data-annotation-file]").forEach(button=>button.onclick=()=>navigateTo("record",{fileId:button.dataset.annotationFile,index:Number(button.dataset.annotationIndex)}));
-  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
-  main.querySelectorAll("[data-server-annotation-record]").forEach(button=>button.onclick=()=>openSharedAnnotationRecord(button.dataset.serverAnnotationStore,button.dataset.serverAnnotationRecord));
-  main.querySelectorAll("[data-delete-server-annotation]").forEach(button=>button.onclick=async()=>{if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_help","This removes the shared annotation. This action cannot be undone."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;try{await api(`/api/annotations/${encodeURIComponent(button.dataset.deleteServerAnnotation)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.removed","Annotation removed."));renderAnnotations(main)}catch(error){toast(error.message,{tone:"danger"})}});
-  main.querySelectorAll("[data-delete-local-annotation]").forEach(button=>button.onclick=async()=>{
-    if(!canUse("editLocalRecords"))return;
-    const item=reviewItemFromKey(button.dataset.deleteLocalAnnotation||"");
-    const annotationIndex=Number(button.dataset.localAnnotationIndex);
-    const annotations=Array.isArray(item?.record?.annotations)?item.record.annotations:[];
-    const annotation=Number.isInteger(annotationIndex)?annotations[annotationIndex]:null;
-    if(!item||!annotation)return;
-    if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_local_help","This removes the annotation from the local JSONL record and records the change in its audit history."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;
-    try{
-      const sharedId=String(annotation.shared_annotation_id||"").trim();
-      if(sharedId){
-        try{await api(`/api/annotations/${encodeURIComponent(sharedId)}`,{method:"DELETE"})}
-        catch(error){if(Number(error?.status||0)!==404)throw error}
-      }
-      const next=annotations.filter((_,index)=>index!==annotationIndex);
-      applyRecordChanges(item.file,item.index,{annotations:next},{source:"annotation-delete"});
-      await persistFileNow(item.file);
-      state.annotationsFetchedAt=0;
-      await refreshServerAnnotations(true);
-      toast(tr("annotations.removed","Annotation removed."));
-      renderAnnotations(main);
-    }catch(error){toast(error.message,{tone:"danger"})}
-  });
-  main.querySelectorAll("[data-annotation-work]").forEach(button=>button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();state.workOverview=button.dataset.annotationWork||"";persistPrefs();navigateTo("works")}));
-  decorateDisabledControls(main);
 }
 
 function timelineCounts(kind,days=30){
@@ -5371,7 +5248,6 @@ async function renderDashboard(main){
   if(isResearcher()){
     try{await refreshStores();if(!state.activeStore)state.activeStore=recordStores()[0]?.name||"";if(state.activeStore)await refreshStoreWorks(true)}catch(error){console.warn("Could not refresh researcher dashboard data",error)}
   }
-  try{await refreshServerAnnotations(isResearcher()&&state.serverAnnotationsStore!==String(state.activeStore||""))}catch(error){console.warn("Could not refresh annotations for dashboard",error)}
   const rows=allRows(),totals=dashboardTotals(),workMap=isResearcher()?null:workIndex();
   const workItems=isResearcher()?(state.storeWorkStats||[]).map(item=>({work:item.work,count:Number(item.count||0),totalWords:Number(item.total_words||0),averageRecordLength:Number(item.average_record_length||0),year:item.publication_year||item.year||"",cover:item.cover_url||"",author:item.document_author||"",publisher:item.publisher||""})): [...workMap.values()].map(item=>{const year=commonWorkValue(item.rows,"publication_year"),totalWords=item.rows.reduce((sum,row)=>sum+String(row.record?.text||"").trim().split(/\s+/).filter(Boolean).length,0);return {work:item.work,count:item.count,totalWords,averageRecordLength:item.count?Math.round(totalWords/item.count):0,year:year.value||[...item.years].sort()[0]||"",cover:workCoverUrl(item.rows),author:[...item.authors].join(", "),publisher:commonWorkValue(item.rows,"publisher").value||""}}).sort((a,b)=>a.work.localeCompare(b.work));
   const words=workItems.reduce((sum,item)=>sum+Number(item.totalWords||0),0);
@@ -5385,14 +5261,13 @@ async function renderDashboard(main){
   ];
   state.dashboardMetricIndex=Math.max(0,Math.min(metricSets.length-1,Number(state.dashboardMetricIndex)||0));
   const activeMetric=metricSets[state.dashboardMetricIndex];
-  const recent=isResearcher()
-    ? (hasCapability("activity.read")?[...(hasCapability("annotations.read")?(state.serverAnnotations||[]).map(annotation=>({kind:"annotation",timestamp:annotation.created_at||"",annotation})):[]),...(hasCapability("rag.jobs.own")?(state.jobs||[]).filter(job=>job.type==="rag").map(job=>({kind:"rag",timestamp:job.updated_at||job.finished_at||job.created_at||"",job})):[])].sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0)).slice(0,4):[])
+  const recent=isResearcher() ? (hasCapability("activity.read")?[...(hasCapability("rag.jobs.own")?(state.jobs||[]).filter(job=>job.type==="rag").map(job=>({kind:"rag",timestamp:job.updated_at||job.finished_at||job.created_at||"",job})):[])].sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0)).slice(0,4):[])
     : recentAuditChanges(4).map(({file,record,index,update})=>({kind:"record",timestamp:update.timestamp||"",file,record,index,update}));
   const works=workItems.sort((a,b)=>a.work.localeCompare(b.work));
   const currentProvider=defaultProviderProfile();
   const currentLanguage=state.translations?.info?.name||state.translations?.locale||"";
   const currentLanguageFlag=state.translations?.info?.flag||"🌐";
-  const latestAnnotation=(!isResearcher()||hasCapability("annotations.read"))?(recentAnnotations(1)[0]||null):null;
+  const latestAnnotation=null;
   const preview=await dashboardRecordPreview(),previewRecord=preview.record,previewTarget=preview.target;
   main.innerHTML=`<div class="dashboard-page">
     <section class="dashboard-page-top"><article class="card dashboard-hero"><img src="/brand/derridai-mark.png" alt="" class="dashboard-hero-mark"><div class="dashboard-hero-copy"><h1>${esc(tr("dashboard.welcome","Welcome to DerridAI"))}</h1><p class="dashboard-hero-tagline">${esc(tr("dashboard.tagline","Search. Compare. Annotate. Always already."))}</p><blockquote>${esc(tr("dashboard.quote","“Il n’y a pas de hors-texte.”"))}</blockquote><small>— Jacques Derrida</small><div class="dashboard-hero-actions"><button class="btn dark" id="dashStartSearch">${icon("search")}${esc(tr("dashboard.start_searching","Start searching"))}</button><button class="btn" id="dashBrowseWorks">${icon("books")}${esc(tr("dashboard.browse_works","Browse works"))}</button></div></div></article>
@@ -5412,7 +5287,6 @@ async function renderDashboard(main){
   // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireCorpusBuildsHomeCard(main);wireOperationsPanel();decorateDisabledControls(main);
 }
-
 
 let shellRefreshHook=()=>{};
 function setShellRefreshHook(hook){
@@ -5504,13 +5378,11 @@ function renderView(){
   else if(state.view==="responsecache") result=renderResponseCache(main);
   else if(isResearcher()&&state.view==="record") result=renderRecord(main);
   else if(isResearcher()&&state.view==="works") result=renderWorks(main);
-  else if(isResearcher()&&state.view==="annotations") result=renderAnnotations(main);
   else if(isResearcher()&&state.view==="global") result=renderGlobal(main);
   else if(!state.files.length) result=renderEmpty(main);
   else if(state.view==="list") result=renderList(main);
   else if(state.view==="record") result=renderRecord(main);
   else if(state.view==="works") result=renderWorks(main);
-  else if(state.view==="annotations") result=renderAnnotations(main);
   else result=renderGlobal(main);
   Promise.resolve(result).finally(()=>requestAnimationFrame(()=>{enhanceCollapsibles(main);decorateDisabledControls(main);translateLegacyDom(main)}));
   return result;
@@ -5680,7 +5552,7 @@ function openTextAnnotationDialog(file,index,selection){
     })});
     const annotations=Array.isArray(record.annotations)?record.annotations.map(cloneAuditValue):[];
     annotations.push({id:uid(),shared_annotation_id:shared?.id||null,field,quote,note,tags,created_at:shared?.created_at||new Date().toISOString(),initiated_by:state.userContext?.username||null});
-    applyRecordChanges(file,index,{annotations},{source:"annotation"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);shell();renderView();toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});
+    applyRecordChanges(file,index,{annotations},{source:"annotation"});shell();renderView();toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});
   }});
 }
 
@@ -5830,7 +5702,6 @@ function renderRecord(main){
     const index=Number(button.dataset.removeAnnotation);if(!Number.isInteger(index)||!annotations[index])return;
     if(!await openMessageModal({title:"Remove record annotation?",message:"Remove this note/tag annotation? The record audit history will retain the change.",tone:"danger",confirmLabel:"Remove",cancelLabel:"Cancel"}))return;
     const sharedId=annotations[index]?.shared_annotation_id;
-    if(sharedId){await api(`/api/annotations/${encodeURIComponent(sharedId)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true)}
     annotations.splice(index,1);applyRecordChanges(f,i,{annotations},{source:"annotation"});shell();renderView();toast(tr("annotations.removed","Record annotation removed"),{tone:"success"});
   }));
   wireEditableChips(main,f,i);
@@ -5971,7 +5842,6 @@ function openWorkMetadataEditor(work,rows){
     toast(trf("works.metadata_applied","Updated {records} records · {fields} tracked field changes",{records:changedRecords.toLocaleString(),fields:fieldChanges.toLocaleString()}),{tone:"success"});
   };
 }
-
 
 const WORK_METADATA_LLM_FIELDS=[
   "source_type","document_type","document_title","short_title","document_author","container_title","journal_title",
@@ -6483,8 +6353,7 @@ async function openSeparateWorksModal(){
 
 async function renderWorks(main){
   if(isResearcher())return renderResearcherWorks(main);
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{await refreshServerAnnotations()}catch{}
+
   if(Date.now()-Number(state.storesLastFetchedAt||0)>5000){
     showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking vector database state…"));
     try{await refreshStores()}catch(error){console.warn("Could not refresh vector stores for Works",error)}
@@ -6504,7 +6373,7 @@ async function renderWorks(main){
     const cover=workCoverUrl(selected.rows);
     const coreFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
     const citationText=fullCitation(selected.rows[0]?.record||{work:selected.work},{includePages:false});
-    const annotationCount=allAnnotations().filter(item=>String(item.work||"")===String(selected.work)).length;
+    const annotationCount=[].filter(item=>String(item.work||"")===String(selected.work)).length;
     return `<section class="card work-overview-card"><div class="work-overview-cover">${cover?`<img src="${esc(cover)}" alt="${esc(trf("works.cover_alt","Cover of {work}",{work:selected.work}))}" loading="lazy">`:`<div class="work-cover-placeholder">${icon("books")}</div>`}</div><div class="work-overview-content"><div class="work-overview-heading"><div><span class="section-label">${esc(tr("works.overview","Work overview"))}</span><h1>${esc(selected.work)}</h1><p>${selected.count.toLocaleString()} ${esc(tr("dynamic.records","records"))} · ${selected.files.size.toLocaleString()} ${esc(tr("works.source_files","source files"))}</p></div><span class="db-status ${workDbStatus(selected.rows,selected.work).kind}"><i></i>${esc(workDbStatus(selected.rows,selected.work).label)}</span></div><div class="work-overview-metadata">${coreFields.map(field=>`<div><span>${esc(label(field))}</span><b>${metadataValue(selected.rows,field)}</b></div>`).join("")}</div><div class="work-overview-citation"><span>${esc(label("full_citation"))}</span><p>${esc(citationText)}</p></div>${workInsightsPanelHtml(selected.rows,selected.work)}<div class="work-overview-actions"><button class="btn primary" id="overviewSearchWork">${icon("search")}${esc(tr("works.search_records","Search records"))}</button><button class="btn" id="overviewEditWork">${icon("edit")}${esc(tr("works.edit_metadata","Edit work metadata"))}</button><button class="btn soft" id="overviewPopulateWork">${icon("spark")}${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</button>${annotationCount?`<button class="btn" id="overviewAnnotations">${icon("record")}${esc(trf("works.view_annotations","Annotations ({count})",{count:annotationCount.toLocaleString()}))}</button>`:""}</div></div></section>`;
   })():"";
 
@@ -6541,7 +6410,7 @@ async function renderWorks(main){
   main.querySelector("#overviewSearchWork")?.addEventListener("click",()=>{state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:selected.work}];state.globalPage=1;persistPrefs();navigateTo("global")});
   main.querySelector("#overviewEditWork")?.addEventListener("click",()=>openWorkMetadataEditor(selected.work,selected.rows));
   main.querySelector("#overviewPopulateWork")?.addEventListener("click",()=>openWorkMetadataLlmDialog([selected]));
-  main.querySelector("#overviewAnnotations")?.addEventListener("click",()=>{state.annotationSearch=selected.work;state.annotationView="works";persistPrefs();navigateTo("annotations")});
+  main.querySelector("#overviewAnnotations")?.addEventListener("click",()=>{navigateTo("annotations",{query:{q:selected.work}})});
   main.querySelectorAll("[data-inspect-mixed-field]").forEach(button=>button.addEventListener("click",()=>openMixedWorkValuesDialog(selected.work,button.dataset.inspectMixedField,selected.rows)));
   main.querySelectorAll("[data-work-insight-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.workInsightField,button.dataset.workInsightValue,{contains:["persons","concepts","topics"].includes(button.dataset.workInsightField)})));
   const openWorkSearch=(work,{needsReview=false}={})=>{state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:work},...(needsReview?[{id:uid(),field:"needs_review",op:"eq",value:"true"}]:[])];state.globalPage=1;persistPrefs();navigateTo("global")};
@@ -6647,17 +6516,16 @@ async function renderResearcherGlobal(main){
 }
 async function renderResearcherWorks(main){
   showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking corpus database…"));try{await refreshStores();if(state.activeStore)await refreshStoreWorks(true)}catch(error){main.innerHTML=`<div class="info error">${esc(error.message)}</div>`;return}
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  const stores=recordStores();if(!state.activeStore&&stores.length){state.activeStore=stores[0].name;await refreshStoreWorks(true)};try{await refreshServerAnnotations(true)}catch{};if(!stores.length){main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("database")}</div><h1>${esc(tr("research.no_database","No corpus database available"))}</h1></div></section>`;return}
+
+  const stores=recordStores();if(!state.activeStore&&stores.length){state.activeStore=stores[0].name;await refreshStoreWorks(true)};;if(!stores.length){main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("database")}</div><h1>${esc(tr("research.no_database","No corpus database available"))}</h1></div></section>`;return}
   const works=(state.storeWorkStats||[]).filter(item=>!state.worksSearch||String(item.work).toLocaleLowerCase().includes(state.worksSearch.toLocaleLowerCase()));const selected=works.find(item=>item.work===state.workOverview)||null;
-  const selectedAnnotationCount=selected?allAnnotations().filter(item=>String(item.work||"")===String(selected.work)).length:0;
+  const selectedAnnotationCount=selected?[].filter(item=>String(item.work||"")===String(selected.work)).length:0;
   const cover=item=>String(item?.cover_url||"");const overview=selected?`<section class="card work-overview-card"><div class="work-overview-cover">${cover(selected)?`<img src="${esc(cover(selected))}" alt="${esc(trf("works.cover_alt","Cover of {work}",{work:selected.work}))}">`:icon("books")}</div><div class="work-overview-content"><div class="work-overview-heading"><div><span class="section-label">${esc(tr("works.overview","Work overview"))}</span><h1>${esc(selected.work)}</h1><p>${Number(selected.count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}</p></div></div><div class="work-overview-metadata">${["document_author","publisher","publication_year","edition","translator","publication_place","isbn","document_language","original_language"].map(field=>selected[field]?`<div><span>${esc(label(field))}</span><b>${esc(display(selected[field]))}</b></div>`:"").join("")}</div>${selected.full_citation?`<div class="work-overview-citation"><span>${esc(label("full_citation"))}</span><p>${esc(selected.full_citation)}</p></div>`:""}<div class="work-overview-actions"><button class="btn primary" id="browseResearchWork">${icon("search")}${esc(tr("works.browse_records","Browse records"))}</button>${selectedAnnotationCount?`<button class="btn" id="researchWorkAnnotations">${icon("record")}${esc(trf("works.view_annotations","Annotations ({count})",{count:selectedAnnotationCount.toLocaleString()}))}</button>`:""}</div></div></section>`:"";
   main.innerHTML=`<section class="page-heading legacy-page-heading"><div><p>${esc(tr("section.corpus","Corpus"))}</p><h1>${esc(tr("nav.works","Works"))}</h1><span>${esc(tr("research.works_menu_help","Browse works in the selected corpus database. Select a work for an overview, then browse its summarized records."))}</span></div></section>${overview}<div class="toolbar works-toolbar"><div class="search"><input id="worksSearch" value="${esc(state.worksSearch)}" placeholder="${esc(tr("research.filter_works","Filter works by title"))}"></div><div class="tools"><select class="control" id="researchWorksStore">${stores.map(store=>`<option value="${esc(store.name)}" ${store.name===state.activeStore?"selected":""}>${esc(store.name)}</option>`).join("")}</select><span class="note">${works.length.toLocaleString()} ${esc(tr("dynamic.works","works"))}</span></div></div><section class="researcher-work-menu">${works.map(item=>`<button class="researcher-work-menu-card ${state.workOverview===item.work?"active":""}" data-research-work="${esc(item.work)}">${cover(item)?`<img class="researcher-work-cover" src="${esc(cover(item))}" alt="">`:`<span class="work-book-icon">${icon("books")}</span>`}<span><b>${esc(item.work)}</b><small>${[item.document_author,item.publication_year||item.year,item.publisher].filter(Boolean).map(esc).join(" · ")}</small><small>${Number(item.count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></span><span class="work-menu-arrow">›</span></button>`).join("")||`<div class="llm-empty">${esc(tr("research.no_works","No works are available."))}</div>`}</section>`;
-  let timer=null;main.querySelector("#worksSearch")?.addEventListener("input",event=>{state.worksSearch=event.target.value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>renderResearcherWorks(main),150)});main.querySelector("#researchWorksStore")?.addEventListener("change",async event=>{state.activeStore=event.target.value;state.storeWorksStore="";state.workOverview="";await refreshStoreWorks(true);persistPrefs();syncUrl({replace:true});renderResearcherWorks(main)});main.querySelectorAll("[data-research-work]").forEach(button=>button.onclick=()=>{const y=window.scrollY;state.workOverview=button.dataset.researchWork||"";persistPrefs();syncUrl({replace:true});renderResearcherWorks(main);requestAnimationFrame(()=>window.scrollTo(0,y))});main.querySelector("#browseResearchWork")?.addEventListener("click",()=>{state.storeWork=state.workOverview;state.storeBrowseMode="records";state.storePage=1;persistPrefs();navigateTo("vector")});main.querySelector("#researchWorkAnnotations")?.addEventListener("click",()=>{state.annotationSearch=state.workOverview;state.annotationView="works";persistPrefs();navigateTo("annotations")});
+  let timer=null;main.querySelector("#worksSearch")?.addEventListener("input",event=>{state.worksSearch=event.target.value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>renderResearcherWorks(main),150)});main.querySelector("#researchWorksStore")?.addEventListener("change",async event=>{state.activeStore=event.target.value;state.storeWorksStore="";state.workOverview="";await refreshStoreWorks(true);persistPrefs();syncUrl({replace:true});renderResearcherWorks(main)});main.querySelectorAll("[data-research-work]").forEach(button=>button.onclick=()=>{const y=window.scrollY;state.workOverview=button.dataset.researchWork||"";persistPrefs();syncUrl({replace:true});renderResearcherWorks(main);requestAnimationFrame(()=>window.scrollTo(0,y))});main.querySelector("#browseResearchWork")?.addEventListener("click",()=>{state.storeWork=state.workOverview;state.storeBrowseMode="records";state.storePage=1;persistPrefs();navigateTo("vector")});main.querySelector("#researchWorkAnnotations")?.addEventListener("click",()=>{navigateTo("annotations",{query:{q:state.workOverview}})});
 }
 async function renderResearcherRecord(main){
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{await refreshServerAnnotations()}catch{}
+
   // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!state.activeStore){try{await refreshStores()}catch{};if(!state.activeStore){main.innerHTML=`<div class="info warn">${esc(tr("research.no_database","No corpus database available"))}</div>`;return}}
   let id=state.researcherRecordId;let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
@@ -6667,10 +6535,10 @@ async function renderResearcherRecord(main){
   if(!record){main.innerHTML=`<section class="empty"><div class="drop"><h1>${esc(tr("research.no_records","No records available"))}</h1><button class="btn primary" id="recordBrowseWorks">${esc(tr("works.browse_records","Browse records"))}</button></div></section>`;main.querySelector("#recordBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));return}
   const viewedPointer={kind:"database",store:state.activeStore,id:String(record._chroma_id||record.record_id||id)};
   if(JSON.stringify(state.lastViewedRecord)!==JSON.stringify(viewedPointer)){state.lastViewedRecord=viewedPointer;persistPrefs()}
-  const q=state.recordFind||"";const text=String(record.text||"");const eKey=dbEvidenceKey(state.activeStore,String(record._chroma_id||record.record_id||id));const groups=[["topics",record.topics],["concepts",record.concepts],["persons",record.persons],["works_referenced",record.works_referenced]];const sharedAnnotations=(state.serverAnnotations||[]).filter(item=>String(item.store||"")===String(state.activeStore)&&String(item.record_id||"")===String(record._chroma_id||record.record_id||id));const sharedAnnotationsHtml=sharedAnnotations.length?`<div class="record-annotations shared-record-annotations">${sharedAnnotations.map(item=>`<article class="record-annotation"><div class="record-annotation-context"><span class="annotation-field-label">${esc(label(item.field||"text"))}</span>${item.quote?`<blockquote>${esc(item.quote)}</blockquote>`:""}</div><div class="record-annotation-body">${item.note?`<p>${esc(item.note)}</p>`:""}${(item.tags||[]).length?`<div class="annotation-tags">${(item.tags||[]).map(tag=>`<span class="chip">${esc(tag)}</span>`).join("")}</div>`:""}<div class="record-annotation-meta"><span>${esc(item.initiated_by||item.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(item.created_at))}</time></div></div></article>`).join("")}</div>`:`<div class="annotation-empty-state"><span class="annotation-empty-icon">${icon("record")}</span><div><b>${esc(tr("annotations.none_record","No annotations on this record yet"))}</b><p>${esc(tr("annotations.none_record_help","Select text above to attach a note or tags."))}</p></div></div>`;
+  const q=state.recordFind||"";const text=String(record.text||"");const eKey=dbEvidenceKey(state.activeStore,String(record._chroma_id||record.record_id||id));const groups=[["topics",record.topics],["concepts",record.concepts],["persons",record.persons],["works_referenced",record.works_referenced]];const sharedAnnotations=[];const sharedAnnotationsHtml="";
   main.innerHTML=`<section class="record-toolbar"><div class="record-nav"><button class="btn" id="researchRecordBack">${icon("search")}${esc(tr("nav.search","Search"))}</button><button class="btn" id="researchRecordWorks">${icon("books")}${esc(tr("nav.works","Works"))}</button></div><div class="search"><input id="recordSearch" value="${esc(q)}" placeholder="${esc(tr("record.find_text","Find in record text"))}"><button class="record-find-clear" id="clearRecordFind" ${q?"":`disabled data-disabled-reason="${esc(tr("record.clear_find_empty","Enter a find query before clearing it."))}"`}>${esc(tr("record.clear_search","Clear search"))}</button></div></section><section class="recordgrid"><article class="card record-main"><div class="headline"><div class="eyebrow">${esc(record.record_id||id)}</div><h1>${metadataLinkHtml("work",record.work||tr("nav.record","Record"),{className:"metadata-heading-link"})}</h1><div class="meta">${metadataLinkHtml("document_author",record.document_author)} · ${metadataLinkHtml("year",record.year)}${mlaPageSpan(record)?` · <span>${esc(`p. ${mlaPageSpan(record)}`)}</span>`:""}</div></div><div class="cardhead"><div><b>${esc(tr("record.summary","Researcher summary"))}</b><div class="note">${esc(tr("research.summary_policy","Edmundson summary · 2–3 sentences"))}${q?` · ${countOccurrences(text,q)} ${esc(tr("record.matches","matches"))}`:""}</div></div><div class="tools">${evidenceButtonHtml(eKey,evidenceIsSelected(eKey)?tr("ui.selected","Selected"):tr("ui.add_evidence","Add evidence"))}<button class="btn tiny" id="researchInlineCite">${icon("copy")}${esc(tr("ui.copy_inline","Inline citation"))}</button><button class="btn tiny" id="researchFullCite">${icon("copy")}${esc(tr("ui.copy_full","Full citation"))}</button></div></div><div class="recordtext" data-annotatable-text data-annotatable-field="text">${highlight(text,q)}</div><div class="record-selection-toolbar" id="researchRecordSelectionToolbar" hidden><span id="researchRecordSelectionLabel">${esc(tr("annotations.selected_text","Selected text"))}</span>${hasCapability("annotations.write")?`<button class="btn tiny primary" id="researchAnnotateSelection">${esc(tr("annotations.add_note_tags","Add note / tags"))}</button>`:""}</div><section class="record-annotation-section"><div class="record-annotation-heading"><div><span class="section-label">${esc(tr("annotations.record_notes","Annotations"))}</span><h3>${esc(tr("annotations.record_annotations","Record annotations"))}</h3><p>${esc(tr("annotations.record_annotations_help","Notes and tags attached to specific evidence in this record."))}</p></div><span class="badge">${sharedAnnotations.length}</span></div>${sharedAnnotationsHtml}</section></article><aside class="side"><section class="card"><div class="section"><h3>${esc(tr("record.metadata","Metadata"))}</h3><div class="mg">${["document_author","edition","year","page_start","page_end","speaker","position_holder","target","discourse_role","proposition_status","stance"].map(key=>metaRow(key,record[key])).join("")}</div></div></section><section class="card record-index-card researcher-index-card">${groups.map(([key,values])=>`<div class="quick-index metadata-badge-section"><div class="section-title-row"><h3>${esc(label(key))}</h3><span class="badge">${Array.isArray(values)?values.length:values?1:0}</span></div><div class="editable-chips researcher-badge-wrap">${flattenValueList(values).map(value=>`<span class="editable-chip researcher-index-chip"><button class="chip-search-link" data-meta-search-field="${esc(key)}" data-meta-search-value="${esc(value)}" data-meta-search-contains="true">${esc(value)}</button></span>`).join("")||`<span class="note">${esc(tr("ui.none","None"))}</span>`}</div></div>`).join("")}</section></aside></section>`;
   main.querySelector("#researchRecordBack")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#researchRecordWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#recordSearch")?.addEventListener("input",event=>{const pos=event.target.selectionStart;state.recordFind=event.target.value;persistPrefs();syncUrl({replace:true});renderResearcherRecord(main);requestAnimationFrame(()=>{const input=main.querySelector("#recordSearch");input?.focus();input?.setSelectionRange(pos,pos)})});main.querySelector("#clearRecordFind")?.addEventListener("click",()=>{state.recordFind="";persistPrefs();syncUrl({replace:true});renderResearcherRecord(main);requestAnimationFrame(()=>main.querySelector("#recordSearch")?.focus())});main.querySelector("#researchInlineCite")?.addEventListener("click",()=>copyCitation(record,"inline"));main.querySelector("#researchFullCite")?.addEventListener("click",()=>copyCitation(record,"full"));main.querySelectorAll("[data-evidence-key]").forEach(button=>button.onclick=()=>{toggleDbEvidence(state.activeStore,String(record._chroma_id||record.record_id||id),record);renderResearcherRecord(main)});wireMetadataSearch(main);
-  let researcherSelection=null;const updateResearcherSelection=()=>{researcherSelection=selectionInsideRecordView();const toolbar=main.querySelector("#researchRecordSelectionToolbar");if(toolbar){toolbar.hidden=!researcherSelection;if(researcherSelection)positionSelectionToolbar(toolbar,researcherSelection)}};const researcherGrid=main.querySelector(".recordgrid");researcherGrid?.addEventListener("mouseup",updateResearcherSelection);researcherGrid?.addEventListener("keyup",updateResearcherSelection);main.querySelector("#researchAnnotateSelection")?.addEventListener("click",()=>{if(!researcherSelection)return;openAnnotationPopover(researcherSelection,{recordLabel:String(record.record_id||id),onSave:async({field,quote,note,tags})=>{await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||id),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});renderResearcherRecord(main)}})});
+  let researcherSelection=null;const updateResearcherSelection=()=>{researcherSelection=selectionInsideRecordView();const toolbar=main.querySelector("#researchRecordSelectionToolbar");if(toolbar){toolbar.hidden=!researcherSelection;if(researcherSelection)positionSelectionToolbar(toolbar,researcherSelection)}};const researcherGrid=main.querySelector(".recordgrid");researcherGrid?.addEventListener("mouseup",updateResearcherSelection);researcherGrid?.addEventListener("keyup",updateResearcherSelection);main.querySelector("#researchAnnotateSelection")?.addEventListener("click",()=>{if(!researcherSelection)return;openAnnotationPopover(researcherSelection,{recordLabel:String(record.record_id||id),onSave:async({field,quote,note,tags})=>{await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||id),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});renderResearcherRecord(main)}})});
 }
 async function renderResearcherCompare(main){
   // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
@@ -6767,7 +6635,6 @@ function wireFilterRow(row,main){
   row.querySelector(".value").onchange=e=>{f.value=e.target.value;state.globalPage=1;persistPrefs();syncUrl({replace:true});renderGlobal(main)};
   row.querySelector(".remove").onclick=()=>{state.globalFilters=state.globalFilters.filter(x=>x!==f);persistPrefs();syncUrl({replace:true});renderGlobal(main)};
 }
-
 
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
@@ -7283,7 +7150,6 @@ function openOcrCleanupDialog(){
     if(await openMessageModal({title:"Run OCR cleanup?",message:`Run conservative OCR cleanup on ${rows.length.toLocaleString()} records?`,confirmLabel:"Run cleanup",cancelLabel:"Cancel"}))cleanRows(rows);
   });
 }
-
 
 const EDITOR_GROUPS = [
   {name:"Source", fields:["record_id","work","document_author","edition","year","page_start","page_end","region_type","region_author","primary_text","canonical_work_id","pdf_file","pdf_pages"]},
@@ -8442,7 +8308,6 @@ function llmDiffSides(field,current,proposed){
   return {left,right};
 }
 
-
 function ensureProviderProfiles(){
   let profiles=Array.isArray(state.appConfig.provider_profiles)?state.appConfig.provider_profiles:[];
   profiles=profiles.filter(profile=>profile&&profile.id&&["ollama","openai"].includes(profile.type));
@@ -9363,9 +9228,6 @@ async function checkHealth(){
   }
 }
 
-
-
-
 function translatedNavLabel(item){
   const keys={home:"nav.dashboard",list:"nav.records",record:"nav.record",works:"nav.works",global:"nav.search",annotations:"nav.annotations",pdf:"nav.pdf",compare:"nav.compare",vector:"nav.vector",rag:"nav.rag",faq:"nav.faq",responsecache:"nav.cache",providers:"nav.providers",config:"nav.config"};
   return keys[item.id]?tr(keys[item.id],item.label):item.label;
@@ -9706,8 +9568,6 @@ async function bootstrapRuntime(){
   startJobPolling();
   if(!isResearcher()&&state.appConfig.warm_default_provider_on_start===true)warmupConfiguredLlm();
 }
-
-
 
 // 0.31.0 native Research bridge. The Vue Research workspace owns presentation,
 // while this compatibility layer continues to own corpus/provider/job state and
@@ -10062,7 +9922,6 @@ function prepareResearchRerun(job){
   return updateResearchConfig(patch);
 }
 
-
 // 0.35.10 — Record Player. The Record page is Vue-native; this bridge exposes
 // only the current record data and actions needed by that workspace. Audit
 // history is summarized separately so the heavyweight `updates` payload never
@@ -10099,8 +9958,7 @@ function normalizedRecordAnnotation(item,index=0,{removable=false}={}){
   };
 }
 async function researcherCurrentRecord(){
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{await refreshServerAnnotations()}catch{}
+
   if(!state.activeStore){
     // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{await refreshStores()}catch{}
@@ -10125,9 +9983,7 @@ async function getRecordWorkspaceSnapshot(){
     const id=String(record._chroma_id||record.record_id||state.researcherRecordId||"");
     const list=researcherDbRecords();
     const currentIndex=list.findIndex(item=>String(item._chroma_id||item.record_id||"")===id);
-    const annotations=(state.serverAnnotations||[])
-      .filter(item=>String(item.store||"")===String(state.activeStore)&&String(item.record_id||"")===id)
-      .map((item,index)=>normalizedRecordAnnotation(item,index,{removable:false}));
+    const annotations=[];
     const text=String(record.text||"");
     const q=String(state.recordFind||"");
     const key=dbEvidenceKey(state.activeStore,id);
@@ -10225,29 +10081,6 @@ async function saveCurrentRecordChanges(changes={}){
   else toast(tr("record.no_changes","No record fields changed"),{tone:"info"});
   return getRecordWorkspaceSnapshot();
 }
-async function addCurrentRecordAnnotation(payload={}){
-  if(!hasCapability("annotations.write"))throw new Error(tr("permissions.annotations_denied","Your role cannot create annotations."));
-  const field=String(payload.field||"text"),quote=String(payload.quote||"").trim(),note=String(payload.note||"").trim(),tags=Array.isArray(payload.tags)?payload.tags.map(String).filter(Boolean):[];
-  if(!quote&&!note&&!tags.length)throw new Error(tr("annotations.empty","Add a quotation, note, or tag first."));
-  if(isResearcher()){
-    const record=await researcherCurrentRecord();if(!record)throw new Error(tr("record.no_record_selected","No record selected."));
-    await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||""),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});
-    state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});return getRecordWorkspaceSnapshot();
-  }
-  const file=activeFile();if(!file)throw new Error(tr("record.no_record_selected","No record selected."));const index=selectedIndex(file),record=file.records[index];
-  const shared=await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore||null,record_id:String(record._chroma_id||record.record_id||index+1),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});
-  const annotations=Array.isArray(record.annotations)?record.annotations.map(cloneAuditValue):[];
-  annotations.push({id:uid(),shared_annotation_id:shared?.id||null,field,quote,note,tags,created_at:shared?.created_at||new Date().toISOString(),initiated_by:state.userContext?.username||null});
-  applyRecordChanges(file,index,{annotations},{source:"annotation"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);shell();toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});return getRecordWorkspaceSnapshot();
-}
-async function removeCurrentRecordAnnotation(annotationId){
-  if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));
-  const file=activeFile();if(!file)throw new Error(tr("record.no_record_selected","No record selected."));const index=selectedIndex(file),record=file.records[index];
-  const annotations=Array.isArray(record.annotations)?record.annotations.map(cloneAuditValue):[];
-  const at=annotations.findIndex((item,i)=>String(item.id||item.shared_annotation_id||`annotation-${i}`)===String(annotationId));if(at<0)return getRecordWorkspaceSnapshot();
-  const sharedId=annotations[at]?.shared_annotation_id;if(sharedId){await api(`/api/annotations/${encodeURIComponent(sharedId)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true)}
-  annotations.splice(at,1);applyRecordChanges(file,index,{annotations},{source:"annotation"});shell();toast(tr("annotations.removed","Record annotation removed"),{tone:"success"});return getRecordWorkspaceSnapshot();
-}
 async function currentRecordPrimaryAction(action,payload={}){
   if(action==="upsert"){
     if(isResearcher()||!canUse("manageCorpus"))throw new Error(tr("permissions.corpus_denied","Your role cannot manage corpus databases."));const file=activeFile();if(!file)return false;await upsertRows([{file,record:file.records[selectedIndex(file)],index:selectedIndex(file)}],"record");return true;
@@ -10286,7 +10119,7 @@ function getWorksWorkspaceSnapshot(){
   const query=String(state.worksSearch||"");
   const metadataFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
   const items=[...map.values()].filter(item=>!query||item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.work.localeCompare(b.work)).map(item=>({
-    work:item.work,count:item.count,review:item.review,annotations:allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length,files:[...item.files],authors:[...item.authors],years:[...item.years].map(String),cover:workCoverUrl(item.rows),citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
+    work:item.work,count:item.count,review:item.review,annotations:[].filter(annotation=>String(annotation.work||"")===String(item.work)).length,files:[...item.files],authors:[...item.authors],years:[...item.years].map(String),cover:workCoverUrl(item.rows),citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
     metadata:metadataFields.map(field=>{const value=commonWorkValue(item.rows,field);return {field,mixed:value.mixed,value:value.mixed?"":String(display(value.value))}}).filter(value=>value.mixed||value.value!=="—"),
     status:workDbStatus(item.rows,item.work),insights:workInsightMetrics(item.rows,item.work).map(metric=>({id:metric.id,title:metric.title,values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0)}))})),
   }));
@@ -10301,7 +10134,6 @@ async function syncAllWorks(){const rows=[...workIndex().values()].flatMap(item=
 function searchWork(work){state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")}];state.globalPage=1;persistPrefs();navigateTo("global")}
 function openWorkMetadataEditorForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataEditor(item.work,item.rows)}
 function openWorkMetadataLlmDialogForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataLlmDialog([item])}
-function openWorkAnnotations(work){state.annotationSearch=String(work||"");state.annotationView="works";persistPrefs();navigateTo("annotations")}
 
 export {
   getNavItems,
@@ -10407,8 +10239,6 @@ export {
   copyCurrentRecordCitation,
   copyCurrentRecordJson,
   saveCurrentRecordChanges,
-  addCurrentRecordAnnotation,
-  removeCurrentRecordAnnotation,
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
@@ -10421,7 +10251,7 @@ export {
   searchWork,
   openWorkMetadataEditorForVue as openWorkMetadataEditor,
   openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
-  openWorkAnnotations,
+
   openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,

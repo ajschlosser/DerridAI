@@ -1,6 +1,7 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+﻿<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
@@ -10,6 +11,7 @@ import type { WorksItem, WorksSnapshot } from "../types/works";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
+const router = useRouter();
 const snapshot = ref<WorksSnapshot | null>(null);
 const loading = ref(true);
 const error = ref("");
@@ -71,7 +73,7 @@ function populateMetadata(work: string) {
   runtime.openWorkMetadataLlmDialog?.(work);
 }
 function openAnnotations(work: string) {
-  runtime.openWorkAnnotations?.(work);
+  void router.push({ name: "annotations", query: { q: work } });
 }
 function onCardKeydown(work: string, event: KeyboardEvent) {
   if (event.key !== "Enter" && event.key !== " ") return;
