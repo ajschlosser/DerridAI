@@ -21,7 +21,7 @@ them. Nothing is rewritten. Each move is proven with one of:
    `28a6e77` (the pre-refactor master) across a wide input matrix (then deleted, not committed), and
 2. a committed test with golden values or snapshots taken from that verified output.
 
-## Done so far (runtime.js: 10,472 -> 9,015 lines)
+## Done so far (runtime.js: 10,472 -> 8,996 lines after merging `development`, which added ~230 lines)
 
 | Module | Contents |
 |---|---|
@@ -38,6 +38,8 @@ them. Nothing is rewritten. Each move is proven with one of:
 | `web/src/domain/operationPresenters.ts` | `createOperationPresenters(deps)` factory: job labels, facts, subtitles, progress (Operations panel view model) |
 | `web/src/domain/fieldFormatting.ts` | `createFieldFormatting({tr})` factory: `label`, `display`, `normalizeRagGrade`, bulk/work-metadata value parsers |
 | `web/src/domain/corpusAnalytics.ts` | `createCorpusAnalytics({allRows, memoCorpus})` factory: work index, top values, year series, needs-review series, audit feed |
+| `web/src/domain/searchFacets.ts` | `createSearchFacets(deps)` factory: facets, filter descriptors, match reasons, list-filter matching |
+| `web/src/domain/workMetadata.ts`, `touchupFields.ts`, `reviewPresentation.ts` | work metadata summary, touch-up field list, review diff sides / pretty JSON / RAG answer HTML / annotation matching |
 | `web/src/services/workspaceDb.ts` | IndexedDB persistence and "delete all browser state" |
 | `web/src/runtime/runtimeState.ts` | initial shape of the runtime `state` (`createRuntimeState()`) |
 
@@ -48,7 +50,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 382 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 403 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -59,7 +61,7 @@ Full end-to-end suite (137 tests, about 8.5 minutes; use ports that are free, St
 APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-desktop --workers=2
 ```
 
-Full e2e (143 tests including the DOM baseline): 137 passed on the untouched pre-refactor build, and 143 passed on
+Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
 ### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`)
@@ -112,7 +114,20 @@ extraction candidates), largest first, with the helpers they call.
 Time zone note: dashboard date keys use local midnight then `toISOString()`, so they depend on the browser's
 time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
 
+## Working rules added in session 2
+
+- Branch from `origin/development` (work branch `claude/runtime-refactor-2`); `git fetch` and merge `development`
+  regularly, other work touches `runtime.js` (e.g. Works became Vue-native and dropped out of the DOM baseline).
+- Write human-readable code: run Prettier on every new file (it expands the dense legacy one-liners) and give
+  extracted params real types instead of `any` where cheap.
+- `scripts/runtime-refactor/deps.py fn1,fn2` lists the runtime names and state fields a group uses; use it to
+  choose groups before extracting.
+
 ## Gotchas learned
+
+- Factory call sites in `runtime.js` must come after the `const` helpers they receive (`label`, `display`, ...):
+  passing a `const` declared later throws "Cannot access X before initialization" and breaks ~26 test files at
+  import. Hoisted `function` declarations are safe; wrap later consts as `uid:()=>uid()`.
 
 - `pkill -f <word>` kills your own shell if the word is in the command line. Kill by PID from `ss -ltnp`.
 - Some editors/tools convert the `\u0000` escape into a literal NUL byte in source. Check new TS files with
