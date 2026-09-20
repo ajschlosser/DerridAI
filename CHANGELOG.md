@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.13 — Fair Falcon
+
+Human reliability can now be measured: reviewer re-checks, blind second opinions and reviewer ids in the ledger. See [0.62.13](docs/notes/0.62.13.md).
+
 ## 0.62.12 — Rigorous Robin
 
 Enrichment experiments can be run and analysed: conditions are recorded on every event, ablations and arms are real switches, there is a frozen gold set, more measures with intervals, and a CSV export. See [0.62.12](docs/notes/0.62.12.md).
