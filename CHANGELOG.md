@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.7 — Nocturnal Newt
+
+The Languages, Response Library, Record, Settings and Compare views follow the theme, so dark mode works there too, and four layout and accessibility defects found on the way are fixed. See [0.62.7](docs/notes/0.62.7.md).
+
 ## 0.62.6 — Luminous Lynx
 
 The Corpus Builder and the shared components are built on design tokens, so dark mode, increased contrast and forced colors now work there, and its accessibility is checked in both colour schemes. See [0.62.6](docs/notes/0.62.6.md).
