@@ -183,27 +183,15 @@ describe("RecordsView", () => {
     await wrapper.get(".records-hero-actions button:nth-child(2)").trigger("click");
     expect(wrapper.get("dialog").attributes("open")).toBeDefined();
     expect(wrapper.get("#records-columns-title").text()).toContain("Configure columns");
-    await wrapper.get(".records-columns-actions .btn.primary").trigger("click");
-    expect(runtime.setRecordsListColumns).toHaveBeenCalled();
+    await wrapper.get(".records-columns-add").trigger("click");
+    await wrapper.get(".records-columns-foot .btn.primary").trigger("click");
+    expect(runtime.setRecordsListColumns).toHaveBeenCalledWith(["__db_status", "work", "text", "speaker"]);
     wrapper.unmount();
   });
 
   it("keeps the search icon from growing with the search field", async () => {
-    const wrapper = mount(RecordsView, {attachTo: document.body});
-    await flushPromises();
+    const wrapper = await mountRecords();
     expect(wrapper.get(".records-search-icon").classes()).toContain("records-search-icon");
-    wrapper.unmount();
-  });
-
-  it("saves columns from the redesigned picker", async () => {
-    snapshot.available_columns = [...snapshot.columns, {key: "speaker", label: "Speaker"}];
-    const wrapper = mount(RecordsView, {attachTo: document.body});
-    await flushPromises();
-    await wrapper.get("header button:nth-of-type(2)").trigger("click");
-    await flushPromises();
-    await wrapper.get(".records-columns-add").trigger("click");
-    await wrapper.get(".records-columns-foot .btn.primary").trigger("click");
-    expect(runtime.setRecordsListColumns).toHaveBeenCalledWith(["__db_status", "work", "text", "speaker"]);
     wrapper.unmount();
   });
 });

@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, ref, useId } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { RecordsColumn } from "../../types/records";
 
@@ -15,7 +15,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const dialog = ref<HTMLDialogElement | null>(null);
 const find = ref("");
-const titleId = `records-columns-title-${useId().replaceAll(":", "")}`;
+const titleId = "records-columns-title";
 const selectedSet = computed(() => new Set(props.modelValue));
 const visible = computed(() => props.modelValue.map(key => props.available.find(column => column.key === key) || {key, label: key}));
 const hidden = computed(() => {
