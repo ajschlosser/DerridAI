@@ -113,8 +113,6 @@ async function rawMarkup(page: Page): Promise<string> {
 const views: Array<{ name: string; nav: string; load: boolean }> = [
   { name: "home-empty", nav: "Home", load: false },
   { name: "home-loaded", nav: "Home", load: true },
-  { name: "annotations-empty", nav: "Annotations", load: false },
-  { name: "annotations-loaded", nav: "Annotations", load: true },
   { name: "research-empty", nav: "Research", load: false },
 ];
 

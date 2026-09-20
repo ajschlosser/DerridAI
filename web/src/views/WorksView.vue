@@ -1,12 +1,14 @@
-﻿<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
-import type { WorksItem, WorksSnapshot } from "../types/works";
-import { annotationsService } from "../services/annotations";
+import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
+import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import { useWorksWorkspace } from "../composables/useWorksWorkspace";
+import * as runtime from "../runtime/runtime.js";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -29,8 +31,8 @@ const showAddCard = computed(() => Boolean(snapshot.value?.mode === "admin" && r
 const loadingTitle = computed(() => i18n.t("works.loading", "Loading works"));
 const loadingDetail = computed(() =>
   auth.isResearcher
-    ? i18n.t("works.checking_database", "Checking corpus databaseâ€¦")
-    : i18n.t("works.checking_database", "Checking vector database stateâ€¦"),
+    ? i18n.t("works.checking_database", "Checking corpus database…")
+    : i18n.t("works.checking_database", "Checking vector database state…"),
 );
 
 function startReveal() {
@@ -75,36 +77,12 @@ function reload() {
 function applyQuery(value: string) {
   query.value = value;
   window.clearTimeout(queryTimer);
-  queryTimer = window.setTimeout(load, 80);
-}
-function selectWork(work: string) {
-  runtime.setWorksOverview?.(work);
-  load();
-}
-async function syncWork(work: WorksItem) {
-  await runtime.syncWork?.(work.work);
-  load();
-}
-async function syncAll() {
-  await runtime.syncAllWorks?.();
-  load();
-}
-function searchWork(work: string) {
-  runtime.searchWork?.(work);
-}
-function editMetadata(work: string) {
-  runtime.openWorkMetadataEditor?.(work);
-}
-function populateMetadata(work: string) {
-  runtime.openWorkMetadataLlmDialog?.(work);
-}
-function openAnnotations(work: string) {
-  annotationsService.openWorkAnnotations(work);
-}
-function onCardKeydown(work: string, event: KeyboardEvent) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  selectWork(work);
+  const delay = snapshot.value?.mode === "researcher" ? 150 : 180;
+  queryTimer = window.setTimeout(() => {
+    works.setQuery(value);
+    startReveal();
+    decorate();
+  }, delay);
 }
 
 function selectWork(work: string) {
@@ -243,7 +221,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
             :title="snapshot.capabilities.canSyncAll ? undefined : snapshot.syncAllDisabledReason"
             @click="works.syncAll()"
           ><AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all", "Sync all works") }}</button>
-          <span class="note">{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("works.shown", "shown") }} Â· {{ snapshot.totalWorks.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.works", "works") }} Â· {{ snapshot.totalRecords.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</span>
+          <span class="note">{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("works.shown", "shown") }} · {{ snapshot.totalWorks.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.works", "works") }} · {{ snapshot.totalRecords.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</span>
         </div>
       </div>
 
@@ -338,7 +316,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
             <small>{{ work.subtitle }}</small>
             <small>{{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</small>
           </span>
-          <span class="work-menu-arrow">â€º</span>
+          <span class="work-menu-arrow">›</span>
         </button>
         <div v-if="!snapshot.works.length" class="llm-empty">{{ i18n.t("research.no_works", "No works are available.") }}</div>
       </section>

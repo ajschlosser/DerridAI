@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { ref } from "vue";
+import { annotationsService } from "../services/annotations";
 import * as runtime from "../runtime/runtime.js";
 import type { WorksSnapshot } from "../types/works";
 
@@ -79,7 +80,7 @@ export function useWorksWorkspace() {
   }
 
   function openAnnotations(work: string) {
-    runtime.openWorkAnnotations?.(work);
+    annotationsService.openWorkAnnotations(work);
   }
 
   function searchOverview(work: string) {

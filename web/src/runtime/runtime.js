@@ -1,4 +1,4 @@
-﻿/* Copyright 2026 Aaron John Schlosser, PhD. */
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
@@ -8730,6 +8730,33 @@ async function removeAnnotationsWorkspaceItem(item) {
   await refreshServerAnnotations(true);
   notifyToast(tr("annotations.removed", "Annotation removed."), { tone: "success" });
 }
+function populateAllWorksMetadata(){
+  openWorkMetadataLlmDialog([...workIndex().values()].sort((a,b)=>a.work.localeCompare(b.work)));
+}
+function inspectWorksMixedField(work,field){
+  const item=workIndex().get(String(work||""));
+  if(item)openMixedWorkValuesDialog(item.work,field,item.rows);
+}
+function searchWorksInsight(field,value){
+  searchByMetadata(field,value,{contains:["persons","concepts","topics"].includes(field)});
+}
+function reviewFlaggedWork(work){
+  openTouchup(needsReviewItems(workIndex().get(String(work||""))?.rows||[]));
+}
+function autoImproveWork(work){
+  openTouchup(needsReviewItems(workIndex().get(String(work||""))?.rows||[]),"auto");
+}
+function removeEntireWork(work){
+  const item=workIndex().get(String(work||""));
+  if(item)return openRemoveWorkModal(item.work,item.rows);
+}
+function browseResearcherWork(work){
+  state.storeWork=String(work||state.workOverview||"");
+  state.storeBrowseMode="records";
+  state.storePage=1;
+  persistPrefs();
+  navigateTo("vector");
+}
 
 export {
   operationViewModel,
@@ -8855,122 +8882,18 @@ export {
   openWorkAnnotations,
 
   getNavItems,
-  state,
-  viewConfig,
-  setUserContext,
-  setTranslationDictionary,
-  getShellSnapshot,
-  setShellRefreshHook,
-  setUrlSyncHook,
-  pauseRuntime,
-  viewPathMap,
-  pathViewMap,
-  bootstrapRuntime,
-  renderView,
-  navigateView,
-  toggleSidebar,
-  activateFile,
-  closeWorkspaceFile,
-  triggerImport,
-  triggerMerge,
-  triggerSubset,
-  triggerBulkEdit,
-  triggerOcrClean,
-  triggerReviewFlagged,
-  triggerAutoImproveFlagged,
-  openTouchup,
-  touchupWorkspaceInfo,
-  touchupProviderStatus,
-  touchupRequestConfig,
-  touchupRequest,
-  touchupSubmitBackground,
-  touchupApplyResults,
-  triggerUpsertQueue,
-  triggerOperations,
-  triggerExport,
-  triggerEdit,
-  triggerBack,
-  triggerForward,
-  getProviderProfilesForUi,
-  getProviderRequestConfigForUi,
-  getDefaultProviderProfileId,
-  getProviderStatusesForUi,
-  getProviderWarmupsForUi,
-  saveProviderProfilesForUi,
-  addProviderProfileForUi,
-  removeProviderProfileForUi,
-  setDefaultProviderProfileForUi,
-  testProviderProfileForUi,
-  warmProviderProfileForUi,
   getWarmOnStartForUi,
   setWarmOnStartForUi,
-  syncResearcherProviderProfiles,
-  notifyToast,
-  registerExternalJob,
-  dbUnavailableReason,
-  hasCorpusDb,
-  openDatabaseCreationFromResearch,
-  notifyVectorStoresChanged,
-  openCollectionCreationWizard,
-  upsertRows,
-  exportStoreJsonl,
-  persistPrefs,
-  lookupRecord,
-  getCompareLibrary,
-  getCompareRecord,
-  ensureCompareLibrary,
-  copyJsonToClipboard,
-  copyCitation,
-  flushWorkspacePrefs,
-  applyUiTheme,
-  applyAppearance,
-  downloadFullBackup,
-  restoreFullBackup,
-  clearAllUpdates,
-  deleteAllDerridaiBrowserState,
-  backupContainsCredentials,
-  pendingUpsertRows,
-  decorateDisabledControls,
-  getResearchWorkspaceSnapshot,
-  updateResearchConfig,
-  removeResearchEvidence,
-  clearResearchEvidence,
-  discoverResearchModels,
-  refreshResearchJobs,
-  getResearchJob,
-  cancelResearchJob,
-  deleteResearchJob,
-  startResearchRun,
-  gradeResearchJob,
-  prepareResearchRerun,
-  getResponseFaqPage,
-  gradeResponseFaqRecord,
-  rerunResponseFaqRecord,
-  getRecordWorkspaceSnapshot,
-  recordWorkspaceNavigate,
-  setRecordWorkspaceFind,
-  toggleCurrentRecordEvidence,
-  toggleCurrentRecordReviewSelection,
-  copyCurrentRecordCitation,
-  copyCurrentRecordJson,
-  saveCurrentRecordChanges,
-  addCurrentRecordAnnotation,
-  removeCurrentRecordAnnotation,
-  currentRecordPrimaryAction,
-  searchCurrentRecordMetadata,
-  navigateRecordWorkspace,
-  getWorksWorkspaceSnapshot,
   prepareWorksWorkspace,
-  setWorksSearch,
-  setWorksOverview,
-  setWorksStore,
-  syncWork,
-  syncAllWorks,
-  searchWork,
   searchWorkRecords,
   searchWorkOverview,
-  openWorkMetadataEditorForVue as openWorkMetadataEditor,
-  openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
+  populateAllWorksMetadata,
+  inspectWorksMixedField,
+  searchWorksInsight,
+  reviewFlaggedWork,
+  autoImproveWork,
+  removeEntireWork,
+  browseResearcherWork,
   openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,
