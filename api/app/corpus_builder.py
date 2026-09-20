@@ -25,6 +25,7 @@ from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
+from .main_text_start import infer_main_text_start
 from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -846,7 +847,13 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
             if is_page_number or len(header_pages.get(normalized, set())) >= repeat_threshold:
                 block["excluded_reason"] = "page_number" if is_page_number else "repeated_header_footer"
                 excluded_count += 1
+        try:
+            outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
+        except Exception:  # noqa: BLE001 - a broken outline only removes one clue
+            outline = []
         return {
+            "main_text_start_inference": infer_main_text_start(blocks, pages, outline),
+            "outline": [{"page": page, "title": title} for page, title in outline[:400]],
             "filename": _safe_filename(filename),
             "page_count": doc.page_count,
             "metadata": metadata,
@@ -2235,6 +2242,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # A deterministic start-page inference (only present when it is more than 90% sure) outranks
+        # the model's guess; the clues travel with the value so the reviewer can check them.
+        inferred = asset.get("main_text_start_inference")
+        if isinstance(inferred, dict) and inferred.get("offered") and isinstance(inferred.get("page"), int):
+            result["main_text_start_page"] = inferred["page"]
+            result["main_text_start_inference"] = {key: inferred.get(key) for key in ("page", "confidence", "clues")}
         # Human-confirmed document structure outranks LLM page-range inference.
         if reviewed_layout:
             layout_start = reviewed_layout.get("main_text_pdf_start")
@@ -5426,6 +5439,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         manifest["source_asset_id"] = build.get("asset_id")
         start_changed = "main_text_start_page" in changes and validated.get("main_text_start_page") != current.get("main_text_start_page")
         if start_changed:
+            manifest.pop("main_text_start_inference", None)  # its clues describe a value that is no longer the one in use
             self._write_start_page_to_layout(str(build.get("asset_id") or ""), validated.get("main_text_start_page"))
         build["manifest"] = manifest
         build["manifest_revision"] = current_revision + 1

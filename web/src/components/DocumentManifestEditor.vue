@@ -9,6 +9,13 @@ const props=withDefaults(defineProps<{manifest?:Record<string,unknown>;disabled?
 const emit=defineEmits<{save:[changes:Record<string,unknown>]} >();
 const i18n=useI18nStore();
 
+// Clues behind an automatically suggested start page; shown only while that page is still the one in use.
+type StartInference={page:number;confidence:number;clues:{kind:string;detail:string}[]};
+const startInference=computed<StartInference|null>(()=>{
+  const value=props.manifest?.main_text_start_inference as StartInference|undefined;
+  return value&&Array.isArray(value.clues)&&value.clues.length&&value.page===props.manifest?.main_text_start_page?value:null;
+});
+
 type FieldDef={key:string;label:string;type?:"text"|"number"|"textarea";wide?:boolean;hint?:string};
 type GroupDef={key:string;title:string;description:string;fields:FieldDef[]};
 const groups=computed<GroupDef[]>(()=>[
@@ -73,6 +80,10 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
           <textarea v-if="field.type==='textarea'" v-model="draft[field.key]" class="control" rows="4" :disabled="props.disabled"></textarea>
           <input v-else v-model="draft[field.key]" class="control" :type="field.type==='number'?'number':'text'" :inputmode="field.type==='number'?'numeric':undefined" :min="field.type==='number'?1:undefined" :disabled="props.disabled">
           <p v-if="serverChanged[field.key]!==undefined" class="manifest-server-change" role="status"><span>{{i18n.tf('pdf_corpus.manifest_changed_elsewhere','This value changed elsewhere to “{value}”. Your edit is kept.',{value:serverChanged[field.key]||i18n.t('pdf_corpus.manifest_empty_value','(empty)')})}}</span> <button type="button" class="manifest-use-server" :disabled="props.disabled" @click="useServerValue(field.key)">{{i18n.t('pdf_corpus.manifest_use_server_value','Use that value')}}</button></p>
+          <div v-if="field.key==='main_text_start_page'&&startInference" class="manifest-inference" role="note">
+            <b>{{i18n.tf('pdf_corpus.manifest_start_inferred','Suggested automatically ({percent}% confident). Check the clues:',{percent:Math.round(startInference.confidence*100)})}}</b>
+            <ul><li v-for="clue in startInference.clues" :key="clue.kind">{{clue.detail}}</li></ul>
+          </div>
         </UiField>
         <UiField v-if="group.key==='language'" :label="i18n.t('pdf_corpus.manifest_translation','Translation status')">
           <select v-model="translationDraft" class="control" :disabled="props.disabled"><option value="">{{i18n.t('pdf_corpus.manifest_unknown','Unknown')}}</option><option value="yes">{{i18n.t('ui.yes','Yes')}}</option><option value="no">{{i18n.t('ui.no','No')}}</option></select>
@@ -89,6 +100,7 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
 
 <style scoped>
 .manifest-server-change{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .5rem;margin:.375rem 0 0;padding:.375rem .625rem;border:1px solid var(--tone-info-border);border-radius:8px;background:var(--tone-info-bg);color:var(--tone-info-fg);font-size:.8125rem;line-height:1.45}
+.manifest-inference{margin:.375rem 0 0;padding:.5rem .75rem;border:1px solid var(--tone-info-border);border-radius:8px;background:var(--tone-info-bg);color:var(--tone-info-fg);font-size:.8125rem;line-height:1.45}.manifest-inference ul{margin:.25rem 0 0;padding-inline-start:1.125rem}
 .manifest-use-server{border:0;background:none;padding:.125rem 0;color:var(--accent-fg);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
 .manifest-use-server:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
 .manifest-editor{display:grid;gap:18px;max-width:900px;margin:0 auto}.manifest-impact{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2,var(--soft))}.manifest-impact>div{display:grid;gap:4px}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}.manifest-impact h3,.manifest-section h3{margin:0;font-size:1rem}.manifest-impact p,.manifest-section header p{margin:0;color:var(--muted);font-size:.875rem;line-height:1.5}.manifest-section{display:grid;gap:12px}.manifest-section>header{display:grid;gap:4px;padding-bottom:8px;border-bottom:1px solid var(--line)}.manifest-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}.manifest-grid .wide{grid-column:1/-1}.manifest-grid textarea{resize:vertical;min-height:96px}.control{width:100%;min-height:42px}.manifest-actions{position:sticky;bottom:-20px;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:16px;margin:2px -22px -20px;padding:14px 22px;border-top:1px solid var(--line);background:var(--panel);box-shadow:0 -10px 24px rgba(20,30,24,.05)}.manifest-change-summary{display:grid;gap:3px;min-width:0}.manifest-change-summary b{font-size:.875rem}.manifest-change-summary span{color:var(--muted);font-size:.8125rem;line-height:1.4}.manifest-action-buttons{display:flex;gap:8px;flex:none}@media(max-width:700px){.manifest-impact{align-items:stretch;flex-direction:column}.manifest-grid{grid-template-columns:1fr}.manifest-actions{position:static;margin:0;padding:14px 0 0;align-items:stretch;flex-direction:column}.manifest-action-buttons{display:grid;grid-template-columns:1fr 1fr}.manifest-action-buttons :deep(.ui-button-wrap),.manifest-action-buttons :deep(.ui-button){width:100%}}
