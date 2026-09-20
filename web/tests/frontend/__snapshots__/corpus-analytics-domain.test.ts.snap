@@ -1,0 +1,3239 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`corpus analytics > builds the needs-review series 1`] = `
+{
+  "rows": [
+    {
+      "key": "2026-03-04",
+      "work_0": 6,
+      "work_1": 6,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-05",
+      "work_0": 6,
+      "work_1": 6,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-06",
+      "work_0": 6,
+      "work_1": 6,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-07",
+      "work_0": 7,
+      "work_1": 7,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-08",
+      "work_0": 7,
+      "work_1": 7,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-09",
+      "work_0": 7,
+      "work_1": 7,
+      "work_2": 6,
+    },
+    {
+      "key": "2026-03-10",
+      "work_0": 7,
+      "work_1": 7,
+      "work_2": 6,
+    },
+  ],
+  "series": [
+    {
+      "key": "work_0",
+      "label": "Margins",
+      "short_label": "1. Margins",
+    },
+    {
+      "key": "work_1",
+      "label": "Of Grammatology",
+      "short_label": "2. Of Grammatology",
+    },
+    {
+      "key": "work_2",
+      "label": "Specters",
+      "short_label": "3. Specters",
+    },
+  ],
+}
+`;
+
+exports[`corpus analytics > builds the needs-review series 2`] = `
+[
+  {
+    "key": "2026-03-05",
+    "value": 22,
+  },
+  {
+    "key": "2026-03-06",
+    "value": 22,
+  },
+  {
+    "key": "2026-03-07",
+    "value": 22,
+  },
+  {
+    "key": "2026-03-08",
+    "value": 22,
+  },
+  {
+    "key": "2026-03-09",
+    "value": 20,
+  },
+  {
+    "key": "2026-03-10",
+    "value": 20,
+  },
+  {
+    "key": "2026-03-11",
+    "value": 20,
+  },
+]
+`;
+
+exports[`corpus analytics > counts and ranks 1`] = `
+[
+  [
+    "a",
+    106,
+  ],
+  [
+    "b",
+    53,
+  ],
+  [
+    "c",
+    53,
+  ],
+]
+`;
+
+exports[`corpus analytics > counts and ranks 2`] = `
+[
+  {
+    "key": "1961",
+    "value": 2,
+  },
+  {
+    "key": "1962",
+    "value": 2,
+  },
+  {
+    "key": "1963",
+    "value": 2,
+  },
+  {
+    "key": "1964",
+    "value": 2,
+  },
+  {
+    "key": "1966",
+    "value": 2,
+  },
+  {
+    "key": "1967",
+    "value": 2,
+  },
+  {
+    "key": "1968",
+    "value": 2,
+  },
+  {
+    "key": "1969",
+    "value": 2,
+  },
+  {
+    "key": "1971",
+    "value": 2,
+  },
+  {
+    "key": "1972",
+    "value": 2,
+  },
+  {
+    "key": "1973",
+    "value": 2,
+  },
+  {
+    "key": "1974",
+    "value": 2,
+  },
+  {
+    "key": "1976",
+    "value": 2,
+  },
+  {
+    "key": "1977",
+    "value": 2,
+  },
+  {
+    "key": "1978",
+    "value": 2,
+  },
+  {
+    "key": "1979",
+    "value": 2,
+  },
+  {
+    "key": "1981",
+    "value": 2,
+  },
+  {
+    "key": "1982",
+    "value": 2,
+  },
+  {
+    "key": "1983",
+    "value": 2,
+  },
+  {
+    "key": "1984",
+    "value": 2,
+  },
+  {
+    "key": "1986",
+    "value": 2,
+  },
+  {
+    "key": "1987",
+    "value": 2,
+  },
+  {
+    "key": "1988",
+    "value": 2,
+  },
+  {
+    "key": "1989",
+    "value": 2,
+  },
+  {
+    "key": "1991",
+    "value": 1,
+  },
+  {
+    "key": "1992",
+    "value": 1,
+  },
+  {
+    "key": "1993",
+    "value": 1,
+  },
+  {
+    "key": "1994",
+    "value": 1,
+  },
+  {
+    "key": "1996",
+    "value": 1,
+  },
+  {
+    "key": "1997",
+    "value": 1,
+  },
+  {
+    "key": "1998",
+    "value": 1,
+  },
+  {
+    "key": "1999",
+    "value": 1,
+  },
+  {
+    "key": "2001",
+    "value": 1,
+  },
+  {
+    "key": "2002",
+    "value": 1,
+  },
+  {
+    "key": "2003",
+    "value": 1,
+  },
+  {
+    "key": "2004",
+    "value": 1,
+  },
+  {
+    "key": "2006",
+    "value": 1,
+  },
+  {
+    "key": "2007",
+    "value": 1,
+  },
+  {
+    "key": "2008",
+    "value": 1,
+  },
+  {
+    "key": "2009",
+    "value": 1,
+  },
+]
+`;
+
+exports[`corpus analytics > counts and ranks 3`] = `
+[
+  [
+    "(Untitled work)",
+    7,
+  ],
+  [
+    "Dissemination",
+    7,
+  ],
+  [
+    "Glas",
+    7,
+  ],
+  [
+    "Other works",
+    59,
+  ],
+]
+`;
+
+exports[`corpus analytics > counts and ranks 4`] = `
+[
+  {
+    "count": 7,
+    "key": "(Untitled work)",
+    "value": 263,
+  },
+  {
+    "count": 7,
+    "key": "Dissemination",
+    "value": 300,
+  },
+  {
+    "count": 7,
+    "key": "Glas",
+    "value": 231,
+  },
+]
+`;
+
+exports[`corpus analytics > counts and ranks 5`] = `
+[
+  {
+    "file": {
+      "id": "f1",
+      "name": "a.jsonl",
+    },
+    "index": 0,
+    "record": {
+      "document_author": "Other, A.",
+      "needs_review": true,
+      "record_id": "r0",
+      "text": "",
+      "topics": "d|e",
+      "updates": [
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+          "timestamp": "2026-03-10T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": true,
+          "old_value": false,
+          "timestamp": "2026-03-07T12:00:00.000Z",
+        },
+        {
+          "field_name": "topics",
+          "new_value": [
+            "x",
+          ],
+          "old_value": [],
+          "timestamp": "2026-03-08T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+        },
+      ],
+      "work": "Of Grammatology",
+    },
+    "update": {
+      "field_name": "needs_review",
+      "new_value": false,
+      "old_value": true,
+      "timestamp": "2026-03-10T12:00:00.000Z",
+    },
+  },
+  {
+    "file": {
+      "id": "f1",
+      "name": "a.jsonl",
+    },
+    "index": 0,
+    "record": {
+      "document_author": "Other, A.",
+      "needs_review": true,
+      "record_id": "r0",
+      "text": "",
+      "topics": "d|e",
+      "updates": [
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+          "timestamp": "2026-03-10T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": true,
+          "old_value": false,
+          "timestamp": "2026-03-07T12:00:00.000Z",
+        },
+        {
+          "field_name": "topics",
+          "new_value": [
+            "x",
+          ],
+          "old_value": [],
+          "timestamp": "2026-03-08T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+        },
+      ],
+      "work": "Of Grammatology",
+    },
+    "update": {
+      "field_name": "topics",
+      "new_value": [
+        "x",
+      ],
+      "old_value": [],
+      "timestamp": "2026-03-08T12:00:00.000Z",
+    },
+  },
+  {
+    "file": {
+      "id": "f1",
+      "name": "a.jsonl",
+    },
+    "index": 3,
+    "record": {
+      "document_author": "J. Derrida",
+      "needs_review": false,
+      "record_id": "r3",
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "topics": "d|e",
+      "updates": [
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+          "timestamp": "2026-03-07T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": true,
+          "old_value": false,
+          "timestamp": "2026-03-04T12:00:00.000Z",
+        },
+        {
+          "field_name": "topics",
+          "new_value": [
+            "x",
+          ],
+          "old_value": [],
+          "timestamp": "2026-03-08T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+        },
+      ],
+      "work": "Dissemination",
+      "year": 1963,
+    },
+    "update": {
+      "field_name": "topics",
+      "new_value": [
+        "x",
+      ],
+      "old_value": [],
+      "timestamp": "2026-03-08T12:00:00.000Z",
+    },
+  },
+  {
+    "file": {
+      "id": "f1",
+      "name": "a.jsonl",
+    },
+    "index": 6,
+    "record": {
+      "document_author": "Other, A.",
+      "needs_review": false,
+      "record_id": "r6",
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "topics": "d|e",
+      "updates": [
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+          "timestamp": "2026-03-04T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": true,
+          "old_value": false,
+          "timestamp": "2026-03-01T12:00:00.000Z",
+        },
+        {
+          "field_name": "topics",
+          "new_value": [
+            "x",
+          ],
+          "old_value": [],
+          "timestamp": "2026-03-08T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+        },
+      ],
+      "work": "Positions",
+      "year": 1966,
+    },
+    "update": {
+      "field_name": "topics",
+      "new_value": [
+        "x",
+      ],
+      "old_value": [],
+      "timestamp": "2026-03-08T12:00:00.000Z",
+    },
+  },
+  {
+    "file": {
+      "id": "f1",
+      "name": "a.jsonl",
+    },
+    "index": 9,
+    "record": {
+      "document_author": "J. Derrida",
+      "needs_review": false,
+      "record_id": "r9",
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "topics": "d|e",
+      "updates": [
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+          "timestamp": "2026-03-01T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": true,
+          "old_value": false,
+          "timestamp": "2026-02-26T12:00:00.000Z",
+        },
+        {
+          "field_name": "topics",
+          "new_value": [
+            "x",
+          ],
+          "old_value": [],
+          "timestamp": "2026-03-08T12:00:00.000Z",
+        },
+        {
+          "field_name": "needs_review",
+          "new_value": false,
+          "old_value": true,
+        },
+      ],
+      "work": "Archive Fever",
+      "year": 1969,
+    },
+    "update": {
+      "field_name": "topics",
+      "new_value": [
+        "x",
+      ],
+      "old_value": [],
+      "timestamp": "2026-03-08T12:00:00.000Z",
+    },
+  },
+]
+`;
+
+exports[`corpus analytics > indexes works 1`] = `
+{
+  "__map": [
+    [
+      "Of Grammatology",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 7,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 0,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r0",
+              "text": "",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-10T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-07T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Of Grammatology",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 12,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r12",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-26T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-23T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Of Grammatology",
+              "year": 1972,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 24,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r24",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-14T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-11T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Of Grammatology",
+              "year": 1984,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 36,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r36",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-27T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-24T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Of Grammatology",
+              "year": 1996,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 8,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r48",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Of Grammatology",
+              "year": 2008,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 20,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r60",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Of Grammatology",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 32,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r72",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Of Grammatology",
+              "year": 1982,
+            },
+          },
+        ],
+        "work": "Of Grammatology",
+        "years": {
+          "__set": [
+            1972,
+            1984,
+            1996,
+            2008,
+            1982,
+          ],
+        },
+      },
+    ],
+    [
+      "Speech and Phenomena",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 1,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r1",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Speech and Phenomena",
+              "year": 1961,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 13,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r13",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Speech and Phenomena",
+              "year": 1973,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 25,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r25",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Speech and Phenomena",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 37,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r37",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Speech and Phenomena",
+              "year": 1997,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 9,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r49",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-01T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-26T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Speech and Phenomena",
+              "year": 2009,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 21,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r61",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-17T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-14T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Speech and Phenomena",
+              "year": 1971,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 33,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r73",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-02T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-27T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Speech and Phenomena",
+              "year": 1983,
+            },
+          },
+        ],
+        "work": "Speech and Phenomena",
+        "years": {
+          "__set": [
+            1961,
+            1973,
+            1997,
+            2009,
+            1971,
+            1983,
+          ],
+        },
+      },
+    ],
+    [
+      "(Untitled work)",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 2,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r2",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "year": 1962,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 14,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r14",
+              "text": "xxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "year": 1974,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 26,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r26",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "year": 1986,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 38,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r38",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "year": 1998,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 10,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r50",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 22,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r62",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "year": 1972,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 34,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r74",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "year": 1984,
+            },
+          },
+        ],
+        "work": "(Untitled work)",
+        "years": {
+          "__set": [
+            1962,
+            1974,
+            1986,
+            1998,
+            1972,
+            1984,
+          ],
+        },
+      },
+    ],
+    [
+      "Dissemination",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 3,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r3",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-07T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-04T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Dissemination",
+              "year": 1963,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 15,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r15",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-23T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-20T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Dissemination",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 27,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r27",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-05T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Dissemination",
+              "year": 1987,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 39,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r39",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-24T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-21T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Dissemination",
+              "year": 1999,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 11,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r51",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Dissemination",
+              "year": 1961,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 23,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r63",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Dissemination",
+              "year": 1973,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 35,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r75",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Dissemination",
+            },
+          },
+        ],
+        "work": "Dissemination",
+        "years": {
+          "__set": [
+            1963,
+            1987,
+            1999,
+            1961,
+            1973,
+          ],
+        },
+      },
+    ],
+    [
+      "Margins",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 7,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 4,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r4",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Margins",
+              "year": 1964,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 16,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r16",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Margins",
+              "year": 1976,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 28,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r28",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Margins",
+              "year": 1988,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 0,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r40",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-10T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-07T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Margins",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 12,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r52",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-26T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-23T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Margins",
+              "year": 1962,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 24,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r64",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-14T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-11T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Margins",
+              "year": 1974,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 36,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r76",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-27T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-24T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Margins",
+              "year": 1986,
+            },
+          },
+        ],
+        "work": "Margins",
+        "years": {
+          "__set": [
+            1964,
+            1976,
+            1988,
+            1962,
+            1974,
+            1986,
+          ],
+        },
+      },
+    ],
+    [
+      "Glas",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 5,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r5",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 17,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r17",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+              "year": 1977,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 29,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r29",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+              "year": 1989,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 1,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r41",
+              "text": "xxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+              "year": 2001,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 13,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r53",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+              "year": 1963,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 25,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r65",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 37,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r77",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Glas",
+              "year": 1987,
+            },
+          },
+        ],
+        "work": "Glas",
+        "years": {
+          "__set": [
+            1977,
+            1989,
+            2001,
+            1963,
+            1987,
+          ],
+        },
+      },
+    ],
+    [
+      "Positions",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 6,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r6",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-04T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-01T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Positions",
+              "year": 1966,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 18,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r18",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-20T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-17T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Positions",
+              "year": 1978,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 30,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r30",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-05T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-02T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Positions",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 2,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r42",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Positions",
+              "year": 2002,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 14,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r54",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Positions",
+              "year": 1964,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 26,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r66",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Positions",
+              "year": 1976,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 38,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r78",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Positions",
+              "year": 1988,
+            },
+          },
+        ],
+        "work": "Positions",
+        "years": {
+          "__set": [
+            1966,
+            1978,
+            2002,
+            1964,
+            1976,
+            1988,
+          ],
+        },
+      },
+    ],
+    [
+      "Writing and Difference",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 7,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 7,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r7",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Writing and Difference",
+              "year": 1967,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 19,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r19",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Writing and Difference",
+              "year": 1979,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 31,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r31",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Writing and Difference",
+              "year": 1991,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 3,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r43",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-07T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-04T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Writing and Difference",
+              "year": 2003,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 15,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r55",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-23T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-20T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Writing and Difference",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 27,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r67",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-05T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Writing and Difference",
+              "year": 1977,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 39,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r79",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-24T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-21T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Writing and Difference",
+              "year": 1989,
+            },
+          },
+        ],
+        "work": "Writing and Difference",
+        "years": {
+          "__set": [
+            1967,
+            1979,
+            1991,
+            2003,
+            1977,
+            1989,
+          ],
+        },
+      },
+    ],
+    [
+      "Specters",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 6,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 6,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 8,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r8",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Specters",
+              "year": 1968,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 20,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r20",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Specters",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 32,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r32",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Specters",
+              "year": 1992,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 4,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r44",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Specters",
+              "year": 2004,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 16,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r56",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Specters",
+              "year": 1966,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 28,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": true,
+              "record_id": "r68",
+              "text": "xxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Specters",
+              "year": 1978,
+            },
+          },
+        ],
+        "work": "Specters",
+        "years": {
+          "__set": [
+            1968,
+            1992,
+            2004,
+            1966,
+            1978,
+          ],
+        },
+      },
+    ],
+    [
+      "Archive Fever",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 6,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 9,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r9",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-01T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-26T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Archive Fever",
+              "year": 1969,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 21,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r21",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-17T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-14T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Archive Fever",
+              "year": 1981,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 33,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r33",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-02T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-27T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Archive Fever",
+              "year": 1993,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 5,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r45",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Archive Fever",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 17,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r57",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Archive Fever",
+              "year": 1967,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 29,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r69",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": "d|e",
+              "work": "Archive Fever",
+              "year": 1979,
+            },
+          },
+        ],
+        "work": "Archive Fever",
+        "years": {
+          "__set": [
+            1969,
+            1981,
+            1993,
+            1967,
+            1979,
+          ],
+        },
+      },
+    ],
+    [
+      "Politics of Friendship",
+      {
+        "authors": {
+          "__set": [
+            "Other, A.",
+          ],
+        },
+        "count": 6,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 10,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r10",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Politics of Friendship",
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 22,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r22",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Politics of Friendship",
+              "year": 1982,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 34,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r34",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Politics of Friendship",
+              "year": 1994,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 6,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r46",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-04T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-01T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Politics of Friendship",
+              "year": 2006,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 18,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r58",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-02-20T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-02-17T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Politics of Friendship",
+              "year": 1968,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 30,
+            "record": {
+              "document_author": "Other, A.",
+              "needs_review": false,
+              "record_id": "r70",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                  "timestamp": "2026-03-05T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": true,
+                  "old_value": false,
+                  "timestamp": "2026-03-02T12:00:00.000Z",
+                },
+                {
+                  "field_name": "topics",
+                  "new_value": [
+                    "x",
+                  ],
+                  "old_value": [],
+                  "timestamp": "2026-03-08T12:00:00.000Z",
+                },
+                {
+                  "field_name": "needs_review",
+                  "new_value": false,
+                  "old_value": true,
+                },
+              ],
+              "work": "Politics of Friendship",
+            },
+          },
+        ],
+        "work": "Politics of Friendship",
+        "years": {
+          "__set": [
+            1982,
+            1994,
+            2006,
+            1968,
+          ],
+        },
+      },
+    ],
+    [
+      "Given Time",
+      {
+        "authors": {
+          "__set": [
+            "J. Derrida",
+          ],
+        },
+        "count": 6,
+        "files": {
+          "__set": [
+            "a.jsonl",
+            "b.jsonl",
+          ],
+        },
+        "review": 0,
+        "rows": [
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 11,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r11",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Given Time",
+              "year": 1971,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 23,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r23",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Given Time",
+              "year": 1983,
+            },
+          },
+          {
+            "file": {
+              "id": "f1",
+              "name": "a.jsonl",
+            },
+            "index": 35,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r35",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Given Time",
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 7,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r47",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "updates": [
+                {
+                  "field_name": "text",
+                  "new_value": "n",
+                  "old_value": "o",
+                  "timestamp": "bad",
+                },
+              ],
+              "work": "Given Time",
+              "year": 2007,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 19,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r59",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Given Time",
+              "year": 1969,
+            },
+          },
+          {
+            "file": {
+              "id": "f2",
+              "name": "b.jsonl",
+            },
+            "index": 31,
+            "record": {
+              "document_author": "J. Derrida",
+              "needs_review": false,
+              "record_id": "r71",
+              "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "topics": [
+                "a",
+                "b;c",
+                " a ",
+              ],
+              "work": "Given Time",
+              "year": 1981,
+            },
+          },
+        ],
+        "work": "Given Time",
+        "years": {
+          "__set": [
+            1971,
+            1983,
+            2007,
+            1969,
+            1981,
+          ],
+        },
+      },
+    ],
+  ],
+}
+`;
