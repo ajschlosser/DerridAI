@@ -785,6 +785,7 @@ def llm_warmup(body: LLMWarmupRequest) -> dict[str, Any]:
             model=body.model,
             base_url=body.base_url,
             api_key=body.api_key,
+            num_ctx=body.num_ctx,
         )
     except TouchupFailure as exc:
         detail = {"message": exc.message}
@@ -2044,9 +2045,12 @@ def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Qu
 @app.get("/api/pdf/corpus-builds/{build_id}")
 def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     try:
-        return pdf_corpus_repository.get_build(build_id)
+        build = pdf_corpus_repository.get_build(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    # Not stored: it is a live reading of what the build is waiting for right now.
+    build["llm_activity"] = pdf_corpus_builds.llm_activity(build_id)
+    return build
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")
@@ -2059,6 +2063,16 @@ def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwit
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/manifest/regenerate")
+def regenerate_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.regenerate_manifest(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/manifest")

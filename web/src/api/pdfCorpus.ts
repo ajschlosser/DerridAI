@@ -29,7 +29,17 @@ export interface DocumentLayoutPlan {
   thread_b_language?:string|null;
 }
 
+export interface LlmActivity {
+  state: "loading_model" | "working" | "unknown";
+  task: "manifest" | "segmentation" | "metadata" | "other";
+  model: string;
+  provider: string;
+  seconds: number;
+  calls_in_flight: number;
+}
 export interface CorpusBuild {
+  /** A live reading of the oldest model call in flight; not stored with the build. */
+  llm_activity?: LlmActivity | null;
   build_id: string;
   asset_id: string;
   source_filename: string;
@@ -200,6 +210,7 @@ export const pdfCorpusApi = {
   profiles: () => apiRequest<{items:Array<Record<string,unknown>>}>("/api/pdf/corpus-profiles"),
   listBuilds: (offset=0, limit=50, assetId="") => apiRequest<{items:CorpusBuild[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds?offset=${offset}&limit=${limit}${assetId?`&asset_id=${encodeURIComponent(assetId)}`:""}`),
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
+  regenerateManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<{build:CorpusBuild;filled:string[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest/regenerate`, {method:"POST",body:JSON.stringify(payload)}),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   switchProviderProfile: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`, {method:"PATCH",body:JSON.stringify(payload)}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),

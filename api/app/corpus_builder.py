@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.request
 import uuid
 from collections import Counter
 from collections.abc import Callable
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import fitz
+import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from . import experiment
@@ -664,6 +666,16 @@ class IndexMetadataResponseModel(BaseModel):
 
 
 
+
+
+def metric_stage_of(schema_name: str) -> str:
+    """Which part of a build a model call belongs to, for words in the UI."""
+    return (
+        "manifest" if "manifest" in schema_name else
+        "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
+        "metadata" if "record_" in schema_name else
+        "other"
+    )
 
 
 def _same_label(a: Any, b: Any) -> bool:
@@ -1435,6 +1447,9 @@ class PdfCorpusBuildManager:
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
+        # Model calls in flight per build, so the UI can say what it is waiting for instead of showing a frozen bar.
+        self._llm_inflight: dict[str, dict[int, dict[str, Any]]] = {}
+        self._loaded_models_cache: tuple[float, str, set[str]] = (0.0, "", set())
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
 
@@ -1804,6 +1819,94 @@ class PdfCorpusBuildManager:
         self._ledger.append(RECHECK, model="", field=field, build_id=build_id, record_id=record_id, value=first, new_value=value, agreed=agreed, first_reviewer=first_reviewer or "", same_reviewer=(first_reviewer or "") == current_reviewer.get(), severity=None if agreed else error_severity(first, value))
         record.setdefault("recheck_results", {})[field] = {"first": first, "second": value, "agreed": agreed}
         return True
+
+    _TRANSPORT_PAUSES = (3.0, 8.0, 15.0)
+    _TRANSPORT_MARKERS = (
+        "disconnected", "connection reset", "connection refused", "connection aborted", "broken pipe", "errno 97", "errno 104",
+        "errno 111", "temporarily unavailable", "remote end closed", "eof occurred",
+    )
+
+    @classmethod
+    def _is_transport_error(cls, exc: Exception) -> bool:
+        """A dropped connection, not a bad answer or a timeout: worth trying again once the server is ready."""
+        if isinstance(exc, (httpx.TimeoutException, InterruptedError)):
+            return False
+        text = f"{type(exc).__name__} {exc}".casefold()
+        if "timeout" in text or "timed out" in text:
+            return False
+        return isinstance(exc, (httpx.TransportError, ConnectionError, OSError)) or any(marker in text for marker in cls._TRANSPORT_MARKERS)
+
+    def _with_transport_retry(self, build_id: str, call: Callable[..., str], **kwargs: Any) -> str:
+        """Run a model call, retrying with a growing pause when the connection itself fails.
+
+        Restarting Ollama, or a model load being abandoned by whoever asked for it, drops every request waiting on
+        it. Trying at once meets the same closed door, so wait a few seconds; a build should not fall back to a
+        degraded result because a server was busy starting.
+        """
+        pauses = self._TRANSPORT_PAUSES
+        for attempt in range(len(pauses) + 1):
+            try:
+                return call(**kwargs)
+            except Exception as exc:  # noqa: BLE001 - classified below; anything else is re-raised untouched
+                if attempt >= len(pauses) or not self._is_transport_error(exc):
+                    raise
+                if build_id:
+                    self._increment_metric(build_id, "transport_retries")
+                deadline = time.monotonic() + pauses[attempt]
+                while time.monotonic() < deadline:
+                    if build_id and self._cancelled(build_id):
+                        raise InterruptedError("Corpus build cancelled") from exc
+                    time.sleep(0.25)
+        raise RuntimeError("unreachable")  # pragma: no cover
+
+    def _note_llm_call_start(self, build_id: str, task: str, provider: str, model: str, base_url: str) -> int:
+        token = time.monotonic_ns()
+        if build_id:
+            with self._lock:
+                self._llm_inflight.setdefault(build_id, {})[token] = {"since": time.monotonic(), "task": task, "provider": provider, "model": model, "base_url": base_url}
+        return token
+
+    def _note_llm_call_end(self, build_id: str, token: int) -> None:
+        if build_id:
+            with self._lock:
+                calls = self._llm_inflight.get(build_id)
+                if calls is not None:
+                    calls.pop(token, None)
+                    if not calls:
+                        self._llm_inflight.pop(build_id, None)
+
+    def _ollama_loaded_models(self, base_url: str) -> set[str] | None:
+        """Names Ollama has in memory right now (its /api/ps), cached for a few seconds. None if it cannot be asked."""
+        now = time.monotonic()
+        cached_at, cached_url, cached = self._loaded_models_cache
+        if cached_url == base_url and now - cached_at < 3.0:
+            return cached
+        try:
+            with urllib.request.urlopen(base_url.rstrip("/") + "/api/ps", timeout=1.5) as response:  # noqa: S310 - the operator's configured Ollama URL
+                names = {str(m.get("name") or m.get("model") or "") for m in json.loads(response.read()).get("models", []) if isinstance(m, dict)}
+        except Exception:  # noqa: BLE001 - the status line is a courtesy; never let it break a build read
+            return None
+        self._loaded_models_cache = (now, base_url, names)
+        return names
+
+    def llm_activity(self, build_id: str) -> dict[str, Any] | None:
+        """What the build is waiting on, for the status line: the oldest model call in flight and whether the model is loaded."""
+        with self._lock:
+            calls = list(self._llm_inflight.get(build_id, {}).values())
+        if not calls:
+            return None
+        oldest = min(calls, key=lambda call: call["since"])
+        state = "working"
+        if oldest["provider"] == "ollama":
+            loaded = self._ollama_loaded_models(str(oldest["base_url"] or settings.ollama_base_url))
+            if loaded is None:
+                state = "unknown"
+            elif not any(oldest["model"] == name or name.startswith(oldest["model"] + ":") for name in loaded):
+                state = "loading_model"
+        return {
+            "state": state, "task": oldest["task"], "model": oldest["model"], "provider": oldest["provider"],
+            "seconds": round(time.monotonic() - oldest["since"], 1), "calls_in_flight": len(calls),
+        }
 
     def enrichment_ledger_csv(self) -> str:
         return self._ledger.to_csv()
@@ -2433,20 +2536,24 @@ class PdfCorpusBuildManager:
                         "quotation" if "record_quotation" in schema_name else
                         "indexing" if "record_indexing" in schema_name else "indexing"
                     )
-                    raw = chat_complete(
-                        provider=provider,
-                        model=model,
-                        base_url=base_url,
-                        api_key=api_key,
-                        prompt=prompt + retry_note,
-                        options=generation,
-                        json_mode=True,
-                        json_schema=schema,
-                        schema_name=schema_name,
-                        max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
-                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                        timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
-                    )
+                    call_token = self._note_llm_call_start(build_id, metric_stage_of(schema_name), provider, model, base_url)
+                    try:
+                        raw = self._with_transport_retry(build_id, chat_complete, 
+                            provider=provider,
+                            model=model,
+                            base_url=base_url,
+                            api_key=api_key,
+                            prompt=prompt + retry_note,
+                            options=generation,
+                            json_mode=True,
+                            json_schema=schema,
+                            schema_name=schema_name,
+                            max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
+                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                            timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
+                        )
+                    finally:
+                        self._note_llm_call_end(build_id, call_token)
                 except InterruptedError:
                     raise
                 except Exception as exc:
@@ -5790,6 +5897,35 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if layout.get("main_text_pdf_start") == start_page:
             return
         self.repo.update_document_layout(asset_id, {**layout, "main_text_pdf_start": start_page})
+
+    def regenerate_manifest(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Ask the model for the document analysis again and fill only what is still empty.
+
+        A build whose first analysis failed (a model that was still loading, a restart) falls back to the PDF's own
+        properties. This tries again with the current provider without touching anything a person has entered or
+        that an earlier analysis already found; values that are missing are added through the ordinary manifest save,
+        so records inherit them and the affected ones are reopened as for any manifest edit.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Wait for the active corpus operation to finish before analysing the document again.")
+        if build.get("status") == "published":
+            raise ValueError("Published builds are immutable.")
+        asset = self.repo.get_asset(str(build.get("asset_id") or ""))
+        blocks = self.repo.load_blocks(str(build.get("asset_id") or ""))
+        active_request = self._interactive_llm_request(build_id, request or None)
+        fresh = self._document_manifest(asset, blocks, active_request, build_id)
+        if bool(active_request.get("auto_enrich_work_metadata", True)):
+            fresh = self._catalog_enrich_manifest(fresh, active_request, build_id)
+        current = dict(build.get("manifest") or {})
+        empty: tuple[object, ...] = (None, "", [])
+        filled = {
+            key: fresh[key] for key in DocumentManifestModel.model_fields
+            if current.get(key) in empty and fresh.get(key) not in empty
+        }
+        if not filled:
+            return {"build": build, "filled": []}
+        return {"build": self.patch_manifest(build_id, filled), "filled": sorted(filled)}
 
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
