@@ -43,6 +43,12 @@ describe("Home page and sign-in contrast", () => {
     );
   });
 
+  it("uses the token-based primary action treatment instead of the retired fixed dark button", () => {
+    expect(declared(".btn.primary", "background")).toBe("var(--ui-accent)");
+    expect(declared(".btn.primary", "border-color")).toBe("var(--ui-accent)");
+    expect(css).not.toContain(".btn.dark{");
+  });
+
   it("dashboard helper text and the empty record hint are readable", () => {
     for (const selector of [
       ".dashboard-metric-controls",

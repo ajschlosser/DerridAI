@@ -139,6 +139,13 @@ html[data-contrast="more"] {
   }
 }
 
-/* The brand images are dark ink on a transparent background, so on a dark surface they are inverted to light ink.
-   (The favicon and app icons keep their own white background; they are not drawn on the page.) */
-html[data-color-scheme="dark"] img[src^="/brand/"] { filter: invert(1); }
+/* The portrait is decorative: the adjacent localized wordmark or page heading conveys the product
+   identity. It has a photographic background rather than a fully transparent one, so the dedicated
+   dark asset is an intentional negative composited against the opaque dark card surface. Do not
+   invert it again, including in high-contrast dark mode. */
+html[data-color-scheme="dark"] .brand-mark img,
+html[data-color-scheme="dark"] .dashboard-hero-mark,
+html[data-color-scheme="dark"] .home-hero-mark {
+  content: url("/brand/derridai-mark-dark.png");
+  filter: none;
+}

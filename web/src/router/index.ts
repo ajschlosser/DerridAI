@@ -16,7 +16,7 @@ import ProvidersView from "../views/ProvidersView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", name: "home", component: DashboardView, meta: { view: "home", capability: "page.dashboard" } },
+  { path: "/", name: "home", component: DashboardView, meta: { view: "home", capability: "page.dashboard", vueNative: true } },
   { path: "/records", name: "list", component: RecordsView, meta: { view: "list", capability: "page.records", adminOnly: true, vueNative: true } },
   { path: "/record", name: "record", component: RecordView, meta: { view: "record", capability: "page.record", vueNative: true } },
   { path: "/works", name: "works", component: CorpusView, meta: { view: "works", capability: "page.works" } },
