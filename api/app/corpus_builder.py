@@ -25,6 +25,7 @@ from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
+from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
     ALLOWED_METADATA_FIELDS as ALLOWED_METADATA_FIELDS,
@@ -4610,18 +4611,6 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
         manifest_build = self.repo.get_build(build_id)
         prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
-        if bool(request.get("review_manifest_before_segmentation", False)) and not manifest_build.get("manifest_confirmed_at"):
-            self._update(
-                build_id,
-                status="awaiting_manifest_review",
-                stage="document_review",
-                progress=0.12,
-                finished_at=iso_now(),
-                resumable=True,
-                error=None,
-            )
-            return None
-
         # The reviewed manifest defines the semantic-analysis region. Source
         # blocks outside it remain in the persisted source asset for audit.
         manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
@@ -4680,6 +4669,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if self._cancelled(build_id):
             raise InterruptedError("Corpus build cancelled")
         self._update(build_id, retrying_segmentation=False)
+        # Whoever proposed the boundaries (the model, a checkpoint, a heuristic), a record must not
+        # start or end mid-sentence. This is deterministic and idempotent, so it also repairs
+        # checkpoints written before it existed.
+        soft_max = int(CORPUS_PROFILES[str(previous_build.get("profile_id") or PROFILE_VERSION)].get("soft_max_chars") or 3500)
+        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=soft_max * 3)
+        self._update(build_id, sentence_boundary_report={key: len(value) for key, value in sentence_report.items()})
         self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
         self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
