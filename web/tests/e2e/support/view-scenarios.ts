@@ -12,6 +12,8 @@ export interface Scenario {
   fixtures?: Fixtures;
   /** Something that is visible once the state has been reached. */
   ready: (page: Page) => Locator;
+  /** Limit the axe scan to this selector, when the rest of the page is not the subject of the state. */
+  scan?: string;
   /** Interactions that reach the state, after the page has loaded. */
   steps?: (page: Page) => Promise<void>;
 }
@@ -124,9 +126,59 @@ export const scenarios: Scenario[] = [
         .click();
     },
   },
-  // Settings and Compare
+  // Corpus Builder review workspace
+  {
+    id: "corpus-review",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.locator(".review-grid"),
+  },
+  // The whole page from the top, before the workspace scrolls into place.
+  {
+    id: "corpus-review-page",
+    path: "/pdf",
+    ready: (p) => p.locator(".review-grid"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.evaluate(() => scrollTo(0, 0));
+    },
+  },
+  {
+    id: "corpus-review-menu-open",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.getByRole("menu"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.getByRole("button", { name: /More (record )?actions/ }).click();
+    },
+  },
+  {
+    id: "corpus-review-metadata-workspace",
+    path: "/pdf",
+    scan: ".review-frame",
+    ready: (p) => p.locator(".review-grid.detail-mode.metadata-workspace"),
+    steps: async (p) => {
+      await p.locator(".review-grid").waitFor();
+      await p.getByRole("button", { name: "Metadata workspace" }).click();
+    },
+  },
+  // Settings, Compare, and Roles
   { id: "settings-default", path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }) },
   { id: "compare-default", path: "/compare", ready: (p) => p.getByRole("heading", { level: 1 }) },
+  {
+    id: "roles-default",
+    path: "/roles",
+    ready: (p) => p.getByRole("heading", { name: /Roles & permissions/ }),
+  },
+  {
+    id: "roles-create-dialog",
+    path: "/roles",
+    ready: (p) => p.getByRole("dialog"),
+    steps: async (p) => {
+      await p.getByRole("button", { name: /^Create role$/ }).click();
+    },
+  },
   // Record (a researcher reads a record from the database)
   {
     id: "record-overview",
