@@ -140,9 +140,8 @@ html[data-contrast="more"] {
 }
 
 /* The portrait is decorative: the adjacent localized wordmark or page heading conveys the product
-   identity. It has a photographic background rather than a fully transparent one, so the dedicated
-   dark asset is an intentional negative composited against the opaque dark card surface. Do not
-   invert it again, including in high-contrast dark mode. */
+   identity. Its dedicated dark asset is a color-inverted version of the same transparent PNG, so
+   it adapts cleanly to every dark surface. Do not invert it again, including in high-contrast mode. */
 html[data-color-scheme="dark"] .brand-mark img,
 html[data-color-scheme="dark"] .dashboard-hero-mark {
   content: url("/brand/derridai-mark-dark.png");
