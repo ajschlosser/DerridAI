@@ -5,7 +5,7 @@ import re
 import sys
 
 module, names = sys.argv[1], sys.argv[2].split(",")
-p = "web/src/runtime/runtime.js"
+p = "src/runtime/runtime.js"
 s = open(p).read()
 for name in names:
     m = re.search(r"^(async )?function %s\(" % re.escape(name), s, re.M)

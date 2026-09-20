@@ -1,6 +1,6 @@
 import re
 
-s = open("web/src/runtime/runtime.js").read()
+s = open("src/runtime/runtime.js").read()
 starts = [(m.start(), m.group(2)) for m in re.finditer(r"^(async )?function ([A-Za-z0-9_]+)\(", s, re.M)]
 funcs = {}
 for i, (a, name) in enumerate(starts):

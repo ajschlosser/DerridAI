@@ -9,7 +9,7 @@ module = sys.argv[1]
 header = sys.argv[2]
 imports = sys.argv[3]  # ts import lines, '\n'-separated, may be ''
 specs = dict(a.split("=", 1) for a in sys.argv[4:])
-p = "web/src/runtime/runtime.js"
+p = "src/runtime/runtime.js"
 s = open(p).read()
 out = []
 for name, sig in specs.items():
