@@ -226,3 +226,29 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
     assert created["id"] == "reading-notes" and [s["id"] for s in listing] == ["default", "reading-notes"]
     assert "attachment" in exported.headers["content-disposition"] and imported.json()["id"] == "reading-notes-2"
     assert bad.status_code == 422 and locked.status_code == 422 and gone.status_code == 200 and missing.status_code == 404
+
+
+def test_the_preview_endpoint_shows_the_prompt_without_calling_a_model(tmp_path, monkeypatch):
+    import asyncio
+    import sys
+    import types
+
+    import httpx
+
+    try:
+        import chromadb  # type: ignore  # noqa: F401
+    except ModuleNotFoundError:
+        sys.modules["chromadb"] = types.SimpleNamespace()
+    from app import main
+
+    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
+            good = await c.post("/api/pdf/metadata-schemas/preview", json={"schema": custom().model_dump(mode="json"), "group": "discourse", "text": "A calm passage."})
+            bad = await c.post("/api/pdf/metadata-schemas/preview", json={"schema": custom().model_dump(mode="json"), "group": "nope", "text": "x"})
+            return good, bad
+
+    good, bad = asyncio.run(run())
+    assert good.status_code == 200 and "A calm passage." in good.json()["prompt"] and good.json()["ran"] is False
+    assert bad.status_code == 422

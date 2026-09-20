@@ -60,6 +60,7 @@ from .models import (
     LLMStatusRequest,
     LLMToolJobCreate,
     LLMWarmupRequest,
+    MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
     PdfCorpusBulkDisposition,
@@ -2112,6 +2113,18 @@ def create_metadata_schema(body: MetadataSchema):
         return metadata_schemas.save(body).model_dump(mode="json")
     except (SchemaLocked, ValueError) as exc:
         raise _schema_errors(exc) from exc
+
+
+@app.post("/api/pdf/metadata-schemas/preview")
+def preview_metadata_schema_group(body: MetadataSchemaPreview):
+    try:
+        payload = body.model_dump(exclude_none=True, by_alias=False)
+        for key in ("schema_", "group", "text", "run"):
+            payload.pop(key, None)
+        request = _resolve_pdf_corpus_provider(payload) if body.run else {}
+        return pdf_corpus_builds.preview_schema_group(body.schema_, body.group, body.text, request, body.run)
+    except (ValueError, TouchupFailure) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/pdf/metadata-schemas/{schema_id}")

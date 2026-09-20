@@ -138,3 +138,16 @@ def test_a_reported_position_needs_a_position_holder_only_when_the_schema_has_on
         result = cb.PdfCorpusBuildManager.validate_records([], records, {**cb.CORPUS_PROFILES[cb.PROFILE_VERSION], **profile})
         errors = [e for e in result.get("relationship_errors", [])] if isinstance(result, dict) else []
         assert len(errors) == expect
+
+
+def test_a_schema_group_can_be_previewed_without_a_build(tmp_path):
+    m, _ = manager(tmp_path)
+    shown = m.preview_schema_group(notes_schema(), "discourse", "It was a calm evening.", {}, run=False)
+    assert shown["ran"] is False and "It was a calm evening." in shown["prompt"] and "note its mood" in shown["prompt"]
+    assert "mood" in str(shown["answer_schema"])
+    with pytest.raises(ValueError, match="no group"):
+        m.preview_schema_group(notes_schema(), "nowhere", "x", {}, run=False)
+    m._chat_json = lambda request, prompt, **kw: {"metadata": {"mood": "calm"}}  # type: ignore[method-assign]
+    m._interactive_llm_request = lambda build_id, override=None: {}  # type: ignore[method-assign]
+    ran = m.preview_schema_group(notes_schema(), "discourse", "It was a calm evening.", {"model": "q"}, run=True)
+    assert ran["ran"] is True and ran["answer"]["metadata"]["mood"] == "calm"

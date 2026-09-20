@@ -1932,6 +1932,29 @@ class PdfCorpusBuildManager:
             "seconds": round(time.monotonic() - oldest["since"], 1), "calls_in_flight": len(calls),
         }
 
+    def preview_schema_group(self, schema: MetadataSchema, group: str, text: str, request: dict[str, Any], run: bool) -> dict[str, Any]:
+        """Show, and optionally run, the prompt one group of a schema produces for a passage.
+
+        This is for trying a schema without a build. It has none of a build's context (no document manifest, editorial
+        memory or neighbouring records), so a real build's prompt is this one plus that context.
+        """
+        if group not in {g.key for g in schema.groups}:
+            raise ValueError(f"The schema has no group '{group}'.")
+        context = (
+            "Document manifest: {}\nBuild-local editorial conventions: {}\nHuman-confirmed examples: {}\n"
+            "Human-owned fields on this record: {}\nCurrent source block IDs: [\"preview-1\"]\nCURRENT REVIEWED RECORD TEXT:\n" + text + "\n"
+        )
+        profile = CORPUS_PROFILES[PROFILE_VERSION]
+        prompt = build_group_prompt(schema, group, base_context=context, allowed_region_types=list(profile.get("region_types") or []), allowed_discourse_roles=list(profile.get("discourse_roles") or []))
+        model_cls = response_model_for(schema, group, region_types=list(profile.get("region_types") or []) or None, roles=list(profile.get("discourse_roles") or []) or None)
+        out: dict[str, Any] = {"prompt": prompt, "answer_schema": model_cls.model_json_schema(), "ran": False}
+        if not run:
+            return out
+        started = time.monotonic()
+        active = self._interactive_llm_request("", request or None)
+        result = self._chat_json(active, prompt, response_model=model_cls, max_tokens=int(self._stage_limits(active).get("indexing_num_predict", 1200)), schema_name=f"derridai_record_{group}", build_id="")
+        return {**out, "ran": True, "answer": result, "seconds": round(time.monotonic() - started, 1)}
+
     def start_autonomous(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Run hands-free mode on an existing build, in the background."""
         build = self.repo.get_build(build_id)

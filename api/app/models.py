@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from .enrichment_cycles import MAX_PASSES
+from .metadata_schema import MetadataSchema
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -820,3 +821,12 @@ class RolePermissionsUpdate(BaseModel):
 class PdfCorpusSecondOpinion(BaseModel):
     field: str = Field(min_length=1, max_length=80)
     value: Any = None
+
+
+class MetadataSchemaPreview(PdfCorpusRecordRerun):
+    """Try one group of a schema on a passage of text, without a build."""
+
+    schema_: MetadataSchema = Field(alias="schema")
+    group: str = Field(min_length=1, max_length=24)
+    text: str = Field(min_length=1, max_length=20000)
+    run: bool = False  # false: show the prompt only, without calling a model
