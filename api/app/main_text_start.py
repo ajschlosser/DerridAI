@@ -20,10 +20,13 @@ from typing import Any
 
 CONFIDENCE_THRESHOLD = 0.9
 
-WEIGHTS = {"outline_first_chapter": 0.75, "first_chapter_heading": 0.65, "page_numbering_restarts": 0.5, "front_matter_ends": 0.45}
+WEIGHTS = {"outline_first_chapter": 0.75, "first_chapter_heading": 0.65, "page_numbering_restarts": 0.5, "front_matter_ends": 0.45, "outline_after_front_matter": 0.5}
 
 _NUMBER_WORDS = r"(?:one|two|first|i|1)"
 _FIRST_CHAPTER = re.compile(rf"^\s*(?:chapter|chap\.|chapitre|part|book|livre|partie)\s+{_NUMBER_WORDS}\b[\s.:—–-]*(?:.{{0,80}})?$", re.I)
+# "1. Title", "1 Title", "I. Title", "One" as a heading of its own. A bare capital I needs its full stop, or "I think" would match.
+_NUMBERED_FIRST = re.compile(r"^\s*(?:(?:1|one|first)(?:[.):—–-]|\s)\s*(?![a-z\d]).{0,80}|I[.):—–-]\s*\S.{0,80})$")
+_INTRO = re.compile(r"^\s*(?:introduction|prologue|prolog|foreword|preface|avant-propos|pr[eé]face)\b", re.I)
 _BARE_FIRST = re.compile(r"^\s*(?:1|i|one)[.)]?\s*$", re.I)
 _FRONT_HEADING = re.compile(
     r"^\s*(?:contents|table of contents|table des mati[eè]res|preface|pr[eé]face|foreword|avant-propos|acknowledg\w+|"
@@ -58,16 +61,24 @@ def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: 
     contents_pages = {p for p, lines in pages.items() if _looks_like_contents(lines) or any(_FRONT_HEADING.match(x) and re.match(r"^\s*(?:table|contents)", x, re.I) for x in lines[:3])}
 
     for page, title in outline:
-        if 1 <= page <= page_count and _FIRST_CHAPTER.match(title):
+        if 1 <= page <= page_count and (_FIRST_CHAPTER.match(title) or _NUMBERED_FIRST.match(title)):
             clues.append({"page": page, "kind": "outline_first_chapter", "detail": f"Bookmark “{title.strip()}” points to PDF page {page}."})
             break
+
+    entries = [(p, t) for p, t in outline if 1 <= p <= page_count]
+    last_front = max((i for i, (p, t) in enumerate(entries) if p <= max(1, page_count // 3) and _FRONT_HEADING.match(t)), default=None)
+    if last_front is not None:
+        # The first bookmark after the front matter, skipping an introduction (which may or may not be main text).
+        after = next(((p, t) for p, t in entries[last_front + 1 :] if not _INTRO.match(t) and p > entries[last_front][0]), None)
+        if after is not None:
+            clues.append({"page": after[0], "kind": "outline_after_front_matter", "detail": f"Bookmark “{after[1].strip()}” is the first after the front matter (PDF page {after[0]})."})
 
     for page in sorted(pages):
         if page in contents_pages:
             continue
         lines = pages[page]
         head = [x for x in lines[:4]]
-        hit = next((x for x in head if _FIRST_CHAPTER.match(x)), None)
+        hit = next((x for x in head if _FIRST_CHAPTER.match(x) or _NUMBERED_FIRST.match(x)), None)
         if hit is None and len(head) >= 2 and re.match(r"^\s*(?:chapter|chapitre)\s*$", head[0], re.I) and _BARE_FIRST.match(head[1]):
             hit = f"{head[0]} {head[1]}"
         if hit:

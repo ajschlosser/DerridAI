@@ -160,3 +160,27 @@ def test_anchoring_compares_seen_and_blind_agreement():
     m = compute(rows)["models"]["m"]
     assert m["blind_labels"] == 10 and m["blind_agreement_ci"]["rate"] == 0.5
     assert m["anchoring"]["difference"] == 0.4 and m["anchoring"]["p_value"] < 0.1
+
+
+def test_a_model_switched_to_mid_run_answers_later_records_and_shows_in_the_metrics(tmp_path, monkeypatch):
+    m = manager(tmp_path)
+    build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
+                                 "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "old", "request": {}})
+    bid = build["build_id"]
+    m.repo.save_records(bid, [{"record_id": f"rec-{i}", "text": "t", "metadata_field_status": {}} for i in range(4)])
+    seen: list[str] = []
+
+    def fake_enrich(candidate, manifest, request, **kw):
+        seen.append(request["model"])
+        if len(seen) == 2:  # the reviewer switches models while the pass is running
+            m._runtime_requests[bid] = {"provider": "ollama", "model": "new"}
+            m._provider_epoch[bid] = m._provider_epoch.get(bid, 0) + 1
+        m._ledger.append("proposed", model=request["model"], field="f", build_id=bid, record_id=candidate["record_id"])
+        return candidate
+
+    monkeypatch.setattr(m, "_enrich_record", fake_enrich)
+    monkeypatch.setattr(m, "_merge_enrichment_candidate", lambda live, cand, *a, **k: {"outcome": "unchanged", "added": 0, "replaced": 0, "kept": 0, "disputed": 0})
+    m._run_enrichment_pass(bid, {"model": "old", "max_concurrent_requests": 1}, "run1", "all", ["discourse"], lambda *a: None)
+    assert seen[:2] == ["old", "old"] and set(seen[2:]) == {"new"}
+    from app.enrichment_metrics import compute
+    assert set(compute(m._ledger.events())["models"]) == {"old", "new"}

@@ -138,3 +138,7 @@ html[data-contrast="more"] {
     --focus-ring: Highlight;
   }
 }
+
+/* The brand images are dark ink on a transparent background, so on a dark surface they are inverted to light ink.
+   (The favicon and app icons keep their own white background; they are not drawn on the page.) */
+html[data-color-scheme="dark"] img[src^="/brand/"] { filter: invert(1); }

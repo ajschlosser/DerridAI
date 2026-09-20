@@ -330,7 +330,7 @@ function directProfilePayload(profileId:string): Record<string,unknown>|null{
     model:config.model,
     base_url:config.base_url,
     api_key:config.api_key,
-    max_concurrent_requests:Number(config.max_concurrent_requests||1),
+    max_concurrent_requests:Math.max(1,Math.min(16,Number(config.max_concurrent_requests||1))),
     generation:ollama&&typeof ollama==="object"?ollama:undefined,
   };
 }
@@ -1205,6 +1205,8 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 /* Scrolling passes to the page at the edge of a pane. The frame fills the window, so a pane that swallowed
    the wheel would leave everything above the workspace unreachable. */
 .review-frame .records-pane,.review-frame .record-review-pane,.review-frame .review-inspector{position:relative;height:100%;min-height:0;max-height:none;overflow:auto;overscroll-behavior:auto}
+/* The text card is a flex item with overflow:hidden, which lets it shrink below its content and clip the end of a long record. It keeps its full height and the pane scrolls instead. */
+.review-frame .record-text-review{flex:none;margin-block-end:14px}
 .review-frame .record-text-review .record-primary-text{max-height:none;overflow:visible}
 .review-splitter{position:relative;cursor:col-resize;touch-action:none;background:var(--card);border-inline:1px solid var(--line)}
 .review-splitter::before{content:"";position:absolute;inset-block:0;inset-inline:-.5rem}

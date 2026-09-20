@@ -127,13 +127,43 @@ DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
 PROFILE_VERSION = "derrida-scholarly-v12"
 
 
+_PROMPT_TAG_RE = re.compile(r"</?\s*SOURCE[_ ]?TEXT\s*/?\s*>", re.I)
+_EDGE_TAG_RE = re.compile(r"^\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*|\s*(</?\s*[A-Za-z_][\w-]{0,30}\s*/?\s*>)\s*$")
+_EDGE_LABEL_RE = re.compile(r"^\s*(?:\[?\s*(?:SOURCE[_ ]TEXT|TOUCHED[- _]?UP(?: TEXT)?|CORRECTED(?: TEXT)?|OUTPUT|RESULT)\s*\]?\s*:)\s*", re.I)
 
 
+def _strip_added_markup(proposed: str, source: str) -> str:
+    """Trim tags and labels a model echoed from the prompt around its answer.
+
+    The test is the one a person would use: material at the very start or end of the answer that is not at the
+    start or end of the source was added by the model. So a tag or label is removed only when the source does not
+    itself begin or end with it; a real "<b>" in the text is kept.
+    """
+    value = proposed
+    # The prompt's own delimiter is never text, wherever the model put it (a small model may even write it self-closing).
+    if not _PROMPT_TAG_RE.search(source):
+        value = _PROMPT_TAG_RE.sub("", value)
+    for _ in range(6):  # a tag, then a label, then another tag: peel until nothing more is added
+        before = value
+        label = _EDGE_LABEL_RE.match(value)
+        if label and not source.lstrip().lower().startswith(label.group(0).strip().lower()):
+            value = value[label.end():]
+        for match in (_EDGE_TAG_RE.search(value),):
+            if not match:
+                continue
+            tag = (match.group(1) or match.group(2) or "").strip()
+            at_start = bool(match.group(1))
+            if tag and not (source.lstrip().startswith(tag) if at_start else source.rstrip().endswith(tag)):
+                value = value[match.end():] if at_start else value[: match.start()]
+        value = value.strip()
+        if value == before:
+            break
+    return value
 
 
 def _sanitize_touchup_output(proposed: str, source: str) -> str:
     """Remove model-added outer wrappers without touching source punctuation."""
-    value = str(proposed or "").strip()
+    value = _strip_added_markup(str(proposed or "").strip(), str(source or "").strip())
     source_value = str(source or "").strip()
     lines = value.splitlines()
     source_lines = source_value.splitlines()
@@ -983,6 +1013,25 @@ class PdfCorpusRepository:
         meta = _json_read(self.asset_meta_path(asset_id))
         if not isinstance(meta, dict):
             raise KeyError(asset_id)
+        return self._with_start_inference(meta)
+
+    def _with_start_inference(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Assets extracted before the inference existed get it the first time they are read, and keep it."""
+        if "main_text_start_inference" in meta or not meta.get("asset_id"):
+            return meta
+        asset_id = str(meta["asset_id"])
+        try:
+            outline: list[tuple[int, str]] = []
+            pdf_path = self.asset_pdf_path(asset_id)
+            if pdf_path.exists():
+                with fitz.open(pdf_path) as doc:
+                    outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
+            meta["outline"] = [{"page": page, "title": title} for page, title in outline[:400]]
+            meta["main_text_start_inference"] = infer_main_text_start(self.load_blocks(asset_id), meta.get("pages") or [], outline)
+            with self._lock:
+                _json_write(self.asset_meta_path(asset_id), meta)
+        except Exception:  # noqa: BLE001 - a failed inference must never make an asset unreadable
+            meta["main_text_start_inference"] = {"page": None, "confidence": 0.0, "clues": [], "offered": False}
         return meta
 
     def list_assets(self) -> list[dict[str, Any]]:
@@ -990,7 +1039,7 @@ class PdfCorpusRepository:
         for path in sorted((self.root / "assets").glob("pdf-*.json"), reverse=True):
             item = _json_read(path)
             if isinstance(item, dict):
-                items.append(item)
+                items.append(self._with_start_inference(item))
         return items
 
     def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:
@@ -1386,6 +1435,7 @@ class PdfCorpusBuildManager:
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
+        self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
 
     def reset_in_memory_state(self) -> None:
@@ -1491,6 +1541,7 @@ class PdfCorpusBuildManager:
                 elif key in {"review_provider_profile_id", "_review_provider"} and key in merged and key not in request:
                     merged.pop(key, None)
             self._runtime_requests[build_id] = merged
+            self._provider_epoch[build_id] = self._provider_epoch.get(build_id, 0) + 1
             public = dict(build.get("request") or {})
             for key in ("provider", "model", "base_url", "generation", "provider_profile_id", "review_provider_profile_id"):
                 if key in merged:
@@ -4114,7 +4165,7 @@ Operational discourse-role definitions:
 {json.dumps({role: DISCOURSE_ROLE_DEFINITIONS.get(role, "") for role in allowed_discourse_roles}, ensure_ascii=False)}
 
 For discourse_role, explicitly discriminate among the two or three closest plausible roles before choosing. In the discourse_role field assessment reason, briefly state why the selected role fits better than its nearest alternative. Pay special attention to the difference between the surrounding author's analysis and a reported_position held by someone else, and between critique, qualification, and commentary. Human-confirmed examples above are style/taxonomy guidance, not evidence.
-If a field is genuinely unsupported, return null rather than inventing a value.
+If a field is genuinely unsupported, return null rather than inventing a value. Never answer with a placeholder or a description of a role ("null", "N/A", "unknown", "the author of the current record", "the speaker", "this passage"): name the person, work or concept the text itself names, or return null.
 
 {base_context}
 For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.
@@ -6974,6 +7025,19 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         indices = self._enrichment_pass_indices(snapshot, scope)
         max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
+        epoch_at_start = self._provider_epoch.get(build_id, 0)
+        provider_keys = ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider")
+
+        def effective_request() -> dict[str, Any]:
+            """This run's request, with the provider the reviewer switched to since it started, if they did.
+
+            A switch applies to records not yet started; requests already in flight finish on the old model.
+            Each event in the ledger names the model that actually answered, so the metrics show both.
+            """
+            if self._provider_epoch.get(build_id, 0) == epoch_at_start:
+                return request
+            live = self._latest_runtime_request(build_id, request)
+            return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
         def candidate_for(index: int) -> dict[str, Any]:
             candidate = json.loads(json.dumps(snapshot[index]))
@@ -6992,7 +7056,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             return self._enrich_record(
                 candidate,
                 manifest,
-                {**request, "families": families, "_interactive_provider_override": True},
+                {**effective_request(), "families": families, "_interactive_provider_override": True},
                 build_id=build_id,
                 previous_text=neighbors["previous_text"],
                 next_text=neighbors["next_text"],
