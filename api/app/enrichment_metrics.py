@@ -16,8 +16,8 @@ from typing import Any
 
 from datetime import datetime
 
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, REVIEW_EVENTS, SUSPENDED
-from .experiment_stats import wilson
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, REVIEW_EVENTS, SUSPENDED
+from .experiment_stats import two_proportion, wilson
 
 THRESHOLDS = (0.7, 0.8, 0.9, 0.95)
 LEARNING_BUCKET = 10  # reviews per point on the learning curve
@@ -143,7 +143,13 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         severities[str(e.get("severity") or ("cleared" if e["kind"] == REJECTED else "unknown"))] += 1
     firsts = [t for t in (_seconds(e) for e in calls) if t is not None]
     useful = [t for t in (_seconds(e) for e in events if e["kind"] in (AUTOFILLED, ACCEPTED)) if t is not None]
+    blind = [e for e in events if e["kind"] == BLIND_LABEL]
+    blind_agreed = sum(1 for e in blind if e.get("agreed"))
     return {
+        # Anchoring: how much more often people agree with the model when they can see its value than when they cannot.
+        "blind_labels": len(blind),
+        "blind_agreement_ci": _ci(blind_agreed, len(blind)),
+        "anchoring": two_proportion(len(accepted), len(reviews), blind_agreed, len(blind)),
         "acceptance_ci": _ci(len(accepted), len(reviews)),
         "correction_severity": dict(severities),
         "substantive_error_rate": _ci(severities.get("substantive", 0), len(reviews)),

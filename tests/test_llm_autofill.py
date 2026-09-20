@@ -126,3 +126,36 @@ def test_gold_records_never_feed_the_blend(tmp_path):
     m._ledger.append(CORRECTED, model="q", field="f", gold=True)
     m._ledger.append(ACCEPTED, model="q", field="f", gold=False)
     assert m._ledger.review_counts("q", "f") == (1, 1)
+
+
+def test_blind_records_seal_the_models_value_and_score_the_reviewers_own(tmp_path):
+    m = manager(tmp_path)
+    request = {"model": "q", "blind_rate": 1.0}
+    record = {"record_id": "rec-9", "text": "x", "metadata_field_status": {}}
+    result = {
+        "metadata": {"discourse_role": "assertion"},
+        "field_assessments": {"discourse_role": {"confidence": 0.99, "needs_review": False}},
+        "field_evidence": {"discourse_role": {"block_ids": ["b1"], "confidence": 0.99}},
+    }
+    profile = cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
+    out = m._reconcile_metadata_results(record, profile, ["b1"], [("discourse", result, None)], False, request=request, build_id="b")
+    status = out["metadata_field_status"]["discourse_role"]
+    # Nothing the browser receives says what the model thought, and nothing is autofilled.
+    assert out["discourse_role"] is None and status["blind"] is True and status["status"] == "unresolved"
+    assert "assertion" not in str(out) and "proposed_value" not in status and not status.get("autofilled")
+    assert m._ledger.sealed_value("b", "rec-9", "discourse_role") == "assertion"
+    # The reviewer decides without seeing it; then it is revealed and the agreement is logged.
+    m._record_human_llm_feedback("b", "discourse_role", None, "critique", status, out)
+    label = next(e for e in m._ledger.events() if e["kind"] == "blind_label")
+    assert label["agreed"] is False and label["value"] == "assertion" and label["new_value"] == "critique"
+    assert out["blind_reveals"]["discourse_role"] == "assertion"
+
+
+def test_anchoring_compares_seen_and_blind_agreement():
+    from app.enrichment_metrics import compute
+
+    rows = [{"kind": "accepted", "model": "m", "field": "f", "confidence": 0.9}] * 9 + [{"kind": "corrected", "model": "m", "field": "f", "confidence": 0.9}]
+    rows += [{"kind": "blind_label", "model": "m", "field": "f", "agreed": i < 5} for i in range(10)]
+    m = compute(rows)["models"]["m"]
+    assert m["blind_labels"] == 10 and m["blind_agreement_ci"]["rate"] == 0.5
+    assert m["anchoring"]["difference"] == 0.4 and m["anchoring"]["p_value"] < 0.1

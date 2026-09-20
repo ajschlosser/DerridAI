@@ -58,3 +58,15 @@ def cohens_kappa(labels_a: Sequence[object], labels_b: Sequence[object]) -> floa
     ca, cb = Counter(labels_a), Counter(labels_b)
     expected = sum(ca[k] * cb[k] for k in ca) / (n * n)
     return None if expected == 1 else round((observed - expected) / (1 - expected), 4)
+
+
+def two_proportion(x1: int, n1: int, x2: int, n2: int) -> dict[str, float | None]:
+    """Difference p1 - p2 with a two-sided z-test (pooled). None when either group is empty."""
+    if n1 <= 0 or n2 <= 0:
+        return {"difference": None, "p_value": None}
+    p1, p2, pooled = x1 / n1, x2 / n2, (x1 + x2) / (n1 + n2)
+    se = math.sqrt(pooled * (1 - pooled) * (1 / n1 + 1 / n2))
+    if se == 0:
+        return {"difference": round(p1 - p2, 4), "p_value": None if p1 != p2 else 1.0}
+    z = (p1 - p2) / se
+    return {"difference": round(p1 - p2, 4), "p_value": round(math.erfc(abs(z) / math.sqrt(2)), 6)}

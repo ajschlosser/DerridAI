@@ -30,6 +30,15 @@ def is_gold(record_id: str, rate: float = GOLD_RATE) -> bool:
     return _unit("gold", record_id) < rate
 
 
+def is_blind(record_id: str, rate: float) -> bool:
+    """Blind-review sample: the reviewer labels these records without seeing the model's values.
+
+    Independent of the gold set and of arm assignment. Comparing how often people agree with the
+    model when blind against how often they accept it when shown measures anchoring.
+    """
+    return rate > 0 and _unit("blind", record_id) < rate
+
+
 def assign_arm(record_id: str, arms: list[dict[str, Any]], salt: str = "") -> dict[str, Any]:
     """Pick one arm uniformly at random for a record, the same way every time."""
     return arms[min(len(arms) - 1, int(_unit("arm", salt, record_id) * len(arms)))]
@@ -56,6 +65,7 @@ def context(request: dict[str, Any] | None, *, model: str, record_id: str, code_
         "arm": str(request.get("arm") or "default"),
         "ablations": sorted(disabled(request)),
         "gold": is_gold(record_id) if record_id else False,
+        "blind": is_blind(record_id, float(request.get("blind_rate") or 0)) if record_id else False,
         "model_version": str(request.get("model_version") or model),
         "prompt_version": prompt_version,
         "code_version": code_version,

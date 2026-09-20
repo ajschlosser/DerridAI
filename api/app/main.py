@@ -1946,6 +1946,10 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     are stripped by the build manager before the public build manifest is saved.
     """
     resolved = dict(payload)
+    # Experiment conditions travel as flat request keys inside the pipeline.
+    experiment = resolved.pop("experiment", None)
+    if isinstance(experiment, dict):
+        resolved.update({key: value for key, value in experiment.items() if value not in (None, [], "")})
     # Build-level generation overrides are intentionally distinct from the saved
     # profile.  Resolve server-owned credentials/options first, then layer only
     # the explicitly supplied per-build values over the profile defaults.

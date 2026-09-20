@@ -29,7 +29,7 @@ from .error_severity import severity as error_severity
 from .autofill import decide as decide_autofill, in_audit_sample
 from . import experiment
 from .enrichment_metrics import compute as compute_enrichment_metrics
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
 from .main_text_start import infer_main_text_start
 from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -1787,6 +1787,11 @@ class PdfCorpusBuildManager:
         method = str(info.get("method") or "")
         state = str(info.get("status") or "")
         if "llm" not in method and state != "llm_inferred":
+            return
+        if info.get("blind") and info.get("model") and record is not None:
+            sealed = self._ledger.sealed_value(build_id, str(record.get("record_id") or ""), field)
+            self._ledger.append(BLIND_LABEL, model=str(info["model"]), field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=sealed, new_value=new_value, agreed=sealed == new_value, severity=None if sealed == new_value else error_severity(sealed, new_value), **(info.get("conditions") or {}))
+            record.setdefault("blind_reveals", {})[field] = sealed  # now that they have decided, the reviewer may see it
             return
         kept = prior_value == new_value
         if info.get("model"):
@@ -4131,7 +4136,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             The blended confidence (see autofill.py) outranks the model's own needs_review flag, but
             never the absence of a cited source block or a self-report at or below the profile floor.
             """
-            if "autofill" in off or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
+            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
                 return None
             reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
             decision = decide_autofill(confidence, reviews, accepted)
@@ -4412,8 +4417,17 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 if checked_field in raw_llm_values:
                     checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
 
+        shown: dict[str, Any] = {}
         for field in sorted(llm_populated_fields):
             proposed_status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            shown[field] = record.get(field)
+            if conditions["blind"] and proposed_status.get("method") == "llm" and proposed_status.get("status") in {"llm_inferred", "unresolved"}:
+                # Blind review: the model's value is sealed in the ledger and the reviewer sees an empty field.
+                record[field] = [] if isinstance(shown[field], list) else None
+                field_status[field] = proposed_status = {
+                    "status": "unresolved", "method": "llm", "blind": True, "reason_code": "blind_review", "auto_populated": False,
+                    "reason": "Blind review: enter your own value. The model's suggestion is shown after you save.",
+                }
             if proposed_status.get("method") == "llm":
                 # Later human decisions on this value are attributed to the model and conditions that produced it.
                 proposed_status.setdefault("model", model)
@@ -4421,9 +4435,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             assessed = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             self._ledger.append(
                 PROPOSED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id,
-                value=record.get(field), self_reported=assessed.get("confidence"),
+                value=shown.get(field), self_reported=assessed.get("confidence"),
                 grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"),
-                supported=experiment.supported_in_text(record.get(field), str(record.get("text") or "")) if field in experiment.FREE_TEXT_FIELDS else None, **conditions,
+                supported=experiment.supported_in_text(shown.get(field), str(record.get("text") or "")) if field in experiment.FREE_TEXT_FIELDS else None, **conditions,
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
