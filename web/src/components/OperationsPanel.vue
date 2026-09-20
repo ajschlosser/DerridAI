@@ -390,7 +390,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   --ops-text: var(--text);
   --ops-muted: var(--muted);
   --ops-line: var(--line);
-  --ops-control: var(--line-strong);
+  --ops-control: var(--text-2);
   --ops-surface: var(--card);
   --ops-sunken: var(--soft);
   --ops-info-fg: var(--tone-info-fg);
