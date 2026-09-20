@@ -52,7 +52,8 @@ for n in names:
 body = "".join(t if t.endswith("\n") else t + "\n" for t in chunks)
 for a, b in edits.items():
     body = body.replace(a, b)
-indented = "\n".join(("  " + line if line.strip() else line) for line in body.splitlines())
+# Do not indent: lines inside multi-line template literals must stay byte-identical. Prettier indents the code.
+indented = body.rstrip("\n")
 out = (
     "/* Copyright 2026 Aaron John Schlosser, PhD. */\n"
     + imports

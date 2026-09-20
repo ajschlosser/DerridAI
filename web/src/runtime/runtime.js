@@ -47,6 +47,7 @@ import { createOperationPresenters } from "../domain/operationPresenters";
 import { createFieldFormatting } from "../domain/fieldFormatting";
 import { createCorpusAnalytics } from "../domain/corpusAnalytics";
 import { createSearchFacets } from "../domain/searchFacets";
+import { createRecordPresenters } from "../domain/recordPresenters";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
@@ -85,6 +86,36 @@ const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValu
 const {searchFacetRawValues,searchFacetDisplay,searchFacetMatches,searchRowMatchesFacets,searchRecordMatchesFacets,searchFacetCountsFromRows,searchFacetCountsFromRecords,buildSearchFacets,searchSuggestions,searchFilterDescriptor,dbSearchFilterDescriptors,searchColumnOptions,searchSimilarity,searchMatchReasons,rowMatchesListFilters}=createSearchFacets({
   tr,label,display,recordDbStatus,pages,recordFields,uid:()=>uid(),dbSearchWhere,filterOpsForField,
   getSearchFacetFilters:()=>state.searchFacetFilters,
+});
+const {
+    uniqueWorkValues,
+    normalizedRecordAnnotation,
+    workInsightPieHtml,
+    flattenedMetricValues,
+    topRecordFieldShare,
+    topRecordFieldValues,
+    workInsightMetrics,
+    mixedWorkValueButton,
+    workMetadataControl,
+    workInsightsPanelHtml,
+    dashboardPieChart,
+    pieShareSeries,
+    dashboardMetricBody,
+    worksBiblioValue,
+    emptyWorksBiblio,
+    describeResearcherWork,
+    pager,
+    ragEvidencePreview,
+    storeCellHtml,
+    recordsListCell,
+    metadataSearchable,
+    searchRecordOptions,
+    recordOptionLabel,
+    ragGradeEvidencePayload,
+  }=createRecordPresenters({
+  tr,trf,pages,recordDbStatus,label,display,
+  allAnnotations:()=>allAnnotations(),
+  compareSearchIndex:()=>compareSearchIndex(),
 });
 const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
   tr,trf,
@@ -647,15 +678,6 @@ function touchupRecordPayload(record,fields=[]){
 function ragEvidenceRecordPayload(record){
   return recordPayload(record,{fields:RAG_EVIDENCE_TRANSPORT_FIELDS});
 }
-function ragGradeEvidencePayload(evidence=[]){
-  return (Array.isArray(evidence)?evidence:[]).slice(0,40).map((item,index)=>({
-    evidence_id:item?.evidence_id||`E${index}`,
-    inline_citation:item?.inline_citation||"",
-    full_citation:item?.full_citation||"",
-    collection:item?.collection||null,
-    record:recordPayload(item?.record||{},{fields:["record_id","work","text"]}),
-  }));
-}
 function applyRecordChanges(file,index,changes,{source="manual",model=null,batchId=null,rationale=null}={}){
   const current=file.records[index];
   if(!current)return 0;
@@ -956,14 +978,6 @@ function pageInfo(total,page){
   const pages=Math.max(1,Math.ceil(total/state.pageSize));
   page=Math.max(1,Math.min(pages,page||1));
   return {page,pages,start:(page-1)*state.pageSize,end:Math.min(total,page*state.pageSize)};
-}
-function pager(pg,total,prefix){
-  return `<div class="pagebar"><span>${total?`${pg.start+1}–${pg.end} of ${total}`:"0 results"}</span><div class="inline">
-  <button class="btn small" data-page="${prefix}:first" ${pg.page<=1?"disabled":""}>First</button>
-  <button class="btn small" data-page="${prefix}:prev" ${pg.page<=1?"disabled":""}>Previous</button>
-  <span>Page ${pg.page} / ${pg.pages}</span>
-  <button class="btn small" data-page="${prefix}:next" ${pg.page>=pg.pages?"disabled":""}>Next</button>
-  <button class="btn small" data-page="${prefix}:last" ${pg.page>=pg.pages?"disabled":""}>Last</button></div></div>`;
 }
 function wirePager(prefix,pg,setPage){
   document.querySelectorAll(`[data-page^="${prefix}:"]`).forEach(b=>b.onclick=()=>{
@@ -1272,16 +1286,6 @@ function listFilterControl(fileId,key){
   return `<input class="column-filter" data-list-filter="${esc(key)}" value="${esc(value)}" placeholder="Filter…">`;
 }
 
-function storeCellHtml(record,key){
-  if(key==="_chroma_id")return `<td class="chroma-id-col"><div class="scroll-cell id" title="${esc(record._chroma_id||"")}">${esc(record._chroma_id||"")}</div></td>`;
-  if(key==="page_start")return `<td>${esc(pages(record))}</td>`;
-  if(key==="needs_review")return `<td>${record.needs_review?'<span class="review">Review</span>':"—"}</td>`;
-  if(key==="text")return `<td class="textcell">${esc(snippet(record.text,"",240))}</td>`;
-  if(key==="inline_citation")return `<td><div class="scroll-cell">${esc(inlineCitation(record))}</div></td>`;
-  if(key==="full_citation")return `<td><div class="scroll-cell" title="${esc(fullCitation(record))}">${esc(fullCitation(record))}</div></td>`;
-  const value=record[key];if(metadataSearchable(key,value))return `<td><button class="table-metadata-link scroll-cell" type="button" data-meta-search-field="${esc(key)}" data-meta-search-value="${esc(Array.isArray(value)?value[0]:value)}" data-meta-search-contains="${Array.isArray(value)}" title="${esc(display(value))}">${esc(display(value))}</button></td>`;
-  return `<td><div class="scroll-cell ${key==="record_id"?"id":""}" title="${esc(display(value))}">${esc(display(value))}</div></td>`;
-}
 
 function pdfDisplayTitle(){
   return state.pdf.title||state.pdf.name||"PDF";
@@ -2621,68 +2625,7 @@ function recentRagRunsHtml(){
 }
 
 
-function pieShareSeries(items,valueField,limit=7){
-  const sorted=[...items].map(item=>({key:item.work,value:Number(item[valueField]||0)})).filter(item=>item.value>0).sort((a,b)=>b.value-a.value);
-  const top=sorted.slice(0,limit),other=sorted.slice(limit).reduce((sum,item)=>sum+item.value,0);
-  if(other)top.push({key:tr("dashboard.other_works","Other works"),value:other});
-  return top;
-}
-function dashboardPieChart(series,title,{valueLabel="records",searchField=""}={}){
-  const total=series.reduce((sum,item)=>sum+Number(item.value||0),0);
-  if(!total)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  let cursor=0;const colors=["var(--chart-1)","var(--chart-2)","var(--chart-3)","var(--chart-4)","var(--chart-5)","var(--chart-6)","var(--chart-7)","var(--chart-8)"];
-  const stops=series.map((item,index)=>{const start=cursor;cursor+=Number(item.value||0)/total*100;return `${colors[index%colors.length]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`}).join(",");
-  return `<div class="dashboard-pie-layout"><div class="dashboard-pie" style="background:conic-gradient(${stops})" role="img" aria-label="${esc(title)}"></div><div class="dashboard-pie-legend">${series.map((item,index)=>{const pct=Number(item.value||0)/total*100;const other=Boolean(item.other)||item.key===tr("dashboard.other_works","Other works");const action=searchField?`data-dashboard-search-field="${esc(searchField)}" data-dashboard-search-value="${esc(item.key)}"`:`data-dashboard-work="${esc(item.key)}"`;return `<button type="button" ${other?"disabled":action}><i style="background:${colors[index%colors.length]}"></i><span title="${esc(item.key)}">${esc(item.key)}</span><b>${pct.toFixed(pct>=10?0:1)}%</b><small>${Number(item.value||0).toLocaleString()} ${esc(valueLabel)}</small></button>`}).join("")}</div></div>`;
-}
-function flattenedMetricValues(value){
-  if(Array.isArray(value))return value.flatMap(flattenedMetricValues);
-  if(value===undefined||value===null||value==="")return [];
-  if(typeof value==="object")return Object.values(value).flatMap(flattenedMetricValues);
-  return [String(value).trim()].filter(Boolean);
-}
-function topRecordFieldValues(rows,field,limit=5){
-  const counts=new Map();
-  for(const row of rows||[])for(const value of flattenedMetricValues(row.record?.[field]))counts.set(value,(counts.get(value)||0)+1);
-  return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([key,value])=>({key,value}));
-}
-function topRecordFieldShare(rows,field,limit=5){
-  const counts=new Map();
-  for(const row of rows||[])for(const value of flattenedMetricValues(row.record?.[field]))counts.set(value,(counts.get(value)||0)+1);
-  const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-  const top=sorted.slice(0,limit).map(([key,value])=>({key,value}));
-  const other=sorted.slice(limit).reduce((sum,[,value])=>sum+Number(value||0),0);
-  if(other)top.push({key:tr("works.other_values","Other"),value:other,other:true});
-  return top;
-}
-function workInsightMetrics(rows,work){
-  return [
-    {id:"persons",field:"persons",title:tr("dashboard.top_persons_work","Top 5 persons mentioned in the work"),type:"bars",values:topRecordFieldValues(rows,"persons")},
-    {id:"concepts",field:"concepts",title:tr("dashboard.top_concepts_work","Top 5 concepts mentioned in the work"),type:"bars",values:topRecordFieldValues(rows,"concepts")},
-    {id:"topics",field:"topics",title:tr("dashboard.top_topics_work","Top 5 topics in the work"),type:"bars",values:topRecordFieldValues(rows,"topics")},
-    {id:"targets",field:"target",title:tr("dashboard.top_discourse_targets_work","Top 5 discourse targets in the work"),type:"bars",values:topRecordFieldValues(rows,"target")},
-    {id:"roles",field:"discourse_role",title:tr("dashboard.discourse_roles_share_work","Top discourse roles as percentage of recorded roles"),type:"pie",values:topRecordFieldShare(rows,"discourse_role"),valueLabel:tr("works.role_occurrences","role occurrences")},
-  ].map(metric=>({...metric,work,format:value=>Number(value).toLocaleString()}));
-}
-function workInsightPieHtml(metric){
-  const total=metric.values.reduce((sum,item)=>sum+Number(item.value||0),0);
-  if(!total)return `<p class="note">${esc(tr("works.no_indexed_values","No indexed values in the loaded records."))}</p>`;
-  const colors=["var(--chart-1)","var(--chart-2)","var(--chart-3)","var(--chart-4)","var(--chart-5)","var(--chart-6)"];
-  let cursor=0;
-  const stops=metric.values.map((item,index)=>{const start=cursor;cursor+=Number(item.value||0)/total*100;return `${colors[index%colors.length]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`}).join(",");
-  const legend=metric.values.map((item,index)=>{const pct=Number(item.value||0)/total*100;return `<li>${item.other?`<span class="work-insight-pie-label" aria-label="${esc(item.key)}"><i style="background:${colors[index%colors.length]}"></i><span>${esc(item.key)}</span></span>`:`<button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><i style="background:${colors[index%colors.length]}"></i><span>${esc(item.key)}</span></button>`}<b>${pct.toFixed(pct>=10?0:1)}%</b></li>`}).join("");
-  return `<div class="work-insight-pie-layout"><div class="work-insight-pie" style="background:conic-gradient(${stops})" role="img" aria-label="${esc(metric.title)}"></div><ol class="work-insight-pie-legend">${legend}</ol></div>`;
-}
-function workInsightsPanelHtml(rows,work){
-  const metrics=workInsightMetrics(rows,work);
-  return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights","Work insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights","Work insights"))}</span><h2>${esc(tr("works.indexed_patterns","Indexed patterns in this work"))}</h2></div><p>${esc(tr("works.work_insights_help","Counts are derived from the currently loaded records and use the corpus metadata fields directly."))}</p></div><div class="work-insights-grid">${metrics.map(metric=>`<article class="work-insight-card ${metric.type==="pie"?"work-insight-card-pie":""}"><h3>${esc(metric.title.replace(" in the work","").replace(" mentioned in the work",""))}</h3>${metric.type==="pie"?workInsightPieHtml(metric):`<ol>${metric.values.map(item=>`<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("")||`<li class="note">${esc(tr("works.no_indexed_values","No indexed values in the loaded records."))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
-}
 
-function dashboardMetricBody(metric){
-  if(metric.type==="pie")return dashboardPieChart(metric.values,metric.title,{valueLabel:metric.valueLabel,searchField:metric.field||""});
-  if(metric.type==="line")return lineChart(metric.values,metric.title,metric.valueLabel||metric.title);
-  const ranking=metric.values,maxRank=Math.max(1,...ranking.map(item=>Number(item.value)||0));
-  return `<div class="dashboard-average-list">${ranking.map(item=>`<button class="dashboard-average-row" ${metric.field?`data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"`:`data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4,Math.round(Number(item.value)/maxRank*100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("")||`<div class="note">${esc(metric.field?tr("works.no_indexed_values","No indexed values in the loaded records."):tr("research.no_works","No works loaded yet."))}</div>`}</div>`;
-}
 
 
 // ---- Operations panel bridge -------------------------------------------------------------
@@ -3459,37 +3402,6 @@ async function renderFaq(main){
   decorateDisabledControls(main);
 }
 
-function ragEvidencePreview(item,index){
-  const record=item.record||{};
-  const metadata=[
-    ["Record ID",record.record_id],
-    ["Work",record.work],
-    ["Pages",pages(record)],
-    ["Document author",record.document_author],
-    ["Speaker",record.speaker],
-    ["Position holder",record.position_holder],
-    ["Stance",record.stance],
-    ["Target",record.target],
-    ["Role",record.discourse_role],
-    ["Proposition status",record.proposition_status],
-    ["Quoted speaker",record.quoted_speaker],
-    ["Quoted author",record.quoted_author],
-    ["Quoted work",record.quoted_work],
-    ["Topics",record.topics],
-    ["Concepts",record.concepts],
-    ["Persons",record.persons],
-  ].filter(([,value])=>value!==undefined&&value!==null&&display(value)!=="—");
-  return `<details class="rag-evidence-card" ${index<3?"open":""}>
-    <summary><span class="rag-evidence-id">[[${esc(item.evidence_id||`E${index}`)}]]</span><span class="rag-evidence-title"><b>${esc(record.record_id||`Record ${index+1}`)}</b><small>${esc(record.work||item.collection||"")} · ${esc(item.inline_citation||pages(record))}</small></span><span class="rag-evidence-score">${item.rerank_score==null?"":Number(item.rerank_score).toFixed(3)}</span></summary>
-    <div class="rag-evidence-body">
-      <div class="rag-evidence-meta">${metadata.map(([name,value])=>`<div><span>${esc(name)}</span><b>${esc(display(value))}</b></div>`).join("")}</div>
-      <div class="rag-evidence-source"><span>Collection</span><b>${esc(item.collection||"")}</b><span>Full citation</span><b>${esc(item.full_citation||"")}</b></div>
-      ${record._researcher_text_policy?`<div class="info researcher-evidence-policy">Researcher view · Edmundson extractive summary · ${Number(record._researcher_text_policy.source_chars||0).toLocaleString()} source characters · topics, concepts, and persons used as bonus terms.</div>`:""}
-      <div class="tools"><button class="btn tiny" data-copy-rag-record="${index}">${icon("copy")}Copy ${record._researcher_text_policy?"summarized ":""}record</button></div>
-      <pre>${esc(record.text||"")}</pre>
-    </div>
-  </details>`;
-}
 async function openRagResult(job){
   if(!job?.id)return toast(tr("research.result_unavailable","This Research run has no result identifier."),{tone:"warn"});
   if(!canAccessPage("rag"))return toast(tr("permissions.research_result_denied","Your role cannot open Research results."),{tone:"warn"});
@@ -4712,7 +4624,6 @@ function renderRecord(main){
   refreshPresenceForRows([{file:f,record:r,index:i}]);
 }
 
-function metadataSearchable(field,value){return value!==undefined&&value!==null&&String(value).trim()!==""&&!['text','record_id','inline_citation','full_citation','page_start','page_end'].includes(field)}
 function searchByMetadata(field,value,{contains=false}={}){
   const raw=String(value??"").trim();if(!field||!raw)return;state.globalPage=1;state.storeSearchResults=[];
   if(isResearcher()){state.globalSearchMode="database";state.dbSearchMethod="filter";state.dbSearchWhere={[field]:contains?{$contains:raw}:raw};state.globalSearch="";state.globalSearchAutoRun=true}else{state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field,op:contains?"has":"eq",value:raw}]}
@@ -4729,21 +4640,6 @@ const WORK_METADATA_FIELDS=[
   "publisher","publication_place","translator","document_language","original_language","document_is_translation",
   "canonical_work_id","isbn","doi","url","full_citation","cover_url"
 ];
-function uniqueWorkValues(rows,field){
-  const values=new Map();
-  for(const row of rows||[]){
-    const value=row.record?.[field]??null;
-    let token;try{token=JSON.stringify(value)}catch{token=String(value)}
-    if(!values.has(token))values.set(token,{value,count:0,files:new Set(),records:[]});
-    const entry=values.get(token);entry.count++;entry.files.add(row.file?.name||tr("works.unknown_source","Unknown source"));
-    if(entry.records.length<3)entry.records.push(String(row.record?.record_id||row.index+1));
-  }
-  return [...values.values()].sort((a,b)=>b.count-a.count||String(display(a.value)).localeCompare(String(display(b.value))));
-}
-function mixedWorkValueButton(rows,field,{compact=false}={}){
-  const count=uniqueWorkValues(rows,field).length;
-  return `<button type="button" class="mixed-value-inspect ${compact?"compact":""}" data-inspect-mixed-field="${esc(field)}" aria-label="${esc(trf("works.inspect_mixed_aria","Inspect {count} unique values for {field}",{count,field:label(field)}))}"><span>${esc(tr("works.mixed","Mixed"))}</span><b>${count}</b><small>${esc(tr("works.unique_values","values"))}</small></button>`;
-}
 function openMixedWorkValuesDialog(work,field,rows){
   const values=uniqueWorkValues(rows,field);
   const dialog=document.createElement("dialog");
@@ -4752,24 +4648,6 @@ function openMixedWorkValuesDialog(work,field,rows){
   dialog.innerHTML=`<div class="dh"><div><span class="section-label">${esc(tr("works.metadata_variants","Metadata variants"))}</span><h2 class="dialog-title" id="mixedValuesTitle">${esc(label(field))}</h2><div class="dialog-subtitle">${esc(work)} · ${values.length.toLocaleString()} ${esc(tr("works.unique_values","unique values"))} · ${rows.length.toLocaleString()} ${esc(tr("dynamic.records","records"))}</div></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div><div class="db mixed-values-body"><p class="note">${esc(tr("works.mixed_values_help","These are the distinct values currently present across records for this work. Counts help distinguish a dominant value from an isolated inconsistency before you bulk-edit metadata."))}</p><div class="mixed-values-list">${values.map((entry,index)=>`<article class="mixed-value-row"><span class="mixed-value-rank">${index+1}</span><div class="mixed-value-copy"><b>${esc(entry.value==null||entry.value===""?tr("ui.unset","Unset"):display(entry.value))}</b><small>${esc([...entry.files].slice(0,3).join(" · "))}${entry.files.size>3?` · +${entry.files.size-3}`:""}</small></div><span class="mixed-value-count">${entry.count.toLocaleString()} <small>${esc(entry.count===1?tr("dynamic.record_one","record"):tr("dynamic.records","records"))}</small></span></article>`).join("")}</div></div><div class="da"><button class="btn primary" type="button" data-close>${esc(tr("ui.done","Done"))}</button></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);
   const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-}
-function workMetadataControl(field,rows){
-  const {mixed,value}=commonWorkValue(rows,field);
-  const exemplar=rows.map(row=>row.record[field]).find(value=>value!==undefined&&value!==null);
-  const current=mixed?"":value;
-  let control;
-  if(typeof exemplar==="boolean"||field==="document_is_translation"){
-    control=`<select class="control work-meta-value" data-work-meta-value="${esc(field)}"><option value="" ${mixed||current==null?"selected":""}>${mixed?"Mixed / leave unchanged":"Unset"}</option><option value="true" ${current===true?"selected":""}>true</option><option value="false" ${current===false?"selected":""}>false</option></select>`;
-  }else if(Array.isArray(exemplar)||exemplar&&typeof exemplar==="object"){
-    control=`<textarea class="work-meta-value work-meta-json" data-work-meta-value="${esc(field)}" placeholder='${mixed?"Mixed values — enter JSON to replace":"JSON value"}'>${mixed?"":esc(JSON.stringify(current??[],null,2))}</textarea>`;
-  }else if(typeof exemplar==="number"||["year","publication_year"].includes(field)){
-    control=`<input class="control work-meta-value" data-work-meta-value="${esc(field)}" type="number" value="${mixed?"":esc(current??"")}" placeholder="${mixed?"Mixed values":""}">`;
-  }else if(field==="full_citation"||field==="edition"){
-    control=`<textarea class="work-meta-value" data-work-meta-value="${esc(field)}" placeholder="${mixed?"Mixed values":""}">${mixed?"":esc(current??"")}</textarea>`;
-  }else{
-    control=`<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed?"":esc(current??"")}" placeholder="${mixed?"Mixed values":""}">`;
-  }
-  return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply","Apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed?mixedWorkValueButton(rows,field,{compact:true}):""}</div>${control}</div>`;
 }
 function openWorkMetadataEditor(work,rows){
   if(!rows?.length)return toast("No records found for this work");
@@ -5682,21 +5560,6 @@ function restoreSearchViewFromHref(href){
   const url=new URL(String(href||""),location.origin);const token=url.searchParams.get("ts");state.view="global";if(token)applyCompressedTableUrlState(decompressUrlState(token),"global");const store=url.searchParams.get("store");if(store)state.activeStore=store;state.storeSearchResults=[];state.searchDatabaseRan=false;if(searchScope()==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;persistPrefs();syncUrl({replace:false});shell();return getSearchWorkspaceSnapshot({refresh:true,autoRun:true});
 }
 
-function recordsListCell(row,key,query){
-  const record=row.record;
-  if(key==="__db_status"){
-    const info=recordDbStatus(row.file,row.index,record);
-    return {key,kind:"status",text:info.label,title:info.title||"",status_kind:info.kind};
-  }
-  if(key==="page_start")return {key,kind:"pages",text:pages(record),title:""};
-  if(key==="needs_review")return {key,kind:"review",text:record.needs_review?"yes":"no",title:""};
-  if(key==="text")return {key,kind:"text",text:snippet(record.text,query),title:""};
-  if(key==="inline_citation")return {key,kind:"plain",text:inlineCitation(record),title:""};
-  if(key==="full_citation")return {key,kind:"plain",text:fullCitation(record),title:""};
-  if(key==="record_id")return {key,kind:"id",text:display(record[key]),title:""};
-  const value=record[key];
-  return {key,kind:metadataSearchable(key,value)?"metadata":"plain",text:display(value),title:"",meta_value:Array.isArray(value)?String(value[0]??""):String(value??""),meta_contains:Array.isArray(value)};
-}
 
 function getRecordsListSnapshot(){
   const files=state.files.map(file=>describeRecordsFile(file,state.activeFileId));
@@ -6562,9 +6425,6 @@ async function extractPdfAllSmart(){
   if(payload.has_text)return {text:parts.join("\n\n"),source:"PyMuPDF (API fallback), all pages",warning:browserError?`PDF.js failed: ${browserError}`:""};
   return {text:parts.join("\n\n"),source:"No extractable text layer",warning:"Neither PDF.js nor PyMuPDF found extractable text. Image-only pages require OCR."};
 }
-function recordOptionLabel(file,record,index){
-  return `${file.name} · ${record.record_id||index+1} · ${record.work||""}`;
-}
 function recordOptionForKey(key){
   const item=lookupRecord(key);
   if(!item)return null;
@@ -6579,16 +6439,6 @@ function compareSearchIndex(){
       search:`${labelText} ${record.document_author||""}`.toLocaleLowerCase(),
     };
   }));
-}
-function searchRecordOptions(query,limit=18){
-  const terms=String(query||"").trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const matches=[];
-  for(const option of compareSearchIndex()){
-    if(terms.length&&!terms.every(term=>option.search.includes(term)))continue;
-    matches.push({value:option.value,label:option.label});
-    if(matches.length>=limit)break;
-  }
-  return matches;
 }
 function lookupRecord(key){
   if(!key)return null;const [fid,i]=key.split("::");const f=state.files.find(x=>x.id===fid);return f?{file:f,index:+i,record:f.records[+i]}:null;
@@ -8406,19 +8256,6 @@ function recordWorkspaceRecord(record){
   delete out.annotations;
   return cloneAuditValue(out);
 }
-function normalizedRecordAnnotation(item,index=0,{removable=false}={}){
-  return {
-    id:item?.id||item?.shared_annotation_id||`annotation-${index}`,
-    field:String(item?.field||"text"),
-    quote:String(item?.quote||""),
-    note:String(item?.note||""),
-    tags:Array.isArray(item?.tags)?item.tags.map(String):[],
-    author:String(item?.initiated_by||item?.author||tr("annotations.unknown_author","Unknown author")),
-    created_at:item?.created_at||null,
-    removable:Boolean(removable),
-    shared_annotation_id:item?.shared_annotation_id||null,
-  };
-}
 async function researcherCurrentRecord(){
   // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
@@ -8602,16 +8439,6 @@ async function currentRecordPrimaryAction(action,payload={}){
 function searchCurrentRecordMetadata(field,value,{contains=false}={}){return searchByMetadata(field,value,{contains})}
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
-function worksBiblioValue(rows,field){
-  const value=commonWorkValue(rows,field);
-  return {
-    field_label:label(field),
-    mixed:Boolean(value.mixed),
-    value:value.mixed?"":(value.value==null||value.value===""?"":String(value.value)),
-    unique_count:value.mixed?uniqueWorkValues(rows,field).length:0,
-  };
-}
-function emptyWorksBiblio(){return {field_label:"",value:"",mixed:false,unique_count:0}}
 function describeAdminWork(item,{insights=false}={}){
   const publisher=worksBiblioValue(item.rows,"publisher");
   const translator=worksBiblioValue(item.rows,"translator");
@@ -8650,27 +8477,6 @@ function describeAdminWork(item,{insights=false}={}){
       type:metric.type==="pie"?"pie":"bars",
       values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0),other:Boolean(value.other)})),
     })):[],
-  };
-}
-function describeResearcherWork(item,{selected=false}={}){
-  const fields=["document_author","publisher","publication_year","edition","translator","publication_place","isbn","document_language","original_language"];
-  return {
-    work:String(item.work||""),
-    count:Number(item.count||0),
-    review:0,
-    annotations:selected?allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length:0,
-    files:[],
-    authors:[],
-    years:[],
-    cover:String(item?.cover_url||""),
-    citation:String(item.full_citation||""),
-    year_label:"",
-    subtitle:[item.document_author,item.publication_year||item.year,item.publisher].filter(Boolean).join(" · "),
-    publisher:emptyWorksBiblio(),
-    translator:emptyWorksBiblio(),
-    metadata:selected?fields.filter(field=>item[field]).map(field=>({field,field_label:label(field),mixed:false,value:String(display(item[field])),unique_count:0})):[],
-    status:{kind:"",label:""},
-    insights:[],
   };
 }
 function worksSnapshotBase(extra){

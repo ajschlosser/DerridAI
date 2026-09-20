@@ -1,0 +1,109 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`record presenters > builds dashboard and work insight fragments 1`] = `"<div class="dashboard-pie-layout"><div class="dashboard-pie" style="background:conic-gradient(var(--chart-1) 0.00% 75.00%,var(--chart-2) 75.00% 100.00%)" role="img" aria-label="T"></div><div class="dashboard-pie-legend"><button type="button" data-dashboard-work="a"><i style="background:var(--chart-1)"></i><span title="a">a</span><b>75%</b><small>3 V</small></button><button type="button" data-dashboard-work="b"><i style="background:var(--chart-2)"></i><span title="b">b</span><b>25%</b><small>1 V</small></button></div></div>"`;
+
+exports[`record presenters > builds dashboard and work insight fragments 2`] = `
+[
+  {
+    "field": "persons",
+    "format": [Function],
+    "id": "persons",
+    "title": "Top 5 persons mentioned in the work",
+    "type": "bars",
+    "values": [],
+    "work": "W",
+  },
+  {
+    "field": "concepts",
+    "format": [Function],
+    "id": "concepts",
+    "title": "Top 5 concepts mentioned in the work",
+    "type": "bars",
+    "values": [],
+    "work": "W",
+  },
+  {
+    "field": "topics",
+    "format": [Function],
+    "id": "topics",
+    "title": "Top 5 topics in the work",
+    "type": "bars",
+    "values": [
+      {
+        "key": "a",
+        "value": 1,
+      },
+      {
+        "key": "b",
+        "value": 1,
+      },
+    ],
+    "work": "W",
+  },
+  {
+    "field": "target",
+    "format": [Function],
+    "id": "targets",
+    "title": "Top 5 discourse targets in the work",
+    "type": "bars",
+    "values": [],
+    "work": "W",
+  },
+  {
+    "field": "discourse_role",
+    "format": [Function],
+    "id": "roles",
+    "title": "Top discourse roles as percentage of recorded roles",
+    "type": "pie",
+    "valueLabel": "role occurrences",
+    "values": [],
+    "work": "W",
+  },
+]
+`;
+
+exports[`record presenters > builds dashboard and work insight fragments 3`] = `"<section class="work-insights-panel" aria-label="Work insights"><div class="work-insights-heading"><div><span class="section-label">Work insights</span><h2>Indexed patterns in this work</h2></div><p>Counts are derived from the currently loaded records and use the corpus metadata fields directly.</p></div><div class="work-insights-grid"><article class="work-insight-card "><h3>Top 5 persons mentioned</h3><ol><li class="note">No indexed values in the loaded records.</li></ol></article><article class="work-insight-card "><h3>Top 5 concepts mentioned</h3><ol><li class="note">No indexed values in the loaded records.</li></ol></article><article class="work-insight-card "><h3>Top 5 topics</h3><ol><li><button type="button" data-work-insight-field="topics" data-work-insight-value="a"><span>a</span><b>1</b></button></li><li><button type="button" data-work-insight-field="topics" data-work-insight-value="b"><span>b</span><b>1</b></button></li></ol></article><article class="work-insight-card "><h3>Top 5 discourse targets</h3><ol><li class="note">No indexed values in the loaded records.</li></ol></article><article class="work-insight-card work-insight-card-pie"><h3>Top discourse roles as percentage of recorded roles</h3><p class="note">No indexed values in the loaded records.</p></article></div></section>"`;
+
+exports[`record presenters > previews RAG evidence 1`] = `
+"<details class="rag-evidence-card" >
+    <summary><span class="rag-evidence-id">[[Eundefined]]</span><span class="rag-evidence-title"><b>Record NaN</b><small> · p-</small></span><span class="rag-evidence-score"></span></summary>
+    <div class="rag-evidence-body">
+      <div class="rag-evidence-meta"><div><span>Pages</span><b>p-</b></div></div>
+      <div class="rag-evidence-source"><span>Collection</span><b></b><span>Full citation</span><b></b></div>
+      
+      <div class="tools"><button class="btn tiny" data-copy-rag-record="undefined"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy record</button></div>
+      <pre></pre>
+    </div>
+  </details>"
+`;
+
+exports[`record presenters > renders table cells 1`] = `
+{
+  "key": "work",
+  "kind": "metadata",
+  "meta_contains": false,
+  "meta_value": "W",
+  "text": "W",
+  "title": "",
+}
+`;
+
+exports[`record presenters > renders table cells 2`] = `"<td class="textcell">hello world text</td>"`;
+
+exports[`record presenters > renders the pager 1`] = `
+"<div class="pagebar"><span>51–100 of 250</span><div class="inline">
+  <button class="btn small" data-page="list:first" >First</button>
+  <button class="btn small" data-page="list:prev" >Previous</button>
+  <span>Page 2 / 5</span>
+  <button class="btn small" data-page="list:next" >Next</button>
+  <button class="btn small" data-page="list:last" >Last</button></div></div>"
+`;
+
+exports[`record presenters > searches compare options 1`] = `
+[
+  {
+    "label": "Alpha rec",
+    "value": undefined,
+  },
+]
+`;
