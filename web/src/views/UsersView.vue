@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { authApi, type AuthUser, type RoleDefinition, type UserRole } from "../api/auth";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
+import { notify } from "../composables/notifications";
 
 const auth = useAuthStore();
+const router = useRouter();
 const i18n = useI18nStore();
 const users = ref<AuthUser[]>([]);
 const roles = ref<RoleDefinition[]>([]);
@@ -36,22 +38,22 @@ async function refresh() {
 async function createUser() {
   createBusy.value = true; error.value = "";
   try {
-    await authApi.createUser({username: username.value.trim(), password: password.value, role: role.value});
+    const { user } = await authApi.createUser({username: username.value.trim(), password: password.value, role: role.value});
+    users.value = [...users.value, user].sort((a, b) => a.username.localeCompare(b.username));
     username.value = ""; password.value = ""; role.value = roles.value.find(item => item.id === "researcher")?.id || roles.value[0]?.id || "researcher";
-    await refresh();
-    runtime.notifyToast?.(i18n.t("users.created_toast", "User created."), {tone: "success"});
+    notify(i18n.t("users.created_toast", "User created."), "success");
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { createBusy.value = false; }
 }
 async function changeRole(user: AuthUser, nextRole: UserRole) {
-  try { await authApi.updateUser(user.id, {role: nextRole}); await refresh(); runtime.notifyToast?.(i18n.t("users.role_saved_toast", "Role updated."), {tone: "success"}); }
+  try { const result = await authApi.updateUser(user.id, {role: nextRole}); users.value = users.value.map(item => item.id === user.id ? result.user : item); notify(i18n.t("users.role_saved_toast", "Role updated."), "success"); }
   catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
 }
 function onRoleChange(user: AuthUser, event: Event) {
   void changeRole(user, (event.target as HTMLSelectElement).value as UserRole);
 }
 async function toggleActive(user: AuthUser) {
-  try { await authApi.updateUser(user.id, {active: !user.active}); await refresh(); runtime.notifyToast?.(user.active ? i18n.t("users.disabled_toast", "User disabled.") : i18n.t("users.enabled_toast", "User enabled."), {tone: "success"}); }
+  try { const result = await authApi.updateUser(user.id, {active: !user.active}); users.value = users.value.map(item => item.id === user.id ? result.user : item); notify(user.active ? i18n.t("users.disabled_toast", "User disabled.") : i18n.t("users.enabled_toast", "User enabled."), "success"); }
   catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
 }
 function openPasswordModal(user: AuthUser) {
@@ -65,17 +67,16 @@ async function applyDialog() {
   if (!dialogUser.value) return;
   dialogBusy.value = true; error.value = "";
   try {
-    if (dialogMode.value === "password") await authApi.updateUser(dialogUser.value.id, {password: newPassword.value});
-    else await authApi.deleteUser(dialogUser.value.id);
+    if (dialogMode.value === "password") { const result = await authApi.updateUser(dialogUser.value.id, {password: newPassword.value}); users.value = users.value.map(item => item.id === result.user.id ? result.user : item); }
+    else { await authApi.deleteUser(dialogUser.value.id); users.value = users.value.filter(item => item.id !== dialogUser.value?.id); }
     dialogRef.value?.close();
     const completedMode = dialogMode.value;
-    await refresh();
-    runtime.notifyToast?.(completedMode === "password" ? i18n.t("users.password_saved_toast", "Password reset.") : i18n.t("users.deleted_toast", "User deleted."), {tone: "success"});
+    notify(completedMode === "password" ? i18n.t("users.password_saved_toast", "Password reset.") : i18n.t("users.deleted_toast", "User deleted."), "success");
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { dialogBusy.value = false; }
 }
 
-function openRoles(){window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/roles"}}));}
+function openRoles(){ void router.push({ name: "roles" }); }
 
 function formatLogin(value?: string | null) {
   if (!value) return i18n.t("users.never", "Never");

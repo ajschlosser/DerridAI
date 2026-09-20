@@ -4,10 +4,10 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
-const runtime = vi.hoisted(() => ({
-  notifyToast: vi.fn(),
+const notifications = vi.hoisted(() => ({
+  notify: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({...runtime}));
+vi.mock("../../src/composables/notifications", () => ({...notifications}));
 
 const authApi = vi.hoisted(() => ({
   listRoles: vi.fn(),
@@ -55,7 +55,7 @@ async function mountView() {
 
 describe("RolesView", () => {
   beforeEach(() => {
-    runtime.notifyToast.mockClear();
+    notifications.notify.mockClear();
     authApi.listRoles.mockResolvedValue({roles, capabilities});
     authApi.listUsers.mockResolvedValue({
       users: [
@@ -101,7 +101,7 @@ describe("RolesView", () => {
     await wrapper.findAll("button").find(button => button.text() === "Save")?.trigger("click");
     await flushPromises();
     expect(authApi.updateRolePermissions).toHaveBeenCalledWith("researcher", ["page.dashboard"]);
-    expect(runtime.notifyToast).toHaveBeenCalled();
+    expect(notifications.notify).toHaveBeenCalled();
   });
 
   it("creates a role from the dialog and selects it", async () => {
