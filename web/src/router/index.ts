@@ -1,7 +1,8 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+﻿import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import DashboardView from "../views/DashboardView.vue";
 import CorpusView from "../views/CorpusView.vue";
 import RecordsView from "../views/RecordsView.vue";
+import WorksView from "../views/WorksView.vue";
 import ResearchView from "../views/ResearchView.vue";
 import SearchView from "../views/SearchView.vue";
 import RecordView from "../views/RecordView.vue";

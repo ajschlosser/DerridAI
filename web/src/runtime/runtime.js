@@ -4403,17 +4403,18 @@ function renderView(){
   // The Vector Stores route is Vue-native. Keep this guard only for callers
   // that invoke the legacy renderer while a native route is mounting.
   else if(state.view==="vector") result=null;
+  // Works is Vue-native. Keep this guard for callers that invoke the legacy
+  // renderer while the native route is mounting.
+  else if(state.view==="works") result=null;
   else if(state.view==="rag") result=renderRag(main);
   else if(state.view==="faq") result=renderFaq(main);
   else if(state.view==="responsecache") result=renderResponseCache(main);
   else if(isResearcher()&&state.view==="record") result=renderRecord(main);
-  else if(isResearcher()&&state.view==="works") result=renderWorks(main);
   else if(isResearcher()&&state.view==="annotations") result=renderAnnotations(main);
   else if(isResearcher()&&state.view==="global") result=renderGlobal(main);
   else if(!state.files.length) result=renderEmpty(main);
   else if(state.view==="list") result=renderList(main);
   else if(state.view==="record") result=renderRecord(main);
-  else if(state.view==="works") result=renderWorks(main);
   else if(state.view==="annotations") result=renderAnnotations(main);
   else result=renderGlobal(main);
   Promise.resolve(result).finally(()=>requestAnimationFrame(()=>{enhanceCollapsibles(main);decorateDisabledControls(main);translateLegacyDom(main)}));
@@ -8824,24 +8825,190 @@ async function currentRecordPrimaryAction(action,payload={}){
 function searchCurrentRecordMetadata(field,value,{contains=false}={}){return searchByMetadata(field,value,{contains})}
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
-function getWorksWorkspaceSnapshot(){
-  const map=workIndex();
-  const query=String(state.worksSearch||"");
+function worksBiblioValue(rows,field){
+  const value=commonWorkValue(rows,field);
+  return {
+    field_label:label(field),
+    mixed:Boolean(value.mixed),
+    value:value.mixed?"":(value.value==null||value.value===""?"":String(value.value)),
+    unique_count:value.mixed?uniqueWorkValues(rows,field).length:0,
+  };
+}
+function emptyWorksBiblio(){return {field_label:"",value:"",mixed:false,unique_count:0}}
+function describeAdminWork(item,{insights=false}={}){
+  const publisher=worksBiblioValue(item.rows,"publisher");
+  const translator=worksBiblioValue(item.rows,"translator");
+  const year=commonWorkValue(item.rows,"publication_year");
   const metadataFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
-  const items=[...map.values()].filter(item=>!query||item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.work.localeCompare(b.work)).map(item=>({
-    work:item.work,count:item.count,review:item.review,annotations:allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length,files:[...item.files],authors:[...item.authors],years:[...item.years].map(String),cover:workCoverUrl(item.rows),citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
-    metadata:metadataFields.map(field=>{const value=commonWorkValue(item.rows,field);return {field,mixed:value.mixed,value:value.mixed?"":String(display(value.value))}}).filter(value=>value.mixed||value.value!=="—"),
-    status:workDbStatus(item.rows,item.work),insights:workInsightMetrics(item.rows,item.work).map(metric=>({id:metric.id,title:metric.title,values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0)}))})),
-  }));
+  return {
+    work:item.work,
+    count:item.count,
+    review:item.review,
+    annotations:allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length,
+    files:[...item.files],
+    authors:[...item.authors],
+    years:[...item.years].map(String),
+    cover:workCoverUrl(item.rows),
+    citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
+    year_label:year.value?String(year.value):[...item.years].sort().join(", "),
+    subtitle:"",
+    publisher,
+    translator,
+    metadata:metadataFields.map(field=>{
+      const value=commonWorkValue(item.rows,field);
+      return {
+        field,
+        field_label:label(field),
+        mixed:Boolean(value.mixed),
+        value:value.mixed?"":String(display(value.value)),
+        unique_count:value.mixed?uniqueWorkValues(item.rows,field).length:0,
+      };
+    }),
+    status:workDbStatus(item.rows,item.work),
+    insights:insights?workInsightMetrics(item.rows,item.work).map(metric=>({
+      id:metric.id,
+      field:metric.field,
+      title:metric.title,
+      heading:String(metric.title||"").replace(" in the work","").replace(" mentioned in the work",""),
+      type:metric.type==="pie"?"pie":"bars",
+      values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0),other:Boolean(value.other)})),
+    })):[],
+  };
+}
+function describeResearcherWork(item,{selected=false}={}){
+  const fields=["document_author","publisher","publication_year","edition","translator","publication_place","isbn","document_language","original_language"];
+  return {
+    work:String(item.work||""),
+    count:Number(item.count||0),
+    review:0,
+    annotations:selected?allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length:0,
+    files:[],
+    authors:[],
+    years:[],
+    cover:String(item?.cover_url||""),
+    citation:String(item.full_citation||""),
+    year_label:"",
+    subtitle:[item.document_author,item.publication_year||item.year,item.publisher].filter(Boolean).join(" · "),
+    publisher:emptyWorksBiblio(),
+    translator:emptyWorksBiblio(),
+    metadata:selected?fields.filter(field=>item[field]).map(field=>({field,field_label:label(field),mixed:false,value:String(display(item[field])),unique_count:0})):[],
+    status:{kind:"",label:""},
+    insights:[],
+  };
+}
+function worksSnapshotBase(extra){
   const stores=recordStores().map(store=>({name:store.name,count:Number(store.count||0)}));
-  return {available:state.files.length>0,works:items,query,selectedWork:String(state.workOverview||""),stores,activeStore:String(state.activeStore||""),totalWorks:map.size,totalRecords:[...map.values()].reduce((sum,item)=>sum+item.count,0),dbUnavailableReason:dbUnavailableReason(),capabilities:{canManageCorpus:canUse("manageCorpus"),canSync:canUse("manageCorpus")&&hasCorpusDb()}};
+  const activeStore=String(state.activeStore||"");
+  const activeStoreInfo=stores.find(store=>store.name===activeStore)||null;
+  const noDbReason=dbUnavailableReason();
+  return {
+    query:String(state.worksSearch||""),
+    selectedWork:String(state.workOverview||""),
+    stores,
+    activeStore,
+    activeStoreCount:Number(activeStoreInfo?.count||0),
+    dbUnavailableReason:noDbReason,
+    storesEmptyLabel:"No corpus Chroma collections",
+    citationLabel:label("full_citation"),
+    populateDisabledReason:"",
+    syncAllDisabledReason:noDbReason||tr("works.select_collection","Select a corpus collection first."),
+    corpusManageDeniedReason:tr("permissions.corpus_manage_denied","Your role cannot load corpus files."),
+    hasProviderProfiles:providerProfiles().length>0,
+    shared:Boolean(new URLSearchParams(location.search).get("file")),
+    error:"",
+    ...extra,
+  };
+}
+async function prepareWorksWorkspace(){
+  if(isResearcher()){
+    try{
+      await refreshStores();
+      if(!state.activeStore&&recordStores().length)state.activeStore=recordStores()[0].name;
+      if(state.activeStore)await refreshStoreWorks(true);
+    }catch(error){
+      return {error:error?.message||String(error)};
+    }
+    try{await refreshServerAnnotations(true)}catch{/* annotations are best-effort */}
+    return {error:""};
+  }
+  try{await refreshServerAnnotations()}catch{/* annotations are best-effort */}
+  if(Date.now()-Number(state.storesLastFetchedAt||0)>5000){
+    try{await refreshStores()}catch(error){console.warn("Could not refresh vector stores for Works",error)}
+  }
+  if(hasCorpusDb()&&state.storeWorksStore!==state.activeStore){
+    try{await refreshStoreWorks()}catch(error){console.warn("Could not load work DB counts",error)}
+  }
+  try{
+    const rows=[...workIndex().values()].slice(0,24).flatMap(item=>item.rows.slice(0,2));
+    refreshPresenceForRows(rows);
+  }catch{/* presence is best-effort */}
+  return {error:""};
+}
+function getWorksWorkspaceSnapshot(){
+  const query=String(state.worksSearch||"");
+  const hasProfiles=providerProfiles().length>0;
+  if(isResearcher()){
+    const stores=recordStores();
+    const items=(state.storeWorkStats||[]).filter(item=>!query||String(item.work).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+    const selectedStat=items.find(item=>item.work===state.workOverview)||null;
+    return worksSnapshotBase({
+      mode:"researcher",
+      available:stores.length>0,
+      works:items.map(item=>describeResearcherWork(item,{selected:false})),
+      selected:selectedStat?describeResearcherWork(selectedStat,{selected:true}):null,
+      totalWorks:items.length,
+      totalRecords:items.reduce((sum,item)=>sum+Number(item.count||0),0),
+      capabilities:{canManageCorpus:false,canSync:false,canSyncAll:false,canPopulate:false},
+    });
+  }
+  const map=workIndex();
+  if(state.workOverview&&!map.has(state.workOverview))state.workOverview="";
+  const selectedItem=state.workOverview?map.get(state.workOverview):null;
+  const items=[...map.values()].filter(item=>!query||item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.work.localeCompare(b.work));
+  const totalRecords=[...map.values()].reduce((sum,item)=>sum+item.count,0);
+  return worksSnapshotBase({
+    mode:"admin",
+    available:state.files.length>0,
+    works:items.map(item=>describeAdminWork(item)),
+    selected:selectedItem?describeAdminWork(selectedItem,{insights:true}):null,
+    totalWorks:map.size,
+    totalRecords,
+    populateDisabledReason:hasProfiles?tr("works.no_works_to_populate","No works are available to populate."):tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."),
+    capabilities:{
+      canManageCorpus:canUse("manageCorpus"),
+      canSync:hasCorpusDb(),
+      canSyncAll:Boolean(state.activeStore&&totalRecords&&hasCorpusDb()),
+      canPopulate:Boolean(hasProfiles&&map.size),
+    },
+  });
 }
 function setWorksSearch(value){state.worksSearch=String(value||"");persistPrefs();syncUrl({replace:true})}
 function setWorksOverview(work){state.workOverview=String(work||"");persistPrefs();syncUrl({replace:true})}
-function setWorksStore(name){setActiveStore(name)}
-async function syncWork(work){const item=workIndex().get(String(work||""));if(!item)return false;return upsertRows(item.rows,trf("works.work_records_label","records for {work}",{work:item.work}))}
+async function setWorksStore(name){
+  setActiveStore(name);
+  if(isResearcher()){
+    state.workOverview="";
+    try{await refreshStoreWorks(true)}catch(error){console.warn("Could not load work DB counts",error)}
+  }
+}
+async function syncWork(work){const item=workIndex().get(String(work||""));if(!item)return false;return upsertRows(item.rows,`work “${item.work}”`)}
 async function syncAllWorks(){const rows=[...workIndex().values()].flatMap(item=>item.rows);return upsertRows(rows,tr("works.all_records_label","records across all works"))}
-function searchWork(work){state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")}];state.globalPage=1;persistPrefs();navigateTo("global")}
+function searchWorkRecords(work,{needsReview=false}={}){
+  state.globalSearchMode="traditional";
+  state.globalSearch="";
+  state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")},...(needsReview?[{id:uid(),field:"needs_review",op:"eq",value:"true"}]:[])];
+  state.globalPage=1;
+  persistPrefs();
+  navigateTo("global");
+}
+function searchWork(work){searchWorkRecords(work)}
+function searchWorkOverview(work){
+  state.globalSearch="";
+  state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")}];
+  state.globalPage=1;
+  persistPrefs();
+  navigateTo("global");
+}
 function openWorkMetadataEditorForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataEditor(item.work,item.rows)}
 function openWorkMetadataLlmDialogForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataLlmDialog([item])}
 function getAnnotationsWorkspaceSnapshot() {
@@ -9210,12 +9377,15 @@ export {
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
   getWorksWorkspaceSnapshot,
+  prepareWorksWorkspace,
   setWorksSearch,
   setWorksOverview,
   setWorksStore,
   syncWork,
   syncAllWorks,
   searchWork,
+  searchWorkRecords,
+  searchWorkOverview,
   openWorkMetadataEditorForVue as openWorkMetadataEditor,
   openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
   openSeparateWorksModal,
