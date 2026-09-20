@@ -20,7 +20,6 @@ import SettingsSection from "../components/settings/SettingsSection.vue";
 import {
   APPEARANCE_DEFAULTS,
   RAG_DEFAULTS,
-  SETTINGS_FIELDS,
   SETTINGS_SECTIONS,
   cloneJson,
   filterSettingsFields,

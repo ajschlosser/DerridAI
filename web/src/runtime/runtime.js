@@ -211,7 +211,7 @@ function syncColorScheme(){
     document.documentElement.dataset.colorScheme=scheme;
     if(contrast==="more")document.documentElement.dataset.contrast="more";
     else delete document.documentElement.dataset.contrast;
-  }catch{}
+  }catch{ /* document may be unavailable during early bootstrap */ }
   return {scheme,contrast};
 }
 function wireAppearanceMedia(){
@@ -221,21 +221,20 @@ function wireAppearanceMedia(){
   try{
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",sync);
     window.matchMedia("(prefers-contrast: more)").addEventListener("change",sync);
-  }catch{}
+  }catch{ /* matchMedia listeners are best-effort in non-browser test hosts */ }
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{}try{localStorage.setItem("derridai.ui.theme",next)}catch{}syncColorScheme();return next}
+function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{ /* document may be unavailable during early bootstrap */ }try{localStorage.setItem("derridai.ui.theme",next)}catch{ /* localStorage can be blocked */ }syncColorScheme();return next}
 function applyAppearance(patch={}){
   if(patch.ui_color_theme!=null)applyUiTheme(patch.ui_color_theme);
   if(patch.ui_color_scheme!=null){
     const next=UI_COLOR_SCHEMES.has(String(patch.ui_color_scheme))?String(patch.ui_color_scheme):"system";
     state.appConfig.ui_color_scheme=next;
-    try{localStorage.setItem("derridai.ui.scheme",next)}catch{}
+    try{localStorage.setItem("derridai.ui.scheme",next)}catch{ /* localStorage can be blocked */ }
   }
   if(patch.ui_contrast!=null){
     const next=UI_CONTRAST_PREFS.has(String(patch.ui_contrast))?String(patch.ui_contrast):"system";
     state.appConfig.ui_contrast=next;
-    try{localStorage.setItem("derridai.ui.contrast",next)}catch{}
+    try{localStorage.setItem("derridai.ui.contrast",next)}catch{ /* localStorage can be blocked */ }
   }
   wireAppearanceMedia();
   return syncColorScheme();
@@ -10373,7 +10372,7 @@ async function bootstrapRuntime(){
   try{
     if(!state.appConfig.ui_color_scheme)state.appConfig.ui_color_scheme=localStorage.getItem("derridai.ui.scheme")||"system";
     if(!state.appConfig.ui_contrast)state.appConfig.ui_contrast=localStorage.getItem("derridai.ui.contrast")||"system";
-  }catch{}
+  }catch{ /* localStorage can be blocked */ }
   applyAppearance({
     ui_color_theme:state.appConfig.ui_color_theme,
     ui_color_scheme:state.appConfig.ui_color_scheme||"system",
