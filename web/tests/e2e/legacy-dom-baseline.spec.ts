@@ -64,7 +64,7 @@ async function open(page: Page, nav: string, load: boolean) {
   await stabilize(page);
   await mockBackend(page, { role: "admin" });
   await page.goto(APP + "/");
-  await expect(page.locator("#main")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#appContent")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Annotations", exact: true })).toBeVisible();
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
