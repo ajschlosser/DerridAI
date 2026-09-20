@@ -8484,6 +8484,40 @@ function persistVectorLocation(){
   persistPrefs();
   syncUrl({replace:true});
 }
+function openStoreRecordEditor(record){
+  const chromaId=record._chroma_id;
+  if(!chromaId)return toast(tr("record.no_storage_id","This Chroma record has no storage ID"));
+  const dialog=document.createElement("dialog");
+  const editable=Object.keys(record).filter(k=>k!=="_chroma_id"&&k!=="updates"&&k!=="_updates_count"&&!k.startsWith("_researcher_"));
+  dialog.innerHTML=`<form><div class="dh"><div><h2 class="dialog-title">Edit Chroma record</h2><div class="dialog-subtitle">${esc(chromaId)} · ${esc(state.activeStore)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body"><div class="info">Saving updates this record in place under the same Chroma ID and regenerates its embedding when the configured embedding provider allows it.</div><section class="editor-section"><h3>Record</h3><div class="editor-grid">${editable.map(k=>fieldEditor(k,record[k])).join("")}</div></section></div><div class="da"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary">${icon("check")}Save to Chroma</button></div></form>`;
+  document.body.appendChild(dialog);showAppModal(dialog);
+  const close=()=>{dialog.close();dialog.remove()};
+  dialog.querySelectorAll("[data-close]").forEach(b=>b.onclick=close);
+  dialog.querySelector("form").onsubmit=async e=>{
+    e.preventDefault();
+    const raw={...record};delete raw._chroma_id;
+    const changes={};
+    try{
+      dialog.querySelectorAll("[data-key]").forEach(el=>{
+        const value=parseEditor(el);
+        if(!sameValue(raw[el.dataset.key],value))changes[el.dataset.key]=value;
+      });
+    }catch(error){openMessageModal({title:"Could not parse edited record",message:error.message,tone:"danger"});return}
+    if(!Object.keys(changes).length)return close();
+    const timestamp=new Date().toISOString(),batchId=uid();
+    const auditEntries=Object.entries(changes).map(([field,newValue])=>({
+      field_name:field,old_value:cloneAuditValue(raw[field]),new_value:cloneAuditValue(newValue),timestamp,
+      source:"chroma_manual",batch_id:batchId,initiated_by:state.userContext?.username||null,
+    }));
+    try{
+      await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,{
+        method:"PATCH",body:JSON.stringify({changes,audit_entries:auditEntries,document_field:"text",embedding_field:"embedding"}),
+      });
+      state.storeWorksStore="";
+      close();toast("Chroma record updated",{tone:"success"});renderView();
+    }catch(error){toast(`Chroma update failed: ${error.message}`,{tone:"danger"})}
+  };
+}
 const vectorCollectionBridge=createVectorCollectionBridge({
   state,workIndex,recordStores,tr,trf,esc,icon,api,refreshStores,persistPrefs,
   upsertRows,toast,openMessageModal,decorateDisabledControls,showAppModal,
