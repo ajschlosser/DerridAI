@@ -111,3 +111,30 @@ test("the providers page lists installed models with their sizes, and the list i
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".provider-model-field input.control").first()).toHaveValue(/14B/);
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the enrichment changes list is readable and accessible in ${scheme} mode`, async ({ page }) => {
+    const source = CORPUS_RECORDS.find((r) => r.review_state === "metadata")!;
+    const record = {
+      ...source,
+      review_reason: "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes.",
+      metadata_enrichment_history: [{
+        run_id: "r1", model: "qwen3.5:4b", outcome: "enriched", added_fields: ["speaker"],
+        replaced: [{ field: "stance", previous: "assertion", value: "critique" }],
+        disputes: [{ field: "target", existing: "cities of refuge", proposed: "hospitality" }],
+      }],
+      speaker: "Jacques Derrida",
+    };
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page, [record, ...CORPUS_RECORDS.slice(0, 4)]);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.setAttribute("data-color-scheme", "dark"));
+    const list = page.locator(".enrichment-changes");
+    await expect(list).toBeVisible();
+    await expect(list.getByText("Restore previous")).toBeVisible();
+    await list.scrollIntoViewIfNeeded();
+    await list.screenshot({ path: `test-results/enrichment-changes-${scheme}.png` });
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    const scan = await new AxeBuilder({ page }).include(".enrichment-changes").analyze();
+    expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
+  });
+}
