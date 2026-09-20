@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.14 — Tidy Tern
+
+Corpus Builder fixes: preparing the workspace no longer blocks the page, a redesigned bulk edit, no more clipped record text or cut-off menus, working LLM touch-up, and no placeholder values. See [0.62.14](docs/notes/0.62.14.md).
+
 ## 0.62.13 — Fair Falcon
 
 Human reliability can now be measured: reviewer re-checks, blind second opinions and reviewer ids in the ledger. See [0.62.13](docs/notes/0.62.13.md).
