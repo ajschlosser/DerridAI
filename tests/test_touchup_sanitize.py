@@ -1,5 +1,4 @@
 import pytest
-
 from app.corpus_builder import _sanitize_touchup_output as clean
 
 SRC = "It was the best of times, it was the worst of times."

@@ -15,7 +15,6 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
-
 EMBEDDED_ALIASES = {"embedded", "local", "persistent", "filesystem", "path"}
 HTTP_ALIASES = {"http", "https", "server", "remote", "chroma"}
 DEFAULT_TENANT = "default_tenant"

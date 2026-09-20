@@ -10,10 +10,10 @@ the real code path; small fake classes stand in for storage.
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import threading
 import types
+from pathlib import Path
 
 import pytest
 
@@ -21,8 +21,8 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
-from app import corpus_builder as cb
 from app import chroma_store as cs
+from app import corpus_builder as cb
 from app import jobs
 from app.models import UpsertJobCreate
 

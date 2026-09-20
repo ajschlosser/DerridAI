@@ -10,8 +10,9 @@ replaced by canned responses so the reconciliation logic is what is being tested
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
-import sys, types
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]

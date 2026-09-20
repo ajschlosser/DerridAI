@@ -1,3 +1,4 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
 import json
@@ -123,7 +124,7 @@ def _extract_translation_json(text: str) -> dict[str, Any]:
         repaired = re.sub(r",\s*([}\]])", r"\1", value)
         parsed = json.loads(repaired)
         if not isinstance(parsed, dict):
-            raise ValueError("provider returned a non-object JSON payload")
+            raise ValueError("provider returned a non-object JSON payload") from None
         return parsed
 
 

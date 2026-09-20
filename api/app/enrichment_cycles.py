@@ -1,3 +1,4 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 """Multi-pass metadata enrichment: conflict resolution and cross-pass learning.
 
 Why: a later enrichment pass may disagree with what an earlier pass (or the
@@ -11,14 +12,14 @@ disk, so the rules are unit-testable in isolation.
 
 from __future__ import annotations
 
-from .experiment import is_gold
-
 import json
 import os
 import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Literal
+
+from .experiment import is_gold
 
 HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "human_confirmed_absent"})
 MAX_PASSES = 10

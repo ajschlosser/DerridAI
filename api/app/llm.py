@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -1020,7 +1021,5 @@ def _response_detail(response: httpx.Response) -> str:
                 )
             return str(payload.get("detail") or payload.get("message") or "")
     except Exception:
-        # Safe: only extracts a friendlier message from an error body; the raw
-        # response text below is returned instead and the HTTP failure stands.
-        pass
+        logger.debug("Could not parse provider error JSON; using response text", exc_info=True)
     return response.text[:1500]

@@ -6,12 +6,21 @@ import logging
 import shutil
 import tempfile
 import zipfile
-from datetime import datetime, timezone
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
-from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -20,81 +29,88 @@ from starlette.background import BackgroundTask
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
 from .chroma_store import ChromaStore, StoreAlreadyExistsError
 from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
-from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
-from .llm_tools import run_pdf_llm, run_rag_grade
-from .researcher_view import sanitize_rag_job, sanitize_records_payload, summarize_record
-from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
-from .models import (
-    AnnotationCreateRequest,
-    ResearcherProviderStatusRequest,
-    BulkUpsert,
-    ChromaConnectionUpdate,
-    ChromaPathUpdate,
-    EmbeddingPreflightRequest,
-    DeriveLanguageStoresRequest,
-    LLMJobCreate,
-    LLMToolJobCreate,
-    LLMResultResolutionRequest,
-    LLMJobRejectRequest,
-    LLMStatusRequest,
-    LLMWarmupRequest,
-    PdfLlmRequest,
-    PdfCorpusBuildCreate,
-    PdfPageLabelsPatch,
-    PdfDocumentLayoutPatch,
-    PdfCorpusManifestPatch,
-    PdfCorpusRecordPatch,
-    PdfCorpusRecordTextPatch,
-    PdfCorpusTextTouchupRequest,
-    PdfCorpusEvidencePatch,
-    PdfCorpusRecordAccept,
-    PdfCorpusSecondOpinion,
-    PdfCorpusRecordDisposition, PdfCorpusReviewDecision, PdfCorpusMetadataDecision,
-    PdfCorpusBulkDisposition, PdfCorpusBulkMetadataPatch,
-    PdfCorpusRecordMerge,
-    PdfCorpusRecordSplit,
-    PdfCorpusRecordSlice,
-    PdfCorpusBoundaryAdjudication,
-    PdfCorpusRecordRerun,
-    PdfCorpusProviderSwitch,
-    PdfCorpusPublishRequest,
-    RAGRunRequest,
-    RAGGradeRequest,
-    RAGConcurrencyUpdate,
-    RecordStatusRequest,
-    UpsertJobCreate,
-    RecordUpsert,
-    SearchRequest,
-    StoreCreate,
-    StoreDriftRequest,
-    StoreEmbeddingUpdate,
-    StoreLanguageUpdate,
-    StoreProtectionUpdate,
-    StoredRecordPatch,
-    TouchupRequest,
-    TouchupResponse,
-    AuthBootstrapRequest,
-    AuthLoginRequest,
-    UserCreateRequest,
-    UserUpdateRequest,
-    RoleCreateRequest,
-    RolePermissionsUpdate,
-    ResearcherProviderProfilesUpdate,
-    LanguageDictionaryUpdate,
-    LanguageContentPolicyUpdate,
-    LanguageInstallRequest,
-)
-from .pdf_tools import extract_pdf_text
-from .reviewer_context import current_reviewer, reviewer_id
-from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
-from .system_store import system_store, normalize_locale_code
-from .i18n_translation import translate_english_dictionary
-from .content_policy_generation import generate_policy_for_installed_language
 from .content_filter import (
     admin_content_policy_view,
     enforce_researcher_text,
     public_content_policy_mirror,
 )
+from .content_policy_generation import generate_policy_for_installed_language
+from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
+from .i18n_translation import translate_english_dictionary
+from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
+from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
+from .llm_tools import run_pdf_llm, run_rag_grade
+from .models import (
+    AnnotationCreateRequest,
+    AuthBootstrapRequest,
+    AuthLoginRequest,
+    BulkUpsert,
+    ChromaConnectionUpdate,
+    ChromaPathUpdate,
+    DeriveLanguageStoresRequest,
+    EmbeddingPreflightRequest,
+    LanguageContentPolicyUpdate,
+    LanguageDictionaryUpdate,
+    LanguageInstallRequest,
+    LLMJobCreate,
+    LLMJobRejectRequest,
+    LLMResultResolutionRequest,
+    LLMStatusRequest,
+    LLMToolJobCreate,
+    LLMWarmupRequest,
+    PdfCorpusBoundaryAdjudication,
+    PdfCorpusBuildCreate,
+    PdfCorpusBulkDisposition,
+    PdfCorpusBulkMetadataPatch,
+    PdfCorpusEvidencePatch,
+    PdfCorpusManifestPatch,
+    PdfCorpusMetadataDecision,
+    PdfCorpusProviderSwitch,
+    PdfCorpusPublishRequest,
+    PdfCorpusRecordAccept,
+    PdfCorpusRecordDisposition,
+    PdfCorpusRecordMerge,
+    PdfCorpusRecordPatch,
+    PdfCorpusRecordRerun,
+    PdfCorpusRecordSlice,
+    PdfCorpusRecordSplit,
+    PdfCorpusRecordTextPatch,
+    PdfCorpusReviewDecision,
+    PdfCorpusSecondOpinion,
+    PdfCorpusTextTouchupRequest,
+    PdfDocumentLayoutPatch,
+    PdfLlmRequest,
+    PdfPageLabelsPatch,
+    RAGConcurrencyUpdate,
+    RAGGradeRequest,
+    RAGRunRequest,
+    RecordStatusRequest,
+    RecordUpsert,
+    ResearcherProviderProfilesUpdate,
+    ResearcherProviderStatusRequest,
+    RoleCreateRequest,
+    RolePermissionsUpdate,
+    SearchRequest,
+    StoreCreate,
+    StoredRecordPatch,
+    StoreDriftRequest,
+    StoreEmbeddingUpdate,
+    StoreLanguageUpdate,
+    StoreProtectionUpdate,
+    TouchupRequest,
+    TouchupResponse,
+    UpsertJobCreate,
+    UserCreateRequest,
+    UserUpdateRequest,
+)
+from .pdf_tools import extract_pdf_text
+from .researcher_view import (
+    sanitize_rag_job,
+    sanitize_records_payload,
+    summarize_record,
+)
+from .reviewer_context import current_reviewer, reviewer_id
+from .system_store import normalize_locale_code, system_store
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +126,7 @@ app.add_middleware(
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_error_handler(_request: Request, exc: RequestValidationError):
+async def request_validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
     # Keep Pydantic internals out of the product UI. The client gets a stable
     # machine code and a concise field list; full details remain available to
     # server logs for diagnosis.
@@ -187,7 +203,10 @@ def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
 
 
 @app.middleware("http")
-async def authentication_middleware(request: Request, call_next):
+async def authentication_middleware(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     path = request.url.path
     public_auth = {"/api/auth/status", "/api/auth/bootstrap", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
     public_i18n = request.method.upper() == "GET" and (
@@ -297,7 +316,7 @@ def _session_cookie(response: Response, token: str) -> None:
 
 
 @app.get("/api/auth/status")
-def auth_status(request: Request):
+def auth_status(request: Request) -> dict[str, Any]:
     user = auth_store.user_for_session(request.cookies.get(SESSION_COOKIE))
     return {
         "bootstrap_required": auth_store.bootstrap_required(),
@@ -307,7 +326,7 @@ def auth_status(request: Request):
 
 
 @app.post("/api/auth/bootstrap")
-def auth_bootstrap(body: AuthBootstrapRequest, response: Response):
+def auth_bootstrap(body: AuthBootstrapRequest, response: Response) -> dict[str, Any]:
     try:
         user = auth_store.bootstrap_admin(body.username, body.password)
         user = auth_store.record_login(user.id)
@@ -319,7 +338,7 @@ def auth_bootstrap(body: AuthBootstrapRequest, response: Response):
 
 
 @app.post("/api/auth/login")
-def auth_login(body: AuthLoginRequest, response: Response):
+def auth_login(body: AuthLoginRequest, response: Response) -> dict[str, Any]:
     retry_after = auth_store.login_lockout_remaining(body.username)
     if retry_after > 0:
         # Locked usernames are reported identically whether or not the account
@@ -342,14 +361,14 @@ def auth_login(body: AuthLoginRequest, response: Response):
 
 
 @app.post("/api/auth/logout")
-def auth_logout(request: Request, response: Response):
+def auth_logout(request: Request, response: Response) -> dict[str, Any]:
     auth_store.delete_session(request.cookies.get(SESSION_COOKIE))
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 
 
 @app.get("/api/auth/me")
-def auth_me(request: Request):
+def auth_me(request: Request) -> dict[str, Any]:
     user = auth_store.user_for_session(request.cookies.get(SESSION_COOKIE))
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
@@ -357,13 +376,13 @@ def auth_me(request: Request):
 
 
 @app.get("/api/auth/users")
-def auth_users(request: Request):
+def auth_users(request: Request) -> dict[str, Any]:
     _require_admin(request)
     return {"users": [user.public() for user in auth_store.list_users()]}
 
 
 @app.post("/api/auth/users")
-def auth_create_user(body: UserCreateRequest, request: Request):
+def auth_create_user(body: UserCreateRequest, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         return {"user": auth_store.create_user(body.username, body.password, body.role).public()}
@@ -372,7 +391,7 @@ def auth_create_user(body: UserCreateRequest, request: Request):
 
 
 @app.put("/api/auth/users/{user_id}")
-def auth_update_user(user_id: int, body: UserUpdateRequest, request: Request):
+def auth_update_user(user_id: int, body: UserUpdateRequest, request: Request) -> dict[str, Any]:
     current = _require_admin(request)
     if current.id == user_id and body.active is False:
         raise HTTPException(status_code=400, detail="You cannot deactivate your current session account.")
@@ -388,7 +407,7 @@ def auth_update_user(user_id: int, body: UserUpdateRequest, request: Request):
 
 
 @app.delete("/api/auth/users/{user_id}")
-def auth_delete_user(user_id: int, request: Request):
+def auth_delete_user(user_id: int, request: Request) -> dict[str, Any]:
     current = _require_admin(request)
     if current.id == user_id:
         raise HTTPException(status_code=400, detail="You cannot delete your current session account.")
@@ -402,14 +421,14 @@ def auth_delete_user(user_id: int, request: Request):
 
 
 @app.get("/api/auth/roles")
-def auth_roles(request: Request):
+def auth_roles(request: Request) -> dict[str, Any]:
     _require_admin(request)
     roles, capabilities = auth_store.role_definitions()
     return {"roles": roles, "capabilities": capabilities}
 
 
 @app.post("/api/auth/roles")
-def auth_create_role(body: RoleCreateRequest, request: Request):
+def auth_create_role(body: RoleCreateRequest, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         role = auth_store.create_role(body.name, body.description, body.clone_from)
@@ -420,7 +439,7 @@ def auth_create_role(body: RoleCreateRequest, request: Request):
 
 
 @app.put("/api/auth/roles/{role}/permissions")
-def auth_update_role_permissions(role: str, body: RolePermissionsUpdate, request: Request):
+def auth_update_role_permissions(role: str, body: RolePermissionsUpdate, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         permissions = auth_store.set_role_permissions(role, body.permissions)
@@ -433,7 +452,7 @@ def auth_update_role_permissions(role: str, body: RolePermissionsUpdate, request
 
 
 @app.delete("/api/auth/roles/{role}")
-def auth_delete_role(role: str, request: Request):
+def auth_delete_role(role: str, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         auth_store.delete_role(role)
@@ -455,7 +474,7 @@ upsert_jobs = UpsertJobManager(store, max_workers=1)
 
 
 @app.get("/api/annotations")
-def list_annotations(request: Request, store_name: str | None = Query(default=None, alias="store")):
+def list_annotations(request: Request, store_name: str | None = Query(default=None, alias="store")) -> dict[str, Any]:
     user = _request_user(request)
     annotations = system_store.list_annotations()
     if user.role == "admin":
@@ -500,7 +519,7 @@ def list_annotations(request: Request, store_name: str | None = Query(default=No
 
 
 @app.post("/api/annotations")
-def create_annotation(body: AnnotationCreateRequest, request: Request):
+def create_annotation(body: AnnotationCreateRequest, request: Request) -> dict[str, Any]:
     user = _request_user(request)
     if user.role != "admin":
         try:
@@ -526,7 +545,7 @@ def create_annotation(body: AnnotationCreateRequest, request: Request):
 
 
 @app.delete("/api/annotations/{annotation_id}")
-def delete_annotation(annotation_id: str, request: Request):
+def delete_annotation(annotation_id: str, request: Request) -> dict[str, Any]:
     user = _request_user(request)
     deleted = system_store.delete_annotation(annotation_id, user_id=user.id, admin=user.role == "admin")
     if not deleted:
@@ -535,7 +554,7 @@ def delete_annotation(annotation_id: str, request: Request):
 
 
 @app.get("/api/system/researcher-providers")
-def researcher_provider_profiles(request: Request):
+def researcher_provider_profiles(request: Request) -> dict[str, Any]:
     user = _request_user(request)
     profiles = system_store.researcher_profiles()
     if user.role != "admin":
@@ -544,20 +563,20 @@ def researcher_provider_profiles(request: Request):
 
 
 @app.put("/api/system/researcher-providers")
-def update_researcher_provider_profiles(body: ResearcherProviderProfilesUpdate, request: Request):
+def update_researcher_provider_profiles(body: ResearcherProviderProfilesUpdate, request: Request) -> dict[str, Any]:
     _require_admin(request)
     return {"profiles": system_store.set_researcher_profiles(body.profiles)}
 
 
 @app.get("/api/system/storage")
-def system_storage_info(request: Request):
+def system_storage_info(request: Request) -> dict[str, Any]:
     """Describe the durable server-owned metadata store for administrators."""
     _require_admin(request)
     return system_store.storage_info()
 
 
 @app.post("/api/system/researcher-providers/status")
-def researcher_provider_status(body: ResearcherProviderStatusRequest, request: Request):
+def researcher_provider_status(body: ResearcherProviderStatusRequest, request: Request) -> dict[str, Any]:
     _require_admin(request)
     stored = system_store.researcher_profile(body.id) if body.id else None
     api_key = body.api_key or (stored or {}).get("api_key")
@@ -565,14 +584,14 @@ def researcher_provider_status(body: ResearcherProviderStatusRequest, request: R
 
 
 @app.get("/api/i18n/languages")
-def i18n_languages():
+def i18n_languages() -> dict[str, Any]:
     # Read-only language metadata is public because the sign-in screen itself is
     # localized. Mutation/install endpoints remain administrator-only.
     return {"languages": system_store.list_languages()}
 
 
 @app.get("/api/i18n/languages/{code}")
-def i18n_language(code: str):
+def i18n_language(code: str) -> dict[str, Any]:
     # Dictionaries contain UI copy only and must be readable before login.
     value = system_store.get_language(code)
     if value is None:
@@ -581,7 +600,7 @@ def i18n_language(code: str):
 
 
 @app.put("/api/i18n/languages/{code}")
-def i18n_update_language(code: str, body: LanguageDictionaryUpdate, request: Request):
+def i18n_update_language(code: str, body: LanguageDictionaryUpdate, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         return system_store.put_language(code, name=body.name, flag=body.flag, dictionary=body.dictionary)
@@ -590,7 +609,7 @@ def i18n_update_language(code: str, body: LanguageDictionaryUpdate, request: Req
 
 
 @app.delete("/api/i18n/languages/{code}")
-def i18n_delete_language(code: str, request: Request):
+def i18n_delete_language(code: str, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         system_store.delete_language(code)
@@ -602,7 +621,7 @@ def i18n_delete_language(code: str, request: Request):
 
 
 @app.post("/api/i18n/languages/install")
-def i18n_install_language(body: LanguageInstallRequest, request: Request):
+def i18n_install_language(body: LanguageInstallRequest, request: Request) -> dict[str, Any]:
     """Create a UI dictionary by translating the canonical en-US dictionary."""
     _require_admin(request)
     try:
@@ -638,7 +657,7 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
             "source_locale": "en-US",
             "provider": body.provider,
             "model": model,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "failed_count": int(translation_stats.get("failed_count") or 0),
             "fallback_count": int(translation_stats.get("fallback_count") or 0),
             "failed_keys": list(translation_stats.get("failed_keys") or []),
@@ -660,21 +679,23 @@ def i18n_install_language(body: LanguageInstallRequest, request: Request):
             ),
         )
     except Exception:
-        # Dictionary installation still succeeds; the administrator can generate
-        # the researcher text policy from the Languages workspace.
-        pass
+        logger.warning(
+            "Content policy generation failed during language install for %s",
+            code,
+            exc_info=True,
+        )
     return system_store.get_language(code) or saved
 
 
 @app.get("/api/i18n/content-policy")
-def i18n_active_content_policy(request: Request):
+def i18n_active_content_policy(request: Request) -> dict[str, Any]:
     """Hashed union of ready locale policies for the researcher client mirror."""
     _request_user(request)
     return public_content_policy_mirror(system_store.list_ready_content_policies())
 
 
 @app.get("/api/i18n/languages/{code}/content-policy")
-def i18n_language_content_policy(code: str, request: Request):
+def i18n_language_content_policy(code: str, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         normalized = normalize_locale_code(code)
@@ -686,7 +707,7 @@ def i18n_language_content_policy(code: str, request: Request):
 
 
 @app.put("/api/i18n/languages/{code}/content-policy")
-def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, request: Request):
+def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, request: Request) -> dict[str, Any]:
     _require_admin(request)
     try:
         normalized = normalize_locale_code(code)
@@ -705,12 +726,12 @@ def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, req
 
 
 @app.get("/api/live")
-def live():
+def live() -> dict[str, Any]:
     return {"ok": True, "version": APP_VERSION, "git_commit": APP_GIT_COMMIT or None}
 
 
 @app.get("/api/health")
-def health():
+def health() -> dict[str, Any]:
     chroma = store.health()
     ollama = llm_status("ollama")
     return {
@@ -754,7 +775,7 @@ def health():
 
 
 @app.get("/api/config")
-def config():
+def config() -> dict[str, Any]:
     return {
         "version": APP_VERSION,
         "git_commit": APP_GIT_COMMIT or None,
@@ -776,7 +797,7 @@ def llm_status_endpoint(
     provider: str = Query(default="ollama"),
     base_url: str | None = Query(default=None),
     api_key: str | None = Query(default=None),
-):
+) -> dict[str, Any]:
     provider = provider.strip().lower()
     if provider not in {"ollama", "openai"}:
         raise HTTPException(status_code=400, detail="provider must be ollama or openai")
@@ -788,7 +809,7 @@ def llm_status_endpoint(
 
 
 @app.post("/api/llm/status")
-def llm_status_post(body: LLMStatusRequest):
+def llm_status_post(body: LLMStatusRequest) -> dict[str, Any]:
     return llm_status(
         body.provider,
         base_url=body.base_url,
@@ -797,7 +818,7 @@ def llm_status_post(body: LLMStatusRequest):
 
 
 @app.post("/api/llm/warmup")
-def llm_warmup(body: LLMWarmupRequest):
+def llm_warmup(body: LLMWarmupRequest) -> dict[str, Any]:
     try:
         return warmup_model(
             provider=body.provider,
@@ -814,7 +835,7 @@ def llm_warmup(body: LLMWarmupRequest):
 
 
 @app.post("/api/jobs/llm")
-def create_llm_job(body: LLMJobCreate, request: Request):
+def create_llm_job(body: LLMJobCreate, request: Request) -> dict[str, Any]:
     try:
         # ``updates`` is never part of LLM review context. Strip it even for
         # older clients so a large audit trail cannot be retained by the job.
@@ -826,7 +847,7 @@ def create_llm_job(body: LLMJobCreate, request: Request):
 
 
 @app.post("/api/rag/grade")
-def grade_rag_response(body: RAGGradeRequest):
+def grade_rag_response(body: RAGGradeRequest) -> dict[str, Any]:
     try:
         for evidence in body.evidence:
             record = evidence.get("record") if isinstance(evidence, dict) else None
@@ -840,7 +861,7 @@ def grade_rag_response(body: RAGGradeRequest):
 
 
 @app.post("/api/pdf/llm")
-def pdf_llm(body: PdfLlmRequest):
+def pdf_llm(body: PdfLlmRequest) -> dict[str, Any]:
     try:
         return run_pdf_llm(body)
     except Exception as exc:
@@ -848,17 +869,17 @@ def pdf_llm(body: PdfLlmRequest):
 
 
 @app.get("/api/jobs/rag/concurrency")
-def get_rag_concurrency():
+def get_rag_concurrency() -> dict[str, Any]:
     return rag_jobs.concurrency_status()
 
 
 @app.put("/api/jobs/rag/concurrency")
-def set_rag_concurrency(body: RAGConcurrencyUpdate):
+def set_rag_concurrency(body: RAGConcurrencyUpdate) -> dict[str, Any]:
     return rag_jobs.set_ollama_limit(body.ollama_max_concurrent)
 
 
 @app.post("/api/jobs/{job_id}/llm-results/resolve")
-def resolve_llm_job_results(job_id: str, body: LLMResultResolutionRequest):
+def resolve_llm_job_results(job_id: str, body: LLMResultResolutionRequest) -> dict[str, Any]:
     try:
         manager = _job_manager_for(job_id)
         if manager is not llm_jobs:
@@ -876,7 +897,7 @@ def resolve_llm_job_results(job_id: str, body: LLMResultResolutionRequest):
 
 
 @app.post("/api/jobs/{job_id}/llm-results/reject")
-def reject_llm_job_results(job_id: str, body: LLMJobRejectRequest):
+def reject_llm_job_results(job_id: str, body: LLMJobRejectRequest) -> dict[str, Any]:
     try:
         manager = _job_manager_for(job_id)
         if manager is not llm_jobs:
@@ -887,7 +908,7 @@ def reject_llm_job_results(job_id: str, body: LLMJobRejectRequest):
 
 
 @app.post("/api/jobs/llm-tool")
-def create_llm_tool_job(body: LLMToolJobCreate, request: Request):
+def create_llm_tool_job(body: LLMToolJobCreate, request: Request) -> dict[str, Any]:
     try:
         return llm_tool_jobs.create(body, owner=_request_user(request).username)
     except ValueError as exc:
@@ -957,7 +978,7 @@ def _profile_generation_options(profile: dict[str, object]) -> dict[str, object]
 
 
 @app.post("/api/jobs/rag")
-def create_rag_job(body: RAGRunRequest, request: Request):
+def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         if user.role != "admin":
@@ -1024,7 +1045,7 @@ def create_rag_job(body: RAGRunRequest, request: Request):
 
 
 @app.post("/api/jobs/upsert")
-def create_upsert_job(body: UpsertJobCreate, request: Request):
+def create_upsert_job(body: UpsertJobCreate, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         if not body.include_updates:
@@ -1046,7 +1067,7 @@ def create_upsert_job(body: UpsertJobCreate, request: Request):
 
 
 @app.get("/api/jobs")
-def list_jobs(request: Request):
+def list_jobs(request: Request) -> dict[str, Any]:
     user = _request_user(request)
     if user.role != "admin":
         jobs = [job for job in rag_jobs.list() if job.get("owner") == user.username]
@@ -1056,7 +1077,7 @@ def list_jobs(request: Request):
     return {"jobs": jobs}
 
 
-def _job_manager_for(job_id: str):
+def _job_manager_for(job_id: str) -> Any:
     for manager in (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs):
         try:
             manager.get(job_id)
@@ -1071,7 +1092,7 @@ def _job_manager_for(job_id: str):
     raise KeyError(job_id)
 
 
-def _researcher_job_access(user: AuthUser, manager, job_id: str) -> dict:
+def _researcher_job_access(user: AuthUser, manager: Any, job_id: str) -> dict[str, Any]:
     job = manager.operation(job_id) if manager is pdf_corpus_builds else manager.get(job_id)
     if user.role != "admin":
         if manager is not rag_jobs or job.get("owner") != user.username:
@@ -1080,7 +1101,7 @@ def _researcher_job_access(user: AuthUser, manager, job_id: str) -> dict:
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str, request: Request):
+def get_job(job_id: str, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         manager = _job_manager_for(job_id)
@@ -1093,7 +1114,7 @@ def get_job(job_id: str, request: Request):
 
 
 @app.post("/api/jobs/{job_id}/cancel")
-def cancel_job(job_id: str, request: Request):
+def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         manager = _job_manager_for(job_id)
@@ -1109,7 +1130,7 @@ def cancel_job(job_id: str, request: Request):
 
 
 @app.delete("/api/jobs/{job_id}")
-def delete_job(job_id: str, request: Request):
+def delete_job(job_id: str, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         manager = _job_manager_for(job_id)
@@ -1123,7 +1144,7 @@ def delete_job(job_id: str, request: Request):
 
 
 @app.delete("/api/jobs")
-def clear_finished_jobs():
+def clear_finished_jobs() -> dict[str, Any]:
     return {
         "deleted": (
             llm_jobs.clear_finished()
@@ -1136,12 +1157,12 @@ def clear_finished_jobs():
 
 
 @app.get("/api/chroma/path")
-def get_chroma_path():
+def get_chroma_path() -> dict[str, Any]:
     return store.health()
 
 
 @app.put("/api/chroma/path")
-def set_chroma_path(body: ChromaPathUpdate):
+def set_chroma_path(body: ChromaPathUpdate) -> dict[str, Any]:
     try:
         return store.set_path(body.path)
     except Exception as exc:
@@ -1149,12 +1170,12 @@ def set_chroma_path(body: ChromaPathUpdate):
 
 
 @app.get("/api/chroma/connection")
-def get_chroma_connection():
+def get_chroma_connection() -> dict[str, Any]:
     return store.health()
 
 
 @app.post("/api/chroma/connection/probe")
-def probe_chroma_connection(body: ChromaConnectionUpdate):
+def probe_chroma_connection(body: ChromaConnectionUpdate) -> dict[str, Any]:
     try:
         return store.probe_connection(
             mode=body.mode,
@@ -1169,7 +1190,7 @@ def probe_chroma_connection(body: ChromaConnectionUpdate):
 
 
 @app.put("/api/chroma/connection")
-def set_chroma_connection(body: ChromaConnectionUpdate):
+def set_chroma_connection(body: ChromaConnectionUpdate) -> dict[str, Any]:
     try:
         return store.set_connection(
             mode=body.mode,
@@ -1237,7 +1258,7 @@ async def create_full_backup(
     workspace: UploadFile = File(...),
     pdf_metadata: str = Form(default="{}"),
     current_pdf: UploadFile | None = File(default=None),
-):
+) -> FileResponse:
     if _background_jobs_active():
         raise HTTPException(
             status_code=409,
@@ -1374,7 +1395,7 @@ async def create_full_backup(
             "backup_type": "derridai-full-backup",
             "format_version": 1,
             "app_version": APP_VERSION,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "workspace": {
                 "file_count": len(files),
                 "record_count": sum(
@@ -1451,7 +1472,7 @@ async def create_full_backup(
 
         archive_path = temp_root / (
             "derridai-full-backup-"
-            + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            + datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
             + ".zip"
         )
         with zipfile.ZipFile(
@@ -1488,7 +1509,7 @@ async def create_full_backup(
 
 
 @app.post("/api/admin/restore")
-async def restore_full_backup(backup: UploadFile = File(...)):
+async def restore_full_backup(backup: UploadFile = File(...)) -> dict[str, Any]:
     if _background_jobs_active():
         raise HTTPException(
             status_code=409,
@@ -1778,7 +1799,7 @@ async def restore_full_backup(backup: UploadFile = File(...)):
 
 
 @app.get("/api/admin/restore/current-pdf")
-def get_restored_current_pdf():
+def get_restored_current_pdf() -> FileResponse:
     pdf_path, meta_path = _restore_asset_paths()
     if not pdf_path.exists():
         raise HTTPException(
@@ -1810,7 +1831,7 @@ def get_restored_current_pdf():
 
 
 @app.post("/api/admin/nuke")
-def nuke(response: Response):
+def nuke(response: Response) -> dict[str, Any]:
     if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count() or pdf_corpus_builds.active_count():
         raise HTTPException(
             status_code=409,
@@ -1861,7 +1882,7 @@ def nuke(response: Response):
 async def pdf_extract(
     file: UploadFile = File(...),
     page: int | None = Query(default=None, ge=1),
-):
+) -> dict[str, Any]:
     try:
         data = await file.read()
         return extract_pdf_text(data, page=page)
@@ -1880,7 +1901,7 @@ async def create_pdf_asset(
     file: UploadFile = File(...),
     ocr_mode: str = Form(default="auto"),
     ocr_languages: str = Form(default="eng+fra+deu"),
-):
+) -> dict[str, Any]:
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
     try:
@@ -1913,12 +1934,12 @@ async def create_pdf_asset(
 
 
 @app.get("/api/pdf/assets")
-def list_pdf_assets():
+def list_pdf_assets() -> dict[str, Any]:
     return {"items": pdf_corpus_repository.list_assets()}
 
 
 @app.get("/api/pdf/assets/{asset_id}")
-def get_pdf_asset(asset_id: str):
+def get_pdf_asset(asset_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_repository.get_asset(asset_id)
     except KeyError as exc:
@@ -1928,7 +1949,7 @@ def get_pdf_asset(asset_id: str):
 
 
 @app.patch("/api/pdf/assets/{asset_id}/page-labels")
-def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch):
+def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_repository.update_page_labels(asset_id, body.labels)
     except KeyError as exc:
@@ -1938,7 +1959,7 @@ def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch):
 
 
 @app.patch("/api/pdf/assets/{asset_id}/document-layout")
-def patch_pdf_asset_document_layout(asset_id: str, body: PdfDocumentLayoutPatch):
+def patch_pdf_asset_document_layout(asset_id: str, body: PdfDocumentLayoutPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_repository.update_document_layout(asset_id, body.model_dump(exclude_none=True))
     except KeyError as exc:
@@ -1948,7 +1969,7 @@ def patch_pdf_asset_document_layout(asset_id: str, body: PdfDocumentLayoutPatch)
 
 
 @app.get("/api/pdf/assets/{asset_id}/content")
-def get_pdf_asset_content(asset_id: str):
+def get_pdf_asset_content(asset_id: str) -> FileResponse:
     try:
         asset = pdf_corpus_repository.get_asset(asset_id)
         path = pdf_corpus_repository.asset_pdf_path(asset_id)
@@ -1963,7 +1984,7 @@ def get_pdf_asset_blocks(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=200, ge=1, le=1000),
     ids: str = Query(default="", max_length=20000),
-):
+) -> dict[str, Any]:
     try:
         blocks = pdf_corpus_repository.load_blocks(asset_id)
         if ids.strip():
@@ -1976,7 +1997,7 @@ def get_pdf_asset_blocks(
 
 
 @app.get("/api/pdf/corpus-profiles")
-def list_pdf_corpus_profiles():
+def list_pdf_corpus_profiles() -> dict[str, Any]:
     return {"items": list(CORPUS_PROFILES.values())}
 
 
@@ -2047,7 +2068,7 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/api/pdf/corpus-builds")
-def create_pdf_corpus_build(body: PdfCorpusBuildCreate):
+def create_pdf_corpus_build(body: PdfCorpusBuildCreate) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.create(_resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
@@ -2057,12 +2078,12 @@ def create_pdf_corpus_build(body: PdfCorpusBuildCreate):
 
 
 @app.get("/api/pdf/corpus-builds")
-def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200), asset_id: str | None = None):
+def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200), asset_id: str | None = None) -> dict[str, Any]:
     return pdf_corpus_repository.list_builds(offset=offset, limit=limit, asset_id=asset_id)
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}")
-def get_pdf_corpus_build(build_id: str):
+def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     try:
         build = pdf_corpus_repository.get_build(build_id)
     except KeyError as exc:
@@ -2073,7 +2094,7 @@ def get_pdf_corpus_build(build_id: str):
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")
-def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwitch):
+def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwitch) -> dict[str, Any]:
     try:
         resolved = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
         return pdf_corpus_builds.switch_provider_profile(build_id, resolved)
@@ -2095,7 +2116,7 @@ def regenerate_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/manifest")
-def patch_pdf_corpus_manifest(build_id: str, body: PdfCorpusManifestPatch):
+def patch_pdf_corpus_manifest(build_id: str, body: PdfCorpusManifestPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.patch_manifest(build_id, body.changes, body.expected_revision)
     except KeyError as exc:
@@ -2115,7 +2136,7 @@ def list_pdf_corpus_records(
     source_problem: bool | None = None,
     review_queue: str | None = Query(default=None, pattern="^(ready|issues|metadata|source|topology|accepted|rejected)$"),
     query: str = "",
-):
+) -> dict[str, Any]:
     try:
         return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, source_problem=source_problem, review_queue=review_queue, query=query)
     except KeyError as exc:
@@ -2123,7 +2144,7 @@ def list_pdf_corpus_records(
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/confirm-manifest")
-def confirm_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
+def confirm_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.confirm_manifest(
             build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
@@ -2135,7 +2156,7 @@ def confirm_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/cancel")
-def cancel_pdf_corpus_build(build_id: str):
+def cancel_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.cancel(build_id)
     except KeyError as exc:
@@ -2143,7 +2164,7 @@ def cancel_pdf_corpus_build(build_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/settle-metadata")
-def settle_pdf_corpus_metadata(build_id: str):
+def settle_pdf_corpus_metadata(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.settle_metadata_unresolved(build_id)
     except KeyError as exc:
@@ -2153,7 +2174,7 @@ def settle_pdf_corpus_metadata(build_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/resume")
-def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun):
+def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.resume(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
@@ -2163,7 +2184,7 @@ def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun):
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata")
-def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch):
+def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes, body.expected_revision)
     except KeyError as exc:
@@ -2173,7 +2194,7 @@ def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text")
-def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusRecordTextPatch):
+def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusRecordTextPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.patch_record_text(build_id, record_id, body.text, body.expected_revision, body.resolve_source_issues)
     except KeyError as exc:
@@ -2183,7 +2204,7 @@ def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusR
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision")
-def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision):
+def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value)
     except KeyError as exc:
@@ -2193,7 +2214,7 @@ def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCo
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")
-def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCorpusEvidencePatch):
+def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCorpusEvidencePatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.patch_evidence(
             build_id, record_id, body.field, body.block_ids, body.confidence, body.reason, body.expected_revision
@@ -2205,7 +2226,7 @@ def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCor
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}/second-opinions")
-def list_pdf_corpus_second_opinions(build_id: str):
+def list_pdf_corpus_second_opinions(build_id: str) -> dict[str, Any]:
     try:
         return {"items": pdf_corpus_builds.pending_second_opinions(build_id)}
     except KeyError as exc:
@@ -2213,7 +2234,7 @@ def list_pdf_corpus_second_opinions(build_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/second-opinion")
-def submit_pdf_corpus_second_opinion(build_id: str, record_id: str, body: PdfCorpusSecondOpinion):
+def submit_pdf_corpus_second_opinion(build_id: str, record_id: str, body: PdfCorpusSecondOpinion) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.submit_second_opinion(build_id, record_id, body.field, body.value)
     except KeyError as exc:
@@ -2223,7 +2244,7 @@ def submit_pdf_corpus_second_opinion(build_id: str, record_id: str, body: PdfCor
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept")
-def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordAccept):
+def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordAccept) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.accept_record(build_id, record_id, body.accepted, body.expected_revision)
     except KeyError as exc:
@@ -2231,7 +2252,7 @@ def accept_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecor
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition")
-def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCorpusRecordDisposition):
+def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCorpusRecordDisposition) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.set_disposition(build_id, record_id, body.disposition, body.reason, body.expected_revision)
     except KeyError as exc:
@@ -2241,7 +2262,7 @@ def set_pdf_corpus_record_disposition(build_id: str, record_id: str, body: PdfCo
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision")
-def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusReviewDecision):
+def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusReviewDecision) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.review_decision(build_id, record_id, body.disposition, body.reason, body.expected_revision, body.review_queue)
     except KeyError as exc:
@@ -2251,7 +2272,7 @@ def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRevie
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
-def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition):
+def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.bulk_disposition(build_id, body.disposition, body.reason, body.needs_review, body.query, body.filter_disposition, body.review_queue, body.record_ids)
     except KeyError as exc:
@@ -2261,7 +2282,7 @@ def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposi
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/metadata")
-def bulk_patch_pdf_corpus_record_metadata(build_id: str, body: PdfCorpusBulkMetadataPatch):
+def bulk_patch_pdf_corpus_record_metadata(build_id: str, body: PdfCorpusBulkMetadataPatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.bulk_patch_metadata(
             build_id, body.changes, record_ids=body.record_ids, apply_to_all=body.apply_to_all,
@@ -2274,7 +2295,7 @@ def bulk_patch_pdf_corpus_record_metadata(build_id: str, body: PdfCorpusBulkMeta
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/review/undo")
-def undo_pdf_corpus_review_edit(build_id: str):
+def undo_pdf_corpus_review_edit(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.undo_last_review_edit(build_id)
     except KeyError as exc:
@@ -2286,7 +2307,7 @@ def undo_pdf_corpus_review_edit(build_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/review/redo")
-def redo_pdf_corpus_review_edit(build_id: str):
+def redo_pdf_corpus_review_edit(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.redo_last_review_edit(build_id)
     except KeyError as exc:
@@ -2296,7 +2317,7 @@ def redo_pdf_corpus_review_edit(build_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge")
-def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordMerge):
+def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordMerge) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.merge(build_id, record_id, body.direction, body.expected_revision)
     except KeyError as exc:
@@ -2308,7 +2329,7 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice")
-def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice):
+def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision)
     except KeyError as exc:
@@ -2318,7 +2339,7 @@ def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication")
-def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpusBoundaryAdjudication):
+def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpusBoundaryAdjudication) -> dict[str, Any]:
     try:
         payload = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
         direction = str(payload.pop("direction"))
@@ -2330,7 +2351,7 @@ def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpu
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/split")
-def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit):
+def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision)
     except KeyError as exc:
@@ -2340,7 +2361,7 @@ def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/retry")
-def retry_pdf_corpus_metadata(build_id: str, body: PdfCorpusRecordRerun):
+def retry_pdf_corpus_metadata(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.retry_incomplete_metadata(
             build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
@@ -2352,7 +2373,7 @@ def retry_pdf_corpus_metadata(build_id: str, body: PdfCorpusRecordRerun):
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}/editorial-memory")
-def get_pdf_corpus_editorial_memory(build_id: str):
+def get_pdf_corpus_editorial_memory(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.editorial_memory(build_id)
     except KeyError as exc:
@@ -2360,7 +2381,7 @@ def get_pdf_corpus_editorial_memory(build_id: str):
 
 
 @app.delete("/api/pdf/corpus-builds/{build_id}/editorial-memory")
-def reset_pdf_corpus_editorial_memory(build_id: str):
+def reset_pdf_corpus_editorial_memory(build_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.reset_editorial_memory(build_id)
     except KeyError as exc:
@@ -2368,7 +2389,7 @@ def reset_pdf_corpus_editorial_memory(build_id: str):
 
 
 @app.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview")
-def preview_pdf_corpus_record(build_id: str, record_id: str):
+def preview_pdf_corpus_record(build_id: str, record_id: str) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.preview_record(build_id, record_id)
     except KeyError as exc:
@@ -2376,7 +2397,7 @@ def preview_pdf_corpus_record(build_id: str, record_id: str):
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup")
-def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusTextTouchupRequest):
+def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusTextTouchupRequest) -> dict[str, Any]:
     try:
         payload = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
         instructions = str(payload.pop("instructions", "") or "")
@@ -2403,7 +2424,7 @@ def export_pdf_corpus_enrichment_ledger():
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")
-def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun):
+def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.rerun_metadata_enrichment(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
@@ -2413,7 +2434,7 @@ def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRer
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/rerun-metadata")
-def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordRerun):
+def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.rerun_metadata(build_id, record_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
     except KeyError as exc:
@@ -2423,7 +2444,7 @@ def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/publish")
-def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest):
+def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.publish(build_id, require_acceptance=body.require_acceptance)
     except KeyError as exc:
@@ -2433,7 +2454,7 @@ def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest):
 
 
 @app.get("/api/pdf/publications/{publication_id}/download")
-def download_pdf_corpus_publication(publication_id: str):
+def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     path = pdf_corpus_repository.publication_path(publication_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Publication not found")
@@ -2441,7 +2462,7 @@ def download_pdf_corpus_publication(publication_id: str):
 
 
 @app.get("/api/stores")
-def list_stores():
+def list_stores() -> dict[str, Any]:
     try:
         return {"stores": store.list_stores()}
     except Exception as exc:
@@ -2449,7 +2470,7 @@ def list_stores():
 
 
 @app.post("/api/stores")
-def create_store(body: StoreCreate):
+def create_store(body: StoreCreate) -> dict[str, Any]:
     try:
         return store.create_store(
             body.name,
@@ -2473,7 +2494,7 @@ def create_store(body: StoreCreate):
 
 
 @app.post("/api/stores/preflight/embedding")
-def preflight_embedding(body: EmbeddingPreflightRequest):
+def preflight_embedding(body: EmbeddingPreflightRequest) -> dict[str, Any]:
     try:
         return store.preflight_embedding(
             provider=body.embedding_provider,
@@ -2486,7 +2507,7 @@ def preflight_embedding(body: EmbeddingPreflightRequest):
 
 
 @app.get("/api/stores/{store_name}")
-def get_store(store_name: str):
+def get_store(store_name: str) -> dict[str, Any]:
     try:
         return store.get_store(store_name)
     except Exception as exc:
@@ -2497,7 +2518,7 @@ def get_store(store_name: str):
 def update_store_embedding(
     store_name: str,
     body: StoreEmbeddingUpdate,
-):
+) -> dict[str, Any]:
     try:
         return store.set_embedding(
             store_name,
@@ -2512,7 +2533,7 @@ def update_store_embedding(
 def update_store_languages(
     store_name: str,
     body: StoreLanguageUpdate,
-):
+) -> dict[str, Any]:
     try:
         return store.set_language_tags(
             store_name,
@@ -2524,7 +2545,7 @@ def update_store_languages(
 
 
 @app.put("/api/stores/{store_name}/protection")
-def update_store_protection(store_name: str, body: StoreProtectionUpdate):
+def update_store_protection(store_name: str, body: StoreProtectionUpdate) -> dict[str, Any]:
     try:
         return store.set_protection(store_name, body.protected)
     except Exception as exc:
@@ -2535,7 +2556,7 @@ def update_store_protection(store_name: str, body: StoreProtectionUpdate):
 def derive_language_stores(
     store_name: str,
     body: DeriveLanguageStoresRequest,
-):
+) -> dict[str, Any]:
     try:
         return store.derive_language_stores(
             store_name,
@@ -2548,7 +2569,7 @@ def derive_language_stores(
 
 
 @app.delete("/api/stores/{store_name}")
-def delete_store(store_name: str, force: bool = Query(default=False)):
+def delete_store(store_name: str, force: bool = Query(default=False)) -> dict[str, Any]:
     try:
         store.delete_store(store_name, force=force)
         return {"deleted": store_name}
@@ -2559,7 +2580,7 @@ def delete_store(store_name: str, force: bool = Query(default=False)):
 
 
 @app.delete("/api/stores/{store_name}/works/{work:path}")
-def delete_store_work(store_name: str, work: str):
+def delete_store_work(store_name: str, work: str) -> dict[str, Any]:
     try:
         return store.delete_work_with_language_sync(store_name, work)
     except Exception as exc:
@@ -2571,7 +2592,7 @@ def get_response_cache_records(
     limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     query: str | None = Query(default=None),
-):
+) -> dict[str, Any]:
     try:
         return store.get_response_cache_records(
             limit=limit,
@@ -2593,7 +2614,7 @@ def get_records(
     sort_dir: str = Query(default="asc"),
     filters: str | None = Query(default=None),
     include_updates: bool = Query(default=False),
-):
+) -> dict[str, Any]:
     try:
         user = _request_user(request)
         parsed_filters: dict[str, str] = {}
@@ -2628,7 +2649,7 @@ def get_records(
 
 
 @app.get("/api/stores/{store_name}/works")
-def list_store_works(store_name: str):
+def list_store_works(store_name: str) -> dict[str, Any]:
     try:
         return {
             "works": store.list_works(store_name),
@@ -2639,7 +2660,7 @@ def list_store_works(store_name: str):
 
 
 @app.post("/api/stores/{store_name}/records/status")
-def record_status(store_name: str, body: RecordStatusRequest):
+def record_status(store_name: str, body: RecordStatusRequest) -> dict[str, Any]:
     try:
         return {"existing_ids": store.existing_ids(store_name, body.ids)}
     except Exception as exc:
@@ -2647,7 +2668,7 @@ def record_status(store_name: str, body: RecordStatusRequest):
 
 
 @app.post("/api/stores/{store_name}/drift")
-def store_drift(store_name: str, body: StoreDriftRequest):
+def store_drift(store_name: str, body: StoreDriftRequest) -> dict[str, Any]:
     try:
         return store.drift_report(
             store_name,
@@ -2661,7 +2682,7 @@ def store_drift(store_name: str, body: StoreDriftRequest):
 def export_store(
     store_name: str,
     work: str | None = Query(default=None),
-):
+) -> dict[str, Any]:
     try:
         return {
             "store": store.get_store(store_name),
@@ -2678,7 +2699,7 @@ def get_record(
     chroma_id: str,
     request: Request,
     include_updates: bool = Query(default=False),
-):
+) -> dict[str, Any]:
     try:
         user = _request_user(request)
         # Researcher responses never expose raw audit history. Admin clients can
@@ -2697,7 +2718,7 @@ def get_record(
 
 
 @app.post("/api/stores/{store_name}/records")
-def create_record(store_name: str, body: RecordUpsert, request: Request):
+def create_record(store_name: str, body: RecordUpsert, request: Request) -> dict[str, Any]:
     try:
         user = _require_admin(request)
         record = dict(body.record)
@@ -2722,7 +2743,7 @@ def patch_record(
     chroma_id: str,
     body: StoredRecordPatch,
     request: Request,
-):
+) -> dict[str, Any]:
     try:
         user = _require_admin(request)
         entries: list[dict[str, Any]] = []
@@ -2755,7 +2776,7 @@ def patch_record(
 
 
 @app.delete("/api/stores/{store_name}/records/{chroma_id:path}")
-def delete_record(store_name: str, chroma_id: str):
+def delete_record(store_name: str, chroma_id: str) -> dict[str, Any]:
     try:
         return store.delete_record_with_language_sync(store_name, chroma_id)
     except Exception as exc:
@@ -2763,7 +2784,7 @@ def delete_record(store_name: str, chroma_id: str):
 
 
 @app.post("/api/stores/{store_name}/records/bulk")
-def bulk_upsert(store_name: str, body: BulkUpsert, request: Request):
+def bulk_upsert(store_name: str, body: BulkUpsert, request: Request) -> dict[str, Any]:
     try:
         user = _require_admin(request)
         records: list[dict[str, Any]] = []
@@ -2806,7 +2827,7 @@ def bulk_upsert(store_name: str, body: BulkUpsert, request: Request):
 
 
 @app.post("/api/stores/{store_name}/search")
-def search(store_name: str, body: SearchRequest, request: Request):
+def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, Any]:
     try:
         user = _request_user(request)
         if user.role != "admin":
@@ -2832,17 +2853,19 @@ def search(store_name: str, body: SearchRequest, request: Request):
 
 
 @app.post("/api/llm/touchup", response_model=TouchupResponse)
-def llm_touchup(body: TouchupRequest):
+def llm_touchup(body: TouchupRequest) -> TouchupResponse:
     try:
-        return propose_touchup(
-            body.record,
-            body.fields,
-            body.instructions,
-            body.model,
-            body.ollama,
-            provider=body.provider,
-            base_url=body.base_url,
-            api_key=body.api_key,
+        return TouchupResponse.model_validate(
+            propose_touchup(
+                body.record,
+                body.fields,
+                body.instructions,
+                body.model,
+                body.ollama,
+                provider=body.provider,
+                base_url=body.base_url,
+                api_key=body.api_key,
+            )
         )
     except TouchupFailure as exc:
         detail: dict[str, str] = {"message": exc.message}

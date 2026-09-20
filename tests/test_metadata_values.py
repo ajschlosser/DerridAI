@@ -1,5 +1,4 @@
 import pytest
-
 from app.corpus_metadata import _normalize_semantic_value
 from app.metadata_values import clean, is_placeholder
 

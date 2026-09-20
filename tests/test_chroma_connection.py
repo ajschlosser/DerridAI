@@ -10,9 +10,9 @@ ChromaStore against fake PersistentClient / HttpClient objects.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 import pytest
 

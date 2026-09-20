@@ -19,8 +19,8 @@ Backend tests need no environment setup: `tests/conftest.py` points storage at a
 
 | Job | Command |
 | --- | --- |
-| Backend lint | `pip install ruff==0.16.8 && ruff check api/app` |
-| Backend types | `mypy` (config in `mypy.ini`) |
+| Backend lint | `pip install -r api/requirements-dev.txt && ruff check api/app tests` |
+| Backend types | `mypy` (config in `mypy.ini`; `check_untyped_defs` is on) |
 | Frontend lint | `cd web && npm run lint` (ESLint, zero warnings) |
 | Backend tests | `python -m compileall -q api/app && pytest -q` |
 | Frontend typecheck | `cd web && npm run typecheck` (strict vue-tsc) |

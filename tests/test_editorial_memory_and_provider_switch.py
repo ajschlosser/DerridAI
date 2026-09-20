@@ -9,9 +9,9 @@ temporary repository.
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401

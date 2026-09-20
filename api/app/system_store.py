@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import re
 import threading
+from datetime import UTC
 from typing import Any
 
 from .locales.en_us import EN_US as DEFAULT_EN_US
@@ -99,10 +100,10 @@ class SystemStore:
 
     def add_annotation(self, value: dict[str, Any]) -> dict[str, Any]:
         import uuid
-        from datetime import datetime, timezone
+        from datetime import datetime
         item = copy.deepcopy(value if isinstance(value, dict) else {})
         item["id"] = str(item.get("id") or uuid.uuid4())
-        item["created_at"] = str(item.get("created_at") or datetime.now(timezone.utc).isoformat())
+        item["created_at"] = str(item.get("created_at") or datetime.now(UTC).isoformat())
         item["tags"] = [str(tag).strip() for tag in item.get("tags") or [] if str(tag).strip()]
         with self._lock:
             self.repository.put_annotation(item)

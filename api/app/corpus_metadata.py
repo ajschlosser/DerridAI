@@ -6,7 +6,9 @@ No repository, model-provider, or job-manager dependency is permitted here.
 from __future__ import annotations
 
 from typing import Any
-from .metadata_values import clean as clean_value, is_placeholder
+
+from .metadata_values import clean as clean_value
+from .metadata_values import is_placeholder
 
 REGION_TYPES = [
     "front_matter", "main_text", "notes", "bibliography", "index",

@@ -1,19 +1,47 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
 import re
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from .enrichment_cycles import MAX_PASSES
 
-
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
 RetrievalMode = Literal["semantic", "hybrid", "lexical"]
 DistanceMetric = Literal["cosine", "l2", "ip"]
+SearchType = Literal["mmr", "similarity", "lexical"]
+TextCleanupRule = Literal[
+    "page_numbers",
+    "repeated_short_lines",
+    "line_hyphenation",
+    "paragraph_lines",
+    "empty_lines",
+    "ocr_artifacts",
+    "whitespace",
+]
 
+
+def _default_locales() -> list[LanguageCode]:
+    return ["en", "fr"]
+
+
+def _default_search_types() -> list[SearchType]:
+    return ["similarity", "lexical", "mmr"]
+
+
+def _default_text_cleanup_rules() -> list[TextCleanupRule]:
+    return [
+        "page_numbers",
+        "repeated_short_lines",
+        "line_hyphenation",
+        "paragraph_lines",
+        "empty_lines",
+        "ocr_artifacts",
+        "whitespace",
+    ]
 
 
 def _clamp_concurrency(value: Any) -> Any:
@@ -26,6 +54,7 @@ def _clamp_concurrency(value: Any) -> Any:
 
 
 ClampedConcurrency = Annotated[int, BeforeValidator(_clamp_concurrency)]
+
 
 class ChromaPathUpdate(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
@@ -311,8 +340,8 @@ class RAGRunRequest(BaseModel):
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
-    locales: list[LanguageCode] = Field(default_factory=lambda: ["en", "fr"])
-    search_types: list[Literal["mmr", "similarity", "lexical"]] = Field(default_factory=lambda: ["similarity", "lexical", "mmr"])
+    locales: list[LanguageCode] = Field(default_factory=_default_locales)
+    search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -475,13 +504,7 @@ class PdfCorpusBuildCreate(BaseModel):
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
     auto_clean_text: bool = True
-    text_cleanup_rules: list[Literal[
-        "page_numbers", "repeated_short_lines", "line_hyphenation",
-        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
-    ]] = Field(default_factory=lambda: [
-        "page_numbers", "repeated_short_lines", "line_hyphenation",
-        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
-    ])
+    text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
 

@@ -9,11 +9,11 @@ tiny compiled copy of the login route, so no web server is started.
 
 from __future__ import annotations
 
+import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
@@ -80,7 +80,7 @@ def test_failed_login_lockout_persists_expires_and_success_resets(monkeypatch, t
     second = auth.AuthStore()
     assert second.authenticate("Scholar", "correct-horse") is None
 
-    expired = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    expired = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
     with second._connect() as conn:
         conn.execute(
             "UPDATE login_failures SET locked_until=? WHERE username_key=?",
@@ -149,13 +149,14 @@ def test_lockout_remaining_is_reported_identically_for_real_and_unknown_username
     assert 100 < real <= 121 and 100 < ghost <= 121
 
     with store._connect() as conn:
-        conn.execute("UPDATE login_failures SET locked_until=?", ((datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),))
+        conn.execute("UPDATE login_failures SET locked_until=?", ((datetime.now(UTC) - timedelta(seconds=1)).isoformat(),))
     assert store.login_lockout_remaining("Scholar") == 0
 
 
 def _login_route(store):
     """Compile only the login route so importing main.py's global workers is unnecessary."""
     import ast
+
     from fastapi import HTTPException
 
     path = ROOT / "api/app/main.py"
@@ -166,7 +167,8 @@ def _login_route(store):
         "_session_cookie": lambda response, token: None,
         "AuthLoginRequest": object, "Response": object,
     }
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), scope)
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec",
+                 flags=__import__("__future__").annotations.compiler_flag), scope)
     return scope["auth_login"], HTTPException
 
 
@@ -203,3 +205,19 @@ def test_login_route_returns_429_with_retry_after_for_locked_usernames(monkeypat
         raise AssertionError("locked account must not sign in")
     except HTTPException as exc:
         assert exc.status_code == 429
+
+
+def test_user_select_rejects_unknown_sql_fragments():
+    """User listing SQL only interpolates a closed set of WHERE/ORDER fragments."""
+    store = auth.AuthStore.__new__(auth.AuthStore)
+    assert "WHERE u.id=?" in store._user_select("WHERE u.id=?")
+    try:
+        store._user_select("WHERE u.role='admin'")
+        raise AssertionError("unknown WHERE clause must be rejected")
+    except ValueError as exc:
+        assert "Unsupported user query clause" in str(exc)
+    try:
+        store._user_select(order="ORDER BY u.password_hash")
+        raise AssertionError("unknown ORDER clause must be rejected")
+    except ValueError as exc:
+        assert "Unsupported user query clause" in str(exc)

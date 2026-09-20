@@ -8,8 +8,12 @@ the LLM call is replaced with canned decisions.
 """
 
 from __future__ import annotations
-import json, sys, types
+
+import json
+import sys
+import types
 from pathlib import Path
+
 try:
     import chromadb  # type: ignore  # noqa
 except ModuleNotFoundError:
@@ -18,6 +22,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
+
 
 def install(tmp_path:Path):
     """Temp repository with r1 ("...A thought that continues") and r2 ("into the next block...").

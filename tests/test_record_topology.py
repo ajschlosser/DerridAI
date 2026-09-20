@@ -10,9 +10,9 @@ tests call the normalizer, record constructor and sanity checks directly.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 

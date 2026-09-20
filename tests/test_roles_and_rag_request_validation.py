@@ -27,6 +27,7 @@ def test_rag_schema_rejects_blank_numeric_values():
     value reach retrieval (k, fetch_k, lambda_mult) or concurrency limits.
     """
     import sys
+
     import pytest
     from pydantic import ValidationError
     if str(ROOT / "api") not in sys.path:
@@ -146,3 +147,30 @@ def test_capability_catalog_has_locale_keys():
         if key not in en:
             missing.append(key)
     assert missing == []
+
+
+def test_rag_request_defaults_keep_both_locales_and_hybrid_search():
+    """Default factories must stay typed lists of the closed vocabularies."""
+    import sys
+
+    if str(ROOT / "api") not in sys.path:
+        sys.path.insert(0, str(ROOT / "api"))
+    from app.models import RAGRunRequest
+
+    body = RAGRunRequest(prompt="What is a trace?")
+    assert body.locales == ["en", "fr"]
+    assert body.search_types == ["similarity", "lexical", "mmr"]
+
+
+def test_language_metadata_accepts_a_tuple_of_codes():
+    """Store language tags take a sequence, not only a mutable list."""
+    import sys
+
+    if str(ROOT / "api") not in sys.path:
+        sys.path.insert(0, str(ROOT / "api"))
+    from app.chroma_store import ChromaStore
+
+    codes, role = ChromaStore._infer_language_metadata("Works", ("en", "fr"), None)
+    assert codes == ["en", "fr"]
+    assert role in {"language", "primary", "general"}
+

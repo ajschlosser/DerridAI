@@ -6,9 +6,9 @@ bulk edits, and automatic enrichment all enforce it identically.
 How: passes minimal record dicts to the function and inspects the result.
 """
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 try:
     import chromadb  # type: ignore  # noqa: F401
@@ -18,8 +18,6 @@ except ModuleNotFoundError:
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
-
-
 
 
 def test_metadata_constraints_are_central_and_hard():

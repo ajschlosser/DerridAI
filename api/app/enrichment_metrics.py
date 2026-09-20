@@ -12,11 +12,22 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
-from datetime import datetime
-
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, BLIND_LABEL, CALL, RECHECK, CORRECTED, PROPOSED, REJECTED, RESUMED, REVIEW_EVENTS, SUSPENDED
+from .enrichment_ledger import (
+    ACCEPTED,
+    AUTOFILLED,
+    BLIND_LABEL,
+    CALL,
+    CORRECTED,
+    PROPOSED,
+    RECHECK,
+    REJECTED,
+    RESUMED,
+    REVIEW_EVENTS,
+    SUSPENDED,
+)
 from .experiment_stats import cohens_kappa, two_proportion, wilson
 
 THRESHOLDS = (0.7, 0.8, 0.9, 0.95)

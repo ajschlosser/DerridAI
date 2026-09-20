@@ -88,6 +88,7 @@ def test_bookmarks_after_the_front_matter_agree_with_a_numbering_restart():
 
 def test_an_older_asset_gets_the_inference_when_first_read(tmp_path):
     import json
+
     from app import corpus_builder as cb
 
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
