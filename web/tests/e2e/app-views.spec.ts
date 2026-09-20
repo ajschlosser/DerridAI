@@ -15,7 +15,8 @@ async function openScenario(page: Page, scenario: (typeof scenarios)[number]) {
   await mockBackend(page, { role: scenario.role, fixtures: scenario.fixtures });
   await page.goto(APP + scenario.path);
   await scenario.steps?.(page);
-  await expect(scenario.ready(page), `${scenario.id} did not reach its state`).toBeVisible();
+  // A view that loads its data first can take longer than the default five seconds on a busy CI machine.
+  await expect(scenario.ready(page), `${scenario.id} did not reach its state`).toBeVisible({ timeout: 15_000 });
 }
 
 for (const scheme of ["light", "dark"] as const) {
