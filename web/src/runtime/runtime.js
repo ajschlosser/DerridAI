@@ -32,6 +32,8 @@ import {
 } from "./legacyCompat.js";
 import { FIELD_LABELS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
+import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
+import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
 import { fullHttpErrorDetail } from "../domain/httpErrors";
 import { parsePastedRecord } from "../domain/pastedRecord";
 import { providerRequestConfig } from "../domain/providerRequest";
@@ -620,19 +622,6 @@ const RAG_EVIDENCE_TRANSPORT_FIELDS=[
   "persons","document_language","document_languages","quoted_speaker",
   "quoted_author","quoted_work","quoted_position_holder"
 ];
-function recordPayload(record,{fields=null,includeUpdates=false,includeChromaId=false}={}){
-  const source=record&&typeof record==="object"?record:{};
-  const keys=fields?[...new Set(fields)]:Object.keys(source);
-  const out={};
-  for(const key of keys){
-    if(!(key in source))continue;
-    if(key==="updates"&&!includeUpdates)continue;
-    if(key==="_updates_count"||key==="_researcher_text_policy")continue;
-    if(key==="_chroma_id"&&!includeChromaId)continue;
-    out[key]=source[key];
-  }
-  return out;
-}
 function upsertRecordPayload(record,chromaId=null){
   const out=recordPayload(record,{includeChromaId:false});
   if(chromaId)out._chroma_id=chromaId;
@@ -891,51 +880,13 @@ function toast(message,{tone="auto",duration=null}={}){
   resume();
 }
 
-function highlight(text, query){
-  const s=String(text ?? ""), q=String(query ?? "");
-  if(!q) return esc(s);
-  const low=s.toLocaleLowerCase(), needle=q.toLocaleLowerCase();
-  let out="", pos=0, i;
-  while((i=low.indexOf(needle,pos))>=0){
-    out += esc(s.slice(pos,i)) + "<mark>" + esc(s.slice(i,i+q.length)) + "</mark>";
-    pos=i+Math.max(1,q.length);
-  }
-  return out + esc(s.slice(pos));
-}
 
-function highlightTerms(text, query){
-  const source=String(text??"");
-  // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
-  const terms=[...new Set(String(query??"").trim().split(/\s+/).map(term=>term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g,"")).filter(term=>term.length>1))]
-    .sort((a,b)=>b.length-a.length);
-  if(!terms.length)return esc(source);
-  const pattern=new RegExp(`(${terms.map(term=>term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})`,"gi");
-  let out="",last=0,match;
-  while((match=pattern.exec(source))){out+=esc(source.slice(last,match.index))+`<mark>${esc(match[0])}</mark>`;last=match.index+match[0].length;if(!match[0].length)pattern.lastIndex++}
-  return out+esc(source.slice(last));
-}
-function semanticSimilarity(distance){
-  const d=Number(distance);
-  if(!Number.isFinite(d))return null;
-  // Chroma distances are not calibrated probabilities. This monotonic transform
-  // provides an intuitive 0..1 display while preserving the result ranking.
-  return 1/(1+Math.max(0,d));
-}
 function similarityHtml(distance){
   const score=semanticSimilarity(distance);
   if(score==null)return `<span class="similarity-score" title="${esc(tr("research.similarity_help","Similarity is derived from vector distance and is not a probability."))}">—</span>`;
   return `<span class="similarity-score" title="${esc(tr("research.similarity_help","A ranking signal derived from vector distance. Higher values indicate closer semantic proximity; it is not a probability or confidence score."))}"><b>${(score*100).toFixed(1)}%</b><small>d=${Number(distance).toFixed(4)}</small></span>`;
 }
 
-function snippet(text, query, max=430){
-  const s=String(text ?? "").replace(/\s+/g," ").trim();
-  if(!s) return "";
-  if(!query) return s.length>max?s.slice(0,max)+"…":s;
-  const i=s.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-  if(i<0) return s.length>max?s.slice(0,max)+"…":s;
-  const a=Math.max(0,i-Math.floor(max/2)), b=Math.min(s.length,a+max);
-  return (a?"…":"")+s.slice(a,b)+(b<s.length?"…":"");
-}
 
 let progressiveRenderToken=0;
 function nextProgressiveRenderToken(){return ++progressiveRenderToken}
@@ -1330,18 +1281,6 @@ function storeCellHtml(record,key){
   const value=record[key];if(metadataSearchable(key,value))return `<td><button class="table-metadata-link scroll-cell" type="button" data-meta-search-field="${esc(key)}" data-meta-search-value="${esc(Array.isArray(value)?value[0]:value)}" data-meta-search-contains="${Array.isArray(value)}" title="${esc(display(value))}">${esc(display(value))}</button></td>`;
   return `<td><div class="scroll-cell ${key==="record_id"?"id":""}" title="${esc(display(value))}">${esc(display(value))}</div></td>`;
 }
-function pdfLinks(record){
-  const file=String(record?.pdf_file||"");
-  if(file&&Array.isArray(record?.pdf_pages)){
-    return [...new Set(record.pdf_pages.map(Number).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b).map(pdf_page=>({pdf_file:file,pdf_page}));
-  }
-  const legacyPage=Number(record?.pdf_page);
-  if(file&&Number.isFinite(legacyPage)&&legacyPage>0)return [{pdf_file:file,pdf_page:legacyPage}];
-  if(Array.isArray(record?.pdf_links)){
-    return record.pdf_links.map(link=>({pdf_file:String(link?.pdf_file||""),pdf_page:Number(link?.pdf_page)})).filter(link=>link.pdf_file&&Number.isFinite(link.pdf_page)&&link.pdf_page>0);
-  }
-  return [];
-}
 
 function pdfDisplayTitle(){
   return state.pdf.title||state.pdf.name||"PDF";
@@ -1410,16 +1349,6 @@ function openLoadedPdfPage(page){
   openPdfExplorerWorkspace();
 }
 
-function normalizePdfLinkChanges(record,links){
-  const files=[...new Set(links.map(link=>link.pdf_file).filter(Boolean))];
-  if(files.length>1)throw new Error("A record can link to multiple pages of one PDF source, not multiple PDF files.");
-  const file=files[0]||null;
-  const pages=[...new Set(links.map(link=>Number(link.pdf_page)).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b);
-  const changes={pdf_file:file,pdf_pages:pages};
-  if(record.pdf_page!==undefined)changes.pdf_page=null;
-  if(record.pdf_links!==undefined)changes.pdf_links=null;
-  return changes;
-}
 function editableChipSection(field,values){
   const list=flattenValueList(values);
   const datalist=[...new Set(allRows().flatMap(row=>flattenValueList(row.record[field])).map(String))].sort((a,b)=>a.localeCompare(b));
@@ -7668,12 +7597,6 @@ function touchupFieldsForRecord(record){
   return known;
 }
 
-function modelOptionLabel(model){
-  const bits=[];
-  if(model.parameter_size)bits.push(model.parameter_size);
-  if(model.quantization_level)bits.push(model.quantization_level);
-  return bits.length?`${model.name} · ${bits.join(" · ")}`:model.name;
-}
 
 function jsonPretty(value){
   if(typeof value==="string")return value;
@@ -7805,17 +7728,6 @@ async function refreshProviderStatuses(){
   return statuses;
 }
 
-function openAiModelMatchesKind(name,kind){
-  if(!kind||kind==="any")return true;
-  const value=String(name||"").toLocaleLowerCase();
-  const patterns={
-    reasoning:["reason","deepseek","r1","qwq","o1","o3","thinking"],
-    coding:["code","coder","codex","devstral","starcoder"],
-    fast:["mini","small","flash","haiku","fast","3b","4b","7b","8b"],
-    general:["gpt","gemma","llama","qwen","mistral","claude","general","chat"],
-  };
-  return (patterns[kind]||[]).some(token=>value.includes(token));
-}
 
 async function legacyOpenTouchup(inputItems=null,initialMode="foreground"){
   const fallback=(()=>{
@@ -9158,18 +9070,6 @@ function prepareResearchRerun(job){
 // only the current record data and actions needed by that workspace. Audit
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
-function compactRecordHistory(record,limit=80){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  return updates.slice(-Math.max(1,limit)).reverse().map((update,index)=>({
-    id:`history-${updates.length-index-1}`,
-    field_name:String(update?.field_name||""),
-    timestamp:update?.timestamp||null,
-    source:String(update?.source||"manual"),
-    initiated_by:update?.initiated_by||null,
-    model:update?.model||null,
-    reason:update?.reason||null,
-  }));
-}
 function recordWorkspaceRecord(record){
   const out=recordPayload(record,{includeChromaId:true});
   delete out.updates;
