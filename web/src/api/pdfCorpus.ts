@@ -210,6 +210,7 @@ export const pdfCorpusApi = {
   profiles: () => apiRequest<{items:Array<Record<string,unknown>>}>("/api/pdf/corpus-profiles"),
   listBuilds: (offset=0, limit=50, assetId="") => apiRequest<{items:CorpusBuild[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds?offset=${offset}&limit=${limit}${assetId?`&asset_id=${encodeURIComponent(assetId)}`:""}`),
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
+  regenerateManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<{build:CorpusBuild;filled:string[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest/regenerate`, {method:"POST",body:JSON.stringify(payload)}),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   switchProviderProfile: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`, {method:"PATCH",body:JSON.stringify(payload)}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),

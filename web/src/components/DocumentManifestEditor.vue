@@ -8,7 +8,7 @@ import MetadataFormSection from "./MetadataFormSection.vue";
 import MetadataFormFooter from "./MetadataFormFooter.vue";
 
 const props=withDefaults(defineProps<{manifest?:Record<string,unknown>;disabled?:boolean;affectedRecords?:number}>(),{manifest:()=>({}),disabled:false,affectedRecords:0});
-const emit=defineEmits<{save:[changes:Record<string,unknown>]} >();
+const emit=defineEmits<{save:[changes:Record<string,unknown>];reanalyze:[]} >();
 const i18n=useI18nStore();
 
 // Clues behind an automatically suggested start page; shown only while that page is still the one in use.
@@ -72,7 +72,8 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
   <form class="manifest-editor" :aria-label="i18n.t('pdf_corpus.document_manifest','Document manifest')" @submit.prevent="save">
     <section class="manifest-impact" aria-labelledby="manifest-impact-title">
       <div><span class="eyebrow">{{i18n.t('pdf_corpus.document_defaults','Document defaults')}}</span><h3 id="manifest-impact-title">{{i18n.t('pdf_corpus.document_defaults_title','One edit, inherited consistently')}}</h3><p>{{i18n.t('pdf_corpus.manifest_help','These values are inherited deterministically by records. Saving regenerates inherited metadata and citations while preserving explicit record overrides.')}}</p></div>
-      <UiStatusBadge v-if="props.affectedRecords>0" tone="info" :label="i18n.tf('pdf_corpus.document_defaults_records','{count} records inherit document defaults',{count:props.affectedRecords})" :show-dot="false"/>
+      <div class="manifest-impact-side"><UiButton :label="i18n.t('pdf_corpus.reanalyze_document','Analyse the document again')" :disabled="props.disabled" :title="i18n.t('pdf_corpus.reanalyze_document_help','Ask the model for the document details again. Only fields that are still empty are filled; nothing you entered is changed.')" @click="emit('reanalyze')"/>
+      <UiStatusBadge v-if="props.affectedRecords>0" tone="info" :label="i18n.tf('pdf_corpus.document_defaults_records','{count} records inherit document defaults',{count:props.affectedRecords})" :show-dot="false"/></div>
     </section>
 
     <MetadataFormSection v-for="group in groups" :key="group.key" :title="group.title" :description="group.description">
@@ -97,6 +98,7 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
 </template>
 
 <style scoped>
+.manifest-impact-side{display:grid;gap:8px;justify-items:end;flex:none}
 .manifest-server-change{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .5rem;margin:.375rem 0 0;padding:.375rem .625rem;border:1px solid var(--tone-info-border);border-radius:8px;background:var(--tone-info-bg);color:var(--tone-info-fg);font-size:.8125rem;line-height:1.45}
 .manifest-inference{margin:.375rem 0 0;padding:.5rem .75rem;border:1px solid var(--tone-info-border);border-radius:8px;background:var(--tone-info-bg);color:var(--tone-info-fg);font-size:.8125rem;line-height:1.45}.manifest-inference ul{margin:.25rem 0 0;padding-inline-start:1.125rem}
 .manifest-use-server{border:0;background:none;padding:.125rem 0;color:var(--accent-fg);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}

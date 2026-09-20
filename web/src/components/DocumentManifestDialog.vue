@@ -4,7 +4,7 @@ import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import UiDialog from "./ui/UiDialog.vue";
 
 const props=withDefaults(defineProps<{manifest?:Record<string,unknown>;disabled?:boolean;affectedRecords?:number}>(),{manifest:()=>({}),disabled:false,affectedRecords:0});
-const emit=defineEmits<{save:[changes:Record<string,unknown>];close:[]} >();
+const emit=defineEmits<{save:[changes:Record<string,unknown>];reanalyze:[];close:[]} >();
 const i18n=useI18nStore();
 </script>
 
@@ -21,6 +21,7 @@ const i18n=useI18nStore();
       :disabled="props.disabled"
       :affected-records="props.affectedRecords"
       @save="emit('save',$event)"
+      @reanalyze="emit('reanalyze')"
     />
   </UiDialog>
 </template>
