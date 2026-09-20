@@ -1,0 +1,6460 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`provider profiles service > behaves as recorded across configurations, roles and operations 1`] = `
+[
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","base_url":null,"api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":"z"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "persist",
+      ],
+    ],
+    "researcher": false,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-uid1",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "New Ollama",
+              "num_ctx": 16384,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-uid2",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "New OpenAI-compatible / FreeLLM",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "q",
+              "name": "Renamed",
+              "temperature": "0.3",
+              "type": "ollama",
+            },
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "n2",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "ollama",
+        "default_provider_profile": "n2",
+        "provider_profiles": [
+          {
+            "api_key": "z",
+            "id": "n2",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "a": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+        "n2": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":""}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+    ],
+    "researcher": true,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-uid1",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "openai",
+        "default_provider_profile": "a",
+        "provider_profiles": [
+          {
+            "id": "a",
+            "model": "q",
+            "name": "Renamed",
+            "temperature": "0.3",
+            "type": "ollama",
+          },
+          {
+            "api_key": "z",
+            "id": "n2",
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "rp": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","base_url":null,"api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":"z"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "persist",
+      ],
+    ],
+    "researcher": false,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://host.docker.internal:11434",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-uid1",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "New Ollama",
+              "num_ctx": 16384,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-uid2",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "New OpenAI-compatible / FreeLLM",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "q",
+              "name": "Renamed",
+              "temperature": "0.3",
+              "type": "ollama",
+            },
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "n2",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "ollama",
+        "default_provider_profile": "n2",
+        "provider_profiles": [
+          {
+            "api_key": "z",
+            "id": "n2",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "a": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+        "n2": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":""}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+    ],
+    "researcher": true,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-uid1",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "openai",
+        "default_provider_profile": "a",
+        "provider_profiles": [
+          {
+            "id": "a",
+            "model": "q",
+            "name": "Renamed",
+            "temperature": "0.3",
+            "type": "ollama",
+          },
+          {
+            "api_key": "z",
+            "id": "n2",
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "rp": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","base_url":null,"api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":"z"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "persist",
+      ],
+    ],
+    "researcher": false,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "x",
+              "name": "A",
+              "type": "ollama",
+            },
+            {
+              "api_key": "k",
+              "id": "b",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "name": "B",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "x",
+              "name": "A",
+              "type": "ollama",
+            },
+            {
+              "api_key": "k",
+              "id": "b",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "name": "B",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "x",
+              "name": "A",
+              "type": "ollama",
+            },
+            {
+              "api_key": "k",
+              "id": "b",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "name": "B",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "b",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "a",
+            "max_concurrent_requests": 1,
+            "model": "x",
+            "name": "A",
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "a",
+            "max_concurrent_requests": 1,
+            "model": "x",
+            "name": "A",
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "api_key": "k",
+            "id": "b",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "name": "B",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": null,
+            "max_concurrent_requests": 1,
+            "model": "x",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "a",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "k",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "b",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": null,
+            "max_concurrent_requests": 1,
+            "model": "x",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "a",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "x",
+              "name": "A",
+              "type": "ollama",
+            },
+            {
+              "api_key": "k",
+              "id": "b",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "name": "B",
+              "type": "openai",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-uid1",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "New Ollama",
+              "num_ctx": 16384,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-uid2",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "New OpenAI-compatible / FreeLLM",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "ok": "__u",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "q",
+              "name": "Renamed",
+              "temperature": "0.3",
+              "type": "ollama",
+            },
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "n2",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "ollama",
+        "default_provider_profile": "n2",
+        "provider_profiles": [
+          {
+            "api_key": "z",
+            "id": "n2",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "a": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+        "n2": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":""}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+    ],
+    "researcher": true,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "x",
+              "name": "A",
+              "type": "ollama",
+            },
+            {
+              "api_key": "k",
+              "id": "b",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "name": "B",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "b",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-uid1",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "openai",
+        "default_provider_profile": "a",
+        "provider_profiles": [
+          {
+            "id": "a",
+            "model": "q",
+            "name": "Renamed",
+            "temperature": "0.3",
+            "type": "ollama",
+          },
+          {
+            "api_key": "z",
+            "id": "n2",
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "rp": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","base_url":null,"api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":"z"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "persist",
+      ],
+    ],
+    "researcher": false,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "type": "ollama",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "type": "ollama",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "type": "ollama",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "a",
+            "max_concurrent_requests": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "a",
+            "max_concurrent_requests": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "a",
+            "max_concurrent_requests": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": null,
+            "max_concurrent_requests": 1,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "a",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": null,
+            "max_concurrent_requests": 1,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "a",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": null,
+            "max_concurrent_requests": 1,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "a",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-uid1",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "New Ollama",
+              "num_ctx": 16384,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-uid2",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "New OpenAI-compatible / FreeLLM",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "ok": "__u",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "q",
+              "name": "Renamed",
+              "temperature": "0.3",
+              "type": "ollama",
+            },
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "n2",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "ollama",
+        "default_provider_profile": "n2",
+        "embedding_model": "e",
+        "ollama_base_url": "http://o",
+        "openai_api_key": "sk",
+        "openai_base_url": "http://p/v1",
+        "openai_model": "gpt",
+        "provider_profiles": [
+          {
+            "api_key": "z",
+            "id": "n2",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "a": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+        "n2": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":""}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+    ],
+    "researcher": true,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "type": "ollama",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-uid1",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "chat_provider": "openai",
+        "default_provider_profile": "a",
+        "embedding_model": "e",
+        "ollama_base_url": "http://o",
+        "openai_api_key": "sk",
+        "openai_base_url": "http://p/v1",
+        "openai_model": "gpt",
+        "provider_profiles": [
+          {
+            "id": "a",
+            "model": "q",
+            "name": "Renamed",
+            "temperature": "0.3",
+            "type": "ollama",
+          },
+          {
+            "api_key": "z",
+            "id": "n2",
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "rp": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","base_url":null,"api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":"z"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"ollama","api_key":null}",
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "warm",
+        "a",
+        undefined,
+      ],
+      [
+        "persist",
+      ],
+    ],
+    "researcher": false,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://legacy",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "coding",
+              "model_mode": "manual",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0.2,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://legacy",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "coding",
+              "model_mode": "manual",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0.2,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://legacy",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "coding",
+              "model_mode": "manual",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0.2,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://legacy",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://legacy",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://legacy",
+            "extra_options": "{}",
+            "id": "ollama-default",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "Local Ollama",
+            "num_ctx": 4096,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://legacy",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://legacy",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": null,
+            "base_url": "http://legacy",
+            "max_concurrent_requests": 1,
+            "model": "gemma4:e2b",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": "10m",
+              "min_p": null,
+              "mirostat": 0,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": 4096,
+              "num_predict": 768,
+              "repeat_penalty": 1.1,
+              "seed": null,
+              "temperature": 0,
+              "think": false,
+              "top_k": 0,
+              "top_p": 1,
+            },
+            "provider": "ollama",
+            "provider_profile_id": "ollama-default",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://legacy",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "coding",
+              "model_mode": "manual",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0.2,
+              "top_p": 1,
+              "type": "openai",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:11434",
+              "extra_options": "{}",
+              "id": "ollama-uid1",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "New Ollama",
+              "num_ctx": 16384,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-uid2",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "any",
+              "model_mode": "auto",
+              "name": "New OpenAI-compatible / FreeLLM",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "a",
+              "max_concurrent_requests": 1,
+              "model": "q",
+              "name": "Renamed",
+              "temperature": "0.3",
+              "type": "ollama",
+            },
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "a": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+            "n2": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "n2",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "z",
+              "id": "n2",
+              "max_concurrent_requests": 32,
+              "model_mode": "auto",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "background_llm": false,
+        "chat_provider": "ollama",
+        "default_provider_profile": "n2",
+        "ollama_base_url": "http://legacy",
+        "openai_model_kind": "coding",
+        "openai_model_mode": "manual",
+        "openai_temperature": 0.2,
+        "provider_profiles": [
+          {
+            "api_key": "z",
+            "id": "n2",
+            "max_concurrent_requests": 32,
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "review_provider_profile": "a",
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "a": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+        "n2": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+  {
+    "log": [
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "persist",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai","base_url":null,"api_key":""}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "api",
+        "/api/llm/status",
+        "{"provider":"openai"}",
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+      [
+        "warm",
+        "rp",
+        undefined,
+      ],
+    ],
+    "researcher": true,
+    "results": [
+      [
+        "ensureProviderProfiles",
+        {
+          "ok": [
+            {
+              "api_key": "",
+              "base_url": "http://legacy",
+              "extra_options": "{}",
+              "id": "ollama-default",
+              "keep_alive": "10m",
+              "max_concurrent_requests": 1,
+              "metadata_num_predict": 768,
+              "min_p": "",
+              "mirostat": 0,
+              "mirostat_eta": "",
+              "mirostat_tau": "",
+              "model": "gemma4:e2b",
+              "model_kind": "any",
+              "model_mode": "manual",
+              "name": "Local Ollama",
+              "num_ctx": 4096,
+              "num_predict": 4096,
+              "repeat_penalty": 1.1,
+              "seed": "",
+              "temperature": 0,
+              "think": "false",
+              "top_k": 0,
+              "top_p": 1,
+              "type": "ollama",
+            },
+            {
+              "api_key": "",
+              "base_url": "http://host.docker.internal:3001/v1",
+              "extra_options": "{}",
+              "id": "openai-default",
+              "max_concurrent_requests": 32,
+              "model": "auto",
+              "model_kind": "coding",
+              "model_mode": "manual",
+              "name": "FreeLLM / OpenAI-compatible",
+              "num_predict": 4096,
+              "seed": "",
+              "temperature": 0.2,
+              "top_p": 1,
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-default",
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "defaultProviderProfile",
+        {
+          "ok": {
+            "id": "rp",
+            "name": "R",
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "N",
+        },
+      ],
+      [
+        "providerDisplayName",
+        {
+          "ok": "OpenAI-compatible · model",
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 4096,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "getProviderRequestConfigForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": null,
+            "max_concurrent_requests": 32,
+            "model": "",
+            "ollama": {
+              "extra_options": {},
+              "keep_alive": null,
+              "min_p": null,
+              "mirostat": null,
+              "mirostat_eta": null,
+              "mirostat_tau": null,
+              "num_ctx": null,
+              "num_predict": 768,
+              "repeat_penalty": null,
+              "seed": null,
+              "temperature": 0,
+              "think": null,
+              "top_k": null,
+              "top_p": 1,
+            },
+            "provider": "openai",
+            "provider_profile_id": "rp",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:11434",
+            "extra_options": "{}",
+            "id": "ollama-uid1",
+            "keep_alive": "10m",
+            "max_concurrent_requests": 1,
+            "metadata_num_predict": 768,
+            "min_p": "",
+            "mirostat": 0,
+            "mirostat_eta": "",
+            "mirostat_tau": "",
+            "model": "gemma4:e2b",
+            "model_kind": "any",
+            "model_mode": "manual",
+            "name": "New Ollama",
+            "num_ctx": 16384,
+            "num_predict": 4096,
+            "repeat_penalty": 1.1,
+            "seed": "",
+            "temperature": 0,
+            "think": "false",
+            "top_k": 0,
+            "top_p": 1,
+            "type": "ollama",
+          },
+        },
+      ],
+      [
+        "addProviderProfileForUi",
+        {
+          "ok": {
+            "api_key": "",
+            "base_url": "http://host.docker.internal:3001/v1",
+            "extra_options": "{}",
+            "id": "openai-uid2",
+            "max_concurrent_requests": 32,
+            "model": "auto",
+            "model_kind": "any",
+            "model_mode": "auto",
+            "name": "New OpenAI-compatible / FreeLLM",
+            "num_predict": 4096,
+            "seed": "",
+            "temperature": 0,
+            "top_p": 1,
+            "type": "openai",
+          },
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "setDefaultProviderProfileForUi",
+        {
+          "err": "The selected provider profile is no longer available.",
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "ollama-uid1",
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "saveProviderProfilesForUi",
+        {
+          "err": "At least one provider profile is required.",
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "getWarmOnStartForUi",
+        {
+          "ok": true,
+        },
+      ],
+      [
+        "setWarmOnStartForUi",
+        {
+          "ok": false,
+        },
+      ],
+      [
+        "refreshProviderStatuses",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "getProviderStatusesForUi",
+        {
+          "ok": {
+            "rp": {
+              "models": [
+                {
+                  "name": "m1",
+                },
+              ],
+              "ok": true,
+              "path": "/api/llm/status",
+            },
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "testProviderProfileForUi",
+        {
+          "ok": {
+            "models": [
+              {
+                "name": "m1",
+              },
+            ],
+            "ok": true,
+            "path": "/api/llm/status",
+          },
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "warmProviderProfileForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "getProviderWarmupsForUi",
+        {
+          "ok": {},
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "removeProviderProfileForUi",
+        {
+          "err": "At least one LLM provider profile is required.",
+        },
+      ],
+      [
+        "getProviderProfilesForUi",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+      [
+        "getDefaultProviderProfileId",
+        {
+          "ok": "a",
+        },
+      ],
+      [
+        "providerProfiles",
+        {
+          "ok": [
+            {
+              "id": "rp",
+              "name": "R",
+              "type": "openai",
+            },
+          ],
+        },
+      ],
+    ],
+    "state": {
+      "appConfig": {
+        "background_llm": false,
+        "chat_provider": "openai",
+        "default_provider_profile": "a",
+        "ollama_base_url": "http://legacy",
+        "openai_model_kind": "coding",
+        "openai_model_mode": "manual",
+        "openai_temperature": 0.2,
+        "provider_profiles": [
+          {
+            "id": "a",
+            "model": "q",
+            "name": "Renamed",
+            "temperature": "0.3",
+            "type": "ollama",
+          },
+          {
+            "api_key": "z",
+            "id": "n2",
+            "model_mode": "auto",
+            "type": "openai",
+          },
+        ],
+        "review_provider_profile": "a",
+        "warm_default_provider_on_start": false,
+      },
+      "llmConfig": {
+        "model": "gemma",
+        "num_ctx": 4096,
+      },
+      "llmStatus": {
+        "models": [
+          {
+            "name": "m1",
+          },
+        ],
+        "ok": true,
+        "path": "/api/llm/status",
+      },
+      "providerStatuses": {
+        "rp": {
+          "models": [
+            {
+              "name": "m1",
+            },
+          ],
+          "ok": true,
+          "path": "/api/llm/status",
+        },
+      },
+      "providerWarmups": {},
+      "researcherProviderProfiles": [
+        {
+          "id": "rp",
+          "name": "R",
+          "type": "openai",
+        },
+      ],
+    },
+  },
+]
+`;
