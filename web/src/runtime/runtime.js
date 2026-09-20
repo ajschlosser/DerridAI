@@ -13,6 +13,16 @@ import {
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
+import {
+  applyAppearance as applyAppearanceCompat,
+  applyUiTheme as applyUiThemeCompat,
+  setTranslationDictionary as setTranslationDictionaryCompat,
+  syncColorScheme as syncColorSchemeCompat,
+  tr as trCompat,
+  trf as trfCompat,
+  translateDynamicUiValue as translateDynamicUiValueCompat,
+  translateLegacyDom as translateLegacyDomCompat,
+} from "./legacyCompat.js";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
@@ -198,170 +208,30 @@ const state = {
   storageReady: false,
 };
 
-const UI_COLOR_THEMES=new Set(["green","blue","slate"]);
-const UI_COLOR_SCHEMES=new Set(["system","light","dark"]);
-const UI_CONTRAST_PREFS=new Set(["system","more"]);
-let appearanceMediaWired=false;
-function mediaMatches(query){
-  try{return Boolean(window.matchMedia?.(query)?.matches)}catch{return false}
-}
 function syncColorScheme(){
-  const pref=UI_COLOR_SCHEMES.has(String(state.appConfig.ui_color_scheme||""))?String(state.appConfig.ui_color_scheme):"system";
-  const contrastPref=UI_CONTRAST_PREFS.has(String(state.appConfig.ui_contrast||""))?String(state.appConfig.ui_contrast):"system";
-  const scheme=pref==="light"||pref==="dark"?pref:(mediaMatches("(prefers-color-scheme: dark)")?"dark":"light");
-  const contrast=contrastPref==="more"||(contrastPref==="system"&&mediaMatches("(prefers-contrast: more)"))?"more":"default";
-  try{
-    document.documentElement.dataset.uiTheme=state.appConfig.ui_color_theme||"green";
-    document.documentElement.dataset.colorScheme=scheme;
-    if(contrast==="more")document.documentElement.dataset.contrast="more";
-    else delete document.documentElement.dataset.contrast;
-  }catch{ /* document may be unavailable during early bootstrap */ }
-  return {scheme,contrast};
+  return syncColorSchemeCompat(state);
 }
-function wireAppearanceMedia(){
-  if(appearanceMediaWired||typeof window==="undefined"||!window.matchMedia)return;
-  appearanceMediaWired=true;
-  const sync=()=>syncColorScheme();
-  try{
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",sync);
-    window.matchMedia("(prefers-contrast: more)").addEventListener("change",sync);
-  }catch{ /* matchMedia listeners are best-effort in non-browser test hosts */ }
+function applyUiTheme(theme){
+  return applyUiThemeCompat(state, theme);
 }
-function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{ /* document may be unavailable during early bootstrap */ }try{localStorage.setItem("derridai.ui.theme",next)}catch{ /* localStorage can be blocked */ }syncColorScheme();return next}
 function applyAppearance(patch={}){
-  if(patch.ui_color_theme!=null)applyUiTheme(patch.ui_color_theme);
-  if(patch.ui_color_scheme!=null){
-    const next=UI_COLOR_SCHEMES.has(String(patch.ui_color_scheme))?String(patch.ui_color_scheme):"system";
-    state.appConfig.ui_color_scheme=next;
-    try{localStorage.setItem("derridai.ui.scheme",next)}catch{ /* localStorage can be blocked */ }
-  }
-  if(patch.ui_contrast!=null){
-    const next=UI_CONTRAST_PREFS.has(String(patch.ui_contrast))?String(patch.ui_contrast):"system";
-    state.appConfig.ui_contrast=next;
-    try{localStorage.setItem("derridai.ui.contrast",next)}catch{ /* localStorage can be blocked */ }
-  }
-  wireAppearanceMedia();
-  return syncColorScheme();
+  return applyAppearanceCompat(state, patch);
 }
 
 function setTranslationDictionary(locale,dictionary={},base={},info={}){
-  const canonical=base||{};
-  const reverse=new Map();
-  for(const [key,value] of Object.entries(canonical)){
-    const text=String(value??"").trim();
-    if(text&&!reverse.has(text))reverse.set(text,key);
-  }
-  state.translations={locale:String(locale||"en-US"),dictionary:dictionary||{},base:canonical,reverse,info:info||{}};
+  return setTranslationDictionaryCompat(state, locale, dictionary, base, info);
 }
 function tr(key,fallback=""){
-  return state.translations?.dictionary?.[key] ?? state.translations?.base?.[key] ?? fallback ?? key;
+  return trCompat(state, key, fallback);
 }
 function trf(key,fallback,values={}){
-  let text=String(tr(key,fallback));
-  for(const [name,value] of Object.entries(values))text=text.replaceAll(`{${name}}`,String(value));
-  return text;
-}
-function translateExactUiValue(value){
-  const raw=String(value??"");
-  if(state.translations?.locale==="en-US")return raw;
-  const trimmed=raw.trim();
-  const key=state.translations?.reverse?.get?.(trimmed);
-  if(!key||state.translations?.dictionary?.[key]==null)return raw;
-  const translated=String(state.translations.dictionary[key]);
-  const prefix=raw.match(/^\s*/)?.[0]||"";
-  const suffix=raw.match(/\s*$/)?.[0]||"";
-  return `${prefix}${translated}${suffix}`;
+  return trfCompat(state, key, fallback, values);
 }
 function translateDynamicUiValue(value){
-  const raw=String(value??"");
-  const exact=translateExactUiValue(raw);
-  if(exact!==raw||state.translations?.locale==="en-US")return exact;
-  const prefix=raw.match(/^\s*/)?.[0]||"";
-  const suffix=raw.match(/\s*$/)?.[0]||"";
-  const text=raw.trim();
-  const numericCount=value=>Number(String(value).replace(/[^0-9.-]/g,""));
-  const noun=(oneKey,manyKey,oneFallback,manyFallback,count)=>tr(numericCount(count)===1?oneKey:manyKey,numericCount(count)===1?oneFallback:manyFallback);
-  let match;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${match[1]} ${noun("dynamic.record_one","dynamic.records","record","records",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) works$/i)))return `${prefix}${match[1]} ${noun("dynamic.work_one","dynamic.works","work","works",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) models$/i)))return `${prefix}${match[1]} ${noun("dynamic.model_one","dynamic.models","model","models",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) profiles$/i)))return `${prefix}${match[1]} ${noun("dynamic.profile_one","dynamic.profiles","profile","profiles",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) words$/i)))return `${prefix}${match[1]} ${noun("dynamic.word_one","dynamic.words","word","words",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) characters$/i)))return `${prefix}${match[1]} ${noun("dynamic.character_one","dynamic.characters","character","characters",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) changes$/i)))return `${prefix}${match[1]} ${noun("dynamic.change_one","dynamic.changes","change","changes",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) annotations$/i)))return `${prefix}${match[1]} ${noun("dynamic.annotation_one","dynamic.annotations","annotation","annotations",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) cached responses$/i)))return `${prefix}${match[1]} ${noun("dynamic.cached_response_one","dynamic.cached_responses","cached response","cached responses",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) selected evidence$/i)))return `${prefix}${match[1]} ${tr("dynamic.selected_evidence","selected evidence")}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) selected$/i)))return `${prefix}${trf("dynamic.selected_count","{count} selected",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) of ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.record_range_count","{shown} of {total} records",{shown:match[1],total:match[2]})}${suffix}`;
-  if((match=text.match(/^Page ([0-9]+) \/ ([0-9]+)$/i)))return `${prefix}${trf("dynamic.page_of_pages","Page {page} / {pages}",{page:match[1],pages:match[2]})}${suffix}`;
-  if((match=text.match(/^Ready · ([0-9][0-9., \u00a0]*) models$/i)))return `${prefix}${trf("dynamic.ready_models","Ready · {count} models",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Showing latest ([0-9]+) of ([0-9]+) changes\. Full history is preserved in the record's updates field\.$/i)))return `${prefix}${trf("dynamic.history_latest","Showing latest {shown} of {total} changes. Full history is preserved in the record's updates field.",{shown:match[1],total:match[2]})}${suffix}`;
-  if((match=text.match(/^Cleared updates history from ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.cleared_history_records","Cleared updates history from {count} records",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Restored original record state · ([0-9][0-9., \u00a0]*) fields changed$/i)))return `${prefix}${trf("dynamic.restored_fields","Restored original record state · {count} fields changed",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Loaded ([0-9][0-9., \u00a0]*) records(?: · ([0-9][0-9., \u00a0]*) parse issues)?$/i)))return `${prefix}${trf(match[2]?"dynamic.loaded_records_issues":"dynamic.loaded_records",match[2]?"Loaded {count} records · {issues} parse issues":"Loaded {count} records",{count:match[1],issues:match[2]||"0"})}${suffix}`;
-  if((match=text.match(/^Merged and replaced ([0-9][0-9., \u00a0]*) tabs · ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.merged_tabs_records","Merged and replaced {tabs} tabs · {records} records",{tabs:match[1],records:match[2]})}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) records cleaned · ([0-9][0-9., \u00a0]*) tracked changes$/i)))return `${prefix}${trf("dynamic.cleaned_records","{records} records cleaned · {changes} tracked changes",{records:match[1],changes:match[2]})}${suffix}`;
-  if((match=text.match(/^Exported ([0-9][0-9., \u00a0]*) records from (.+)$/i)))return `${prefix}${trf("dynamic.exported_records","Exported {count} records from {collection}",{count:match[1],collection:match[2]})}${suffix}`;
-  if((match=text.match(/^Grading ([0-9]+) of ([0-9]+) · (.+)$/i)))return `${prefix}${trf("dynamic.grading_progress","Grading {current} of {total} · {question}",{current:match[1],total:match[2],question:match[3]})}${suffix}`;
-  if((match=text.match(/^Translating ([0-9][0-9., \u00a0]*) interface strings to (.+)$/i)))return `${prefix}${trf("dynamic.translating_interface","Translating {count} interface strings to {locale}",{count:match[1],locale:match[2]})}${suffix}`;
-  if((match=text.match(/^Running (.+)$/i)))return `${prefix}${trf("dynamic.running_operation","Running {label}",{label:match[1]})}${suffix}`;
-  if((match=text.match(/^Completed · ([0-9][0-9., \u00a0]*) graded, ([0-9][0-9., \u00a0]*) failed$/i)))return `${prefix}${trf("dynamic.completed_grading","Completed · {graded} graded, {failed} failed",{graded:match[1],failed:match[2]})}${suffix}`;
-  if((match=text.match(/^Completed · ([0-9][0-9., \u00a0]*) works, ([0-9][0-9., \u00a0]*) failed$/i)))return `${prefix}${trf("dynamic.completed_works","Completed · {works} works, {failed} failed",{works:match[1],failed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for provider slot: ([0-9]+) active \/ ([0-9]+) allowed$/i)))return `${prefix}${trf("dynamic.waiting_provider_active","Waiting for provider slot: {active} active / {allowed} allowed",{active:match[1],allowed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for provider slot \(([0-9]+)\/([0-9]+) active\)$/i)))return `${prefix}${trf("dynamic.waiting_provider_active_paren","Waiting for provider slot ({active}/{allowed} active)",{active:match[1],allowed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for Ollama slot: ([0-9]+) active \/ ([0-9]+) allowed$/i)))return `${prefix}${trf("dynamic.waiting_ollama_active","Waiting for Ollama slot: {active} active / {allowed} allowed",{active:match[1],allowed:match[2]})}${suffix}`;
-  return raw;
+  return translateDynamicUiValueCompat(state, value);
 }
-
-/**
- * Translate application-owned legacy UI labels after a compatibility renderer
- * has painted. Exact dictionary values are preferred; a deliberately small set
- * of count/status patterns handles legacy strings that contain runtime numbers.
- * Corpus passages, record text, source evidence, code and user input are blocked
- * from this bridge. New Vue-native components should call the i18n store directly.
- */
 function translateLegacyDom(root=document.querySelector("#main")){
-  if(!root||state.translations?.locale==="en-US")return;
-  const selectors=[
-    "button","label","th","option",".section-label",".side-section-label",
-    ".dialog-title",".dialog-subtitle",".empty-store > b",".ui-collapse-title"
-  ];
-  root.querySelectorAll(selectors.join(",")).forEach(element=>{
-    // Controls with nested icons/counts keep their structured children; translating
-    // only pure text labels avoids destroying SVG or status badges.
-    if(element.childElementCount===0&&element.textContent){
-      const next=translateDynamicUiValue(element.textContent);
-      if(next!==element.textContent)element.textContent=next;
-    }
-    for(const attr of ["title","aria-label","placeholder"]){
-      if(!element.hasAttribute(attr))continue;
-      const current=element.getAttribute(attr)||"";
-      const next=translateDynamicUiValue(current);
-      if(next!==current)element.setAttribute(attr,next);
-    }
-  });
-  root.querySelectorAll("input[placeholder],textarea[placeholder],select[title]").forEach(element=>{
-    for(const attr of ["placeholder","title","aria-label"]){
-      if(!element.hasAttribute(attr))continue;
-      const current=element.getAttribute(attr)||"";
-      const next=translateDynamicUiValue(current);
-      if(next!==current)element.setAttribute(attr,next);
-    }
-  });
-  // Compatibility views still contain substantial vanilla-DOM markup. Translate
-  // exact UI phrases even when an icon or badge makes the containing element
-  // non-leaf, but never walk record/evidence/source-text regions.
-  const blocked=".textcell,.recordtext,.pdftext,.researcher-summary-text,[data-annotatable-field],pre,code,svg,script,style,textarea,input";
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
-  const nodes=[];let node;
-  while((node=walker.nextNode()))nodes.push(node);
-  for(const textNode of nodes){
-    const parent=textNode.parentElement;
-    if(!parent||parent.closest(blocked))continue;
-    const next=translateDynamicUiValue(textNode.nodeValue||"");
-    if(next!==textNode.nodeValue)textNode.nodeValue=next;
-  }
+  return translateLegacyDomCompat(state, root);
 }
 
 const labels = {
@@ -8744,7 +8614,7 @@ function openAiModelMatchesKind(name,kind){
   return (patterns[kind]||[]).some(token=>value.includes(token));
 }
 
-async function openTouchup(inputItems=null,initialMode="foreground"){
+async function legacyOpenTouchup(inputItems=null,initialMode="foreground"){
   const fallback=(()=>{
     const file=activeFile(),record=selectedRecord();
     if(!file||!record)return [];
@@ -9220,6 +9090,90 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
   dialog.querySelector("[data-close]").onclick=close;
   status=await fetchLlmStatus();
   renderSetup();
+}
+
+function normalizeTouchupItems(inputItems=null){
+  const fallback=(()=>{
+    const file=activeFile(),record=selectedRecord();
+    if(!file||!record)return [];
+    const index=selectedIndex(file);
+    return [{file,index,record,key:reviewKey(file,index)}];
+  })();
+  return (inputItems?.length?inputItems:fallback).map(item=>({
+    ...item,
+    record:item.file.records[item.index],
+    key:item.key||reviewKey(item.file,item.index),
+  })).filter(item=>item.record);
+}
+function openTouchup(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  if(!items.length)return;
+  window.dispatchEvent(new CustomEvent("derridai:open-touchup",{detail:{items,initialMode}}));
+}
+function touchupWorkspaceInfo(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  const availableFields=[];
+  for(const item of items){
+    for(const field of touchupFieldsForRecord(item.record))if(!availableFields.includes(field)&&field!=="updates")availableFields.push(field);
+  }
+  const attributionPreset=["speaker","position_holder","target","is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain"].filter(field=>availableFields.includes(field));
+  const semanticPreset=["discourse_role","proposition_status","semantic_function","stance","claim_scope","topics","concepts","persons","works_referenced"].filter(field=>availableFields.includes(field));
+  const preset=state.appConfig.default_review_preset;
+  return {
+    items,
+    initialMode,
+    availableFields,
+    attributionPreset,
+    semanticPreset,
+    defaultSelection:preset==="text"&&availableFields.includes("text")?["text"]:preset==="semantic"?semanticPreset:attributionPreset,
+    groups:TOUCHUP_GROUPS,
+    highRiskFields:[...HIGH_RISK_TOUCHUP_FIELDS],
+    fieldLabels:Object.fromEntries(availableFields.map(field=>[field,label(field)])),
+    profiles:providerProfiles().map(profile=>({...profile,api_key:undefined})),
+    providerProfileId:state.appConfig.review_provider_profile||state.appConfig.default_provider_profile||defaultProviderProfile()?.id||"",
+    defaultMode:initialMode==="auto"?"auto":state.appConfig.default_llm_run_mode==="foreground"?"foreground":"background",
+  };
+}
+async function touchupProviderStatus(profileId){
+  const profile=providerProfile(profileId);
+  if(!profile)return {provider:"ollama",available:false,models:[],configured_model:"",error:"No provider profile configured"};
+  try{
+    const status=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url||null,api_key:profile.type==="openai"?(profile.api_key||""):null})});
+    state.providerStatuses[profile.id]=status;
+    return status;
+  }catch(error){return {provider:profile.type,available:false,models:[],configured_model:profile.model||"",error:error.message};}
+}
+function touchupRequestConfig(profileId,model,fields=[]){
+  const profile=providerProfile(profileId);
+  const config=providerRequestConfig(profile,{textReview:fields.includes("text")});
+  if(config&&model)config.model=model;
+  return config;
+}
+async function touchupRequest(item,fields,config,instructions=""){
+  return api("/api/llm/touchup",{method:"POST",body:JSON.stringify({
+    record:touchupRecordPayload(item.file.records[item.index],fields),fields,instructions,
+    model:config.model,provider:config.provider,base_url:config.base_url,api_key:config.api_key,ollama:config.ollama,
+  })});
+}
+async function touchupSubmitBackground(items,config,fields,instructions,mode){
+  return submitBackgroundLlmJob(items,config,fields,instructions,mode);
+}
+function touchupApplyResults(items,results,approvals,all=false,reviewOnly=false){
+  const batchId=uid();let appliedFields=0,reviewedRecords=0;
+  for(const item of items){
+    const result=results[item.key];if(!result?.proposal)continue;
+    const fields=reviewOnly?[]:(all?Object.keys(result.proposal.changes||{}):[...(approvals[item.key]||[])]);
+    const changes={};
+    for(const field of fields)if(field in result.proposal.changes)changes[field]=result.proposal.changes[field];
+    const record=item.file.records[item.index];
+    if(record.needs_review===true)changes.needs_review=false;
+    if(record.review_reason!==undefined&&record.review_reason!==null&&record.review_reason!=="")changes.review_reason=null;
+    appliedFields+=applyRecordChanges(item.file,item.index,changes,{source:"llm_review",model:result.proposal.model,batchId,rationale:result.proposal.rationale});
+    reviewedRecords++;
+  }
+  clearReviewSelection();shell();renderView();
+  toast(`Marked ${reviewedRecords} record${reviewedRecords===1?"":"s"} reviewed · ${appliedFields} tracked field change${appliedFields===1?"":"s"}`);
+  return {appliedFields,reviewedRecords};
 }
 
 function backupContainsCredentials(){
@@ -10748,6 +10702,28 @@ async function currentRecordPrimaryAction(action,payload={}){
 function searchCurrentRecordMetadata(field,value,{contains=false}={}){return searchByMetadata(field,value,{contains})}
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
+function getWorksWorkspaceSnapshot(){
+  const map=workIndex();
+  const query=String(state.worksSearch||"");
+  const metadataFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
+  const items=[...map.values()].filter(item=>!query||item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.work.localeCompare(b.work)).map(item=>({
+    work:item.work,count:item.count,review:item.review,annotations:allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length,files:[...item.files],authors:[...item.authors],years:[...item.years].map(String),cover:workCoverUrl(item.rows),citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
+    metadata:metadataFields.map(field=>{const value=commonWorkValue(item.rows,field);return {field,mixed:value.mixed,value:value.mixed?"":String(display(value.value))}}).filter(value=>value.mixed||value.value!=="—"),
+    status:workDbStatus(item.rows,item.work),insights:workInsightMetrics(item.rows,item.work).map(metric=>({id:metric.id,title:metric.title,values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0)}))})),
+  }));
+  const stores=recordStores().map(store=>({name:store.name,count:Number(store.count||0)}));
+  return {available:state.files.length>0,works:items,query,selectedWork:String(state.workOverview||""),stores,activeStore:String(state.activeStore||""),totalWorks:map.size,totalRecords:[...map.values()].reduce((sum,item)=>sum+item.count,0),dbUnavailableReason:dbUnavailableReason(),capabilities:{canManageCorpus:canUse("manageCorpus"),canSync:canUse("manageCorpus")&&hasCorpusDb()}};
+}
+function setWorksSearch(value){state.worksSearch=String(value||"");persistPrefs();syncUrl({replace:true})}
+function setWorksOverview(work){state.workOverview=String(work||"");persistPrefs();syncUrl({replace:true})}
+function setWorksStore(name){setActiveStore(name)}
+async function syncWork(work){const item=workIndex().get(String(work||""));if(!item)return false;return upsertRows(item.rows,trf("works.work_records_label","records for {work}",{work:item.work}))}
+async function syncAllWorks(){const rows=[...workIndex().values()].flatMap(item=>item.rows);return upsertRows(rows,tr("works.all_records_label","records across all works"))}
+function searchWork(work){state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")}];state.globalPage=1;persistPrefs();navigateTo("global")}
+function openWorkMetadataEditorForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataEditor(item.work,item.rows)}
+function openWorkMetadataLlmDialogForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataLlmDialog([item])}
+function openWorkAnnotations(work){state.annotationSearch=String(work||"");state.annotationView="works";persistPrefs();navigateTo("annotations")}
+
 export {
   getNavItems,
   operationViewModel,
@@ -10776,6 +10752,13 @@ export {
   triggerOcrClean,
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
+  openTouchup,
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
   triggerUpsertQueue,
   triggerOperations,
   triggerExport,
@@ -10848,6 +10831,17 @@ export {
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
+  getWorksWorkspaceSnapshot,
+  setWorksSearch,
+  setWorksOverview,
+  setWorksStore,
+  syncWork,
+  syncAllWorks,
+  searchWork,
+  openWorkMetadataEditorForVue as openWorkMetadataEditor,
+  openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
+  openWorkAnnotations,
+  openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,
   updateSearchQuery,
