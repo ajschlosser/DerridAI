@@ -731,6 +731,17 @@ async function bulkDisposition(disposition:"accepted"|"rejected"){
 
 async function undoReview(){if(!currentBuild.value)return;const viewport=captureReviewViewport();busy.value="record";try{const result=await pdfCorpusApi.undoReview(currentBuild.value.build_id);await refreshBuild();await refreshRecords(true,result.selected_record_id||"");await restoreReviewViewport(viewport,{record:true});setMessage(i18n.t("pdf_corpus.undo_done","The last review change was undone."))}catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function redoReview(){if(!currentBuild.value)return;const viewport=captureReviewViewport();busy.value="record";try{const result=await pdfCorpusApi.redoReview(currentBuild.value.build_id);await refreshBuild();await refreshRecords(true,result.selected_record_id||"");await restoreReviewViewport(viewport,{record:true});setMessage(i18n.t("pdf_corpus.redo_done","The last undone review change was restored."))}catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
+async function reanalyzeDocument(){
+  if(!currentBuild.value)return;
+  busy.value="manifest";
+  try{
+    const result=await pdfCorpusApi.regenerateManifest(currentBuild.value.build_id,providerPayload.value);
+    currentBuild.value=result.build;
+    await refreshBuilds();
+    if(result.filled.length)await refreshRecords(true);
+    setMessage(result.filled.length?i18n.tf("pdf_corpus.reanalyze_filled","The model filled {count} missing document detail(s): {fields}.",{count:result.filled.length,fields:result.filled.join(", ")}):i18n.t("pdf_corpus.reanalyze_nothing","The model found nothing new to add."));
+  }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
 async function saveManifest(changes:Record<string,unknown>){if(!currentBuild.value)return;busy.value="manifest";try{currentBuild.value=await pdfCorpusApi.patchManifest(currentBuild.value.build_id,changes,Number(currentBuild.value.manifest_revision||1));await refreshBuilds();await refreshRecords(true);setMessage(i18n.t("pdf_corpus.manifest_saved","Document manifest saved. Inherited record metadata and citations were regenerated for review."))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 
 async function saveReviewedText(resolveIssues=resolveSourceOnTextSave.value){
@@ -1017,7 +1028,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           </section>
           <details v-if="currentBuild.manifest&&Object.keys(currentBuild.manifest).length&&(!showReviewWorkspace||finishPhase)" class="manifest-details" :open="awaitingManifestReview">
             <summary>{{i18n.t('pdf_corpus.document_manifest','Document manifest')}} · {{i18n.t('pdf_corpus.revision','revision')}} {{currentBuild.manifest_revision||1}}</summary>
-            <DocumentManifestEditor :manifest="currentBuild.manifest||{}" :disabled="buildRunning||busy!==''" @save="saveManifest" />
+            <DocumentManifestEditor :manifest="currentBuild.manifest||{}" :disabled="buildRunning||busy!==''" @save="saveManifest" @reanalyze="reanalyzeDocument" />
           </details>
           <div v-if="!showReviewWorkspace||finishPhase" class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{currentBuild.schema_version}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
         </section>
@@ -1112,7 +1123,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
       </main>
     </div>
 
-    <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" :affected-records="Number(currentBuild.record_count||0)" @save="saveManifest" @close="documentMetadataOpen=false" />
+    <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" @reanalyze="reanalyzeDocument" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" :affected-records="Number(currentBuild.record_count||0)" @save="saveManifest" @close="documentMetadataOpen=false" />
 
     <Teleport to="body"><CorpusBoundarySliceDialog v-if="boundarySliceOpen&&selectedRecord" :text="String(selectedRecord.text||'')" :can-previous="canMergePrevious" :can-next="canMergeNext" :busy="busy!==''" @close="boundarySliceOpen=false" @slice="sliceRecord" /></Teleport>
     <CorpusTextCleanupDialog v-if="textCleanupOpen&&selectedRecord" :text="textDraft" :recurring-lines="recurringCleanupLines" :document-terms="cleanupDocumentTerms" @close="textCleanupOpen=false" @apply="value=>{textDraft=value;textCleanupOpen=false;setMessage(i18n.t('pdf_corpus.cleanup_applied_draft','Cleanup applied to the reviewed-text draft. Save to persist it.'))}" />

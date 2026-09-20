@@ -764,6 +764,7 @@ def llm_warmup(body: LLMWarmupRequest):
             model=body.model,
             base_url=body.base_url,
             api_key=body.api_key,
+            num_ctx=body.num_ctx,
         )
     except TouchupFailure as exc:
         detail = {"message": exc.message}
@@ -2041,6 +2042,16 @@ def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwit
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/manifest/regenerate")
+def regenerate_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun):
+    try:
+        return pdf_corpus_builds.regenerate_manifest(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/manifest")

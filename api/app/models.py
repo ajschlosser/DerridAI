@@ -232,6 +232,7 @@ class LLMWarmupRequest(BaseModel):
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
+    num_ctx: int | None = Field(default=None, ge=256, le=1048576)
 
 
 class TouchupRequest(BaseModel):

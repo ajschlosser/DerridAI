@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 import fitz
+import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .config import APP_VERSION, settings
@@ -1764,6 +1765,45 @@ class PdfCorpusBuildManager:
         record.setdefault("recheck_results", {})[field] = {"first": first, "second": value, "agreed": agreed}
         return True
 
+    _TRANSPORT_PAUSES = (3.0, 8.0, 15.0)
+    _TRANSPORT_MARKERS = (
+        "disconnected", "connection reset", "connection refused", "connection aborted", "broken pipe", "errno 97", "errno 104",
+        "errno 111", "temporarily unavailable", "remote end closed", "eof occurred",
+    )
+
+    @classmethod
+    def _is_transport_error(cls, exc: Exception) -> bool:
+        """A dropped connection, not a bad answer or a timeout: worth trying again once the server is ready."""
+        if isinstance(exc, (httpx.TimeoutException, InterruptedError)):
+            return False
+        text = f"{type(exc).__name__} {exc}".casefold()
+        if "timeout" in text or "timed out" in text:
+            return False
+        return isinstance(exc, (httpx.TransportError, ConnectionError, OSError)) or any(marker in text for marker in cls._TRANSPORT_MARKERS)
+
+    def _with_transport_retry(self, build_id: str, call: Callable[..., str], **kwargs: Any) -> str:
+        """Run a model call, retrying with a growing pause when the connection itself fails.
+
+        Restarting Ollama, or a model load being abandoned by whoever asked for it, drops every request waiting on
+        it. Trying at once meets the same closed door, so wait a few seconds; a build should not fall back to a
+        degraded result because a server was busy starting.
+        """
+        pauses = self._TRANSPORT_PAUSES
+        for attempt in range(len(pauses) + 1):
+            try:
+                return call(**kwargs)
+            except Exception as exc:  # noqa: BLE001 - classified below; anything else is re-raised untouched
+                if attempt >= len(pauses) or not self._is_transport_error(exc):
+                    raise
+                if build_id:
+                    self._increment_metric(build_id, "transport_retries")
+                deadline = time.monotonic() + pauses[attempt]
+                while time.monotonic() < deadline:
+                    if build_id and self._cancelled(build_id):
+                        raise InterruptedError("Corpus build cancelled") from exc
+                    time.sleep(0.25)
+        raise RuntimeError("unreachable")  # pragma: no cover
+
     def _note_llm_call_start(self, build_id: str, task: str, provider: str, model: str, base_url: str) -> int:
         token = time.monotonic_ns()
         if build_id:
@@ -2443,7 +2483,7 @@ class PdfCorpusBuildManager:
                     )
                     call_token = self._note_llm_call_start(build_id, metric_stage_of(schema_name), provider, model, base_url)
                     try:
-                        raw = chat_complete(
+                        raw = self._with_transport_retry(build_id, chat_complete, 
                             provider=provider,
                             model=model,
                             base_url=base_url,
@@ -5801,6 +5841,35 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         if layout.get("main_text_pdf_start") == start_page:
             return
         self.repo.update_document_layout(asset_id, {**layout, "main_text_pdf_start": start_page})
+
+    def regenerate_manifest(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Ask the model for the document analysis again and fill only what is still empty.
+
+        A build whose first analysis failed (a model that was still loading, a restart) falls back to the PDF's own
+        properties. This tries again with the current provider without touching anything a person has entered or
+        that an earlier analysis already found; values that are missing are added through the ordinary manifest save,
+        so records inherit them and the affected ones are reopened as for any manifest edit.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Wait for the active corpus operation to finish before analysing the document again.")
+        if build.get("status") == "published":
+            raise ValueError("Published builds are immutable.")
+        asset = self.repo.get_asset(str(build.get("asset_id") or ""))
+        blocks = self.repo.load_blocks(str(build.get("asset_id") or ""))
+        active_request = self._interactive_llm_request(build_id, request or None)
+        fresh = self._document_manifest(asset, blocks, active_request, build_id)
+        if bool(active_request.get("auto_enrich_work_metadata", True)):
+            fresh = self._catalog_enrich_manifest(fresh, active_request, build_id)
+        current = dict(build.get("manifest") or {})
+        empty = (None, "", [])
+        filled = {
+            key: fresh[key] for key in DocumentManifestModel.model_fields
+            if current.get(key) in empty and fresh.get(key) not in empty
+        }
+        if not filled:
+            return {"build": build, "filled": []}
+        return {"build": self.patch_manifest(build_id, filled), "filled": sorted(filled)}
 
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
