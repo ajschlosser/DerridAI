@@ -13,6 +13,8 @@ import {
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
+import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
+import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
   applyAppearance as applyAppearanceCompat,
@@ -823,45 +825,6 @@ function reviewItemFromKey(key){
 }
 function selectedReviewItems(){return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean)}
 
-function mlaAuthorName(value){
-  const name=String(value||"").trim();if(!name)return "";
-  if(name.includes(","))return name;const parts=name.split(/\s+/);if(parts.length<2)return name;return `${parts.pop()}, ${parts.join(" ")}`;
-}
-function mlaPageSpan(record,{prefix=true}={}){
-  const a=record?.page_start,b=record?.page_end;
-  if(a==null||a==="")return "";const span=b!=null&&b!==""&&String(b)!==String(a)?`${a}–${b}`:`${a}`;
-  return prefix?`${b!=null&&b!==""&&String(b)!==String(a)?"pp.":"p."} ${span}`:span;
-}
-function inlineCitation(record){
-  const author=String(record?.document_author||record?.author||"").trim();
-  const last=author.includes(",")?author.split(",")[0].trim():author.split(/\s+/).filter(Boolean).pop()||"";
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const a=record?.page_start,b=record?.page_end;
-  const page=a==null||a===""?"":(b!=null&&b!==""&&String(b)!==String(a)?`${a}-${b}`:`${a}`);
-  const head=[last,year].filter(Boolean).join(" ");
-  if(head&&page)return `(${head}: ${page})`;
-  if(head)return `(${head})`;
-  return page?`(${page})`:String(record?.record_id||"Record");
-}
-function mlaSentence(value){const text=String(value||"").trim();return text&&!/[.!?]$/.test(text)?`${text}.`:text}
-function fullCitation(record,{includePages=true}={}){
-  const author=mlaAuthorName(record?.document_author||record?.author);
-  const title=String(record?.work||record?.document_title||"").trim();
-  const translator=String(record?.translator||"").trim();
-  const edition=String(record?.edition||"").trim();
-  const publisher=String(record?.publisher||"").trim();
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const page=includePages?mlaPageSpan(record):"";
-  const opening=[author?mlaSentence(author):"",title?mlaSentence(title):""].filter(Boolean).join(" ");
-  const publication=[];
-  if(translator)publication.push(`Translated by ${translator}`);
-  if(edition)publication.push(edition);
-  if(publisher)publication.push(publisher);
-  if(year)publication.push(year);
-  if(page)publication.push(page);
-  const tail=publication.length?`${publication.join(", ")}.`:"";
-  return [opening,tail].filter(Boolean).join(" ").trim()||String(record?.record_id||"Record");
-}
 async function copyCitation(record,kind="inline"){
   const text=kind==="full"?fullCitation(record):inlineCitation(record);
   try{await navigator.clipboard.writeText(text);toast(`Copied ${kind} citation`,{tone:"success"})}
@@ -949,15 +912,6 @@ function setReviewSelected(file,index,selected){
 function clearReviewSelection(){
   state.reviewSelection.clear();
   persistPrefs();
-}
-function cloneAuditValue(value){
-  if(value===undefined)return null;
-  try{return structuredClone(value)}catch{
-    try{return JSON.parse(JSON.stringify(value))}catch{return String(value)}
-  }
-}
-function sameValue(a,b){
-  try{return JSON.stringify(a)===JSON.stringify(b)}catch{return Object.is(a,b)}
 }
 
 // 0.30.11 packet discipline: API boundaries receive only fields required by
@@ -1391,25 +1345,6 @@ function pages(r){
   return r.page_end!=null && r.page_end!==r.page_start ? `${display(r.page_start)}–${display(r.page_end)}` : display(r.page_start);
 }
 
-function compareValues(a,b){
-  const ae=a==null||a==="", be=b==null||b==="";
-  if(ae&&be)return 0;if(ae)return 1;if(be)return -1;
-  if(Array.isArray(a))a=a.join("\u0000");if(Array.isArray(b))b=b.join("\u0000");
-  if(typeof a==="boolean"||typeof b==="boolean")return Number(a)-Number(b);
-  const na=Number(a),nb=Number(b);
-  if(Number.isFinite(na)&&Number.isFinite(nb)&&String(a).trim()!==""&&String(b).trim()!=="")return na-nb;
-  return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});
-}
-
-function sortRows(rows, sort){
-  if(!sort?.key) return rows;
-  return [...rows].sort((x,y)=>{
-    const av=sort.key==="__file"?x.file.name:x.record?.[sort.key];
-    const bv=sort.key==="__file"?y.file.name:y.record?.[sort.key];
-    const c=compareValues(av,bv);
-    return (c || x.index-y.index)*sort.dir;
-  });
-}
 function toggleSort(sort,key){if(sort.key===key)sort.dir*=-1;else{sort.key=key;sort.dir=1}}
 function sortHead(text,key,sort,className=""){const arrow=sort.key===key?(sort.dir===1?"▲":"▼"):"";return `<th${className?` class="${esc(className)}"`:""}><button data-sort="${esc(key)}">${esc(text)} ${arrow}</button></th>`}
 
@@ -1435,24 +1370,9 @@ function wirePager(prefix,pg,setPage){
   });
 }
 
-function stableValue(value){
-  if(Array.isArray(value))return value.map(stableValue);
-  if(value&&typeof value==="object"){
-    const out={};
-    for(const key of Object.keys(value).filter(key=>key!=="updates"&&key!=="_updates_count"&&!key.startsWith("_chroma_")).sort())out[key]=stableValue(value[key]);
-    return out;
-  }
-  return value;
-}
 function recordFingerprint(record){
   if(record&&typeof record==="object"&&recordFingerprintCache.has(record))return recordFingerprintCache.get(record);
-  const text=JSON.stringify(stableValue(record));
-  let hash=2166136261;
-  for(let i=0;i<text.length;i++){
-    hash^=text.charCodeAt(i);
-    hash=Math.imul(hash,16777619);
-  }
-  const value=(hash>>>0).toString(16).padStart(8,"0");
+  const value=computeRecordFingerprint(record);
   if(record&&typeof record==="object")recordFingerprintCache.set(record,value);
   return value;
 }
