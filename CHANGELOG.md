@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.19 — Configurable Chameleon
+
+Metadata schemas: define which fields JSONL records have, their allowed values and what the model looks for in each; save, share and choose one per build. See [0.62.19](docs/notes/0.62.19.md).
+
 ## 0.62.18 — Hands-free Heron
 
 A hands-free mode, and fixes to review: a quoted speaker can be added, Save & mark reviewed stays in reach, the review screen is more compact, and the default model is no longer loaded unasked. See [0.62.18](docs/notes/0.62.18.md).
