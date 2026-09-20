@@ -1,7 +1,7 @@
 {
-  "name": "derridai-corpus-viewer",
+  "name": "derridai",
   "private": true,
-  "version": "0.58.0",
+  "version": "0.62.18",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -9,7 +9,14 @@
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview --host 0.0.0.0",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:frontend": "npm run typecheck && npm run test:unit && npm run build && npm run build-storybook && npm run test:e2e",
+    "lint": "eslint src --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "diff": "^7.0.0",
@@ -19,13 +26,24 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.1",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.5",
-    "vue-tsc": "^3.0.6",
-    "storybook": "^10.0.0",
+    "@axe-core/playwright": "^4.10.2",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.55.0",
+    "@storybook/addon-a11y": "^10.0.0",
     "@storybook/vue3-vite": "^10.0.0",
-    "@storybook/addon-a11y": "^10.0.0"
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.4.6",
+    "eslint": "^9.39.5",
+    "eslint-plugin-vue": "^10.11.0",
+    "globals": "^16.5.0",
+    "happy-dom": "^18.0.1",
+    "prettier": "3.6.2",
+    "storybook": "^10.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.0.6"
   },
   "author": "Aaron John Schlosser, PhD",
   "copyright": "Copyright 2026 Aaron John Schlosser, PhD."

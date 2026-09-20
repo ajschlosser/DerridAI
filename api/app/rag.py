@@ -2,18 +2,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import time
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
 from .chroma_store import ChromaStore
 from .config import settings
 from .models import OllamaTouchupOptions, RAGRunRequest
+from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 
+logger = logging.getLogger(__name__)
 
 QUERY_TEMPLATE = """
 Your job is to extract query details from the user's research request.
@@ -107,7 +111,7 @@ def _response_detail(response: httpx.Response) -> str:
                 return str(error.get("message") or error)
             return str(payload.get("detail") or payload.get("message") or "")
     except Exception:
-        pass
+        logger.debug("Could not parse provider error JSON; using response text", exc_info=True)
     return response.text[:1200]
 
 
@@ -425,10 +429,10 @@ def _context_string(
     *,
     record_char_limit: int,
     total_char_limit: int,
-) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+) -> tuple[str, dict[str, str], list[EvidenceItem]]:
     blocks: list[str] = []
     works: dict[str, str] = {}
-    evidence: list[dict[str, Any]] = []
+    evidence: list[EvidenceItem] = []
     total_chars = 0
 
     for item in records:
@@ -486,7 +490,30 @@ def _context_string(
     return "\n\n".join(blocks), works, evidence
 
 
-def _bind_sources(answer: str, evidence: list[dict[str, Any]], include_works_cited: bool) -> str:
+def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Return deterministic provenance failures before generation can begin."""
+    issues: list[dict[str, str]] = []
+    for item in evidence:
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        evidence_id = str(item.get("evidence_id") or "unknown")
+        missing = [
+            field
+            for field, value in {
+                "record_id": record.get("record_id"),
+                "work": record.get("work"),
+                "document_author": record.get("document_author"),
+                "exact_text": record.get("text"),
+                "inline_citation": item.get("inline_citation"),
+                "full_citation": item.get("full_citation"),
+            }.items()
+            if not str(value or "").strip()
+        ]
+        if missing:
+            issues.append({"evidence_id": evidence_id, "missing": ", ".join(missing)})
+    return issues
+
+
+def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
     citation_map = {
         item["evidence_id"]: item["inline_citation"]
         for item in evidence
@@ -736,7 +763,7 @@ def _resolve_search_collections(
     return resolved
 
 
-def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) -> list[dict[str, Any]]:
+def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) -> list[RetrievalCandidate]:
     """Resolve user-selected evidence to authoritative records.
 
     DB-backed researcher selections are sent as collection/id pairs so the full
@@ -744,7 +771,7 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
     directly. The resulting candidate shape matches retrieval candidates and can
     therefore enter the existing context/citation pipeline unchanged.
     """
-    resolved: list[dict[str, Any]] = []
+    resolved: list[RetrievalCandidate] = []
     seen: set[str] = set()
     for selection in request.selected_evidence or []:
         record: dict[str, Any] | None = None
@@ -773,6 +800,25 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
             "selected_evidence": True,
         })
     return resolved
+
+
+def _scope_rag_candidates(
+    rows: list[dict[str, Any]],
+    collection: dict[str, Any],
+    locale_codes: set[str],
+) -> list[dict[str, Any]]:
+    if collection.get("collection_role") == "language":
+        return rows
+    scoped: list[dict[str, Any]] = []
+    for candidate in rows:
+        record = candidate.get("record") or {}
+        language_value = record.get("document_language")
+        if language_value is None:
+            language_value = record.get("document_languages")
+        codes = ChromaStore._record_language_codes(language_value)
+        if not locale_codes or codes & locale_codes:
+            scoped.append(candidate)
+    return scoped
 
 
 def run_rag_pipeline(
@@ -809,6 +855,7 @@ def run_rag_pipeline(
     # Step 1-2: query metadata/decomposition, adapted from the supplied pipeline.
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
+    parsed_query: dict[str, Any] = {}
     if request.query_decomposition:
         decomposition_prompt = QUERY_TEMPLATE.format(
             prompt=request.prompt,
@@ -826,26 +873,23 @@ def run_rag_pipeline(
             cancelled=cancelled,
         )
         try:
-            query_metadata = _extract_json(raw)
+            parsed_query = _extract_json(raw)
         except Exception as exc:
             warnings.append(
                 f"Query decomposition failed ({exc}); using the original prompt."
             )
-            query_metadata = {}
-    else:
-        query_metadata = {}
-
-    query_metadata = {
+            parsed_query = {}
+    query_metadata: QueryDecomposition = {
         "prompt_query": str(
-            query_metadata.get("prompt_query")
+            parsed_query.get("prompt_query")
             or request.prompt
         ).strip(),
         "prompt_query_fr": str(
-            query_metadata.get("prompt_query_fr")
+            parsed_query.get("prompt_query_fr")
             or request.prompt
         ).strip(),
         "prompt_instructions": str(
-            query_metadata.get("prompt_instructions")
+            parsed_query.get("prompt_instructions")
             or request.instructions
             or ""
         ).strip(),
@@ -857,9 +901,9 @@ def run_rag_pipeline(
         "response_language": (
             request.response_language
             if request.response_language in {"en", "fr"}
-            else str(query_metadata.get("response_language") or "en")
+            else str(parsed_query.get("response_language") or "en")
         ),
-        "document_languages": list(request.locales),
+        "document_languages": [str(code) for code in request.locales],
     }
     stages.append({
         "name": "query_metadata",
@@ -907,28 +951,18 @@ def run_rag_pipeline(
             else query_metadata["prompt_query"]
         )
 
-        def scope_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            if collection.get("collection_role") == "language":
-                return rows
-            scoped: list[dict[str, Any]] = []
-            for candidate in rows:
-                record = candidate.get("record") or {}
-                language_value = record.get("document_language")
-                if language_value is None:
-                    language_value = record.get("document_languages")
-                codes = ChromaStore._record_language_codes(language_value)
-                if not locale_codes or codes & locale_codes:
-                    scoped.append(candidate)
-            return scoped
-
         semantic_candidates: list[dict[str, Any]] = []
         if {"similarity", "mmr"} & set(request.search_types):
             try:
-                semantic_candidates = scope_candidates(store.semantic_candidates(
-                    collection["name"],
-                    query,
-                    min(fetch_k, max(1, collection["count"])),
-                ))
+                semantic_candidates = _scope_rag_candidates(
+                    store.semantic_candidates(
+                        collection["name"],
+                        query,
+                        min(fetch_k, max(1, collection["count"])),
+                    ),
+                    collection,
+                    locale_codes,
+                )
             except ValueError as exc:
                 # Precomputed-vector collections remain useful through the lexical
                 # route even though they cannot embed a new query.
@@ -963,11 +997,15 @@ def run_rag_pipeline(
                 total_units,
                 f"Lexical · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            lexical_candidates = scope_candidates(store.lexical_search(
-                collection["name"],
-                query,
-                min(fetch_k, max(1, collection["count"])),
-            ))
+            lexical_candidates = _scope_rag_candidates(
+                store.lexical_search(
+                    collection["name"],
+                    query,
+                    min(fetch_k, max(1, collection["count"])),
+                ),
+                collection,
+                locale_codes,
+            )
             for rank, candidate in enumerate(lexical_candidates[:retrieve_k], start=1):
                 row = dict(candidate)
                 row["collection"] = collection["name"]
@@ -1145,15 +1183,25 @@ def run_rag_pipeline(
         record_char_limit=request.evidence_record_char_limit,
         total_char_limit=request.evidence_total_char_limit,
     )
+    sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
         "name": "retrieval_context",
         "seconds": time.perf_counter() - stage_start,
         "detail": {
             "evidence_count": len(evidence),
             "characters": len(retrieval_context),
+            "sufficiency_issues": sufficiency_issues,
         },
     })
     update("context", 1, 1, f"{len(evidence)} evidence records packaged")
+    if not evidence:
+        raise ValueError("RAG evidence sufficiency failed: retrieval produced no evidence records.")
+    if sufficiency_issues:
+        detail = "; ".join(
+            f"{item['evidence_id']} missing {item['missing']}"
+            for item in sufficiency_issues
+        )
+        raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
 
     # Step 6: generate answer.
@@ -1245,5 +1293,6 @@ def run_rag_pipeline(
             "response_language": request.response_language,
             "evidence_record_char_limit": request.evidence_record_char_limit,
             "evidence_total_char_limit": request.evidence_total_char_limit,
+            "evidence_sufficiency": {"passed": True, "issues": []},
         },
     }

@@ -3,19 +3,33 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import re
 import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TypeAlias
 
 from .config import settings
 
-Role: TypeAlias = str
+type Role = str
+
+_USER_SELECT_WHERES = frozenset(
+    {
+        "",
+        "WHERE u.id=?",
+        "WHERE u.username=? COLLATE NOCASE",
+        "JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1",
+    }
+)
+_USER_SELECT_ORDERS = frozenset(
+    {
+        "",
+        "ORDER BY u.username COLLATE NOCASE",
+        "ORDER BY u.id",
+    }
+)
 
 # Authorization contract shared with the API and frontend. Every navigable
 # page and meaningful feature has a named capability. Administrator access is
@@ -72,10 +86,12 @@ ADMIN_ONLY_CAPABILITIES = frozenset({
 SESSION_COOKIE = "derridai_session"
 PBKDF2_ITERATIONS = 600_000
 SESSION_DAYS = 14
+_DUMMY_PASSWORD_SALT = "00" * 24
+_DUMMY_PASSWORD_HASH = "00" * 32
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
@@ -159,7 +175,6 @@ class AuthStore:
                     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                     password_salt TEXT NOT NULL,
                     password_hash TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK(role IN ('admin','researcher')),
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -173,6 +188,14 @@ class AuthStore:
                     expires_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+                CREATE TABLE IF NOT EXISTS login_failures (
+                    username_key TEXT PRIMARY KEY,
+                    failures INTEGER NOT NULL DEFAULT 0,
+                    locked_until TEXT,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_login_failures_locked_until
+                    ON login_failures(locked_until);
                 CREATE TABLE IF NOT EXISTS role_permissions (
                     role TEXT NOT NULL,
                     capability TEXT NOT NULL,
@@ -193,11 +216,15 @@ class AuthStore:
                 "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
                 (now, now),
             )
-            # users.role remains the built-in base role; arbitrary application
-            # roles are represented through the assignment table.
-            conn.execute(
-                "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
-            )
+            legacy_columns = {str(column[1]) for column in conn.execute("PRAGMA table_info(users)")}
+            if "role" in legacy_columns:
+                # Existing installations had a built-in-only users.role value.
+                # Capture it exactly once, then remove the obsolete column so it
+                # cannot diverge from the canonical assignment.
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
+                )
+                conn.execute("ALTER TABLE users DROP COLUMN role")
             role_rows = conn.execute("SELECT id FROM roles ORDER BY id").fetchall()
             for row in role_rows:
                 role = str(row["id"])
@@ -227,7 +254,7 @@ class AuthStore:
         if row is None:
             return None
         keys = set(row.keys())
-        effective_role = str(row["effective_role"] if "effective_role" in keys else row["role"])
+        effective_role = str(row["role"])
         role_name = str(
             row["role_name"]
             if "role_name" in keys and row["role_name"]
@@ -247,20 +274,68 @@ class AuthStore:
 
     @staticmethod
     def _user_select(where: str = "", order: str = "") -> str:
-        return f"""
-            SELECT u.*,
-                   COALESCE(a.role,u.role) AS effective_role,
-                   COALESCE(r.name,CASE WHEN COALESCE(a.role,u.role)='admin' THEN 'Administrator' ELSE 'Researcher' END) AS role_name
-            FROM users u
-            LEFT JOIN user_role_assignments a ON a.user_id=u.id
-            LEFT JOIN roles r ON r.id=COALESCE(a.role,u.role)
-            {where}
-            {order}
-        """
+        if where not in _USER_SELECT_WHERES or order not in _USER_SELECT_ORDERS:
+            raise ValueError("Unsupported user query clause.")
+        parts = [
+            "SELECT u.*, a.role, r.name AS role_name",
+            "FROM users u",
+            "JOIN user_role_assignments a ON a.user_id=u.id",
+            "JOIN roles r ON r.id=a.role",
+        ]
+        if where:
+            parts.append(where)
+        if order:
+            parts.append(order)
+        return " ".join(parts)
 
     def bootstrap_required(self) -> bool:
         with self._connect() as conn:
             return int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]) == 0
+
+    def reset_to_fresh_install(self) -> dict[str, int]:
+        """Return authentication to the first-run schema: no users, builtin roles only.
+
+        Open connections stay valid. Tables are emptied in place so WAL files and
+        the live AuthStore instance remain usable, then researcher permissions are
+        restored to the shipped defaults.
+        """
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            deleted_users = int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+            deleted_roles = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM roles WHERE id NOT IN ('admin','researcher')"
+                ).fetchone()[0]
+            )
+            conn.execute("DELETE FROM sessions")
+            conn.execute("DELETE FROM login_failures")
+            conn.execute("DELETE FROM user_role_assignments")
+            conn.execute("DELETE FROM users")
+            conn.execute("DELETE FROM role_permissions WHERE role NOT IN ('admin','researcher')")
+            conn.execute("DELETE FROM roles WHERE id NOT IN ('admin','researcher')")
+            try:
+                conn.execute("DELETE FROM sqlite_sequence WHERE name='users'")
+            except sqlite3.OperationalError:
+                # sqlite_sequence exists only after at least one AUTOINCREMENT insert.
+                pass
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('admin','Administrator','Full application access. Administrator permissions are locked to prevent loss of administrative control.',1,1,?,?)",
+                (now, now),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
+                (now, now),
+            )
+            conn.execute("DELETE FROM role_permissions WHERE role='researcher'")
+            conn.executemany(
+                "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
+                [
+                    ("researcher", capability, 1 if capability in DEFAULT_RESEARCHER_CAPABILITIES else 0)
+                    for capability in sorted(CAPABILITY_CATALOG)
+                ],
+            )
+            conn.commit()
+        return {"deleted_users": deleted_users, "deleted_custom_roles": deleted_roles}
 
     def bootstrap_admin(self, username: str, password: str) -> AuthUser:
         with self._lock:
@@ -335,14 +410,13 @@ class AuthStore:
             raise ValueError("Password must contain at least 6 characters.")
         if not self.role_exists(role):
             raise ValueError("Selected role does not exist.")
-        base_role = "admin" if role == "admin" else "researcher"
         salt, digest = _hash_password(password)
         now = _iso_now()
         try:
             with self._lock, self._connect() as conn:
                 cursor = conn.execute(
-                    "INSERT INTO users(username,password_salt,password_hash,role,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
-                    (username, salt, digest, base_role, now, now),
+                    "INSERT INTO users(username,password_salt,password_hash,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
+                    (username, salt, digest, now, now),
                 )
                 conn.execute(
                     "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
@@ -352,16 +426,110 @@ class AuthStore:
         except sqlite3.IntegrityError as exc:
             raise ValueError("A user with that username already exists.") from exc
         assert row is not None
-        return self._row_user(row)  # type: ignore[return-value]
+        return self._row_user(row)
+
+    @staticmethod
+    def _login_key(username: str) -> str:
+        return username.strip().casefold()
+
+    @staticmethod
+    def _parse_auth_time(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+
+    @staticmethod
+    def _login_throttle_settings() -> tuple[int, int]:
+        limit = max(1, int(getattr(settings, "auth_login_max_failures", 5)))
+        seconds = max(1, int(getattr(settings, "auth_login_lockout_seconds", 300)))
+        return limit, seconds
+
+    def login_lockout_remaining(self, username: str) -> int:
+        """Whole seconds until this username may try again, or 0 when not locked.
+
+        Keyed exactly like the failure counter, so a username that does not exist
+        is reported the same way as one that does.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT locked_until FROM login_failures WHERE username_key=?",
+                (self._login_key(username),),
+            ).fetchone()
+        locked_until = self._parse_auth_time(str(row["locked_until"]) if row and row["locked_until"] else None)
+        if locked_until is None:
+            return 0
+        remaining = (locked_until - datetime.now(UTC)).total_seconds()
+        return int(remaining) + 1 if remaining > 0 else 0
 
     def authenticate(self, username: str, password: str) -> AuthUser | None:
-        with self._connect() as conn:
-            row = conn.execute(self._user_select("WHERE u.username=? COLLATE NOCASE"), (username.strip(),)).fetchone()
-            if row is None or not bool(row["active"]):
+        username_clean = username.strip()
+        username_key = self._login_key(username_clean)
+        limit, lockout_seconds = self._login_throttle_settings()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
+        with self._lock, self._connect() as conn:
+            # Serialize failure-counter updates across AuthStore instances, not
+            # merely threads sharing this Python object.
+            conn.execute("BEGIN IMMEDIATE")
+            throttle = conn.execute(
+                "SELECT failures,locked_until FROM login_failures WHERE username_key=?",
+                (username_key,),
+            ).fetchone()
+            row = conn.execute(
+                self._user_select("WHERE u.username=? COLLATE NOCASE"),
+                (username_clean,),
+            ).fetchone()
+
+            # Spend the same PBKDF2 work for an unknown username as for a known
+            # account, avoiding a cheap username-existence timing distinction.
+            if row is None:
+                password_valid = _verify_password(
+                    password, _DUMMY_PASSWORD_SALT, _DUMMY_PASSWORD_HASH
+                )
+                password_valid = False
+            else:
+                password_valid = _verify_password(
+                    password, str(row["password_salt"]), str(row["password_hash"])
+                )
+                password_valid = password_valid and bool(row["active"])
+
+            locked_until = self._parse_auth_time(
+                str(throttle["locked_until"]) if throttle and throttle["locked_until"] else None
+            )
+            if locked_until is not None and locked_until > now_dt:
                 return None
-            if not _verify_password(password, str(row["password_salt"]), str(row["password_hash"])):
+
+            if not password_valid or row is None:
+                prior_failures = int(throttle["failures"] or 0) if throttle else 0
+                # An expired lock begins a fresh failure window.
+                if locked_until is not None and locked_until <= now_dt:
+                    prior_failures = 0
+                failures = prior_failures + 1
+                next_locked_until = (
+                    (now_dt + timedelta(seconds=lockout_seconds)).isoformat()
+                    if failures >= limit
+                    else None
+                )
+                conn.execute(
+                    """
+                    INSERT INTO login_failures(username_key,failures,locked_until,updated_at)
+                    VALUES(?,?,?,?)
+                    ON CONFLICT(username_key) DO UPDATE SET
+                        failures=excluded.failures,
+                        locked_until=excluded.locked_until,
+                        updated_at=excluded.updated_at
+                    """,
+                    (username_key, failures, next_locked_until, now),
+                )
                 return None
-            now = _iso_now()
+
+            conn.execute("DELETE FROM login_failures WHERE username_key=?", (username_key,))
             conn.execute(
                 "UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE id=?",
                 (now, int(row["id"])),
@@ -385,7 +553,7 @@ class AuthStore:
 
     def create_session(self, user_id: int) -> str:
         token = secrets.token_urlsafe(48)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(days=SESSION_DAYS)
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now.isoformat(),))
@@ -417,7 +585,7 @@ class AuthStore:
     def list_users(self) -> list[AuthUser]:
         with self._connect() as conn:
             rows = conn.execute(self._user_select(order="ORDER BY u.username COLLATE NOCASE")).fetchall()
-            return [self._row_user(row) for row in rows if row is not None]  # type: ignore[list-item]
+            return [self._row_user(row) for row in rows if row is not None]
 
     def get_user(self, user_id: int) -> AuthUser | None:
         with self._connect() as conn:
@@ -436,16 +604,19 @@ class AuthStore:
         if current.role == "admin" and current.active and (next_role != "admin" or not next_active):
             if self._active_admin_count() <= 1:
                 raise ValueError("At least one active administrator is required.")
-        base_role = "admin" if next_role == "admin" else "researcher"
-        clauses = ["role=?", "active=?", "updated_at=?"]
-        values: list[object] = [base_role, int(next_active), _iso_now()]
-        if password is not None:
-            salt, digest = _hash_password(password)
-            clauses.extend(["password_salt=?", "password_hash=?"])
-            values.extend([salt, digest])
-        values.append(user_id)
+        now = _iso_now()
         with self._lock, self._connect() as conn:
-            conn.execute(f"UPDATE users SET {', '.join(clauses)} WHERE id=?", values)
+            if password is not None:
+                salt, digest = _hash_password(password)
+                conn.execute(
+                    "UPDATE users SET active=?, updated_at=?, password_salt=?, password_hash=? WHERE id=?",
+                    (int(next_active), now, salt, digest, user_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET active=?, updated_at=? WHERE id=?",
+                    (int(next_active), now, user_id),
+                )
             conn.execute(
                 "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
                 (user_id, next_role),
@@ -454,7 +625,7 @@ class AuthStore:
                 conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
             row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
         assert row is not None
-        return self._row_user(row)  # type: ignore[return-value]
+        return self._row_user(row)
 
     def delete_user(self, user_id: int) -> None:
         current = self.get_user(user_id)
@@ -475,7 +646,7 @@ class AuthStore:
                     "username": str(row["username"]),
                     "password_salt": str(row["password_salt"]),
                     "password_hash": str(row["password_hash"]),
-                    "role": str(row["effective_role"]),
+                    "role": str(row["role"]),
                     "active": bool(row["active"]),
                     "created_at": str(row["created_at"]),
                     "updated_at": str(row["updated_at"]),
@@ -574,10 +745,9 @@ class AuthStore:
             conn.execute("DELETE FROM users")
             restored_ids: set[int] = set()
             for user_id, username, salt, digest, role, active, created_at, updated_at, last_login, login_count in normalized:
-                base_role = "admin" if role == "admin" else "researcher"
                 cursor = conn.execute(
-                    "INSERT INTO users(id,username,password_salt,password_hash,role,active,created_at,updated_at,last_login,login_count) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    (user_id, username, salt, digest, base_role, active, created_at, updated_at, last_login, login_count),
+                    "INSERT INTO users(id,username,password_salt,password_hash,active,created_at,updated_at,last_login,login_count) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (user_id, username, salt, digest, active, created_at, updated_at, last_login, login_count),
                 )
                 restored_id = int(user_id or cursor.lastrowid)
                 restored_ids.add(restored_id)
@@ -660,7 +830,7 @@ class AuthStore:
 
     def _active_admin_count(self) -> int:
         with self._connect() as conn:
-            return int(conn.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0])
+            return int(conn.execute("SELECT COUNT(*) FROM users u JOIN user_role_assignments a ON a.user_id=u.id WHERE a.role='admin' AND u.active=1").fetchone()[0])
 
 
 auth_store = AuthStore()

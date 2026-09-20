@@ -4,19 +4,32 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import logging
 import math
 import re
 import shutil
 import uuid
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from typing import Any
 
 import chromadb
 import httpx
 
+from .chroma_connection import (
+    DEFAULT_DATABASE,
+    DEFAULT_HTTP_URL,
+    DEFAULT_TENANT,
+    connection_identity,
+    http_client_kwargs,
+    normalize_mode,
+    parse_http_endpoint,
+    public_http_config,
+)
 from .config import APP_VERSION, settings
 
+logger = logging.getLogger(__name__)
 
 _JSON_PREFIX = "__json__:"
 
@@ -105,7 +118,7 @@ def compact_nested_record_payloads(value: Any) -> Any:
 
 class Embeddings:
     def __init__(self) -> None:
-        self._default = None
+        self._default: Any = None
 
     def embed(
         self,
@@ -222,9 +235,16 @@ class ChromaStore:
     _BUILD_HISTORY_KEY = "__derridai_build_history"
 
     def __init__(self) -> None:
-        self._client = None
+        self._client: Any = None
         self._data_root = Path(settings.chroma_data_root).expanduser().resolve()
         self._path = str(self._normalize_path(settings.chroma_path))
+        self._mode = normalize_mode(settings.chroma_mode)
+        self._http: dict[str, Any] = {
+            "url": str(settings.chroma_base_url or DEFAULT_HTTP_URL).rstrip("/"),
+            "token": str(settings.chroma_token or ""),
+            "tenant": str(settings.chroma_tenant or DEFAULT_TENANT),
+            "database": str(settings.chroma_database or DEFAULT_DATABASE),
+        }
         self.embeddings = Embeddings()
 
     def _normalize_path(self, path: str) -> Path:
@@ -250,54 +270,244 @@ class ChromaStore:
         return self._path
 
     @property
+    def mode(self) -> str:
+        return getattr(self, "_mode", "embedded")
+
+    def _http_display(self) -> str:
+        http = getattr(self, "_http", {}) or {}
+        try:
+            return str(parse_http_endpoint(str(http.get("url") or DEFAULT_HTTP_URL))["display"])
+        except ValueError:
+            return str(http.get("url") or "")
+
+    @property
     def client(self):
         if self._client is None:
-            target = Path(self._path).expanduser()
-            target.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(target))
+            self._client = self._open_client()
         return self._client
 
-    def set_path(self, path: str) -> dict[str, Any]:
-        target = self._normalize_path(path)
+    def _open_client(self):
+        if self.mode == "http":
+            return self._open_http_client(getattr(self, "_http", {}) or {})
+        target = Path(self._path).expanduser()
         target.mkdir(parents=True, exist_ok=True)
+        return chromadb.PersistentClient(path=str(target))
 
-        probe = target / ".derridai-write-test"
-        try:
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink()
-        except OSError as exc:
-            raise ValueError(f"Chroma path is not writable: {target}: {exc}") from exc
+    def _open_http_client(self, http: dict[str, Any]):
+        kwargs: dict[str, Any] = http_client_kwargs(str(http.get("url") or DEFAULT_HTTP_URL))
+        token = str(http.get("token") or "").strip()
+        if token:
+            kwargs["headers"] = {"Authorization": f"Bearer {token}"}
+        tenant = str(http.get("tenant") or "").strip()
+        database = str(http.get("database") or "").strip()
+        if tenant:
+            kwargs["tenant"] = tenant
+        if database:
+            kwargs["database"] = database
+        return chromadb.HttpClient(**kwargs)
 
-        client = chromadb.PersistentClient(path=str(target))
-        client.list_collections()
-        self._path = str(target)
-        self._client = client
-        return self.health()
+    def _probe_client(self, client) -> dict[str, Any]:
+        heartbeat_ok = False
+        version = getattr(chromadb, "__version__", None)
+        if hasattr(client, "heartbeat"):
+            client.heartbeat()
+            heartbeat_ok = True
+        if hasattr(client, "get_version"):
+            try:
+                version = client.get_version() or version
+            except Exception:
+                logger.debug("Chroma get_version() failed; using package version", exc_info=True)
+        collections = client.list_collections()
+        if not heartbeat_ok:
+            heartbeat_ok = True
+        return {
+            "heartbeat_ok": heartbeat_ok,
+            "chroma_version": str(version) if version else None,
+            "collection_count": len(collections),
+        }
+
+    def set_path(self, path: str) -> dict[str, Any]:
+        if self.mode != "embedded":
+            raise ValueError(
+                "A filesystem path is only used in embedded mode. "
+                "Switch the Chroma backend to embedded storage first."
+            )
+        return self.set_connection(mode="embedded", path=path)
+
+    def probe_connection(
+        self,
+        *,
+        mode: str,
+        path: str | None = None,
+        url: str | None = None,
+        token: str | None = None,
+        tenant: str | None = None,
+        database: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate a backend without replacing the live client."""
+        return self._connect(
+            mode=mode,
+            path=path,
+            url=url,
+            token=token,
+            tenant=tenant,
+            database=database,
+            commit=False,
+        )
+
+    def set_connection(
+        self,
+        *,
+        mode: str,
+        path: str | None = None,
+        url: str | None = None,
+        token: str | None = None,
+        tenant: str | None = None,
+        database: str | None = None,
+    ) -> dict[str, Any]:
+        """Probe then adopt a backend. Collections are not migrated."""
+        return self._connect(
+            mode=mode,
+            path=path,
+            url=url,
+            token=token,
+            tenant=tenant,
+            database=database,
+            commit=True,
+        )
+
+    def _connect(
+        self,
+        *,
+        mode: str,
+        path: str | None,
+        url: str | None,
+        token: str | None,
+        tenant: str | None,
+        database: str | None,
+        commit: bool,
+    ) -> dict[str, Any]:
+        normalized = normalize_mode(mode)
+        current_http = dict(getattr(self, "_http", {}) or {})
+        if normalized == "embedded":
+            target = self._normalize_path(path or self._path)
+            if (
+                not commit
+                and self.mode == "embedded"
+                and str(target) == self._path
+                and self._client is not None
+            ):
+                probed = self._probe_client(self._client)
+                return self._health_from(
+                    mode="embedded",
+                    path=str(target),
+                    probed=probed,
+                    error=None,
+                )
+            target.mkdir(parents=True, exist_ok=True)
+            probe = target / ".derridai-write-test"
+            try:
+                probe.write_text("ok", encoding="utf-8")
+                probe.unlink()
+            except OSError as exc:
+                raise ValueError(f"Chroma path is not writable: {target}: {exc}") from exc
+            client = chromadb.PersistentClient(path=str(target))
+            probed = self._probe_client(client)
+            if commit:
+                self._mode = "embedded"
+                self._path = str(target)
+                self._client = client
+            return self.health() if commit else self._health_from(
+                mode="embedded",
+                path=str(target),
+                probed=probed,
+                error=None,
+            )
+
+        next_http = {
+            "url": str(url or current_http.get("url") or DEFAULT_HTTP_URL).rstrip("/"),
+            "token": current_http.get("token") if token is None else str(token),
+            "tenant": str(tenant or current_http.get("tenant") or DEFAULT_TENANT).strip()
+            or DEFAULT_TENANT,
+            "database": str(
+                database or current_http.get("database") or DEFAULT_DATABASE
+            ).strip()
+            or DEFAULT_DATABASE,
+        }
+        client = self._open_http_client(next_http)
+        probed = self._probe_client(client)
+        if commit:
+            self._mode = "http"
+            self._http = next_http
+            self._client = client
+        return self.health() if commit else self._health_from(
+            mode="http",
+            path=None,
+            http=next_http,
+            probed=probed,
+            error=None,
+        )
+
+    def _health_from(
+        self,
+        *,
+        mode: str,
+        path: str | None,
+        probed: dict[str, Any] | None = None,
+        http: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        probed = probed or {}
+        http_public = public_http_config(http if mode == "http" else None)
+        host_hint = self._host_path_hint(Path(path)) if mode == "embedded" and path else None
+        identity = connection_identity(
+            mode=mode,
+            path=path,
+            host_path_hint=host_hint,
+            url=http_public.get("url"),
+            tenant=http_public.get("tenant"),
+            database=http_public.get("database"),
+        )
+        return {
+            "available": error is None,
+            "mode": mode,
+            "path": path if mode == "embedded" else None,
+            "host_path_hint": host_hint,
+            "data_root": str(self._data_root),
+            "url": http_public.get("url") if mode == "http" else None,
+            "tenant": http_public.get("tenant") if mode == "http" else None,
+            "database": http_public.get("database") if mode == "http" else None,
+            "token_configured": bool(http_public.get("token_configured")) if mode == "http" else False,
+            "writable": error is None,
+            "heartbeat_ok": bool(probed.get("heartbeat_ok")) if error is None else False,
+            "chroma_version": probed.get("chroma_version"),
+            "collection_count": probed.get("collection_count"),
+            "identity": identity,
+            "error": error,
+        }
 
     def health(self) -> dict[str, Any]:
+        mode = self.mode
         try:
-            self.client.list_collections()
-            return {
-                "available": True,
-                "path": self._path,
-                "host_path_hint": self._host_path_hint(),
-                "data_root": str(self._data_root),
-                "writable": True,
-                "error": None,
-            }
+            probed = self._probe_client(self.client)
+            return self._health_from(
+                mode=mode,
+                path=self._path if mode == "embedded" else None,
+                http=getattr(self, "_http", None),
+                probed=probed,
+                error=None,
+            )
         except Exception as exc:
-            return {
-                "available": False,
-                "path": self._path,
-                "host_path_hint": self._host_path_hint(),
-                "data_root": str(self._data_root),
-                "writable": False,
-                "error": str(exc),
-            }
+            return self._health_from(
+                mode=mode,
+                path=self._path if mode == "embedded" else None,
+                http=getattr(self, "_http", None),
+                error=str(exc),
+            )
 
     @staticmethod
     def _iso_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def preflight_embedding(
         self,
@@ -587,7 +797,7 @@ class ChromaStore:
     def _infer_language_metadata(
         cls,
         name: str,
-        language_codes: list[str] | None,
+        language_codes: Sequence[str] | None,
         collection_role: str | None,
     ) -> tuple[list[str], str]:
         if language_codes is not None:
@@ -726,7 +936,7 @@ class ChromaStore:
         self,
         name: str,
         *,
-        language_codes: list[str],
+        language_codes: Sequence[str],
         collection_role: str | None = None,
     ) -> dict[str, Any]:
         collection = self._collection(name)
@@ -814,7 +1024,7 @@ class ChromaStore:
         retrieval_mode: str = "hybrid",
         text_field: str = "text",
         filter_fields: list[str] | None = None,
-        language_codes: list[str] | None = None,
+        language_codes: Sequence[str] | None = None,
         collection_role: str | None = None,
         protected: bool = False,
     ) -> dict[str, Any]:
@@ -1296,10 +1506,10 @@ class ChromaStore:
                 "filters": filters,
             }
 
-        kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        scan_kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if work:
-            kwargs["where"] = {"work": work}
-        payload = col.get(**kwargs)
+            scan_kwargs["where"] = {"work": work}
+        payload = col.get(**scan_kwargs)
         records = self._decode_result(payload, include_updates=include_updates)
 
         def searchable(value: Any) -> str:
@@ -1398,15 +1608,14 @@ class ChromaStore:
 
     @staticmethod
     def _flatten_language_values(value: Any) -> list[str]:
+        output: list[str] = []
         if value is None:
-            return []
+            return output
         if isinstance(value, list):
-            output: list[str] = []
             for item in value:
                 output.extend(ChromaStore._flatten_language_values(item))
             return output
         if isinstance(value, dict):
-            output: list[str] = []
             for item in value.values():
                 output.extend(ChromaStore._flatten_language_values(item))
             return output
@@ -1503,7 +1712,7 @@ class ChromaStore:
                 else embeddings
             ) or []
 
-            buckets = {
+            buckets: dict[str, dict[str, list[Any]]] = {
                 code: {
                     "ids": [],
                     "documents": [],
@@ -1593,6 +1802,29 @@ class ChromaStore:
             return vector
         return [value / norm for value in vector]
 
+    @staticmethod
+    def _is_missing_collection_error(exc: Exception) -> bool:
+        """Recognize an absent collection without conflating it with storage failure."""
+        name = exc.__class__.__name__.casefold()
+        message = str(exc).casefold()
+        return (
+            name in {"notfounderror", "invalidcollectionexception"}
+            or ("collection" in message and ("not found" in message or "does not exist" in message))
+        )
+
+    @staticmethod
+    def _is_query_capability_error(exc: Exception) -> bool:
+        """Return True only for query-shape/capability failures with a safe scan fallback."""
+        if isinstance(exc, (TypeError, ValueError)):
+            return True
+        name = exc.__class__.__name__.casefold()
+        message = str(exc).casefold()
+        if name in {"invalidargumenterror", "invalidwhereerror"}:
+            return True
+        mentions_feature = any(token in message for token in ("where_document", "$contains", "limit"))
+        mentions_capability = any(token in message for token in ("unsupported", "not supported", "invalid", "unexpected"))
+        return mentions_feature and mentions_capability
+
     def get_response_cache_records(
         self,
         *,
@@ -1603,22 +1835,24 @@ class ChromaStore:
         """Read the current response-cache collection."""
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
-        except Exception:
-            return {
-                "records": [],
-                "count": 0,
-                "total": 0,
-                "limit": limit,
-                "offset": offset,
-                "query": query or "",
-                "exists": False,
-            }
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return {
+                    "records": [],
+                    "count": 0,
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "query": query or "",
+                    "exists": False,
+                }
+            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
 
         try:
             payload = collection.get(include=["documents", "metadatas"])
             records = [dict(record) for record in self._decode_result(payload)]
-        except Exception:
-            records = []
+        except Exception as exc:
+            raise RuntimeError(f"Could not read response-cache records: {exc}") from exc
 
         records.sort(
             key=lambda record: str(
@@ -1655,7 +1889,9 @@ class ChromaStore:
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
             return self._public_store(collection)
-        except Exception:
+        except Exception as exc:
+            if not self._is_missing_collection_error(exc):
+                raise RuntimeError(f"Could not inspect response-cache collection: {exc}") from exc
             return self.create_store(
                 self._RESPONSE_CACHE_PUBLIC,
                 embedding_provider="precomputed",
@@ -1759,7 +1995,7 @@ class ChromaStore:
         record = dict(decoded[0])
         clean = dict(record)
         chroma_id = str(clean.pop("_chroma_id", response_record_id))
-        graded_at = datetime.now(timezone.utc).isoformat()
+        graded_at = datetime.now(UTC).isoformat()
         entry = {
             "graded_at": graded_at,
             "provider": provider,
@@ -1898,6 +2134,46 @@ class ChromaStore:
             })
         return inventory
 
+    @staticmethod
+    def _flush_logical_restore_batch(
+        collection: Any,
+        name: str,
+        ids: list[str],
+        docs: list[str | None],
+        metas: list[dict[str, Any] | None],
+        embeddings: list[list[float] | None],
+    ) -> None:
+        if not ids:
+            return
+        grouped: dict[tuple[bool, bool, bool], list[int]] = {}
+        for row_index in range(len(ids)):
+            key = (
+                docs[row_index] is not None,
+                metas[row_index] is not None,
+                embeddings[row_index] is not None,
+            )
+            grouped.setdefault(key, []).append(row_index)
+        for (has_doc, has_meta, has_embedding), indexes in grouped.items():
+            kwargs: dict[str, Any] = {
+                "ids": [ids[index] for index in indexes],
+            }
+            if has_doc:
+                kwargs["documents"] = [docs[index] for index in indexes]
+            if has_meta:
+                kwargs["metadatas"] = [metas[index] for index in indexes]
+            if has_embedding:
+                kwargs["embeddings"] = [embeddings[index] for index in indexes]
+            elif has_doc:
+                raise ValueError(
+                    f"Collection {name!r} backup row is missing its stored embedding; "
+                    "restore refuses to silently re-embed it."
+                )
+            collection.add(**kwargs)
+        ids.clear()
+        docs.clear()
+        metas.clear()
+        embeddings.clear()
+
     def restore_logical_backup(
         self,
         root: Path,
@@ -1940,35 +2216,6 @@ class ChromaStore:
             metas: list[dict[str, Any] | None] = []
             embeddings: list[list[float] | None] = []
 
-            def flush() -> None:
-                if not ids:
-                    return
-                grouped: dict[tuple[bool, bool, bool], list[int]] = {}
-                for row_index in range(len(ids)):
-                    key = (
-                        docs[row_index] is not None,
-                        metas[row_index] is not None,
-                        embeddings[row_index] is not None,
-                    )
-                    grouped.setdefault(key, []).append(row_index)
-                for (has_doc, has_meta, has_embedding), indexes in grouped.items():
-                    kwargs: dict[str, Any] = {
-                        "ids": [ids[index] for index in indexes],
-                    }
-                    if has_doc:
-                        kwargs["documents"] = [docs[index] for index in indexes]
-                    if has_meta:
-                        kwargs["metadatas"] = [metas[index] for index in indexes]
-                    if has_embedding:
-                        kwargs["embeddings"] = [embeddings[index] for index in indexes]
-                    elif has_doc:
-                        raise ValueError(
-                            f"Collection {name!r} backup row is missing its stored embedding; "
-                            "restore refuses to silently re-embed it."
-                        )
-                    collection.add(**kwargs)
-                ids.clear(); docs.clear(); metas.clear(); embeddings.clear()
-
             with file_path.open("r", encoding="utf-8") as handle:
                 for line_number, line in enumerate(handle, start=1):
                     if not line.strip():
@@ -1992,8 +2239,10 @@ class ChromaStore:
                     metas.append(row.get("metadata"))
                     embeddings.append(embedding)
                     if len(ids) >= 500:
-                        flush()
-                flush()
+                        self._flush_logical_restore_batch(
+                            collection, name, ids, docs, metas, embeddings
+                        )
+                self._flush_logical_restore_batch(collection, name, ids, docs, metas, embeddings)
             actual = collection.count()
             expected = int(entry.get("count") or 0)
             if expected != actual:
@@ -2004,19 +2253,38 @@ class ChromaStore:
         return {"collections": restored, "count": len(restored)}
 
     def nuke(self) -> dict[str, Any]:
-        names = [
-            collection.name if hasattr(collection, "name") else str(collection)
-            for collection in self.client.list_collections()
-        ]
-        for name in names:
-            self.client.delete_collection(name=name)
+        names: list[str] = []
+        mode = self.mode
+        try:
+            names = [
+                collection.name if hasattr(collection, "name") else str(collection)
+                for collection in self.client.list_collections()
+            ]
+            for name in names:
+                self.client.delete_collection(name=name)
+        except Exception as exc:
+            # Embedded NUKE still has a filesystem wipe as the authority.
+            # An HTTP server has no local catalog to delete; fail visibly.
+            if mode != "embedded":
+                raise RuntimeError(
+                    f"Could not reset the Chroma server: {exc}"
+                ) from exc
+        self._client = None
+        gc.collect()
 
-        # Keep the Chroma catalog itself valid, but remove orphaned collection
-        # directories below the persistence path after all collections are gone.
+        if mode != "embedded":
+            return {
+                "deleted_collections": len(names),
+                "removed_paths": 0,
+                "mode": mode,
+                "path": None,
+                "url": self._http_display(),
+            }
+
         root = Path(self._path)
         removed_paths = 0
         for child in list(root.iterdir()) if root.exists() else []:
-            if child.name in {"chroma.sqlite3", ".derridai-write-test"}:
+            if child.name == ".gitkeep":
                 continue
             try:
                 if child.is_dir():
@@ -2028,11 +2296,13 @@ class ChromaStore:
                 # Collection deletion is the authoritative reset; stale files are
                 # non-fatal and can be removed after the API container stops.
                 pass
-        gc.collect()
+        root.mkdir(parents=True, exist_ok=True)
         return {
             "deleted_collections": len(names),
             "removed_paths": removed_paths,
+            "mode": "embedded",
             "path": self._path,
+            "url": None,
         }
 
     def existing_ids(self, store: str, ids: list[str]) -> list[str]:
@@ -2386,7 +2656,7 @@ class ChromaStore:
             record[document_field]=docs[index] if index < len(docs) else ""; record["_chroma_id"]=chroma_id
             record=compact_record_payload(record,include_updates=False)
             candidates.append({"id":chroma_id,"distance":distances[index] if index < len(distances) else None,"record":record,"embedding":embeddings[index] if index < len(embeddings) else None})
-        selected=[]; remaining=list(candidates)
+        selected: list[dict[str, Any]] = []; remaining=list(candidates)
         while remaining and len(selected)<n_results:
             best_index=0; best_score=-float("inf")
             for index,candidate in enumerate(remaining):
@@ -2455,7 +2725,9 @@ class ChromaStore:
         fast_args["where_document"] = {"$contains": needle}
         try:
             rows = self._decode_result(col.get(**fast_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             rows = []
         if rows:
             return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
@@ -2468,7 +2740,9 @@ class ChromaStore:
         try:
             scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
             candidates = self._decode_result(col.get(**scan_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             scan_args.pop("limit", None)
             candidates = self._decode_result(col.get(**scan_args))
         folded = needle.casefold()
@@ -2507,7 +2781,9 @@ class ChromaStore:
         try:
             scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
             candidates = self._decode_result(col.get(**scan_args))
-        except Exception:
+        except Exception as exc:
+            if not self._is_query_capability_error(exc):
+                raise
             scan_args.pop("limit", None)
             candidates = self._decode_result(col.get(**scan_args))
         if not candidates:

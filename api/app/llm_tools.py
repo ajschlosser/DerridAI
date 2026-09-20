@@ -1,17 +1,24 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from typing import Any, Callable
 import copy
 import json
 import re
 import unicodedata
+from collections.abc import Callable
+from typing import Any
 
 import httpx
-from datetime import datetime, timezone
 
+from .bibliography import _mla_book_citation, _mla_citation
 from .chroma_store import ChromaStore
 from .config import settings
-from .models import PdfLlmRequest, RAGGradeRequest, WorkMetadataRequest, WorkMetadataSeed
+from .models import (
+    PdfLlmRequest,
+    RAGGradeRequest,
+    WorkMetadataRequest,
+    WorkMetadataSeed,
+)
 from .rag import _extract_json, chat_complete
 
 
@@ -225,7 +232,6 @@ def _edition_translator(entry: dict[str, Any]) -> str:
     return ", ".join(names)
 
 
-from .bibliography import _mla_citation, _mla_book_citation
 
 def _edition_metadata(
     *,
@@ -393,13 +399,13 @@ def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     current = seed.current_metadata or {}
     query = str(current.get("document_title") or seed.work).strip()
     author = str(current.get("document_author") or "").strip()
-    params = {"query.bibliographic": query, "rows": 8}
+    params: dict[str, str | int] = {"query.bibliographic": query, "rows": 8}
     if author:
         params["query.author"] = author
     with httpx.Client(timeout=20.0, follow_redirects=True, headers={"User-Agent": "DerridAI/0.48.1 (bibliographic metadata lookup)"}) as client:
         response = client.get("https://api.crossref.org/works", params=params)
         response.raise_for_status()
-        items = list((((response.json() or {}).get("message") or {}).get("items") or []))
+        items = list(((response.json() or {}).get("message") or {}).get("items") or [])
     out: list[dict[str, Any]] = []
     for item in items:
         title = _first_catalog_value(item.get("title"))
@@ -654,17 +660,22 @@ def _normalize_rag_grade_payload(value: Any) -> dict[str, Any]:
     audit trail while top-level score fields support current UI summaries.
     """
     original = copy.deepcopy(value)
+    grade: dict[str, Any]
     if isinstance(value, dict):
-        grade = value.get("grade") if isinstance(value.get("grade"), dict) else value
-        if isinstance(grade.get("result"), dict) and not any(
+        nested = value.get("grade")
+        grade = nested if isinstance(nested, dict) else value
+        nested_result = grade.get("result")
+        if isinstance(nested_result, dict) and not any(
             key in grade for key in ("overall", "query_relevance", "summary", "categories")
         ):
-            grade = grade["result"]
+            grade = nested_result
     else:
         grade = {"summary": "" if value is None else str(value)}
 
-    scores = grade.get("scores") if isinstance(grade.get("scores"), dict) else {}
-    supplied_categories = grade.get("categories") if isinstance(grade.get("categories"), dict) else {}
+    scores_raw = grade.get("scores")
+    scores = scores_raw if isinstance(scores_raw, dict) else {}
+    categories_raw = grade.get("categories")
+    supplied_categories = categories_raw if isinstance(categories_raw, dict) else {}
     score_keys = (
         "query_relevance", "source_binding", "claim_traceability",
         "attribution_source_discrimination", "claim_evidence_fidelity",

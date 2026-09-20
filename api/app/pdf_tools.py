@@ -1,8 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from typing import Any
 import unicodedata
+from typing import Any
 
 import fitz
 

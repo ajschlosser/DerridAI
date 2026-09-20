@@ -16,7 +16,7 @@ htmlcov/
 venv/
 
 # Node / frontend build artifacts
-web/node_modules/
+web/node_modules
 web/dist/
 web/storybook-static/
 web/coverage/
@@ -51,3 +51,5 @@ data/.home/*
 .idea/
 *.swp
 *.swo
+.test-data/
+web/test-results/

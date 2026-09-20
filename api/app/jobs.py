@@ -6,27 +6,42 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .llm import TouchupFailure, propose_touchup
 from .chroma_store import ChromaStore
 from .config import settings
-from .models import LLMJobCreate, LLMToolJobCreate, RAGGradeRequest, RAGRunRequest, UpsertJobCreate
-from .rag import run_rag_pipeline
+from .content_policy_generation import generate_policy_for_installed_language
+from .i18n_translation import (
+    LanguageTranslationError,
+    LanguageTranslationInterrupted,
+    translate_english_dictionary,
+)
+from .llm import TouchupFailure, propose_touchup
 from .llm_tools import run_pdf_llm, run_rag_grade, run_work_metadata_batch
-from .system_store import system_store, normalize_locale_code
-from .i18n_translation import LanguageTranslationError, LanguageTranslationInterrupted, translate_english_dictionary
+from .models import (
+    LLMJobCreate,
+    LLMToolJobCreate,
+    RAGGradeRequest,
+    RAGRunRequest,
+    UpsertJobCreate,
+)
 from .persistence import job_repository
+from .rag import run_rag_pipeline
+from .system_store import normalize_locale_code, system_store
+
+JobPayload = dict[str, Any]
+JobPayloadList = list[JobPayload]
 
 
 def iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _error_details(exc: Exception | dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +91,8 @@ class PersistentJobStateMixin:
     """
 
     JOB_TYPE = "operation"
+    _lock: threading.RLock
+    _jobs: dict[str, JobPayload]
 
     def _start_persistent_state(self) -> None:
         persisted = job_repository.load(self.JOB_TYPE)
@@ -97,9 +114,17 @@ class PersistentJobStateMixin:
                     jobs = [copy.deepcopy(job) for job in self._jobs.values()]
                 if jobs:
                     job_repository.upsert_many(jobs)
-            except Exception:
-                # Persistence is retried on the next checkpoint. API calls keep
-                # their existing behavior rather than crashing a worker thread.
+            except Exception as exc:
+                # Keep workers alive, but make durability degradation visible in
+                # every live operation. When SQLite recovers, the next checkpoint
+                # persists this warning together with the current job state.
+                detail = f"Durable job checkpoint failed and will be retried: {exc}"
+                with self._lock:
+                    for job in self._jobs.values():
+                        if job.get("status") in {"queued", "running", "cancelling"}:
+                            warnings = job.setdefault("warnings", [])
+                            if detail not in warnings[-3:]:
+                                warnings.append(detail)
                 continue
 
     def _persist_job(self, job_id: str) -> None:
@@ -112,6 +137,20 @@ class PersistentJobStateMixin:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
         job_repository.upsert_many(jobs)
+
+    def clear_all(self) -> int:
+        """Drop in-memory and durable history for this manager (fresh-install reset)."""
+        with self._lock:
+            count = len(self._jobs)
+            self._jobs.clear()
+            provider_active = getattr(self, "_provider_active", None)
+            if isinstance(provider_active, dict):
+                provider_active.clear()
+            active = getattr(self, "_active", None)
+            if isinstance(active, dict):
+                active.clear()
+        job_repository.clear_type(self.JOB_TYPE)
+        return count
 
 
 class LLMJobManager(PersistentJobStateMixin):
@@ -382,7 +421,7 @@ class LLMJobManager(PersistentJobStateMixin):
         with self._lock:
             return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [
                 self._copy(job, include_results=False)
@@ -402,7 +441,7 @@ class LLMJobManager(PersistentJobStateMixin):
         job_id: str,
         *,
         action: str,
-        items: list[dict[str, Any]],
+        items: JobPayloadList,
         dismiss_job: bool = False,
     ) -> dict[str, Any]:
         if action not in {"accept", "reject"}:
@@ -415,7 +454,7 @@ class LLMJobManager(PersistentJobStateMixin):
             if not requested:
                 return self._copy(job, include_results=True)
 
-            kept: list[dict[str, Any]] = []
+            kept: JobPayloadList = []
             resolved_records = 0
             resolved_fields = 0
             for result in job["results"]:
@@ -499,7 +538,7 @@ class LLMJobManager(PersistentJobStateMixin):
             job = self._jobs[job_id]
             pending_records = len(job["results"])
             pending_fields = sum(
-                len(((result.get("proposal") or {}).get("changes") or {}))
+                len((result.get("proposal") or {}).get("changes") or {})
                 for result in job["results"]
             )
             job["results"] = []
@@ -528,7 +567,7 @@ class LLMJobManager(PersistentJobStateMixin):
             job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, include_results=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_results=True))
@@ -537,7 +576,7 @@ class LLMJobManager(PersistentJobStateMixin):
                 and not job.get("dismissed")
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -642,7 +681,7 @@ class LLMJobManager(PersistentJobStateMixin):
         ]
         out["pending_result_count"] = len(pending_results)
         out["pending_change_count"] = sum(
-            len(((result.get("proposal") or {}).get("changes") or {}))
+            len((result.get("proposal") or {}).get("changes") or {})
             for result in pending_results
         )
         out["failure_result_count"] = sum(
@@ -1130,7 +1169,7 @@ class RAGJobManager(PersistentJobStateMixin):
                                 deadline = time.monotonic() + delay
                                 while time.monotonic() < deadline:
                                     if cancelled():
-                                        raise InterruptedError()
+                                        raise InterruptedError() from None
                                     time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
                         if grade_payload is None:
                             raise RuntimeError("Auto-grade did not return a result.")
@@ -1260,7 +1299,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, include_result=False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -1271,7 +1310,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], include_result=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_result=True))
@@ -1279,7 +1318,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -1427,6 +1466,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
             raise ValueError("Work metadata jobs require a work_metadata payload.")
         if body.task == "language_dictionary" and body.language is None:
             raise ValueError("Language dictionary jobs require a language payload.")
+        if body.task == "language_content_policy" and body.language is None:
+            raise ValueError("Researcher text policy jobs require a language payload.")
 
         payload = self._payload(body)
         assert payload is not None
@@ -1440,6 +1481,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
         elif body.task == "language_dictionary":
             base = system_store.get_language("en-US") or {"dictionary": {}}
             total = len(base.get("dictionary") or {})
+        elif body.task == "language_content_policy":
+            total = 1
 
         job_id = str(uuid.uuid4())
         label = body.label or {
@@ -1450,6 +1493,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
             "rag_grade_batch": "RAG · grade response cache",
             "work_metadata": "Works · populate metadata",
             "language_dictionary": "Languages · translate dictionary",
+            "language_content_policy": "Languages · researcher text policy",
         }.get(body.task, body.task)
         job = {
             "id": job_id,
@@ -1698,11 +1742,105 @@ class LLMToolJobManager(PersistentJobStateMixin):
             dictionary=clean,
             translation_report=translation_report,
         )
+        policy_result = self._generate_language_content_policy(
+            job_id,
+            code=code,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            generation=config.generation,
+            cancelled=cancelled,
+        )
         return {
             "code": str(saved.get("code") or code),
             "name": str(saved.get("name") or config.name or code),
             "flag": str(saved.get("flag") or config.flag or "🌐"),
             **stats,
+            **policy_result,
+        }
+
+    def _generate_language_content_policy(
+        self,
+        job_id: str,
+        *,
+        code: str,
+        provider: str,
+        model: str,
+        base_url: str | None,
+        api_key: str | None,
+        generation: Any,
+        cancelled: Any,
+    ) -> dict[str, Any]:
+        with self._lock:
+            job = self._jobs[job_id]
+            job["stage"] = "content_policy"
+            job["stage_detail"] = f"Generating researcher text policy for {code}"
+            job["events"].append({
+                "timestamp": iso_now(),
+                "stage": "content_policy",
+                "detail": f"Generating researcher text policy for {code}",
+            })
+        try:
+            policy = generate_policy_for_installed_language(
+                code=code,
+                provider=provider,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                generation=generation,
+                cancelled=cancelled,
+            )
+            saved = system_store.put_content_policy(code, policy)
+        except Exception as exc:
+            return {
+                "content_policy_ready": False,
+                "content_policy_error": str(exc),
+                "term_count": 0,
+                "contextual_count": 0,
+            }
+        return {
+            "content_policy_ready": True,
+            "term_count": len(saved.get("blocked_terms") or []),
+            "contextual_count": len(saved.get("contextual_terms") or []),
+        }
+
+    def _run_language_content_policy(self, job_id: str, body: LLMToolJobCreate) -> dict[str, Any]:
+        assert body.language is not None
+        config = body.language
+        code = normalize_locale_code(config.code)
+        if system_store.get_language(code) is None:
+            raise ValueError(f"Locale {code} is not installed. Install the dictionary before generating its researcher text policy.")
+        stored_profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
+        provider = str((stored_profile or {}).get("type") or config.provider)
+        model = str(config.model or (stored_profile or {}).get("model") or "").strip()
+        base_url = config.base_url or (stored_profile or {}).get("base_url")
+        api_key = config.api_key or (stored_profile or {}).get("api_key")
+        if not model:
+            raise ValueError("Select a model to generate the researcher text policy.")
+
+        def cancelled() -> bool:
+            with self._lock:
+                return bool(self._jobs[job_id]["cancel_requested"])
+
+        policy_result = self._generate_language_content_policy(
+            job_id,
+            code=code,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            generation=config.generation,
+            cancelled=cancelled,
+        )
+        if not policy_result.get("content_policy_ready"):
+            raise ValueError(policy_result.get("content_policy_error") or "Researcher text policy generation failed.")
+        language = system_store.get_language(code) or {}
+        return {
+            "code": code,
+            "name": str(language.get("name") or config.name or code),
+            "flag": str(language.get("flag") or config.flag or "🌐"),
+            **policy_result,
         }
 
     def _run(self, job_id: str, body: LLMToolJobCreate) -> None:
@@ -1744,6 +1882,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
                     result = self._run_grade_batch(job_id, body)
                 elif body.task == "language_dictionary":
                     result = self._run_language_dictionary(job_id, body)
+                elif body.task == "language_content_policy":
+                    result = self._run_language_content_policy(job_id, body)
                 elif body.task == "work_metadata":
                     def metadata_progress(completed: int, total: int, detail: str) -> None:
                         with self._lock:
@@ -1768,9 +1908,9 @@ class LLMToolJobManager(PersistentJobStateMixin):
                         job["stage_detail"] = "Cancelled"
                     else:
                         job["status"] = "completed"
-                        if body.task not in {"rag_grade_batch", "work_metadata", "language_dictionary"}:
+                        if body.task not in {"rag_grade_batch", "work_metadata", "language_dictionary", "language_content_policy"}:
                             job["completed"] = 1
-                        elif body.task in {"work_metadata", "language_dictionary"}:
+                        elif body.task in {"work_metadata", "language_dictionary", "language_content_policy"}:
                             job["completed"] = job["total"]
                         job["stage"] = "completed"
                         if body.task == "rag_grade_batch":
@@ -1813,7 +1953,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -1824,7 +1964,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         # Raw copies intentionally retain hidden language-translation checkpoints
         # so a full backup can restore an incomplete/resumable dictionary job.
         with self._lock:
@@ -1834,7 +1974,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -1955,6 +2095,8 @@ class UpsertJobManager(PersistentJobStateMixin):
         try:
             self._spool_path(job_id).unlink(missing_ok=True)
         except OSError:
+            # Terminal job state lives in SQLite. Spool deletion is cleanup only;
+            # a stale file is ignored unless the durable job ledger says to resume.
             pass
 
     def _run_from_spool(self, job_id: str) -> None:
@@ -2104,12 +2246,15 @@ class UpsertJobManager(PersistentJobStateMixin):
                 self._jobs[job_id] = job
             self._persist_job(job_id)
             self._executor.submit(self._run_from_spool, job_id)
-        except Exception:
+        except Exception as exc:
             self._remove_spool(job_id)
             try:
                 self._store.fail_sync(body.store_name, "Vector build could not be queued.")
-            except Exception:
-                pass
+            except Exception as sync_exc:
+                raise RuntimeError(
+                    f"Vector build could not be queued ({exc}); collection failure status "
+                    f"could not be persisted ({sync_exc})."
+                ) from exc
             raise
         return self.get(job_id)
 
@@ -2152,7 +2297,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                         break
 
                 batch_items = body.items[start:start + body.batch_size]
-                records: list[dict[str, Any]] = []
+                records: JobPayloadList = []
                 audit_entries_by_id: dict[str, list[dict[str, Any]]] = {}
                 replace_updates_by_id: dict[str, list[dict[str, Any]]] = {}
                 for item in batch_items:
@@ -2249,12 +2394,17 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job = self._jobs[job_id]
                 job["status"] = "failed"
                 job["failed"] += 1
-                details = _store_job_error(job, exc)
+                _ = _store_job_error(job, exc)
                 job["finished_at"] = iso_now()
             try:
                 self._store.fail_sync(body.store_name, str(exc))
-            except Exception:
-                pass
+            except Exception as sync_exc:
+                with self._lock:
+                    job = self._jobs[job_id]
+                    job["collection_status_sync_error"] = str(sync_exc)
+                    job.setdefault("warnings", []).append(
+                        f"Vector build failed, and the collection failure status could not be persisted: {sync_exc}"
+                    )
             with self._lock:
                 job = self._jobs[job_id]
                 job["events"].append({
@@ -2269,7 +2419,7 @@ class UpsertJobManager(PersistentJobStateMixin):
             if terminal:
                 self._remove_spool(job_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> JobPayloadList:
         with self._lock:
             jobs = [self._copy(job, include_results=False) for job in self._jobs.values()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -2280,7 +2430,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 raise KeyError(job_id)
             return self._copy(self._jobs[job_id], include_results=True)
 
-    def snapshot(self) -> list[dict[str, Any]]:
+    def snapshot(self) -> JobPayloadList:
         with self._lock:
             return [
                 copy.deepcopy(self._copy(job, include_results=True))
@@ -2288,7 +2438,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 if job.get("status") not in {"queued", "running", "cancelling"}
             ]
 
-    def restore_snapshot(self, jobs: list[dict[str, Any]]) -> int:
+    def restore_snapshot(self, jobs: JobPayloadList) -> int:
         restored = 0
         with self._lock:
             self._jobs = {
@@ -2364,6 +2514,12 @@ class UpsertJobManager(PersistentJobStateMixin):
         for job_id in ids:
             self._remove_spool(job_id)
         return len(ids)
+
+    def clear_all(self) -> int:
+        count = super().clear_all()
+        shutil.rmtree(self._spool_dir, ignore_errors=True)
+        self._spool_dir.mkdir(parents=True, exist_ok=True)
+        return count
 
     @staticmethod
     def _copy(job: dict[str, Any], *, include_results: bool) -> dict[str, Any]:

@@ -38,6 +38,7 @@ const columnWidths=reactive<Record<string,number>>(loadColumnWidths());
 let localSearchTimer=0;
 let recentTimer=0;
 let redirectedForDatabase=false;
+const noDatabase=ref(false);
 
 const scope=computed<SearchScope>(()=>snapshot.value?.scope||"loaded");
 const databaseMode=computed(()=>scope.value==="database");
@@ -51,6 +52,7 @@ const resultSummary=computed(()=>{
 });
 const searchPlaceholder=computed(()=>databaseMode.value?i18n.t("search.database_placeholder","Search the corpus semantically…"):i18n.t("search.loaded_placeholder","Search extracted text across loaded records…"));
 const methodHelp=computed(()=>snapshot.value?.method==="mmr"?i18n.t("search.mmr_help","Balances semantic relevance with diversity across the result set."):snapshot.value?.method==="filter"?i18n.t("search.filter_only_help","Returns records using metadata filters without embedding a text query."):i18n.t("search.similarity_help","Ranks records by semantic similarity to your query."));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const selectedColumnKeys=computed(()=>snapshot.value?.columns.map(column=>column.key)||[]);
 const sortOptions=computed(()=>{
   const base=[{key:"work",label:i18n.t("field.work","Work")},{key:"page_start",label:i18n.t("field.page_start","Page Start")},{key:"record_id",label:i18n.t("field.record_id","Record ID")}];
@@ -60,12 +62,15 @@ const sortOptions=computed(()=>{
 const activeSortLabel=computed(()=>sortOptions.value.find(item=>item.key===snapshot.value?.sort.key)?.label||i18n.t("search.sort","Sort"));
 
 function loadColumnWidths(){try{return JSON.parse(localStorage.getItem("derridai.search.columnWidths.v1")||"{}")||{}}catch{return {}}}
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistColumnWidths(){try{localStorage.setItem("derridai.search.columnWidths.v1",JSON.stringify(columnWidths))}catch{}}
 function loadSavedState(){
   try{savedViews.value=JSON.parse(localStorage.getItem("derridai.search.savedViews.v1")||"[]")||[]}catch{savedViews.value=[]}
   try{recentSearches.value=JSON.parse(localStorage.getItem("derridai.search.recent.v1")||"[]")||[]}catch{recentSearches.value=[]}
 }
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistSavedViews(){try{localStorage.setItem("derridai.search.savedViews.v1",JSON.stringify(savedViews.value.slice(0,40)))}catch{}}
+// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistRecent(){try{localStorage.setItem("derridai.search.recent.v1",JSON.stringify(recentSearches.value.slice(0,12)))}catch{}}
 
 async function load(options:{refresh?:boolean;autoRun?:boolean}={}){
@@ -76,6 +81,11 @@ async function load(options:{refresh?:boolean;autoRun?:boolean}={}){
     if(!newFilterField.value||!next.filter_fields.some(field=>field.key===newFilterField.value))newFilterField.value=next.filter_fields[0]?.key||"work";
     shell.sync();
     const mustCreateDatabase=!next.has_database&&(next.scope==="database"||!next.has_loaded_records);
+    // With nothing to search anywhere, explain that in place instead of
+    // toasting and opening an unrelated dialog. A database-scoped search that
+    // still has loaded records keeps the guided redirect.
+    noDatabase.value=!next.has_database&&!next.has_loaded_records;
+    if(noDatabase.value)return;
     if(mustCreateDatabase&&next.capabilities.can_manage_database&&!redirectedForDatabase){redirectedForDatabase=true;runtime.notifyToast(i18n.t("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});runtime.openDatabaseCreationFromResearch();return}
     redirectedForDatabase=false;
   }catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{loading.value=false}
@@ -155,6 +165,7 @@ function recordRecentSearch(){if(!snapshot.value)return;const q=query.value.trim
 
 function displayValue(value:unknown){if(value==null||value==="")return "—";if(Array.isArray(value))return value.join(", ");if(typeof value==="object")return JSON.stringify(value);if(typeof value==="boolean")return value?i18n.t("runtime.yes","Yes"):i18n.t("runtime.no","No");return String(value)}
 function columnValue(result:SearchResult,key:string){if(key==="__file")return result.file_name||"—";if(key==="page_start")return result.page_span||"—";if(key==="text")return result.text;if(key==="__db_status")return result.db_status?.label||i18n.t("search.db_in_database","In DB");return result.record[key]}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 function columnLabel(key:string){return snapshot.value?.available_columns.find(column=>column.key===key)?.label||key}
 function columnStyle(key:string){if(!databaseMode.value)return undefined;const width=columnWidths[key];return width?{width:`${width}px`,minWidth:`${width}px`,maxWidth:key==='text'?`${Math.max(width,260)}px`:undefined}:undefined}
 function startResize(event:PointerEvent,key:string){event.preventDefault();event.stopPropagation();const th=(event.currentTarget as HTMLElement).closest("th") as HTMLElement|null;if(!th)return;const startX=event.clientX,startWidth=th.getBoundingClientRect().width;const move=(moveEvent:PointerEvent)=>{columnWidths[key]=Math.max(key==='text'?260:96,Math.min(900,startWidth+(moveEvent.clientX-startX)))};const stop=()=>{window.removeEventListener('pointermove',move);persistColumnWidths()};window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true})}
@@ -173,6 +184,7 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
   <main class="vue-native-page search-native-page" :aria-busy="loading" aria-labelledby="search-page-title">
     <div v-if="loading&&!snapshot" class="search-page-loading" role="status"><span class="spinner"></span>{{i18n.t('search.loading','Loading Search workspace…')}}</div>
     <section v-else-if="error" class="search-page-error"><h1>{{i18n.t('search.load_failed','Could not load Search')}}</h1><p>{{error}}</p><button type="button" class="btn" @click="load()">{{i18n.t('ui.retry','Retry')}}</button></section>
+    <AccessibleEmptyState v-else-if="noDatabase" icon="database" :title="i18n.t('search.nothing_to_search_title','Search needs something to search')" :description="snapshot?.capabilities.can_manage_database?i18n.t('search.nothing_to_search_help','Open a JSONL workspace or create a corpus collection, then search across your works, metadata, and annotations.'):i18n.t('search.empty_state_denied','Ask an administrator to configure a corpus database or grant you access.')" :action-label="snapshot?.capabilities.can_manage_database?i18n.t('search.empty_state_action','Create a collection'):''" @action="runtime.openDatabaseCreationFromResearch()"/>
     <template v-else-if="snapshot">
       <SearchWorkspaceHeader
         :scope="snapshot.scope"

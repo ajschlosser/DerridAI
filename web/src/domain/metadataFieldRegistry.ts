@@ -1,3 +1,4 @@
+import { isPlaceholderValue } from './metadataValues';
 export type MetadataControl = 'enum'|'combobox'|'multi-combobox'|'boolean'|'number'|'text';
 export interface MetadataFieldSpec { control:MetadataControl; allowedValues?:string[]; suggestionFields?:string[]; allowCustom?:boolean }
 
@@ -13,6 +14,23 @@ export const PROPOSITION_STATUS_VALUES=[
 export const STANCE_VALUES=[
   'affirm','reject','criticize','question','qualify','suspend','neutral','describe'
 ];
+
+export const STANCE_ALIASES:Record<string,string>={
+  affirmed:'affirm',
+  rejected:'reject',
+  criticized:'criticize',
+  questioned:'question',
+  qualified:'qualify',
+  suspended:'suspend',
+  descriptive:'describe',
+};
+
+export function normalizeMetadataFieldValue(field:string,value:unknown):unknown{
+  if(field!=='stance'||typeof value!=='string')return value;
+  const normalized=value.trim().toLowerCase();
+  if(STANCE_VALUES.includes(normalized))return normalized;
+  return STANCE_ALIASES[normalized]??value;
+}
 
 export function metadataFieldSpec(field:string, regionTypes:string[], discourseRoles:string[]):MetadataFieldSpec{
   if(field==='region_type') return {control:'enum',allowedValues:regionTypes};
@@ -36,8 +54,8 @@ export function metadataSuggestions(record:Record<string,unknown>, fields:string
   const out=new Set<string>();
   for(const field of fields){
     const value=record[field];
-    if(typeof value==='string'&&value.trim()) out.add(value.trim());
-    if(Array.isArray(value)) for(const item of value) if(typeof item==='string'&&item.trim()) out.add(item.trim());
+    if(typeof value==='string'&&!isPlaceholderValue(value)) out.add(value.trim());
+    if(Array.isArray(value)) for(const item of value) if(typeof item==='string'&&!isPlaceholderValue(item)) out.add(item.trim());
   }
   return [...out].sort((a,b)=>a.localeCompare(b));
 }

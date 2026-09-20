@@ -1,4 +1,5 @@
 import { apiRequest } from "./http";
+import type { JobSummary } from "./jobs";
 
 export interface ProviderProfile {
   id: string;
@@ -11,7 +12,35 @@ export interface ProviderProfile {
   [key: string]: unknown;
 }
 
-export interface LanguageInfo { code: string; name: string; flag: string }
+export interface LanguageInfo { code: string; name: string; flag: string; content_policy_ready?: boolean }
+export interface LanguageContentPolicy {
+  target_language?: string;
+  generation_report?: { attempts: number; removed_as_wrong_language: number; categories?: Record<string, number>; short_categories?: string[] };
+  code?: string;
+  status?: string;
+  blocked_terms?: string[];
+  contextual_terms?: Array<{
+    term?: string;
+    allow_title_case?: boolean;
+    allow_if_surrounding?: string[];
+    allow_if_before_markers?: string[];
+  }>;
+  generated_at?: string;
+  source?: string;
+  provider?: string;
+  model?: string;
+}
+export interface ResearcherContentPolicyMirror {
+  ready: boolean;
+  locales: string[];
+  blocked_term_hashes: string[];
+  contextual: Array<{
+    term_hash: string;
+    allow_title_case?: boolean;
+    allow_if_surrounding?: string[];
+    allow_if_before_markers?: string[];
+  }>;
+}
 export interface LanguageTranslationReport {
   status?: string;
   source_locale?: string;
@@ -34,6 +63,10 @@ export const systemApi = {
   languages: () => apiRequest<{languages: LanguageInfo[]}>("/api/i18n/languages"),
   language: (code: string) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
   updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "PUT", body: JSON.stringify(payload)}),
-  installLanguage: (payload: Record<string, unknown>) => apiRequest<any>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
+  installLanguage: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   deleteLanguage: (code: string) => apiRequest<{deleted: string}>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "DELETE"}),
+  contentPolicyMirror: () => apiRequest<ResearcherContentPolicyMirror>("/api/i18n/content-policy"),
+  languageContentPolicy: (code: string) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`),
+  updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
+  generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
 };

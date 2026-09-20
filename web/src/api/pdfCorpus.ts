@@ -4,6 +4,7 @@ export interface PdfAsset {
   asset_id: string;
   sha256: string;
   filename: string;
+  main_text_start_inference?: { page: number | null; confidence: number; clues: { kind: string; detail: string }[]; offered: boolean };
   created_at: string;
   page_count: number;
   block_count: number;
@@ -28,7 +29,24 @@ export interface DocumentLayoutPlan {
   thread_b_language?:string|null;
 }
 
+export interface LlmActivity {
+  state: "loading_model" | "working" | "unknown";
+  task: "manifest" | "segmentation" | "metadata" | "other";
+  model: string;
+  provider: string;
+  seconds: number;
+  calls_in_flight: number;
+}
+export interface AutonomousPolicy { enabled: boolean; passes: number; min_confidence: number; unresolved: "best_guess" | "leave"; accept_records: boolean; publish: boolean }
+export interface AutonomousReport {
+  records: number; accepted: number; fields_filled: number; left_for_review: number; passes_run: number; ran_at: string;
+  exceptions: { record_id: string; reasons: string[] }[]; notes: string[]; policy: AutonomousPolicy; published?: boolean;
+}
 export interface CorpusBuild {
+  /** What the last hands-free run settled and left. */
+  autonomous_report?: AutonomousReport | null;
+  /** A live reading of the oldest model call in flight; not stored with the build. */
+  llm_activity?: LlmActivity | null;
   build_id: string;
   asset_id: string;
   source_filename: string;
@@ -117,7 +135,7 @@ export interface CorpusBuild {
     issues?:Array<{record_id?:string;field?:string;issue_type?:string;retryable?:boolean;status?:string;reason?:string;method?:string;confidence?:number|null;current_value?:unknown;page_start?:number|string|null;page_end?:number|string|null}>;
     records?:Array<{record_id?:string;fields?:string[];issues?:Array<Record<string,unknown>>;page_start?:number|string|null;page_end?:number|string|null}>
   };
-  metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null};
+  metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null;passes_requested?:number;passes_completed?:number;current_pass?:number;converged?:boolean;records_disputed?:number;fields_replaced?:number;fields_kept?:number;pass_results?:{pass:number;records_processed?:number;fields_added?:number}[]};
   source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
   pipeline_state?: {current?:string;stages?:Record<string,{state?:string;[key:string]:unknown}>};
   publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];required_document_fields?:string[];missing_document_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean;no_publishable_records?:boolean};
@@ -140,7 +158,7 @@ export interface CorpusRecord {
   source_block_ids: string[];
   source_spans: Array<{block_id:string;page:number;bbox?:number[];extraction_method?:string}>;
   metadata_evidence?: Record<string,{block_ids?:string[];confidence?:number;reason?:string;reviewed_by?:string;reviewed_at?:string}>;
-  metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number;reason?:string}>;
+  metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number;reason?:string;autofilled?:boolean;audit_sample?:boolean;self_reported_confidence?:number;model?:string}>;
   metadata_incomplete_fields?: string[];
   metadata_review_fields?: string[];
   metadata_reviewed_at?: string;
@@ -199,6 +217,8 @@ export const pdfCorpusApi = {
   profiles: () => apiRequest<{items:Array<Record<string,unknown>>}>("/api/pdf/corpus-profiles"),
   listBuilds: (offset=0, limit=50, assetId="") => apiRequest<{items:CorpusBuild[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds?offset=${offset}&limit=${limit}${assetId?`&asset_id=${encodeURIComponent(assetId)}`:""}`),
   build: (buildId:string) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}`),
+  runAutonomous: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/autonomous/run`, {method:"POST",body:JSON.stringify(payload)}),
+  regenerateManifest: (buildId:string, payload:Record<string,unknown>) => apiRequest<{build:CorpusBuild;filled:string[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest/regenerate`, {method:"POST",body:JSON.stringify(payload)}),
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   switchProviderProfile: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`, {method:"PATCH",body:JSON.stringify(payload)}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
@@ -220,6 +240,7 @@ export const pdfCorpusApi = {
   split: (buildId:string, recordId:string, afterBlockId:string, expectedRevision?:number) => apiRequest<{records:CorpusRecord[]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`, {method:"POST",body:JSON.stringify({after_block_id:afterBlockId,expected_revision:expectedRevision})}),
   retryMetadata: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/metadata/retry`, {method:"POST",body:JSON.stringify(payload)}),
   rerunMetadata: (buildId:string, recordId:string, payload:Record<string,unknown>) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`, {method:"POST",body:JSON.stringify(payload)}),
+  enrichmentMetrics: (buildId:string) => apiRequest<EnrichmentMetrics>(`/api/pdf/corpus-enrichment-metrics?build_id=${encodeURIComponent(buildId)}`),
   rerunMetadataEnrichment: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/metadata/enrich`, {method:"POST",body:JSON.stringify(payload)}),
   editorialMemory: (buildId:string) => apiRequest<{conventions:Record<string,{value:unknown;confirmed_records:number}>;examples:Record<string,Array<{record_id:string;value:unknown;similarity:number;excerpt:string}>>;reset_at?:string|null;convention_count:number;example_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/editorial-memory`),
   resetEditorialMemory: (buildId:string) => apiRequest<{conventions:Record<string,{value:unknown;confirmed_records:number}>;examples:Record<string,Array<{record_id:string;value:unknown;similarity:number;excerpt:string}>>;reset_at?:string|null;convention_count:number;example_count:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/editorial-memory`,{method:"DELETE"}),
@@ -232,3 +253,17 @@ export const pdfCorpusApi = {
   publish: (buildId:string) => apiRequest<{publication_id:string;filename:string;sha256:string;record_count:number;created_at:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/publish`, {method:"POST",body:JSON.stringify({require_acceptance:true})}),
   publicationUrl: (publicationId:string) => `/api/pdf/publications/${encodeURIComponent(publicationId)}/download`,
 };
+
+export interface EnrichmentModelMetrics {
+  proposals:number;reviews:number;autofilled:number;acceptance_rate:number|null;brier_score:number|null;correction_rate:number|null;rejection_rate:number|null;
+  autofill_precision:number|null;stability:number|null;touched_share:number|null;grounded_rate:number|null;ms_per_accepted_field:number|null;
+  precision_at_threshold:{threshold:number;reviews:number;precision:number|null;coverage:number|null}[];learning_curve:{reviews_before:number;acceptance:number|null}[];
+  acceptance_ci:Interval;substantive_error_rate:Interval;autofill_precision_ci:Interval;spot_checks_still_needed:number;correction_severity:Record<string,number>;
+  supported_rate:number|null;supported_checked:number;repeat_rate:number|null;proposals_after_a_rejection:number;review_seconds_per_decision:number|null;
+  seconds_to_first_useful_value:number|null;autofill_suspensions:number;autofill_resumptions:number;
+}
+export interface Interval { rate:number|null;low:number|null;high:number|null;n:number }
+export interface EnrichmentMetrics {
+  self_consistency?:Interval;inter_annotator?:Interval&{kappa:number|null};models:Record<string,EnrichmentModelMetrics>;inter_model_agreement:{compared:number;agreement:number|null};unresolved_remaining:number|null;
+  runs:string[];concurrency:{limit:number;working:number};
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { systemApi, type LanguageDictionary, type LanguageInfo, type ProviderProfile } from "../api/system";
+import { systemApi, type LanguageContentPolicy, type LanguageDictionary, type LanguageInfo, type ProviderProfile } from "../api/system";
 import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
@@ -22,10 +22,12 @@ const saving = ref(false);
 const installing = ref(false);
 const error = ref("");
 const installOpen = ref(false);
+const installCloseConfirm = ref(false);
 const manageProvidersConfirm = ref(false);
 const headerRef = ref<InstanceType<typeof LanguageWorkspaceHeader> | null>(null);
 const installCodeInput = ref<HTMLInputElement | null>(null);
 const installDialog = ref<HTMLElement | null>(null);
+const installCloseDialog = ref<HTMLElement | null>(null);
 const manageProvidersDialog = ref<HTMLElement | null>(null);
 const unsavedDialog = ref<HTMLElement | null>(null);
 const deleteDialog = ref<HTMLElement | null>(null);
@@ -42,9 +44,14 @@ const newKey = ref("");
 const newValue = ref("");
 const baseline = ref("");
 const installJob = ref<JobSummary | null>(null);
+const policyJob = ref<JobSummary | null>(null);
+const contentPolicy = ref<LanguageContentPolicy | null>(null);
+const newPolicyTerm = ref("");
+const savingPolicy = ref(false);
 const resumeJobId = ref("");
 const translationRiskAcknowledged = ref(false);
 let installPollTimer = 0;
+let policyPollTimer = 0;
 
 const selectedProvider = computed(() => providerProfiles.value.find(item => item.id === selectedProviderId.value) || providerProfiles.value[0] || null);
 const isCanonical = computed(() => current.value?.code === "en-US");
@@ -96,6 +103,11 @@ const installCodeExists = computed(() => {
   const candidate = install.value.code.trim().replaceAll("_", "-").toLowerCase();
   return Boolean(candidate) && languages.value.some(item => item.code.replaceAll("_", "-").toLowerCase() === candidate);
 });
+const installDraftDirty = computed(() => Boolean(
+  install.value.code.trim()
+  || install.value.name.trim()
+  || (install.value.flag && install.value.flag !== "🌐"),
+));
 const modelTranslationRisk = computed(() => translationRiskForModel(String(selectedProvider.value?.model || "")));
 const modelTranslationRiskMessage = computed(() => {
   const risk = modelTranslationRisk.value;
@@ -112,6 +124,9 @@ const resumableInstallJob = computed(() => {
 });
 const installFailureCount = computed(() => Number(installJob.value?.result?.failed_count || installJob.value?.result?.fallback_count || 0));
 const installPartialCount = computed(() => Number(installJob.value?.result?.partial_key_count || installJob.value?.result?.translated_count || installJob.value?.completed || 0));
+const pendingPolicyCount = computed(() => languages.value.filter(item => !item.content_policy_ready).length);
+const policyReady = computed(() => contentPolicy.value?.status === "ready" && Boolean(contentPolicy.value.blocked_terms?.length || contentPolicy.value.contextual_terms?.length));
+const policyBusy = computed(() => Boolean(policyJob.value && !["completed", "failed", "cancelled"].includes(policyJob.value.status)));
 
 function translationRiskForModel(model: string) {
   const id = model.trim().toLowerCase();
@@ -130,10 +145,9 @@ function translationRiskForModel(model: string) {
   return null;
 }
 
-function flagFor(code: string, fallback = "🌐") {
-  if (code === "en-US") return "🇺🇸";
-  if (code === "fr-CA") return "🇨🇦";
-  return fallback || "🌐";
+// A language's flag is plain stored data; nothing here depends on which language it is.
+function flagFor(_code: string, stored = "🌐") {
+  return stored || "🌐";
 }
 function snapshotCurrent() {
   if (!current.value) return "";
@@ -195,9 +209,94 @@ async function load(code = selectedCode.value) {
     baseline.value = snapshotCurrent();
     keyQuery.value = "";
     statusFilter.value = "all";
+    await loadContentPolicy(code);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally { loading.value = false; }
+}
+async function loadContentPolicy(code = selectedCode.value) {
+  try {
+    contentPolicy.value = await systemApi.languageContentPolicy(code);
+  } catch {
+    contentPolicy.value = { code, status: "missing", blocked_terms: [], contextual_terms: [] };
+  }
+}
+async function monitorPolicy(jobId: string) {
+  window.clearTimeout(policyPollTimer);
+  try {
+    const job = await jobsApi.get(jobId);
+    policyJob.value = job;
+    if (["completed", "failed", "cancelled"].includes(job.status)) {
+      if (job.status === "completed") {
+        await refreshLanguages();
+        await loadContentPolicy(String(job.result?.code || selectedCode.value));
+        runtime.notifyToast?.(i18n.t("language.content_policy_generated", "Researcher text policy generated."), { tone: "success" });
+      } else if (job.status === "failed") {
+        error.value = job.stage_detail || i18n.t("language.content_policy_missing_help", "This locale has no generated forbidden-term list yet. Generate one with a provider profile.");
+      }
+      return;
+    }
+    policyPollTimer = window.setTimeout(() => void monitorPolicy(jobId), 1200);
+  } catch {
+    policyPollTimer = window.setTimeout(() => void monitorPolicy(jobId), 2000);
+  }
+}
+async function generateContentPolicy() {
+  const profile = selectedProvider.value;
+  const code = current.value?.code;
+  if (!profile || !code) { error.value = i18n.t("language.provider_profile_required", "Configure an LLM provider profile before installing a dictionary."); return; }
+  const model = String(profile.model || "").trim();
+  if (!model) { error.value = i18n.t("language.provider_model_required", "The selected provider profile does not have a model configured."); return; }
+  error.value = "";
+  try {
+    const created = await systemApi.generateLanguageContentPolicy({
+      code,
+      provider: profile.type,
+      model,
+      base_url: profile.base_url || undefined,
+      generation: providerGeneration(profile),
+      provider_profile_id: profile.id,
+      max_concurrent_requests: profile.max_concurrent_requests || 1,
+    });
+    policyJob.value = created;
+    runtime.registerExternalJob?.(created);
+    runtime.notifyToast?.(i18n.t("language.content_policy_generating", "Generating researcher text policy…"), { tone: "info" });
+    void monitorPolicy(created.id);
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
+function addPolicyTerm() {
+  const term = newPolicyTerm.value.trim();
+  if (!term || !contentPolicy.value) return;
+  const blocked = [...(contentPolicy.value.blocked_terms || [])];
+  if (!blocked.includes(term)) blocked.push(term);
+  contentPolicy.value = { ...contentPolicy.value, blocked_terms: blocked };
+  newPolicyTerm.value = "";
+}
+function removePolicyTerm(term: string) {
+  if (!contentPolicy.value) return;
+  contentPolicy.value = {
+    ...contentPolicy.value,
+    blocked_terms: (contentPolicy.value.blocked_terms || []).filter(item => item !== term),
+  };
+}
+async function saveContentPolicy() {
+  if (!current.value || !contentPolicy.value) return;
+  savingPolicy.value = true;
+  error.value = "";
+  try {
+    contentPolicy.value = await systemApi.updateLanguageContentPolicy(current.value.code, {
+      blocked_terms: contentPolicy.value.blocked_terms || [],
+      contextual_terms: contentPolicy.value.contextual_terms || [],
+    });
+    await refreshLanguages();
+    runtime.notifyToast?.(i18n.t("language.content_policy_saved", "Researcher text policy saved."), { tone: "success" });
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    savingPolicy.value = false;
+  }
 }
 function rememberConfirmationFocus() {
   confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -266,7 +365,7 @@ async function saveAndSwitch() {
   }
 }
 function providerGeneration(profile: ProviderProfile) {
-  const value = (key: string) => profile[key] as any;
+  const value = (key: string) => profile[key];
   return {
     num_ctx: value("num_ctx") || undefined,
     num_predict: value("metadata_num_predict") || value("num_predict") || undefined,
@@ -297,7 +396,7 @@ async function monitorInstall(jobId: string) {
         const fallbackCount = Number(job.result?.fallback_count || job.result?.failed_count || 0);
         if (fallbackCount > 0) {
           statusFilter.value = "review";
-          runtime.notifyToast?.(i18n.tf("language.installed_with_fallbacks", "Language installed with {count} English fallback string(s). Review them under Matches English.", { count: fallbackCount.toLocaleString(i18n.locale) }), { tone: "warning" });
+          runtime.notifyToast?.(i18n.tf("language.installed_with_fallbacks", "Language installed with {count} English fallback string(s). Review them under Needs review.", { count: fallbackCount.toLocaleString(i18n.locale) }), { tone: "warning" });
         } else {
           runtime.notifyToast?.(i18n.t("language.translation_complete", "Language translated and installed."), { tone: "success" });
         }
@@ -322,6 +421,21 @@ function openInstallDialog() {
   installFlagTouched.value = false;
   translationRiskAcknowledged.value = false;
   installOpen.value = true;
+}
+
+function requestCloseInstall() {
+  if (installing.value) return;
+  if (installDraftDirty.value) {
+    rememberConfirmationFocus();
+    installCloseConfirm.value = true;
+    return;
+  }
+  installOpen.value = false;
+}
+
+function discardInstallDraft() {
+  installCloseConfirm.value = false;
+  installOpen.value = false;
 }
 
 function openResumeDialog() {
@@ -353,6 +467,12 @@ async function restoreLanguageTranslationJob() {
   try {
     const data = await jobsApi.list();
     const summary = data.jobs.find(job => job.mode === "language_dictionary" && ["queued", "running", "cancelling", "failed", "cancelled"].includes(job.status));
+    const policySummary = data.jobs.find(job => job.mode === "language_content_policy" && ["queued", "running", "cancelling"].includes(job.status));
+    if (policySummary) {
+      const job = await jobsApi.get(policySummary.id);
+      policyJob.value = job;
+      if (!["failed", "cancelled", "completed"].includes(job.status)) void monitorPolicy(job.id);
+    }
     if (!summary) return;
     const job = await jobsApi.get(summary.id);
     const code = String(job.result?.code || job.request?.code || "");
@@ -454,6 +574,10 @@ watch(manageProvidersConfirm, async open => {
   if (open) await focusDialog(manageProvidersDialog.value);
   else if (installOpen.value) restoreConfirmationFocus();
 });
+watch(installCloseConfirm, async open => {
+  if (open) await focusDialog(installCloseDialog.value);
+  else if (installOpen.value) restoreConfirmationFocus();
+});
 watch(pendingLocaleCode, async code => {
   if (code) await focusDialog(unsavedDialog.value);
   else restoreConfirmationFocus();
@@ -489,14 +613,21 @@ onMounted(async () => {
     await restoreLanguageTranslationJob();
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); loading.value = false; }
 });
-onUnmounted(() => window.clearTimeout(installPollTimer));
+onUnmounted(() => {
+  window.clearTimeout(installPollTimer);
+  window.clearTimeout(policyPollTimer);
+});
 </script>
 
 <template>
   <main class="vue-native-page languages-page language-studio">
-    <LanguageWorkspaceHeader ref="headerRef" :language-count="languages.length" :key-count="Object.keys(referenceDictionary).length" @install="openInstallDialog" />
+    <LanguageWorkspaceHeader ref="headerRef" :language-count="languages.length" :key-count="Object.keys(referenceDictionary).length" :policy-pending-count="pendingPolicyCount" @install="openInstallDialog" />
 
     <div v-if="error" class="language-alert error" role="alert"><AppIcon name="warning"/><span>{{ error }}</span><button type="button" :aria-label="i18n.t('ui.close','Close')" @click="error=''">×</button></div>
+    <section v-if="pendingPolicyCount" class="language-policy-banner" role="status">
+      <AppIcon name="warning"/>
+      <span>{{ i18n.tf("language.content_policy_missing_banner", "{count} locale(s) still need a researcher text policy. Generate terms for each language before researchers can submit text.", { count: pendingPolicyCount.toLocaleString(i18n.locale) }) }}</span>
+    </section>
     <section v-if="installJob && !['completed','failed','cancelled'].includes(installJob.status)" class="translation-progress-card" aria-live="polite">
       <div class="translation-progress-icon"><span class="spinner"></span></div>
       <div><b>{{ i18n.t("language.translating_install", "Translating before installation") }}</b><span>{{ installJob.stage_detail || i18n.t("language.translation_in_progress", "Translating the canonical English dictionary…") }}</span><div class="translation-progress-track"><i :style="{width:`${installProgress}%`}"></i></div></div>
@@ -522,7 +653,8 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
           <button v-for="item in filteredLanguages" :key="item.code" type="button" class="language-locale-card" :class="{active:item.code===selectedCode}" :aria-current="item.code===selectedCode?'page':undefined" @click="requestLoad(item.code)">
             <LanguageFlag :code="item.code" :symbol="flagFor(item.code,item.flag)" :label="item.name" size="large" />
             <span class="language-locale-copy"><b>{{ item.name }}</b><small>{{ item.code }}</small></span>
-            <span v-if="['en-US','fr-CA'].includes(item.code)" class="locale-kind">{{ i18n.t("language.built_in", "Built-in") }}</span>
+            <span v-if="!item.content_policy_ready" class="locale-kind policy-needed">{{ i18n.t("language.content_policy_needed", "Policy needed") }}</span>
+            <span v-else-if="['en-US','fr-CA'].includes(item.code)" class="locale-kind">{{ i18n.t("language.built_in", "Built-in") }}</span>
             <span v-else class="locale-kind custom">{{ i18n.t("language.custom", "Custom") }}</span>
           </button>
           <p v-if="!filteredLanguages.length" class="language-empty-list">{{ i18n.t("language.no_locale_matches", "No installed locales match this search.") }}</p>
@@ -547,6 +679,36 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
             <CountryFlagPicker v-model="current.flag" :locale-code="current.code" :label="i18n.t('language.locale_icon','Locale icon')" :help="i18n.t('language.flag_library_help','Choose from the country flag library or use the neutral globe for languages without a country-specific locale.')" />
             <div class="language-source-card"><span>{{ i18n.t("language.source_language", "Source language") }}</span><b>🇺🇸 {{ i18n.t("language.english_us", "English") }}</b><small>{{ i18n.t("language.source_language_help", "All installed translations are keyed to the canonical English interface set.") }}</small></div>
             <button v-if="!['en-US','fr-CA'].includes(current.code)" type="button" class="language-remove-action" @click="removeLanguage(current)"><AppIcon name="trash"/>{{ i18n.t("language.remove_language", "Remove language") }}</button>
+          </section>
+
+          <section class="language-policy-card" :aria-label="i18n.t('language.content_policy_title','Researcher text policy')">
+            <div class="language-policy-copy">
+              <p>{{ i18n.t("language.content_policy", "Researcher text policy") }}</p>
+              <b>{{ policyReady ? i18n.t("language.content_policy_ready", "Policy ready") : i18n.t("language.content_policy_missing", "Not generated") }}</b>
+              <span>{{ policyReady ? i18n.tf("language.content_policy_count", "{count} terms", { count: (contentPolicy?.blocked_terms?.length || 0).toLocaleString(i18n.locale) }) : i18n.t("language.content_policy_missing_help", "This locale has no generated forbidden-term list yet. Generate one with a provider profile.") }}</span>
+              <span v-if="policyReady && contentPolicy?.generation_report" class="language-policy-report">{{ i18n.tf("language.content_policy_report", "Generated in {attempts} attempt(s) · language check removed {removed} term(s)", { attempts: contentPolicy.generation_report.attempts, removed: contentPolicy.generation_report.removed_as_wrong_language }) }}</span>
+              <span v-if="policyReady && contentPolicy?.generation_report?.short_categories?.length" class="language-policy-gap" role="status">{{ i18n.tf("language.content_policy_short", "Coverage is incomplete for: {categories}. Add terms below.", { categories: contentPolicy.generation_report.short_categories.map(id => i18n.t(`language.policy_category.${id}`, id.replaceAll("_", " "))).join(", ") }) }}</span>
+              <small>{{ i18n.t("language.content_policy_help", "Researcher-authored queries, notes, and filters are checked against every generated locale policy. Terms are stored with the language, not in the application source.") }}</small>
+              <div v-if="policyReady" class="language-policy-terms">
+                <span>{{ i18n.t("language.content_policy_blocked", "Forbidden terms") }}</span>
+                <ul tabindex="0" :aria-label="i18n.t('language.content_policy_blocked', 'Forbidden terms')">
+                  <li v-for="term in contentPolicy?.blocked_terms || []" :key="term">
+                    <code>{{ term }}</code>
+                    <button type="button" class="language-row-remove" :aria-label="`${i18n.t('language.content_policy_remove','Remove term')}: ${term}`" @click="removePolicyTerm(term)">×</button>
+                  </li>
+                </ul>
+                <form class="language-policy-add" @submit.prevent="addPolicyTerm">
+                  <label><span class="sr-only">{{ i18n.t("language.content_policy_term", "Term") }}</span><input v-model="newPolicyTerm" class="control" :placeholder="i18n.t('language.content_policy_add_placeholder','Add a forbidden term')"></label>
+                  <button class="btn small" type="submit" :disabled="!newPolicyTerm.trim()">{{ i18n.t("language.content_policy_add", "Add term") }}</button>
+                  <button class="btn small" type="button" :disabled="savingPolicy" @click="saveContentPolicy">{{ savingPolicy ? i18n.t("ui.saving", "Saving…") : i18n.t("language.content_policy_save", "Save policy") }}</button>
+                </form>
+                <small v-if="contentPolicy?.contextual_terms?.length" class="language-policy-contextual">{{ i18n.t("language.content_policy_contextual", "Context-sensitive terms") }} · {{ i18n.t("language.content_policy_contextual_help", "These tokens are blocked except when the listed scholarly or naming exemptions apply.") }}</small>
+              </div>
+            </div>
+            <div class="language-policy-actions">
+              <ProviderProfileSelect v-model="selectedProviderId" :profiles="providerProfiles" :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''" :label="i18n.t('language.provider_profile','Provider profile')" :help="i18n.t('language.content_policy_generate_help','The selected provider compiles forbidden terms for this locale. Built-in English and French need this once after the first administrator account is created. Installing a new locale generates a policy automatically.')" :empty-title="i18n.t('language.no_provider_profiles','No LLM provider profiles are configured')" :empty-help="i18n.t('language.no_provider_profiles_help','Create a provider profile first, then return here to translate a dictionary.')" :manage-label="i18n.t('language.manage_providers','Manage provider profiles')" :model-not-set-label="i18n.t('language.model_not_set','model not set')" :default-label="i18n.t('ui.default','Default')" :concurrent-label="i18n.t('language.concurrent_requests','max concurrent request(s)')" :context-label="i18n.t('providers.context_tokens','context tokens')" @manage="requestManageProviders" />
+              <button type="button" class="btn primary" :disabled="policyBusy || !selectedProvider" @click="generateContentPolicy">{{ policyBusy ? i18n.t("language.content_policy_generating", "Generating researcher text policy…") : (policyReady ? i18n.t("language.content_policy_regenerate", "Regenerate policy") : i18n.t("language.content_policy_generate", "Generate policy")) }}</button>
+            </div>
           </section>
 
           <section v-if="!isCanonical && trackedFallbackCount" class="language-fallback-report" role="status">
@@ -582,9 +744,9 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
     </section>
 
     <Teleport to="body">
-      <div v-if="installOpen" class="workflow-overlay language-modal-overlay" role="presentation" @mousedown.self="installOpen=false" @keydown.esc.stop.prevent="installOpen=false" @keydown="trapFocus($event, installDialog)">
+      <div v-if="installOpen" class="workflow-overlay language-modal-overlay" role="presentation" @mousedown.self="requestCloseInstall" @keydown.esc.stop.prevent="requestCloseInstall" @keydown="trapFocus($event, installDialog)">
         <section ref="installDialog" class="workflow-dialog language-install-dialog modern-language-dialog" role="dialog" aria-modal="true" aria-labelledby="language-install-title" aria-describedby="language-install-description">
-          <header class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary_modern", "Translate & install locale") }}</h2><span id="language-install-description">{{ i18n.t("language.install_help_modern", "DerridAI translates from the canonical English interface, validates every key and placeholder, and reports any strings that require an English fallback or retry.") }}</span></div></div><button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="installOpen=false">×</button></header>
+          <header class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon" aria-hidden="true">🌐</span><div><p>{{ i18n.t("language.install_kicker", "New interface language") }}</p><h2 id="language-install-title">{{ i18n.t("language.install_dictionary_modern", "Translate & install locale") }}</h2><span id="language-install-description">{{ i18n.t("language.install_help_modern", "DerridAI translates from the canonical English interface, validates every key and placeholder, and reports any strings that require an English fallback or retry.") }}</span></div></div><button class="icon-btn workflow-close" type="button" :title="i18n.t('ui.close','Close')" :aria-label="i18n.t('ui.close','Close')" @click="requestCloseInstall">×</button></header>
           <form class="workflow-form language-install-form" @submit.prevent="installLanguage">
             <section class="language-install-source"><span class="language-install-source-icon">🇺🇸</span><div><b>{{ i18n.t("language.english_source_set", "Source: English") }}</b><small>{{ i18n.tf("language.source_key_count", "{count} interface strings will be translated.", {count:Object.keys(referenceDictionary).length.toLocaleString(i18n.locale)}) }}</small></div><span class="source-lock"><AppIcon name="lock"/>{{ i18n.t("language.canonical", "Canonical") }}</span></section>
             <section class="workflow-section"><div class="workflow-section-copy"><b>{{ i18n.t("language.identity_section", "Language identity") }}</b><span>{{ i18n.t("language.identity_section_help_modern", "Use a BCP 47 locale code. Script-aware locales such as zh-Hant-TW are supported.") }}</span></div><div class="workflow-fields workflow-identity-fields"><label class="workflow-field"><span>{{ i18n.t("language.locale_code", "Locale code") }}</span><input ref="installCodeInput" v-model="install.code" class="control" required autocomplete="off" spellcheck="false" placeholder="de-DE" aria-describedby="locale-code-help" :disabled="Boolean(resumeJobId)"><small id="locale-code-help">{{ i18n.t("language.locale_code_help_modern", "Examples: de-DE, pt-BR, zh-Hant-TW.") }}</small></label><label class="workflow-field"><span>{{ i18n.t("language.name", "Display name") }}</span><input v-model="install.name" class="control" autocomplete="off" placeholder="Deutsch (Deutschland)"><small>{{ i18n.t("language.name_help", "Human-readable language name shown in the picker.") }}</small></label><CountryFlagPicker :model-value="install.flag" :locale-code="install.code" :label="i18n.t('language.locale_icon','Locale icon')" :help="i18n.t('language.flag_library_help','Choose from the country flag library or use the neutral globe for languages without a country-specific locale.')" @update:model-value="setInstallFlag" /></div></section>
@@ -593,10 +755,12 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
               <aside v-if="modelTranslationRisk" class="language-model-warning" role="note" aria-live="polite"><AppIcon name="warning"/><div><b>{{ i18n.t("language.model_translation_risk_title", "Translation quality warning") }}</b><p>{{ modelTranslationRiskMessage }}</p><label><input v-model="translationRiskAcknowledged" type="checkbox"><span>{{ i18n.t("language.model_translation_risk_ack", "I understand the risk and want to use this model anyway.") }}</span></label></div></aside>
             </div></section>
             <section class="language-install-assurance"><div><AppIcon name="check"/><span><b>{{ i18n.t("language.atomic_install", "Validated before installation") }}</b><small>{{ i18n.t("language.atomic_install_help", "Unsafe strings are tracked individually. Fewer than 10% may fall back to canonical English; larger failures remain resumable instead of discarding completed work.") }}</small></span></div><div><AppIcon name="history"/><span><b>{{ i18n.t("language.background_translation", "Runs in the background") }}</b><small>{{ i18n.t("language.background_translation_help_modern", "Progress remains visible here and in Operations. If the job stops, validated translations are retained for a later resume.") }}</small></span></div></section>
-            <footer class="workflow-actions"><button type="button" class="btn" @click="installOpen=false">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider || installCodeExists || Boolean(modelTranslationRisk && !translationRiskAcknowledged)">{{ installing ? i18n.t("language.checking_provider", "Checking provider…") : (resumeJobId ? i18n.t("language.resume_translation", "Resume translation") : i18n.t("language.translate_install", "Translate & install")) }}</button></footer>
+            <footer class="workflow-actions"><button type="button" class="btn" @click="requestCloseInstall">{{ i18n.t("ui.cancel", "Cancel") }}</button><button class="btn primary" :disabled="installing || !install.code.trim() || !selectedProvider || installCodeExists || Boolean(modelTranslationRisk && !translationRiskAcknowledged)">{{ installing ? i18n.t("language.checking_provider", "Checking provider…") : (resumeJobId ? i18n.t("language.resume_translation", "Resume translation") : i18n.t("language.translate_install", "Translate & install")) }}</button></footer>
           </form>
         </section>
       </div>
+
+      <div v-if="installCloseConfirm" class="native-confirm-backdrop" role="presentation" @click.self="installCloseConfirm=false" @keydown.esc.stop.prevent="installCloseConfirm=false" @keydown="trapFocus($event, installCloseDialog)"><section ref="installCloseDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="discard-install-title"><div class="cardhead"><div><b id="discard-install-title">{{ i18n.t("language.discard_install_title", "Discard language installation draft?") }}</b><div class="note">{{ i18n.t("language.discard_install_help", "The locale code, display name, and flag you entered have not been saved.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="installCloseConfirm=false">{{ i18n.t("language.keep_editing", "Keep editing") }}</button><button class="btn danger" type="button" @click="discardInstallDraft">{{ i18n.t("language.discard_install", "Discard draft") }}</button></div></section></div>
 
       <div v-if="manageProvidersConfirm" class="native-confirm-backdrop" role="presentation" @click.self="manageProvidersConfirm=false" @keydown.esc.stop.prevent="manageProvidersConfirm=false" @keydown="trapFocus($event, manageProvidersDialog)"><section ref="manageProvidersDialog" class="card native-confirm-card language-confirm-card" role="dialog" aria-modal="true" aria-labelledby="manage-provider-warning"><div class="cardhead"><div><b id="manage-provider-warning">{{ i18n.t("language.leave_install_title", "Leave language installation?") }}</b><div class="note">{{ i18n.t("language.leave_install_help", "Manage provider profiles opens another page. Values entered in this installation form will be discarded.") }}</div></div></div><div class="actions"><button class="btn" type="button" @click="manageProvidersConfirm=false">{{ i18n.t("ui.stay", "Stay here") }}</button><button class="btn primary" type="button" @click="confirmManageProviders">{{ i18n.t("language.leave_manage_providers", "Leave and manage providers") }}</button></div></section></div>
 
@@ -608,5 +772,5 @@ onUnmounted(() => window.clearTimeout(installPollTimer));
 </template>
 
 <style scoped>
-.language-studio{display:grid;gap:14px;max-width:1680px;margin:0 auto;padding:14px 16px 30px}.language-alert{min-height:46px;display:grid;grid-template-columns:20px minmax(0,1fr) 34px;gap:10px;align-items:center;padding:8px 10px;border:1px solid #efc8c8;border-radius:11px;background:#fff6f6;color:#8f3030;font-size:12.5px}.language-alert :deep(svg){width:18px;height:18px}.language-alert button{min-width:34px;min-height:34px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:20px;cursor:pointer}.translation-progress-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid #d8e4dc;border-radius:12px;background:#f8fbf9}.translation-progress-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#fff}.translation-progress-card>div:nth-child(2){display:grid;gap:3px}.translation-progress-card b{font-size:12.5px;color:#2d4236}.translation-progress-card span{font-size:.8125rem;color:#69788b}.translation-progress-actions{display:grid;justify-items:end;gap:5px}.translation-progress-actions>strong{font-size:13px;color:var(--ui-accent-dark,#286442);font-variant-numeric:tabular-nums}.translation-progress-track{height:5px;overflow:hidden;border-radius:999px;background:#dfe7e2;margin-top:3px}.translation-progress-track i{display:block;height:100%;background:var(--ui-accent,#3c8d62);transition:width .25s ease}.translation-recovery-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid #e4d4af;border-radius:12px;background:#fffaf0}.translation-recovery-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#fff;color:#8a6425}.translation-recovery-icon :deep(svg){width:18px;height:18px}.translation-recovery-copy{display:grid;gap:3px}.translation-recovery-copy b{font-size:12.5px;color:#5f471e}.translation-recovery-copy span{font-size:.8125rem;line-height:1.45;color:#705d3e}.translation-recovery-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}.language-resume-notice{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;margin:14px 20px 0;padding:10px 12px;border:1px solid #cfded5;border-radius:10px;background:#f4faf6;color:#345743}.language-resume-notice :deep(svg){width:17px;height:17px;margin-top:1px}.language-resume-notice span{display:grid;gap:2px}.language-resume-notice b{font-size:.8125rem}.language-resume-notice small{font-size:.8125rem;line-height:1.4;color:#5b7264}.language-model-warning{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;margin-top:10px;padding:11px 12px;border:1px solid #e7cea0;border-radius:10px;background:#fff9ee;color:#654d22}.language-model-warning>:deep(svg){width:17px;height:17px;margin-top:2px}.language-model-warning>div{display:grid;gap:5px}.language-model-warning b{font-size:.8125rem}.language-model-warning p{margin:0;font-size:.8125rem;line-height:1.45;color:#755d34}.language-model-warning label{display:flex;align-items:flex-start;gap:7px;font-size:.8125rem;font-weight:700;line-height:1.35;cursor:pointer}.language-model-warning input{width:16px;height:16px;margin:0;flex:0 0 auto}.language-studio-grid{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;align-items:start}.language-locale-rail{position:sticky;top:116px;max-height:calc(100vh - 140px);display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:12px;border:1px solid #e0e6eb;border-radius:14px;background:#fff;box-shadow:0 6px 22px rgba(15,23,42,.04)}.language-rail-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}.language-rail-head p{margin:0;color:var(--ui-accent-dark,#286442);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-rail-head h2{margin:2px 0 0;font-size:16px;color:#25364b}.language-rail-head>span{min-width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#f1f5f3;color:#536578;font-size:.8125rem;font-weight:800}.language-search-field,.language-key-search{min-height:40px;display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:7px;border:1px solid #dce3e9;border-radius:10px;background:#fbfcfd;padding:0 10px}.language-search-field :deep(svg),.language-key-search :deep(svg){width:15px;height:15px;color:#7b8898}.language-search-field input,.language-key-search input{width:100%;border:0;outline:0;background:transparent;color:#34465b;font:inherit;font-size:.8125rem}.language-locale-list{min-height:0;overflow:auto;display:grid;align-content:start;gap:5px;padding-inline-end:2px}.language-locale-card{width:100%;min-height:59px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid transparent;border-radius:11px;background:transparent;padding:7px;text-align:start;color:#33465a;cursor:pointer}.language-locale-card:hover{background:#f7f9f8}.language-locale-card.active{border-color:#cbdcd2;background:var(--ui-accent-soft,#eef7f1);box-shadow:inset 3px 0 0 var(--ui-accent,#3c8d62)}.language-locale-copy{display:grid;gap:2px;min-width:0}.language-locale-copy b{font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.language-locale-copy small{font-size:.8125rem;color:#607086}.locale-kind{padding:4px 6px;border-radius:999px;background:#eef2f5;color:#647386;font-size:.8125rem;font-weight:750;text-transform:uppercase;letter-spacing:.03em}.locale-kind.custom{background:#f5f0e8;color:#806a46}.language-empty-list{padding:24px 10px;text-align:center;color:#788697;font-size:.8125rem}.language-editor-workspace{min-width:0;display:grid;gap:12px}.language-loading{min-height:260px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #e2e7eb;border-radius:14px;background:#fff;color:#6f7d8d;font-size:.8125rem}.language-editor-hero{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:18px;align-items:center;padding:15px 16px;border:1px solid #e0e6eb;border-radius:14px;background:#fff}.language-editor-identity{display:flex;align-items:center;gap:11px;min-width:0}.language-editor-identity>div{min-width:0}.language-editor-identity p{margin:0;color:var(--ui-accent-dark,#286442);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-editor-identity h2{margin:1px 0;font:600 22px/1.15 Georgia,"Times New Roman",serif;color:#24354a}.language-editor-identity span{font-size:.8125rem;color:#607086}.language-editor-metrics{display:flex;gap:7px}.language-editor-metrics span{min-width:84px;display:grid;gap:1px;padding:7px 9px;border:1px solid #e1e7eb;border-radius:9px;background:#fafbfc;color:#607086;font-size:.8125rem;text-transform:uppercase;letter-spacing:.03em}.language-editor-metrics b{font-size:14px;color:#304257;letter-spacing:0}.language-editor-save{display:grid;justify-items:end;gap:5px}.unsaved-dot{font-size:.8125rem;color:#8d6522}.language-identity-card{display:grid;grid-template-columns:minmax(180px,.9fr) minmax(250px,1.1fr) minmax(220px,.85fr) auto;gap:12px;align-items:start;padding:13px 14px;border:1px solid #e0e6eb;border-radius:14px;background:#fff}.language-meta-field{display:grid;gap:7px}.language-meta-field>span,.language-source-card>span{font-size:.8125rem;font-weight:750;color:#34465d}.language-meta-field small,.language-source-card small{font-size:.8125rem;line-height:1.35;color:#607086}.language-source-card{min-height:73px;display:grid;align-content:start;gap:5px;padding:9px 10px;border:1px solid #e3e8ec;border-radius:10px;background:#fafbfc}.language-source-card b{font-size:.8125rem;color:#33465b}.language-remove-action{min-height:40px;display:flex;align-items:center;gap:6px;border:1px solid #ead3d3;border-radius:9px;background:#fff9f9;padding:0 10px;color:#9b4242;font-size:.8125rem;font-weight:700;cursor:pointer}.language-remove-action :deep(svg){width:14px;height:14px}.language-fallback-report{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid #e6cf9f;border-radius:12px;background:#fffaf0}.language-fallback-report-main{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start}.language-fallback-report-main :deep(svg){width:17px;height:17px;margin-top:1px;color:#8a6425}.language-fallback-report-main>div{display:grid;gap:3px}.language-fallback-report-main b{font-size:.8125rem;color:#62491f}.language-fallback-report-main span{font-size:.8125rem;line-height:1.45;color:#745e38}.language-fallback-report-actions{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap}.language-fallback-report details{min-width:180px}.language-fallback-report summary{min-height:34px;display:flex;align-items:center;color:#6d5936;font-size:.8125rem;font-weight:750;cursor:pointer}.language-fallback-report ul{max-height:220px;margin:4px 0 0;padding:7px 9px;overflow:auto;border:1px solid #eadbbb;border-radius:8px;background:#fff;list-style:none}.language-fallback-report li{display:grid;gap:2px;padding:5px 0;border-top:1px solid #f0e7d5}.language-fallback-report li:first-child{border-top:0}.language-fallback-report code{font-size:.8125rem;color:#4c5d70;overflow-wrap:anywhere}.language-fallback-report li span{font-size:.8125rem;color:#786747}.language-translation-toolbar{position:sticky;top:115px;z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid #e0e6eb;border-radius:12px;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);box-shadow:0 5px 18px rgba(15,23,42,.05)}.language-key-search{flex:1;max-width:520px}.language-filter-tabs{display:flex;gap:5px;flex-wrap:wrap}.language-filter-tabs button{min-height:34px;display:flex;align-items:center;gap:6px;border:1px solid #dfe5ea;border-radius:9px;background:#fff;padding:0 9px;color:#536477;font-size:.8125rem;cursor:pointer}.language-filter-tabs button[aria-pressed="true"]{border-color:#c8dacf;background:var(--ui-accent-soft,#eef7f1);color:#2f5d43}.language-filter-tabs button span{padding:2px 5px;border-radius:999px;background:#edf1f4;font-size:.8125rem}.language-string-editor{overflow:hidden;border:1px solid #dde5ea;border-radius:14px;background:#fff}.language-string-head,.language-string-row{display:grid;grid-template-columns:minmax(160px,.72fr) minmax(220px,1fr) minmax(280px,1.3fr);gap:0}.language-string-head.canonical,.language-string-row.canonical{grid-template-columns:minmax(190px,.7fr) minmax(320px,1.5fr) 40px}.language-string-head{position:static;z-index:auto;border-bottom:1px solid #dfe6eb;background:#f6f8f9}.language-string-head span{padding:9px 11px;color:#687789;font-size:.8125rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.language-string-row{border-bottom:1px solid #edf1f3}.language-string-row:last-of-type{border-bottom:0}.language-string-row.fallback{background:#fffdf8}.language-string-row.missing{background:#fff9f9}.language-key-cell,.language-source-cell,.language-target-cell{min-width:0;padding:10px 11px;border-inline-end:1px solid #edf1f3}.language-key-cell{display:grid;align-content:start;gap:5px}.language-key-cell code{font-size:.8125rem;color:#334d63;overflow-wrap:anywhere}.language-key-cell small{font-size:.8125rem;line-height:1.35;color:#607086}.language-source-cell{font-size:.8125rem;line-height:1.5;color:#4a5c70;white-space:pre-wrap;overflow-wrap:anywhere}.mobile-column-label{display:none}.language-target-cell{display:grid;gap:4px}.language-target-cell textarea{width:100%;min-height:48px;resize:vertical;font-size:.8125rem;line-height:1.45}.language-target-cell small{color:#956f2b;font-size:.8125rem}.language-row-remove{align-self:start;justify-self:center;min-width:28px;min-height:28px;margin-top:9px;border:1px solid #ead4d4;border-radius:8px;background:#fff;color:#a34747;font-size:17px;cursor:pointer}.language-no-results{display:grid;justify-items:center;gap:7px;padding:38px;color:#6e7d8e;font-size:.8125rem}.language-no-results :deep(svg){width:22px;height:22px}.language-advanced-key{padding:12px 14px;border:1px solid #e0e6eb;border-radius:12px;background:#fff}.language-advanced-key summary{cursor:pointer;font-size:.8125rem;font-weight:750;color:#42556b}.language-advanced-key form{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(240px,1.3fr) auto;gap:9px;align-items:end;margin-top:11px}.language-advanced-key label{display:grid;gap:5px;font-size:.8125rem;font-weight:700;color:#46586d}.language-advanced-key p{margin:8px 0 0;color:#607086;font-size:.8125rem}.modern-language-dialog{width:min(980px,calc(100vw - 32px))}.language-install-form{display:grid}.language-install-source{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;margin:16px 20px 0;padding:10px 12px;border:1px solid #dae4de;border-radius:11px;background:#f7faf8}.language-install-source-icon{font-size:25px}.language-install-source>div{display:grid;gap:2px}.language-install-source b{font-size:.8125rem;color:#304538}.language-install-source small{font-size:.8125rem;color:#607086}.source-lock{display:flex;align-items:center;gap:5px;color:#5e7567;font-size:.8125rem;font-weight:750}.source-lock :deep(svg){width:13px;height:13px}.language-install-assurance{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px}.language-install-assurance>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:10px;border:1px solid #e0e7e3;border-radius:10px;background:#fafcfb}.language-install-assurance :deep(svg){width:17px;height:17px;color:var(--ui-accent-dark,#286442)}.language-install-assurance span{display:grid;gap:2px}.language-install-assurance b{font-size:.8125rem;color:#385044}.language-install-assurance small{font-size:.8125rem;line-height:1.4;color:#607086}.language-confirm-card{max-width:520px}.language-confirm-card .actions{justify-content:flex-end;flex-wrap:wrap}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--ui-accent,#3c8d62) 48%,#fff);outline-offset:2px}@media(max-width:1200px){.language-studio-grid{grid-template-columns:235px minmax(0,1fr)}.language-identity-card{grid-template-columns:1fr 1fr}.language-source-card{grid-column:1/-1}.language-editor-hero{grid-template-columns:1fr auto}.language-editor-metrics{grid-row:2;grid-column:1/-1}.language-editor-save{grid-column:2;grid-row:1}.language-string-head,.language-string-row{grid-template-columns:minmax(145px,.6fr) minmax(190px,.9fr) minmax(250px,1.2fr)}}@media(max-width:900px){.language-fallback-report{grid-template-columns:1fr}.language-fallback-report-actions{justify-content:flex-start}.translation-recovery-card{grid-template-columns:38px minmax(0,1fr)}.translation-recovery-actions{grid-column:1/-1;justify-content:flex-start}.language-studio-grid{grid-template-columns:1fr}.language-locale-rail{position:static;max-height:none}.language-locale-list{grid-template-columns:repeat(2,minmax(0,1fr));max-height:260px}.language-translation-toolbar{top:112px;align-items:stretch;flex-direction:column}.language-key-search{max-width:none}.language-string-head{display:none}.language-string-row,.language-string-row.canonical{grid-template-columns:1fr}.language-key-cell,.language-source-cell,.language-target-cell{border-inline-end:0;border-bottom:1px solid #edf1f3}.mobile-column-label{display:block!important;margin-bottom:5px;color:#607086;font-size:.8125rem;font-weight:800;text-transform:uppercase}.language-row-remove{justify-self:end;margin:0 10px 9px}.language-advanced-key form{grid-template-columns:1fr}.language-install-assurance{grid-template-columns:1fr}}@media(max-width:560px){.language-studio{padding-inline:9px}.language-locale-list{grid-template-columns:1fr}.language-editor-hero{grid-template-columns:1fr}.language-editor-save{grid-column:1;grid-row:auto;justify-items:stretch}.language-editor-metrics{grid-column:1;grid-row:auto;overflow:auto}.language-identity-card{grid-template-columns:1fr}.language-filter-tabs{display:grid;grid-template-columns:1fr 1fr}.language-filter-tabs button{justify-content:center}.language-install-source{grid-template-columns:34px 1fr}.source-lock{grid-column:1/-1}.language-install-assurance{padding-inline:14px}}
+.language-policy-banner{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--tone-warn-edge);border-radius:11px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem;line-height:1.45}.language-policy-banner :deep(svg){width:18px;height:18px;color:var(--tone-warn-fg)}.language-policy-card{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr);gap:14px;align-items:start;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card)}.language-policy-copy{display:grid;gap:4px}.language-policy-copy p{margin:0;color:var(--accent-fg);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-policy-copy b{font-size:0.9375rem;color:var(--text)}.language-policy-copy span,.language-policy-copy small{font-size:.8125rem;line-height:1.45;color:var(--muted)}.language-policy-actions{display:grid;gap:10px}.language-policy-terms{display:grid;gap:8px;margin-top:6px}.language-policy-terms>span{font-size:.8125rem;font-weight:750;color:var(--text-2)}.language-policy-terms ul{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none;max-height:11rem;overflow:auto}.language-policy-terms li{display:flex;align-items:center;gap:4px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card)}.language-policy-terms code{font-size:.8125rem;color:var(--text-2)}.language-policy-add{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.language-policy-add label{flex:1;min-width:180px}.language-policy-gap{color:var(--tone-warn-fg)!important;font-weight:650}.language-policy-contextual{margin:0;font-size:.8125rem;color:var(--tone-warn-fg)}.language-studio{display:grid;gap:14px;max-width:1680px;margin:0 auto;padding:14px 16px 30px}.language-alert{min-height:46px;display:grid;grid-template-columns:20px minmax(0,1fr) 34px;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--tone-danger-edge);border-radius:11px;background:var(--tone-danger-bg);color:var(--tone-danger-fg);font-size:0.78125rem}.language-alert :deep(svg){width:18px;height:18px}.language-alert button{min-width:34px;min-height:34px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:1.25rem;cursor:pointer}.translation-progress-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.translation-progress-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--card)}.translation-progress-card>div:nth-child(2){display:grid;gap:3px}.translation-progress-card b{font-size:0.78125rem;color:var(--text)}.translation-progress-card span{font-size:.8125rem;color:var(--muted)}.translation-progress-actions{display:grid;justify-items:end;gap:5px}.translation-progress-actions>strong{font-size:0.8125rem;color:var(--accent-fg);font-variant-numeric:tabular-nums}.translation-progress-track{height:5px;overflow:hidden;border-radius:999px;background:var(--soft);margin-top:3px}.translation-progress-track i{display:block;height:100%;background:var(--ui-accent,#3c8d62);transition:width .25s ease}.translation-recovery-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--tone-warn-edge);border-radius:12px;background:var(--tone-warn-bg)}.translation-recovery-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--card);color:var(--tone-warn-fg)}.translation-recovery-icon :deep(svg){width:18px;height:18px}.translation-recovery-copy{display:grid;gap:3px}.translation-recovery-copy b{font-size:0.78125rem;color:var(--tone-warn-fg)}.translation-recovery-copy span{font-size:.8125rem;line-height:1.45;color:var(--tone-warn-fg)}.translation-recovery-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}.language-resume-notice{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;margin:14px 20px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--text-2)}.language-resume-notice :deep(svg){width:17px;height:17px;margin-top:1px}.language-resume-notice span{display:grid;gap:2px}.language-resume-notice b{font-size:.8125rem}.language-resume-notice small{font-size:.8125rem;line-height:1.4;color:var(--text-2)}.language-model-warning{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;margin-top:10px;padding:11px 12px;border:1px solid var(--tone-warn-edge);border-radius:10px;background:var(--tone-warn-bg);color:var(--tone-warn-fg)}.language-model-warning>:deep(svg){width:17px;height:17px;margin-top:2px}.language-model-warning>div{display:grid;gap:5px}.language-model-warning b{font-size:.8125rem}.language-model-warning p{margin:0;font-size:.8125rem;line-height:1.45;color:var(--tone-warn-fg)}.language-model-warning label{display:flex;align-items:flex-start;gap:7px;font-size:.8125rem;font-weight:700;line-height:1.35;cursor:pointer}.language-model-warning input{width:16px;height:16px;margin:0;flex:0 0 auto}.language-studio-grid{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;align-items:start}.language-locale-rail{position:sticky;top:116px;max-height:calc(100vh - 140px);display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 6px 22px rgba(15,23,42,.04)}.language-rail-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}.language-rail-head p{margin:0;color:var(--accent-fg);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-rail-head h2{margin:2px 0 0;font-size:1rem;color:var(--text)}.language-rail-head>span{min-width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:var(--soft);color:var(--text-2);font-size:.8125rem;font-weight:800}.language-search-field,.language-key-search{min-height:40px;display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:0 10px}.language-search-field :deep(svg),.language-key-search :deep(svg){width:15px;height:15px;color:var(--muted)}.language-search-field input,.language-key-search input{width:100%;border:0;outline:0;background:transparent;color:var(--text-2);font:inherit;font-size:.8125rem}.language-locale-list{min-height:0;overflow:auto;display:grid;align-content:start;gap:5px;padding-inline-end:2px}.language-locale-card{width:100%;min-height:59px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid transparent;border-radius:11px;background:transparent;padding:7px;text-align:start;color:var(--text-2);cursor:pointer}.language-locale-card:hover{background:var(--card)}.language-locale-card.active{border-color:var(--line);background:var(--ui-accent-soft,#eef7f1);box-shadow:inset 3px 0 0 var(--ui-accent,#3c8d62)}.language-locale-copy{display:grid;gap:2px;min-width:0}.language-locale-copy b{font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.language-locale-copy small{font-size:.8125rem;color:var(--muted)}.locale-kind{padding:4px 6px;border-radius:999px;background:var(--soft);color:var(--muted);font-size:.8125rem;font-weight:750;text-transform:uppercase;letter-spacing:.03em}.locale-kind.custom{background:var(--tone-warn-bg);color:var(--tone-warn-fg)}.locale-kind.policy-needed{background:var(--tone-warn-bg);color:var(--tone-warn-fg)}.language-empty-list{padding:24px 10px;text-align:center;color:var(--muted);font-size:.8125rem}.language-editor-workspace{min-width:0;display:grid;gap:12px}.language-loading{min-height:260px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--muted);font-size:.8125rem}.language-editor-hero{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:18px;align-items:center;padding:15px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card)}.language-editor-identity{display:flex;align-items:center;gap:11px;min-width:0}.language-editor-identity>div{min-width:0}.language-editor-identity p{margin:0;color:var(--accent-fg);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-editor-identity h2{margin:1px 0;font:600 22px/1.15 Georgia,"Times New Roman",serif;color:var(--text)}.language-editor-identity span{font-size:.8125rem;color:var(--muted)}.language-editor-metrics{display:flex;gap:7px}.language-editor-metrics span{min-width:84px;display:grid;gap:1px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--muted);font-size:.8125rem;text-transform:uppercase;letter-spacing:.03em}.language-editor-metrics b{font-size:0.875rem;color:var(--text-2);letter-spacing:0}.language-editor-save{display:grid;justify-items:end;gap:5px}.unsaved-dot{font-size:.8125rem;color:var(--tone-warn-fg)}.language-identity-card{display:grid;grid-template-columns:minmax(180px,.9fr) minmax(250px,1.1fr) minmax(220px,.85fr) auto;gap:12px;align-items:start;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card)}.language-meta-field{display:grid;gap:7px}.language-meta-field>span,.language-source-card>span{font-size:.8125rem;font-weight:750;color:var(--text-2)}.language-meta-field small,.language-source-card small{font-size:.8125rem;line-height:1.35;color:var(--muted)}.language-source-card{min-height:73px;display:grid;align-content:start;gap:5px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.language-source-card b{font-size:.8125rem;color:var(--text-2)}.language-remove-action{min-height:40px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:var(--card);padding:0 10px;color:var(--tone-danger-fg);font-size:.8125rem;font-weight:700;cursor:pointer}.language-remove-action :deep(svg){width:14px;height:14px}.language-fallback-report{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--tone-warn-edge);border-radius:12px;background:var(--tone-warn-bg)}.language-fallback-report-main{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start}.language-fallback-report-main :deep(svg){width:17px;height:17px;margin-top:1px;color:var(--tone-warn-fg)}.language-fallback-report-main>div{display:grid;gap:3px}.language-fallback-report-main b{font-size:.8125rem;color:var(--tone-warn-fg)}.language-fallback-report-main span{font-size:.8125rem;line-height:1.45;color:var(--tone-warn-fg)}.language-fallback-report-actions{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap}.language-fallback-report details{min-width:180px}.language-fallback-report summary{min-height:34px;display:flex;align-items:center;color:var(--tone-warn-fg);font-size:.8125rem;font-weight:750;cursor:pointer}.language-fallback-report ul{max-height:220px;margin:4px 0 0;padding:7px 9px;overflow:auto;border:1px solid var(--tone-warn-edge);border-radius:8px;background:var(--card);list-style:none}.language-fallback-report li{display:grid;gap:2px;padding:5px 0;border-top:1px solid var(--line)}.language-fallback-report li:first-child{border-top:0}.language-fallback-report code{font-size:.8125rem;color:var(--text-2);overflow-wrap:anywhere}.language-fallback-report li span{font-size:.8125rem;color:var(--tone-warn-fg)}.language-translation-toolbar{position:sticky;top:115px;z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(12px);box-shadow:0 5px 18px rgba(15,23,42,.05)}.language-key-search{flex:1;max-width:520px}.language-filter-tabs{display:flex;gap:5px;flex-wrap:wrap}.language-filter-tabs button{min-height:34px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:var(--card);padding:0 9px;color:var(--text-2);font-size:.8125rem;cursor:pointer}.language-filter-tabs button[aria-pressed="true"]{border-color:var(--line);background:var(--ui-accent-soft,#eef7f1);color:var(--tone-ok-fg)}.language-filter-tabs button span{padding:2px 5px;border-radius:999px;background:var(--soft);font-size:.8125rem}.language-string-editor{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--card)}.language-string-head,.language-string-row{display:grid;grid-template-columns:minmax(160px,.72fr) minmax(220px,1fr) minmax(280px,1.3fr);gap:0}.language-string-head.canonical,.language-string-row.canonical{grid-template-columns:minmax(190px,.7fr) minmax(320px,1.5fr) 40px}.language-string-head{position:static;z-index:auto;border-bottom:1px solid var(--line);background:var(--card)}.language-string-head span{padding:9px 11px;color:var(--muted);font-size:.8125rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.language-string-row{border-bottom:1px solid var(--line)}.language-string-row:last-of-type{border-bottom:0}.language-string-row.fallback{background:var(--card)}.language-string-row.missing{background:var(--card)}.language-key-cell,.language-source-cell,.language-target-cell{min-width:0;padding:10px 11px;border-inline-end:1px solid var(--line)}.language-key-cell{display:grid;align-content:start;gap:5px}.language-key-cell code{font-size:.8125rem;color:var(--text-2);overflow-wrap:anywhere}.language-key-cell small{font-size:.8125rem;line-height:1.35;color:var(--muted)}.language-source-cell{font-size:.8125rem;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}.mobile-column-label{display:none}.language-target-cell{display:grid;gap:4px}.language-target-cell textarea{width:100%;min-height:48px;resize:vertical;font-size:.8125rem;line-height:1.45}.language-target-cell small{color:var(--tone-warn-fg);font-size:.8125rem}.language-row-remove{align-self:start;justify-self:center;min-width:28px;min-height:28px;margin-top:9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tone-danger-fg);font-size:1.0625rem;cursor:pointer}.language-no-results{display:grid;justify-items:center;gap:7px;padding:38px;color:var(--muted);font-size:.8125rem}.language-no-results :deep(svg){width:22px;height:22px}.language-advanced-key{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.language-advanced-key summary{cursor:pointer;font-size:.8125rem;font-weight:750;color:var(--text-2)}.language-advanced-key form{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(240px,1.3fr) auto;gap:9px;align-items:end;margin-top:11px}.language-advanced-key label{display:grid;gap:5px;font-size:.8125rem;font-weight:700;color:var(--text-2)}.language-advanced-key p{margin:8px 0 0;color:var(--muted);font-size:.8125rem}.modern-language-dialog{width:min(980px,calc(100vw - 32px))}.language-install-form{display:grid}.language-install-source{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;margin:16px 20px 0;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--card)}.language-install-source-icon{font-size:1.5625rem}.language-install-source>div{display:grid;gap:2px}.language-install-source b{font-size:.8125rem;color:var(--text-2)}.language-install-source small{font-size:.8125rem;color:var(--muted)}.source-lock{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:.8125rem;font-weight:750}.source-lock :deep(svg){width:13px;height:13px}.language-install-assurance{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px}.language-install-assurance>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.language-install-assurance :deep(svg){width:17px;height:17px;color:var(--accent-fg)}.language-install-assurance span{display:grid;gap:2px}.language-install-assurance b{font-size:.8125rem;color:var(--text-2)}.language-install-assurance small{font-size:.8125rem;line-height:1.4;color:var(--muted)}.language-confirm-card{max-width:520px}.language-confirm-card .actions{justify-content:flex-end;flex-wrap:wrap}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--ui-accent,#3c8d62) 48%,var(--card));outline-offset:2px}@media(max-width:1200px){.language-studio-grid{grid-template-columns:235px minmax(0,1fr)}.language-policy-card{grid-template-columns:1fr}.language-identity-card{grid-template-columns:1fr 1fr}.language-source-card{grid-column:1/-1}.language-editor-hero{grid-template-columns:1fr auto}.language-editor-metrics{grid-row:2;grid-column:1/-1}.language-editor-save{grid-column:2;grid-row:1}.language-string-head,.language-string-row{grid-template-columns:minmax(145px,.6fr) minmax(190px,.9fr) minmax(250px,1.2fr)}}@media(max-width:900px){.language-fallback-report{grid-template-columns:1fr}.language-fallback-report-actions{justify-content:flex-start}.translation-recovery-card{grid-template-columns:38px minmax(0,1fr)}.translation-recovery-actions{grid-column:1/-1;justify-content:flex-start}.language-studio-grid{grid-template-columns:1fr}.language-locale-rail{position:static;max-height:none}.language-locale-list{grid-template-columns:repeat(2,minmax(0,1fr));max-height:260px}.language-translation-toolbar{top:112px;align-items:stretch;flex-direction:column}.language-key-search{max-width:none}.language-string-head{display:none}.language-string-row,.language-string-row.canonical{grid-template-columns:1fr}.language-key-cell,.language-source-cell,.language-target-cell{border-inline-end:0;border-bottom:1px solid var(--line)}.mobile-column-label{display:block!important;margin-bottom:5px;color:var(--muted);font-size:.8125rem;font-weight:800;text-transform:uppercase}.language-row-remove{justify-self:end;margin:0 10px 9px}.language-advanced-key form{grid-template-columns:1fr}.language-install-assurance{grid-template-columns:1fr}}@media(max-width:560px){.language-studio{padding-inline:9px}.language-locale-list{grid-template-columns:1fr}.language-editor-hero{grid-template-columns:1fr}.language-editor-save{grid-column:1;grid-row:auto;justify-items:stretch}.language-editor-metrics{grid-column:1;grid-row:auto;overflow:auto}.language-identity-card{grid-template-columns:1fr}.language-filter-tabs{display:grid;grid-template-columns:1fr 1fr}.language-filter-tabs button{justify-content:center}.language-install-source{grid-template-columns:34px 1fr}.source-lock{grid-column:1/-1}.language-install-assurance{padding-inline:14px}}
 </style>

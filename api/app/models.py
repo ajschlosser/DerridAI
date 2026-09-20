@@ -1,20 +1,74 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from typing import Any, Literal
 import re
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
+from .enrichment_cycles import MAX_PASSES
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
 RetrievalMode = Literal["semantic", "hybrid", "lexical"]
 DistanceMetric = Literal["cosine", "l2", "ip"]
+SearchType = Literal["mmr", "similarity", "lexical"]
+TextCleanupRule = Literal[
+    "page_numbers",
+    "repeated_short_lines",
+    "line_hyphenation",
+    "paragraph_lines",
+    "empty_lines",
+    "ocr_artifacts",
+    "whitespace",
+]
+
+
+def _default_locales() -> list[LanguageCode]:
+    return ["en", "fr"]
+
+
+def _default_search_types() -> list[SearchType]:
+    return ["similarity", "lexical", "mmr"]
+
+
+def _default_text_cleanup_rules() -> list[TextCleanupRule]:
+    return [
+        "page_numbers",
+        "repeated_short_lines",
+        "line_hyphenation",
+        "paragraph_lines",
+        "empty_lines",
+        "ocr_artifacts",
+        "whitespace",
+    ]
+
+
+def _clamp_concurrency(value: Any) -> Any:
+    """A provider profile may allow more parallel requests (a FreeLLM profile defaults to 32) than one corpus operation
+    uses. Clamp to the operation's ceiling instead of rejecting the whole request with a 422."""
+    try:
+        return max(1, min(16, int(value)))
+    except (TypeError, ValueError):
+        return value
+
+
+ClampedConcurrency = Annotated[int, BeforeValidator(_clamp_concurrency)]
 
 
 class ChromaPathUpdate(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
+
+
+class ChromaConnectionUpdate(BaseModel):
+    """Switch or probe the Chroma backend. Token omitted keeps the current secret."""
+
+    mode: Literal["embedded", "http"]
+    path: str | None = Field(default=None, max_length=4096)
+    url: str | None = Field(default=None, max_length=2048)
+    token: str | None = Field(default=None, max_length=4096)
+    tenant: str | None = Field(default=None, max_length=128)
+    database: str | None = Field(default=None, max_length=128)
 
 
 class StoreCreate(BaseModel):
@@ -207,6 +261,7 @@ class LLMWarmupRequest(BaseModel):
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
+    num_ctx: int | None = Field(default=None, ge=256, le=1048576)
 
 
 class TouchupRequest(BaseModel):
@@ -285,8 +340,8 @@ class RAGRunRequest(BaseModel):
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
-    locales: list[LanguageCode] = Field(default_factory=lambda: ["en", "fr"])
-    search_types: list[Literal["mmr", "similarity", "lexical"]] = Field(default_factory=lambda: ["similarity", "lexical", "mmr"])
+    locales: list[LanguageCode] = Field(default_factory=_default_locales)
+    search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -412,9 +467,38 @@ class PdfCorpusRecordSizing(BaseModel):
             raise ValueError("absolute_record_chars must be at least long_record_chars")
 
 
+class PdfCorpusExperimentArm(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    ablations: list[Literal["autofill", "blended_confidence", "rejection_memory", "reviewer_conventions", "cross_build_learning"]] = Field(default_factory=list)
+
+
+class PdfCorpusExperiment(BaseModel):
+    """Optional experiment conditions. Absent, a run behaves normally and records the default arm."""
+
+    ablations: list[Literal["autofill", "blended_confidence", "rejection_memory", "reviewer_conventions", "cross_build_learning"]] = Field(default_factory=list)
+    arms: list[PdfCorpusExperimentArm] = Field(default_factory=list, max_length=8)
+    arm_salt: str = Field(default="", max_length=60)
+    blind_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    recheck_rate: float = Field(default=0.0, ge=0.0, le=0.5)
+    iaa_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    model_version: str | None = Field(default=None, max_length=120)
+
+
+
+class PdfCorpusAutonomy(BaseModel):
+    """Hands-free mode: nobody reviews the records, so a stated policy makes the decisions. Off unless enabled."""
+
+    enabled: bool = False
+    passes: int = Field(default=1, ge=0, le=3)
+    min_confidence: float = Field(default=0.8, ge=0.5, le=0.99)
+    unresolved: Literal["best_guess", "leave"] = "best_guess"
+    accept_records: bool = True
+    publish: bool = False
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
-    profile_id: str = Field(default="derrida-scholarly-v11", min_length=1, max_length=200)
+    profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
     base_url: str | None = None
@@ -424,20 +508,15 @@ class PdfCorpusBuildCreate(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
-    review_manifest_before_segmentation: bool = False
     auto_enrich_work_metadata: bool = True
+    experiment: PdfCorpusExperiment | None = None
+    autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
-    text_cleanup_rules: list[Literal[
-        "page_numbers", "repeated_short_lines", "line_hyphenation",
-        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
-    ]] = Field(default_factory=lambda: [
-        "page_numbers", "repeated_short_lines", "line_hyphenation",
-        "paragraph_lines", "empty_lines", "ocr_artifacts", "whitespace",
-    ])
+    text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
 
@@ -556,14 +635,18 @@ class PdfCorpusRecordRerun(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     enrichment_mode: Literal["fast", "deep"] = "fast"
+    experiment: PdfCorpusExperiment | None = None
+    autonomous: PdfCorpusAutonomy | None = None
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
     scope: Literal["all", "accepted", "pending"] = "all"
+    # 1 runs a single pass; more chains passes, each learning from the last.
+    passes: int = Field(default=1, ge=1, le=MAX_PASSES)
 
 
 class PdfCorpusTextTouchupRequest(BaseModel):
@@ -576,7 +659,7 @@ class PdfCorpusTextTouchupRequest(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
     generation: OllamaTouchupOptions | None = None
     use_profile_defaults: bool = True
-    max_concurrent_requests: int = Field(default=1, ge=1, le=16)
+    max_concurrent_requests: ClampedConcurrency = Field(default=1)
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     instructions: str = Field(default="", max_length=2000)
@@ -640,6 +723,7 @@ class LLMToolJobCreate(BaseModel):
         "rag_grade_batch",
         "work_metadata",
         "language_dictionary",
+        "language_content_policy",
     ]
     pdf: PdfLlmRequest | None = None
     grade: RAGGradeRequest | None = None
@@ -681,6 +765,11 @@ class LanguageDictionaryUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     flag: str = Field(default="🌐", max_length=32)
     dictionary: dict[str, str] = Field(default_factory=dict)
+
+
+class LanguageContentPolicyUpdate(BaseModel):
+    blocked_terms: list[str] = Field(default_factory=list, max_length=150)
+    contextual_terms: list[dict[str, Any]] = Field(default_factory=list, max_length=24)
 
 
 class LanguageInstallRequest(BaseModel):
@@ -725,3 +814,8 @@ class RoleCreateRequest(BaseModel):
 
 class RolePermissionsUpdate(BaseModel):
     permissions: list[str] = Field(default_factory=list, max_length=200)
+
+
+class PdfCorpusSecondOpinion(BaseModel):
+    field: str = Field(min_length=1, max_length=80)
+    value: Any = None

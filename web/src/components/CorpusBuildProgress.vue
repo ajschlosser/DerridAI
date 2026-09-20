@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import CorpusSegmentationTelemetry from "./CorpusSegmentationTelemetry.vue";
 import type { CorpusSegmentationTelemetry as CorpusSegmentationTelemetryData } from "../types/corpus";
@@ -13,7 +14,7 @@ const props=defineProps<{
   acceptedCount:number;
   error?:string|null;
   warnings?:string[];
-  validation?:Record<string,any>|null;
+  validation?:CorpusBuild['validation']|null;
   llmMetrics?:{calls?:number;manifest_calls?:number;segmentation_calls?:number;metadata_calls?:number;discourse_calls?:number;quotation_calls?:number;indexing_calls?:number;retries?:number;structured_output_failures?:number;escalations?:number}|null;
   unresolvedCount?:number;
   segmentationTelemetry?:CorpusSegmentationTelemetryData|null;
@@ -61,5 +62,5 @@ const nextStage=computed(()=>{const order=["structure","segmenting","constructin
 </template>
 
 <style scoped>
-.corpus-build-progress{display:grid;gap:9px}.stage-explanation{display:grid;grid-template-columns:max-content 1fr max-content;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--soft);font-size:.8125rem}.stage-explanation span{color:var(--muted);line-height:1.4}.stage-explanation small{color:var(--muted);white-space:nowrap}.unresolved-line{padding:7px 9px;border-radius:8px;background:#fff6e5;color:#604300;font-size:.8125rem}.build-status-line,.validation-strip,.llm-metrics{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:.8125rem;color:var(--muted)}.pill{border:1px solid var(--line);border-radius:999px;padding:3px 7px;text-transform:uppercase;font-weight:800;letter-spacing:.04em}.progress-track{height:7px;border-radius:999px;background:var(--soft);overflow:hidden}.progress-track span{display:block;height:100%;background:var(--accent);transition:width .25s}.build-warning{display:grid;gap:3px;padding:9px;border:1px solid #c96b6b;border-radius:8px;background:#fff2f2;color:#7d2222;font-size:.8125rem}.warnings,.validation-details{font-size:.8125rem}.warnings summary,.validation-details summary{cursor:pointer;font-weight:700}.validation-details ul{margin:6px 0 0;padding-inline-start:20px}.validation-strip{padding:7px 9px;border-radius:8px;background:#edf8f1}.validation-strip.invalid{background:#fff6e5;color:#604300}@media(prefers-reduced-motion:reduce){.progress-track span{transition:none}}
+.corpus-build-progress{display:grid;gap:9px}.stage-explanation{display:grid;grid-template-columns:max-content 1fr max-content;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--soft);font-size:.8125rem}.stage-explanation span{color:var(--muted);line-height:1.4}.stage-explanation small{color:var(--muted);white-space:nowrap}.unresolved-line{padding:7px 9px;border-radius:8px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem}.build-status-line,.validation-strip,.llm-metrics{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:.8125rem;color:var(--muted)}.pill{border:1px solid var(--line);border-radius:999px;padding:3px 7px;text-transform:uppercase;font-weight:800;letter-spacing:.04em}.progress-track{height:7px;border-radius:999px;background:var(--soft);overflow:hidden}.progress-track span{display:block;height:100%;background:var(--accent);transition:width .25s}.build-warning{display:grid;gap:3px;padding:9px;border:1px solid var(--tone-danger-border);border-radius:8px;background:var(--tone-danger-bg);color:var(--tone-danger-fg);font-size:.8125rem}.warnings,.validation-details{font-size:.8125rem}.warnings summary,.validation-details summary{cursor:pointer;font-weight:700}.validation-details ul{margin:6px 0 0;padding-inline-start:20px}.validation-strip{padding:7px 9px;border-radius:8px;background:var(--tone-ok-bg)}.validation-strip.invalid{background:var(--tone-warn-bg);color:var(--tone-warn-fg)}@media(prefers-reduced-motion:reduce){.progress-track span{transition:none}}
 </style>

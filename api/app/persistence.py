@@ -5,15 +5,16 @@ import copy
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .config import settings
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _json_dumps(value: Any) -> str:
@@ -28,6 +29,22 @@ def _json_loads(value: str | bytes | None, default: Any) -> Any:
     except (TypeError, ValueError, json.JSONDecodeError):
         return copy.deepcopy(default)
     return parsed
+
+
+def _language_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "name": str(row["name"]),
+        "flag": str(row["flag"]),
+        "dictionary": _json_loads(row["dictionary_json"], {}),
+    }
+    if row["translation_report_json"]:
+        value["translation_report"] = _json_loads(row["translation_report_json"], {})
+    keys = set(row.keys())
+    if "content_policy_json" in keys and row["content_policy_json"]:
+        policy = _json_loads(row["content_policy_json"], None)
+        if isinstance(policy, dict):
+            value["content_policy"] = policy
+    return value
 
 
 class SQLiteRepositoryBase:
@@ -83,6 +100,7 @@ class SQLiteRepositoryBase:
                     flag TEXT NOT NULL,
                     dictionary_json TEXT NOT NULL,
                     translation_report_json TEXT,
+                    content_policy_json TEXT,
                     updated_at TEXT NOT NULL
                 );
 
@@ -101,6 +119,14 @@ class SQLiteRepositoryBase:
                     ON jobs(status, updated_at DESC);
                 """
             )
+            self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
+
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+        names = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in names:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     def describe(self) -> dict[str, Any]:
         with self._connect() as conn:
@@ -143,16 +169,9 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             ]
             languages: dict[str, Any] = {}
             for row in conn.execute(
-                "SELECT code,name,flag,dictionary_json,translation_report_json FROM languages ORDER BY code"
+                "SELECT code,name,flag,dictionary_json,translation_report_json,content_policy_json FROM languages ORDER BY code"
             ):
-                value: dict[str, Any] = {
-                    "name": str(row["name"]),
-                    "flag": str(row["flag"]),
-                    "dictionary": _json_loads(row["dictionary_json"], {}),
-                }
-                if row["translation_report_json"]:
-                    value["translation_report"] = _json_loads(row["translation_report_json"], {})
-                languages[str(row["code"])] = value
+                languages[str(row["code"])] = _language_from_row(row)
 
         return {
             "researcher_provider_profiles": profiles,
@@ -211,14 +230,16 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 if not clean_code:
                     continue
                 report = language.get("translation_report")
+                policy = language.get("content_policy")
                 conn.execute(
-                    "INSERT INTO languages(code,name,flag,dictionary_json,translation_report_json,updated_at) VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO languages(code,name,flag,dictionary_json,translation_report_json,content_policy_json,updated_at) VALUES(?,?,?,?,?,?,?)",
                     (
                         clean_code,
                         str(language.get("name") or clean_code),
                         str(language.get("flag") or "🌐"),
                         _json_dumps(language.get("dictionary") or {}),
                         _json_dumps(report) if isinstance(report, dict) else None,
+                        _json_dumps(policy) if isinstance(policy, dict) else None,
                         now,
                     ),
                 )
@@ -303,36 +324,19 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT code,name,flag,dictionary_json,translation_report_json FROM languages ORDER BY code"
+                "SELECT code,name,flag,dictionary_json,translation_report_json,content_policy_json FROM languages ORDER BY code"
             ).fetchall()
-        languages: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            value: dict[str, Any] = {
-                "name": str(row["name"]),
-                "flag": str(row["flag"]),
-                "dictionary": _json_loads(row["dictionary_json"], {}),
-            }
-            if row["translation_report_json"]:
-                value["translation_report"] = _json_loads(row["translation_report_json"], {})
-            languages[str(row["code"])] = value
-        return languages
+        return {str(row["code"]): _language_from_row(row) for row in rows}
 
     def get_language(self, code: str) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
-                "SELECT code,name,flag,dictionary_json,translation_report_json FROM languages WHERE code=?",
+                "SELECT code,name,flag,dictionary_json,translation_report_json,content_policy_json FROM languages WHERE code=?",
                 (str(code),),
             ).fetchone()
         if row is None:
             return None
-        value: dict[str, Any] = {
-            "name": str(row["name"]),
-            "flag": str(row["flag"]),
-            "dictionary": _json_loads(row["dictionary_json"], {}),
-        }
-        if row["translation_report_json"]:
-            value["translation_report"] = _json_loads(row["translation_report_json"], {})
-        return value
+        return _language_from_row(row)
 
     def put_language(self, code: str, language: dict[str, Any]) -> None:
         now = _iso_now()
@@ -359,6 +363,16 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 ),
             )
             conn.commit()
+
+    def put_content_policy(self, code: str, policy: dict[str, Any] | None) -> bool:
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE languages SET content_policy_json=?, updated_at=? WHERE code=?",
+                (_json_dumps(policy) if isinstance(policy, dict) else None, now, str(code)),
+            )
+            conn.commit()
+            return bool(cursor.rowcount)
 
     def delete_language(self, code: str) -> bool:
         with self._lock, self._connect() as conn:
@@ -478,9 +492,22 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",
+                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
+                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
+    def clear_type(self, job_type: str) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM jobs WHERE job_type=?", (str(job_type),))
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
+    def clear_all(self) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM jobs")
             conn.commit()
             return int(cursor.rowcount or 0)
 
@@ -492,7 +519,8 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",
+                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
+                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
             for raw in jobs or []:

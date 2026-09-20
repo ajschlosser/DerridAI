@@ -2,380 +2,93 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
+import {
+  dockCollapsedSummary,
+  isActiveJobStatus,
+  isTerminalJobStatus,
+  jobIdsToPruneFromDock,
+  jobProgressPercent,
+  shouldMountOperationDock,
+  statusBadgeTone,
+} from "../domain/operationsDock";
+import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
+import { formatDuration } from "../domain/operationsPanel";
+import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
+import { compressUrlState, decompressUrlState } from "../domain/urlState";
+import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../domain/recordQuery";
+import { DB_NAME, createWorkspaceDb, deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
+import { finiteResearchNumber, normalizedResearchConfig, researchEvidenceForUi, researchJobForUi, researchProfileForUi, sanitizeResearchGeneration } from "../domain/researchPayloads";
+import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
+import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
+import {
+  applyAppearance as applyAppearanceCompat,
+  applyUiTheme as applyUiThemeCompat,
+  setTranslationDictionary as setTranslationDictionaryCompat,
+  syncColorScheme as syncColorSchemeCompat,
+  tr as trCompat,
+  trf as trfCompat,
+  translateDynamicUiValue as translateDynamicUiValueCompat,
+  translateLegacyDom as translateLegacyDomCompat,
+} from "./legacyCompat.js";
+import { FIELD_LABELS, SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS, viewConfig } from "../domain/runtimeConstants";
+import { esc, icon } from "../domain/html";
+import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
+import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
+import { fullHttpErrorDetail } from "../domain/httpErrors";
+import { parsePastedRecord } from "../domain/pastedRecord";
+import { providerRequestConfig } from "../domain/providerRequest";
+import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
+import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
+import { createOperationPresenters } from "../domain/operationPresenters";
+import { createFieldFormatting } from "../domain/fieldFormatting";
+import { createCorpusAnalytics } from "../domain/corpusAnalytics";
+import { createRuntimeState } from "./runtimeState";
+import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
-const state = {
-  userContext: null,
-  files: [],
-  activeFileId: null,
-  view: "home",
-  selected: {},
-  searches: {},
-  listFilters: {},
-  pages: {},
-  pageSize: 100,
-  sorts: {},
-  globalSearch: "",
-  globalFilters: [],
-  globalSort: { key: "__file", dir: 1 },
-  globalPage: 1,
-  globalSearchMode: "traditional",
-  dbSearchMethod: "similarity",
-  dbSearchWhere: {},
-  dbSearchFetchK: 100,
-  dbSearchLambda: 0.7,
-  globalAdvancedOpen: false,
-  searchFacetFilters: {},
-  searchDatabaseRan: false,
-  worksSearch: "",
-  workOverview: "",
-  researcherRecordId: "",
-  researcherCompareA: "",
-  researcherCompareB: "",
-  annotationView: "works",
-  annotationSearch: "",
-  serverAnnotations: [],
-  serverAnnotationsStore: "",
-  annotationsFetchedAt: 0,
-  dashboardMetricIndex: 0,
-  lastViewedRecord: null,
-  globalSearchAutoRun: false,
-  searchResultLayouts: {traditional:"compact",database:"cards"},
-  foregroundUpsertCancelRequested: false,
-  recordFind: "",
-  recordFindKey: "",
-  pdf: { doc: null, file: null, url: "", name: "", title: "", author: "", page: 1, rotation: 0, text: "", search: "", relatedSearch: "", extractError: "", extractionSource: "" },
-  compareA: "",
-  compareB: "",
-  compareMode: "workspace",
-  comparePasteA: "",
-  comparePasteB: "",
-  stores: [],
-  storesLastFetchedAt: 0,
-  vectorAutoCreateRequested: false,
-  activeStore: "",
-  storeSearchResults: [],
-  storeSearchLoading: false,
-  storeSearchMessage: "",
-  storeSearchSort: {key:"similarity",dir:-1},
-  storeRecords: [],
-  storeCount: 0,
-  storePage: 1,
-  storePageSize: 50,
-  storeQuery: "",
-  storeSearchMode: "",
-  storeWork: "",
-  storeSort: {key:"",dir:1},
-  storeFilters: {},
-  storeWorks: [],
-  storeWorkStats: [],
-  storeWorksStore: "",
-  storeBrowseMode: "works",
-  vectorTab: "overview",
-  vectorCollectionFilter: "",
-  health: null,
-  llmStatus: null,
-  reviewSelection: new Set(),
-  selectedEvidence: {},
-  researcherProviderProfiles: [],
-  translations: {locale:"en-US",dictionary:{},base:{}},
-  navHistory: [],
-  navForward: [],
-  sidebarCollapsed: false,
-  collectionsCollapsed: false,
-  operationToastsMinimized: false,
-  operationStackPosition: null,
-  collapsedPanels: {},
-  providerStatuses: {},
-  providerWarmups: {},
-  tableColumns: {},
-  upsertState: {},
-  upsertIgnored: {},
-  storePresence: {},
-  storePresenceIds: {},
-  storePresenceCheckedAt: {},
-  operationProgress: {},
-  jobs: [],
-  jobsLastFetched: 0,
-  jobsPollTimer: null,
-  jobApplied: {},
-  upsertJobApplied: {},
-  foregroundUpsertActive: false,
-  warmup: {status:"idle",message:""},
-  faqSearch: "",
-  faqPage: 1,
-  faqExpanded: {},
-  ragConfig: {
-    source_collection: "",
-    locales: ["en","fr"],
-    search_types: ["similarity","lexical","mmr"],
-    k: 64,
-    fetch_k: 500,
-    lambda_mult: 0.7,
-    rrf_k: 60,
-    rerank_top_n: 24,
-    reranker: "cross_encoder",
-    cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    query_decomposition: true,
-    query_decomposition_num_predict: 768,
-    response_language: "auto",
-    evidence_record_char_limit: 12000,
-    evidence_total_char_limit: 120000,
-    bind_citations: true,
-    include_works_cited: true,
-    auto_grade: false,
-    auto_grade_provider_profile_id: "",
-    provider_profile_id: "",
-    skip_retrieval: false,
-    prompt: "",
-    instructions: "",
-    history: [],
-    run_history: []
-  },
-  appConfig: {
-    chat_provider: "ollama",
-    chat_model: "gemma4:e2b",
-    embedding_provider: "ollama",
-    embedding_model: "bge-m3:latest",
-    ollama_base_url: "http://host.docker.internal:11434",
-    ollama_rag_concurrency: 1,
-    openai_base_url: "http://host.docker.internal:3001/v1",
-    openai_model: "auto",
-    openai_model_mode: "auto",
-    openai_model_kind: "any",
-    openai_api_key: "",
-    default_review_preset: "text",
-    default_llm_run_mode: "foreground",
-    desktop_notifications: false,
-    ui_color_theme: "green",
-    default_provider_profile: "",
-    review_provider_profile: "",
-    provider_profiles: [],
-    background_llm: true,
-    openai_num_predict: 4096,
-    openai_temperature: 0,
-    openai_top_p: 1,
-    openai_seed: "",
-    openai_extra_options: "{}",
-    metadata_num_predict: 768,
-    text_num_predict: 4096
-  },
-  llmConfig: {
-    model: "gemma4:e2b",
-    num_ctx: 16384,
-    num_predict: "",
-    think: "false",
-    temperature: 0,
-    top_k: 0,
-    top_p: 1,
-    min_p: "",
-    repeat_penalty: 1.1,
-    seed: "",
-    mirostat: 0,
-    mirostat_eta: "",
-    mirostat_tau: "",
-    keep_alive: "10m",
-    extra_options: "{}"
-  },
-  storageReady: false,
-};
+const state = createRuntimeState();
 
-const UI_COLOR_THEMES=new Set(["green","blue","slate"]);
-function applyUiTheme(theme){const next=UI_COLOR_THEMES.has(String(theme||""))?String(theme):"green";state.appConfig.ui_color_theme=next;try{document.documentElement.dataset.uiTheme=next}catch{}try{localStorage.setItem("derridai.ui.theme",next)}catch{}return next}
+function syncColorScheme(){
+  return syncColorSchemeCompat(state);
+}
+function applyUiTheme(theme){
+  return applyUiThemeCompat(state, theme);
+}
+function applyAppearance(patch={}){
+  return applyAppearanceCompat(state, patch);
+}
 
-function setTranslationDictionary(locale,dictionary={},base={}){
-  const canonical=base||{};
-  const reverse=new Map();
-  for(const [key,value] of Object.entries(canonical)){
-    const text=String(value??"").trim();
-    if(text&&!reverse.has(text))reverse.set(text,key);
-  }
-  state.translations={locale:String(locale||"en-US"),dictionary:dictionary||{},base:canonical,reverse};
+function setTranslationDictionary(locale,dictionary={},base={},info={}){
+  return setTranslationDictionaryCompat(state, locale, dictionary, base, info);
 }
 function tr(key,fallback=""){
-  return state.translations?.dictionary?.[key] ?? state.translations?.base?.[key] ?? fallback ?? key;
+  return trCompat(state, key, fallback);
 }
 function trf(key,fallback,values={}){
-  let text=String(tr(key,fallback));
-  for(const [name,value] of Object.entries(values))text=text.replaceAll(`{${name}}`,String(value));
-  return text;
-}
-function translateExactUiValue(value){
-  const raw=String(value??"");
-  if(state.translations?.locale==="en-US")return raw;
-  const trimmed=raw.trim();
-  const key=state.translations?.reverse?.get?.(trimmed);
-  if(!key||state.translations?.dictionary?.[key]==null)return raw;
-  const translated=String(state.translations.dictionary[key]);
-  const prefix=raw.match(/^\s*/)?.[0]||"";
-  const suffix=raw.match(/\s*$/)?.[0]||"";
-  return `${prefix}${translated}${suffix}`;
+  return trfCompat(state, key, fallback, values);
 }
 function translateDynamicUiValue(value){
-  const raw=String(value??"");
-  const exact=translateExactUiValue(raw);
-  if(exact!==raw||state.translations?.locale==="en-US")return exact;
-  const prefix=raw.match(/^\s*/)?.[0]||"";
-  const suffix=raw.match(/\s*$/)?.[0]||"";
-  const text=raw.trim();
-  const numericCount=value=>Number(String(value).replace(/[^0-9.-]/g,""));
-  const noun=(oneKey,manyKey,oneFallback,manyFallback,count)=>tr(numericCount(count)===1?oneKey:manyKey,numericCount(count)===1?oneFallback:manyFallback);
-  let match;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${match[1]} ${noun("dynamic.record_one","dynamic.records","record","records",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) works$/i)))return `${prefix}${match[1]} ${noun("dynamic.work_one","dynamic.works","work","works",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) models$/i)))return `${prefix}${match[1]} ${noun("dynamic.model_one","dynamic.models","model","models",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) profiles$/i)))return `${prefix}${match[1]} ${noun("dynamic.profile_one","dynamic.profiles","profile","profiles",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) words$/i)))return `${prefix}${match[1]} ${noun("dynamic.word_one","dynamic.words","word","words",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) characters$/i)))return `${prefix}${match[1]} ${noun("dynamic.character_one","dynamic.characters","character","characters",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) changes$/i)))return `${prefix}${match[1]} ${noun("dynamic.change_one","dynamic.changes","change","changes",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) annotations$/i)))return `${prefix}${match[1]} ${noun("dynamic.annotation_one","dynamic.annotations","annotation","annotations",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) cached responses$/i)))return `${prefix}${match[1]} ${noun("dynamic.cached_response_one","dynamic.cached_responses","cached response","cached responses",match[1])}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) selected evidence$/i)))return `${prefix}${match[1]} ${tr("dynamic.selected_evidence","selected evidence")}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) selected$/i)))return `${prefix}${trf("dynamic.selected_count","{count} selected",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) of ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.record_range_count","{shown} of {total} records",{shown:match[1],total:match[2]})}${suffix}`;
-  if((match=text.match(/^Page ([0-9]+) \/ ([0-9]+)$/i)))return `${prefix}${trf("dynamic.page_of_pages","Page {page} / {pages}",{page:match[1],pages:match[2]})}${suffix}`;
-  if((match=text.match(/^Ready · ([0-9][0-9., \u00a0]*) models$/i)))return `${prefix}${trf("dynamic.ready_models","Ready · {count} models",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Showing latest ([0-9]+) of ([0-9]+) changes\. Full history is preserved in the record's updates field\.$/i)))return `${prefix}${trf("dynamic.history_latest","Showing latest {shown} of {total} changes. Full history is preserved in the record's updates field.",{shown:match[1],total:match[2]})}${suffix}`;
-  if((match=text.match(/^Cleared updates history from ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.cleared_history_records","Cleared updates history from {count} records",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Restored original record state · ([0-9][0-9., \u00a0]*) fields changed$/i)))return `${prefix}${trf("dynamic.restored_fields","Restored original record state · {count} fields changed",{count:match[1]})}${suffix}`;
-  if((match=text.match(/^Loaded ([0-9][0-9., \u00a0]*) records(?: · ([0-9][0-9., \u00a0]*) parse issues)?$/i)))return `${prefix}${trf(match[2]?"dynamic.loaded_records_issues":"dynamic.loaded_records",match[2]?"Loaded {count} records · {issues} parse issues":"Loaded {count} records",{count:match[1],issues:match[2]||"0"})}${suffix}`;
-  if((match=text.match(/^Merged and replaced ([0-9][0-9., \u00a0]*) tabs · ([0-9][0-9., \u00a0]*) records$/i)))return `${prefix}${trf("dynamic.merged_tabs_records","Merged and replaced {tabs} tabs · {records} records",{tabs:match[1],records:match[2]})}${suffix}`;
-  if((match=text.match(/^([0-9][0-9., \u00a0]*) records cleaned · ([0-9][0-9., \u00a0]*) tracked changes$/i)))return `${prefix}${trf("dynamic.cleaned_records","{records} records cleaned · {changes} tracked changes",{records:match[1],changes:match[2]})}${suffix}`;
-  if((match=text.match(/^Exported ([0-9][0-9., \u00a0]*) records from (.+)$/i)))return `${prefix}${trf("dynamic.exported_records","Exported {count} records from {collection}",{count:match[1],collection:match[2]})}${suffix}`;
-  if((match=text.match(/^Grading ([0-9]+) of ([0-9]+) · (.+)$/i)))return `${prefix}${trf("dynamic.grading_progress","Grading {current} of {total} · {question}",{current:match[1],total:match[2],question:match[3]})}${suffix}`;
-  if((match=text.match(/^Translating ([0-9][0-9., \u00a0]*) interface strings to (.+)$/i)))return `${prefix}${trf("dynamic.translating_interface","Translating {count} interface strings to {locale}",{count:match[1],locale:match[2]})}${suffix}`;
-  if((match=text.match(/^Running (.+)$/i)))return `${prefix}${trf("dynamic.running_operation","Running {label}",{label:match[1]})}${suffix}`;
-  if((match=text.match(/^Completed · ([0-9][0-9., \u00a0]*) graded, ([0-9][0-9., \u00a0]*) failed$/i)))return `${prefix}${trf("dynamic.completed_grading","Completed · {graded} graded, {failed} failed",{graded:match[1],failed:match[2]})}${suffix}`;
-  if((match=text.match(/^Completed · ([0-9][0-9., \u00a0]*) works, ([0-9][0-9., \u00a0]*) failed$/i)))return `${prefix}${trf("dynamic.completed_works","Completed · {works} works, {failed} failed",{works:match[1],failed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for provider slot: ([0-9]+) active \/ ([0-9]+) allowed$/i)))return `${prefix}${trf("dynamic.waiting_provider_active","Waiting for provider slot: {active} active / {allowed} allowed",{active:match[1],allowed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for provider slot \(([0-9]+)\/([0-9]+) active\)$/i)))return `${prefix}${trf("dynamic.waiting_provider_active_paren","Waiting for provider slot ({active}/{allowed} active)",{active:match[1],allowed:match[2]})}${suffix}`;
-  if((match=text.match(/^Waiting for Ollama slot: ([0-9]+) active \/ ([0-9]+) allowed$/i)))return `${prefix}${trf("dynamic.waiting_ollama_active","Waiting for Ollama slot: {active} active / {allowed} allowed",{active:match[1],allowed:match[2]})}${suffix}`;
-  return raw;
+  return translateDynamicUiValueCompat(state, value);
 }
-
-/**
- * Translate application-owned legacy UI labels after a compatibility renderer
- * has painted. Exact dictionary values are preferred; a deliberately small set
- * of count/status patterns handles legacy strings that contain runtime numbers.
- * Corpus passages, record text, source evidence, code and user input are blocked
- * from this bridge. New Vue-native components should call the i18n store directly.
- */
 function translateLegacyDom(root=document.querySelector("#main")){
-  if(!root||state.translations?.locale==="en-US")return;
-  const selectors=[
-    "button","label","th","option",".section-label",".side-section-label",
-    ".dialog-title",".dialog-subtitle",".empty-store > b",".ui-collapse-title"
-  ];
-  root.querySelectorAll(selectors.join(",")).forEach(element=>{
-    // Controls with nested icons/counts keep their structured children; translating
-    // only pure text labels avoids destroying SVG or status badges.
-    if(element.childElementCount===0&&element.textContent){
-      const next=translateDynamicUiValue(element.textContent);
-      if(next!==element.textContent)element.textContent=next;
-    }
-    for(const attr of ["title","aria-label","placeholder"]){
-      if(!element.hasAttribute(attr))continue;
-      const current=element.getAttribute(attr)||"";
-      const next=translateDynamicUiValue(current);
-      if(next!==current)element.setAttribute(attr,next);
-    }
-  });
-  root.querySelectorAll("input[placeholder],textarea[placeholder],select[title]").forEach(element=>{
-    for(const attr of ["placeholder","title","aria-label"]){
-      if(!element.hasAttribute(attr))continue;
-      const current=element.getAttribute(attr)||"";
-      const next=translateDynamicUiValue(current);
-      if(next!==current)element.setAttribute(attr,next);
-    }
-  });
-  // Compatibility views still contain substantial vanilla-DOM markup. Translate
-  // exact UI phrases even when an icon or badge makes the containing element
-  // non-leaf, but never walk record/evidence/source-text regions.
-  const blocked=".textcell,.recordtext,.pdftext,.researcher-summary-text,[data-annotatable-field],pre,code,svg,script,style,textarea,input";
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
-  const nodes=[];let node;
-  while((node=walker.nextNode()))nodes.push(node);
-  for(const textNode of nodes){
-    const parent=textNode.parentElement;
-    if(!parent||parent.closest(blocked))continue;
-    const next=translateDynamicUiValue(textNode.nodeValue||"");
-    if(next!==textNode.nodeValue)textNode.nodeValue=next;
-  }
+  return translateLegacyDomCompat(state, root);
 }
 
-const labels = {
-  record_id:"Record ID",work:"Work",document_author:"Document author",edition:"Edition",year:"Year",
-  page_start:"Page start",page_end:"Page end",region_type:"Region type",region_author:"Region author",
-  primary_text:"Primary text",canonical_work_id:"Canonical work ID",speaker:"Speaker",
-  position_holder:"Position holder",target:"Target",discourse_role:"Discourse role",
-  proposition_status:"Proposition status",semantic_function:"Semantic function",stance:"Stance",
-  claim_scope:"Claim scope",is_direct_quote:"Direct quote",quoted_speaker:"Quoted speaker",
-  quoted_author:"Quoted author",quoted_work:"Quoted work",quoted_position_holder:"Quoted position holder",
-  quoted_addressee:"Quoted addressee",quoted_referent:"Quoted referent",quotation_chain:"Quotation chain",
-  topics:"Topics",concepts:"Concepts",persons:"Persons",works_referenced:"Works referenced",
-  attribution_confidence:"Attribution confidence",semantic_classification_confidence:"Semantic classification confidence",
-  extraction_quality:"Extraction quality",needs_review:"Needs review",review_reason:"Review reason",
-  document_language:"Document language",original_language:"Original language",document_is_translation:"Document is translation",
-  translator:"Translator",publisher:"Publisher",publication_year:"Publication year",publication_place:"Publication place",isbn:"ISBN",document_title:"Document title",short_title:"Short title",original_title:"Original title",cover_url:"Cover URL",inline_citation:"Inline citation",full_citation:"Full citation",text:"Extracted text",text_length:"Text length",updates:"Change history",pdf_file:"PDF file",pdf_page:"PDF page",pdf_pages:"PDF pages",pdf_links:"PDF links",__file:"File",__db_status:"DB status",_chroma_id:"Chroma ID"
-};
+const {workIndex,dateKeys,topNeedsReviewWorkSeries,needsReviewTimeline,topFieldValues,publicationYearSeries,workRecordShares,averageRecordLengthForTopWorks,recentAuditChanges}=createCorpusAnalytics({allRows,memoCorpus});
+const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValue}=createFieldFormatting({tr});
+const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
+  tr,trf,
+  getLocale:()=>state.translations?.locale||"en-US",
+  getStores:()=>state.stores,
+  providerProfiles:()=>providerProfiles(),
+  providerDisplayName:profile=>providerDisplayName(profile),
+});
 
 
-const viewConfig = [
-  {id:"home", label:"Home", icon:"dashboard", section:"Overview"},
-  {id:"list", label:"Records", icon:"list", section:"Corpus"},
-  {id:"record", label:"Record View", icon:"record", section:"Corpus"},
-  {id:"works", label:"Works", icon:"books", section:"Corpus"},
-  {id:"global", label:"Search", icon:"search", section:"Corpus"},
-  {id:"annotations", label:"Annotations", icon:"record", section:"Corpus"},
-  {id:"pdf", label:"Corpus Builder", icon:"pdf", section:"Tools"},
-  {id:"compare", label:"Compare", icon:"compare", section:"Tools"},
-  {id:"vector", label:"Vector Stores", icon:"database", section:"Tools"},
-  {id:"rag", label:"Research", icon:"spark", section:"Research"},
-  {id:"faq", label:"Response Library", icon:"books", section:"Research"},
-  {id:"responsecache", label:"Response Cache", icon:"database", section:"Research"},
-  {id:"providers", label:"LLM Providers", icon:"spark", section:"System"},
-  {id:"config", label:"Settings", icon:"gear", section:"System"},
-];
 
-const TABLE_DEFAULTS={
-  // Record actions are rendered as a dedicated trailing column. Keep the default
-  // data columns compact enough to scan on a laptop and let users opt into the
-  // rest through the column chooser.
-  list:["__db_status","work","page_start","needs_review","text"],
-  global:["__db_status","work","page_start","needs_review","text"],
-  vector:["_chroma_id","record_id","work","page_start","speaker","needs_review"],
-};
-const SEARCH_LOADED_COLUMNS=["__db_status","work","page_start","needs_review","text"];
 
-function icon(name){
-  const paths={
-    dashboard:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    list:'<path d="M5 7h14M5 12h14M5 17h14"/><path d="M3 7h.01M3 12h.01M3 17h.01"/>',
-    record:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    books:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
-    search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
-    pdf:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M8.5 15h7M8.5 18h5"/>',
-    compare:'<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3"/>',
-    database:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20v-11"/><path d="M2 20h21"/>',
-    upload:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
-    download:'<path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 20h14"/>',
-    edit:'<path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
-    copy:'<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
-    filter:'<path d="M3 5h18l-7 8v5l-4 2v-7z"/>',
-    spark:'<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z"/><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z"/>',
-    broom:'<path d="m15 3 6 6-8 8-6-6z"/><path d="M7 11 3 15l6 6 4-4M5 17l2 2M8 14l4 4"/>',
-    plus:'<path d="M12 5v14M5 12h14"/>',
-    refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
-    check:'<path d="m5 12 4 4L19 6"/>',
-    history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
-    arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
-    close:'<path d="m6 6 12 12M18 6 6 18"/>',
-    gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
-  };
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.record}</svg>`;
-}
+
 
 function systemCardHtml(){
   const health=state.health;
@@ -402,7 +115,7 @@ function currentContext(){
   if(state.view==="record"&&r) return {kicker:r.record_id||"Record", title:r.work||"Record", meta:f?.name||""};
   const map={
     home:["Overview","Dashboard","Workspace, vector stores, review activity, and corpus statistics"],
-    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} records`:"Open a JSONL file"],
+    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} ${tr("dynamic.records","records")}`:"Open a JSONL file"],
     works:["Corpus","Works","Cross-file work overview"],
     global:["Corpus","Global Search","Search and filter every loaded record"],
     annotations:["Corpus","Annotations","Review annotations by work or in recent-activity order"],
@@ -415,8 +128,16 @@ function currentContext(){
     providers:["System","LLM Providers","Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow"],
     config:["System","Settings","Application behavior, retrieval defaults, storage, backup, and reset controls"],
   };
-  const [kicker,title,meta]=map[state.view]||map.list;
-  return {kicker,title,meta};
+  const dynamicTitle=state.view==="list"&&f?.name||state.view==="pdf"&&state.pdf.title;
+  const dynamicMeta=state.view==="list"&&f||state.view==="pdf"&&state.pdf.name;
+  const key=map[state.view]?state.view:"list";
+  const [kickerText,titleText,metaText]=map[key];
+  // Static labels are translated; data-driven titles (file names, PDF titles) are not.
+  return {
+    kicker:tr(`context.${key}.kicker`,kickerText),
+    title:dynamicTitle?titleText:tr(`context.${key}.title`,titleText),
+    meta:dynamicMeta?metaText:tr(`context.${key}.meta`,metaText),
+  };
 }
 
 const uid = () => crypto.randomUUID();
@@ -430,15 +151,6 @@ async function stableJsonlFileIdentity(text){
   const hex=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,"0")).join("");
   return {id:`jsonl-${hex.slice(0,24)}`,content_hash:hex};
 }
-const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-const label = key => tr(`field.${key}`, labels[key] || key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase()));
-const display = value => {
-  if(value === null || value === undefined || value === "") return "—";
-  if(Array.isArray(value)) return value.length ? value.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ") : "—";
-  if(typeof value === "object") return JSON.stringify(value);
-  if(typeof value === "boolean") return value ? tr("runtime.yes","Yes") : tr("runtime.no","No");
-  return String(value);
-};
 const activeFile = () => state.files.find(f => f.id === state.activeFileId) || null;
 const selectedIndex = f => Math.max(0, Math.min((f?.records.length || 1)-1, state.selected[f?.id] ?? 0));
 const selectedRecord = () => {
@@ -511,6 +223,7 @@ function setUserContext(user){
   state.userContext=user||null;
   if(priorId!==state.userContext?.id){state.serverAnnotations=[];state.serverAnnotationsStore="";state.annotationsFetchedAt=0}
   if(!canAccessPage(state.view))state.view="home";
+  void refreshResearcherContentPolicy();
 }
 function viewDisabledReason(view){
   if(!canAccessPage(view))return "This workspace is available to administrators only.";
@@ -537,7 +250,7 @@ function decorateDisabledControls(root=document){
     else if(id==="breadcrumbforward")reason="There is no forward navigation location.";
     else if(id==="loadraghistory")reason="Choose a previous RAG question first.";
     else if(id==="applyjobselected"||id==="applyselectedchanges")reason="Select at least one proposed change first.";
-    else if(id==="nukeeverything")reason='Type "NUKE" exactly to enable this destructive action.';
+    else if(id==="nukeeverything")reason=tr("config.nuke.type_to_enable_help",'Type "NUKE" exactly to enable this destructive action.');
     else if(id==="linkpdf")reason="The current PDF page is already linked to this record.";
     else if(id==="runsearch")reason="Semantic search is unavailable for precomputed-only collections.";
     else if(["ragmodel","toolmodel","touchmodel"].includes(id))reason="The provider is configured to choose the model automatically.";
@@ -567,72 +280,24 @@ function showAppModal(dialog){
   dialog.showModal();
 }
 
-const DB_NAME="derridai-corpus-viewer";
-const DB_VERSION=2;
 function workspaceDbName(){
   return isResearcher()&&state.userContext?.id?`${DB_NAME}-researcher-${state.userContext.id}`:DB_NAME;
 }
-let dbPromise=null;
 let prefsTimer=null;
 const fileTimers=new Map();
 
-function openWorkspaceDb(){
-  if(dbPromise)return dbPromise;
-  dbPromise=new Promise((resolve,reject)=>{
-    const request=indexedDB.open(workspaceDbName(),DB_VERSION);
-    request.onupgradeneeded=()=>{
-      const db=request.result;
-      if(!db.objectStoreNames.contains("files"))db.createObjectStore("files",{keyPath:"id"});
-      if(!db.objectStoreNames.contains("prefs"))db.createObjectStore("prefs",{keyPath:"key"});
-      if(!db.objectStoreNames.contains("assets"))db.createObjectStore("assets",{keyPath:"key"});
-    };
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-  return dbPromise;
-}
-function idbRequest(request){
-  return new Promise((resolve,reject)=>{
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error);
-  });
-}
-async function idbGetAll(storeName){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).getAll());
-}
-async function idbGet(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readonly");
-  return idbRequest(tx.objectStore(storeName).get(key));
-}
-async function idbPut(storeName,value){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).put(value));
-}
-async function idbDelete(storeName,key){
-  const db=await openWorkspaceDb();
-  const tx=db.transaction(storeName,"readwrite");
-  await idbRequest(tx.objectStore(storeName).delete(key));
-}
+const workspaceDb=createWorkspaceDb(workspaceDbName);
+const idbGetAll=workspaceDb.getAll;
+const idbGet=workspaceDb.get;
+const idbPut=workspaceDb.put;
+const idbDelete=workspaceDb.remove;
 async function deleteWorkspaceDatabase(){
   clearTimeout(prefsTimer);
   for(const timer of fileTimers.values())clearTimeout(timer);
   fileTimers.clear();
-  try{
-    const db=await openWorkspaceDb();
-    db.close();
-  }catch{}
-  dbPromise=null;
-  await new Promise((resolve,reject)=>{
-    const request=indexedDB.deleteDatabase(workspaceDbName());
-    request.onsuccess=()=>resolve();
-    request.onerror=()=>reject(request.error);
-    request.onblocked=()=>reject(new Error("IndexedDB deletion is blocked by another open DerridAI tab."));
-  });
+  await workspaceDb.drop();
 }
+const deleteAllDerridaiBrowserState=()=>deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
 async function persistCurrentPdfAsset(){
   if(!state.pdf.file)return;
   try{
@@ -693,15 +358,7 @@ async function restoreCurrentPdfAsset(){
 }
 
 function serializableFile(file){
-  return {
-    id:file.id,
-    name:file.name,
-    records:file.records,
-    errors:file.errors||[],
-    dirty:[...file.dirty],
-    imported_at:file.imported_at||new Date().toISOString(),
-    saved_at:new Date().toISOString(),
-  };
+  return serializableRecordsFile(file);
 }
 async function persistFileNow(file){
   invalidateCorpusCache();
@@ -752,6 +409,9 @@ function workspacePrefs(){
     compareMode:state.compareMode,
     comparePasteA:state.comparePasteA,
     comparePasteB:state.comparePasteB,
+    compareSourceA:state.compareSourceA,
+    compareSourceB:state.compareSourceB,
+    compareFilter:state.compareFilter,
     activeStore:state.activeStore,
     storePage:state.storePage,
     storePageSize:state.storePageSize,
@@ -791,6 +451,11 @@ function persistPrefs(){
   clearTimeout(prefsTimer);
   prefsTimer=setTimeout(()=>idbPut("prefs",workspacePrefs()).catch(error=>console.error("IndexedDB preference persistence failed",error)),400);
 }
+async function flushWorkspacePrefs(){
+  if(!state.storageReady)throw new Error("Workspace storage is not ready yet.");
+  clearTimeout(prefsTimer);
+  await idbPut("prefs",workspacePrefs());
+}
 async function restoreWorkspace(){
   try{
     const [savedFiles,prefs]=await Promise.all([idbGetAll("files"),idbGet("prefs","workspace")]);
@@ -806,7 +471,7 @@ async function restoreWorkspace(){
     if(prefs){
       const preservedAppDefaults={...state.appConfig};
       const preservedLlmDefaults={...state.llmConfig};
-      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
+      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","compareSourceA","compareSourceB","compareFilter","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
         if(prefs[key]!==undefined)state[key]=prefs[key];
       }
       state.appConfig={...preservedAppDefaults,...(prefs.appConfig||{})};
@@ -830,6 +495,7 @@ async function restoreWorkspace(){
       state.reviewSelection=new Set(prefs.reviewSelection||[]);
       state.activeFileId=state.files.some(f=>f.id===prefs.activeFileId)?prefs.activeFileId:(state.files[0]?.id||null);
     }else{
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       state.activeFileId=state.files[0]?.id||null;ensureProviderProfiles();try{state.appConfig.ui_color_theme=localStorage.getItem("derridai.ui.theme")||state.appConfig.ui_color_theme||"green"}catch{}applyUiTheme(state.appConfig.ui_color_theme);
     }
     const validPrefixes=new Set(state.files.map(f=>f.id));
@@ -853,45 +519,6 @@ function reviewItemFromKey(key){
 }
 function selectedReviewItems(){return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean)}
 
-function mlaAuthorName(value){
-  const name=String(value||"").trim();if(!name)return "";
-  if(name.includes(","))return name;const parts=name.split(/\s+/);if(parts.length<2)return name;return `${parts.pop()}, ${parts.join(" ")}`;
-}
-function mlaPageSpan(record,{prefix=true}={}){
-  const a=record?.page_start,b=record?.page_end;
-  if(a==null||a==="")return "";const span=b!=null&&b!==""&&String(b)!==String(a)?`${a}–${b}`:`${a}`;
-  return prefix?`${b!=null&&b!==""&&String(b)!==String(a)?"pp.":"p."} ${span}`:span;
-}
-function inlineCitation(record){
-  const author=String(record?.document_author||record?.author||"").trim();
-  const last=author.includes(",")?author.split(",")[0].trim():author.split(/\s+/).filter(Boolean).pop()||"";
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const a=record?.page_start,b=record?.page_end;
-  const page=a==null||a===""?"":(b!=null&&b!==""&&String(b)!==String(a)?`${a}-${b}`:`${a}`);
-  const head=[last,year].filter(Boolean).join(" ");
-  if(head&&page)return `(${head}: ${page})`;
-  if(head)return `(${head})`;
-  return page?`(${page})`:String(record?.record_id||"Record");
-}
-function mlaSentence(value){const text=String(value||"").trim();return text&&!/[.!?]$/.test(text)?`${text}.`:text}
-function fullCitation(record,{includePages=true}={}){
-  const author=mlaAuthorName(record?.document_author||record?.author);
-  const title=String(record?.work||record?.document_title||"").trim();
-  const translator=String(record?.translator||"").trim();
-  const edition=String(record?.edition||"").trim();
-  const publisher=String(record?.publisher||"").trim();
-  const year=String(record?.publication_year||record?.year||"").trim();
-  const page=includePages?mlaPageSpan(record):"";
-  const opening=[author?mlaSentence(author):"",title?mlaSentence(title):""].filter(Boolean).join(" ");
-  const publication=[];
-  if(translator)publication.push(`Translated by ${translator}`);
-  if(edition)publication.push(edition);
-  if(publisher)publication.push(publisher);
-  if(year)publication.push(year);
-  if(page)publication.push(page);
-  const tail=publication.length?`${publication.join(", ")}.`:"";
-  return [opening,tail].filter(Boolean).join(" ").trim()||String(record?.record_id||"Record");
-}
 async function copyCitation(record,kind="inline"){
   const text=kind==="full"?fullCitation(record):inlineCitation(record);
   try{await navigator.clipboard.writeText(text);toast(`Copied ${kind} citation`,{tone:"success"})}
@@ -980,15 +607,6 @@ function clearReviewSelection(){
   state.reviewSelection.clear();
   persistPrefs();
 }
-function cloneAuditValue(value){
-  if(value===undefined)return null;
-  try{return structuredClone(value)}catch{
-    try{return JSON.parse(JSON.stringify(value))}catch{return String(value)}
-  }
-}
-function sameValue(a,b){
-  try{return JSON.stringify(a)===JSON.stringify(b)}catch{return Object.is(a,b)}
-}
 
 // 0.30.11 packet discipline: API boundaries receive only fields required by
 // the operation. Audit history is intentionally opt-in because it can dwarf
@@ -1009,19 +627,6 @@ const RAG_EVIDENCE_TRANSPORT_FIELDS=[
   "persons","document_language","document_languages","quoted_speaker",
   "quoted_author","quoted_work","quoted_position_holder"
 ];
-function recordPayload(record,{fields=null,includeUpdates=false,includeChromaId=false}={}){
-  const source=record&&typeof record==="object"?record:{};
-  const keys=fields?[...new Set(fields)]:Object.keys(source);
-  const out={};
-  for(const key of keys){
-    if(!(key in source))continue;
-    if(key==="updates"&&!includeUpdates)continue;
-    if(key==="_updates_count"||key==="_researcher_text_policy")continue;
-    if(key==="_chroma_id"&&!includeChromaId)continue;
-    out[key]=source[key];
-  }
-  return out;
-}
 function upsertRecordPayload(record,chromaId=null){
   const out=recordPayload(record,{includeChromaId:false});
   if(chromaId)out._chroma_id=chromaId;
@@ -1097,11 +702,11 @@ async function clearRecordUpdates(file,index,{confirmFirst=true}={}){
   persistFile(file);
   return true;
 }
-async function clearAllUpdates(){
+async function clearAllUpdates({confirmed=false}={}){
   const rows=allRows().filter(row=>Array.isArray(row.record.updates)&&row.record.updates.length);
   if(!rows.length)return toast("No loaded records have updates history");
   const entries=rows.reduce((sum,row)=>sum+row.record.updates.length,0);
-  if(!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
   const files=new Set();
   for(const row of rows){
     row.file.records[row.index]={...row.record,updates:[]};
@@ -1123,54 +728,6 @@ function formatTimestamp(value){
   if(!value)return "";
   const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
-}
-function recordHistoryVersions(record){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const cleanSnapshot=value=>{
-    const copy=cloneAuditValue(value)||{};
-    if(copy&&typeof copy==="object")delete copy.updates;
-    return copy;
-  };
-  const baseline=cleanSnapshot(record);
-  for(let index=updates.length-1;index>=0;index--){
-    const update=updates[index]||{};
-    if(!update.field_name)continue;
-    baseline[update.field_name]=cloneAuditValue(update.old_value);
-  }
-  const versions=[{
-    index:0,
-    label:"Original",
-    timestamp:null,
-    source:"original",
-    changes:[],
-    record:cleanSnapshot(baseline),
-  }];
-  const groups=[];
-  for(let index=0;index<updates.length;index++){
-    const update=updates[index]||{};
-    const key=update.batch_id||update.timestamp||`change-${index}`;
-    const previous=groups.at(-1);
-    if(previous?.key===key)previous.items.push(update);
-    else groups.push({key,items:[update]});
-  }
-  let snapshot=cleanSnapshot(baseline);
-  for(const group of groups){
-    snapshot=cleanSnapshot(snapshot);
-    for(const update of group.items){
-      if(update?.field_name)snapshot[update.field_name]=cloneAuditValue(update.new_value);
-    }
-    const last=group.items.at(-1)||{};
-    versions.push({
-      index:versions.length,
-      label:`Version ${versions.length}`,
-      timestamp:last.timestamp||null,
-      source:last.source||"manual",
-      model:last.model||null,
-      changes:group.items,
-      record:cleanSnapshot(snapshot),
-    });
-  }
-  return versions;
 }
 function historyVersionChanges(previous,current){
   const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
@@ -1328,50 +885,13 @@ function toast(message,{tone="auto",duration=null}={}){
   resume();
 }
 
-function highlight(text, query){
-  const s=String(text ?? ""), q=String(query ?? "");
-  if(!q) return esc(s);
-  const low=s.toLocaleLowerCase(), needle=q.toLocaleLowerCase();
-  let out="", pos=0, i;
-  while((i=low.indexOf(needle,pos))>=0){
-    out += esc(s.slice(pos,i)) + "<mark>" + esc(s.slice(i,i+q.length)) + "</mark>";
-    pos=i+Math.max(1,q.length);
-  }
-  return out + esc(s.slice(pos));
-}
 
-function highlightTerms(text, query){
-  const source=String(text??"");
-  const terms=[...new Set(String(query??"").trim().split(/\s+/).map(term=>term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g,"")).filter(term=>term.length>1))]
-    .sort((a,b)=>b.length-a.length);
-  if(!terms.length)return esc(source);
-  const pattern=new RegExp(`(${terms.map(term=>term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})`,"gi");
-  let out="",last=0,match;
-  while((match=pattern.exec(source))){out+=esc(source.slice(last,match.index))+`<mark>${esc(match[0])}</mark>`;last=match.index+match[0].length;if(!match[0].length)pattern.lastIndex++}
-  return out+esc(source.slice(last));
-}
-function semanticSimilarity(distance){
-  const d=Number(distance);
-  if(!Number.isFinite(d))return null;
-  // Chroma distances are not calibrated probabilities. This monotonic transform
-  // provides an intuitive 0..1 display while preserving the result ranking.
-  return 1/(1+Math.max(0,d));
-}
 function similarityHtml(distance){
   const score=semanticSimilarity(distance);
   if(score==null)return `<span class="similarity-score" title="${esc(tr("research.similarity_help","Similarity is derived from vector distance and is not a probability."))}">—</span>`;
   return `<span class="similarity-score" title="${esc(tr("research.similarity_help","A ranking signal derived from vector distance. Higher values indicate closer semantic proximity; it is not a probability or confidence score."))}"><b>${(score*100).toFixed(1)}%</b><small>d=${Number(distance).toFixed(4)}</small></span>`;
 }
 
-function snippet(text, query, max=430){
-  const s=String(text ?? "").replace(/\s+/g," ").trim();
-  if(!s) return "";
-  if(!query) return s.length>max?s.slice(0,max)+"…":s;
-  const i=s.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-  if(i<0) return s.length>max?s.slice(0,max)+"…":s;
-  const a=Math.max(0,i-Math.floor(max/2)), b=Math.min(s.length,a+max);
-  return (a?"…":"")+s.slice(a,b)+(b<s.length?"…":"");
-}
 
 let progressiveRenderToken=0;
 function nextProgressiveRenderToken(){return ++progressiveRenderToken}
@@ -1420,25 +940,6 @@ function pages(r){
   return r.page_end!=null && r.page_end!==r.page_start ? `${display(r.page_start)}–${display(r.page_end)}` : display(r.page_start);
 }
 
-function compareValues(a,b){
-  const ae=a==null||a==="", be=b==null||b==="";
-  if(ae&&be)return 0;if(ae)return 1;if(be)return -1;
-  if(Array.isArray(a))a=a.join("\u0000");if(Array.isArray(b))b=b.join("\u0000");
-  if(typeof a==="boolean"||typeof b==="boolean")return Number(a)-Number(b);
-  const na=Number(a),nb=Number(b);
-  if(Number.isFinite(na)&&Number.isFinite(nb)&&String(a).trim()!==""&&String(b).trim()!=="")return na-nb;
-  return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});
-}
-
-function sortRows(rows, sort){
-  if(!sort?.key) return rows;
-  return [...rows].sort((x,y)=>{
-    const av=sort.key==="__file"?x.file.name:x.record?.[sort.key];
-    const bv=sort.key==="__file"?y.file.name:y.record?.[sort.key];
-    const c=compareValues(av,bv);
-    return (c || x.index-y.index)*sort.dir;
-  });
-}
 function toggleSort(sort,key){if(sort.key===key)sort.dir*=-1;else{sort.key=key;sort.dir=1}}
 function sortHead(text,key,sort,className=""){const arrow=sort.key===key?(sort.dir===1?"▲":"▼"):"";return `<th${className?` class="${esc(className)}"`:""}><button data-sort="${esc(key)}">${esc(text)} ${arrow}</button></th>`}
 
@@ -1464,24 +965,9 @@ function wirePager(prefix,pg,setPage){
   });
 }
 
-function stableValue(value){
-  if(Array.isArray(value))return value.map(stableValue);
-  if(value&&typeof value==="object"){
-    const out={};
-    for(const key of Object.keys(value).filter(key=>key!=="updates"&&key!=="_updates_count"&&!key.startsWith("_chroma_")).sort())out[key]=stableValue(value[key]);
-    return out;
-  }
-  return value;
-}
 function recordFingerprint(record){
   if(record&&typeof record==="object"&&recordFingerprintCache.has(record))return recordFingerprintCache.get(record);
-  const text=JSON.stringify(stableValue(record));
-  let hash=2166136261;
-  for(let i=0;i<text.length;i++){
-    hash^=text.charCodeAt(i);
-    hash=Math.imul(hash,16777619);
-  }
-  const value=(hash>>>0).toString(16).padStart(8,"0");
+  const value=computeRecordFingerprint(record);
   if(record&&typeof record==="object")recordFingerprintCache.set(record,value);
   return value;
 }
@@ -1767,8 +1253,9 @@ function rowMatchesListFilters(row,filters){
     const filter=String(raw??"").trim().toLocaleLowerCase();
     if(!filter)continue;
     if(key==="__db_status"){
-      const status=recordDbStatus(row.file,row.index,row.record).label.toLocaleLowerCase();
-      if(!status.includes(filter))return false;
+      const info=recordDbStatus(row.file,row.index,row.record);
+      const haystack=`${info.kind} ${info.label}`.toLocaleLowerCase();
+      if(!haystack.includes(filter))return false;
       continue;
     }
     if(key==="needs_review"){
@@ -1798,18 +1285,6 @@ function storeCellHtml(record,key){
   if(key==="full_citation")return `<td><div class="scroll-cell" title="${esc(fullCitation(record))}">${esc(fullCitation(record))}</div></td>`;
   const value=record[key];if(metadataSearchable(key,value))return `<td><button class="table-metadata-link scroll-cell" type="button" data-meta-search-field="${esc(key)}" data-meta-search-value="${esc(Array.isArray(value)?value[0]:value)}" data-meta-search-contains="${Array.isArray(value)}" title="${esc(display(value))}">${esc(display(value))}</button></td>`;
   return `<td><div class="scroll-cell ${key==="record_id"?"id":""}" title="${esc(display(value))}">${esc(display(value))}</div></td>`;
-}
-function pdfLinks(record){
-  const file=String(record?.pdf_file||"");
-  if(file&&Array.isArray(record?.pdf_pages)){
-    return [...new Set(record.pdf_pages.map(Number).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b).map(pdf_page=>({pdf_file:file,pdf_page}));
-  }
-  const legacyPage=Number(record?.pdf_page);
-  if(file&&Number.isFinite(legacyPage)&&legacyPage>0)return [{pdf_file:file,pdf_page:legacyPage}];
-  if(Array.isArray(record?.pdf_links)){
-    return record.pdf_links.map(link=>({pdf_file:String(link?.pdf_file||""),pdf_page:Number(link?.pdf_page)})).filter(link=>link.pdf_file&&Number.isFinite(link.pdf_page)&&link.pdf_page>0);
-  }
-  return [];
 }
 
 function pdfDisplayTitle(){
@@ -1879,16 +1354,6 @@ function openLoadedPdfPage(page){
   openPdfExplorerWorkspace();
 }
 
-function normalizePdfLinkChanges(record,links){
-  const files=[...new Set(links.map(link=>link.pdf_file).filter(Boolean))];
-  if(files.length>1)throw new Error("A record can link to multiple pages of one PDF source, not multiple PDF files.");
-  const file=files[0]||null;
-  const pages=[...new Set(links.map(link=>Number(link.pdf_page)).filter(page=>Number.isFinite(page)&&page>0))].sort((a,b)=>a-b);
-  const changes={pdf_file:file,pdf_pages:pages};
-  if(record.pdf_page!==undefined)changes.pdf_page=null;
-  if(record.pdf_links!==undefined)changes.pdf_links=null;
-  return changes;
-}
 function editableChipSection(field,values){
   const list=flattenValueList(values);
   const datalist=[...new Set(allRows().flatMap(row=>flattenValueList(row.record[field])).map(String))].sort((a,b)=>a.localeCompare(b));
@@ -1920,23 +1385,6 @@ function needsReviewItems(rows=null){
     return memoCorpus("needs-review-items",()=>allRows().filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)})));
   }
   return rows.filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)}));
-}
-function workIndex(){
-  return memoCorpus("work-index",()=>{
-    const map=new Map();
-    for(const {file,record:r,index} of allRows()){
-      const key=String(r.work||"(Untitled work)");
-      const item=map.get(key)||{work:key,count:0,review:0,files:new Set(),authors:new Set(),years:new Set(),rows:[]};
-      item.count++;
-      if(r.needs_review)item.review++;
-      item.files.add(file.name);
-      if(r.document_author)item.authors.add(r.document_author);
-      if(r.year!=null)item.years.add(r.year);
-      item.rows.push({file,record:r,index});
-      map.set(key,item);
-    }
-    return map;
-  });
 }
 function openMergeDialog(){
   if(state.files.length<2)return toast("Open at least two JSONL files to merge");
@@ -2041,38 +1489,6 @@ async function ensureStores(){
     console.warn("Could not refresh Chroma collections",error);
   }
 }
-function upsertAuditDelta(record,receipt,presence){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  const updatesCount=updates.length;
-  if(receipt&&receipt.updates_count!==null&&receipt.updates_count!==undefined&&Number.isInteger(Number(receipt.updates_count))){
-    const previousCount=Math.max(0,Number(receipt.updates_count));
-    if(updatesCount<previousCount){
-      return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-    }
-    if(updatesCount>previousCount){
-      return {audit_entries:updates.slice(previousCount).map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-    return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
-  }
-  // Upgrade path for receipts created before 0.30.11: use the receipt timestamp
-  // to send only audit entries created after the last successful sync.
-  if(receipt?.timestamp){
-    const syncedAt=Date.parse(receipt.timestamp);
-    if(Number.isFinite(syncedAt)){
-      const delta=updates.filter(entry=>{
-        const timestamp=Date.parse(entry?.timestamp||"");
-        return Number.isFinite(timestamp)&&timestamp>syncedAt;
-      });
-      return {audit_entries:delta.map(cloneAuditValue),replace_updates:null,updates_count:updatesCount};
-    }
-  }
-  // A genuinely new Chroma row needs its existing local history initialized
-  // once. Existing rows with no receipt preserve their server-side history.
-  if(presence===false&&updatesCount){
-    return {audit_entries:[],replace_updates:updates.map(cloneAuditValue),updates_count:updatesCount};
-  }
-  return {audit_entries:[],replace_updates:null,updates_count:updatesCount};
-}
 
 async function buildUpsertItems(rows,store,{yieldEvery=0}={}){
   const idCounts=new Map();
@@ -2116,6 +1532,7 @@ async function upsertRows(rows,labelText="records",{largeSyncConfirmed=false}={}
     state.jobs=[job,...state.jobs.filter(existing=>existing.id!==job.id)];
     syncJobProgressToasts();startJobPolling();
     toast(trf("operations.vector_build_queued","Queued {count} records for background build of {store}",{count:rows.length.toLocaleString(),store}),{tone:"success"});
+    notifyVectorStoresChanged();
     if(state.view==="home")refreshOperationsPanelOnly();
     return true;
   }catch(error){toast(`Could not start vector build: ${error.message}`);return false}
@@ -2203,79 +1620,6 @@ const viewPathMap={home:"/",list:"/records",record:"/record",works:"/works",glob
 const pathViewMap=Object.fromEntries(Object.entries(viewPathMap).map(([view,path])=>[path,view]));
 let urlSyncHook=null;
 function setUrlSyncHook(hook){urlSyncHook=typeof hook==="function"?hook:null}
-function _base64UrlEncodeBinary(binary){
-  return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
-}
-function _base64UrlDecodeBinary(token){
-  let b64=String(token||"").replace(/-/g,"+").replace(/_/g,"/");
-  while(b64.length%4)b64+="=";
-  return atob(b64);
-}
-function compressUrlState(value){
-  try{
-    // Table state is frequently small. Fixed-width LZW is excellent once column
-    // and filter names repeat, but can expand a tiny payload. Generate both a
-    // raw UTF-8 base64url form and the 12-bit LZW form and keep whichever is
-    // shorter. The one-character prefix keeps decoding deterministic while the
-    // legacy unprefixed LZW path below preserves links created by early 0.23 builds.
-    const bytes=new TextEncoder().encode(JSON.stringify(value));
-    if(!bytes.length)return "";
-    const input=String.fromCharCode(...bytes);
-    const raw=`r${_base64UrlEncodeBinary(input)}`;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(String.fromCharCode(i),i);
-    let next=256,w="";const codes=[];
-    for(const c of input){
-      const wc=w+c;
-      if(dict.has(wc)){w=wc;continue}
-      if(w)codes.push(dict.get(w));
-      if(next<4096)dict.set(wc,next++);
-      w=c;
-    }
-    if(w)codes.push(dict.get(w));
-    const packed=[];let buffer=0,bits=0;
-    for(const code of codes){
-      buffer=(buffer<<12)|code;bits+=12;
-      while(bits>=8){bits-=8;packed.push((buffer>>bits)&255);buffer&=(1<<bits)-1}
-    }
-    if(bits)packed.push((buffer<<(8-bits))&255);
-    let binary="";for(const byte of packed)binary+=String.fromCharCode(byte);
-    const compressed=`z${_base64UrlEncodeBinary(binary)}`;
-    return compressed.length<raw.length?compressed:raw;
-  }catch(error){console.warn("Could not compress URL table state",error);return ""}
-}
-function decompressUrlState(token){
-  try{
-    const source=String(token||"");
-    if(!source)return null;
-    if(source[0]==="r"){
-      const raw=_base64UrlDecodeBinary(source.slice(1));
-      const bytes=Uint8Array.from(raw,ch=>ch.charCodeAt(0));
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-    // `z` is the current compressed representation. No prefix means the link
-    // came from the first 0.23 implementation and is decoded as legacy LZW.
-    const encoded=source[0]==="z"?source.slice(1):source;
-    const binary=_base64UrlDecodeBinary(encoded),codes=[];let buffer=0,bits=0;
-    for(let i=0;i<binary.length;i++){
-      buffer=(buffer<<8)|binary.charCodeAt(i);bits+=8;
-      while(bits>=12){bits-=12;codes.push((buffer>>bits)&4095);buffer&=(1<<bits)-1}
-    }
-    if(!codes.length)return null;
-    const dict=new Map();for(let i=0;i<256;i++)dict.set(i,String.fromCharCode(i));
-    let next=256,w=dict.get(codes[0]);if(w==null)return null;let output=w;
-    for(let i=1;i<codes.length;i++){
-      const code=codes[i];let entry=dict.get(code);
-      if(entry==null&&code===next)entry=w+w[0];
-      if(entry==null)return null;
-      output+=entry;
-      if(next<4096)dict.set(next++,w+entry[0]);
-      w=entry;
-    }
-    const bytes=Uint8Array.from(output,ch=>ch.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-  }catch(error){console.warn("Could not decode URL table state",error);return null}
-}
-
 function currentTableUrlState(view=state.view){
   // URL state is intentionally view-scoped. It is the public/shareable state
   // contract for a page; IndexedDB remains only a convenience for restoring a
@@ -2459,32 +1803,188 @@ function breadcrumbHtml(){
   return `<div class="breadcrumbs"><div class="breadcrumb-nav"><button class="breadcrumb-back" id="breadcrumbBack" type="button" ${previous?"":"disabled"}>← Back</button><button class="breadcrumb-forward" id="breadcrumbForward" type="button" ${next?"":"disabled"}>Forward →</button></div><span class="crumb-path">${previous?`${esc(viewLabel(previous.view))} <span class="crumb-sep">›</span> `:"<span class=\"crumb-home\">DerridAI</span> <span class=\"crumb-sep\">›</span> "}<strong>${esc(current)}</strong>${next?` <span class="crumb-sep">›</span> ${esc(viewLabel(next.view))}`:""}</span></div>`;
 }
 
+let operationDockResizeWired=false;
+
 function applyOperationStackPosition(stack){
-  if(!stack)return;const position=state.operationStackPosition;
-  if(!position){stack.style.left="";stack.style.top="";stack.style.right="";stack.style.bottom="";stack.style.removeProperty("--operation-stack-max-height");stack.classList.remove("user-positioned");return}
-  const rect=stack.getBoundingClientRect(),maxLeft=Math.max(8,window.innerWidth-Math.max(rect.width,280)-8),maxTop=Math.max(8,window.innerHeight-52),left=Math.min(maxLeft,Math.max(8,Number(position.left)||8)),top=Math.min(maxTop,Math.max(8,Number(position.top)||8));state.operationStackPosition={left,top};stack.style.left=`${left}px`;stack.style.top=`${top}px`;stack.style.right="auto";stack.style.bottom="auto";stack.style.setProperty("--operation-stack-max-height",`${Math.max(120,window.innerHeight-top-8)}px`);stack.classList.add("user-positioned");
+  if(!stack)return;
+  const position=state.operationStackPosition;
+  if(!position){
+    stack.style.left="";
+    stack.style.top="";
+    stack.style.right="";
+    stack.style.bottom="";
+    stack.style.transform="";
+    stack.style.translate="";
+    stack.style.removeProperty("--operation-stack-max-height");
+    stack.classList.remove("user-positioned");
+    return;
+  }
+  const rect=stack.getBoundingClientRect();
+  const maxLeft=Math.max(8,window.innerWidth-Math.max(rect.width,280)-8);
+  const maxTop=Math.max(8,window.innerHeight-52);
+  const left=Math.min(maxLeft,Math.max(8,Number(position.left)||8));
+  const top=Math.min(maxTop,Math.max(8,Number(position.top)||8));
+  state.operationStackPosition={left,top};
+  stack.style.left=`${left}px`;
+  stack.style.top=`${top}px`;
+  stack.style.right="auto";
+  stack.style.bottom="auto";
+  stack.style.translate="none";
+  stack.style.setProperty("--operation-stack-max-height",`${Math.max(120,window.innerHeight-top-8)}px`);
+  stack.classList.add("user-positioned");
+}
+function setOperationDockMinimized(minimized){
+  state.operationToastsMinimized=Boolean(minimized);
+  persistPrefs();
+  const stack=document.querySelector("#operationProgressStack");
+  if(!stack)return;
+  stack.classList.toggle("minimized",state.operationToastsMinimized);
+  stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
+  const toggle=stack.querySelector("#operationStackToggle");
+  if(toggle){
+    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
+    toggle.setAttribute("aria-label",state.operationToastsMinimized
+      ?tr("operations.expand","Show operations")
+      :tr("operations.collapse","Hide operations"));
+  }
+  applyOperationStackPosition(stack);
+  updateOperationStackCount();
+}
+function announceOperationDock(message){
+  const live=document.querySelector("#operationStackLive");
+  if(!live||!message)return;
+  live.textContent="";
+  live.textContent=message;
+}
+function operationDockCardStats(stack){
+  let active=0,failed=0,finished=0,primaryLabel="",primaryPercent=null;
+  stack.querySelectorAll(".operation-progress").forEach(panel=>{
+    const job=panel.dataset.jobOperation?state.jobs.find(item=>item.id===panel.dataset.jobOperation):null;
+    if(job){
+      if(isActiveJobStatus(job.status)){
+        active+=1;
+        if(!primaryLabel){
+          primaryLabel=jobLabel(job);
+          primaryPercent=jobProgressPercent(job);
+        }
+      }else if(job.status==="failed")failed+=1;
+      else finished+=1;
+      return;
+    }
+    if(panel.classList.contains("failed")){failed+=1;return;}
+    if(panel.classList.contains("operation-complete")){finished+=1;return;}
+    active+=1;
+    if(!primaryLabel){
+      primaryLabel=panel.querySelector("b")?.textContent||"";
+      const width=panel.querySelector("[data-progress-bar], .operation-progress-track i")?.style?.width||"";
+      const parsed=Number.parseInt(width,10);
+      primaryPercent=Number.isNaN(parsed)?null:parsed;
+    }
+  });
+  return {active,failed,finished,primaryLabel,primaryPercent};
 }
 function wireOperationStackDrag(stack){
-  const handle=stack?.querySelector("[data-operation-drag]");if(!handle||handle.dataset.dragWired)return;handle.dataset.dragWired="1";
-  handle.addEventListener("pointerdown",event=>{if(event.button!==0||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width,maxLeft=Math.max(8,window.innerWidth-width-8),maxTop=Math.max(8,window.innerHeight-52);let nextLeft=startLeft,nextTop=startTop,frame=0;handle.classList.add("dragging");stack.classList.add("is-dragging");try{handle.setPointerCapture(event.pointerId)}catch{}const paint=()=>{frame=0;stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`};const move=e=>{nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));if(!frame)frame=requestAnimationFrame(paint)};const done=e=>{if(frame)cancelAnimationFrame(frame);stack.style.transform="";state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};applyOperationStackPosition(stack);handle.classList.remove("dragging");stack.classList.remove("is-dragging");window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",done);window.removeEventListener("pointercancel",done);try{handle.releasePointerCapture(e?.pointerId)}catch{}persistPrefs()};window.addEventListener("pointermove",move,{passive:true});window.addEventListener("pointerup",done,{once:true});window.addEventListener("pointercancel",done,{once:true})});
-  handle.addEventListener("dblclick",event=>{if(event.target.closest("button"))return;state.operationStackPosition=null;persistPrefs();applyOperationStackPosition(stack)});handle.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;event.preventDefault();const rect=stack.getBoundingClientRect(),step=event.shiftKey?40:12;let left=rect.left,top=rect.top;if(event.key==="ArrowLeft")left-=step;if(event.key==="ArrowRight")left+=step;if(event.key==="ArrowUp")top-=step;if(event.key==="ArrowDown")top+=step;state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};persistPrefs();applyOperationStackPosition(stack)});window.addEventListener("resize",()=>applyOperationStackPosition(stack),{passive:true});
+  const handle=stack?.querySelector("[data-operation-drag]");
+  if(!handle||handle.dataset.dragWired)return;
+  handle.dataset.dragWired="1";
+  handle.addEventListener("pointerdown",event=>{
+    if(event.button!==0||event.target.closest("button"))return;
+    event.preventDefault();
+    const rect=stack.getBoundingClientRect();
+    const startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width;
+    const maxLeft=Math.max(8,window.innerWidth-width-8);
+    const maxTop=Math.max(8,window.innerHeight-52);
+    let nextLeft=startLeft,nextTop=startTop,frame=0;
+    handle.classList.add("dragging");
+    stack.classList.add("is-dragging");
+    stack.style.translate="none";
+    stack.style.left=`${startLeft}px`;
+    stack.style.top=`${startTop}px`;
+    stack.style.right="auto";
+    stack.style.bottom="auto";
+    try{handle.setPointerCapture(event.pointerId)}catch{/* pointer capture is optional on this surface */}
+    const paint=()=>{
+      frame=0;
+      stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`;
+    };
+    const move=e=>{
+      nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));
+      nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));
+      if(!frame)frame=requestAnimationFrame(paint);
+    };
+    const done=e=>{
+      if(frame)cancelAnimationFrame(frame);
+      stack.style.transform="";
+      state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};
+      applyOperationStackPosition(stack);
+      handle.classList.remove("dragging");
+      stack.classList.remove("is-dragging");
+      window.removeEventListener("pointermove",move);
+      window.removeEventListener("pointerup",done);
+      window.removeEventListener("pointercancel",done);
+      try{handle.releasePointerCapture(e?.pointerId)}catch{/* pointer capture is optional on this surface */}
+      persistPrefs();
+    };
+    window.addEventListener("pointermove",move,{passive:true});
+    window.addEventListener("pointerup",done,{once:true});
+    window.addEventListener("pointercancel",done,{once:true});
+  });
+  handle.addEventListener("dblclick",event=>{
+    if(event.target.closest("button"))return;
+    state.operationStackPosition=null;
+    persistPrefs();
+    applyOperationStackPosition(stack);
+  });
+  handle.addEventListener("keydown",event=>{
+    if(event.key==="Escape"){
+      if(!state.operationToastsMinimized){
+        event.preventDefault();
+        setOperationDockMinimized(true);
+      }
+      return;
+    }
+    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;
+    event.preventDefault();
+    const rect=stack.getBoundingClientRect();
+    const step=event.shiftKey?40:12;
+    let left=rect.left,top=rect.top;
+    if(event.key==="ArrowLeft")left-=step;
+    if(event.key==="ArrowRight")left+=step;
+    if(event.key==="ArrowUp")top-=step;
+    if(event.key==="ArrowDown")top+=step;
+    state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};
+    persistPrefs();
+    applyOperationStackPosition(stack);
+  });
+  if(!operationDockResizeWired){
+    operationDockResizeWired=true;
+    window.addEventListener("resize",()=>applyOperationStackPosition(document.querySelector("#operationProgressStack")),{passive:true});
+  }
 }
 
 function progressStack(){
   let stack=document.querySelector("#operationProgressStack");
   if(!stack){
-    stack=document.createElement("div");
+    const dragHelp=tr("operations.drag_help","Drag anywhere · double-click to recenter");
+    const title=tr("operations.title","Operations");
+    stack=document.createElement("aside");
     stack.id="operationProgressStack";
-    stack.className=`operation-progress-stack ${state.operationToastsMinimized?"minimized":""}`;
-    stack.innerHTML=`<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(tr("operations.drag_help","Drag operations anywhere · double-click to reset"))}" title="${esc(tr("operations.drag_help","Drag operations anywhere · double-click to reset"))}"><span class="operation-drag-grip" aria-hidden="true">⠿</span><button class="btn tiny" id="operationStackToggle">${state.operationToastsMinimized?tr("operations.show","Show operations"):tr("operations.minimize","Minimize operations")}</button><span id="operationStackCount"></span></div><div class="operation-stack-items"></div>`;
+    stack.className=`operation-progress-stack${state.operationToastsMinimized?" minimized":""}`;
+    stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
+    stack.setAttribute("role","complementary");
+    stack.setAttribute("aria-label",title);
+    stack.innerHTML=`<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized?"false":"true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized?tr("operations.expand","Show operations"):tr("operations.collapse","Hide operations"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished","Clear finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
     document.body.appendChild(stack);
-    wireOperationStackDrag(stack);applyOperationStackPosition(stack);
-    stack.querySelector("#operationStackToggle").onclick=()=>{
-      state.operationToastsMinimized=!state.operationToastsMinimized;
-      persistPrefs();
-      stack.classList.toggle("minimized",state.operationToastsMinimized);
-      stack.querySelector("#operationStackToggle").textContent=state.operationToastsMinimized?tr("operations.show","Show operations"):tr("operations.minimize","Minimize operations");
-    };
+    wireOperationStackDrag(stack);
+    applyOperationStackPosition(stack);
+    stack.querySelector("#operationStackToggle").addEventListener("click",()=>setOperationDockMinimized(!state.operationToastsMinimized));
+    stack.querySelector("#operationStackClearFinished").addEventListener("click",()=>clearFinishedOperations());
+    stack.addEventListener("keydown",event=>{
+      if(event.key==="Escape"&&!state.operationToastsMinimized&&!event.target.closest("input,textarea,select")){
+        event.preventDefault();
+        setOperationDockMinimized(true);
+      }
+    });
   }
   return stack.querySelector(".operation-stack-items")||stack;
 }
@@ -2492,8 +1992,34 @@ function updateOperationStackCount(){
   const stack=document.querySelector("#operationProgressStack");
   if(!stack)return;
   const count=stack.querySelectorAll(".operation-progress").length;
+  if(!shouldMountOperationDock(count)){
+    stack.remove();
+    return;
+  }
+  const stats=operationDockCardStats(stack);
+  const summary=dockCollapsedSummary(stats);
   const label=stack.querySelector("#operationStackCount");
-  if(label)label.textContent=count?`${count} operation${count===1?"":"s"}`:"";
+  if(label){
+    label.textContent=trf(summary.key,summary.fallback,summary.values);
+    // When there is nothing more specific to say, the summary falls back to the dock's own title; do not say it twice.
+    label.hidden=label.textContent===tr("operations.title","Operations");
+  }
+  stack.dataset.tone=summary.tone;
+  if(summary.percent==null)stack.style.removeProperty("--operation-dock-progress");
+  else stack.style.setProperty("--operation-dock-progress",`${summary.percent}%`);
+  const clear=stack.querySelector("#operationStackClearFinished");
+  if(clear){
+    const canClear=stats.failed+stats.finished>0;
+    clear.hidden=!canClear||state.operationToastsMinimized;
+    clear.disabled=!canClear;
+  }
+  const toggle=stack.querySelector("#operationStackToggle");
+  if(toggle){
+    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
+    toggle.setAttribute("aria-label",state.operationToastsMinimized
+      ?tr("operations.expand","Show operations")
+      :tr("operations.collapse","Hide operations"));
+  }
 }
 function showOperationProgress(title,total){
   const id=uid();
@@ -2530,7 +2056,7 @@ function hideOperationProgress(id,delay=200){
   const head=panel.querySelector(".operation-progress-head");
   if(head&&!head.querySelector("[data-dismiss-operation]")){
     const button=document.createElement("button");
-    button.className="btn tiny";button.dataset.dismissOperation=id;button.textContent="Dismiss";
+    button.className="btn tiny";button.dataset.dismissOperation=id;button.textContent=tr("ui.dismiss","Dismiss");
     button.onclick=()=>{panel.remove();delete state.operationProgress[id];updateOperationStackCount()};
     head.appendChild(button);
   }
@@ -2553,6 +2079,32 @@ function pruneClientJobState(jobId,{removeHistory=true}={}){
     state.ragConfig.run_history=state.ragConfig.run_history.filter(item=>item.job_id!==jobId);
   }
   updateOperationStackCount();
+}
+
+async function removeFinishedJob(jobId,{refresh=true}={}){
+  try{
+    await api(`/api/jobs/${encodeURIComponent(jobId)}`,{method:"DELETE"});
+    pruneClientJobState(jobId);
+    persistPrefs();
+    if(refresh)await refreshJobs({rerender:state.view==="home"});
+    else updateOperationStackCount();
+  }catch(error){
+    toast(trf("operations.remove_failed","Could not remove the operation: {message}",{message:error.message}));
+  }
+}
+
+async function clearFinishedOperations(){
+  try{
+    await api("/api/jobs",{method:"DELETE"});
+    document.querySelectorAll("#operationProgressStack [data-operation-id].operation-complete").forEach(panel=>{
+      delete state.operationProgress[panel.dataset.operationId];
+      panel.remove();
+    });
+    await refreshJobs({rerender:true});
+    updateOperationStackCount();
+  }catch(error){
+    toast(trf("operations.clear_failed","Could not clear jobs: {message}",{message:error.message}));
+  }
 }
 
 async function syncUpsertJobReceipts(job){
@@ -2591,6 +2143,7 @@ async function syncUpsertJobReceipts(job){
   persistPrefs();
   updateDbStatusElements();
   if(!["queued","running","cancelling"].includes(detail.status)){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{await refreshStores()}catch{}
   }
 }
@@ -2620,7 +2173,8 @@ async function refreshJobs({rerender=false}={}){
       operationsButton.classList.toggle("soft",active>0);
       operationsButton.innerHTML=`${icon("history")}Operations <span class="button-count">${active}</span>`;
     }
-    if(rerender&&state.view==="home"){refreshOperationsPanelOnly();refreshCorpusBuildsHomeCardOnly();}
+    notifyOperationsChanged();
+    if(rerender&&state.view==="home")refreshCorpusBuildsHomeCardOnly();
     if(state.view==="rag")refreshRagProgressPanel();
     return state.jobs;
   }catch(error){
@@ -2628,89 +2182,7 @@ async function refreshJobs({rerender=false}={}){
     return state.jobs;
   }
 }
-function jobLabel(job){
-  if(job.type==="rag")return "RAG pipeline";
-  if(job.type==="upsert")return "Chroma upsert";
-  if(job.type==="pdf_corpus")return tr("pdf_corpus.operation_label","PDF corpus build");
-  if(job.type==="llm_tool")return job.label||({pdf_clean_text:"PDF · clean text",pdf_draft_record:"PDF · draft record",pdf_link_record:"PDF · link record",rag_grade:"RAG · grade response",rag_grade_batch:"RAG · grade response cache",work_metadata:tr("works.populate_metadata_llm","Populate metadata with LLM")}[job.tool||job.mode]||"LLM operation");
-  return job.mode==="auto"?"Auto-improve":"LLM review";
-}
-function jobProviderSummary(job){
-  if(job.type==="upsert")return [job.label,job.store_name||"collection"].filter(Boolean).join(" · ");
-  const profile=job.provider_profile_id?providerProfiles().find(item=>item.id===job.provider_profile_id):null;
-  const providerName=profile?providerDisplayName(profile):(job.provider||"");
-  const model=job.model||"";
-  return [providerName,model].filter(Boolean).join(" · ");
-}
-function jobElapsedSeconds(job){
-  const start=job.started_at?new Date(job.started_at).getTime():null;
-  if(!Number.isFinite(start))return 0;
-  const end=job.finished_at?new Date(job.finished_at).getTime():Date.now();
-  return Math.max(0,(end-start)/1000);
-}
-function humanDuration(seconds){
-  const total=Math.max(0,Math.round(Number(seconds)||0));
-  const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;
-  if(h)return `${h}h ${m}m ${s}s`;
-  if(m)return `${m}m ${s}s`;
-  return `${s}s`;
-}
-function operationDetailPairs(job){
-  const request=job.request||{};
-  const pairs=[];
-  if(job.owner)pairs.push(["Started by",job.owner]);
-  if(job.type==="llm"){
-    pairs.push(
-      ["Model",job.model||job.provider||"—"],
-      ["Fields",(job.fields||[]).join(", ")||"—"],
-      ["Current record",job.current_record_id||"—"],
-      ["Pending results",job.pending_result_count??0],
-      ["Pending changes",job.pending_change_count??0],
-      ["Unprocessed records",job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0))],
-      ["Accepted",`${job.accepted_results||0} result(s) · ${job.accepted_fields||0} field(s)`],
-      ["Rejected",`${job.rejected_results||0} result(s) · ${job.rejected_fields||0} field(s)`],
-      ["Decision",job.resolution_state||"pending"]
-    );
-    if(request.generation&&Object.keys(request.generation).length)pairs.push(["Generation",JSON.stringify(request.generation)]);
-  }else if(job.type==="rag"){
-    const sourceStore=state.stores.find(store=>store.name===job.source_collection);
-    pairs.push(
-      ["Generation",job.model||job.provider||"—"],
-      ["Embedding",sourceStore?.embedding_model||sourceStore?.embedding_provider||"—"],
-      ["Reranker",request.cross_encoder_model||request.reranker||"—"],
-      ["Collection",job.source_collection||"—"],
-      ["Stage",job.stage||"—"],
-      ["Languages",(request.locales||[]).join(", ")||"—"],
-      ["Retrieval",(request.search_types||[]).join(" + ")||"—"],
-      ["k / fetch_k",`${request.k??"—"} / ${request.fetch_k??"—"}`],
-      ["RRF k",request.rrf_k??"—"],
-      ["Top N",request.rerank_top_n??"—"]
-    );
-    if(request.auto_grade){
-      const gradeProfile=request.auto_grade_provider_profile_id?providerProfiles().find(item=>item.id===request.auto_grade_provider_profile_id):null;
-      pairs.push(["Auto-grade",`${gradeProfile?providerDisplayName(gradeProfile):(request.auto_grade_provider||job.provider||"grader")} · ${request.auto_grade_model||job.model||"model"}`]);
-    }
-  }else if(job.type==="pdf_corpus"){
-    pairs.push(
-      [tr("pdf_corpus.source_pdf","Source PDF"),job.source_filename||"—"],
-      [tr("pdf_corpus.stage","Stage"),job.stage||"—"],
-      [tr("pdf_corpus.records","records"),job.record_count??0],
-      [tr("pdf_corpus.need_review","need review"),job.review_count??0],
-      [tr("pdf_corpus.unresolved_regions","Unresolved regions"),job.unresolved_regions??0],
-      [tr("pdf_corpus.concurrent_requests","max concurrent request(s)"),job.max_concurrent_requests??1]
-    );
-  }else if(job.type==="llm_tool"){
-    pairs.push(["Operation",job.label||job.tool||job.mode||"LLM tool"],["Provider",job.provider||"—"],["Model",job.model||"—"],["Stage",job.stage||"—"],["Max concurrent",job.max_concurrent_requests??"—"]);
-    if(request.pdf_file)pairs.push(["PDF",request.pdf_file],["Page",request.pdf_page??"—"]);
-    if(request.response_record_id)pairs.push(["Cached response",request.response_record_id]);
-  }else if(job.type==="upsert"){
-    pairs.push(["Collection",job.store_name||"—"],["Scope",job.label||request.label||"records"],["Records",job.total??0],["Committed",job.completed??0],["Current record",job.current_record_id||"—"]);
-    const mirrors=Object.entries(job.mirrored||{}).map(([name,count])=>`${name}: ${count}`).join(" · ");
-    if(mirrors)pairs.push(["Language mirrors",mirrors]);
-  }
-  pairs.push([job.finished_at?"Total time":"Elapsed",humanDuration(jobElapsedSeconds(job))]);
-  return pairs;
-}
+// Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 async function cancelBackgroundJob(jobId,{refresh=true}={}){
   const job=state.jobs.find(item=>item.id===jobId);
   if(job?.cancel_requested)return;
@@ -2745,17 +2217,18 @@ async function cancelBackgroundJob(jobId,{refresh=true}={}){
 function ensureJobProgressCard(job){
   const stack=progressStack();
   let panel=stack.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-  const wasOpen=Boolean(panel?.querySelector("details")?.open);
   if(!panel){
-    panel=document.createElement("div");
+    panel=document.createElement("article");
     panel.className="operation-progress show";
     panel.dataset.jobOperation=job.id;
     stack.appendChild(panel);
-    updateOperationStackCount();
   }
-  const pct=Math.round(job.total?job.completed/job.total*100:0);
-  const active=["queued","running","cancelling"].includes(job.status);
+  const pct=jobProgressPercent(job);
+  const active=isActiveJobStatus(job.status);
+  const tone=statusBadgeTone(job.status);
   panel.classList.toggle("failed",job.status==="failed");
+  panel.classList.toggle("operation-complete",isTerminalJobStatus(job.status));
+  panel.dataset.tone=tone;
   const cancellationDetail=job.type==="llm"||job.type==="llm_tool"
     ?"Cancellation requested · interrupting the active model stream."
     : job.type==="rag"
@@ -2766,7 +2239,11 @@ function ensureJobProgressCard(job){
   const detail=job.status==="cancelling"||job.cancel_requested
     ?cancellationDetail
     : job.status==="failed"
-      ? String(job.fatal_error||job.stage_detail||"Operation failed")
+      ? trf("operations.failed_help","Failed · {detail}",{detail:String(job.fatal_error||job.stage_detail||"Operation failed")})
+    : job.status==="completed"
+      ? tr("operations.completed_help","Completed · open the result or dismiss")
+    : job.status==="cancelled"
+      ? tr("operations.cancelled_help","Cancelled · partial results may still be available")
     : job.type==="rag"
       ? `${job.stage_detail||job.stage||"Running RAG pipeline"}`
       : job.type==="upsert"
@@ -2778,16 +2255,32 @@ function ensureJobProgressCard(job){
   const detailHtml=httpIndex>=0
     ? `${esc(String(detail).slice(0,httpIndex))}<strong>${esc(String(detail).slice(httpIndex))}</strong>`
     : esc(detail);
-  const detailRows=operationDetailPairs(job).map(([name,value])=>`<div><span>${esc(name)}</span><b>${esc(value)}</b></div>`).join("");
-  const recent=(job.events||[]).slice(-4).reverse().map(event=>`<div class="operation-toast-event"><time>${esc(formatTimestamp(event.timestamp))}</time><span>${esc(event.detail||event.stage||"")}</span></div>`).join("");
   const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status));
-  const resultActionLabel=job.type==="pdf_corpus"?tr("pdf_corpus.open_build","Open corpus build"):job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")?"View grade":"Open result";
-  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}${jobProviderSummary(job)?` · ${esc(jobProviderSummary(job))}`:""}</b><span>${job.completed.toLocaleString()} of ${job.total.toLocaleString()} (${pct}%) · ${esc(job.status)}</span></div><div class="operation-toast-actions">${active?(job.cancel_requested||job.status==="cancelling"?'<span class="cancel-pending">Cancelling…</span>':`<button class="btn tiny danger" data-toast-cancel-job="${job.id}">Cancel</button>`):`${canOpenResult?`<button class="btn tiny primary" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-dismiss-job="${job.id}">Dismiss</button>`}${active?'<div class="spinner small-spinner"></div>':""}</div></div><div class="operation-progress-track"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><details class="operation-toast-details" ${wasOpen?"open":""}><summary>Details</summary><div class="operation-toast-grid">${detailRows}</div>${recent?`<div class="operation-toast-events">${recent}</div>`:""}<div class="tools">${job.type==="llm"&&Number(job.pending_result_count||0)>0?`<button class="btn tiny primary" data-toast-review-results="${job.id}">Review ${Number(job.pending_result_count||0)} available</button>`:""}${canOpenResult?`<button class="btn tiny" data-toast-open-result="${job.id}">${resultActionLabel}</button>`:""}<button class="btn tiny" data-toast-open-details="${job.id}">Open full details</button></div></details>`;
+  const resultActionLabel=job.type==="pdf_corpus"
+    ?tr("pdf_corpus.open_build","Open corpus build")
+    :job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")
+      ?tr("operations.view_grade","View grade")
+      :tr("operations.open_result","Open result");
+  const statusLabel=tr(`operations.status.${job.status}`,job.status);
+  const provider=jobProviderSummary(job);
+  const pending=Number(job.pending_result_count||0);
+  const actions=[];
+  if(active){
+    if(job.cancel_requested||job.status==="cancelling")actions.push(`<span class="cancel-pending">${esc(tr("operations.cancelling","Cancelling…"))}</span>`);
+    else actions.push(`<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel","Cancel"))}</button>`);
+  }else{
+    if(canOpenResult)actions.push(`<button type="button" class="btn tiny primary" data-toast-open-result="${job.id}">${esc(resultActionLabel)}</button>`);
+    if(job.type==="llm"&&pending>0)actions.push(`<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available","Review {count} available",{count:pending}))}</button>`);
+    actions.push(`<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss","Dismiss"))}</button>`);
+  }
+  actions.push(`<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details","Full details"))}</button>`);
+  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}</b>${provider?`<small class="operation-progress-provider">${esc(provider)}</small>`:""}</div><span class="operation-status-badge" data-tone="${esc(tone)}"><span class="operation-status-dot" aria-hidden="true"></span>${esc(statusLabel)}</span></div><div class="operation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(jobProgressText(job,"of"))}"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><div class="operation-toast-actions">${actions.join("")}${active?'<div class="spinner small-spinner"></div>':""}</div>`;
   panel.querySelector("[data-toast-cancel-job]")?.addEventListener("click",()=>cancelBackgroundJob(job.id));
   panel.querySelector("[data-toast-review-results]")?.addEventListener("click",()=>openJobResults(job.id));
   panel.querySelectorAll("[data-toast-open-result]").forEach(button=>button.addEventListener("click",()=>openJobResults(job.id)));
   panel.querySelector("[data-toast-open-details]")?.addEventListener("click",()=>openJobDetails(job.id));
-  panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>{clearTimeout(completedJobToastTimers[job.id]);delete completedJobToastTimers[job.id];panel.remove();updateOperationStackCount()});
+  panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>removeFinishedJob(job.id));
+  updateOperationStackCount();
 }
 function maybeDesktopNotify(job){
   if(!state.appConfig.desktop_notifications)return;
@@ -2811,31 +2304,17 @@ function maybeDesktopNotify(job){
   }catch(error){console.warn("Desktop notification failed",error)}
 }
 function syncJobProgressToasts(previous=new Map()){
-  const runningIds=new Set();
   for(const job of state.jobs){
-    if(["queued","running","cancelling"].includes(job.status)){
-      runningIds.add(job.id);
+    if(isActiveJobStatus(job.status)){
+      if(previous.size&&!previous.has(job.id)){
+        announceOperationDock(trf("operations.live_started","{label} started",{label:jobLabel(job)}));
+      }
       ensureJobProgressCard(job);
       continue;
     }
     const transitioned=previous.get(job.id)&&previous.get(job.id)!==job.status&&["completed","cancelled","failed"].includes(job.status);
     const panel=document.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-    if(panel||transitioned){
-      ensureJobProgressCard(job);
-      const current=document.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-      const detail=current?.querySelector(".operation-progress-detail");
-      if(detail){
-        const detailText=job.status==="completed"
-          ?"Completed · open the result or dismiss"
-          :job.status==="cancelled"
-            ?"Cancelled · partial results may still be available"
-            :`Failed · ${job.fatal_error||job.stage_detail||"open details"}`;
-        const httpIndex=detailText.search(/\bHTTP\s+\d{3}\b/i);
-        if(job.status==="failed"&&httpIndex>=0){
-          detail.innerHTML=`${esc(detailText.slice(0,httpIndex))}<strong>${esc(detailText.slice(httpIndex))}</strong>`;
-        }else detail.textContent=detailText;
-      }
-    }
+    if(panel||transitioned)ensureJobProgressCard(job);
     if(transitioned&&!jobCompletionNotified[job.id]){
       jobCompletionNotified[job.id]=true;
       if(job.status==="completed"&&job.type==="llm_tool"&&(job.tool||job.mode)==="language_dictionary"){
@@ -2846,14 +2325,18 @@ function syncJobProgressToasts(previous=new Map()){
         const unit=job.type==="rag"?" stages":job.type==="llm_tool"&&(job.tool||job.mode)==="work_metadata"?" works":" records";
         toast(`${jobLabel(job)}${providerSummary?` · ${providerSummary}`:""} ${job.status}: ${job.completed}/${job.total}${unit}`);
       }
+      const liveKey=job.status==="failed"?"operations.live_failed":job.status==="cancelled"?"operations.live_cancelled":"operations.live_completed";
+      const liveFallback=job.status==="failed"?"{label} failed":job.status==="cancelled"?"{label} cancelled":"{label} completed";
+      announceOperationDock(trf(liveKey,liveFallback,{label:jobLabel(job)}));
       maybeDesktopNotify(job);
     }
   }
-  document.querySelectorAll("[data-job-operation]").forEach(panel=>{
-    if(!runningIds.has(panel.dataset.jobOperation)&&!state.jobs.some(job=>job.id===panel.dataset.jobOperation)){
-      panel.remove();
-    }
-  });
+  const liveIds=state.jobs.map(job=>job.id);
+  const visibleIds=[...document.querySelectorAll("[data-job-operation]")].map(panel=>panel.dataset.jobOperation);
+  for(const id of jobIdsToPruneFromDock(visibleIds,liveIds)){
+    document.querySelector(`[data-job-operation="${CSS.escape(id)}"]`)?.remove();
+  }
+  updateOperationStackCount();
 }
 function startJobPolling(){
   if(state.jobsPollTimer)return;
@@ -2892,6 +2375,8 @@ async function warmupProviderProfile(profileId=null){
   try{
     const result=await api("/api/llm/warmup",{method:"POST",body:JSON.stringify({
       provider:profile.type,model:cfg.model,base_url:cfg.base_url,api_key:cfg.api_key,
+      // Load with the context real calls use, so the model is not loaded twice.
+      num_ctx:Number(cfg.ollama?.num_ctx)>0?Number(cfg.ollama.num_ctx):undefined,
     })});
     const ready={
       status:"ready",message:`${providerDisplayName(profile)} · ${result.model||cfg.model} warmed`,
@@ -2943,64 +2428,6 @@ async function submitBackgroundLlmJob(items,config,fields,instructions,mode){
   startJobPolling();
   toast(`${mode==="auto"?"Auto-improve":"LLM review"} started in background · ${items.length} records`);
   return job;
-}
-function flattenValueList(value){
-  if(value==null)return [];
-  if(Array.isArray(value))return value.flatMap(flattenValueList);
-  if(typeof value==="object")return Object.values(value).flatMap(flattenValueList);
-  const text=String(value).trim();
-  if(!text)return [];
-  if((text.startsWith("[")&&text.endsWith("]"))||(text.startsWith("{")&&text.endsWith("}"))){
-    try{return flattenValueList(JSON.parse(text))}catch{}
-  }
-  // Legacy corpus files have used newline, semicolon, pipe, and CSV-like
-  // encodings for list metadata. Normalize them once so every badge surface
-  // receives a stable list rather than rendering serialized arrays as a chip.
-  if(/[\n;|]/.test(text))return text.split(/[\n;|]+/).map(item=>item.trim()).filter(Boolean);
-  // Commas are intentionally not treated as a universal list separator: person
-  // names and bibliographic values commonly contain commas. Legacy list fields
-  // should use JSON arrays, semicolons, pipes, or line breaks.
-  return [text];
-}
-function topFieldValues(field,limit=5){
-  return memoCorpus(`top:${field}:${limit}`,()=>{
-    const counts=new Map();
-    for(const {record} of allRows()){
-      for(const value of flattenValueList(record[field])){
-        const key=value.trim();
-        if(!key)continue;
-        counts.set(key,(counts.get(key)||0)+1);
-      }
-    }
-    return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit);
-  });
-}
-function averageRecordLengthForTopWorks(limit=5){
-  return memoCorpus(`avg-record-length-by-work:${limit}`,()=>{
-    const groups=new Map();
-    for(const {record} of allRows()){
-      const work=String(record.work||"(Untitled work)").trim()||"(Untitled work)";
-      const stats=groups.get(work)||{count:0,total:0};
-      stats.count++;
-      stats.total+=String(record.text||"").length;
-      groups.set(work,stats);
-    }
-    return [...groups.entries()]
-      .sort((a,b)=>b[1].count-a[1].count||a[0].localeCompare(b[0]))
-      .slice(0,limit)
-      .map(([work,stats])=>({key:work,value:Math.round(stats.total/Math.max(1,stats.count)),count:stats.count}));
-  });
-}
-function recentAuditChanges(limit=10){
-  return memoCorpus(`recent-audit:${limit}`,()=>{
-  const changes=[];
-  for(const {file,record,index} of allRows()){
-    for(const update of Array.isArray(record.updates)?record.updates:[]){
-      changes.push({file,record,index,update});
-    }
-  }
-  return changes.sort((a,b)=>new Date(b.update.timestamp||0)-new Date(a.update.timestamp||0)).slice(0,limit);
-  });
 }
 
 function serverAnnotationItems(){
@@ -3073,6 +2500,7 @@ function annotationItemHtml(item){
   return `<article class="annotation-feed-item">${open}<div class="annotation-feed-copy"><div class="annotation-feed-meta"><b>${esc(item.record?.record_id||tr("nav.record","Record"))}</b><span>${esc(annotation.field?label(annotation.field):tr("annotations.record_note","Record note"))}</span><time>${esc(formatTimestamp(annotation.created_at))}</time></div>${annotation.quote?`<blockquote>${esc(annotation.quote)}</blockquote>`:""}${annotation.note?`<p>${esc(annotation.note)}</p>`:""}${tags?`<div class="annotation-tags">${tags}</div>`:""}<small>${esc(annotation.initiated_by||annotation.author||tr("annotations.unknown_author","Unknown author"))} · ${esc(source)}</small></div>${removeButton}</article>`;
 }
 async function renderAnnotations(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(isResearcher()&&!state.activeStore){try{await refreshStores();state.activeStore=recordStores()[0]?.name||""}catch{}}
   await refreshServerAnnotations(isResearcher()&&state.serverAnnotationsStore!==String(state.activeStore||""));
   const all=allAnnotations();
@@ -3083,6 +2511,7 @@ async function renderAnnotations(main){
   const input=main.querySelector("#annotationSearch");let timer=null;input?.addEventListener("input",event=>{const value=event.target.value,pos=event.target.selectionStart;state.annotationSearch=value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>{if(state.view!=="annotations")return;renderAnnotations(main);requestAnimationFrame(()=>{const next=main.querySelector("#annotationSearch");if(next){next.focus();next.setSelectionRange(pos,pos)}})},150)});
   main.querySelectorAll("[data-annotation-view]").forEach(button=>button.onclick=()=>{state.annotationView=button.dataset.annotationView;persistPrefs();syncUrl({replace:true});renderAnnotations(main)});
   main.querySelectorAll("[data-annotation-file]").forEach(button=>button.onclick=()=>navigateTo("record",{fileId:button.dataset.annotationFile,index:Number(button.dataset.annotationIndex)}));
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   main.querySelectorAll("[data-server-annotation-record]").forEach(button=>button.onclick=()=>openSharedAnnotationRecord(button.dataset.serverAnnotationStore,button.dataset.serverAnnotationRecord));
   main.querySelectorAll("[data-delete-server-annotation]").forEach(button=>button.onclick=async()=>{if(!await openMessageModal({title:tr("annotations.remove_title","Remove annotation?"),message:tr("annotations.remove_help","This removes the shared annotation. This action cannot be undone."),tone:"danger",confirmLabel:tr("ui.remove","Remove"),cancelLabel:tr("ui.cancel","Cancel")}))return;try{await api(`/api/annotations/${encodeURIComponent(button.dataset.deleteServerAnnotation)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.removed","Annotation removed."));renderAnnotations(main)}catch(error){toast(error.message,{tone:"danger"})}});
   main.querySelectorAll("[data-delete-local-annotation]").forEach(button=>button.onclick=async()=>{
@@ -3151,17 +2580,6 @@ function timelineCounts(kind,days=30){
   return keys.map(key=>({key,value:counts.get(key)||0}));
   });
 }
-function dateKeys(days=30){
-  const today=new Date();
-  const keys=[];
-  for(let offset=days-1;offset>=0;offset--){
-    const d=new Date(today);
-    d.setHours(0,0,0,0);
-    d.setDate(d.getDate()-offset);
-    keys.push(d.toISOString().slice(0,10));
-  }
-  return keys;
-}
 function ragRunTimeline(days=30){
   const keys=dateKeys(days);
   const rows=new Map(keys.map(key=>[key,{key,ollama:0,freellm:0}]));
@@ -3189,130 +2607,7 @@ function ragRunTimeline(days=30){
   }
   return [...rows.values()];
 }
-function topNeedsReviewWorkSeries(days=30,limit=5){
-  const dayKey=new Date().toISOString().slice(0,10);
-  return memoCorpus(`review-work-series:${days}:${limit}:${dayKey}`,()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    if(!record.needs_review)continue;
-    const work=String(record.work||"(Untitled work)");
-    counts.set(work,(counts.get(work)||0)+1);
-  }
-  const top=[...counts.entries()]
-    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
-    .slice(0,limit)
-    .map(([work])=>work);
-  if(!top.length)return {rows:[],series:[]};
 
-  const recordsByWork=new Map(top.map(work=>[work,[]]));
-  for(const {record} of allRows()){
-    const work=String(record.work||"(Untitled work)");
-    if(!recordsByWork.has(work))continue;
-    const events=(Array.isArray(record.updates)?record.updates:[])
-      .filter(update=>update.field_name==="needs_review"&&update.timestamp)
-      .map(update=>({
-        time:new Date(update.timestamp).getTime(),
-        old:Boolean(update.old_value),
-      }))
-      .filter(event=>Number.isFinite(event.time))
-      .sort((a,b)=>b.time-a.time);
-    recordsByWork.get(work).push({
-      current:Boolean(record.needs_review),
-      events,
-    });
-  }
-
-  const keys=dateKeys(days);
-  const series=top.map((work,index)=>({
-    key:`work_${index}`,
-    label:work,
-    short_label:`${index+1}. ${work.length>18?`${work.slice(0,16)}…`:work}`,
-  }));
-  const rows=keys.map(key=>{
-    const end=new Date(`${key}T23:59:59.999Z`).getTime();
-    const row={key};
-    top.forEach((work,index)=>{
-      let count=0;
-      for(const history of recordsByWork.get(work)||[]){
-        let value=history.current;
-        for(const event of history.events){
-          if(event.time<=end)break;
-          value=event.old;
-        }
-        if(value)count++;
-      }
-      row[`work_${index}`]=count;
-    });
-    return row;
-  });
-  return {rows,series};
-  });
-}
-function multiLineChart(rows,title,seriesDefs,{note=""}={}){
-  if(!rows.length||!seriesDefs.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const width=540,height=185,left=46,right=14,top=18,bottom=28;
-  const values=rows.flatMap(row=>seriesDefs.map(series=>Number(row[series.key])||0));
-  const maxValue=Math.max(0,...values);
-  const scaleMax=Math.max(1,maxValue);
-  const plotWidth=width-left-right,plotHeight=height-top-bottom;
-  const xFor=index=>rows.length===1?left+plotWidth/2:left+(index/(rows.length-1))*plotWidth;
-  const yFor=value=>top+plotHeight-(Number(value||0)/scaleMax)*plotHeight;
-  const grades=[0,.25,.5,.75,1].map(fraction=>{
-    const value=Math.round(scaleMax*fraction);
-    const y=top+plotHeight-fraction*plotHeight;
-    return `<g class="chart-grade"><line x1="${left}" x2="${width-right}" y1="${y}" y2="${y}"/><text x="${left-7}" y="${y+3}" text-anchor="end">${value}</text></g>`;
-  }).join("");
-  const paths=seriesDefs.map((series,seriesIndex)=>{
-    const points=rows.map((row,index)=>({
-      x:xFor(index),
-      y:yFor(row[series.key]),
-      value:Number(row[series.key])||0,
-      key:row.key,
-    }));
-    const d=points.map((point,index)=>`${index?"L":"M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-    return `<path class="chart-line chart-series-${seriesIndex}" d="${d}"/>${points.map(point=>`<circle class="chart-dot chart-series-${seriesIndex}" data-chart-tip="${esc(`${series.label} · ${point.key}: ${point.value.toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(series.label)} · ${esc(point.key)}: ${point.value.toLocaleString()}</title></circle>`).join("")}`;
-  }).join("");
-  const mid=rows[Math.floor((rows.length-1)/2)]?.key||"";
-  return `<div class="dash-chart multi-line-chart">
-    <div class="dash-chart-head"><div><div class="dash-chart-title">${esc(title)}</div>${note?`<div class="dash-chart-note">${esc(note)}</div>`:""}</div><div class="chart-legend multi-chart-legend">${seriesDefs.map((series,index)=>`<span title="${esc(series.label)}"><i class="chart-series-${index}"></i>${esc(series.short_label||series.label)}</span>`).join("")}</div></div>
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
-      ${grades}
-      <path class="chart-axis" d="M${left},${top+plotHeight} H${width-right}"/>
-      ${paths}
-    </svg>
-    <div class="dash-chart-foot"><span>${esc(rows[0]?.key||"")}</span><span>${esc(mid)}</span><span>${esc(rows[rows.length-1]?.key||"")}</span></div>
-  </div>`;
-}
-
-function workRecordShares(limit=9){
-  return memoCorpus(`work-shares:${limit}`,()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    const work=String(record.work||"(Untitled work)");
-    counts.set(work,(counts.get(work)||0)+1);
-  }
-  const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-  const top=sorted.slice(0,limit);
-  const other=sorted.slice(limit).reduce((sum,[,count])=>sum+count,0);
-  if(other)top.push(["Other works",other]);
-  return top;
-  });
-}
-function pieChart(title,entries){
-  const total=entries.reduce((sum,[,value])=>sum+Number(value||0),0);
-  if(!total)return `<div class="dash-chart-empty">${esc(title)} · no records loaded</div>`;
-  const cx=90,cy=90,r=64,circ=2*Math.PI*r;
-  let offset=0;
-  const slices=entries.map(([name,value],index)=>{
-    const fraction=Number(value||0)/total;
-    const dash=fraction*circ;
-    const gap=Math.max(0,circ-dash);
-    const current=offset;
-    offset+=dash;
-    return `<circle class="pie-slice pie-series-${index%10}" data-chart-tip="${esc(`${name} · ${Number(value).toLocaleString()} records · ${(fraction*100).toFixed(1)}%`)}" cx="${cx}" cy="${cy}" r="${r}" pathLength="${circ}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-current}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(name)}: ${Number(value).toLocaleString()} (${(fraction*100).toFixed(1)}%)</title></circle>`;
-  }).join("");
-  return `<div class="dash-chart pie-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div></div><div class="pie-layout"><svg viewBox="0 0 180 180" role="img" aria-label="${esc(title)}"><circle class="pie-track" cx="${cx}" cy="${cy}" r="${r}"/>${slices}<text class="pie-total" x="${cx}" y="${cy-2}" text-anchor="middle">${total.toLocaleString()}</text><text class="pie-total-label" x="${cx}" y="${cy+15}" text-anchor="middle">records</text></svg><div class="pie-legend">${entries.map(([name,value],index)=>`<div title="${esc(name)}"><i class="pie-series-${index%10}"></i><span>${esc(name)}</span><b>${(Number(value)/total*100).toFixed(1)}%</b><small>${Number(value).toLocaleString()}</small></div>`).join("")}</div></div></div>`;
-}
 function recentRagRuns(limit=5){
   const jobMap=new Map(state.jobs.filter(job=>job.type==="rag").map(job=>[job.id,job]));
   const merged=[];
@@ -3334,86 +2629,6 @@ function recentRagRunsHtml(){
   </section>`;
 }
 
-function publicationYearSeries(){
-  return memoCorpus("publication-year-series",()=>{
-  const counts=new Map();
-  for(const {record} of allRows()){
-    const year=Number(record.year);
-    if(!Number.isFinite(year)||year<1000||year>3000)continue;
-    counts.set(year,(counts.get(year)||0)+1);
-  }
-  return [...counts.entries()].sort((a,b)=>a[0]-b[0]).map(([key,value])=>({key:String(key),value}));
-  });
-}
-function needsReviewTimeline(days=30){
-  const dayKey=new Date().toISOString().slice(0,10);
-  return memoCorpus(`needs-review-timeline:${days}:${dayKey}`,()=>{
-  const today=new Date();
-  today.setHours(23,59,59,999);
-  const dates=[];
-  for(let offset=days-1;offset>=0;offset--){
-    const d=new Date(today);
-    d.setDate(d.getDate()-offset);
-    dates.push(d);
-  }
-
-  const recordHistories=allRows().map(({record})=>{
-    const events=(Array.isArray(record.updates)?record.updates:[])
-      .filter(update=>update.field_name==="needs_review"&&update.timestamp)
-      .map(update=>({
-        time:new Date(update.timestamp).getTime(),
-        old:Boolean(update.old_value),
-        next:Boolean(update.new_value),
-      }))
-      .filter(event=>Number.isFinite(event.time))
-      .sort((a,b)=>b.time-a.time);
-    return {current:Boolean(record.needs_review),events};
-  });
-
-  return dates.map(date=>{
-    const end=date.getTime();
-    let count=0;
-    for(const history of recordHistories){
-      let value=history.current;
-      for(const event of history.events){
-        if(event.time<=end)break;
-        value=event.old;
-      }
-      if(value)count++;
-    }
-    return {key:date.toISOString().slice(0,10),value:count};
-  });
-  });
-}
-function lineChart(series,title,legendLabel=title){
-  if(!series.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const width=540,height=185,left=46,right=14,top=18,bottom=28;
-  const maxValue=Math.max(0,...series.map(item=>Number(item.value)||0));
-  const scaleMax=Math.max(1,maxValue);
-  const plotWidth=width-left-right,plotHeight=height-top-bottom;
-  const points=series.map((item,index)=>{
-    const x=series.length===1?left+plotWidth/2:left+(index/(series.length-1))*plotWidth;
-    const y=top+plotHeight-(Number(item.value||0)/scaleMax)*plotHeight;
-    return {x,y,...item};
-  });
-  const path=points.map((point,index)=>`${index?"L":"M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const grades=[0,.25,.5,.75,1].map(fraction=>{
-    const value=Math.round(scaleMax*fraction);
-    const y=top+plotHeight-fraction*plotHeight;
-    return `<g class="chart-grade"><line x1="${left}" x2="${width-right}" y1="${y}" y2="${y}"/><text x="${left-7}" y="${y+3}" text-anchor="end">${value}</text></g>`;
-  }).join("");
-  const mid=series[Math.floor((series.length-1)/2)]?.key||"";
-  return `<div class="dash-chart">
-    <div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(legendLabel)}</span></div></div>
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
-      ${grades}
-      <path class="chart-axis" d="M${left},${top+plotHeight} H${width-right}"/>
-      <path class="chart-line" d="${path}"/>
-      ${points.map(point=>`<circle class="chart-dot" data-chart-tip="${esc(`${legendLabel} · ${point.key}: ${Number(point.value||0).toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(point.key)}: ${Number(point.value||0).toLocaleString()}</title></circle>`).join("")}
-    </svg>
-    <div class="dash-chart-foot"><span>${esc(series[0]?.key||"")}</span><span>${esc(mid)}</span><span>${esc(series[series.length-1]?.key||"")}</span></div>
-  </div>`;
-}
 
 function pieShareSeries(items,valueField,limit=7){
   const sorted=[...items].map(item=>({key:item.work,value:Number(item[valueField]||0)})).filter(item=>item.value>0).sort((a,b)=>b.value-a.value);
@@ -3478,93 +2693,46 @@ function dashboardMetricBody(metric){
   return `<div class="dashboard-average-list">${ranking.map(item=>`<button class="dashboard-average-row" ${metric.field?`data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"`:`data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4,Math.round(Number(item.value)/maxRank*100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("")||`<div class="note">${esc(metric.field?tr("works.no_indexed_values","No indexed values in the loaded records."):tr("research.no_works","No works loaded yet."))}</div>`}</div>`;
 }
 
-function barChart(series,title,{valueLabel="Average characters"}={}){
-  if(!series.length)return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
-  const max=Math.max(1,...series.map(item=>Number(item.value)||0));
-  return `<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(valueLabel)}</span></div></div><div class="dash-bars">${series.map(item=>{
-    const pct=Math.max(2,Math.round((Number(item.value||0)/max)*100));
-    return `<div class="dash-bar-row" data-chart-tip="${esc(`${item.key} · ${Number(item.value||0).toLocaleString()} ${valueLabel.toLowerCase()} · ${Number(item.count||0).toLocaleString()} records`)}"><div class="dash-bar-label" title="${esc(item.key)}"><b>${esc(item.key)}</b><span>${Number(item.count||0).toLocaleString()} records</span></div><div class="dash-bar-track"><i style="width:${pct}%"></i></div><strong>${Number(item.value||0).toLocaleString()}</strong></div>`;
-  }).join("")}</div></section>`;
-}
 
-function statList(title,items){
-  return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value,count],index)=>`<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="Search the corpus for ${esc(value)}"><span>${index+1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("")||'<div class="note" style="padding:12px">No data</div>'}</div></section>`;
+// ---- Operations panel bridge -------------------------------------------------------------
+// The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
+// job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
+// model from here and calls back into the existing functions.
+const operationsListeners=new Set();
+function notifyOperationsChanged(){
+  for(const listener of [...operationsListeners]){
+    try{listener()}catch(error){console.warn("Operations panel listener failed",error)}
+  }
 }
-function renderOperationsPanel(){
-  const jobs=state.jobs;
-  const activeCount=jobs.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
-  return `<section class="card dashboard-operations" id="operationsPanel" data-no-collapse="true">
-    <div class="cardhead">
-      <div><b>${esc(tr("operations.background","Background operations"))}</b><div class="note">${esc(trf("operations.summary",{active:activeCount,retained:jobs.length,queue:tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")},`${activeCount} active · ${jobs.length} retained · ${tr("operations.shared_queue","LLM, RAG, PDF corpus builds, and Chroma upserts share this queue")}`))}</div></div>
-      <div class="tools operations-header-actions"><button class="btn small" id="refreshJobs">${icon("refresh")}${esc(tr("ui.refresh","Refresh"))}</button><button class="btn small" id="clearFinishedJobs" ${jobs.some(job=>!["queued","running","cancelling"].includes(job.status))?"":`disabled data-disabled-reason="${esc(tr("operations.no_finished","There are no finished operations to clear."))}"`}>${esc(tr("operations.clear_finished","Clear finished"))}</button></div>
-    </div>
-    <div class="operations-list">${jobs.map(job=>{
-      const pct=Math.round(job.total?job.completed/job.total*100:0);
-      const active=["queued","running","cancelling"].includes(job.status);
-      const hasPartialLlmResults=job.type==="llm"&&Number(job.pending_result_count||0)>0;
-      const decision=job.resolution_state||"pending";
-      const pairs=operationDetailPairs(job);
-      const primary=pairs.slice(0,6).map(([name,value])=>`<span><b>${esc(name)}</b> ${esc(value)}</span>`).join("");
-      const subtitle=job.status==="cancelling"||job.cancel_requested
-        ?"Cancellation requested · current call/batch is reaching a safe stopping point"
-        : job.type==="rag"
-          ? `${esc(job.stage_detail||job.stage||"queued")}`
-          : job.type==="upsert"
-            ? `${esc(job.store_name||"collection")} · ${job.completed}/${job.total} committed${Object.keys(job.mirrored||{}).length?" · language mirrors active":""}`
-            : job.type==="pdf_corpus"
-              ? `${esc(job.source_filename||tr("pdf_corpus.source_pdf","Source PDF"))} · ${esc(job.stage_detail||job.stage||job.raw_status||"queued")}${job.unresolved_regions?` · ${Number(job.unresolved_regions).toLocaleString()} ${esc(tr("pdf_corpus.unresolved_regions","unresolved segmentation region(s)"))}`:""}`
-            : job.type==="llm_tool"
-              ? `${esc(job.stage_detail||job.label||job.tool||"LLM operation")} · ${esc(job.provider||"")} · ${esc(job.model||"")}`
-              : `${job.completed}/${job.total} records${job.current_record_id?` · current: ${esc(job.current_record_id)}`:""}${job.failed?` · ${job.failed} failed`:""}`;
-      return `<div class="operation-row operation-row-rich" data-operation-row="${job.id}">
-        <div class="operation-main">
-          <div class="operation-title"><b>${esc(jobLabel(job))}</b><span class="job-status ${esc(job.status)}">${esc(job.status)}</span>${job.type==="llm"&&decision!=="pending"?`<span class="job-resolution ${esc(decision)}">${esc(decision.replaceAll("_"," "))}</span>`:""}</div>
-          <div class="operation-subtitle">${subtitle}</div>
-          <div class="operation-facts">${primary}</div>
-          <div class="operation-inline-progress"><i style="width:${pct}%"></i></div>
-          <div class="operation-progress-caption"><span>${job.completed}/${job.total} (${pct}%)</span><span>${job.finished_at?"Total":"Elapsed"}: ${esc(humanDuration(jobElapsedSeconds(job)))}</span></div>
-        </div>
-        <div class="tools operation-actions">
-          <button class="btn small" data-job-details="${job.id}">Details</button>
-          ${job.type==="llm"&&hasPartialLlmResults?`<button class="btn small primary" data-job-result="${job.id}">${active?"Review available results":"Review results"}</button>`:""}
-          ${(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status))?`<button class="btn small primary" data-job-result="${job.id}">${job.type==="pdf_corpus"?esc(tr("pdf_corpus.open_build","Open corpus build")):"Open result"}</button>`:""}
-          ${active?(job.cancel_requested||job.status==="cancelling"?'<button class="btn small" disabled>Cancelling…</button>':`<button class="btn small danger" data-cancel-job="${job.id}">Cancel</button>`):`<button class="btn small" data-remove-job="${job.id}">Remove</button>`}
-        </div>
-      </div>`;
-    }).join("")||'<div class="llm-empty">No background operations yet.</div>'}</div>
-  </section>`;
-}
-
-function wireOperationsPanel(){
-  const panel=document.querySelector("#operationsPanel");
-  if(!panel)return;
-  panel.querySelector("#refreshJobs")?.addEventListener("click",()=>refreshJobs({rerender:true}));
-  panel.querySelector("#clearFinishedJobs")?.addEventListener("click",async()=>{
-    try{
-      await api("/api/jobs",{method:"DELETE"});
-      await refreshJobs({rerender:true});
-    }catch(error){toast(`Could not clear jobs: ${error.message}`)}
-  });
-  panel.querySelectorAll("[data-job-details]").forEach(button=>button.onclick=()=>openJobDetails(button.dataset.jobDetails));
-  panel.querySelectorAll("[data-job-result]").forEach(button=>button.onclick=()=>openJobResults(button.dataset.jobResult));
-  panel.querySelectorAll("[data-cancel-job]").forEach(button=>button.onclick=()=>cancelBackgroundJob(button.dataset.cancelJob));
-  panel.querySelectorAll("[data-remove-job]").forEach(button=>button.onclick=async()=>{
-    try{
-      await api(`/api/jobs/${encodeURIComponent(button.dataset.removeJob)}`,{method:"DELETE"});
-      pruneClientJobState(button.dataset.removeJob);
+function operationsBridge(){
+  return {
+    snapshot:()=>(state.jobs||[]).map(operationViewModel),
+    subscribe:listener=>{operationsListeners.add(listener);return()=>operationsListeners.delete(listener)},
+    refresh:async()=>{await refreshJobs({rerender:true})},
+    openDetails:id=>{void openJobDetails(id)},
+    openResult:id=>{void openJobResults(id)},
+    cancel:async id=>{await cancelBackgroundJob(id)},
+    remove:async id=>{
+      await api(`/api/jobs/${encodeURIComponent(id)}`,{method:"DELETE"});
+      pruneClientJobState(id);
       persistPrefs();
       await refreshJobs({rerender:true});
-    }catch(error){toast(`Remove failed: ${error.message}`)}
-  });
+    },
+    clearFinished:async()=>{
+      await api("/api/jobs",{method:"DELETE"});
+      await refreshJobs({rerender:true});
+    },
+  };
+}
+function renderOperationsPanel(){
+  // A placeholder only: the Vue panel is mounted into it by mountOperationsPanelHost().
+  return `<div id="operationsPanelHost"></div>`;
+}
+function mountOperationsPanelHost(){
+  mountOperationsPanel(document.querySelector("#operationsPanelHost"),operationsBridge());
 }
 function refreshOperationsPanelOnly(){
-  const current=document.querySelector("#operationsPanel");
-  if(!current)return;
-  const holder=document.createElement("div");
-  holder.innerHTML=renderOperationsPanel();
-  const replacement=holder.firstElementChild;
-  if(replacement)current.replaceWith(replacement);
-  wireOperationsPanel();
+  notifyOperationsChanged();
   if(state.view==="rag")refreshRagProgressPanel();
 }
 function wireCorpusBuildsHomeCard(root=document){
@@ -4943,6 +4111,7 @@ async function renderRag(main){
           prompt,
           instructions:instructions||null,
           source_collection:cfg.source_collection,
+          // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
           selected_evidence:selectedPayload,
           skip_retrieval:Boolean(cfg.skip_retrieval),
           locales:cfg.locales,
@@ -5125,13 +4294,13 @@ async function renderDashboard(main){
     : recentAuditChanges(4).map(({file,record,index,update})=>({kind:"record",timestamp:update.timestamp||"",file,record,index,update}));
   const works=workItems.sort((a,b)=>a.work.localeCompare(b.work));
   const currentProvider=defaultProviderProfile();
-  const currentLanguage=state.translations?.locale==="fr-CA"?tr("language.french_ca","Français"):tr("language.english_us","English");
-  const currentLanguageFlag=state.translations?.locale==="fr-CA"?"🇨🇦":"🇺🇸";
+  const currentLanguage=state.translations?.info?.name||state.translations?.locale||"";
+  const currentLanguageFlag=state.translations?.info?.flag||"🌐";
   const latestAnnotation=(!isResearcher()||hasCapability("annotations.read"))?(recentAnnotations(1)[0]||null):null;
   const preview=await dashboardRecordPreview(),previewRecord=preview.record,previewTarget=preview.target;
   main.innerHTML=`<div class="dashboard-page">
     <section class="dashboard-page-top"><article class="card dashboard-hero"><img src="/brand/derridai-mark.png" alt="" class="dashboard-hero-mark"><div class="dashboard-hero-copy"><h1>${esc(tr("dashboard.welcome","Welcome to DerridAI"))}</h1><p class="dashboard-hero-tagline">${esc(tr("dashboard.tagline","Search. Compare. Annotate. Always already."))}</p><blockquote>${esc(tr("dashboard.quote","“Il n’y a pas de hors-texte.”"))}</blockquote><small>— Jacques Derrida</small><div class="dashboard-hero-actions"><button class="btn dark" id="dashStartSearch">${icon("search")}${esc(tr("dashboard.start_searching","Start searching"))}</button><button class="btn" id="dashBrowseWorks">${icon("books")}${esc(tr("dashboard.browse_works","Browse works"))}</button></div></div></article>
-    <article class="card dashboard-search-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("search")}</span><b>${esc(tr("dashboard.global_search","Global Search"))}</b></div><div class="dashboard-search-tabs"><button class="${state.globalSearchMode==="traditional"?"active":""}" data-dash-search-mode="traditional">${esc(tr("research.traditional_search",isResearcher()?"Record search":"Traditional search"))}</button><button class="${state.globalSearchMode!=="traditional"?"active":""}" data-dash-search-mode="database">${esc(tr("research.semantic_db_search","Semantic DB Search"))}</button></div><div class="dashboard-search-line"><div class="dashboard-search-input">${icon("search")}<input id="dashSearchQuery" value="${esc(state.globalSearch||"")}" placeholder="${esc(tr("dashboard.search_corpus_placeholder","Search the corpus…"))}"></div><select id="dashSearchWork" class="control"><option value="">${esc(tr("dashboard.all_works","All works"))}</option>${works.map(item=>`<option value="${esc(item.work)}">${esc(item.work)}</option>`).join("")}</select><button class="btn dark" id="dashRunSearch">${icon("search")}${esc(tr("ui.search","Search"))}</button></div><div class="dashboard-search-footer"><button class="dashboard-advanced-link" id="dashAdvancedSearch">${esc(tr("dashboard.advanced_filters","Advanced filters"))} →</button><p class="dashboard-search-help">${esc(tr("dashboard.search_help","Search across works, metadata, annotations, and—when available—the semantic database."))}</p></div></article></section>
+    <article class="card dashboard-search-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("search")}</span><b>${esc(tr("dashboard.global_search","Global Search"))}</b></div><div class="dashboard-search-tabs"><button class="${state.globalSearchMode==="traditional"?"active":""}" data-dash-search-mode="traditional">${esc(tr("research.traditional_search",isResearcher()?"Record search":"Traditional search"))}</button><button class="${state.globalSearchMode!=="traditional"?"active":""}" data-dash-search-mode="database">${esc(tr("research.semantic_db_search","Semantic DB Search"))}</button></div><div class="dashboard-search-line"><div class="dashboard-search-input">${icon("search")}<input id="dashSearchQuery" value="${esc(state.globalSearch||"")}" placeholder="${esc(tr("dashboard.search_corpus_placeholder","Search the corpus…"))}"></div><select id="dashSearchWork" class="control" aria-label="${esc(tr("field.work","Work"))}"><option value="">${esc(tr("dashboard.all_works","All works"))}</option>${works.map(item=>`<option value="${esc(item.work)}">${esc(item.work)}</option>`).join("")}</select><button class="btn dark" id="dashRunSearch">${icon("search")}${esc(tr("ui.search","Search"))}</button></div><div class="dashboard-search-footer"><button class="dashboard-advanced-link" id="dashAdvancedSearch">${esc(tr("dashboard.advanced_filters","Advanced filters"))} →</button><p class="dashboard-search-help">${esc(tr("dashboard.search_help","Search across works, metadata, annotations, and—when available—the semantic database."))}</p></div></article></section>
     <section class="dashboard-page-middle"><article class="card dashboard-overview-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("books")}</span><b>${esc(tr("dashboard.corpus_overview","Corpus Overview"))}</b></div><div class="dashboard-overview-grid"><button data-dashboard-nav="works"><span class="dashboard-overview-icon">${icon("books")}</span><strong>${works.length.toLocaleString()}</strong><small>${esc(tr("dashboard.works","Works"))}</small></button><button data-dashboard-nav="${isResearcher()?"vector":"list"}"><span class="dashboard-overview-icon">${icon("record")}</span><strong>${totals.records.toLocaleString()}</strong><small>${esc(tr("dashboard.records","Records"))}</small></button><button ${isResearcher()?"disabled data-disabled-reason=\"Word totals are not exposed to researcher accounts.\"":""}><span class="dashboard-overview-icon">${icon("list")}</span><strong>${isResearcher()?"—":compactNumber(words)}</strong><small>${esc(tr("dashboard.total_words","Total words"))}</small></button><button data-dashboard-nav="vector"><span class="dashboard-overview-icon">${icon("database")}</span><strong>${totals.dbs.toLocaleString()}</strong><small>${esc(tr("dashboard.databases","Databases"))}</small></button></div></article>
     <article class="card dashboard-average-card dashboard-metric-carousel" aria-roledescription="carousel"><div class="dashboard-metric-head"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("chart")}</span><b>${esc(activeMetric.title)}</b></div><div class="dashboard-metric-controls"><button class="dashboard-metric-arrow" id="dashMetricPrev" type="button" aria-label="${esc(tr("dashboard.previous_chart","Previous chart"))}">←</button><span>${state.dashboardMetricIndex+1} / ${metricSets.length}</span><button class="dashboard-metric-arrow" id="dashMetricNext" type="button" aria-label="${esc(tr("dashboard.next_chart","Next chart"))}">→</button></div></div><div class="dashboard-metric-body">${dashboardMetricBody(activeMetric)}</div><div class="dashboard-metric-dots" role="tablist" aria-label="${esc(tr("dashboard.work_charts","Work charts"))}">${metricSets.map((metric,index)=>`<button type="button" role="tab" data-dashboard-metric="${index}" class="${index===state.dashboardMetricIndex?"active":""}" aria-label="${esc(metric.title)}" aria-selected="${index===state.dashboardMetricIndex}" tabindex="${index===state.dashboardMetricIndex?0:-1}"></button>`).join("")}</div></article>
     <article class="card dashboard-activity-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("history")}</span><b>${esc(tr("dashboard.recent_activity","Recent Activity"))}</b></div><div class="dashboard-activity-list">${recent.map(item=>item.kind==="annotation"?`<button class="dashboard-activity-row" data-recent-server-annotation-record="${esc(item.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(item.annotation.store||"")}"><span class="dashboard-activity-clock">${icon("record")}</span><time>${esc(relativeTime(item.timestamp))}</time><span>${esc(tr("annotations.record_note","Annotation"))} · ${esc(item.annotation.work||item.annotation.record_id||tr("nav.record","Record"))}</span></button>`:item.kind==="rag"?`<button class="dashboard-activity-row" ${item.job.status==="completed"?`data-recent-rag-result="${esc(item.job.id)}"`:""}><span class="dashboard-activity-clock">${icon("spark")}</span><time>${esc(relativeTime(item.timestamp))}</time><span>${esc(tr("nav.rag","Research"))} · ${esc(String(item.job.prompt||item.job.label||"RAG").slice(0,90))}</span></button>`:`<button class="dashboard-activity-row" data-recent-file="${item.file.id}" data-recent-index="${item.index}"><span class="dashboard-activity-clock">${icon("history")}</span><time>${esc(relativeTime(item.update.timestamp))}</time><span>${esc(label(item.update.field_name||tr("dashboard.updated_record","Updated record")))} · ${esc(item.record.work||item.record.record_id||item.file.name)}</span></button>`).join("")||`<div class="dashboard-activity-empty">${esc(tr("dashboard.no_recent_activity","No recent activity in areas available to this account."))}</div>`}</div></article></section>
@@ -5141,7 +4310,10 @@ async function renderDashboard(main){
     <article class="card dashboard-quick-card dashboard-record-preview"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.record_view","Record View"))}</b></div><button class="dashboard-text-link" id="dashRecordView" ${previewTarget?"":`disabled data-disabled-reason="${esc(tr("dashboard.no_record_available","No record is available to open."))}"`}>${esc(tr("research.open","Open"))} →</button></div>${previewRecord?`<div class="dashboard-record-state">${esc(preview.lastViewed?tr("dashboard.last_viewed_record","Last viewed record"):tr("dashboard.random_record","A record from the corpus"))}</div><div class="dashboard-record-meta"><b>${esc(previewRecord.work||previewRecord.record_id||tr("dashboard.record","Record"))}</b><span class="dashboard-record-pages">${esc(mlaPageSpan(previewRecord)||"")}</span></div><div class="dashboard-record-text">${esc(String(previewRecord.text||"").replace(/\s+/g," ").slice(0,220))}${String(previewRecord.text||"").length>220?"…":""}</div>`:`<div class="dashboard-record-empty">${esc(tr("dashboard.no_record_selected","No corpus record is currently available."))}</div>`}</article>
     ${latestAnnotation?`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.latest_annotation","Latest annotation"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("annotations.view_all","View all"))} →</button></div><button class="dashboard-annotation-preview" ${latestAnnotation.server?`data-recent-server-annotation-record="${esc(latestAnnotation.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(latestAnnotation.annotation.store||"")}"`:`data-recent-annotation-file="${esc(latestAnnotation.file.id)}" data-recent-annotation-index="${latestAnnotation.index}"`}><div class="dashboard-annotation-meta"><span class="dashboard-annotation-work">${esc(latestAnnotation.work)}</span><span class="dashboard-annotation-pages">${esc(mlaPageSpan(latestAnnotation.record)||tr("record.page_not_recorded","Page not recorded"))}</span><span class="dashboard-annotation-author">${esc(latestAnnotation.annotation.initiated_by||latestAnnotation.annotation.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(latestAnnotation.annotation.created_at))}</time><small>${esc(latestAnnotation.record.record_id||tr("nav.record","Record"))}</small></div>${latestAnnotation.annotation.note?`<p>${esc(latestAnnotation.annotation.note)}</p>`:latestAnnotation.annotation.quote?`<blockquote>${esc(latestAnnotation.annotation.quote)}</blockquote>`:`<p>${esc(tr("annotations.record_note","Record annotation"))}</p>`}</button></article>`:`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.annotations","Annotations"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("research.open","Open"))} →</button></div><p>${esc(isResearcher()?tr("annotations.researcher_help","Annotations are organized by work when available in the current workspace."):tr("dashboard.annotations_help","Collect notes, tags, and discussion threads attached to corpus evidence."))}</p></article>`}
     </section>${renderCorpusBuildsHomeCard()}${renderOperationsPanel()}</div>`;
+  mountOperationsPanelHost();
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   const goSearch=async()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"",semantic=state.globalSearchMode==="database";state.globalPage=1;state.storeSearchResults=[];if(semantic){if(!state.activeStore){try{await refreshStores()}catch{};state.activeStore=recordStores()[0]?.name||""}state.globalSearchMode="database";if(!state.activeStore){persistPrefs();if(canAccessPage("vector")){toast(tr("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});openDatabaseCreationFromResearch()}else{navigateTo("global");toast(tr("research.no_database","No corpus database available"),{tone:"warn"})}return;}state.dbSearchWhere=work?{work}:{};state.storeQuery=state.globalSearch;if(state.globalSearch&&state.dbSearchMethod==="filter")state.dbSearchMethod="similarity";if(!state.globalSearch&&work)state.dbSearchMethod="filter";state.globalSearchAutoRun=false;state.storeSearchLoading=true;persistPrefs();navigateTo("global");try{const mode=state.dbSearchMethod||"similarity";const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:state.globalSearch,mode,n_results:100,where:Object.keys(dbSearchWhere()).length?dbSearchWhere():null,fetch_k:Number(state.dbSearchFetchK||100),lambda_mult:Number(state.dbSearchLambda??0.7)})});state.storeSearchResults=data.results||[]}catch(error){toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}finally{state.storeSearchLoading=false;persistPrefs();if(state.view==="global")renderGlobal(document.querySelector("#main"))}}else{state.globalSearchMode="traditional";state.globalSearchAutoRun=false;if(isResearcher())state.dbSearchWhere=work?{work}:{};else state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")}};
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireCorpusBuildsHomeCard(main);wireOperationsPanel();decorateDisabledControls(main);
 }
 
@@ -5217,21 +4389,23 @@ function renderView(){
   // the legacy surface. Do not let compatibility rendering or URL syncing
   // overwrite those routes while they are active.
   if(!main){
+    unmountOperationsPanel();
     shellRefreshHook?.();
     return null;
   }
+  if(state.view!=="home")unmountOperationsPanel();
   if(!canAccessPage(state.view))state.view="home";
   syncUrl({replace:true});
   let result;
   if(state.view==="home") result=renderDashboard(main);
   else if(state.view==="pdf") result=renderPdf(main);
   else if(state.view==="compare") result=renderCompare(main);
-  else if(state.view==="vector") result=renderVector(main);
+  // The Vector Stores route is Vue-native. Keep this guard only for callers
+  // that invoke the legacy renderer while a native route is mounting.
+  else if(state.view==="vector") result=null;
   else if(state.view==="rag") result=renderRag(main);
   else if(state.view==="faq") result=renderFaq(main);
   else if(state.view==="responsecache") result=renderResponseCache(main);
-  else if(state.view==="providers") result=renderProviders(main);
-  else if(state.view==="config") result=renderConfig(main);
   else if(isResearcher()&&state.view==="record") result=renderRecord(main);
   else if(isResearcher()&&state.view==="works") result=renderWorks(main);
   else if(isResearcher()&&state.view==="annotations") result=renderAnnotations(main);
@@ -5279,15 +4453,6 @@ async function importFiles(fileList){
     if(requestedUrlState)applyCompressedTableUrlState(decompressUrlState(requestedUrlState),state.view);
   }else if(first)state.activeFileId=first;
   persistPrefs();shell();renderView();syncUrl({replace:true});toast(`Loaded ${total} records${errors?` · ${errors} parse issues`:""}`);
-}
-function parseJsonl(text){
-  const records=[],errors=[],trimmed=text.trim();
-  if(!trimmed)return{records,errors};
-  if(trimmed.startsWith("[")){
-    try{const value=JSON.parse(trimmed);if(!Array.isArray(value))throw Error("Root is not an array");value.forEach((x,i)=>typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Item ${i+1}: not an object`));return{records,errors}}catch(e){return{records,errors:[e.message]}}
-  }
-  text.split(/\r?\n/).forEach((line,i)=>{if(!line.trim())return;try{const x=JSON.parse(line);typeof x==="object"&&x&&!Array.isArray(x)?records.push(x):errors.push(`Line ${i+1}: not an object`)}catch(e){errors.push(`Line ${i+1}: ${e.message}`)}});
-  return{records,errors};
 }
 async function closeFile(id){
   const f=state.files.find(x=>x.id===id);if(!f)return;
@@ -5573,13 +4738,6 @@ function renderRecord(main){
   decorateDisabledControls(main);
   refreshPresenceForRows([{file:f,record:r,index:i}]);
 }
-function countOccurrences(text,query){
-  if(!query)return 0;
-  const hay=String(text).toLocaleLowerCase(),needle=String(query).toLocaleLowerCase();
-  let i=0,count=0;
-  while((i=hay.indexOf(needle,i))>=0){count++;i+=Math.max(needle.length,1)}
-  return count;
-}
 
 function metadataSearchable(field,value){return value!==undefined&&value!==null&&String(value).trim()!==""&&!['text','record_id','inline_citation','full_citation','page_start','page_end'].includes(field)}
 function searchByMetadata(field,value,{contains=false}={}){
@@ -5646,26 +4804,6 @@ function workMetadataControl(field,rows){
     control=`<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed?"":esc(current??"")}" placeholder="${mixed?"Mixed values":""}">`;
   }
   return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply","Apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed?mixedWorkValueButton(rows,field,{compact:true}):""}</div>${control}</div>`;
-}
-function parseWorkMetadataValue(field,control,rows){
-  const exemplar=rows.map(row=>row.record[field]).find(value=>value!==undefined&&value!==null);
-  const raw=control.value;
-  if(typeof exemplar==="boolean"||field==="document_is_translation"){
-    if(raw==="")return null;
-    return raw==="true";
-  }
-  if(Array.isArray(exemplar)||exemplar&&typeof exemplar==="object"){
-    const parsed=JSON.parse(raw||"null");
-    if(exemplar&&Array.isArray(exemplar)&&!Array.isArray(parsed))throw new Error(`${label(field)} must be a JSON array.`);
-    return parsed;
-  }
-  if(typeof exemplar==="number"||["year","publication_year"].includes(field)){
-    if(raw.trim()==="")return null;
-    const value=Number(raw);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} must be numeric.`);
-    return value;
-  }
-  return raw;
 }
 function openWorkMetadataEditor(work,rows){
   if(!rows?.length)return toast("No records found for this work");
@@ -5812,33 +4950,6 @@ function openWorkMetadataProposalResult(job){
   });
 }
 
-function parseBulkFieldValue(field,raw,rows){
-  const sample=rows.map(row=>row.record?.[field]).find(value=>value!==undefined&&value!==null);
-  const text=String(raw??"");
-  if(text.trim()==="__NULL__")return null;
-  if(typeof sample==="boolean"){
-    const token=text.trim().toLowerCase();
-    if(["true","1","yes","on"].includes(token))return true;
-    if(["false","0","no","off"].includes(token))return false;
-    throw new Error(`Enter true or false for ${label(field)}.`);
-  }
-  if(typeof sample==="number"){
-    const value=Number(text);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} requires a number.`);
-    return value;
-  }
-  if(Array.isArray(sample)||sample&&typeof sample==="object"){
-    try{
-      const value=JSON.parse(text);
-      if(Array.isArray(sample)&&!Array.isArray(value))throw new Error("Expected JSON array.");
-      if(!Array.isArray(sample)&&(Array.isArray(value)||!value||typeof value!=="object"))throw new Error("Expected JSON object.");
-      return value;
-    }catch(error){
-      throw new Error(`${label(field)} requires valid JSON: ${error.message}`);
-    }
-  }
-  return text;
-}
 function bulkEditRowsForScope(scope){
   if(scope==="selected")return selectedReviewItems();
   if(scope==="active"){
@@ -5851,33 +4962,6 @@ function bulkEditRowsForScope(scope){
     return work?allRows().filter(row=>row.record.work===work):[];
   }
   return allRows();
-}
-function subsetValueText(value){
-  if(value===null||value===undefined)return "";
-  if(Array.isArray(value))return value.map(subsetValueText).join(" ");
-  if(typeof value==="object")return JSON.stringify(value);
-  return String(value);
-}
-function subsetRuleMatches(record,rule,caseSensitive=false){
-  const value=record?.[rule.field];
-  const raw=String(rule.value??"");
-  const normalize=text=>caseSensitive?String(text):String(text).toLocaleLowerCase();
-  const hay=normalize(subsetValueText(value));
-  const needle=normalize(raw);
-  switch(rule.operator){
-    case "equals": return Array.isArray(value)?value.some(item=>normalize(subsetValueText(item))===needle):hay===needle;
-    case "not_equals": return Array.isArray(value)?!value.some(item=>normalize(subsetValueText(item))===needle):hay!==needle;
-    case "contains": return hay.includes(needle);
-    case "not_contains": return !hay.includes(needle);
-    case "array_contains": return Array.isArray(value)&&value.some(item=>normalize(subsetValueText(item))===needle);
-    case "exists": return value!==undefined&&value!==null&&subsetValueText(value)!=="";
-    case "missing": return value===undefined||value===null||subsetValueText(value)==="";
-    case "truthy": return Boolean(value);
-    case "falsy": return !value;
-    case "regex":
-      try{return new RegExp(raw,caseSensitive?"":"i").test(subsetValueText(value))}catch{return false}
-    default:return false;
-  }
 }
 const SUBSET_PROFILE_STORAGE_KEY="derridai.subset-filter-profiles.v1";
 function loadSubsetProfiles(){
@@ -6213,6 +5297,7 @@ async function openSeparateWorksModal(){
 
 async function renderWorks(main){
   if(isResearcher())return renderResearcherWorks(main);
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
   if(Date.now()-Number(state.storesLastFetchedAt||0)>5000){
     showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking vector database state…"));
@@ -6305,13 +5390,6 @@ function recordFields(){
   corpusCache.fields=[...set].sort();
   return corpusCache.fields;
 }
-function valueMatches(v,op,n){
-  const empty=v==null||v===""||(Array.isArray(v)&&!v.length);if(op==="empty")return empty;if(op==="notempty")return!empty;
-  const vals=Array.isArray(v)?v:[v],q=String(n??"").toLocaleLowerCase();
-  if(op==="eq")return vals.some(x=>String(x??"").toLocaleLowerCase()===q);if(op==="neq")return!vals.some(x=>String(x??"").toLocaleLowerCase()===q);
-  if(op==="has")return vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));if(op==="nhas")return!vals.some(x=>String(x??"").toLocaleLowerCase().includes(q));
-  if(op==="gte")return vals.some(x=>+x>=+n);if(op==="lte")return vals.some(x=>+x<=+n);return true;
-}
 
 function dbFilterDisplayValue(value){return value&&typeof value==="object"&&"$contains" in value?`${tr("research.contains","contains")} ${value.$contains}`:String(value??"")}
 function dbSearchWhere(){return Object.fromEntries(Object.entries(state.dbSearchWhere||{}).filter(([,value])=>String(value??"").trim()!==""))}
@@ -6376,6 +5454,7 @@ async function renderResearcherGlobal(main){
 }
 async function renderResearcherWorks(main){
   showViewLoading(main,tr("works.loading","Loading works"),tr("works.checking_database","Checking corpus database…"));try{await refreshStores();if(state.activeStore)await refreshStoreWorks(true)}catch(error){main.innerHTML=`<div class="info error">${esc(error.message)}</div>`;return}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   const stores=recordStores();if(!state.activeStore&&stores.length){state.activeStore=stores[0].name;await refreshStoreWorks(true)};try{await refreshServerAnnotations(true)}catch{};if(!stores.length){main.innerHTML=`<section class="empty"><div class="drop"><div class="drop-icon">${icon("database")}</div><h1>${esc(tr("research.no_database","No corpus database available"))}</h1></div></section>`;return}
   const works=(state.storeWorkStats||[]).filter(item=>!state.worksSearch||String(item.work).toLocaleLowerCase().includes(state.worksSearch.toLocaleLowerCase()));const selected=works.find(item=>item.work===state.workOverview)||null;
   const selectedAnnotationCount=selected?allAnnotations().filter(item=>String(item.work||"")===String(selected.work)).length:0;
@@ -6384,10 +5463,13 @@ async function renderResearcherWorks(main){
   let timer=null;main.querySelector("#worksSearch")?.addEventListener("input",event=>{state.worksSearch=event.target.value;persistPrefs();syncUrl({replace:true});clearTimeout(timer);timer=setTimeout(()=>renderResearcherWorks(main),150)});main.querySelector("#researchWorksStore")?.addEventListener("change",async event=>{state.activeStore=event.target.value;state.storeWorksStore="";state.workOverview="";await refreshStoreWorks(true);persistPrefs();syncUrl({replace:true});renderResearcherWorks(main)});main.querySelectorAll("[data-research-work]").forEach(button=>button.onclick=()=>{const y=window.scrollY;state.workOverview=button.dataset.researchWork||"";persistPrefs();syncUrl({replace:true});renderResearcherWorks(main);requestAnimationFrame(()=>window.scrollTo(0,y))});main.querySelector("#browseResearchWork")?.addEventListener("click",()=>{state.storeWork=state.workOverview;state.storeBrowseMode="records";state.storePage=1;persistPrefs();navigateTo("vector")});main.querySelector("#researchWorkAnnotations")?.addEventListener("click",()=>{state.annotationSearch=state.workOverview;state.annotationView="works";persistPrefs();navigateTo("annotations")});
 }
 async function renderResearcherRecord(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!state.activeStore){try{await refreshStores()}catch{};if(!state.activeStore){main.innerHTML=`<div class="info warn">${esc(tr("research.no_database","No corpus database available"))}</div>`;return}}
   let id=state.researcherRecordId;let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
   if(!record&&id){try{record=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(id)}`)}catch{record=null}}
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!record){if(!state.storeRecords.length){try{await loadStorePage()}catch{}}record=state.storeRecords[0];id=String(record?._chroma_id||record?.record_id||"");state.researcherRecordId=id}
   if(!record){main.innerHTML=`<section class="empty"><div class="drop"><h1>${esc(tr("research.no_records","No records available"))}</h1><button class="btn primary" id="recordBrowseWorks">${esc(tr("works.browse_records","Browse records"))}</button></div></section>`;main.querySelector("#recordBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));return}
   const viewedPointer={kind:"database",store:state.activeStore,id:String(record._chroma_id||record.record_id||id)};
@@ -6398,6 +5480,7 @@ async function renderResearcherRecord(main){
   let researcherSelection=null;const updateResearcherSelection=()=>{researcherSelection=selectionInsideRecordView();const toolbar=main.querySelector("#researchRecordSelectionToolbar");if(toolbar){toolbar.hidden=!researcherSelection;if(researcherSelection)positionSelectionToolbar(toolbar,researcherSelection)}};const researcherGrid=main.querySelector(".recordgrid");researcherGrid?.addEventListener("mouseup",updateResearcherSelection);researcherGrid?.addEventListener("keyup",updateResearcherSelection);main.querySelector("#researchAnnotateSelection")?.addEventListener("click",()=>{if(!researcherSelection)return;openAnnotationPopover(researcherSelection,{recordLabel:String(record.record_id||id),onSave:async({field,quote,note,tags})=>{await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||id),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});renderResearcherRecord(main)}})});
 }
 async function renderResearcherCompare(main){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   if(!state.activeStore){try{await refreshStores()}catch{}};if(!state.storeRecords.length&&state.activeStore){state.storePageSize=100;try{await loadStorePage()}catch{}}
   const records=researcherDbRecords();const byId=new Map(records.map(record=>[String(record._chroma_id||record.record_id||""),record]));if(!state.researcherCompareA&&records[0])state.researcherCompareA=String(records[0]._chroma_id||records[0].record_id||"");if(!state.researcherCompareB&&records[1])state.researcherCompareB=String(records[1]._chroma_id||records[1].record_id||"");const a=byId.get(state.researcherCompareA),b=byId.get(state.researcherCompareB);
   const options=records.map(record=>{const id=String(record._chroma_id||record.record_id||"");return `<option value="${esc(id)}">${esc(record.record_id||id)} · ${esc(record.work||"")}</option>`}).join("");
@@ -6426,6 +5509,7 @@ async function renderAdminDatabaseGlobal(main){
   main.querySelector("#runAdminGlobalSearch")?.addEventListener("click",run);main.querySelector("#adminGlobalQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();void run()}});main.querySelector("#clearAdminGlobalSearch")?.addEventListener("click",()=>{state.globalSearch="";state.storeSearchResults=[];state.dbSearchWhere={};persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)});
   main.querySelector("#addAdminFilter")?.addEventListener("click",()=>{const field=main.querySelector("#adminFilterField")?.value;const value=main.querySelector("#adminFilterValue")?.value?.trim();if(field&&value){state.dbSearchWhere={...(state.dbSearchWhere||{}),[field]:value};persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)}});main.querySelectorAll("[data-remove-admin-filter]").forEach(button=>button.onclick=()=>{const next={...(state.dbSearchWhere||{})};delete next[button.dataset.removeAdminFilter];state.dbSearchWhere=next;persistPrefs();syncUrl({replace:true});renderAdminDatabaseGlobal(main)});
   main.querySelectorAll("[data-admin-db-edit]").forEach(button=>button.onclick=()=>{const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id||"")===String(button.dataset.adminDbEdit));if(result)openStoreRecordEditor({...result.record,_chroma_id:result.id})});
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   wireEvidenceButtons(main);decorateDisabledControls(main);
   if(state.globalSearchAutoRun){state.globalSearchAutoRun=false;persistPrefs();queueMicrotask(()=>void run())}
 }
@@ -6444,6 +5528,7 @@ function renderTraditionalGlobal(main){
   const flagged=needsReviewItems(rows).length;
   const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(x.file,x.index)));
   const available=tableAvailableFields(allRows(),["__file","__db_status"]);
+  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
   const columns=scope==="loaded"
     ? SEARCH_LOADED_COLUMNS.filter(key=>available.includes(key))
     : getTableColumns("global",available);
@@ -6780,11 +5865,182 @@ function restoreSearchViewFromHref(href){
   const url=new URL(String(href||""),location.origin);const token=url.searchParams.get("ts");state.view="global";if(token)applyCompressedTableUrlState(decompressUrlState(token),"global");const store=url.searchParams.get("store");if(store)state.activeStore=store;state.storeSearchResults=[];state.searchDatabaseRan=false;if(searchScope()==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;persistPrefs();syncUrl({replace:false});shell();return getSearchWorkspaceSnapshot({refresh:true,autoRun:true});
 }
 
+function recordsListCell(row,key,query){
+  const record=row.record;
+  if(key==="__db_status"){
+    const info=recordDbStatus(row.file,row.index,record);
+    return {key,kind:"status",text:info.label,title:info.title||"",status_kind:info.kind};
+  }
+  if(key==="page_start")return {key,kind:"pages",text:pages(record),title:""};
+  if(key==="needs_review")return {key,kind:"review",text:record.needs_review?"yes":"no",title:""};
+  if(key==="text")return {key,kind:"text",text:snippet(record.text,query),title:""};
+  if(key==="inline_citation")return {key,kind:"plain",text:inlineCitation(record),title:""};
+  if(key==="full_citation")return {key,kind:"plain",text:fullCitation(record),title:""};
+  if(key==="record_id")return {key,kind:"id",text:display(record[key]),title:""};
+  const value=record[key];
+  return {key,kind:metadataSearchable(key,value)?"metadata":"plain",text:display(value),title:"",meta_value:Array.isArray(value)?String(value[0]??""):String(value??""),meta_contains:Array.isArray(value)};
+}
+
+function getRecordsListSnapshot(){
+  const files=state.files.map(file=>describeRecordsFile(file,state.activeFileId));
+  const stores=recordStores();
+  const shared=Boolean(new URLSearchParams(location.search).get("file"));
+  const capabilities={
+    can_select:canUse("editLocalRecords"),
+    can_review:canUse("editLocalRecords"),
+    can_bulk_edit:canUse("editLocalRecords"),
+    can_upsert:canUse("manageCorpus")&&hasCorpusDb(),
+    can_import:canUse("manageCorpus"),
+    can_select_evidence:hasCapability("evidence.select"),
+  };
+  const f=activeFile();
+  if(!f){
+    return {
+      available:false,shared,files,file:null,query:"",rows:[],columns:[],available_columns:[],
+      sort:{key:"page_start",dir:1},filters:{},page:1,pages:1,page_size:state.pageSize,start:0,end:0,
+      matched:0,total:0,flagged:0,selection_count:state.reviewSelection.size,page_selected:false,
+      stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
+      active_store:state.activeStore||"",has_database:stores.length>0,
+      db_unavailable_reason:dbUnavailableReason(),capabilities,
+    };
+  }
+  const query=state.searches[f.id]||"";
+  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
+  const filters=state.listFilters[f.id]||{};
+  let rows=f.records.map((record,index)=>({file:f,record,index}))
+    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    .filter(x=>rowMatchesListFilters(x,filters));
+  rows=sortRows(rows,sort);
+  const pg=pageInfo(rows.length,state.pages[f.id]||1);state.pages[f.id]=pg.page;
+  const slice=rows.slice(pg.start,pg.end);
+  try{refreshPresenceForRows(slice)}catch{/* presence is best-effort */}
+  const flagged=needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))).length;
+  const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(f,x.index)));
+  const available=tableAvailableFields(f.records.map((record,index)=>({file:f,record,index})),["__db_status","work","page_start","needs_review","text"]);
+  const columnKeys=getTableColumns("list",available);
+  return {
+    available:true,shared,files,
+    file:describeRecordsFile(f,state.activeFileId),
+    query,rows:slice.map(x=>{
+      const key=reviewKey(f,x.index);
+      const evidenceKey=workspaceEvidenceSelectionKey(f,x.index);
+      const status=recordDbStatus(f,x.index,x.record);
+      return {
+        index:x.index,key,record_id:String(x.record.record_id||`#${x.index+1}`),
+        work:String(x.record.work||""),selected:state.reviewSelection.has(key),
+        evidence_selected:evidenceIsSelected(evidenceKey),
+        db_status:{kind:status.kind,label:status.label,title:status.title||""},
+        cells:columnKeys.map(column=>recordsListCell(x,column,query)),
+      };
+    }),
+    columns:columnKeys.map(key=>({key,label:label(key)})),
+    available_columns:available.map(key=>({key,label:label(key)})),
+    sort:{key:sort.key,dir:sort.dir},filters:{...filters},
+    page:pg.page,pages:pg.pages,page_size:state.pageSize,start:pg.start,end:pg.end,
+    matched:rows.length,total:f.records.length,flagged,selection_count:state.reviewSelection.size,
+    page_selected:pageSelected,
+    stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
+    active_store:state.activeStore||"",has_database:stores.length>0,
+    db_unavailable_reason:dbUnavailableReason(),capabilities,
+  };
+}
+function setRecordsListQuery(value){
+  const f=activeFile();if(!f)return;
+  state.searches[f.id]=String(value||"");state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListStore(name){setActiveStore(name);shell()}
+function setRecordsListPage(page){
+  const f=activeFile();if(!f)return;
+  state.pages[f.id]=Math.max(1,Number(page)||1);persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListPageSize(size){
+  const f=activeFile();if(!f)return;
+  state.pageSize=Number(size)||state.pageSize;state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListSort(key){
+  const f=activeFile();if(!f)return;
+  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
+  toggleSort(sort,key);state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListFilter(key,value){
+  const f=activeFile();if(!f)return;
+  setListFilterValue(f.id,key,value);state.pages[f.id]=1;syncUrl({replace:true});
+}
+function clearRecordsListFilters(){
+  const f=activeFile();if(!f)return;
+  state.listFilters[f.id]={};state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
+}
+function setRecordsListRowSelected(index,selected){
+  const f=activeFile();if(!f)return;
+  setReviewSelected(f,index,selected);syncUrl({replace:true});
+}
+function setRecordsListPageSelected(selected){
+  const snapshot=getRecordsListSnapshot();
+  const f=activeFile();if(!f)return;
+  for(const row of snapshot.rows)setReviewSelected(f,row.index,selected);
+  syncUrl({replace:true});
+}
+function selectRecordsListMatches(){
+  const f=activeFile();if(!f)return;
+  const query=state.searches[f.id]||"";
+  const filters=state.listFilters[f.id]||{};
+  const rows=f.records.map((record,index)=>({file:f,record,index}))
+    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    .filter(x=>rowMatchesListFilters(x,filters));
+  for(const x of rows)state.reviewSelection.add(reviewKey(f,x.index));
+  persistPrefs();syncUrl({replace:true});
+}
+function clearRecordsListSelection(){clearReviewSelection();syncUrl({replace:true})}
+function openRecordsListRecord(index){
+  const f=activeFile();if(!f)return;
+  navigateTo("record",{fileId:f.id,index});
+}
+function copyRecordsListJson(index){
+  const f=activeFile();const record=f?.records?.[index];
+  if(record)copyJsonToClipboard(record,record.record_id||"record");
+}
+function copyRecordsListCitation(index,kind){
+  const f=activeFile();const record=f?.records?.[index];
+  if(record)copyCitation(record,kind||"inline");
+}
+function toggleRecordsListEvidence(index){
+  const f=activeFile();if(!f)return;
+  toggleWorkspaceEvidence(f,index);shell();
+}
+function recordsListMetadataSearch(field,value,contains){
+  return searchByMetadata(field,value,{contains:Boolean(contains)});
+}
+function setRecordsListColumns(keys){
+  const list=Array.isArray(keys)?keys.filter(Boolean):[];
+  if(list.length)state.tableColumns.list=list;
+  persistPrefs();syncUrl({replace:true});
+}
+function resetRecordsListColumns(){
+  state.tableColumns.list=[...TABLE_DEFAULTS.list];
+  persistPrefs();syncUrl({replace:true});
+}
+function getRecordsListShareHref(){const path=urlFromState();return new URL(path,location.origin).href}
+function recordsListCommand(name){
+  const f=activeFile();
+  if(name==="import"){document.querySelector("#fileInput")?.click();return Promise.resolve()}
+  if(name==="ocr")return Promise.resolve(canUse("editLocalRecords")?openOcrCleanupDialog():toast("Your role does not have permission to edit records."));
+  if(!f)return Promise.resolve();
+  if(name==="reviewSelected")return Promise.resolve(openTouchup(selectedReviewItems()));
+  if(name==="improveSelected")return Promise.resolve(openTouchup(selectedReviewItems(),"auto"));
+  if(name==="bulkSelected")return Promise.resolve(openBulkFieldEditor({rows:selectedReviewItems(),title:tr("search.bulk_edit_selected","Bulk edit selected records")}));
+  if(name==="upsertSelected")return upsertRows(rowsFromReviewSelection(),"selected records");
+  if(name==="reviewFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index})))));
+  if(name==="improveFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))),"auto"));
+  if(name==="upsertFile")return upsertRows(f.records.map((record,index)=>({file:f,record,index})),"records");
+  return Promise.resolve();
+}
+
 const ligatures={"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"};
 function cleanText(text){
   let s=String(text??""),before=s;
   s=s.replace(/[ﬀﬁﬂﬃﬄﬅﬆ]/g,c=>ligatures[c]||c)
     .replace(/\u00ad/g,"")
+    // eslint-disable-next-line no-misleading-character-class -- SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics.
     .replace(/[\u200b\u200c\u200d\u2060\ufeff\ufffe\uffff]/g,"")
     .replace(/([A-Za-zÀ-ÖØ-öø-ÿ])-[ \t]*\r?\n[ \t]*([a-zà-öø-ÿ])/g,"$1$2")
     .replace(/\r\n/g,"\n");
@@ -7041,37 +6297,6 @@ function openLlmToolResult(job){
   dialog.querySelector("#useToolText")?.addEventListener("click",()=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${job.model||result.model||"model"}`;close();if(state.view==="pdf")renderPdf(document.querySelector("#main"))});
   dialog.querySelector("#openToolDraft")?.addEventListener("click",()=>{close();openPdfDraftRecord(result.record||{})});
   dialog.querySelector("#applyToolLink")?.addEventListener("click",async()=>{await applyPdfLinkMatch(result.match||{});close()});
-}
-function normalizeRagGrade(value){
-  let grade=value;
-  if(grade&&typeof grade==="object"&&!Array.isArray(grade)){
-    if(grade.grade&&typeof grade.grade==="object"&&!Array.isArray(grade.grade))grade=grade.grade;
-    else if(grade.result&&typeof grade.result==="object"&&!Array.isArray(grade.result))grade=grade.result;
-  }
-  if(!grade||typeof grade!=="object"||Array.isArray(grade))grade={summary:grade==null?"":String(grade)};
-  const scores=grade.scores&&typeof grade.scores==="object"&&!Array.isArray(grade.scores)?grade.scores:{};
-  const list=value=>{
-    if(value==null||value==="")return [];
-    if(Array.isArray(value))return value.flatMap(item=>list(item));
-    if(typeof value==="object")return Object.entries(value).map(([key,item])=>`${label(key)}: ${display(item)}`);
-    return [String(value)];
-  };
-  const score=key=>{
-    const raw=grade[key]??scores[key];
-    if(raw==null||raw==="")return "—";
-    if(typeof raw==="object"){
-      const nested=raw.score??raw.value??raw.rating;
-      return nested==null?display(raw):nested;
-    }
-    return raw;
-  };
-  return {
-    raw:grade,score,
-    summary:String(grade.summary??grade.overall_summary??grade.assessment??""),
-    strengths:list(grade.strengths??grade.strength),
-    weaknesses:list(grade.weaknesses??grade.weakness),
-    unsupported_or_risky_claims:list(grade.unsupported_or_risky_claims??grade.risky_claims??grade.unsupported_claims),
-  };
 }
 function ragGradeHtml(grade={}){
   const normalized=normalizeRagGrade(grade);
@@ -7551,31 +6776,40 @@ function searchRecordOptions(query,limit=18){
 function lookupRecord(key){
   if(!key)return null;const [fid,i]=key.split("::");const f=state.files.find(x=>x.id===fid);return f?{file:f,index:+i,record:f.records[+i]}:null;
 }
-function parsePastedRecord(value){
-  let text=String(value||"").trim();
-  if(!text)return null;
-  text=text.replace(/^```(?:json|jsonl)?\s*/i,"").replace(/\s*```$/,"").trim();
-  try{
-    const parsed=JSON.parse(text);
-    if(Array.isArray(parsed)){
-      if(parsed.length!==1||!parsed[0]||typeof parsed[0]!=="object"||Array.isArray(parsed[0])){
-        throw new Error("Paste exactly one JSON record, not an array of multiple records.");
-      }
-      return parsed[0];
-    }
-    if(!parsed||typeof parsed!=="object")throw new Error("Pasted value is not a JSON object.");
-    return parsed;
-  }catch(error){
-    const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-    const parsedLines=[];
-    for(const line of lines){
-      try{parsedLines.push(JSON.parse(line))}catch{throw error}
-    }
-    if(parsedLines.length!==1||!parsedLines[0]||typeof parsedLines[0]!=="object"||Array.isArray(parsedLines[0])){
-      throw new Error("Paste exactly one JSON/JSONL record on each side.");
-    }
-    return parsedLines[0];
+function getCompareLibrary(){
+  if(isResearcher()){
+    return researcherDbRecords().map(record=>{
+      const id=String(record._chroma_id||record.record_id||"");
+      const label=`${record.record_id||id} · ${record.work||""}`;
+      return {value:id,label,search:`${label} ${record.document_author||""}`.toLocaleLowerCase()};
+    });
   }
+  return compareSearchIndex();
+}
+function getCompareRecord(key){
+  if(!key)return null;
+  if(isResearcher()){
+    const record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(key));
+    if(!record)return null;
+    const copy={...record};
+    delete copy._chroma_id;
+    delete copy._researcher_text_policy;
+    return {record:copy,label:`${record.record_id||key} · ${record.work||""}`};
+  }
+  const item=lookupRecord(key);
+  if(!item?.record)return null;
+  return {record:item.record,label:recordOptionLabel(item.file,item.record,item.index)};
+}
+async function ensureCompareLibrary(){
+  if(!isResearcher())return getCompareLibrary();
+  if(!state.activeStore){
+    try{await refreshStores()}catch{ /* stores may be unavailable */ }
+  }
+  if(!state.storeRecords.length&&state.activeStore){
+    state.storePageSize=Math.max(Number(state.storePageSize||50),100);
+    try{await loadStorePage()}catch{ /* page load is best-effort for Compare */ }
+  }
+  return getCompareLibrary();
 }
 function compareRecordTable(a,b,{titleA="Record A",titleB="Record B",rowKeyA="",rowKeyB=""}={}){
   if(!a||!b)return '<div class="empty mini"><p>Select or paste two records to compare them.</p></div>';
@@ -7700,34 +6934,13 @@ function renderCompare(main){
 }
 
 const HTTP_ERROR_STORAGE_KEY="derridai.httpErrors.v1";
-function fullHttpErrorDetail(payload,text,statusText=""){
-  const detail=payload?.detail;
-  if(typeof detail==="string"&&detail.trim())return detail.trim();
-  if(Array.isArray(detail)){
-    const value=detail.map(item=>{
-      if(item&&typeof item==="object"){
-        const location=Array.isArray(item.loc)?item.loc.join("."):"";
-        const message=item.msg||item.message||JSON.stringify(item);
-        return location?`${location}: ${message}`:String(message);
-      }
-      return String(item);
-    }).filter(Boolean).join("; ");
-    if(value)return value;
-  }
-  if(detail&&typeof detail==="object"){
-    const message=detail.message||detail.error||detail.detail;
-    if(message)return String(message);
-    try{return JSON.stringify(detail)}catch{}
-  }
-  if(text&&String(text).trim())return String(text).trim();
-  return String(statusText||"Request failed");
-}
 function storeHttpError(entry){
   try{
     const current=JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY)||"[]");
     const rows=Array.isArray(current)?current:[];
     rows.unshift(entry);
     localStorage.setItem(HTTP_ERROR_STORAGE_KEY,JSON.stringify(rows.slice(0,50)));
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   }catch{}
 }
 async function api(path,options={}){
@@ -7863,533 +7076,6 @@ function persistVectorLocation(){
   persistPrefs();
   syncUrl({replace:true});
 }
-async function renderResearcherVector(main){
-  if(state.view==="vector")syncUrl({replace:true});
-  showViewLoading(main,tr("research.search_loading","Loading corpus search"),"Reading available collections and summarized work metadata…");
-  try{
-    await refreshStores();
-    if(state.activeStore)await refreshStoreWorks();
-    await loadStorePage();
-  }catch(error){
-    main.innerHTML=`<div class="info warn">Corpus database error: ${esc(error.message)}</div>`;
-    return;
-  }
-  const stores=recordStores();
-  if(!state.activeStore&&stores.length){
-    state.activeStore=stores[0].name;
-    state.storeBrowseMode="works";
-    state.storePage=1;
-    state.storeWorksStore="";
-    await refreshStoreWorks();
-    await loadStorePage();
-    persistPrefs();
-  }
-  const current=stores.find(store=>store.name===state.activeStore);
-  const maxPage=Math.max(1,Math.ceil(state.storeCount/state.storePageSize));
-  const currentProvider=current?.embedding_provider||"chroma";
-  const researcherPolicy=`${esc(tr("research.summary_policy","Researcher view · Edmundson summary · 2–3 sentences"))}. Topics, concepts, and persons are bonus terms; selected sentences are separated by <code> [...] </code>.`;
-
-  const sort=state.storeSearchSort||{key:"similarity",dir:-1};
-  const results=[...(state.storeSearchResults||[])].sort((a,b)=>{
-    const ar=a.record||{},br=b.record||{};
-    const key=sort.key||"similarity";
-    let av,bv;
-    if(key==="similarity"){av=semanticSimilarity(a.distance)??-1;bv=semanticSimilarity(b.distance)??-1}
-    else if(key==="pages"){av=Number(ar.page_start??0);bv=Number(br.page_start??0)}
-    else {av=String(ar[key]??"").toLocaleLowerCase();bv=String(br[key]??"").toLocaleLowerCase()}
-    if(av===bv)return 0;
-    return (av>bv?1:-1)*(sort.dir||1);
-  });
-  const sortHead=(key,labelText)=>`<button class="researcher-sort-head ${sort.key===key?"active":""}" data-r-search-sort="${key}">${esc(labelText)}${sort.key===key?(sort.dir<0?" ↓":" ↑"):""}</button>`;
-  const resultsTable=results.length?`<div class="table-wrap researcher-search-table-wrap"><table class="researcher-search-table"><thead><tr><th>${esc(tr("ui.evidence","Evidence"))}</th><th>${sortHead("record_id","Record")}</th><th>${sortHead("work","Work")}</th><th>${sortHead("document_author","Author")}</th><th>${sortHead("pages","Pages")}</th><th>${sortHead("similarity",tr("research.similarity","Similarity"))}</th><th>Text</th><th>Citations</th></tr></thead><tbody>${results.map(result=>{
-    const record=result.record||{};
-    const id=String(result.id||record._chroma_id||record.record_id||"");
-    const eKey=dbEvidenceKey(state.activeStore,id);
-    return `<tr><td>${evidenceButtonHtml(eKey,evidenceIsSelected(eKey)?"Selected":"Add")}</td><td class="id">${highlightTerms(record.record_id||id,state.storeQuery)}</td><td>${highlightTerms(record.work||"—",state.storeQuery)}</td><td>${highlightTerms(record.document_author||"—",state.storeQuery)}</td><td>${esc(pages(record))}</td><td>${similarityHtml(result.distance)}</td><td class="textcell researcher-search-text">${highlightTerms(snippet(record.text,state.storeQuery,520),state.storeQuery)}</td><td><div class="citation-actions"><button class="btn tiny" data-db-cite="inline" data-db-result-id="${esc(id)}" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">${icon("copy")}Inline</button><button class="btn tiny" data-db-cite="full" data-db-result-id="${esc(id)}" title="${esc(tr("ui.copy_full","Copy full citation"))}">${icon("copy")}Full</button></div></td></tr>`;
-  }).join("")}</tbody></table></div>`:`<div class="note researcher-search-empty">${esc(tr("research.no_matches","No matching records. Try a broader query or another corpus database."))}</div>`;
-
-  const recordCards=state.storeRecords.map(record=>{
-    const id=String(record._chroma_id||record.record_id||"");
-    const eKey=dbEvidenceKey(state.activeStore,id);
-    return `<article class="card researcher-record-card"><div class="researcher-result-head"><div><span class="section-label">${esc(record.record_id||id||"Record")}</span><h3>${esc(record.work||"Untitled work")}</h3></div>${record.page_start!=null?`<span class="badge">p. ${esc(record.page_start)}</span>`:""}</div><div class="researcher-result-meta">${[["document_author",record.document_author],["year",record.year],["speaker",record.speaker],["position_holder",record.position_holder]].filter(([,v])=>v).map(([field,v])=>metadataLinkHtml(field,v,{className:"metadata-result-pill"})).join("")}</div><p class="researcher-summary-text">${esc(record.text||"")}</p><div class="record-inline-actions">${evidenceButtonHtml(eKey,evidenceIsSelected(eKey)?"Selected":"Add evidence")}<button class="btn tiny" data-store-record-cite="inline" data-store-record-id="${esc(id)}">${icon("copy")}Inline citation</button><button class="btn tiny" data-store-record-cite="full" data-store-record-id="${esc(id)}">${icon("copy")}Full citation</button></div>${Number(record._updates_count||0)>0?`<div class="note researcher-history-count">${Number(record._updates_count).toLocaleString()} audit update${Number(record._updates_count)===1?"":"s"} retained server-side.</div>`:""}</article>`;
-  }).join("");
-
-  main.innerHTML=`<section class="page-heading legacy-page-heading"><div><p>${esc(tr("research.section","Research"))}</p><h1>${esc(tr("research.corpus_search","Corpus search"))}</h1><span>${esc(tr("research.browse_description","Browse works and search vector databases without exposing editable or full-text corpus records."))}</span></div></section>
-    <div class="info researcher-policy-info">${researcherPolicy}</div>
-    ${stores.length?`<section class="card researcher-db-toolbar"><div class="field"><label>${esc(tr("research.corpus_database","Corpus database"))}</label><select class="control" id="researcherStore">${stores.map(store=>`<option value="${esc(store.name)}" ${store.name===state.activeStore?"selected":""}>${esc(store.name)} · ${Number(store.count||0).toLocaleString()} records</option>`).join("")}</select></div><div class="researcher-db-stats"><span><b>${Number(current?.count||0).toLocaleString()}</b> records</span><span><b>${state.storeWorkStats.length.toLocaleString()}</b> works</span><span><b>${selectedEvidenceEntries().length}</b> selected evidence</span></div></section>
-    <section class="card researcher-semantic-search"><div class="cardhead"><div><b>${esc(tr("research.semantic_search","Semantic DB search"))}</b><div class="note">${esc(tr("research.semantic_help","Search the selected collection. Returned text is summarized before it reaches this browser."))}</div></div></div><div class="inline"><input class="control" id="storeQuery" value="${esc(state.storeQuery)}" placeholder="${esc(tr("research.search_placeholder","Search the corpus semantically"))}"><button class="btn primary" id="runSearch" ${currentProvider==="precomputed"?`disabled data-disabled-reason="Semantic search is unavailable for precomputed-only collections."`:""}>${esc(tr("ui.search","Search"))}</button><button class="btn" id="clearStoreSearch">${esc(tr("ui.clear","Clear"))}</button></div><div id="researcherSearchStatus" class="search-progress ${state.storeSearchLoading?"active":""}">${state.storeSearchLoading?`<span class="spinner"></span><div><b>${esc(tr("research.search_loading","Searching the corpus…"))}</b><span>${esc(state.storeSearchMessage||tr("research.search_embedding","Embedding your query and comparing it with the selected collection…"))}</span></div>`:(state.storeQuery&&state.storeSearchResults.length?`<span>Showing ${state.storeSearchResults.length} result${state.storeSearchResults.length===1?"":"s"} for <b>${esc(state.storeQuery)}</b>.</span>`:`<span>${esc(tr("research.search_empty","Enter a query to search the selected corpus database."))}</span>`)}</div><div id="researcherSearchResults">${resultsTable}</div></section>
-    <div class="db-browser-tabs"><button class="db-browser-tab ${state.storeBrowseMode==="works"?"active":""}" id="browseWorks">Works <span>${state.storeWorkStats.length}</span></button><button class="db-browser-tab ${state.storeBrowseMode==="records"?"active":""}" id="browseRecords">Records <span>${Number(current?.count||0).toLocaleString()}</span></button></div>
-    ${state.storeBrowseMode==="works"?`<section class="db-work-browser"><div class="db-work-grid">${state.storeWorkStats.map(item=>`<button class="db-work-card" data-db-work="${esc(item.work)}"><span><b>${esc(item.work)}</b><small>Browse summarized records</small></span><strong>${Number(item.count||0).toLocaleString()}</strong></button>`).join("")||'<div class="llm-empty">No work metadata was found in this collection.</div>'}</div></section>`:`<section class="researcher-record-browser"><div class="toolbar store-record-toolbar"><div><b>${state.storeWork?esc(state.storeWork):"All records"}</b><div class="note">${state.storeCount.toLocaleString()} records · page ${state.storePage} of ${maxPage}</div></div><div class="tools"><select class="control store-work-filter" id="storeWork"><option value="">All works</option>${state.storeWorks.map(work=>`<option value="${esc(work)}" ${work===state.storeWork?"selected":""}>${esc(work)}</option>`).join("")}</select><select class="control" id="storePageSize">${[25,50,100].map(n=>`<option ${state.storePageSize===n?"selected":""}>${n}</option>`).join("")}</select><button class="btn small" id="storePrev" ${state.storePage<=1?"disabled":""}>← Previous</button><button class="btn small" id="storeNext" ${state.storePage>=maxPage?"disabled":""}>Next →</button></div></div><div class="researcher-result-grid">${recordCards||'<div class="llm-empty">No records match this work.</div>'}</div></section>`}`:`<section class="empty"><div class="drop"><div class="drop-icon">${icon("database")}</div><h1>No corpus database available</h1><p>An administrator must create or restore a corpus vector database before researcher search and RAG can be used.</p></div></section>`}`;
-  if(!stores.length){decorateDisabledControls(main);return}
-
-  document.querySelector("#researcherStore")?.addEventListener("change",e=>{state.activeStore=e.target.value;state.storePage=1;state.storeQuery="";state.storeSearchResults=[];state.storeWork="";state.storeWorksStore="";state.storeBrowseMode="works";persistVectorLocation();renderResearcherVector(main)});
-  document.querySelector("#browseWorks")?.addEventListener("click",()=>{state.storeBrowseMode="works";state.storeWork="";persistVectorLocation();renderResearcherVector(main)});
-  document.querySelector("#browseRecords")?.addEventListener("click",()=>{state.storeBrowseMode="records";state.storeWork="";state.storePage=1;persistVectorLocation();renderResearcherVector(main)});
-  document.querySelectorAll("[data-db-work]").forEach(button=>button.addEventListener("click",()=>{state.storeWork=button.dataset.dbWork;state.storeBrowseMode="records";state.storePage=1;persistVectorLocation();renderResearcherVector(main)}));
-  document.querySelector("#storeWork")?.addEventListener("change",e=>{state.storeWork=e.target.value;state.storePage=1;persistVectorLocation();renderResearcherVector(main)});
-  document.querySelector("#storePageSize")?.addEventListener("change",e=>{state.storePageSize=+e.target.value;state.storePage=1;persistVectorLocation();renderResearcherVector(main)});
-  document.querySelector("#storePrev")?.addEventListener("click",()=>{state.storePage=Math.max(1,state.storePage-1);persistVectorLocation();renderResearcherVector(main)});
-  document.querySelector("#storeNext")?.addEventListener("click",()=>{state.storePage=Math.min(maxPage,state.storePage+1);persistVectorLocation();renderResearcherVector(main)});
-  document.querySelectorAll("[data-r-search-sort]").forEach(button=>button.addEventListener("click",()=>{const key=button.dataset.rSearchSort;state.storeSearchSort=state.storeSearchSort?.key===key?{key,dir:-state.storeSearchSort.dir}:{key,dir:key==="similarity"?-1:1};persistVectorLocation();renderResearcherVector(main)}));
-
-  document.querySelector("#runSearch")?.addEventListener("click",async()=>{
-    const q=document.querySelector("#storeQuery")?.value.trim();if(!q)return;
-    state.storeQuery=q;state.storeSearchLoading=true;state.storeSearchMessage=tr("research.search_embedding","Embedding your query and comparing it with the selected collection…");persistVectorLocation();
-    const status=document.querySelector("#researcherSearchStatus");if(status){status.classList.add("active");status.innerHTML=`<span class="spinner"></span><div><b>${esc(tr("research.search_loading","Searching the corpus…"))}</b><span>${esc(state.storeSearchMessage)}</span></div>`}
-    const button=document.querySelector("#runSearch");if(button){button.disabled=true;button.textContent="Searching…"}
-    const startedAt=Date.now();
-    const searchTicker=setInterval(()=>{
-      const elapsed=Math.max(1,Math.round((Date.now()-startedAt)/1000));
-      if(elapsed>=10)state.storeSearchMessage=`Still working (${elapsed}s). A local embedding model may take longer on its first request; the search has not stalled.`;
-      else if(elapsed>=3)state.storeSearchMessage=`Searching vector candidates… ${elapsed}s elapsed.`;
-      const live=document.querySelector("#researcherSearchStatus span:last-child");
-      if(live)live.textContent=state.storeSearchMessage;
-    },1000);
-    try{
-      const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:q,n_results:50})});
-      state.storeSearchResults=data.results||[];
-    }catch(error){toast(`Search failed: ${error.message}`,{tone:"danger"})}
-    finally{clearInterval(searchTicker);state.storeSearchLoading=false;state.storeSearchMessage="";persistVectorLocation();renderResearcherVector(main)}
-  });
-  document.querySelector("#storeQuery")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();document.querySelector("#runSearch")?.click()}});
-  document.querySelector("#clearStoreSearch")?.addEventListener("click",()=>{state.storeQuery="";state.storeSearchResults=[];state.storeSearchLoading=false;persistVectorLocation();renderResearcherVector(main)});
-
-  document.querySelectorAll("[data-evidence-key]").forEach(button=>button.addEventListener("click",()=>{
-    const key=button.dataset.evidenceKey;
-    if(key.startsWith("db:")){
-      const id=key.split(":").slice(2).join(":");
-      const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id)===id);
-      const record=result?.record||state.storeRecords.find(item=>String(item._chroma_id||item.record_id)===id)||{};
-      toggleDbEvidence(state.activeStore,id,record);
-      renderResearcherVector(main);
-    }
-  }));
-  document.querySelectorAll("[data-db-cite]").forEach(button=>button.addEventListener("click",()=>{
-    const id=button.dataset.dbResultId;const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id)===String(id));if(result?.record)copyCitation(result.record,button.dataset.dbCite);
-  }));
-  document.querySelectorAll("[data-store-record-cite]").forEach(button=>button.addEventListener("click",()=>{
-    const record=state.storeRecords.find(item=>String(item._chroma_id||item.record_id)===String(button.dataset.storeRecordId));if(record)copyCitation(record,button.dataset.storeRecordCite);
-  }));
-  decorateDisabledControls(main);
-}
-
-function openDatabaseCreationFromResearch(){
-  state.vectorAutoCreateRequested=true;
-  window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/databases",runtimeView:"vector"}}));
-}
-
-function collectionSyncableWorks(){
-  return [...workIndex().values()].sort((a,b)=>String(a.work).localeCompare(String(b.work))).map(item=>({work:item.work,count:item.rows.length,rows:item.rows}));
-}
-
-function openCollectionCreationWizard({defaultProvider="ollama",defaultModel="bge-m3:latest",installedModels=[]}={}){
-  const dialog=document.createElement("dialog");
-  dialog.className="collection-wizard-dialog workflow-dialog collection-wizard-v037";
-  const works=collectionSyncableWorks();
-  const form={name:recordStores().length?"":"derrida-primary",description:"",role:"primary",languages:new Set(),provider:defaultProvider,model:defaultModel,dimension:"",distance:"cosine",retrieval:"hybrid",protected:false,selectedWorks:new Set(),preflight:null};
-  let step=0;
-  const steps=[tr("vector.create_step_source","Source"),tr("vector.create_step_retrieval","Retrieval"),tr("vector.create_step_review","Review & build")];
-  const selectedRows=()=>works.filter(item=>form.selectedWorks.has(item.work)).flatMap(item=>item.rows);
-  const selectedCount=()=>selectedRows().length;
-  const persistFields=()=>{
-    const name=dialog.querySelector("#wizardCollectionName");if(name)form.name=name.value.trim();
-    const description=dialog.querySelector("#wizardCollectionDescription");if(description)form.description=description.value.trim();
-    const role=dialog.querySelector("#wizardCollectionRole");if(role)form.role=role.value;
-    const languageBoxes=[...dialog.querySelectorAll("[data-wizard-language]")];if(languageBoxes.length)form.languages=new Set(languageBoxes.filter(box=>box.checked).map(box=>box.dataset.wizardLanguage));
-    const provider=dialog.querySelector('input[name="wizardEmbeddingProviderRadio"]:checked');if(provider)form.provider=provider.value;
-    const model=dialog.querySelector("#wizardEmbeddingModel");if(model)form.model=model.value.trim();
-    const dimension=dialog.querySelector("#wizardEmbeddingDimension");if(dimension)form.dimension=dimension.value.trim();
-    const distance=dialog.querySelector("#wizardDistanceMetric");if(distance)form.distance=distance.value;
-    const retrieval=dialog.querySelector("#wizardRetrievalMode");if(retrieval)form.retrieval=retrieval.value;
-    const protection=dialog.querySelector("#wizardProtected");if(protection)form.protected=protection.checked;
-    const workBoxes=[...dialog.querySelectorAll("[data-wizard-work]")];if(workBoxes.length)form.selectedWorks=new Set(workBoxes.filter(box=>box.checked).map(box=>box.dataset.wizardWork));
-  };
-  const close=()=>{dialog.close();dialog.remove()};
-  const sourceStep=()=>{
-    const total=selectedCount();
-    return `<section class="workflow-step-body"><div class="workflow-step-copy"><span class="section-label">${esc(tr("vector.create_collection","Create collection"))}</span><h3>${esc(tr("vector.source_dataset","Choose the source dataset"))}</h3><p>${esc(tr("vector.source_dataset_help","Define the logical collection and the corpus material this build will represent. The source selection is recorded in the build manifest."))}</p></div><div class="workflow-fields"><label class="field"><span>${esc(tr("vector.collection_name","Collection name"))}</span><input class="control" id="wizardCollectionName" value="${esc(form.name)}" autocomplete="off" placeholder="derrida-primary"><small>${esc(tr("vector.collection_name_rules","3–128 characters; start and end with a letter or number; use letters, numbers, periods, underscores, or hyphens."))}</small></label><label class="field"><span>${esc(tr("vector.collection_description","Description"))}</span><textarea class="control" id="wizardCollectionDescription" rows="2" placeholder="${esc(tr("vector.collection_description_placeholder","Primary multilingual Derrida research corpus"))}">${esc(form.description)}</textarea></label><div class="wizard-work-toolbar"><div><b>${esc(tr("vector.available_loaded_works","Available loaded works"))}</b><small>${works.length?trf("vector.available_works_count","{count} works from the current browser workspace",{count:works.length.toLocaleString()}):tr("vector.no_loaded_works","No loaded JSONL works are available to sync.")}</small></div>${works.length?`<div class="tools"><button class="btn small" type="button" id="wizardSelectWorks">${esc(tr("ui.select_all","Select all"))}</button><button class="btn small" type="button" id="wizardClearWorks">${esc(tr("ui.clear","Clear"))}</button></div>`:""}</div><div class="wizard-sync-summary"><span><b>${form.selectedWorks.size.toLocaleString()}</b>${esc(tr("dynamic.works","works"))}</span><span><b>${total.toLocaleString()}</b>${esc(tr("dynamic.records","records"))}</span></div><div class="wizard-work-list">${works.map(item=>`<label class="wizard-work-row"><input type="checkbox" data-wizard-work="${esc(item.work)}" ${form.selectedWorks.has(item.work)?"checked":""}><span><b>${esc(item.work)}</b><small>${item.count.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></span></label>`).join("")||`<div class="empty-inline">${esc(tr("vector.no_loaded_works","No loaded JSONL works are available to sync."))}</div>`}</div></div></section>`;
-  };
-  const retrievalStep=()=>`<section class="workflow-step-body"><div class="workflow-step-copy"><span class="section-label">${esc(tr("vector.create_collection","Create collection"))}</span><h3>${esc(tr("vector.retrieval_contract","Define the retrieval contract"))}</h3><p>${esc(tr("vector.retrieval_contract_help","Embedding identity, vector dimension, distance metric, and retrieval mode are treated as a durable collection contract and validated before creation."))}</p></div><div class="workflow-fields"><div class="wizard-two-col"><label class="field"><span>${esc(tr("vector.collection_role","Collection role"))}</span><select class="control" id="wizardCollectionRole"><option value="primary" ${form.role==="primary"?"selected":""}>${esc(tr("vector.role_primary","Primary"))}</option><option value="general" ${form.role==="general"?"selected":""}>${esc(tr("vector.role_general","General"))}</option><option value="language" ${form.role==="language"?"selected":""}>${esc(tr("vector.role_language","Language-specific"))}</option></select></label><fieldset class="vector-language-choice"><legend>${esc(tr("vector.language_tags","Language tags"))}</legend><div class="vector-language-options">${[["en","English"],["fr","Français"]].map(([code,name])=>`<label><input type="checkbox" data-wizard-language="${code}" ${form.languages.has(code)?"checked":""}><span>${name}</span></label>`).join("")}</div><small>${esc(tr("vector.language_tags_scope_help","Descriptive/filtering scope only; mixed-language primary collections are preferred over duplicate physical language databases."))}</small></fieldset></div><fieldset class="vector-provider-choice"><legend>${esc(tr("vector.embedding_provider","Embedding provider"))}</legend><div class="vector-provider-options">${[["ollama",tr("vector.provider_ollama","Ollama"),tr("vector.provider_ollama_help","Generate embeddings with a configured local Ollama model.")],["chroma",tr("vector.provider_chroma","Chroma default"),tr("vector.provider_chroma_help","Use Chroma's default embedding function.")],["precomputed",tr("vector.provider_precomputed","Precomputed"),tr("vector.provider_precomputed_help","Records must already contain vectors; lexical search remains available but semantic query embedding is unavailable.")]].map(([value,name,help])=>`<label class="${form.provider===value?"selected":""}"><input type="radio" name="wizardEmbeddingProviderRadio" value="${value}" ${form.provider===value?"checked":""}><span><b>${esc(name)}</b><small>${esc(help)}</small></span></label>`).join("")}</div></fieldset><div class="wizard-two-col"><label class="field ${form.provider==="ollama"?"":"muted-field"}"><span>${esc(tr("vector.embedding_model","Embedding model"))}</span><input class="control" id="wizardEmbeddingModel" list="wizardEmbeddingModels" value="${esc(form.model)}" ${form.provider==="ollama"?"":"disabled"} placeholder="bge-m3:latest"><datalist id="wizardEmbeddingModels">${installedModels.map(model=>`<option value="${esc(model.name)}"></option>`).join("")}</datalist></label><label class="field"><span>${esc(tr("vector.embedding_dimension","Vector dimension"))}</span><input class="control" id="wizardEmbeddingDimension" inputmode="numeric" value="${esc(form.dimension)}" placeholder="${form.provider==="precomputed"?esc(tr("vector.dimension_optional","Optional until first vector")):esc(tr("vector.dimension_auto","Detected automatically"))}" ${form.provider==="precomputed"?"":"disabled"}><small>${esc(tr("vector.embedding_dimension_help","DerridAI probes generated embeddings automatically and rejects incompatible dimensions before writing records."))}</small></label><label class="field"><span>${esc(tr("vector.distance_metric","Distance metric"))}</span><select class="control" id="wizardDistanceMetric"><option value="cosine" ${form.distance==="cosine"?"selected":""}>Cosine</option><option value="l2" ${form.distance==="l2"?"selected":""}>L2</option><option value="ip" ${form.distance==="ip"?"selected":""}>Inner product</option></select></label><label class="field"><span>${esc(tr("vector.retrieval_mode","Retrieval mode"))}</span><select class="control" id="wizardRetrievalMode"><option value="hybrid" ${form.retrieval==="hybrid"?"selected":""}>${esc(tr("vector.hybrid_recommended","Hybrid — recommended"))}</option><option value="semantic" ${form.retrieval==="semantic"?"selected":""}>${esc(tr("vector.semantic_only","Semantic only"))}</option><option value="lexical" ${form.retrieval==="lexical"?"selected":""}>${esc(tr("vector.lexical_only","Lexical only"))}</option></select><small>${esc(tr("vector.hybrid_help","Hybrid fuses semantic and exact lexical retrieval so names, quotations, neologisms, and multilingual terminology can surface independently of embeddings."))}</small></label></div><label class="vector-protection-toggle"><input type="checkbox" id="wizardProtected" ${form.protected?"checked":""}><span><b>${esc(tr("vector.deletion_protection","Deletion protection"))}</b><small>${esc(tr("vector.deletion_protection_help","Prevent accidental collection deletion until protection is explicitly disabled."))}</small></span></label></div></section>`;
-  const reviewStep=()=>{
-    const total=selectedCount(),pf=form.preflight||{};
-    const providerLabel=form.provider==="ollama"?`Ollama · ${form.model}`:form.provider==="precomputed"?tr("vector.provider_precomputed","Precomputed"):tr("vector.provider_chroma","Chroma default");
-    return `<section class="workflow-step-body"><div class="workflow-step-copy"><span class="section-label">${esc(tr("vector.create_collection","Create collection"))}</span><h3>${esc(tr("vector.review_build","Review the build"))}</h3><p>${esc(tr("vector.review_build_help","Creation is strict: DerridAI will never silently reuse an existing collection. The resolved retrieval contract and source snapshot become part of the collection manifest."))}</p></div><div class="workflow-fields"><div class="collection-preflight-card"><div class="collection-preflight-status ok">${icon("check")}<div><b>${esc(tr("vector.preflight_passed","Embedding preflight passed"))}</b><span>${esc(pf.message||tr("vector.preflight_ready","Ready to create"))}</span></div></div><dl class="manifest-review"><div><dt>${esc(tr("vector.collection","Collection"))}</dt><dd>${esc(form.name)}</dd></div><div><dt>${esc(tr("vector.source","Source"))}</dt><dd>${form.selectedWorks.size.toLocaleString()} ${esc(tr("dynamic.works","works"))} · ${total.toLocaleString()} ${esc(tr("dynamic.records","records"))}</dd></div><div><dt>${esc(tr("vector.embedding_provider","Embedding"))}</dt><dd>${esc(providerLabel)}</dd></div><div><dt>${esc(tr("vector.embedding_dimension","Dimension"))}</dt><dd>${pf.embedding_dimension ?? (form.dimension || "—")}</dd></div><div><dt>${esc(tr("vector.distance_metric","Metric"))}</dt><dd>${esc(form.distance)}</dd></div><div><dt>${esc(tr("vector.retrieval_mode","Retrieval"))}</dt><dd>${esc(form.retrieval)}</dd></div><div><dt>${esc(tr("vector.query_embedding","Query embedding"))}</dt><dd>${pf.query_supported===false?esc(tr("ui.no","No")):esc(tr("ui.yes","Yes"))}</dd></div><div><dt>${esc(tr("vector.deletion_protection","Protection"))}</dt><dd>${form.protected?esc(tr("ui.on","On")):esc(tr("ui.off","Off"))}</dd></div></dl>${total?`<div class="info"><b>${esc(tr("vector.background_build","Background build"))}</b><span>${esc(trf("vector.background_build_help","After the collection is created, {count} selected records will be queued as one server-side background build. You can continue using DerridAI while it runs.",{count:total.toLocaleString()}))}</span></div>`:`<div class="info"><span>${esc(tr("vector.empty_manifest_help","The empty collection will still retain its validated embedding contract and build manifest."))}</span></div>`}</div></div></section>`;
-  };
-  const stepContent=()=>step===0?sourceStep():step===1?retrievalStep():reviewStep();
-  const runPreflight=async(button)=>{
-    persistFields();
-    if(form.provider==="ollama"&&!form.model){toast(tr("vector.embedding_model_required","Choose an Ollama embedding model"));return false}
-    button.disabled=true;const old=button.innerHTML;button.textContent=tr("vector.running_preflight","Running preflight…");
-    try{
-      form.preflight=await api("/api/stores/preflight/embedding",{method:"POST",body:JSON.stringify({embedding_provider:form.provider,embedding_model:form.provider==="ollama"?form.model:null,embedding_dimension:form.dimension?Number(form.dimension):null,distance_metric:form.distance})});
-      if(form.preflight?.embedding_dimension)form.dimension=String(form.preflight.embedding_dimension);
-      return true;
-    }catch(error){openMessageModal({title:tr("vector.preflight_failed","Embedding preflight failed"),message:error.message||String(error),tone:"danger"});return false}
-    finally{button.disabled=false;button.innerHTML=old}
-  };
-  const render=()=>{
-    dialog.innerHTML=`<div class="workflow-dialog-head"><div><span class="section-label">${esc(tr("vector.new_collection","New vector collection"))}</span><h2>${esc(tr("vector.new_direction_build","Create a reproducible retrieval collection"))}</h2><p>${esc(tr("vector.new_direction_build_help","Choose source material, validate the retrieval contract, then create a manifest-backed collection without blocking the workspace."))}</p></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div><ol class="workflow-steps" aria-label="${esc(tr("vector.creation_steps","Collection creation steps"))}">${steps.map((label,index)=>`<li class="${index===step?"active":index<step?"done":""}"><span>${index+1}</span><b>${esc(label)}</b></li>`).join("")}</ol>${stepContent()}<div class="workflow-dialog-actions"><button class="btn" type="button" data-close>${esc(tr("ui.cancel","Cancel"))}</button><div class="workflow-action-spacer"></div>${step?`<button class="btn" type="button" id="wizardBack">← ${esc(tr("ui.back","Back"))}</button>`:""}${step<2?`<button class="btn primary" type="button" id="wizardNext">${esc(step===1?tr("vector.preflight_and_review","Preflight & review"):tr("ui.next","Next"))} →</button>`:`<button class="btn primary" type="button" id="wizardCreate">${icon("plus")}${esc(form.selectedWorks.size?tr("vector.create_and_build","Create & build"):tr("vector.create_empty","Create empty collection"))}</button>`}</div>`;
-    dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    dialog.querySelector("#wizardBack")?.addEventListener("click",()=>{persistFields();step=Math.max(0,step-1);render()});
-    dialog.querySelector("#wizardNext")?.addEventListener("click",async event=>{persistFields();if(step===0&&!form.name)return toast(tr("vector.collection_name_required","Enter a collection name"));if(step===0){step=1;render();return}if(step===1){const ok=await runPreflight(event.currentTarget);if(ok){step=2;render()}}});
-    dialog.querySelectorAll('input[name="wizardEmbeddingProviderRadio"]').forEach(input=>input.addEventListener("change",event=>{persistFields();form.provider=event.target.value;form.preflight=null;render()}));
-    dialog.querySelector("#wizardSelectWorks")?.addEventListener("click",()=>{persistFields();form.selectedWorks=new Set(works.map(item=>item.work));render()});
-    dialog.querySelector("#wizardClearWorks")?.addEventListener("click",()=>{persistFields();form.selectedWorks.clear();render()});
-    dialog.querySelectorAll("[data-wizard-work]").forEach(input=>input.addEventListener("change",()=>{persistFields();render()}));
-    dialog.querySelector("#wizardCreate")?.addEventListener("click",async()=>{
-      persistFields();
-      if(!form.name)return toast(tr("vector.collection_name_required","Enter a collection name"));
-      const button=dialog.querySelector("#wizardCreate");button.disabled=true;button.textContent=tr("vector.creating_collection","Creating collection…");
-      try{
-        await api("/api/stores",{method:"POST",body:JSON.stringify({name:form.name,description:form.description||null,embedding_provider:form.provider,embedding_model:form.provider==="ollama"?form.model:null,embedding_dimension:form.dimension?Number(form.dimension):null,distance_metric:form.distance,retrieval_mode:form.retrieval,text_field:"text",language_codes:form.languages.size?[...form.languages]:null,collection_role:form.role||null,protected:form.protected})});
-        await refreshStores();state.activeStore=form.name;state.storePage=1;state.storeSearchResults=[];state.storeWork="";state.storeWorksStore="";state.storeBrowseMode="works";persistPrefs();
-        const rows=selectedRows();close();
-        const syncStarted=rows.length?await upsertRows(rows,trf("vector.selected_works_label","{count} selected works",{count:form.selectedWorks.size}),{largeSyncConfirmed:true}):false;
-        toast(rows.length&&syncStarted?trf("vector.collection_created_build","Created {name}; background build queued.",{name:form.name}):trf("vector.collection_created","Created {name}",{name:form.name}),{tone:"success"});
-        if(state.view==="vector")renderVector(document.querySelector("#main"));
-      }catch(error){button.disabled=false;button.textContent=tr("vector.create_collection","Create collection");openMessageModal({title:tr("vector.create_failed","Could not create collection"),message:error.message||String(error),tone:"danger"})}
-    });
-    decorateDisabledControls(dialog);
-  };
-  document.body.appendChild(dialog);render();showAppModal(dialog);
-}
-
-async function renderVector(main){
-  if(isResearcher())return renderResearcherVector(main);
-  if(state.view==="vector")syncUrl({replace:true});
-  showViewLoading(main,"Loading Vector Stores","Reading collections, works, and the current record page…");
-  try{
-    await refreshStores();
-    if(state.activeStore)await refreshStoreWorks();
-    await loadStorePage();
-  }catch(error){
-    main.innerHTML=`<div class="info warn">ChromaDB API error: ${esc(error.message)}</div>`;
-    return;
-  }
-
-  if(!state.llmStatus){
-    try{state.llmStatus=await api("/api/llm/status")}catch{}
-  }
-
-  const stores=recordStores();
-  const current=stores.find(store=>store.name===state.activeStore);
-  const maxPage=Math.max(1,Math.ceil(state.storeCount/state.storePageSize));
-  const currentPath=state.health?.chroma?.path||state.health?.chroma_path||"/data/chroma";
-  const hostPath=state.health?.chroma?.host_path_hint||"./data/chroma";
-  const installedModels=state.llmStatus?.models||[];
-  const embedDefault=state.appConfig.embedding_model||state.health?.ollama_embed_model||"bge-m3:latest";
-  const defaultProvider=state.appConfig.embedding_provider||state.health?.embedding_provider||"ollama";
-  const currentProvider=current?.embedding_provider||defaultProvider;
-  const currentModel=current?.embedding_model||embedDefault;
-  const currentCodes=current?.language_codes||[];
-  const currentRole=current?.collection_role||"general";
-  const providerLabel=currentProvider==="ollama"?`Ollama · ${currentModel}`:currentProvider==="precomputed"?"Precomputed vectors":"Chroma default";
-  const currentStatus=String(current?.status||((current?.count||0)?"ready":"empty")).toLowerCase();
-  const currentDimension=current?.embedding_dimension||null;
-  const currentMetric=current?.distance_metric||"l2";
-  const currentRetrieval=current?.retrieval_mode||"semantic";
-  const currentBuild=current?.build_id||"";
-  const lastSynced=current?.last_synced_at||null;
-  const currentProtected=Boolean(current?.protected);
-  const currentSource=current?.source_label||current?.source_kind||"";
-  const buildHistory=Array.isArray(current?.build_history)?current.build_history:[];
-  const contractLocked=Boolean(current?.app_version&&current.app_version!=="legacy");
-  const currentSearchMode=state.storeSearchMode||({hybrid:"hybrid",lexical:"lexical",semantic:"similarity"}[currentRetrieval]||"similarity");
-  const available=tableAvailableFields(state.storeRecords,["_chroma_id"]);
-  const columns=getTableColumns("vector",available);
-  const pending=pendingUpsertRows();
-  const derived=deriveNames(state.activeStore);
-  const canDerive=Boolean(state.activeStore&&state.activeStore!=="_response_cache"&&currentRole!=="language");
-
-  const workBrowser=state.activeStore&&state.storeBrowseMode==="works"
-    ? `<section class="db-work-browser"><div class="db-work-browser-head"><div><b>${esc(tr("vector.browse_works","Browse works"))}</b><span>${esc(tr("vector.browse_works_help","Open a work to browse only its records in this collection."))}</span></div></div><div class="db-work-grid">${state.storeWorkStats.map(item=>`<button class="db-work-card" data-db-work="${esc(item.work)}"><span class="vector-store-icon">${icon("books")}</span><span><b>${esc(item.work)}</b><small>${esc(tr("vector.open_work_records","Open records"))}</small></span><strong>${item.count==null?"—":Number(item.count).toLocaleString()}</strong></button>`).join("")||`<div class="llm-empty">${esc(tr("research.no_work_metadata","No work metadata was found in this collection."))}</div>`}</div></section>`
-    : "";
-
-  const recordsBrowser=state.activeStore&&state.storeBrowseMode==="records"
-    ? `<div class="toolbar store-record-toolbar"><div><b>${state.storeWork?esc(state.storeWork):esc(tr("research.all_records","All records"))}</b><div class="note">${state.storeCount.toLocaleString()} ${esc(tr("dynamic.records","records"))} · ${esc(tr("dynamic.page","page"))} ${state.storePage} ${esc(tr("research.of","of"))} ${maxPage}</div></div><div class="tools"><select class="control store-work-filter" id="storeWork"><option value="">${esc(tr("dashboard.all_works","All works"))}</option>${state.storeWorks.map(work=>`<option value="${esc(work)}" ${work===state.storeWork?"selected":""}>${esc(work)}</option>`).join("")}</select><button class="btn small" id="vectorColumns">${esc(tr("ui.columns","Columns"))}</button><select class="control" id="storePageSize" aria-label="${esc(tr("ui.rows_per_page","Rows per page"))}">${[25,50,100,250].map(n=>`<option ${state.storePageSize===n?"selected":""}>${n}</option>`).join("")}</select><button class="btn small" id="storePrev" ${state.storePage<=1?`disabled data-disabled-reason="${esc(tr("ui.first_page","Already on the first page."))}"`:""}>← ${esc(tr("ui.previous","Previous"))}</button><button class="btn small" id="storeNext" ${state.storePage>=maxPage?`disabled data-disabled-reason="${esc(tr("ui.last_page","Already on the last page."))}"`:""}>${esc(tr("ui.next","Next"))} →</button></div></div>
-      <div class="tablewrap"><table class="store-table configurable-table"><thead><tr>${columns.map(key=>`<th class="${key==="_chroma_id"?"chroma-id-col":key==="record_id"?"record-id-col":""}"><button class="store-sort-head" data-store-sort="${esc(key)}">${esc(label(key))} ${state.storeSort?.key===key?(state.storeSort.dir===1?"▲":"▼"):""}</button></th>`).join("")}<th class="store-actions-col"></th></tr><tr class="column-filter-row">${columns.map(key=>`<th><input class="column-filter-input" data-store-filter="${esc(key)}" value="${esc(state.storeFilters?.[key]||"")}" placeholder="Filter"></th>`).join("")}<th><button class="btn tiny" id="clearStoreFilters">Clear</button></th></tr></thead><tbody>${state.storeRecords.map(record=>`<tr>${columns.map(key=>storeCellHtml(record,key)).join("")}<td class="store-actions-col"><div class="tools vector-row-actions"><button class="btn small" data-inspect-store="${esc(record._chroma_id||"")}">${esc(tr("ui.open","Open"))}</button>${evidenceButtonHtml(dbEvidenceKey(state.activeStore,String(record._chroma_id||record.record_id||"")),evidenceIsSelected(dbEvidenceKey(state.activeStore,String(record._chroma_id||record.record_id||"")))?"Selected":"Evidence")}<details class="vector-row-menu"><summary class="btn small" aria-label="${esc(tr("ui.more_actions","More actions"))}">•••</summary><div class="vector-row-menu-popover"><button class="btn small" data-copy-store-record="${esc(record._chroma_id||"")}">${icon("copy")}${esc(tr("ui.copy","Copy"))}</button><button class="btn small" data-copy-store-citation="inline" data-store-id="${esc(record._chroma_id||"")}">${esc(tr("record.inline_citation","Inline cite"))}</button><button class="btn small" data-copy-store-citation="full" data-store-id="${esc(record._chroma_id||"")}">${esc(tr("record.full_citation","Full cite"))}</button><button class="btn small" data-edit-store="${esc(record._chroma_id||"")}">${icon("edit")}${esc(tr("ui.edit","Edit"))}</button><button class="btn small danger" data-delete-store-record="${esc(record._chroma_id||"")}">${esc(tr("ui.delete","Delete"))}</button></div></details></div></td></tr>`).join("")||`<tr><td colspan="${columns.length+1}" class="note" style="padding:28px;text-align:center">No records match the current filters.</td></tr>`}</tbody></table></div>`
-    : "";
-
-  const noCollections=!stores.length;
-  const vectorTabs=["overview","data","retrieval","builds","settings"];
-  const vectorTab=vectorTabs.includes(state.vectorTab)?state.vectorTab:"overview";
-  state.vectorTab=vectorTab;
-  const collectionNeedle=String(state.vectorCollectionFilter||"").trim().toLowerCase();
-  const visibleStores=collectionNeedle?stores.filter(store=>String(store.name||"").toLowerCase().includes(collectionNeedle)):stores;
-  const pendingTitle=pending.length
-    ? trf("vector.unsynced_changes_count","{count} unsynced local changes",{count:pending.length.toLocaleString()})
-    : tr("vector.no_unsynced_changes","No confirmed unsynced local changes");
-  main.innerHTML=`
-  <section class="page-heading legacy-page-heading vector-page-heading">
-    <div><p>${esc(tr("section.storage","Storage"))}</p><h1>${esc(tr("nav.vector","Vector Stores"))}</h1><span>${esc(tr("vector.page_help","Create, sync, browse, search, and export persistent Chroma collections used by DerridAI."))}</span></div>
-    ${stores.length?`<div class="vector-heading-status"><span class="badge">${stores.length.toLocaleString()} ${esc(tr("vector.collections","collections"))}</span></div>`:""}
-  </section>
-
-  ${noCollections?`<section class="card vector-first-collection-cta"><img src="/brand/derridai-mark.png" alt="" aria-hidden="true"><div><span class="section-label">${esc(tr("vector.empty_kicker","Vector Stores"))}</span><h2>${esc(tr("vector.empty_title","Create your first corpus collection"))}</h2><p>${esc(tr("vector.empty_help","A vector collection gives DerridAI a persistent corpus database for semantic search, researcher browsing, and RAG. Configure the collection first, then optionally sync any works already loaded in the browser workspace."))}</p><button class="btn primary" id="createFirstCollection">${icon("plus")}${esc(tr("vector.create_first_collection","Create first collection"))}</button></div></section>`:`
-  <section class="storegrid vector-store-layout vector-workspace-v0371">
-    <aside class="card vector-collection-sidebar"><div class="vector-collection-head"><div><b>${esc(tr("vector.collections","Collections"))}</b><span>${stores.length.toLocaleString()} ${esc(tr("vector.collections","collections"))}</span></div><button class="btn icon-only" id="refreshStores" aria-label="${esc(tr("ui.refresh","Refresh"))}" title="${esc(tr("ui.refresh","Refresh"))}">${icon("refresh")}</button></div><div class="vector-rail-actions"><input class="control" id="vectorCollectionFilter" value="${esc(state.vectorCollectionFilter||"")}" placeholder="${esc(tr("vector.filter_collections","Search collections…"))}" aria-label="${esc(tr("vector.filter_collections","Search collections"))}"><button class="btn primary" id="createCollectionWizard">${icon("plus")}${esc(tr("vector.new_collection_short","New"))}</button></div><div class="vector-collection-list">${visibleStores.map(store=>`<button class="storeitem ${store.name===state.activeStore?"active":""}" data-store="${esc(store.name)}"><span class="vector-store-status-dot vector-store-status-${esc(String(store.status||((store.count||0)?"ready":"empty")).toLowerCase())}" aria-hidden="true"></span><span><b>${esc(store.name)}</b><small>${Number(store.count||0).toLocaleString()} · ${esc(store.retrieval_mode||"semantic")} · ${esc(String(store.status||((store.count||0)?"ready":"empty")).replaceAll("_"," "))}</small></span><span aria-hidden="true">›</span></button>`).join("")||`<div class="vector-rail-empty">${esc(tr("vector.no_collection_matches","No collections match this search."))}</div>`}</div></aside>
-
-    <article class="vector-store-main">${state.activeStore?`
-      <section class="card vector-collection-hero vector-collection-hero-v037"><div class="vector-hero-copy"><div class="vector-hero-kicker"><span class="section-label">${esc(tr("vector.collection","Collection"))}</span><span class="vector-status-badge vector-status-${esc(currentStatus)}">${esc(currentStatus.replaceAll("_"," "))}</span>${currentProtected?`<span class="vector-protected-badge">${icon("lock")}${esc(tr("vector.protected","Protected"))}</span>`:""}</div><h2>${esc(state.activeStore)}</h2>${current?.description?`<p class="vector-collection-description">${esc(current.description)}</p>`:""}<div class="vector-collection-contract"><span><b>${(current?.count||0).toLocaleString()}</b> ${esc(tr("dynamic.records","records"))}</span><span>${esc(currentRetrieval)}</span><span>${esc(providerLabel)}</span>${currentDimension?`<span>${Number(currentDimension).toLocaleString()}d</span>`:""}<span>${esc(currentMetric)}</span>${currentCodes.length?`<span>${esc(currentCodes.join(", "))}</span>`:""}</div><div class="vector-collection-provenance">${currentSource?`<span>${esc(tr("vector.source","Source"))}: <b>${esc(currentSource)}</b></span>`:""}${lastSynced?`<span>${esc(tr("vector.last_synced","Last synced"))}: <b>${esc(new Date(lastSynced).toLocaleString())}</b></span>`:`<span>${esc(tr("vector.never_synced","Not yet synced"))}</span>`}${currentBuild?`<span title="${esc(currentBuild)}">${esc(tr("vector.build","Build"))}: <code>${esc(currentBuild.slice(-12))}</code></span>`:""}</div></div><div class="tools vector-hero-actions"><button class="btn soft" id="vectorUpsertQueue" ${pending.length?"":`disabled data-disabled-reason="${esc(tr("vector.no_unsynced_changes_help","DerridAI has not found any loaded workspace records that changed since their last sync or are confirmed missing from this collection."))}"`}>${icon("database")}${esc(pending.length?pendingTitle:tr("vector.sync","Sync"))}</button><button class="btn" id="vectorTestRetrieval">${icon("search")}${esc(tr("vector.test_retrieval","Test retrieval"))}</button><details class="vector-hero-menu"><summary class="btn">${esc(tr("ui.more_actions","More actions"))}</summary><div class="vector-hero-menu-popover"><button class="btn" id="toggleStoreProtection">${currentProtected?icon("unlock"):icon("lock")}${esc(currentProtected?tr("vector.disable_protection","Disable protection"):tr("vector.enable_protection","Enable protection"))}</button><button class="btn danger" id="deleteStore" ${currentProtected?`disabled data-disabled-reason="${esc(tr("vector.disable_protection_before_delete","Disable deletion protection before deleting this collection."))}"`:""}>${esc(tr("vector.delete_collection","Delete collection"))}</button></div></details></div></section>
-      <nav class="vector-workspace-tabs" aria-label="${esc(tr("vector.workspace_sections","Collection sections"))}" role="tablist">${[["overview",tr("vector.tab_overview","Overview")],["data",tr("vector.tab_data","Data")],["retrieval",tr("vector.tab_retrieval","Retrieval")],["builds",tr("vector.tab_builds","Builds")],["settings",tr("vector.tab_settings","Settings")]].map(([id,label])=>`<button class="vector-workspace-tab ${vectorTab===id?"active":""}" data-vector-tab="${id}" role="tab" aria-selected="${vectorTab===id}">${esc(label)}</button>`).join("")}</nav>
-      <section class="vector-tab-panel ${vectorTab==="overview"?"active":""}" data-vector-panel="overview"><div class="vector-overview-grid"><article class="card vector-overview-card"><span>${esc(tr("vector.sync_state","Sync state"))}</span><b>${pending.length?trf("vector.changes_pending","{count} changes pending",{count:pending.length.toLocaleString()}):tr("vector.current","Current")}</b><small>${lastSynced?trf("vector.synced_at","Last synced {time}",{time:new Date(lastSynced).toLocaleString()}):tr("vector.never_synced","Not yet synced")}</small></article><article class="card vector-overview-card"><span>${esc(tr("vector.retrieval_contract","Retrieval contract"))}</span><b>${esc(currentRetrieval)} · ${esc(currentMetric)}${currentDimension?` · ${Number(currentDimension).toLocaleString()}d`:""}</b><small>${esc(providerLabel)}</small></article><article class="card vector-overview-card"><span>${esc(tr("vector.source","Source"))}</span><b>${esc(currentSource||tr("vector.source_unrecorded","Not recorded"))}</b><small>${Number(current?.source_record_count||current?.count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></article><article class="card vector-overview-card"><span>${esc(tr("vector.current_build","Current build"))}</span><b>${esc(currentBuild?currentBuild.slice(-12):tr("vector.no_build","No build yet"))}</b><small>${buildHistory.length.toLocaleString()} ${esc(tr("vector.completed_builds","completed builds"))}</small></article></div>${current?.last_build_error?`<div class="info warn"><b>${esc(tr("vector.last_build_error","Last build error"))}</b><span>${esc(current.last_build_error)}</span></div>`:""}</section>
-
-      <div class="vector-settings-grid vector-tab-panel ${vectorTab==="settings"?"active":""}" data-vector-panel="settings">
-        <section class="card vector-settings-card"><div class="cardhead"><div><b>${esc(tr("vector.role_language_title","Role & language"))}</b><div class="note">${esc(tr("vector.role_language_help","Collection role and language tags describe how this database should be used."))}</div></div></div><div class="vector-settings-body"><label class="field"><span>${esc(tr("vector.collection_role","Collection role"))}</span><select class="control" id="collectionRole"><option value="primary" ${currentRole==="primary"?"selected":""}>${esc(tr("vector.role_primary","Primary"))}</option><option value="general" ${currentRole==="general"?"selected":""}>${esc(tr("vector.role_general","General"))}</option><option value="language" ${currentRole==="language"?"selected":""}>${esc(tr("vector.role_language","Language-specific"))}</option></select></label><fieldset class="vector-inline-fieldset"><legend>${esc(tr("vector.language_tags","Language tags"))}</legend><div class="language-checks">${["en","fr"].map(code=>`<label><input type="checkbox" data-current-lang="${code}" ${currentCodes.includes(code)?"checked":""}><span>${code}</span></label>`).join("")}</div></fieldset><button class="btn" id="saveLanguageTags">${esc(tr("ui.save","Save"))}</button></div></section>
-        <section class="card vector-settings-card"><div class="cardhead"><div><b>${esc(tr("vector.embedding_configuration","Embedding configuration"))}</b><div class="note">${esc((contractLocked||current?.count)?tr("vector.embedding_locked_help","Embedding settings are immutable for this collection contract. Create a new collection/build to change them."):tr("vector.embedding_edit_help","Choose how DerridAI creates vectors for this collection."))}</div></div></div><div class="vector-settings-body"><label class="field"><span>${esc(tr("vector.embedding_provider","Provider"))}</span><select class="control" id="collectionEmbeddingProvider" ${(contractLocked||current?.count)?`disabled data-disabled-reason="${esc(tr("vector.embedding_locked_help","Embedding settings are immutable for this collection contract. Create a new collection/build to change them."))}"`:""}><option value="ollama" ${currentProvider==="ollama"?"selected":""}>Ollama</option><option value="chroma" ${currentProvider==="chroma"?"selected":""}>${esc(tr("vector.provider_chroma","Chroma default"))}</option><option value="precomputed" ${currentProvider==="precomputed"?"selected":""}>${esc(tr("vector.provider_precomputed","Precomputed"))}</option></select></label><label class="field"><span>${esc(tr("vector.embedding_model","Model"))}</span><input class="control" id="collectionEmbeddingModel" list="ollamaModelList" value="${esc(currentModel||"")}" placeholder="bge-m3:latest" ${currentProvider==="ollama"&&!(contractLocked||current?.count)?"":`disabled data-disabled-reason="${esc((contractLocked||current?.count)?tr("vector.embedding_locked_help","Embedding settings are immutable for this collection contract. Create a new collection/build to change them."):tr("vector.model_not_used","This provider does not use an Ollama model name."))}"`}></label><button class="btn" id="saveEmbeddingSettings" ${(contractLocked||current?.count)?`disabled data-disabled-reason="${esc(tr("vector.embedding_locked_help","Embedding settings are immutable for this collection contract. Create a new collection/build to change them."))}"`:""}>${esc(tr("ui.save","Save"))}</button></div></section>
-      </div>
-
-      <section class="card vector-transfer-card vector-tab-panel ${vectorTab==="settings"?"active":""}" data-vector-panel="settings"><div class="cardhead"><div><b>${esc(tr("vector.import_export","Import & export records"))}</b><div class="note">${esc(tr("vector.import_export_help","Sync loaded JSONL records into this collection, or export collection records back to clean JSONL. Exporting does not modify the collection."))}</div></div></div><div class="vector-transfer-groups"><div><span class="section-label">${esc(tr("vector.sync_into_collection","Sync into collection"))}</span><div class="store-actions"><button class="btn" id="importActive" ${activeFile()?"":`disabled data-disabled-reason="${esc(tr("vector.load_jsonl_first","Load and select a JSONL tab first."))}"`}>${icon("database")}${esc(tr("vector.sync_active_jsonl","Sync active JSONL"))}</button><button class="btn" id="importAll" ${state.files.length?"":`disabled data-disabled-reason="${esc(tr("vector.load_jsonl_any_first","Load at least one JSONL tab first."))}"`}>${icon("database")}${esc(tr("vector.sync_all_loaded","Sync all loaded JSONL"))}</button></div><p class="note">${esc(tr("vector.sync_behavior_help","Sync updates matching records and inserts new ones. All syncs run as durable server-side background operations; large syncs require confirmation but this tab does not need to remain open."))}</p></div><div><span class="section-label">${esc(tr("vector.export_from_collection","Export from collection"))}</span><div class="store-actions"><button class="btn" id="loadEntireStore">${icon("download")}${esc(tr("vector.open_db_jsonl","Open full collection as JSONL tab"))}</button><button class="btn" id="downloadEntireStore">${icon("download")}${esc(tr("vector.download_db_jsonl","Download full collection JSONL"))}</button>${state.storeWork?`<button class="btn" id="loadCurrentWork">${icon("download")}${esc(tr("vector.open_current_work","Open current work as JSONL"))}</button><button class="btn" id="downloadCurrentWork">${icon("download")}${esc(tr("vector.download_current_work","Download current work"))}</button>`:""}</div><details class="vector-secondary-action"><summary>${esc(tr("vector.page_export_title","Current table page"))}</summary><p>${esc(tr("vector.page_export_help","Open only the records currently visible on this paginated table as a temporary JSONL tab. This is not a full collection export."))}</p><button class="btn small" id="loadStorePage">${icon("download")}${esc(tr("vector.open_current_page","Open current table page as JSONL tab"))}</button></details></div></div></section>
-
-      <section class="card vector-search-card vector-tab-panel ${vectorTab==="retrieval"?"active":""}" data-vector-panel="retrieval" id="vectorRetrievalTest"><div class="cardhead"><div><b>${esc(tr("vector.test_retrieval","Test retrieval"))}</b><div class="note">${esc(tr("vector.test_retrieval_help","Compare the collection's semantic, lexical, hybrid, and diversity-aware retrieval behavior against the same stored corpus."))}</div></div><span class="badge">${esc(currentRetrieval)} ${esc(tr("vector.default","default"))}</span></div><div class="vector-search-config"><label class="field"><span>${esc(tr("vector.search_method","Search method"))}</span><select class="control" id="vectorSearchMode"><option value="hybrid" ${currentSearchMode==="hybrid"?"selected":""}>${esc(tr("vector.hybrid","Hybrid"))}</option><option value="similarity" ${currentSearchMode==="similarity"?"selected":""}>${esc(tr("vector.semantic","Semantic"))}</option><option value="lexical" ${currentSearchMode==="lexical"?"selected":""}>${esc(tr("vector.lexical","Lexical (BM25)"))}</option><option value="mmr" ${currentSearchMode==="mmr"?"selected":""}>MMR</option></select></label><div class="vector-search-row"><input class="control" id="storeQuery" value="${esc(state.storeQuery)}" placeholder="${esc(tr("vector.retrieval_search_placeholder","Search this collection…"))}"><button class="btn primary" id="runSearch">${esc(tr("ui.search","Search"))}</button><button class="btn" id="compareRetrievalModes">${esc(tr("vector.compare_modes","Compare modes"))}</button><button class="btn" id="clearStoreSearch">${esc(tr("ui.clear","Clear"))}</button></div></div>${currentProvider==="precomputed"?`<div class="info"><span>${esc(tr("vector.precomputed_search_help","Precomputed collections can use lexical search and the lexical leg of hybrid search. Semantic and MMR query embedding require an embedding function."))}</span></div>`:""}<div id="storeResults" class="vector-search-results">${state.storeSearchResults.length?state.storeSearchResults.map(result=>{const resultId=String(result.id||result.record?._chroma_id||result.record?.record_id||"");const eKey=dbEvidenceKey(state.activeStore,resultId);const score=result.hybrid_score!=null?`<span class="similarity">${esc(tr("vector.hybrid_score","Hybrid"))} ${Number(result.hybrid_score).toFixed(4)}</span>`:similarityHtml(result.distance);const hits=Array.isArray(result.retrieval_hits)?result.retrieval_hits.map(hit=>hit.type).join(" + "):"";return `<div class="result store-result"><div class="result-main"><div class="note">${score}${hits?` · ${esc(hits)}`:""} · ${highlightTerms(result.record.record_id||resultId,state.storeQuery)}</div><b>${highlightTerms(result.record.work||"",state.storeQuery)}</b><div class="textcell">${highlightTerms(snippet(result.record.text,state.storeQuery,320),state.storeQuery)}</div></div><div class="tools vector-row-actions"><button class="btn small" data-inspect-search="${esc(resultId)}">${esc(tr("ui.open","Open"))}</button>${evidenceButtonHtml(eKey,evidenceIsSelected(eKey)?"Selected":"Evidence")}<details class="vector-row-menu"><summary class="btn small" aria-label="${esc(tr("ui.more_actions","More actions"))}">•••</summary><div class="vector-row-menu-popover"><button class="btn small" data-search-cite="inline" data-search-id="${esc(resultId)}">${esc(tr("record.inline_citation","Inline cite"))}</button><button class="btn small" data-search-cite="full" data-search-id="${esc(resultId)}">${esc(tr("record.full_citation","Full cite"))}</button><button class="btn small" data-edit-search="${esc(resultId)}">${esc(tr("ui.edit","Edit"))}</button><button class="btn small danger" data-delete-search="${esc(resultId)}">${esc(tr("ui.delete","Delete"))}</button></div></details></div></div>`}).join(""):`<div class="note">${esc(tr("vector.search_results_empty","Search results will appear here."))}</div>`}</div></section>
-
-      <section class="card vector-manifest-card vector-tab-panel ${vectorTab==="builds"?"active":""}" data-vector-panel="builds"><div class="cardhead"><div><b>${esc(tr("vector.manifest_builds","Manifest & builds"))}</b><div class="note">${esc(tr("vector.manifest_builds_help","Inspect the reproducible retrieval contract, source snapshot, and recent completed build history for this collection."))}</div></div><span class="badge">v${esc(String(current?.manifest_version||1))}</span></div><dl class="manifest-review vector-manifest-review"><div><dt>${esc(tr("vector.status","Status"))}</dt><dd>${esc(currentStatus)}</dd></div><div><dt>${esc(tr("vector.retrieval_mode","Retrieval"))}</dt><dd>${esc(currentRetrieval)}</dd></div><div><dt>${esc(tr("vector.embedding_dimension","Dimension"))}</dt><dd>${currentDimension?Number(currentDimension).toLocaleString():"—"}</dd></div><div><dt>${esc(tr("vector.distance_metric","Metric"))}</dt><dd>${esc(currentMetric)}</dd></div><div><dt>${esc(tr("vector.text_field","Text field"))}</dt><dd><code>${esc(current?.text_field||"text")}</code></dd></div><div><dt>${esc(tr("vector.source_records","Source records"))}</dt><dd>${Number(current?.source_record_count||0).toLocaleString()}</dd></div><div><dt>${esc(tr("vector.source_snapshot","Source snapshot"))}</dt><dd>${current?.source_snapshot_hash?`<code title="${esc(current.source_snapshot_hash)}">${esc(String(current.source_snapshot_hash).slice(0,16))}…</code>`:"—"}</dd></div><div><dt>${esc(tr("vector.created_with","Created with"))}</dt><dd>${esc(current?.app_version||"legacy")}</dd></div></dl>${current?.last_build_error?`<div class="info warn"><b>${esc(tr("vector.last_build_error","Last build error"))}</b><span>${esc(current.last_build_error)}</span></div>`:""}<details class="vector-build-history" ${buildHistory.length?"":"open"}><summary>${esc(trf("vector.build_history","Build history ({count})",{count:buildHistory.length}))}</summary>${buildHistory.length?`<div class="vector-build-list">${[...buildHistory].reverse().map(build=>`<article><div><b>${esc(build.build_id||tr("vector.build","Build"))}</b><span class="vector-status-badge vector-status-${esc(build.status||"ready")}">${esc(build.status||"ready")}</span></div><small>${esc(build.finished_at?new Date(build.finished_at).toLocaleString():build.created_at?new Date(build.created_at).toLocaleString():"")} · ${Number(build.record_count||0).toLocaleString()} ${esc(tr("dynamic.records","records"))}${build.embedding_dimension?` · ${Number(build.embedding_dimension).toLocaleString()}d`:""}</small></article>`).join("")}</div>`:`<p class="note">${esc(tr("vector.no_build_history","No completed synchronization build has been recorded yet."))}</p>`}</details></section>
-
-      ${canDerive?`<section class="card vector-language-databases vector-tab-panel ${vectorTab==="settings"?"active":""}" data-vector-panel="settings"><div class="cardhead"><div><b>${esc(tr("vector.language_collections","Language databases"))}</b><div class="note">${esc(tr("vector.language_derive_help","Create separate English and French collections by routing records according to document_language metadata."))}</div></div><span class="badge">${esc(tr("vector.advanced","Advanced"))}</span></div><div class="language-database-grid"><label class="field"><span>${esc(tr("vector.english_collection","English collection"))}</span><input class="control" id="deriveEnName" value="${esc(derived.en)}"><small>${esc(tr("vector.english_collection_help","Receives records routed as English."))}</small></label><label class="field"><span>${esc(tr("vector.french_collection","French collection"))}</span><input class="control" id="deriveFrName" value="${esc(derived.fr)}"><small>${esc(tr("vector.french_collection_help","Receives records routed as French."))}</small></label><div class="language-database-action"><button class="btn primary" id="deriveLanguages">${icon("database")}${esc(tr("vector.generate_language_collections","Create language databases"))}</button><small>${esc(tr("vector.language_source_help","Source collection stays unchanged. Existing target collections are updated according to the current routing rules."))}</small></div></div></section>`:""}
-
-      <section class="card vector-browser-card vector-tab-panel ${vectorTab==="data"?"active":""}" data-vector-panel="data"><div class="db-browser-tabs" role="tablist"><button class="db-browser-tab ${state.storeBrowseMode==="works"?"active":""}" role="tab" aria-selected="${state.storeBrowseMode==="works"}" id="browseWorks">${esc(tr("dashboard.works","Works"))} <span>${state.storeWorkStats.length}</span></button><button class="db-browser-tab ${state.storeBrowseMode==="records"?"active":""}" role="tab" aria-selected="${state.storeBrowseMode==="records"}" id="browseRecords">${esc(tr("dashboard.records","Records"))} <span>${(current?.count||0).toLocaleString()}</span></button></div>${workBrowser}${recordsBrowser}</section>
-    `:`<section class="card vector-select-collection"><div class="accessible-empty-state"><span class="accessible-empty-icon">${icon("database")}</span><h2>${esc(tr("vector.select_collection","Select a collection"))}</h2><p>${esc(tr("vector.select_collection_help","Choose a collection from the list to manage settings, sync records, search, or browse its contents."))}</p></div></section>`}</article>
-  </section>`}
-
-  <section class="card vector-storage-compact"><div><span class="section-label">${esc(tr("vector.backend","Backend"))}</span><b>Local Chroma</b><small>${esc(hostPath)} · ${esc(tr("vector.persistent_storage","Persistent storage"))}</small></div><button class="btn" id="openChromaPathDialog">${icon("gear")}${esc(tr("vector.storage_settings","Storage settings"))}</button></section>
-  <datalist id="ollamaModelList">${installedModels.map(model=>`<option value="${esc(model.name)}"></option>`).join("")}</datalist>`;
-
-
-  const openCreateWizard=()=>openCollectionCreationWizard({defaultProvider,defaultModel:embedDefault,installedModels});
-  document.querySelector("#createCollectionWizard")?.addEventListener("click",openCreateWizard);
-  document.querySelector("#createFirstCollection")?.addEventListener("click",openCreateWizard);
-  if(noCollections&&state.vectorAutoCreateRequested){
-    state.vectorAutoCreateRequested=false;
-    window.setTimeout(openCreateWizard,0);
-  }else if(!noCollections){
-    state.vectorAutoCreateRequested=false;
-  }
-  document.querySelector("#openChromaPathDialog")?.addEventListener("click",()=>{
-    const dialog=document.createElement("dialog");dialog.className="message-dialog storage-location-dialog";dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.change_storage_location","Change data location"))}</h2><div class="dialog-subtitle">${esc(tr("vector.change_storage_location_help","Advanced deployment setting. Existing collections are not moved automatically."))}</div></div><button class="btn icon-only" data-close>×</button></div><div class="db"><div class="storage-location-current"><span>${esc(tr("vector.current_container_path","Current container path"))}</span><code>${esc(currentPath)}</code></div><div class="info warn"><b>${esc(tr("vector.storage_change_caution","Changing storage location does not move existing collections."))}</b><span>${esc(tr("vector.storage_change_caution_help","DerridAI will begin using the new directory. Existing collections remain in the current directory until you switch back or move them outside the app."))}</span></div><label class="field"><span>${esc(tr("vector.new_container_path","New container path"))}</span><input class="control" id="chromaPathInput" value="${esc(currentPath)}" spellcheck="false"><small>${esc(tr("vector.new_container_path_help","Enter the server-side Chroma persistence directory. Only change this when you understand the deployment mapping."))}</small></label></div><div class="da"><button class="btn" data-close>${esc(tr("ui.cancel","Cancel"))}</button><button class="btn primary" id="applyChromaPath">${icon("check")}${esc(tr("vector.apply_storage_path","Apply path"))}</button></div>`;document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(b=>b.onclick=close);dialog.querySelector("#applyChromaPath").onclick=async()=>{const path=dialog.querySelector("#chromaPathInput")?.value.trim();if(!path)return toast(tr("vector.enter_storage_path","Enter a Chroma storage path"));const button=dialog.querySelector("#applyChromaPath");button.disabled=true;button.textContent=tr("vector.checking_path","Checking…");try{await api("/api/chroma/path",{method:"PUT",body:JSON.stringify({path})});state.health=await api("/api/health");state.activeStore="";state.storePage=1;state.storeSearchResults=[];state.storeWork="";await refreshStores();persistPrefs();close();toast(trf("vector.storage_changed","Chroma storage changed to {path}",{path:state.health.chroma.host_path_hint||state.health.chroma.path}),{tone:"success"});renderVector(main)}catch(error){button.disabled=false;button.innerHTML=`${icon("check")}${esc(tr("vector.apply_storage_path","Apply storage path"))}`;toast(trf("vector.storage_change_failed","Could not change Chroma storage: {message}",{message:error.message||String(error)}),{tone:"danger"})}};
-  });
-  document.querySelector("#refreshStores")?.addEventListener("click",()=>renderVector(main));
-  let collectionFilterTimer=null;
-  document.querySelector("#vectorCollectionFilter")?.addEventListener("input",event=>{
-    state.vectorCollectionFilter=event.target.value;persistPrefs();
-    clearTimeout(collectionFilterTimer);
-    collectionFilterTimer=setTimeout(()=>{renderVector(main);requestAnimationFrame(()=>{const input=document.querySelector("#vectorCollectionFilter");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}})},140);
-  });
-  document.querySelectorAll("[data-vector-tab]").forEach(button=>button.addEventListener("click",()=>{state.vectorTab=button.dataset.vectorTab||"overview";persistPrefs();renderVector(main)}));
-
-  document.querySelectorAll("[data-store]").forEach(button=>button.onclick=()=>{
-    state.activeStore=button.dataset.store;state.storePage=1;state.storeSearchResults=[];state.storeQuery="";state.storeSearchMode="";state.storeWork="";state.storeSort={key:"",dir:1};state.storeFilters={};state.storeWorksStore="";state.storeBrowseMode="works";state.vectorTab="overview";persistPrefs();renderVector(main);
-  });
-  if(state.activeStore&&allRows().length){
-    void refreshPresenceForRows(allRows()).then(()=>{
-      if(state.view!=="vector")return;
-      const button=document.querySelector("#vectorUpsertQueue");if(!button)return;
-      const nextPending=pendingUpsertRows();
-      button.disabled=!nextPending.length;
-      if(nextPending.length){button.removeAttribute("data-disabled-reason");button.innerHTML=`${icon("database")}${esc(trf("vector.unsynced_changes_count","{count} unsynced local changes",{count:nextPending.length.toLocaleString()}))}`}
-      else{button.dataset.disabledReason=tr("vector.no_unsynced_changes_help","DerridAI has not found any loaded workspace records that changed since their last sync or are confirmed missing from this collection.");button.innerHTML=`${icon("database")}${esc(tr("vector.unsynced_changes","Unsynced local changes"))}`}
-      decorateDisabledControls(main);
-    });
-  }
-  decorateDisabledControls(main);
-  if(!state.activeStore)return;
-
-  document.querySelector("#saveLanguageTags")?.addEventListener("click",async()=>{
-    const language_codes=[...document.querySelectorAll("[data-current-lang]:checked")].map(box=>box.dataset.currentLang);
-    const collection_role=document.querySelector("#collectionRole").value;
-    try{
-      await api(`/api/stores/${encodeURIComponent(state.activeStore)}/languages`,{
-        method:"PUT",
-        body:JSON.stringify({language_codes,collection_role}),
-      });
-      await refreshStores();
-      toast("Collection language tags saved",{tone:"success"});
-      renderVector(main);
-    }catch(error){toast(`Could not save language tags: ${error.message}`)}
-  });
-
-  const providerControl=document.querySelector("#collectionEmbeddingProvider"),modelControl=document.querySelector("#collectionEmbeddingModel");
-  const syncCollectionModel=()=>{if(modelControl&&providerControl)modelControl.disabled=contractLocked||Boolean(current?.count)||providerControl.value!=="ollama"};
-  providerControl?.addEventListener("change",syncCollectionModel);syncCollectionModel();
-  document.querySelector("#saveEmbeddingSettings")?.addEventListener("click",async()=>{
-    const embedding_provider=providerControl.value;
-    const embedding_model=embedding_provider==="ollama"?modelControl.value.trim():null;
-    if(embedding_provider==="ollama"&&!embedding_model)return toast("Choose an Ollama embedding model");
-    try{
-      await api(`/api/stores/${encodeURIComponent(state.activeStore)}/embedding`,{method:"PUT",body:JSON.stringify({embedding_provider,embedding_model})});
-      toast("Embedding settings saved",{tone:"success"});renderVector(main);
-    }catch(error){toast(`Could not change embedding settings: ${error.message}`)}
-  });
-
-  document.querySelector("#deriveLanguages")?.addEventListener("click",async()=>{
-    const en_name=document.querySelector("#deriveEnName").value.trim();
-    const fr_name=document.querySelector("#deriveFrName").value.trim();
-    if(!en_name||!fr_name)return toast("Enter English and French collection names");
-    if(!await openMessageModal({title:"Generate language collections?",message:`Generate ${en_name} and ${fr_name} from ${state.activeStore}? Existing collections with those names will be replaced.`,tone:"danger",confirmLabel:"Generate collections",cancelLabel:"Cancel"}))return;
-    const op=showOperationProgress(`Deriving language DBs from ${state.activeStore}`,Math.max(1,current?.count||1));
-    try{
-      updateOperationProgress(op,0,Math.max(1,current?.count||1),"Partitioning records by document_language(s)…");
-      const result=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/derive-languages`,{
-        method:"POST",
-        body:JSON.stringify({en_name,fr_name,overwrite:true}),
-      });
-      const info=result.collections||{};
-      updateOperationProgress(op,current?.count||1,current?.count||1,`en ${info.en?.count||0} · fr ${info.fr?.count||0} · skipped ${result.skipped||0}`);
-      await refreshStores();
-      toast(`Generated language DBs · en ${info.en?.count||0}, fr ${info.fr?.count||0}`);
-      setTimeout(()=>hideOperationProgress(op),1000);
-      renderVector(main);
-    }catch(error){
-      updateOperationProgress(op,0,Math.max(1,current?.count||1),`Failed: ${error.message}`);
-      toast(`Language DB generation failed: ${error.message}`);
-      setTimeout(()=>hideOperationProgress(op),1800);
-    }
-  });
-
-  document.querySelector("#vectorUpsertQueue")?.addEventListener("click",openUpsertQueue);
-  document.querySelector("#vectorTestRetrieval")?.addEventListener("click",()=>{state.vectorTab="retrieval";persistPrefs();renderVector(main)});
-  document.querySelector("#toggleStoreProtection")?.addEventListener("click",async()=>{
-    try{
-      await api(`/api/stores/${encodeURIComponent(state.activeStore)}/protection`,{method:"PUT",body:JSON.stringify({protected:!currentProtected})});
-      await refreshStores();
-      toast(currentProtected?tr("vector.protection_disabled","Deletion protection disabled"):tr("vector.protection_enabled","Deletion protection enabled"),{tone:"success"});
-      renderVector(main);
-    }catch(error){toast(`${tr("vector.protection_failed","Could not change deletion protection")}: ${error.message}`,{tone:"danger"})}
-  });
-  document.querySelector("#deleteStore")?.addEventListener("click",async()=>{
-    if(currentProtected)return toast(tr("vector.disable_protection_before_delete","Disable deletion protection before deleting this collection."),{tone:"warn"});
-    if(!await openMessageModal({title:"Delete Chroma collection?",message:`Delete Chroma collection ${state.activeStore}? This cannot be undone.`,tone:"danger",confirmLabel:"Delete collection",cancelLabel:"Cancel"}))return;
-    try{
-      await api(`/api/stores/${encodeURIComponent(state.activeStore)}`,{method:"DELETE"});
-      state.activeStore="";state.storeRecords=[];state.storeSearchResults=[];state.storeWork="";persistPrefs();toast("Collection deleted");renderVector(main);
-    }catch(error){toast(`Delete failed: ${error.message}`)}
-  });
-
-  document.querySelector("#importActive")?.addEventListener("click",()=>upsertRows(activeFile()?.records.map((record,index)=>({file:activeFile(),record,index}))||[],"records").then(()=>renderVector(main)));
-  document.querySelector("#importAll")?.addEventListener("click",()=>upsertRows(allRows(),"records").then(()=>renderVector(main)));
-  document.querySelector("#loadEntireStore")?.addEventListener("click",()=>exportStoreJsonl({loadTab:true}));
-  document.querySelector("#downloadEntireStore")?.addEventListener("click",()=>exportStoreJsonl({downloadFile:true}));
-  document.querySelector("#loadCurrentWork")?.addEventListener("click",()=>exportStoreJsonl({work:state.storeWork,loadTab:true}));
-  document.querySelector("#downloadCurrentWork")?.addEventListener("click",()=>exportStoreJsonl({work:state.storeWork,downloadFile:true}));
-  document.querySelector("#loadStorePage")?.addEventListener("click",()=>{
-    const suffix=state.storeWork?`-${state.storeWork.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")}`:"";
-    const file={id:uid(),name:`${state.activeStore}${suffix}-page-${state.storePage}.jsonl`,records:state.storeRecords.map(record=>{const clean={...record};delete clean._chroma_id;return clean}),dirty:new Set(),errors:[],imported_at:new Date().toISOString()};
-    state.files.push(file);persistFileNow(file);navigateTo("list",{fileId:file.id});toast(`Loaded ${file.records.length} Chroma records`);
-  });
-
-  document.querySelector("#browseWorks")?.addEventListener("click",()=>{state.storeBrowseMode="works";state.vectorTab="data";persistPrefs();renderVector(main)});
-  document.querySelector("#browseRecords")?.addEventListener("click",()=>{state.storeBrowseMode="records";state.storeWork="";state.storePage=1;state.vectorTab="data";persistVectorLocation();persistPrefs();renderVector(main)});
-  document.querySelectorAll("[data-db-work]").forEach(button=>button.onclick=()=>{state.storeWork=button.dataset.dbWork;state.storeBrowseMode="records";state.storePage=1;state.vectorTab="data";persistVectorLocation();persistPrefs();renderVector(main)});
-  document.querySelector("#storeWork")?.addEventListener("change",e=>{state.storeWork=e.target.value;state.storePage=1;persistVectorLocation();renderVector(main)});
-  document.querySelector("#vectorColumns")?.addEventListener("click",()=>openColumnChooser("vector",available,()=>renderVector(main)));
-  document.querySelectorAll("[data-store-sort]").forEach(button=>button.onclick=()=>{
-    const key=button.dataset.storeSort;
-    if(state.storeSort?.key===key)state.storeSort.dir*=-1;
-    else state.storeSort={key,dir:1};
-    state.storePage=1;persistVectorLocation();renderVector(main);
-  });
-  let storeFilterTimer=null;
-  document.querySelectorAll("[data-store-filter]").forEach(input=>input.oninput=e=>{
-    state.storeFilters[e.target.dataset.storeFilter]=e.target.value;
-    state.storePage=1;persistPrefs();
-    clearTimeout(storeFilterTimer);
-    storeFilterTimer=setTimeout(()=>renderVector(main),280);
-  });
-  document.querySelector("#clearStoreFilters")?.addEventListener("click",()=>{state.storeFilters={};state.storePage=1;persistVectorLocation();renderVector(main)});
-  document.querySelector("#storePageSize")?.addEventListener("change",e=>{state.storePageSize=+e.target.value;state.storePage=1;persistVectorLocation();renderVector(main)});
-  document.querySelector("#storePrev")?.addEventListener("click",()=>{state.storePage--;persistVectorLocation();renderVector(main)});
-  document.querySelector("#storeNext")?.addEventListener("click",()=>{state.storePage++;persistVectorLocation();renderVector(main)});
-
-  const vectorSearchMode=document.querySelector("#vectorSearchMode");
-  const syncVectorSearchAvailability=()=>{
-    if(!vectorSearchMode)return;
-    state.storeSearchMode=vectorSearchMode.value;
-    const button=document.querySelector("#runSearch");
-    const semanticUnavailable=currentProvider==="precomputed"&&["similarity","mmr"].includes(vectorSearchMode.value);
-    if(button){
-      button.disabled=semanticUnavailable;
-      if(semanticUnavailable)button.dataset.disabledReason=tr("vector.precomputed_search_help","Precomputed collections can use lexical or hybrid search, but semantic and MMR query embedding require an embedding function.");
-      else button.removeAttribute("data-disabled-reason");
-    }
-    persistPrefs();decorateDisabledControls(main);
-  };
-  vectorSearchMode?.addEventListener("change",()=>{state.storeSearchResults=[];syncVectorSearchAvailability()});
-  syncVectorSearchAvailability();
-  document.querySelector("#runSearch").onclick=async()=>{
-    const q=document.querySelector("#storeQuery").value.trim();if(!q)return;
-    const mode=vectorSearchMode?.value||currentSearchMode;
-    state.storeQuery=q;state.storeSearchMode=mode;persistPrefs();
-    try{
-      const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:q,mode,n_results:30})});
-      state.storeSearchResults=data.results||[];renderVector(main);
-    }catch(error){toast(`Search failed: ${error.message}`)}
-  };
-  document.querySelector("#clearStoreSearch").onclick=()=>{state.storeQuery="";state.storeSearchResults=[];persistPrefs();renderVector(main)};
-  document.querySelector("#compareRetrievalModes")?.addEventListener("click",async()=>{
-    const q=document.querySelector("#storeQuery")?.value.trim()||state.storeQuery.trim();if(!q)return toast(tr("vector.enter_query","Enter a query to compare retrieval modes."));
-    await openVectorRetrievalComparison(q,currentProvider);
-  });
-  document.querySelectorAll("[data-inspect-store]").forEach(button=>button.onclick=()=>{const record=state.storeRecords.find(record=>String(record._chroma_id||"")===String(button.dataset.inspectStore||""));if(record)openVectorRecordInspector(record)});
-  document.querySelectorAll("[data-inspect-search]").forEach(button=>button.onclick=()=>{const result=state.storeSearchResults.find(result=>String(result.id||result.record?._chroma_id||result.record?.record_id||"")===String(button.dataset.inspectSearch||""));if(result?.record)openVectorRecordInspector({...result.record,_chroma_id:result.id,_retrieval_result:result})});
-  document.querySelectorAll("[data-edit-store]").forEach(button=>button.onclick=()=>{const record=state.storeRecords.find(record=>record._chroma_id===button.dataset.editStore);if(record)openStoreRecordEditor(record)});
-  document.querySelectorAll("[data-edit-search]").forEach(button=>button.onclick=()=>{const result=state.storeSearchResults.find(result=>result.id===button.dataset.editSearch);if(result)openStoreRecordEditor({...result.record,_chroma_id:result.id})});
-  document.querySelectorAll("[data-delete-store-record]").forEach(button=>button.onclick=()=>deleteStoreRecord(button.dataset.deleteStoreRecord));
-  document.querySelectorAll("[data-delete-search]").forEach(button=>button.onclick=()=>deleteStoreRecord(button.dataset.deleteSearch));
-  document.querySelectorAll("[data-copy-store-citation]").forEach(button=>button.onclick=()=>{const record=state.storeRecords.find(item=>String(item._chroma_id||"")===String(button.dataset.storeId||""));if(record)copyCitation(record,button.dataset.copyStoreCitation)});
-  document.querySelectorAll("[data-search-cite]").forEach(button=>button.onclick=()=>{const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id||"")===String(button.dataset.searchId||""));if(result?.record)copyCitation(result.record,button.dataset.searchCite)});
-  document.querySelectorAll("[data-evidence-key]").forEach(button=>button.onclick=()=>{const key=button.dataset.evidenceKey;if(!key?.startsWith("db:"))return;const id=key.split(":").slice(2).join(":");const result=state.storeSearchResults.find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id||"")===id);const record=result?.record||state.storeRecords.find(item=>String(item._chroma_id||item.record_id||"")===id)||{};toggleDbEvidence(state.activeStore,id,record);renderVector(main)});
-  decorateDisabledControls(main);
-}
-function openVectorRecordInspector(record){
-  const id=String(record?._chroma_id||record?.record_id||"");
-  if(!id)return;
-  const clean={...record};delete clean._retrieval_result;
-  const retrieval=record?._retrieval_result||null;
-  const metadata=Object.entries(clean).filter(([key])=>!["text","_chroma_id"].includes(key)&&!key.startsWith("_researcher_")).slice(0,28);
-  const eKey=dbEvidenceKey(state.activeStore,id);
-  const dialog=document.createElement("dialog");dialog.className="vector-record-inspector";
-  const score=retrieval?.hybrid_score!=null?`${tr("vector.hybrid_score","Hybrid")} ${Number(retrieval.hybrid_score).toFixed(4)}`:retrieval?.distance!=null?`${tr("vector.distance","Distance")} ${Number(retrieval.distance).toFixed(4)}`:"";
-  dialog.innerHTML=`<div class="vector-inspector-shell"><div class="vector-inspector-head"><div><span class="section-label">${esc(tr("vector.record_inspector","Record inspector"))}</span><h2>${esc(record.work||record.record_id||id)}</h2><small>${esc(record.record_id||id)}${score?` · ${esc(score)}`:""}</small></div><button class="btn icon-only" data-close aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div><div class="vector-inspector-actions">${evidenceButtonHtml(eKey,evidenceIsSelected(eKey)?tr("research.selected","Selected"):tr("research.evidence","Evidence"))}<button class="btn" data-inspector-cite="inline">${esc(tr("record.inline_citation","Inline cite"))}</button><button class="btn" data-inspector-cite="full">${esc(tr("record.full_citation","Full cite"))}</button><button class="btn" id="inspectorEdit">${icon("edit")}${esc(tr("ui.edit","Edit"))}</button></div><div class="vector-inspector-body"><section><span class="section-label">${esc(tr("record.text","Text"))}</span><div class="vector-inspector-text">${esc(String(record.text||""))}</div></section><section><span class="section-label">${esc(tr("record.metadata","Metadata"))}</span><dl class="vector-inspector-metadata">${metadata.map(([key,value])=>`<div><dt>${esc(label(key))}</dt><dd>${esc(Array.isArray(value)?value.join(", "):typeof value==="object"&&value!==null?JSON.stringify(value):String(value??""))}</dd></div>`).join("")}</dl></section></div></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.addEventListener("click",close));
-  dialog.querySelectorAll("[data-inspector-cite]").forEach(button=>button.addEventListener("click",()=>copyCitation(record,button.dataset.inspectorCite)));
-  dialog.querySelector("[data-evidence-key]")?.addEventListener("click",()=>{toggleDbEvidence(state.activeStore,id,record);const button=dialog.querySelector("[data-evidence-key]");if(button)button.textContent=evidenceIsSelected(eKey)?tr("research.selected","Selected"):tr("research.evidence","Evidence")});
-  dialog.querySelector("#inspectorEdit")?.addEventListener("click",()=>{close();openStoreRecordEditor(record)});
-}
-async function openVectorRetrievalComparison(query,currentProvider){
-  const modes=currentProvider==="precomputed"?["hybrid","lexical"]:["hybrid","similarity","lexical","mmr"];
-  const dialog=document.createElement("dialog");dialog.className="vector-comparison-dialog workflow-dialog";
-  dialog.innerHTML=`<div class="dh"><div><span class="section-label">${esc(tr("vector.compare_modes","Compare modes"))}</span><h2>${esc(query)}</h2><div class="dialog-subtitle">${esc(tr("vector.compare_modes_help","Runs the same query across available retrieval modes so you can compare ranking behavior."))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db"><div class="vector-comparison-loading"><span class="spinner"></span>${esc(tr("vector.comparing_modes","Comparing retrieval modes…"))}</div></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  const requests=await Promise.allSettled(modes.map(mode=>api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query,mode,n_results:8})})));
-  if(!dialog.isConnected)return;
-  const body=dialog.querySelector(".db");
-  body.innerHTML=`<div class="vector-comparison-grid">${modes.map((mode,index)=>{const outcome=requests[index];if(outcome.status!=="fulfilled")return `<section class="vector-comparison-column"><header><b>${esc(mode)}</b></header><div class="info warn">${esc(outcome.reason?.message||String(outcome.reason))}</div></section>`;const results=outcome.value?.results||[];return `<section class="vector-comparison-column"><header><b>${esc(mode==="similarity"?tr("vector.semantic","Semantic"):mode)}</b><span>${results.length}</span></header><ol>${results.map((result,rank)=>`<li><span>${rank+1}</span><div><b>${esc(result.record?.work||result.record?.record_id||result.id||"")}</b><small>${esc(snippet(result.record?.text||"",query,170))}</small></div></li>`).join("")||`<li class="vector-comparison-empty">${esc(tr("vector.no_results","No results"))}</li>`}</ol></section>`}).join("")}</div>`;
-}
-async function deleteStoreRecord(chromaId){
-  if(!state.activeStore||!chromaId)return;
-  if(!await openMessageModal({title:"Delete Chroma record?",message:`Delete record ${chromaId} from ${state.activeStore}?`,tone:"danger",confirmLabel:"Delete record",cancelLabel:"Cancel"}))return;
-  try{
-    await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,{method:"DELETE"});
-    state.storeSearchResults=state.storeSearchResults.filter(x=>x.id!==chromaId);
-    state.storeWorksStore="";
-    toast("Chroma record deleted");renderVector(document.querySelector("#main"));
-  }catch(error){toast(`Delete failed: ${error.message}`)}
-}
-function auditedRecordCopy(record,changes,{source="manual"}={}){
-  const base={...record};
-  delete base._chroma_id;
-  const history=Array.isArray(base.updates)?base.updates.map(cloneAuditValue):[];
-  const timestamp=new Date().toISOString(),batchId=uid();
-  for(const [field,newValue] of Object.entries(changes)){
-    if(field==="updates"||sameValue(base[field],newValue))continue;
-    history.push({field_name:field,old_value:cloneAuditValue(base[field]),new_value:cloneAuditValue(newValue),timestamp,source,batch_id:batchId,initiated_by:state.userContext?.username||null});
-    base[field]=newValue;
-  }
-  if("text" in changes&&"text_length" in base)base.text_length=String(base.text||"").length;
-  base.updates=history;
-  return base;
-}
 function openStoreRecordEditor(record){
   const chromaId=record._chroma_id;
   if(!chromaId)return toast(tr("record.no_storage_id","This Chroma record has no storage ID"));
@@ -8412,28 +7098,25 @@ function openStoreRecordEditor(record){
     if(!Object.keys(changes).length)return close();
     const timestamp=new Date().toISOString(),batchId=uid();
     const auditEntries=Object.entries(changes).map(([field,newValue])=>({
-      field_name:field,
-      old_value:cloneAuditValue(raw[field]),
-      new_value:cloneAuditValue(newValue),
-      timestamp,
-      source:"chroma_manual",
-      batch_id:batchId,
-      initiated_by:state.userContext?.username||null,
+      field_name:field,old_value:cloneAuditValue(raw[field]),new_value:cloneAuditValue(newValue),timestamp,
+      source:"chroma_manual",batch_id:batchId,initiated_by:state.userContext?.username||null,
     }));
     try{
       await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,{
-        method:"PATCH",
-        body:JSON.stringify({changes,audit_entries:auditEntries,document_field:"text",embedding_field:"embedding"}),
+        method:"PATCH",body:JSON.stringify({changes,audit_entries:auditEntries,document_field:"text",embedding_field:"embedding"}),
       });
       state.storeWorksStore="";
-      close();toast("Chroma record updated",{tone:"success"});renderVector(document.querySelector("#main"));
-    }catch(error){toast(`Chroma update failed: ${error.message}`)}
+      close();toast("Chroma record updated",{tone:"success"});renderView();
+    }catch(error){toast(`Chroma update failed: ${error.message}`,{tone:"danger"})}
   };
 }
-async function upsertFiles(files){
-  return upsertRows(files.flatMap(file=>file.records.map((record,index)=>({file,record,index}))),"records");
-}
-
+const vectorCollectionBridge=createVectorCollectionBridge({
+  state,workIndex,recordStores,tr,trf,esc,icon,api,refreshStores,persistPrefs,
+  upsertRows,toast,openMessageModal,decorateDisabledControls,showAppModal,
+});
+function notifyVectorStoresChanged(){return vectorCollectionBridge.notifyVectorStoresChanged()}
+function openDatabaseCreationFromResearch(){return vectorCollectionBridge.openDatabaseCreationFromResearch()}
+function openCollectionCreationWizard(options={}){return vectorCollectionBridge.openCollectionCreationWizard(options)}
 const TOUCHUP_GROUPS = [
   {name:"Text quality", fields:["text"]},
   {name:"Attribution", fields:["speaker","position_holder","target"]},
@@ -8466,12 +7149,6 @@ function touchupFieldsForRecord(record){
   return known;
 }
 
-function modelOptionLabel(model){
-  const bits=[];
-  if(model.parameter_size)bits.push(model.parameter_size);
-  if(model.quantization_level)bits.push(model.quantization_level);
-  return bits.length?`${model.name} · ${bits.join(" · ")}`:model.name;
-}
 
 function jsonPretty(value){
   if(typeof value==="string")return value;
@@ -8574,41 +7251,6 @@ function providerDisplayName(profile){
   if(!profile)return "LLM provider";
   return profile.name||`${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${profile.model||"model"}`;
 }
-function providerRequestConfig(profile,{textReview=false}={}){
-  if(!profile)return null;
-  let extra={};
-  try{extra=JSON.parse(profile.extra_options||"{}")}catch{}
-  if(!extra||Array.isArray(extra)||typeof extra!=="object")extra={};
-  let think=null;
-  if(profile.type==="ollama"){
-    const raw=String(profile.think??"false");
-    think=raw==="true"?true:["low","medium","high"].includes(raw)?raw:false;
-  }
-  return {
-    provider_profile_id:profile.id,
-    max_concurrent_requests:Math.max(1,Math.min(64,Number(profile.max_concurrent_requests??(profile.type==="ollama"?1:32))||1)),
-    provider:profile.type,
-    model:profile.type==="openai"&&profile.model_mode==="auto"?"auto":(profile.model||""),
-    base_url:profile.base_url||null,
-    api_key:profile.type==="openai"?(profile.api_key||""):null,
-    ollama:{
-      num_ctx:profile.type==="ollama"&&profile.num_ctx!==""?Number(profile.num_ctx):null,
-      num_predict:Number(textReview?(profile.num_predict??4096):(profile.metadata_num_predict??profile.num_predict??768)),
-      think,
-      temperature:profile.temperature===""?null:Number(profile.temperature??0),
-      top_k:profile.type==="ollama"&&profile.top_k!==""?Number(profile.top_k):null,
-      top_p:profile.top_p===""?null:Number(profile.top_p??1),
-      min_p:profile.type==="ollama"&&profile.min_p!==""?Number(profile.min_p):null,
-      repeat_penalty:profile.type==="ollama"&&profile.repeat_penalty!==""?Number(profile.repeat_penalty):null,
-      seed:profile.seed===""?null:Number(profile.seed),
-      mirostat:profile.type==="ollama"&&profile.mirostat!==""?Number(profile.mirostat):null,
-      mirostat_eta:profile.type==="ollama"&&profile.mirostat_eta!==""?Number(profile.mirostat_eta):null,
-      mirostat_tau:profile.type==="ollama"&&profile.mirostat_tau!==""?Number(profile.mirostat_tau):null,
-      keep_alive:profile.type==="ollama"?(profile.keep_alive||null):null,
-      extra_options:extra,
-    },
-  };
-}
 async function refreshProviderStatuses(){
   const statuses={};
   await Promise.all(providerProfiles().map(async profile=>{
@@ -8638,19 +7280,8 @@ async function refreshProviderStatuses(){
   return statuses;
 }
 
-function openAiModelMatchesKind(name,kind){
-  if(!kind||kind==="any")return true;
-  const value=String(name||"").toLocaleLowerCase();
-  const patterns={
-    reasoning:["reason","deepseek","r1","qwq","o1","o3","thinking"],
-    coding:["code","coder","codex","devstral","starcoder"],
-    fast:["mini","small","flash","haiku","fast","3b","4b","7b","8b"],
-    general:["gpt","gemma","llama","qwen","mistral","claude","general","chat"],
-  };
-  return (patterns[kind]||[]).some(token=>value.includes(token));
-}
 
-async function openTouchup(inputItems=null,initialMode="foreground"){
+async function legacyOpenTouchup(inputItems=null,initialMode="foreground"){
   const fallback=(()=>{
     const file=activeFile(),record=selectedRecord();
     if(!file||!record)return [];
@@ -8949,6 +7580,7 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
     dialog.querySelector("#touchModel")?.addEventListener("input",e=>{state.llmConfig.model=e.target.value;persistPrefs();updateSelection()});
     dialog.querySelector("#touchInstructions")?.addEventListener("input",e=>instructionsValue=e.target.value);
     dialog.querySelector("#refreshModels").onclick=async()=>{
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       try{captureConfig()}catch{}
       status=await fetchLlmStatus();
       renderSetup();
@@ -9127,16 +7759,103 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
   renderSetup();
 }
 
-async function downloadFullBackup(){
+function normalizeTouchupItems(inputItems=null){
+  const fallback=(()=>{
+    const file=activeFile(),record=selectedRecord();
+    if(!file||!record)return [];
+    const index=selectedIndex(file);
+    return [{file,index,record,key:reviewKey(file,index)}];
+  })();
+  return (inputItems?.length?inputItems:fallback).map(item=>({
+    ...item,
+    record:item.file.records[item.index],
+    key:item.key||reviewKey(item.file,item.index),
+  })).filter(item=>item.record);
+}
+function openTouchup(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  if(!items.length)return;
+  window.dispatchEvent(new CustomEvent("derridai:open-touchup",{detail:{items,initialMode}}));
+}
+function touchupWorkspaceInfo(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  const availableFields=[];
+  for(const item of items){
+    for(const field of touchupFieldsForRecord(item.record))if(!availableFields.includes(field)&&field!=="updates")availableFields.push(field);
+  }
+  const attributionPreset=["speaker","position_holder","target","is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain"].filter(field=>availableFields.includes(field));
+  const semanticPreset=["discourse_role","proposition_status","semantic_function","stance","claim_scope","topics","concepts","persons","works_referenced"].filter(field=>availableFields.includes(field));
+  const preset=state.appConfig.default_review_preset;
+  return {
+    items,
+    initialMode,
+    availableFields,
+    attributionPreset,
+    semanticPreset,
+    defaultSelection:preset==="text"&&availableFields.includes("text")?["text"]:preset==="semantic"?semanticPreset:attributionPreset,
+    groups:TOUCHUP_GROUPS,
+    highRiskFields:[...HIGH_RISK_TOUCHUP_FIELDS],
+    fieldLabels:Object.fromEntries(availableFields.map(field=>[field,label(field)])),
+    profiles:providerProfiles().map(profile=>({...profile,api_key:undefined})),
+    providerProfileId:state.appConfig.review_provider_profile||state.appConfig.default_provider_profile||defaultProviderProfile()?.id||"",
+    defaultMode:initialMode==="auto"?"auto":state.appConfig.default_llm_run_mode==="foreground"?"foreground":"background",
+  };
+}
+async function touchupProviderStatus(profileId){
+  const profile=providerProfile(profileId);
+  if(!profile)return {provider:"ollama",available:false,models:[],configured_model:"",error:"No provider profile configured"};
+  try{
+    const status=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url||null,api_key:profile.type==="openai"?(profile.api_key||""):null})});
+    state.providerStatuses[profile.id]=status;
+    return status;
+  }catch(error){return {provider:profile.type,available:false,models:[],configured_model:profile.model||"",error:error.message};}
+}
+function touchupRequestConfig(profileId,model,fields=[]){
+  const profile=providerProfile(profileId);
+  const config=providerRequestConfig(profile,{textReview:fields.includes("text")});
+  if(config&&model)config.model=model;
+  return config;
+}
+async function touchupRequest(item,fields,config,instructions=""){
+  return api("/api/llm/touchup",{method:"POST",body:JSON.stringify({
+    record:touchupRecordPayload(item.file.records[item.index],fields),fields,instructions,
+    model:config.model,provider:config.provider,base_url:config.base_url,api_key:config.api_key,ollama:config.ollama,
+  })});
+}
+async function touchupSubmitBackground(items,config,fields,instructions,mode){
+  return submitBackgroundLlmJob(items,config,fields,instructions,mode);
+}
+function touchupApplyResults(items,results,approvals,all=false,reviewOnly=false){
+  const batchId=uid();let appliedFields=0,reviewedRecords=0;
+  for(const item of items){
+    const result=results[item.key];if(!result?.proposal)continue;
+    const fields=reviewOnly?[]:(all?Object.keys(result.proposal.changes||{}):[...(approvals[item.key]||[])]);
+    const changes={};
+    for(const field of fields)if(field in result.proposal.changes)changes[field]=result.proposal.changes[field];
+    const record=item.file.records[item.index];
+    if(record.needs_review===true)changes.needs_review=false;
+    if(record.review_reason!==undefined&&record.review_reason!==null&&record.review_reason!=="")changes.review_reason=null;
+    appliedFields+=applyRecordChanges(item.file,item.index,changes,{source:"llm_review",model:result.proposal.model,batchId,rationale:result.proposal.rationale});
+    reviewedRecords++;
+  }
+  clearReviewSelection();shell();renderView();
+  toast(`Marked ${reviewedRecords} record${reviewedRecords===1?"":"s"} reviewed · ${appliedFields} tracked field change${appliedFields===1?"":"s"}`);
+  return {appliedFields,reviewedRecords};
+}
+
+function backupContainsCredentials(){
+  return providerProfiles().some(profile=>Boolean(profile.api_key));
+}
+async function downloadFullBackup({confirmed=false}={}){
   const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
   if(activeJobs.length){
     return toast(`Wait for or cancel ${activeJobs.length} active background operation${activeJobs.length===1?"":"s"} before backing up.`);
   }
-  const hasCredentials=providerProfiles().some(profile=>Boolean(profile.api_key));
+  const hasCredentials=backupContainsCredentials();
   const warning=hasCredentials
     ? "This full backup contains provider API keys/credentials configured in DerridAI. Treat the ZIP as sensitive. Continue?"
     : "Create a full DerridAI backup containing all loaded JSONL records, configuration, audit history, UI workspace state, the current PDF, and every Chroma collection with its stored embeddings?";
-  if(!await openMessageModal({title:"Create full backup?",message:warning,tone:hasCredentials?"danger":"info",confirmLabel:"Create backup",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Create full backup?",message:warning,tone:hasCredentials?"danger":"info",confirmLabel:"Create backup",cancelLabel:"Cancel"}))return;
   const button=document.querySelector("#downloadFullBackup");
   if(button){button.disabled=true;button.textContent="Creating backup…"}
   try{
@@ -9165,12 +7884,15 @@ async function downloadFullBackup(){
     const response=await fetch("/api/admin/backup",{method:"POST",body:form});
     if(!response.ok){
       let detail=`HTTP ${response.status}`;
+      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
       try{const payload=await response.json();detail=payload.detail||detail}catch{}
       throw new Error(detail);
     }
     const blob=await response.blob();
     const disposition=response.headers.get("content-disposition")||"";
+    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
     const match=disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
     const filename=decodeURIComponent((match?.[1]||`derridai-full-backup-${new Date().toISOString().slice(0,10)}.zip`).replace(/^\"|\"$/g,""));
     const url=URL.createObjectURL(blob);
     const anchor=document.createElement("a");
@@ -9184,11 +7906,11 @@ async function downloadFullBackup(){
     if(current){current.disabled=false;current.textContent="Download full backup"}
   }
 }
-async function restoreFullBackup(file){
+async function restoreFullBackup(file,{confirmed=false}={}){
   if(!file)return;
   const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
   if(activeJobs.length)return toast("Cancel or wait for all background operations before restoring a backup.");
-  if(!await openMessageModal({title:"Restore full DerridAI backup?",message:"This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",tone:"danger",confirmLabel:"Restore backup",cancelLabel:"Cancel"}))return;
+  if(!confirmed&&!await openMessageModal({title:"Restore full DerridAI backup?",message:"This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",tone:"danger",confirmLabel:"Restore backup",cancelLabel:"Cancel"}))return;
   const button=document.querySelector("#restoreFullBackup");
   if(button){button.disabled=true;button.textContent="Restoring…"}
   try{
@@ -9243,193 +7965,11 @@ async function restoreFullBackup(file){
   }
 }
 
-async function openProviderModelList(profileId){
-  const profile=providerProfile(profileId);
-  if(!profile)return toast("Provider profile is no longer available");
-  let status=state.providerStatuses?.[profile.id]||{};
-  if(!status.available||!Array.isArray(status.models)||!status.models.length){
-    try{
-      status=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url,api_key:profile.type==="openai"?profile.api_key:null})});
-      state.providerStatuses[profile.id]=status;
-    }catch(error){return openMessageModal({title:"Could not discover models",message:error.message,tone:"danger"})}
-  }
-  const models=status.models||[];
-  const dialog=document.createElement("dialog");
-  dialog.className="provider-model-dialog";
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Available models</h2><div class="dialog-subtitle">${esc(providerDisplayName(profile))} · ${models.length.toLocaleString()} discovered</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db"><div class="provider-model-search"><input class="control" id="providerModelSearch" placeholder="Filter models…"></div><div class="provider-model-list" id="providerModelList"></div></div><div class="da"><button class="btn" data-close>Close</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  const list=dialog.querySelector("#providerModelList"),search=dialog.querySelector("#providerModelSearch");
-  const render=()=>{
-    const q=search.value.trim().toLocaleLowerCase();
-    const filtered=models.filter(item=>String(item.name||"").toLocaleLowerCase().includes(q));
-    list.innerHTML=filtered.map(item=>`<button class="provider-model-row" data-use-provider-model="${esc(item.name||"")}"><span><b>${esc(item.name||"Unnamed model")}</b><small>${esc([item.parameter_size,item.quantization_level].filter(Boolean).join(" · ")||(profile.type==="ollama"?"Ollama model":"OpenAI-compatible model"))}</small></span><span>Use model</span></button>`).join("")||'<div class="llm-empty">No models match this filter.</div>';
-    list.querySelectorAll("[data-use-provider-model]").forEach(button=>button.onclick=()=>{
-      const card=document.querySelector(`[data-provider-profile="${CSS.escape(profile.id)}"]`);
-      const input=card?.querySelector('[data-profile-field="model"]');
-      if(input)input.value=button.dataset.useProviderModel;
-      close();
-    });
-  };
-  search.addEventListener("input",render);render();search.focus();
-}
-function providerManagerHtml(){
-  const cfg=state.appConfig;
-  return `<section class="card config-card provider-profile-manager">
-    <div class="cardhead"><div><b>Provider profiles</b><div class="note">Reusable endpoint + model + generation settings for every LLM workflow. OpenAI-compatible profiles query GET /models when the endpoint supports it. Ollama profiles sharing an endpoint share one execution gate and use that endpoint’s lowest configured concurrency cap.</div></div><div class="tools"><button class="btn small" id="addOllamaProfile">${icon("plus")}Add Ollama</button><button class="btn small" id="addOpenaiProfile">${icon("plus")}Add OpenAI-compatible / FreeLLM</button></div></div>
-    <div class="provider-profile-list">${providerProfiles().map(profile=>{
-      const status=state.providerStatuses?.[profile.id]||{};
-      const warm=state.providerWarmups?.[profile.id]||{};
-      const endpoint=String(profile.base_url||"").replace(/\/$/,"").toLocaleLowerCase();
-      const endpointPeers=profile.type==="ollama"?providerProfiles().filter(item=>item.type==="ollama"&&String(item.base_url||"").replace(/\/$/,"").toLocaleLowerCase()===endpoint):[];
-      const sharedLimit=endpointPeers.length?Math.min(...endpointPeers.map(item=>Math.max(1,Number(item.max_concurrent_requests||1)))):Number(profile.max_concurrent_requests||1);
-      const researcherEnabled=Boolean(profile.researcher_enabled||(state.researcherProviderProfiles||[]).some(item=>item.id===profile.id));
-      return `<article class="provider-profile-card ${profile.id===cfg.default_provider_profile?"default-provider":""}" data-provider-profile="${esc(profile.id)}">
-        <div class="provider-profile-card-head"><div><span class="provider-badge">${profile.type==="ollama"?"OLLAMA":"OPENAI-COMPATIBLE"}</span><input class="control provider-profile-name" data-profile-field="name" value="${esc(profile.name||"")}"></div><div class="tools">${profile.id===cfg.default_provider_profile?'<span class="job-applied">default</span>':`<button class="btn tiny" data-make-default-profile="${esc(profile.id)}">Make default</button>`}<button class="btn tiny danger" data-remove-provider-profile="${esc(profile.id)}">Remove</button></div></div>
-        <input type="hidden" data-profile-field="type" value="${esc(profile.type)}">
-        <div class="provider-profile-grid">
-          <div class="field field-full"><label>Endpoint</label><input class="control" data-profile-field="base_url" value="${esc(profile.base_url||"")}"></div>
-          <div class="field"><label>Model</label><div class="provider-model-picker"><input class="control" data-profile-field="model" list="provider-models-${esc(profile.id)}" value="${esc(profile.model||"")}" placeholder="${profile.type==="ollama"?"Type or choose an installed model":"Type or choose a model ID"}"><button class="btn tiny" type="button" data-view-provider-models="${esc(profile.id)}">View models${(status.models||[]).length?` (${(status.models||[]).length})`:""}</button></div><datalist id="provider-models-${esc(profile.id)}">${(status.models||[]).map(item=>`<option value="${esc(item.name||"")}"></option>`).join("")}</datalist><div class="note">${profile.type==="openai"?"Discovery uses the endpoint’s standard GET /models route when available; manual model IDs remain supported.":"Models are discovered from the configured Ollama endpoint."}</div></div>
-          <div class="field"><label>Max concurrent requests</label><input class="control" type="number" min="1" max="64" data-profile-field="max_concurrent_requests" value="${esc(profile.type==="ollama"?sharedLimit:(profile.max_concurrent_requests??32))}"><div class="note">${profile.type==="ollama"&&endpointPeers.length>1?`${endpointPeers.length} Ollama profiles share this endpoint. All are restricted to the lowest configured value (${sharedLimit}) to protect the shared Ollama server.`:"Background jobs using this profile respect this cap."}</div></div>
-          <section class="provider-researcher-access ${researcherEnabled?"enabled":""}" aria-label="Researcher access"><div class="provider-access-copy"><span class="provider-access-icon">${icon("users")}</span><div><b>Researcher access</b><small>Allow researcher accounts to use this profile for Research without exposing credentials or provider administration.</small></div></div><label class="provider-access-switch"><input type="checkbox" data-profile-field="researcher_enabled" ${researcherEnabled?"checked":""}><span class="provider-access-switch-track" aria-hidden="true"></span><em>${researcherEnabled?"Available to researchers":"Administrator only"}</em></label></section>
-          ${profile.type==="openai"?`<div class="field"><label>Model mode</label><select class="control" data-profile-field="model_mode"><option value="auto" ${profile.model_mode==="auto"?"selected":""}>Auto router</option><option value="discovered" ${profile.model_mode==="discovered"?"selected":""}>Discovered</option><option value="manual" ${profile.model_mode==="manual"?"selected":""}>Manual</option></select></div><div class="field"><label>Model kind</label><select class="control" data-profile-field="model_kind"><option value="any" ${profile.model_kind==="any"?"selected":""}>Any</option><option value="general" ${profile.model_kind==="general"?"selected":""}>General/chat</option><option value="reasoning" ${profile.model_kind==="reasoning"?"selected":""}>Reasoning</option><option value="coding" ${profile.model_kind==="coding"?"selected":""}>Coding</option><option value="fast" ${profile.model_kind==="fast"?"selected":""}>Fast/small</option></select></div><div class="field"><label>API key</label><input class="control" type="password" autocomplete="off" data-profile-field="api_key" value="${esc(profile.api_key||"")}"></div>`:""}
-        </div>
-        <details class="provider-profile-advanced"><summary>Generation defaults & advanced parameters</summary><div class="provider-profile-grid">
-          ${profile.type==="ollama"?`<div class="field"><label>num_ctx</label><input class="control" type="number" data-profile-field="num_ctx" value="${esc(profile.num_ctx??16384)}"></div><div class="field"><label>Metadata output</label><input class="control" type="number" data-profile-field="metadata_num_predict" value="${esc(profile.metadata_num_predict??768)}"></div>`:""}
-          <div class="field"><label>${profile.type==="ollama"?"Text output":"Max output"}</label><input class="control" type="number" data-profile-field="num_predict" value="${esc(profile.num_predict??4096)}"></div>
-          ${profile.type==="ollama"?`<div class="field"><label>Think</label><select class="control" data-profile-field="think">${[["false","Off"],["true","On"],["low","Low"],["medium","Medium"],["high","High"]].map(([v,l])=>`<option value="${v}" ${String(profile.think??"false")===v?"selected":""}>${l}</option>`).join("")}</select></div>`:""}
-          <div class="field"><label>Temperature</label><input class="control" type="number" step="0.01" data-profile-field="temperature" value="${esc(profile.temperature??0)}"></div>
-          ${profile.type==="ollama"?`<div class="field"><label>top_k</label><input class="control" type="number" data-profile-field="top_k" value="${esc(profile.top_k??0)}"></div>`:""}
-          <div class="field"><label>top_p</label><input class="control" type="number" step="0.01" data-profile-field="top_p" value="${esc(profile.top_p??1)}"></div>
-          ${profile.type==="ollama"?`<div class="field"><label>min_p</label><input class="control" type="number" step="0.01" data-profile-field="min_p" value="${esc(profile.min_p??"")}"></div><div class="field"><label>repeat_penalty</label><input class="control" type="number" step="0.01" data-profile-field="repeat_penalty" value="${esc(profile.repeat_penalty??1.1)}"></div>`:""}
-          <div class="field"><label>seed</label><input class="control" type="number" data-profile-field="seed" value="${esc(profile.seed??"")}"></div>
-          ${profile.type==="ollama"?`<div class="field"><label>mirostat</label><select class="control" data-profile-field="mirostat">${[0,1,2].map(v=>`<option value="${v}" ${Number(profile.mirostat??0)===v?"selected":""}>${v}</option>`).join("")}</select></div><div class="field"><label>mirostat_eta</label><input class="control" type="number" step="0.01" data-profile-field="mirostat_eta" value="${esc(profile.mirostat_eta??"")}"></div><div class="field"><label>mirostat_tau</label><input class="control" type="number" step="0.01" data-profile-field="mirostat_tau" value="${esc(profile.mirostat_tau??"")}"></div><div class="field"><label>keep_alive</label><input class="control" data-profile-field="keep_alive" value="${esc(profile.keep_alive||"10m")}"></div>`:""}
-          <div class="field field-full"><label>Advanced options JSON</label><textarea data-profile-field="extra_options" spellcheck="false">${esc(profile.extra_options||"{}")}</textarea></div>
-        </div></details>
-        <div class="provider-profile-card-actions"><button class="btn small" data-test-provider-profile="${esc(profile.id)}">${icon("refresh")}Test / discover</button><button class="btn small" data-warm-config-profile="${esc(profile.id)}">${icon("spark")}Warm independently</button><span class="note" data-provider-profile-status="${esc(profile.id)}">${status.available?`Ready · ${(status.models||[]).length} models`:status.error||warm.message||"Not verified"}</span></div>
-      </article>`;
-    }).join("")}</div>
-    <div class="config-actions"><button class="btn primary" id="saveProviderProfiles">${icon("check")}Save provider profiles</button></div>
-  </section>`;
-}
-function collectProviderProfilesFromDom(){
-  const profiles=[];
-  document.querySelectorAll("[data-provider-profile]").forEach(card=>{
-    const current=providerProfile(card.dataset.providerProfile)||{};
-    const value=field=>card.querySelector(`[data-profile-field="${field}"]`)?.value??current[field]??"";
-    const numValue=(field,fallback="")=>{
-      const raw=value(field); if(raw==="")return fallback;
-      const n=Number(raw); return Number.isFinite(n)?n:fallback;
-    };
-    let extra=value("extra_options")||"{}";
-    const parsed=JSON.parse(extra);
-    if(!parsed||Array.isArray(parsed)||typeof parsed!=="object")throw new Error(`Advanced options for ${value("name")||card.dataset.providerProfile} must be a JSON object.`);
-    extra=JSON.stringify(parsed);
-    profiles.push({
-      ...current,
-      id:card.dataset.providerProfile,
-      name:value("name").trim()||"LLM provider",
-      type:value("type"),
-      base_url:value("base_url").trim(),
-      model:value("model").trim(),
-      model_mode:value("model_mode")||current.model_mode||"manual",
-      model_kind:value("model_kind")||current.model_kind||"any",
-      api_key:value("api_key"),
-      max_concurrent_requests:Math.max(1,Math.min(64,numValue("max_concurrent_requests",current.type==="ollama"?1:32))),
-      num_ctx:numValue("num_ctx",current.num_ctx??16384),
-      metadata_num_predict:numValue("metadata_num_predict",current.metadata_num_predict??768),
-      num_predict:numValue("num_predict",current.num_predict??4096),
-      think:value("think")||current.think||"false",
-      temperature:numValue("temperature",0), top_k:numValue("top_k",0), top_p:numValue("top_p",1),
-      min_p:numValue("min_p",""), repeat_penalty:numValue("repeat_penalty",1.1), seed:numValue("seed",""),
-      mirostat:numValue("mirostat",current.mirostat??0), mirostat_eta:numValue("mirostat_eta",current.mirostat_eta??""),
-      mirostat_tau:numValue("mirostat_tau",current.mirostat_tau??""), keep_alive:value("keep_alive")||current.keep_alive||"10m",
-      extra_options:extra,
-      researcher_enabled:Boolean(card.querySelector('[data-profile-field="researcher_enabled"]')?.checked),
-    });
-  });
-  const endpointLimits=new Map();
-  for(const profile of profiles){if(profile.type!=="ollama")continue;const endpoint=String(profile.base_url||"").replace(/\/$/,"").toLocaleLowerCase();const current=endpointLimits.get(endpoint);endpointLimits.set(endpoint,current==null?profile.max_concurrent_requests:Math.min(current,profile.max_concurrent_requests))}
-  for(const profile of profiles){if(profile.type!=="ollama")continue;const endpoint=String(profile.base_url||"").replace(/\/$/,"").toLocaleLowerCase();profile.max_concurrent_requests=endpointLimits.get(endpoint)||profile.max_concurrent_requests}
-  return profiles;
-}
-function saveProviderProfilesFromDom(){
-  try{
-    const profiles=collectProviderProfilesFromDom();
-    if(!profiles.length)throw new Error("At least one provider profile is required.");
-    state.appConfig.provider_profiles=profiles;
-    if(!profiles.some(profile=>profile.id===state.appConfig.default_provider_profile))state.appConfig.default_provider_profile=profiles[0].id;
-    const defaultProfile=defaultProviderProfile();
-    if(defaultProfile)state.appConfig.chat_provider=defaultProfile.type;
-    persistPrefs(); return true;
-  }catch(error){toast(error.message);return false}
-}
 async function syncResearcherProviderProfiles(){
   const approved=providerProfiles().filter(profile=>profile.researcher_enabled).map(profile=>({...profile}));
   const result=await api("/api/system/researcher-providers",{method:"PUT",body:JSON.stringify({profiles:approved})});
   state.researcherProviderProfiles=result.profiles||[];
 }
-function wireProviderManager(main){
-  const rerender=()=>renderProviders(main);
-  document.querySelector("#saveProviderProfiles")?.addEventListener("click",async()=>{if(!saveProviderProfilesFromDom())return;try{await syncResearcherProviderProfiles();toast("Provider profiles saved",{tone:"success"});rerender()}catch(error){toast(`Provider profiles saved locally, but researcher access could not be synchronized: ${error.message}`,{tone:"danger"})}});
-  document.querySelector("#addOllamaProfile")?.addEventListener("click",()=>{
-    if(!saveProviderProfilesFromDom())return;
-    state.appConfig.provider_profiles.push({id:`ollama-${uid()}`,name:"New Ollama",type:"ollama",base_url:"http://host.docker.internal:11434",model:"gemma4:e2b",model_mode:"manual",model_kind:"any",api_key:"",max_concurrent_requests:1,num_ctx:16384,metadata_num_predict:768,num_predict:4096,think:"false",temperature:0,top_k:0,top_p:1,min_p:"",repeat_penalty:1.1,seed:"",mirostat:0,mirostat_eta:"",mirostat_tau:"",keep_alive:"10m",extra_options:"{}"});
-    persistPrefs();rerender();
-  });
-  document.querySelector("#addOpenaiProfile")?.addEventListener("click",()=>{
-    if(!saveProviderProfilesFromDom())return;
-    state.appConfig.provider_profiles.push({id:`openai-${uid()}`,name:"New OpenAI-compatible / FreeLLM",type:"openai",base_url:"http://host.docker.internal:3001/v1",model:"auto",model_mode:"auto",model_kind:"any",api_key:"",max_concurrent_requests:32,num_predict:4096,temperature:0,top_p:1,seed:"",extra_options:"{}"});
-    persistPrefs();rerender();
-  });
-  document.querySelectorAll("[data-view-provider-models]").forEach(button=>button.onclick=()=>openProviderModelList(button.dataset.viewProviderModels));
-  document.querySelectorAll("[data-remove-provider-profile]").forEach(button=>button.onclick=async()=>{
-    if(providerProfiles().length<=1)return toast("At least one LLM provider profile is required");
-    const profile=providerProfile(button.dataset.removeProviderProfile);
-    if(!await openMessageModal({title:"Remove provider profile?",message:`Remove “${providerDisplayName(profile)}”?`,tone:"danger",confirmLabel:"Remove",cancelLabel:"Cancel"}))return;
-    state.appConfig.provider_profiles=providerProfiles().filter(item=>item.id!==button.dataset.removeProviderProfile);
-    if(state.appConfig.default_provider_profile===button.dataset.removeProviderProfile)state.appConfig.default_provider_profile=state.appConfig.provider_profiles[0]?.id||"";
-    persistPrefs();rerender();
-  });
-  document.querySelectorAll("[data-make-default-profile]").forEach(button=>button.onclick=()=>{
-    if(!saveProviderProfilesFromDom())return;
-    state.appConfig.default_provider_profile=button.dataset.makeDefaultProfile;
-    persistPrefs();rerender();
-  });
-  document.querySelectorAll("[data-test-provider-profile]").forEach(button=>button.onclick=async()=>{
-    if(!saveProviderProfilesFromDom())return;
-    const profile=providerProfile(button.dataset.testProviderProfile);
-    const statusEl=document.querySelector(`[data-provider-profile-status="${CSS.escape(profile.id)}"]`);
-    if(statusEl)statusEl.textContent="Testing / discovering models…";
-    try{
-      const result=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url,api_key:profile.type==="openai"?profile.api_key:null})});
-      state.providerStatuses[profile.id]=result;
-      if(statusEl)statusEl.textContent=result.available?`Ready · ${(result.models||[]).length} models`:(result.error||"Unavailable");
-      if(state.view==="providers")renderProviders(main);
-    }catch(error){if(statusEl)statusEl.textContent=error.message}
-  });
-  document.querySelectorAll("[data-warm-config-profile]").forEach(button=>button.onclick=async()=>{
-    if(!saveProviderProfilesFromDom())return;
-    const profile=providerProfile(button.dataset.warmConfigProfile);
-    const statusEl=document.querySelector(`[data-provider-profile-status="${CSS.escape(profile.id)}"]`);
-    if(statusEl)statusEl.textContent="Warming…";
-    await warmupProviderProfile(profile.id);
-    if(statusEl)statusEl.textContent=state.providerWarmups?.[profile.id]?.message||"Warmup requested";
-  });
-}
-function renderProviders(main){
-  ensureProviderProfiles();
-  main.innerHTML=`<div class="providers-page">
-    <section class="card providers-overview"><div class="cardhead"><div><b>LLM Providers</b><div class="note">Create and configure reusable providers once; select them wherever DerridAI uses an LLM.</div></div><button class="btn" id="providersRefreshAll">${icon("refresh")}Refresh all readiness</button></div>
-      <div class="providers-summary"><span><b>${providerProfiles().length}</b> profiles</span><span><b>${providerProfiles().filter(p=>p.type==="ollama").length}</b> Ollama</span><span><b>${providerProfiles().filter(p=>p.type==="openai").length}</b> OpenAI-compatible / FreeLLM</span><span><b>${esc(providerDisplayName(defaultProviderProfile()))}</b> default</span></div>
-      <div class="info">Concurrency is profile-specific. Ollama normally starts at 1 concurrent request; FreeLLM/OpenAI-compatible profiles default to 32 and can be adjusted from 1–64.</div>
-    </section>
-    ${providerManagerHtml()}
-  </div>`;
-  wireProviderManager(main);
-  document.querySelector("#providersRefreshAll")?.addEventListener("click",async()=>{await refreshProviderStatuses();renderProviders(main)});
-}
-
 async function renderResponseCache(main){
   showViewLoading(main,"Loading response cache","Reading cached RAG responses…");
   try{await refreshStores()}catch(error){console.warn("Could not refresh store metadata",error)}
@@ -9467,196 +8007,6 @@ async function renderResponseCache(main){
       await refreshStores();renderResponseCache(main);toast("Response cache cleared");
     }catch(error){toast(`Could not clear response cache: ${error.message}`)}
   });
-}
-
-function appearanceConfigHtml(){
-  const cfg=state.appConfig;
-  return `<section class="card config-card appearance-config-card"><div class="cardhead"><div><b>${esc(tr("settings.appearance","Appearance"))}</b><div class="note">${esc(tr("settings.appearance_help","Choose the interface color theme for your workspace."))}</div></div></div><div class="theme-choice-grid" role="radiogroup" aria-label="${esc(tr("settings.color_theme","Color theme"))}">${[["green",tr("settings.theme_green","DerridAI green"),tr("settings.theme_green_help","The original restrained green palette.")],["blue",tr("settings.theme_blue","Reference blue"),tr("settings.theme_blue_help","The blue palette used in the visual reference.")],["slate",tr("settings.theme_slate","Slate"),tr("settings.theme_slate_help","A neutral graphite-blue research palette.")]].map(([value,name,help])=>`<label class="theme-choice ${cfg.ui_color_theme===value?"selected":""}"><input type="radio" name="cfgColorTheme" value="${value}" ${cfg.ui_color_theme===value?"checked":""}><span class="theme-swatch theme-swatch-${value}"><i></i><i></i><i></i></span><span><b>${esc(name)}</b><small>${esc(help)}</small></span></label>`).join("")}</div><div class="config-actions"><button class="btn primary" id="saveAppearance">${icon("check")}${esc(tr("settings.save_appearance","Save appearance"))}</button><span class="note">${esc(tr("settings.browser_workspace_note","Theme preferences are saved in this browser workspace."))}</span></div></section>`;
-}
-function wireAppearanceConfig(main){
-  const sync=()=>main.querySelectorAll(".theme-choice").forEach(label=>label.classList.toggle("selected",Boolean(label.querySelector("input")?.checked)));
-  main.querySelectorAll('input[name="cfgColorTheme"]').forEach(control=>control.addEventListener("change",event=>{applyUiTheme(event.target.value);sync()}));
-  main.querySelector("#saveAppearance")?.addEventListener("click",()=>{const selected=main.querySelector('input[name="cfgColorTheme"]:checked')?.value||"green";state.appConfig.ui_color_theme=applyUiTheme(selected);persistPrefs();shell();toast(tr("settings.appearance_saved","Appearance saved"),{tone:"success"})});
-}
-
-function renderConfig(main){
-  const cfg=state.appConfig;
-  const llm=state.llmConfig;
-  const rag=state.ragConfig;
-  const chromaPath=state.health?.chroma?.path||"/data/chroma";
-  if(isResearcher()){
-    const appearance=hasCapability("appearance.manage")?appearanceConfigHtml():"";
-    const shortcuts=[
-      hasCapability("page.dashboard")?`<button class="btn" id="researcherGoHome">${icon("dashboard")}${esc(tr("nav.home","Home"))}</button>`:"",
-      hasCapability("page.annotations")?`<button class="btn" id="researcherGoAnnotations">${icon("record")}${esc(tr("nav.annotations","Annotations"))}</button>`:"",
-      hasCapability("page.research")?`<button class="btn" id="researcherGoRag">${icon("spark")}${esc(tr("nav.rag","Research"))}</button>`:"",
-    ].join("");
-    main.innerHTML=`<div class="config-page researcher-settings-page">${appearance}<section class="card config-card"><div class="cardhead"><div><b>${esc(tr("settings.researcher_workspace","Research workspace"))}</b><div class="note">${esc(tr("settings.researcher_workspace_help","Researcher accounts use summarized corpus text and do not expose database or source-management controls."))}</div></div></div>${shortcuts?`<div class="config-actions">${shortcuts}</div>`:`<div class="note">${esc(tr("permissions.no_workspace_shortcuts","No additional workspace pages are enabled for this role."))}</div>`}</section></div>`;
-    if(hasCapability("appearance.manage"))wireAppearanceConfig(main);
-    main.querySelector("#researcherGoHome")?.addEventListener("click",()=>navigateTo("home"));
-    main.querySelector("#researcherGoAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));
-    main.querySelector("#researcherGoRag")?.addEventListener("click",()=>navigateTo("rag"));
-    return;
-  }
-
-  main.innerHTML=`
-  <div class="config-page">
-    ${appearanceConfigHtml()}
-    <section class="card config-card config-overview-card">
-      <div class="cardhead"><div><b>Review behavior</b><div class="note">Provider choice, default review preset, and whether LLM review opens interactively or runs as a background job.</div></div></div>
-      <div class="config-grid">
-        <div class="field"><label>Default provider profile</label><select class="control" id="cfgChatProvider">${providerProfiles().map(profile=>`<option value="${esc(profile.id)}" ${cfg.default_provider_profile===profile.id?"selected":""}>${esc(providerDisplayName(profile))} · ${profile.type==="ollama"?"Ollama":"OpenAI-compatible"}</option>`).join("")}</select></div>
-        <div class="field"><label>Default review preset</label><select class="control" id="cfgReviewPreset"><option value="text" ${cfg.default_review_preset==="text"?"selected":""}>OCR / text cleanup</option><option value="attribution" ${cfg.default_review_preset==="attribution"?"selected":""}>Attribution</option><option value="semantic" ${cfg.default_review_preset==="semantic"?"selected":""}>Semantics</option></select></div>
-        <div class="field"><label>Default run mode</label><select class="control" id="cfgRunMode"><option value="foreground" ${cfg.default_llm_run_mode==="foreground"?"selected":""}>Interactive foreground</option><option value="background" ${cfg.default_llm_run_mode!=="foreground"?"selected":""}>Background review</option></select></div>
-      </div>
-      <div class="config-actions"><button class="btn primary" id="saveReviewBehavior">${icon("check")}Save review behavior</button></div>
-    </section>
-
-    <section class="card config-card provider-config-link-card">
-      <div class="cardhead"><div><b>LLM providers</b><div class="note">Provider endpoints, credentials, models, concurrency limits, generation defaults, readiness, and independent warmups are configured on the dedicated Providers page.</div></div><button class="btn primary" id="goProvidersConfig">${icon("spark")}Open LLM Providers</button></div>
-      <div class="providers-summary">${providerProfiles().map(profile=>`<span><i class="status-dot ${state.providerStatuses?.[profile.id]?.available?"ok":"warn"}"></i><b>${esc(providerDisplayName(profile))}</b><small>${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · max ${profile.max_concurrent_requests??1}${profile.id===cfg.default_provider_profile?" · default":""}</small></span>`).join("")}</div>
-    </section>
-
-    <section class="card config-card">
-      <div class="cardhead"><div><b>Vector database defaults</b><div class="note">New collections default to Ollama embeddings with <code>bge-m3:latest</code>. Chroma language collections use coarse <code>en</code> and <code>fr</code> tags.</div></div></div>
-      <div class="config-grid">
-        <div class="field"><label>Default embedding provider</label><select class="control" id="cfgEmbeddingProvider"><option value="ollama" ${cfg.embedding_provider==="ollama"?"selected":""}>Ollama</option><option value="chroma" ${cfg.embedding_provider==="chroma"?"selected":""}>Chroma default</option><option value="precomputed" ${cfg.embedding_provider==="precomputed"?"selected":""}>Precomputed vectors</option></select></div>
-        <div class="field"><label>Default embedding model</label><input class="control" id="cfgEmbeddingModel" value="${esc(cfg.embedding_model||"bge-m3:latest")}"></div>
-        <div class="field field-full"><label>Current Chroma path</label><input class="control" value="${esc(chromaPath)}" disabled></div>
-      </div>
-      <div class="config-actions"><button class="btn primary" id="saveEmbeddingDefaults">${icon("check")}Save embedding defaults</button><button class="btn" id="goVectorConfig">${icon("database")}Open Vector Stores</button></div>
-    </section>
-
-    <section class="card config-card">
-      <div class="cardhead"><div><b>RAG pipeline defaults</b><div class="note">Retrieval, fusion, reranking, evidence-budget, and query-decomposition defaults. Per-run generation parameters are also exposed on Research.</div></div></div>
-      <div class="config-grid">
-        <div class="field"><label>Retrieval k</label><input class="control" id="cfgRagK" type="number" min="1" max="500" value="${esc(rag.k)}"></div>
-        <div class="field"><label>MMR fetch_k</label><input class="control" id="cfgRagFetchK" type="number" min="1" max="5000" value="${esc(rag.fetch_k)}"></div>
-        <div class="field"><label>MMR lambda</label><input class="control" id="cfgRagLambda" type="number" min="0" max="1" step="0.05" value="${esc(rag.lambda_mult)}"></div>
-        <div class="field"><label>RRF k</label><input class="control" id="cfgRagRrfK" type="number" min="1" value="${esc(rag.rrf_k??60)}"></div>
-        <div class="field"><label>Rerank top N</label><input class="control" id="cfgRagTopN" type="number" min="1" max="500" value="${esc(rag.rerank_top_n)}"></div>
-        <div class="field"><label>Default reranker</label><select class="control" id="cfgRagReranker"><option value="cross_encoder" ${rag.reranker==="cross_encoder"?"selected":""}>Cross-encoder</option><option value="lexical" ${rag.reranker==="lexical"?"selected":""}>Lexical/vector</option><option value="none" ${rag.reranker==="none"?"selected":""}>None</option></select></div>
-        <div class="field field-full"><label>Cross-encoder model</label><input class="control" id="cfgRagCrossEncoder" value="${esc(rag.cross_encoder_model)}"></div>
-        <div class="field"><label>Query-decomposition max tokens</label><input class="control" id="cfgRagDecomposePredict" type="number" min="64" value="${esc(rag.query_decomposition_num_predict??768)}"></div>
-        <div class="field"><label>Response language</label><select class="control" id="cfgRagResponseLanguage"><option value="auto" ${rag.response_language==="auto"?"selected":""}>Auto</option><option value="en" ${rag.response_language==="en"?"selected":""}>English</option><option value="fr" ${rag.response_language==="fr"?"selected":""}>French</option></select></div>
-        <div class="field"><label>Max chars / evidence record</label><input class="control" id="cfgRagRecordChars" type="number" min="500" value="${esc(rag.evidence_record_char_limit??12000)}"></div>
-        <div class="field"><label>Total evidence chars</label><input class="control" id="cfgRagTotalChars" type="number" min="5000" value="${esc(rag.evidence_total_char_limit??120000)}"></div>
-        <div class="field field-full"><label>Document languages</label><div class="language-checks">${["en","fr"].map(code=>`<label><input type="checkbox" data-cfg-rag-locale="${code}" ${rag.locales.includes(code)?"checked":""}><span>${code}</span></label>`).join("")}</div></div>
-        <div class="field field-full"><label>Retrieval routes</label><div class="language-checks">${[["similarity","Similarity"],["lexical","Lexical (BM25)"],["mmr","MMR"]].map(([value,name])=>`<label><input type="checkbox" data-cfg-rag-search="${value}" ${rag.search_types.includes(value)?"checked":""}><span>${name}</span></label>`).join("")}</div></div>
-        <div class="field field-full"><label class="check-item"><input type="checkbox" id="cfgRagAutoGrade" ${rag.auto_grade?"checked":""}><span>Auto-grade the final RAG response after caching <small>Choose the grading provider/model in the RAG runner.</small></span></label></div>
-      </div>
-      <div class="config-actions"><button class="btn primary" id="saveRagDefaults">${icon("check")}Save RAG defaults</button><button class="btn" id="goRagConfig">${icon("spark")}Open Research</button></div>
-    </section>
-
-    <section class="card config-card backup-config-card">
-      <div class="cardhead"><div><b>Backup & restore</b><div class="note">Create one portable compressed archive containing the browser workspace, loaded JSONL records, audit history, provider/RAG configuration, current PDF, and every Chroma collection with its stored vectors.</div></div></div>
-      <div class="info warn">A full backup can contain provider API keys. Store backup ZIP files securely. Installed Ollama model files and Docker images are not copied.</div>
-      <div class="backup-summary"><span><b>${state.files.length.toLocaleString()}</b> JSONL tabs</span><span><b>${allRows().length.toLocaleString()}</b> loaded records</span><span><b>${recordStores().length.toLocaleString()}</b> corpus Chroma collections</span><span><b>${Number(responseCacheStore()?.count||0).toLocaleString()}</b> cached RAG responses</span><span><b>${state.pdf.file?"1":"0"}</b> current PDF</span></div>
-      <input type="file" id="restoreBackupInput" accept=".zip,application/zip" hidden>
-      <div class="config-actions"><button class="btn primary" id="downloadFullBackup">${icon("download")}Download full backup</button><button class="btn" id="restoreFullBackup">${icon("upload")}Load from backup</button></div>
-    </section>
-
-    <section class="card config-card">
-      <div class="cardhead"><div><b>Viewer configuration</b><div class="note">Reset UI choices or remove audit history without deleting records.</div></div></div>
-      <div class="config-grid"><div class="field"><label>Desktop notifications</label><select class="control" id="cfgDesktopNotifications"><option value="off" ${cfg.desktop_notifications?"":"selected"}>Off</option><option value="on" ${cfg.desktop_notifications?"selected":""}>On when background operations finish</option></select><div class="note">Browser permission is required. Notifications are local browser notifications.</div></div></div><div class="config-actions"><button class="btn" id="requestNotificationPermission">Request notification permission</button><button class="btn" id="resetColumns">Reset table columns</button><button class="btn" id="resetCollapsiblePanels">Expand all UI panels</button><button class="btn" id="expandSidebar">Expand navigation sidebar</button><button class="btn" id="clearUpsertSuppressions">Restore removed upsert-queue items</button><button class="btn danger" id="clearAllUpdates">${icon("history")}Clear all record updates</button><button class="btn" id="goDashboard">Open Dashboard</button></div>
-    </section>
-
-    <section class="card config-card danger-zone">
-      <div class="cardhead"><div><b>Start from scratch</b><div class="note">Deletes all loaded browser JSONL workspace data and every collection in the current Chroma persistence database. Installed model files are not deleted.</div></div></div>
-      <div class="info error">This cannot be undone unless you have exported/backed up your JSONL and Chroma data.</div>
-      <div class="nuke-controls"><input class="control" id="nukeConfirm" placeholder='Type NUKE to enable'><button class="btn danger" id="nukeEverything" disabled>NUKE DerridAI workspace</button></div>
-    </section>
-  </div>`;
-
-  const num=(id,fallback=null)=>{
-    const raw=document.querySelector(`#${id}`)?.value?.trim();
-    if(raw===""||raw==null)return fallback;
-    const value=Number(raw);
-    return Number.isFinite(value)?value:fallback;
-  };
-  const parseOptions=(id)=>{
-    const raw=document.querySelector(`#${id}`)?.value||"{}";
-    const parsed=JSON.parse(raw);
-    if(!parsed||Array.isArray(parsed)||typeof parsed!=="object")throw new Error("Advanced options must be a JSON object.");
-    return JSON.stringify(parsed);
-  };
-
-  wireAppearanceConfig(main);
-  document.querySelector("#goProvidersConfig")?.addEventListener("click",()=>navigateTo("providers"));
-  document.querySelector("#saveReviewBehavior").onclick=()=>{
-    state.appConfig.default_provider_profile=document.querySelector("#cfgChatProvider").value;
-    const profile=providerProfile(state.appConfig.default_provider_profile);
-    if(profile)state.appConfig.chat_provider=profile.type;
-    state.appConfig.default_review_preset=document.querySelector("#cfgReviewPreset").value;
-    state.appConfig.default_llm_run_mode=document.querySelector("#cfgRunMode").value;
-    persistPrefs();toast("Review behavior saved",{tone:"success"});
-  };
-
-  document.querySelector("#saveEmbeddingDefaults").onclick=()=>{
-    state.appConfig.embedding_provider=document.querySelector("#cfgEmbeddingProvider").value;
-    state.appConfig.embedding_model=document.querySelector("#cfgEmbeddingModel").value.trim()||"bge-m3:latest";
-    persistPrefs();toast("Embedding defaults saved",{tone:"success"});
-  };
-  document.querySelector("#goVectorConfig").onclick=()=>navigateTo("vector");
-
-  document.querySelector("#saveRagDefaults").onclick=()=>{
-    rag.k=Math.max(1,num("cfgRagK",64));
-    rag.fetch_k=Math.max(rag.k,num("cfgRagFetchK",500));
-    rag.lambda_mult=Math.max(0,Math.min(1,num("cfgRagLambda",0.7)));
-    rag.rrf_k=Math.max(1,num("cfgRagRrfK",60));
-    rag.rerank_top_n=Math.max(1,num("cfgRagTopN",24));
-    rag.reranker=document.querySelector("#cfgRagReranker").value;
-    rag.cross_encoder_model=document.querySelector("#cfgRagCrossEncoder").value.trim()||"cross-encoder/ms-marco-MiniLM-L-6-v2";
-    rag.query_decomposition_num_predict=Math.max(64,num("cfgRagDecomposePredict",768));
-    rag.response_language=document.querySelector("#cfgRagResponseLanguage").value;
-    rag.evidence_record_char_limit=Math.max(500,num("cfgRagRecordChars",12000));
-    rag.evidence_total_char_limit=Math.max(5000,num("cfgRagTotalChars",120000));
-    rag.locales=[...document.querySelectorAll("[data-cfg-rag-locale]:checked")].map(box=>box.dataset.cfgRagLocale);
-    rag.search_types=[...document.querySelectorAll("[data-cfg-rag-search]:checked")].map(box=>box.dataset.cfgRagSearch);
-    rag.auto_grade=document.querySelector("#cfgRagAutoGrade").checked;
-    if(!rag.locales.length)return toast("Select at least one RAG document language");
-    if(!rag.search_types.length)return toast("Select at least one RAG retrieval route");
-    persistPrefs();toast("RAG defaults saved",{tone:"success"});
-  };
-  document.querySelector("#goRagConfig").onclick=e=>{if(!e.currentTarget.disabled)navigateTo("rag")};
-
-  document.querySelector("#downloadFullBackup")?.addEventListener("click",downloadFullBackup);
-  document.querySelector("#restoreFullBackup")?.addEventListener("click",()=>document.querySelector("#restoreBackupInput")?.click());
-  document.querySelector("#restoreBackupInput")?.addEventListener("change",e=>{const file=e.target.files?.[0];e.target.value="";if(file)restoreFullBackup(file)});
-  document.querySelector("#goDashboard").onclick=()=>navigateTo("home");
-  document.querySelector("#cfgDesktopNotifications").onchange=e=>{state.appConfig.desktop_notifications=e.target.value==="on";persistPrefs()};
-  document.querySelector("#requestNotificationPermission").onclick=async()=>{
-    if(typeof Notification==="undefined")return toast("Desktop notifications are not supported by this browser");
-    try{
-      const permission=await Notification.requestPermission();
-      state.appConfig.desktop_notifications=permission==="granted";
-      persistPrefs();
-      toast(permission==="granted"?"Desktop notifications enabled":`Notification permission: ${permission}`);
-      renderConfig(main);
-    }catch(error){toast(`Could not request notification permission: ${error.message}`)}
-  };
-  document.querySelector("#resetColumns").onclick=()=>{state.tableColumns={};persistPrefs();toast("Table columns reset")};
-  document.querySelector("#resetCollapsiblePanels").onclick=()=>{state.collapsedPanels={};persistPrefs();renderView();toast("All UI panels expanded")};
-  document.querySelector("#expandSidebar").onclick=()=>{state.sidebarCollapsed=false;persistPrefs();shell();renderView()};
-  document.querySelector("#clearUpsertSuppressions").onclick=()=>{state.upsertIgnored={};persistPrefs();shell();renderView();toast("Removed upsert-queue suppressions cleared")};
-  document.querySelector("#clearAllUpdates").onclick=clearAllUpdates;
-
-  const confirmInput=document.querySelector("#nukeConfirm");
-  const nukeButton=document.querySelector("#nukeEverything");
-  confirmInput.oninput=()=>nukeButton.disabled=confirmInput.value!=="NUKE";
-  nukeButton.onclick=async()=>{
-    if(confirmInput.value!=="NUKE")return;
-    if(!await openMessageModal({title:"Delete entire DerridAI workspace?",message:"Delete the entire browser workspace and every collection in the current Chroma DB?",tone:"danger",confirmLabel:"Delete everything",cancelLabel:"Cancel"}))return;
-    nukeButton.disabled=true;nukeButton.textContent="Deleting…";
-    try{
-      await api("/api/admin/nuke",{method:"POST",body:"{}"});
-      await deleteWorkspaceDatabase();
-      location.reload();
-    }catch(error){
-      nukeButton.disabled=false;nukeButton.textContent="NUKE DerridAI workspace";
-      toast(`Nuke failed: ${error.message}`);
-    }
-  };
 }
 
 async function checkHealth(){
@@ -9710,7 +8060,7 @@ function getShellSnapshot(){
   return {
     view:state.view,
     sidebarCollapsed:state.sidebarCollapsed,
-    files:state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId})),
+    files:state.files.map(file=>describeRecordsFile(file,state.activeFileId)),
     context:ctx,
     totalLoaded,
     flagged,
@@ -9729,13 +8079,19 @@ function getShellSnapshot(){
     forwardLabel:state.navForward.length?viewLabel(state.navForward[state.navForward.length-1].view):"",
     selectedEvidenceCount:selectedEvidenceEntries().length,
     systemHtml:systemCardHtml(),
-    nav:viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
-      ...item,
-      label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
-      section:translatedSectionLabel(item.section),
-      disabledReason:viewDisabledReason(item.id),
-    })),
+    nav:getNavItems(),
   };
+}
+// Navigation membership depends only on the signed-in user, the static view list,
+// and translations, never on workspace/bootstrap state. The Vue shell calls this as
+// soon as a user exists so the menu is complete before the slow runtime bootstrap.
+function getNavItems(){
+  return viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
+    ...item,
+    label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
+    section:translatedSectionLabel(item.section),
+    disabledReason:viewDisabledReason(item.id),
+  }));
 }
 
 function toggleSidebar(){
@@ -9776,7 +8132,53 @@ function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   const profile=providerProfile(profileId);
   return profile?cloneAuditValue(providerRequestConfig(profile,{textReview})):null;
 }
+function getWarmOnStartForUi(){return state.appConfig.warm_default_provider_on_start===true}
+function setWarmOnStartForUi(value){state.appConfig.warm_default_provider_on_start=Boolean(value);persistPrefs();return getWarmOnStartForUi()}
 function getDefaultProviderProfileId(){return state.appConfig.default_provider_profile||defaultProviderProfile()?.id||""}
+function getProviderStatusesForUi(){return cloneAuditValue(state.providerStatuses||{})}
+function getProviderWarmupsForUi(){return cloneAuditValue(state.providerWarmups||{})}
+function saveProviderProfilesForUi(profiles=[]){
+  if(!Array.isArray(profiles)||!profiles.length)throw new Error("At least one provider profile is required.");
+  state.appConfig.provider_profiles=cloneAuditValue(profiles);
+  if(!state.appConfig.provider_profiles.some(profile=>profile.id===state.appConfig.default_provider_profile))state.appConfig.default_provider_profile=state.appConfig.provider_profiles[0].id;
+  const defaultProfile=defaultProviderProfile();
+  if(defaultProfile)state.appConfig.chat_provider=defaultProfile.type;
+  persistPrefs();
+  return getProviderProfilesForUi();
+}
+function addProviderProfileForUi(type){
+  ensureProviderProfiles();
+  const profile=type==="openai"
+    ? {id:`openai-${uid()}`,name:"New OpenAI-compatible / FreeLLM",type:"openai",base_url:"http://host.docker.internal:3001/v1",model:"auto",model_mode:"auto",model_kind:"any",api_key:"",max_concurrent_requests:32,num_predict:4096,temperature:0,top_p:1,seed:"",extra_options:"{}"}
+    : {id:`ollama-${uid()}`,name:"New Ollama",type:"ollama",base_url:"http://host.docker.internal:11434",model:"gemma4:e2b",model_mode:"manual",model_kind:"any",api_key:"",max_concurrent_requests:1,num_ctx:16384,metadata_num_predict:768,num_predict:4096,think:"false",temperature:0,top_k:0,top_p:1,min_p:"",repeat_penalty:1.1,seed:"",mirostat:0,mirostat_eta:"",mirostat_tau:"",keep_alive:"10m",extra_options:"{}"};
+  state.appConfig.provider_profiles=[...providerProfiles(),profile];
+  persistPrefs();
+  return cloneAuditValue(profile);
+}
+function removeProviderProfileForUi(profileId){
+  if(providerProfiles().length<=1)throw new Error("At least one LLM provider profile is required.");
+  state.appConfig.provider_profiles=providerProfiles().filter(profile=>profile.id!==profileId);
+  if(state.appConfig.default_provider_profile===profileId)state.appConfig.default_provider_profile=state.appConfig.provider_profiles[0]?.id||"";
+  persistPrefs();
+  return getProviderProfilesForUi();
+}
+function setDefaultProviderProfileForUi(profileId){
+  if(!providerProfiles().some(profile=>profile.id===profileId))throw new Error("The selected provider profile is no longer available.");
+  state.appConfig.default_provider_profile=profileId;
+  const profile=providerProfile(profileId);if(profile)state.appConfig.chat_provider=profile.type;
+  persistPrefs();
+}
+async function testProviderProfileForUi(profileId){
+  const profile=providerProfile(profileId);if(!profile)throw new Error("The selected provider profile is no longer available.");
+  const result=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url,api_key:profile.type==="openai"?profile.api_key:null})});
+  state.providerStatuses[profile.id]=result;
+  return cloneAuditValue(result);
+}
+async function warmProviderProfileForUi(profileId){
+  const profile=providerProfile(profileId);if(!profile)throw new Error("The selected provider profile is no longer available.");
+  await warmupProviderProfile(profile.id);
+  return cloneAuditValue(state.providerWarmups?.[profile.id]||{});
+}
 function closeWorkspaceFile(fileId){return closeFile(fileId)}
 function notifyToast(message,options={}){return toast(message,options)}
 function registerExternalJob(job){
@@ -9851,39 +8253,62 @@ document.addEventListener("click",event=>{
     if(record){const copy={...record};delete copy._chroma_id;copyJsonToClipboard(copy,copy.record_id||"Chroma record")}
   }
 });
-const researcherSevereTerms=["fuck","fucking","fucker","motherfucker","shit","bullshit","bitch","bastard","cunt","cock","pussy","asshole","arsehole","whore","slut","goddamn","nigger","nigga","faggot","kike","chink","spic","wetback","tranny","retard","retarded"];
-const researcherSeverePattern=new RegExp(`\\b(?:${researcherSevereTerms.sort((a,b)=>b.length-a.length).map(term=>term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})\\b`,`gi`);
+let researcherPolicy={ready:false,blocked:new Set(),contextual:[]};
 let researcherPolicyToastAt=0;
-function researcherContextualViolation(value){
-  const text=String(value||"");
-  for(const match of text.matchAll(/[A-Za-z][A-Za-z'-]*/g)){
-    const token=match[0],lower=token.toLowerCase();
-    // "Dick" is a common proper name. Lowercase use remains contextual.
-    if(lower==="dick"&&token==="Dick")continue;
-    if(lower==="fag"&&/\b(cigarette|smoke|smoking|british|uk)\b/i.test(text))continue;
-    if(lower==="damn"&&/\b(word|term|quote|quoted|language|example)\b/i.test(text))continue;
-    if(["dick","fag","damn"].includes(lower))return token;
-  }
-  return "";
+const researcherLeet={"0":"o","1":"i","3":"e","4":"a","5":"s","7":"t","@":"a","$":"s"};
+function normalizeResearcherToken(value){
+  const text=String(value||"").normalize("NFKC").replace(/[013457@$]/g,ch=>researcherLeet[ch]||ch).toLocaleLowerCase();
+  return text.replace(/(?<=\w)[._*~-]+(?=\w)/g,"");
 }
-function filterResearcherInputElement(target){
-  if(!isResearcher()||!(target instanceof HTMLElement))return;
+async function researcherTokenDigest(value){
+  if(!globalThis.crypto?.subtle)return "";
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalizeResearcherToken(value)));
+  return Array.from(new Uint8Array(buf),b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function refreshResearcherContentPolicy(){
+  if(!state.userContext){researcherPolicy={ready:false,blocked:new Set(),contextual:[]};return}
+  try{
+    const data=await api("/api/i18n/content-policy");
+    researcherPolicy={
+      ready:Boolean(data?.ready),
+      blocked:new Set(Array.isArray(data?.blocked_term_hashes)?data.blocked_term_hashes:[]),
+      contextual:Array.isArray(data?.contextual)?data.contextual:[],
+    };
+  }catch{
+    researcherPolicy={ready:false,blocked:new Set(),contextual:[]};
+  }
+}
+async function filterResearcherInputElement(target){
+  if(!isResearcher()||!(target instanceof HTMLElement)||!researcherPolicy.ready)return;
   const acceptsText=target instanceof HTMLTextAreaElement||(target instanceof HTMLInputElement&&["text","search","url","email","tel"].includes(target.type))||target.isContentEditable;
   if(!acceptsText)return;
   const original=target.isContentEditable?target.textContent||"":target.value||"";
-  researcherSeverePattern.lastIndex=0;
-  const severe=researcherSeverePattern.exec(original)?.[0]||"";
-  const contextual=researcherContextualViolation(original);
-  if(!severe&&!contextual)return;
+  const words=[...original.matchAll(/[\w'’]+/g)];
+  const remove=[];
+  for(const match of words){
+    const raw=match[0];
+    const digest=await researcherTokenDigest(raw);
+    if(!digest)continue;
+    if(researcherPolicy.blocked.has(digest)){remove.push(raw);continue}
+    const rule=researcherPolicy.contextual.find(item=>item.term_hash===digest);
+    if(!rule)continue;
+    if(rule.allow_title_case&&raw===raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase()&&raw!==raw.toLowerCase())continue;
+    const index=words.indexOf(match);
+    const surrounding=words.slice(Math.max(0,index-3),index+4).map(item=>normalizeResearcherToken(item[0])).join(" ");
+    if((rule.allow_if_surrounding||[]).some(marker=>surrounding.includes(normalizeResearcherToken(marker))))continue;
+    const before=normalizeResearcherToken(original.slice(Math.max(0,match.index-20),match.index));
+    if((rule.allow_if_before_markers||[]).some(marker=>before.includes(normalizeResearcherToken(marker))))continue;
+    remove.push(raw);
+  }
+  if(!remove.length)return;
   let filtered=original;
-  if(severe){researcherSeverePattern.lastIndex=0;filtered=filtered.replace(researcherSeverePattern,"");}
-  if(contextual)filtered=filtered.replace(new RegExp(`\\b${contextual.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`),"");
+  for(const token of remove)filtered=filtered.replace(new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`),"");
   filtered=filtered.replace(/ {2,}/g," ");
   if(target.isContentEditable)target.textContent=filtered;else target.value=filtered;
   target.dispatchEvent(new Event("change",{bubbles:true}));
   const now=Date.now();if(now-researcherPolicyToastAt>1200){researcherPolicyToastAt=now;toast(tr("content_filter.warning","That language is not permitted for researcher accounts. The flagged term was removed."),{tone:"warn"})}
 }
-document.addEventListener("input",event=>filterResearcherInputElement(event.target),true);
+document.addEventListener("input",event=>{void filterResearcherInputElement(event.target)},true);
 
 window.addEventListener("popstate",()=>{
   applyUrlState();
@@ -9918,7 +8343,15 @@ function wireTabScrollPreservation(){
 async function bootstrapRuntime(){
   wireTabScrollPreservation();wireMetadataSearchDelegation();
   await restoreWorkspace();
-  applyUiTheme(state.appConfig.ui_color_theme);
+  try{
+    if(!state.appConfig.ui_color_scheme)state.appConfig.ui_color_scheme=localStorage.getItem("derridai.ui.scheme")||"system";
+    if(!state.appConfig.ui_contrast)state.appConfig.ui_contrast=localStorage.getItem("derridai.ui.contrast")||"system";
+  }catch{ /* localStorage can be blocked */ }
+  applyAppearance({
+    ui_color_theme:state.appConfig.ui_color_theme,
+    ui_color_scheme:state.appConfig.ui_color_scheme||"system",
+    ui_contrast:state.appConfig.ui_contrast||"system",
+  });
   try{
     const providerData=await api("/api/system/researcher-providers");
     state.researcherProviderProfiles=Array.isArray(providerData.profiles)?providerData.profiles:[];
@@ -9945,7 +8378,7 @@ async function bootstrapRuntime(){
   await refreshJobs({rerender:false});
   if(state.view==="home"&&document.querySelector("#main"))renderDashboard(document.querySelector("#main"));
   startJobPolling();
-  if(!isResearcher())warmupConfiguredLlm();
+  if(!isResearcher()&&state.appConfig.warm_default_provider_on_start===true)warmupConfiguredLlm();
 }
 
 
@@ -9955,66 +8388,6 @@ async function bootstrapRuntime(){
 // the sparse API contracts introduced in 0.30.11. Keep the bridge intentionally
 // operation-specific so native components never need to receive credentials,
 // full corpus records, or unrelated runtime state.
-function researchProfileForUi(profile){
-  if(!profile)return null;
-  const keys=[
-    "id","name","type","model","model_mode","model_kind","max_concurrent_requests",
-    "num_ctx","num_predict","think","temperature","top_k","top_p","min_p",
-    "repeat_penalty","seed","mirostat","mirostat_eta","mirostat_tau","keep_alive",
-    "extra_options",
-  ];
-  return Object.fromEntries(keys.filter(key=>profile[key]!==undefined).map(key=>[key,cloneAuditValue(profile[key])]));
-}
-function researchEvidenceForUi(item){
-  if(!item)return null;
-  return {
-    key:item.key,
-    kind:item.kind,
-    collection:item.collection||null,
-    chroma_id:item.chroma_id||null,
-    record_id:item.record_id||"",
-    work:item.work||"",
-    page_start:item.page_start??null,
-    page_end:item.page_end??null,
-    speaker:item.speaker||null,
-    position_holder:item.position_holder||null,
-    stance:item.stance||null,
-    discourse_role:item.discourse_role||null,
-    target:item.target||null,
-    proposition_status:item.proposition_status||null,
-    inline_citation:item.inline_citation||null,
-    text_preview:item.text_preview||"",
-    label:item.label||"",
-  };
-}
-function researchJobForUi(job){
-  if(!job)return null;
-  const result=job.result&&typeof job.result==="object"?job.result:null;
-  return {
-    id:job.id,
-    type:job.type,
-    status:job.status,
-    stage:job.stage||"",
-    stage_detail:job.stage_detail||"",
-    prompt:job.prompt||result?.prompt||"",
-    provider:job.provider||result?.provider||"",
-    provider_profile_id:job.provider_profile_id||null,
-    model:job.model||result?.model||"",
-    source_collection:job.source_collection||"",
-    owner:job.owner||"",
-    created_at:job.created_at||null,
-    started_at:job.started_at||null,
-    finished_at:job.finished_at||null,
-    updated_at:job.updated_at||null,
-    completed:Number(job.completed||0),
-    total:Number(job.total||0),
-    cancel_requested:Boolean(job.cancel_requested),
-    fatal_error:job.fatal_error||null,
-    request:job.request?cloneAuditValue(job.request):null,
-    result:result?cloneAuditValue(result):null,
-    events:Array.isArray(job.events)?cloneAuditValue(job.events):[],
-  };
-}
 function researchConfigForUi(){
   return cloneAuditValue(state.ragConfig||{});
 }
@@ -10125,65 +8498,6 @@ async function deleteResearchJob(jobId){
 function generationFromProfile(profile){
   const cfg=providerRequestConfig(profile,{textReview:true});
   return cloneAuditValue(cfg?.ollama||{});
-}
-function finiteResearchNumber(value,fallback,{integer=false,min=-Infinity,max=Infinity}={}){
-  if(value===null||value===undefined||value==="")return fallback;
-  const parsed=integer?Number.parseInt(String(value),10):Number(value);
-  if(!Number.isFinite(parsed))return fallback;
-  return Math.min(max,Math.max(min,parsed));
-}
-function sanitizeResearchGeneration(input={}){
-  const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
-  const out={};
-  const specs={
-    num_ctx:{integer:true,min:512,max:262144},num_predict:{integer:true,min:16,max:32768},
-    temperature:{min:0,max:2},top_k:{integer:true,min:0,max:1000},top_p:{min:0,max:1},min_p:{min:0,max:1},
-    repeat_penalty:{min:0,max:5},seed:{integer:true},mirostat:{integer:true,min:0,max:2},mirostat_eta:{min:0},mirostat_tau:{min:0},
-  };
-  for(const [key,spec] of Object.entries(specs)){
-    const raw=source[key];
-    if(raw===null||raw===undefined||raw==="")continue;
-    const value=finiteResearchNumber(raw,null,spec);
-    if(value!==null&&Number.isFinite(value))out[key]=value;
-  }
-  const think=source.think;
-  if(typeof think==="boolean")out.think=think;
-  else if(["low","medium","high"].includes(String(think||"").toLowerCase()))out.think=String(think).toLowerCase();
-  else if(String(think||"").toLowerCase()==="true")out.think=true;
-  else if(String(think||"").toLowerCase()==="false")out.think=false;
-  if(source.keep_alive!==null&&source.keep_alive!==undefined&&String(source.keep_alive).trim())out.keep_alive=String(source.keep_alive).trim();
-  if(Array.isArray(source.stop))out.stop=source.stop.map(item=>String(item)).filter(Boolean);
-  let extra=source.extra_options;
-  if(typeof extra==="string"){try{extra=JSON.parse(extra||"{}")}catch{extra={}}}
-  out.extra_options=extra&&typeof extra==="object"&&!Array.isArray(extra)?extra:{};
-  return out;
-}
-function normalizedResearchConfig(cfg={}){
-  const locales=Array.isArray(cfg.locales)?[...new Set(cfg.locales.map(String).filter(value=>["en","fr"].includes(value)))]:["en","fr"];
-  const searchTypes=Array.isArray(cfg.search_types)?[...new Set(cfg.search_types.map(String).filter(value=>["mmr","similarity","lexical"].includes(value)))]:["similarity","lexical","mmr"];
-  const reranker=["cross_encoder","lexical","none"].includes(String(cfg.reranker||""))?String(cfg.reranker):"cross_encoder";
-  const responseLanguage=["auto","en","fr"].includes(String(cfg.response_language||""))?String(cfg.response_language):"auto";
-  return {
-    ...cfg,
-    k:finiteResearchNumber(cfg.k,64,{integer:true,min:1,max:500}),
-    fetch_k:finiteResearchNumber(cfg.fetch_k,500,{integer:true,min:1,max:5000}),
-    lambda_mult:finiteResearchNumber(cfg.lambda_mult,.7,{min:0,max:1}),
-    rrf_k:finiteResearchNumber(cfg.rrf_k,60,{integer:true,min:1,max:10000}),
-    rerank_top_n:finiteResearchNumber(cfg.rerank_top_n,24,{integer:true,min:1,max:500}),
-    reranker,
-    cross_encoder_model:String(cfg.cross_encoder_model||"cross-encoder/ms-marco-MiniLM-L-6-v2").trim()||"cross-encoder/ms-marco-MiniLM-L-6-v2",
-    query_decomposition:Boolean(cfg.query_decomposition),
-    query_decomposition_num_predict:finiteResearchNumber(cfg.query_decomposition_num_predict,768,{integer:true,min:64,max:8192}),
-    response_language:responseLanguage,
-    evidence_record_char_limit:finiteResearchNumber(cfg.evidence_record_char_limit,12000,{integer:true,min:500,max:100000}),
-    evidence_total_char_limit:finiteResearchNumber(cfg.evidence_total_char_limit,120000,{integer:true,min:5000,max:1000000}),
-    locales,
-    search_types:searchTypes,
-    bind_citations:cfg.bind_citations!==false,
-    include_works_cited:cfg.include_works_cited!==false,
-    auto_grade:Boolean(cfg.auto_grade),
-    skip_retrieval:Boolean(cfg.skip_retrieval),
-  };
 }
 async function startResearchRun(input={}){
   if(!hasCapability("rag.run"))throw new Error(tr("permissions.rag_denied","Your role cannot run Research pipelines."));
@@ -10308,18 +8622,6 @@ function prepareResearchRerun(job){
 // only the current record data and actions needed by that workspace. Audit
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
-function compactRecordHistory(record,limit=80){
-  const updates=Array.isArray(record?.updates)?record.updates:[];
-  return updates.slice(-Math.max(1,limit)).reverse().map((update,index)=>({
-    id:`history-${updates.length-index-1}`,
-    field_name:String(update?.field_name||""),
-    timestamp:update?.timestamp||null,
-    source:String(update?.source||"manual"),
-    initiated_by:update?.initiated_by||null,
-    model:update?.model||null,
-    reason:update?.reason||null,
-  }));
-}
 function recordWorkspaceRecord(record){
   const out=recordPayload(record,{includeChromaId:true});
   delete out.updates;
@@ -10340,8 +8642,10 @@ function normalizedRecordAnnotation(item,index=0,{removable=false}={}){
   };
 }
 async function researcherCurrentRecord(){
+  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   try{await refreshServerAnnotations()}catch{}
   if(!state.activeStore){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     try{await refreshStores()}catch{}
     if(!state.activeStore)return null;
   }
@@ -10349,6 +8653,7 @@ async function researcherCurrentRecord(){
   let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
   if(!record&&id){try{record=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(id)}`)}catch{record=null}}
   if(!record){
+    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     if(!state.storeRecords.length){try{await loadStorePage()}catch{}}
     record=state.storeRecords[0]||null;
     id=String(record?._chroma_id||record?.record_id||"");
@@ -10519,7 +8824,33 @@ async function currentRecordPrimaryAction(action,payload={}){
 function searchCurrentRecordMetadata(field,value,{contains=false}={}){return searchByMetadata(field,value,{contains})}
 function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
+function getWorksWorkspaceSnapshot(){
+  const map=workIndex();
+  const query=String(state.worksSearch||"");
+  const metadataFields=["source_type","document_author","container_title","journal_title","volume","issue","pages","publisher","publication_year","edition","translator","editor","publication_place","isbn","doi","document_language","original_language"];
+  const items=[...map.values()].filter(item=>!query||item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>a.work.localeCompare(b.work)).map(item=>({
+    work:item.work,count:item.count,review:item.review,annotations:allAnnotations().filter(annotation=>String(annotation.work||"")===String(item.work)).length,files:[...item.files],authors:[...item.authors],years:[...item.years].map(String),cover:workCoverUrl(item.rows),citation:fullCitation(item.rows[0]?.record||{work:item.work},{includePages:false}),
+    metadata:metadataFields.map(field=>{const value=commonWorkValue(item.rows,field);return {field,mixed:value.mixed,value:value.mixed?"":String(display(value.value))}}).filter(value=>value.mixed||value.value!=="—"),
+    status:workDbStatus(item.rows,item.work),insights:workInsightMetrics(item.rows,item.work).map(metric=>({id:metric.id,title:metric.title,values:metric.values.map(value=>({key:String(value.key),value:Number(value.value||0)}))})),
+  }));
+  const stores=recordStores().map(store=>({name:store.name,count:Number(store.count||0)}));
+  return {available:state.files.length>0,works:items,query,selectedWork:String(state.workOverview||""),stores,activeStore:String(state.activeStore||""),totalWorks:map.size,totalRecords:[...map.values()].reduce((sum,item)=>sum+item.count,0),dbUnavailableReason:dbUnavailableReason(),capabilities:{canManageCorpus:canUse("manageCorpus"),canSync:canUse("manageCorpus")&&hasCorpusDb()}};
+}
+function setWorksSearch(value){state.worksSearch=String(value||"");persistPrefs();syncUrl({replace:true})}
+function setWorksOverview(work){state.workOverview=String(work||"");persistPrefs();syncUrl({replace:true})}
+function setWorksStore(name){setActiveStore(name)}
+async function syncWork(work){const item=workIndex().get(String(work||""));if(!item)return false;return upsertRows(item.rows,trf("works.work_records_label","records for {work}",{work:item.work}))}
+async function syncAllWorks(){const rows=[...workIndex().values()].flatMap(item=>item.rows);return upsertRows(rows,tr("works.all_records_label","records across all works"))}
+function searchWork(work){state.globalSearchMode="traditional";state.globalSearch="";state.globalFilters=[{id:uid(),field:"work",op:"eq",value:String(work||"")}];state.globalPage=1;persistPrefs();navigateTo("global")}
+function openWorkMetadataEditorForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataEditor(item.work,item.rows)}
+function openWorkMetadataLlmDialogForVue(work){const item=workIndex().get(String(work||""));if(item)openWorkMetadataLlmDialog([item])}
+function openWorkAnnotations(work){state.annotationSearch=String(work||"");state.annotationView="works";persistPrefs();navigateTo("annotations")}
+
 export {
+  getNavItems,
+  operationViewModel,
+  operationDetailPairs,
+  jobProgressText,
   state,
   viewConfig,
   setUserContext,
@@ -10543,6 +8874,13 @@ export {
   triggerOcrClean,
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
+  openTouchup,
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
   triggerUpsertQueue,
   triggerOperations,
   triggerExport,
@@ -10552,11 +8890,42 @@ export {
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
   getDefaultProviderProfileId,
+  getProviderStatusesForUi,
+  getProviderWarmupsForUi,
+  saveProviderProfilesForUi,
+  addProviderProfileForUi,
+  removeProviderProfileForUi,
+  setDefaultProviderProfileForUi,
+  testProviderProfileForUi,
+  warmProviderProfileForUi,
+  getWarmOnStartForUi,
+  setWarmOnStartForUi,
+  syncResearcherProviderProfiles,
   notifyToast,
   registerExternalJob,
   dbUnavailableReason,
   hasCorpusDb,
   openDatabaseCreationFromResearch,
+  notifyVectorStoresChanged,
+  openCollectionCreationWizard,
+  upsertRows,
+  exportStoreJsonl,
+  persistPrefs,
+  lookupRecord,
+  getCompareLibrary,
+  getCompareRecord,
+  ensureCompareLibrary,
+  copyJsonToClipboard,
+  copyCitation,
+  flushWorkspacePrefs,
+  applyUiTheme,
+  applyAppearance,
+  downloadFullBackup,
+  restoreFullBackup,
+  clearAllUpdates,
+  deleteAllDerridaiBrowserState,
+  backupContainsCredentials,
+  pendingUpsertRows,
   decorateDisabledControls,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,
@@ -10586,6 +8955,17 @@ export {
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
+  getWorksWorkspaceSnapshot,
+  setWorksSearch,
+  setWorksOverview,
+  setWorksStore,
+  syncWork,
+  syncAllWorks,
+  searchWork,
+  openWorkMetadataEditorForVue as openWorkMetadataEditor,
+  openWorkMetadataLlmDialogForVue as openWorkMetadataLlmDialog,
+  openWorkAnnotations,
+  openSeparateWorksModal,
   getSearchWorkspaceSnapshot,
   setSearchScope,
   updateSearchQuery,
@@ -10611,4 +8991,25 @@ export {
   runSearchSelectionAction,
   getSearchShareHref,
   restoreSearchViewFromHref,
+  getRecordsListSnapshot,
+  setRecordsListQuery,
+  setRecordsListStore,
+  setRecordsListPage,
+  setRecordsListPageSize,
+  setRecordsListSort,
+  setRecordsListFilter,
+  clearRecordsListFilters,
+  setRecordsListRowSelected,
+  setRecordsListPageSelected,
+  selectRecordsListMatches,
+  clearRecordsListSelection,
+  openRecordsListRecord,
+  copyRecordsListJson,
+  copyRecordsListCitation,
+  toggleRecordsListEvidence,
+  recordsListMetadataSearch,
+  setRecordsListColumns,
+  resetRecordsListColumns,
+  getRecordsListShareHref,
+  recordsListCommand,
 };

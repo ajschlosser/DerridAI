@@ -1,0 +1,205 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+"""Pure scholarly metadata vocabulary and deterministic ownership constraints.
+
+No repository, model-provider, or job-manager dependency is permitted here.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from .metadata_values import clean as clean_value
+from .metadata_values import is_placeholder
+
+REGION_TYPES = [
+    "front_matter", "main_text", "notes", "bibliography", "index",
+    "appendix", "back_matter", "paratext", "unknown",
+]
+
+DISCOURSE_ROLES = [
+    "assertion", "analysis", "quotation", "reported_position", "critique",
+    "qualification", "transition", "question", "definition", "example",
+    "commentary", "paratext", "bibliographic",
+]
+
+PROPOSITION_STATUS_VALUES = [
+    "asserted", "affirmed", "rejected", "criticized", "questioned", "qualified",
+    "hypothetical", "attributed", "reported", "conceded", "suspended",
+]
+
+STANCE_VALUES = ["affirm", "reject", "criticize", "question", "qualify", "suspend", "neutral", "describe"]
+
+STANCE_ALIASES = {
+    "affirmed": "affirm",
+    "rejected": "reject",
+    "criticized": "criticize",
+    "questioned": "question",
+    "qualified": "qualify",
+    "suspended": "suspend",
+    "descriptive": "describe",
+}
+
+STRONG_STRUCTURAL_METHODS = {
+    "human_document_layout",
+    "document_layout_rule",
+    "confirmed_manifest_page_range",
+}
+
+def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
+    """Canonicalize only closed-vocabulary grammatical aliases.
+
+    The raw model value is returned separately for audit. We deliberately avoid
+    semantic synonym expansion: only direct inflectional variants are normalized.
+    """
+    if isinstance(value, str) and is_placeholder(value):
+        return None, value  # the raw text is kept for audit; it is not a value
+    if isinstance(value, list) and any(is_placeholder(item) for item in value):
+        return clean_value(value), value
+    if field != "stance" or not isinstance(value, str):
+        return value, None
+    raw = value
+    token = value.strip().casefold()
+    if token in STANCE_VALUES:
+        return token, None
+    normalized = STANCE_ALIASES.get(token)
+    return (normalized, raw) if normalized else (value, None)
+
+DISCOURSE_ROLE_DEFINITIONS = {
+    "assertion": "The speaker directly advances a proposition as part of the argument.",
+    "analysis": "The passage examines, interprets, or explicates a claim, text, concept, or distinction.",
+    "quotation": "The record primarily functions as direct quoted material rather than the surrounding author's own proposition.",
+    "reported_position": "The passage presents a proposition held or advanced by another position holder without necessarily endorsing it.",
+    "critique": "The passage explicitly challenges, rejects, problematizes, or exposes a limitation in a position.",
+    "qualification": "The passage limits, modifies, complicates, or adds a condition to another proposition.",
+    "transition": "The passage primarily moves between argumentative stages rather than advancing a substantive proposition.",
+    "question": "The passage primarily poses a question or problem rather than asserting an answer.",
+    "definition": "The passage explicitly defines, specifies, or characterizes a term or concept.",
+    "example": "The passage primarily provides an illustration, case, or example for another point.",
+    "commentary": "The passage offers explanatory commentary that is not itself the principal argumentative move.",
+    "paratext": "Editorial, publishing, prefatory, front/back matter, or other apparatus rather than substantive argument.",
+    "bibliographic": "Bibliographic citation, reference-list, or works-cited material.",
+}
+
+HYBRID_REQUIRED_FIELDS = ("region_type", "primary_text", "discourse_role")
+
+REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "speaker", "position_holder", "target", "stance", "proposition_status", "claim_scope")
+
+NON_PRIMARY_REGION_TYPES = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
+
+def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Apply deterministic record-metadata relationships.
+
+    Hard semantic invariants are applied consistently in single-record editing,
+    bulk editing, and automatic enrichment. Human decisions remain authoritative
+    for soft defaults, but impossible apparatus/primary-text combinations are not
+    offered as scholarly choices.
+    """
+    region = str(record.get("region_type") or "")
+    status = record.setdefault("metadata_field_status", {})
+    changes: list[dict[str, Any]] = []
+
+    primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
+    human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
+    strong_structural_primary = str(primary_status.get("method") or "") in STRONG_STRUCTURAL_METHODS
+    semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
+    desired_primary: bool | None = None
+    primary_reason = ""
+    primary_hard = False
+    if region in NON_PRIMARY_REGION_TYPES:
+        desired_primary = False
+        primary_hard = True
+        primary_reason = f"{region} cannot be primary text."
+    elif region == "main_text" and not human_primary:
+        desired_primary = True
+        primary_reason = "main_text is deterministically suggested as primary text unless a reviewer overrides it."
+    if desired_primary is not None and (primary_hard or not human_primary):
+        if record.get("primary_text") is not desired_primary:
+            changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
+        record["primary_text"] = desired_primary
+        if not semantic_disagreement and not strong_structural_primary:
+            status["primary_text"] = {
+                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+                "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
+            }
+
+    role_status = status.get("discourse_role") if isinstance(status.get("discourse_role"), dict) else {}
+    human_role = str(role_status.get("status") or "") in {"human_confirmed", "human_override"}
+    desired_role: str | None = None
+    role_reason = ""
+    if region == "bibliography":
+        desired_role = "bibliographic"
+        role_reason = "Bibliography regions are deterministically bibliographic discourse."
+    elif region in {"front_matter", "back_matter", "paratext"}:
+        desired_role = "paratext"
+        role_reason = f"{region} is deterministically classified as paratext unless a reviewer explicitly overrides it."
+    if desired_role is not None and not human_role:
+        if record.get("discourse_role") != desired_role:
+            changes.append({"field": "discourse_role", "value": desired_role, "reason": role_reason})
+        record["discourse_role"] = desired_role
+        status["discourse_role"] = {
+            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
+            "reason_code": "semantic_invariant", "reason": role_reason,
+        }
+    return changes
+
+ATTRIBUTION_EVIDENCE_FIELDS = {
+    "speaker", "position_holder", "target", "stance", "proposition_status",
+    "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder",
+    "quoted_addressee", "quoted_referent", "quotation_chain",
+}
+
+EVIDENCE_REQUIRED_FIELDS = ATTRIBUTION_EVIDENCE_FIELDS | set(HYBRID_REQUIRED_FIELDS)
+
+SOURCE_BOUND_FIELDS = {
+    "record_id", "record_revision", "text", "text_length", "page_start", "page_end", "pdf_file",
+    "pdf_pages", "source_asset_id", "source_block_ids", "source_spans",
+}
+
+ALLOWED_METADATA_FIELDS = {
+    "work", "document_title", "short_title", "original_title", "document_author",
+    "edition", "year", "publication_year", "publisher", "publication_place", "isbn",
+    "language", "document_language", "original_language", "document_is_translation", "translator", "region_type",
+    "region_author", "primary_text", "speaker", "position_holder", "target",
+    "discourse_role", "proposition_status", "semantic_function", "stance",
+    "claim_scope", "is_direct_quote", "quoted_speaker", "quoted_author",
+    "quoted_work", "quoted_position_holder", "quoted_addressee", "quoted_referent",
+    "quotation_chain", "topics", "concepts", "persons", "works_referenced",
+    "attribution_confidence", "semantic_classification_confidence", "extraction_quality",
+    "canonical_work_id", "inline_citation", "full_citation", "needs_review",
+    "review_reason",
+}
+
+METADATA_FAMILY_FIELDS = {
+    "discourse": {
+        "region_type", "region_author", "primary_text", "speaker", "position_holder",
+        "target", "discourse_role", "proposition_status", "semantic_function", "stance",
+        "claim_scope", "attribution_confidence", "semantic_classification_confidence",
+    },
+    "quotation": {
+        "is_direct_quote", "quoted_speaker", "quoted_author", "quoted_work",
+        "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain",
+    },
+    "indexing": {"topics", "concepts", "persons", "works_referenced"},
+}
+
+MANIFEST_INHERITED_FIELDS = {
+    "work", "document_title", "short_title", "original_title", "canonical_work_id",
+    "document_author", "translator", "edition", "year", "publication_year", "publisher",
+    "publication_place", "isbn", "document_language", "original_language",
+    "document_is_translation",
+}
+
+HUMAN_EDITABLE_METADATA_FIELDS = {
+    # Record-level overrides of inherited bibliographic metadata are explicit
+    # human decisions. They never mutate the document manifest and must survive
+    # later automatic enrichment.
+    "work", "document_title", "short_title", "original_title", "canonical_work_id",
+    "document_author", "translator", "edition", "year", "publication_year",
+    "publisher", "publication_place", "isbn", "document_language",
+    "original_language", "document_is_translation",
+    "language", "region_type", "region_author", "primary_text", "speaker",
+    "position_holder", "target", "discourse_role", "proposition_status",
+    "semantic_function", "stance", "claim_scope", "is_direct_quote",
+    "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder",
+    "quoted_addressee", "quoted_referent", "quotation_chain", "topics",
+    "concepts", "persons", "works_referenced", "needs_review", "review_reason",
+}

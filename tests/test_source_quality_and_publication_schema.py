@@ -1,0 +1,75 @@
+"""Profile identity, source-quality gate, and publication schema.
+
+Why: version identifiers are provenance; corrupted PDF text must stop enrichment;
+published JSONL must be namespaced, Unicode-safe, and use only allowed vocabulary.
+How: pure functions and small dicts; no LLM or disk.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "api"))
+
+from app import corpus_builder as cb
+from app.models import PdfCorpusBuildCreate
+
+
+def test_profile_prompt_and_publication_schema_ids():
+    """Pin profile, prompt and publication schema ids; only one profile is registered."""
+    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v10"
+    assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
+    assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v12"
+    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
+
+
+def test_source_quality_blocks_corruption_not_unicode():
+    """Real Unicode passes the quality gate; replacement characters do not.
+
+    Healthy text (accents, Greek, CJK) is valid for enrichment. OCR text with the
+    Unicode replacement character makes the page a blocking page (page 2).
+    Why: enriching garbled text would create confident but meaningless metadata.
+    """
+    healthy = [{"page": 1, "text": "Hélène Cixous · Édouard Glissant · différance · Łódź · Ελληνικά · 東京", "extraction_method": "native"}]
+    report = cb.PdfCorpusBuildManager._source_quality_report(healthy)
+    assert report["valid_for_enrichment"] is True
+    assert report["blocking_pages"] == []
+    damaged = [{"page": 2, "text": "corrupt � � source text", "extraction_method": "ocr"}]
+    report = cb.PdfCorpusBuildManager._source_quality_report(damaged)
+    assert report["valid_for_enrichment"] is False
+    assert report["blocking_pages"] == [2]
+
+
+def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
+    """A valid public record has no errors; an invented region type is rejected.
+
+    The record carries build details under corpus_build_details, non-ASCII text, and
+    allowed enum values. Changing region_type to "invented" must produce an error
+    naming region_type.
+    """
+    public = {
+        "record_id": "rec-1",
+        "text": "Édouard Glissant writes of relation — 東京",
+        "source_block_ids": ["p001-b001"],
+        "region_type": cb.REGION_TYPES[0],
+        "discourse_role": cb.DISCOURSE_ROLES[0],
+        "primary_text": True,
+        "corpus_build_details": {
+            "build_id": "build-1", "publication_id": "publication-1", "published_at": "2026-09-17T00:00:00Z",
+            "app_version": "0.60.0", "schema_version": cb.SCHEMA_VERSION,
+            "publication_schema_version": cb.PUBLICATION_SCHEMA_VERSION,
+            "profile_id": cb.PROFILE_VERSION, "source_sha256": "abc",
+        },
+    }
+    assert cb.PdfCorpusBuildManager._validate_publication_record(public) == []
+    assert "東京" in json.dumps(public, ensure_ascii=False)
+    public["region_type"] = "invented"
+    assert any("region_type" in error for error in cb.PdfCorpusBuildManager._validate_publication_record(public))
+
+
+
+

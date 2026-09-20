@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
-withDefaults(defineProps<{ placeholder?: string; shortcut?: string }>(), { placeholder: "Search…", shortcut: "⌘K" });
+// The handler in App.vue accepts Ctrl+K and ⌘K; advertise the one this platform uses.
+withDefaults(defineProps<{ placeholder?: string; shortcut?: string }>(), { placeholder: "Search…", shortcut: () => (typeof navigator!=="undefined"&&/Mac|iPhone|iPad/i.test(navigator.platform||navigator.userAgent||"")?"⌘K":"Ctrl K") });
 const model = defineModel<string>({ default: "" });
 const emit = defineEmits<{ submit: [] }>();
 const input = ref<HTMLInputElement | null>(null);

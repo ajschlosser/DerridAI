@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import * as runtime from "../runtime/runtime.js";
+import * as runtime from "../runtime/runtimeBridge";
 
 export interface ShellFile {
   id: string;
@@ -8,6 +8,8 @@ export interface ShellFile {
   count: number;
   dirty: number;
   active: boolean;
+  origin?: string;
+  origin_detail?: string;
 }
 export interface ShellNavItem {
   id: string;
@@ -70,8 +72,25 @@ export const useShellStore = defineStore("shell", () => {
   const snapshot = ref<ShellSnapshot>(emptySnapshot);
   const ready = ref(false);
 
+  // True once the navigation list has been computed for the signed-in user. The shell
+  // must not draw a partial menu (only the Vue-side admin items) before this.
+  const navReady = ref(false);
+
   function sync() {
     snapshot.value = runtime.getShellSnapshot() as ShellSnapshot;
+    navReady.value = true;
+  }
+
+  // Publish only the menu. Cheap and independent of workspace bootstrap, so it can run
+  // the moment a user signs in instead of waiting for the first full snapshot.
+  function syncNav() {
+    snapshot.value = { ...snapshot.value, nav: runtime.getNavItems() as ShellNavItem[] };
+    navReady.value = true;
+  }
+
+  function resetNav() {
+    snapshot.value = { ...snapshot.value, nav: [] };
+    navReady.value = false;
   }
 
   const groupedNav = computed(() => {
@@ -87,5 +106,5 @@ export const useShellStore = defineStore("shell", () => {
     return groups;
   });
 
-  return { snapshot, ready, groupedNav, sync };
+  return { snapshot, ready, navReady, groupedNav, sync, syncNav, resetNav };
 });

@@ -3,6 +3,10 @@ services:
   web:
     build:
       context: ./web
+      additional_contexts:
+        gitmeta: ./.git
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
     ports:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8181}:80"
     healthcheck:
@@ -32,6 +36,10 @@ services:
   api:
     build:
       context: ./api
+      additional_contexts:
+        gitmeta: ./.git
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
@@ -40,9 +48,17 @@ services:
       CHROMA_PATH: /data/chroma
       CHROMA_DATA_ROOT: /data
       AUTH_DB_PATH: ${AUTH_DB_PATH:-/data/.home/derridai-auth.sqlite3}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      AUTH_LOGIN_MAX_FAILURES: ${AUTH_LOGIN_MAX_FAILURES:-5}
+      AUTH_LOGIN_LOCKOUT_SECONDS: ${AUTH_LOGIN_LOCKOUT_SECONDS:-300}
       SYSTEM_DB_PATH: ${SYSTEM_DB_PATH:-/data/.home/derridai-system.sqlite3}
       RESEARCHER_TEXT_MAX_CHARS: ${RESEARCHER_TEXT_MAX_CHARS:-1600}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      CHROMA_MODE: ${CHROMA_MODE:-embedded}
+      CHROMA_BASE_URL: ${CHROMA_BASE_URL:-http://chroma:8000}
+      CHROMA_TOKEN: ${CHROMA_TOKEN:-}
+      CHROMA_TENANT: ${CHROMA_TENANT:-default_tenant}
+      CHROMA_DATABASE: ${CHROMA_DATABASE:-default_database}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3:latest}
@@ -86,4 +102,23 @@ services:
     volumes:
       - ./data/ollama:/root/.ollama
     gpus: all
+    restart: unless-stopped
+
+  # Opt-in Chroma server. Run with:
+  #   docker compose --profile chroma up -d
+  # then set CHROMA_MODE=http and CHROMA_BASE_URL=http://chroma:8000.
+  # Do not point PersistentClient and this service at the same directory.
+  chroma:
+    image: chromadb/chroma:${CHROMA_IMAGE_TAG:-1.1.0}
+    profiles: ["chroma"]
+    ports:
+      - "${CHROMA_BIND:-127.0.0.1}:${CHROMA_PORT:-8001}:8000"
+    volumes:
+      - ./data/chroma-server:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
     restart: unless-stopped
