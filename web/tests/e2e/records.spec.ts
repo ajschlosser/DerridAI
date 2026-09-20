@@ -20,3 +20,10 @@ test("Records workspace header has no WCAG 2.2 AA violations", async ({page}) =>
   const results = await scan(page, ".records-hero");
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });
+
+test("Records file rail has no WCAG 2.2 AA violations", async ({page}) => {
+  await page.goto("/iframe.html?id=records-file-rail--populated&viewMode=story");
+  await expect(page.locator(".records-file-rail").first()).toBeVisible();
+  const results = await scan(page, ".records-file-rail");
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+});

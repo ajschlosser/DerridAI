@@ -13,6 +13,7 @@ import {
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
+import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
   applyAppearance as applyAppearanceCompat,
   applyUiTheme as applyUiThemeCompat,
@@ -659,15 +660,7 @@ async function restoreCurrentPdfAsset(){
 }
 
 function serializableFile(file){
-  return {
-    id:file.id,
-    name:file.name,
-    records:file.records,
-    errors:file.errors||[],
-    dirty:[...file.dirty],
-    imported_at:file.imported_at||new Date().toISOString(),
-    saved_at:new Date().toISOString(),
-  };
+  return serializableRecordsFile(file);
 }
 async function persistFileNow(file){
   invalidateCorpusCache();
@@ -7080,7 +7073,7 @@ function recordsListCell(row,key,query){
 }
 
 function getRecordsListSnapshot(){
-  const files=state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId}));
+  const files=state.files.map(file=>describeRecordsFile(file,state.activeFileId));
   const stores=recordStores();
   const shared=Boolean(new URLSearchParams(location.search).get("file"));
   const capabilities={
@@ -7118,7 +7111,7 @@ function getRecordsListSnapshot(){
   const columnKeys=getTableColumns("list",available);
   return {
     available:true,shared,files,
-    file:{id:f.id,name:f.name,count:f.records.length,dirty:f.dirty?.size||0},
+    file:describeRecordsFile(f,state.activeFileId),
     query,rows:slice.map(x=>{
       const key=reviewKey(f,x.index);
       const evidenceKey=workspaceEvidenceSelectionKey(f,x.index);
@@ -9391,7 +9384,7 @@ function getShellSnapshot(){
   return {
     view:state.view,
     sidebarCollapsed:state.sidebarCollapsed,
-    files:state.files.map(file=>({id:file.id,name:file.name,count:file.records.length,dirty:file.dirty?.size||0,active:file.id===state.activeFileId})),
+    files:state.files.map(file=>describeRecordsFile(file,state.activeFileId)),
     context:ctx,
     totalLoaded,
     flagged,

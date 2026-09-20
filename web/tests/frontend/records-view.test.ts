@@ -7,8 +7,8 @@ function baseSnapshot() {
   return {
     available: true,
     shared: false,
-    files: [{ id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true }],
-    file: { id: "f1", name: "tab.jsonl", count: 2, dirty: 0 },
+    files: [{ id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true, origin: "imported", origin_detail: "" }],
+    file: { id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true, origin: "imported", origin_detail: "" },
     query: "",
     rows: [
       {
@@ -76,7 +76,12 @@ const runtime = vi.hoisted(() => ({
   getShellSnapshot: vi.fn(() => ({ files: [] })),
   setRecordsListQuery: vi.fn(),
   recordsListCommand: vi.fn(async () => undefined),
+  triggerMerge: vi.fn(),
+  triggerSubset: vi.fn(),
+  triggerExport: vi.fn(),
   getRecordsListShareHref: vi.fn(() => "http://localhost/records?file=f1"),
+  activateFile: vi.fn(),
+  closeWorkspaceFile: vi.fn(async () => undefined),
   setRecordsListColumns: vi.fn(),
   resetRecordsListColumns: vi.fn(),
   openRecordsListRecord: vi.fn(),
@@ -194,6 +199,7 @@ describe("RecordsView", () => {
     runtime.getRecordsListSnapshot.mockReturnValue({
       ...baseSnapshot(),
       available: false,
+      files: [],
       file: null,
       rows: [],
       total: 0,
@@ -209,6 +215,7 @@ describe("RecordsView", () => {
       ...baseSnapshot(),
       available: false,
       shared: true,
+      files: [],
       file: null,
       rows: [],
       total: 0,
@@ -270,6 +277,45 @@ describe("RecordsView", () => {
       "text",
       "speaker",
     ]);
+    wrapper.unmount();
+  });
+
+  it("selects a local JSONL file from the Records rail", async () => {
+    const wrapper = await mountRecords();
+    expect(wrapper.text()).toContain("Local JSONL");
+    expect(wrapper.text()).toContain("Imported");
+    await wrapper.get(".records-file-select").trigger("click");
+    expect(runtime.activateFile).toHaveBeenCalledWith("f1");
+    wrapper.unmount();
+  });
+
+  it("opens, merges, subsets, exports, and closes files from the Records rail", async () => {
+    const extra = {
+      id: "f2",
+      name: "subset.jsonl",
+      count: 1,
+      dirty: 0,
+      active: false,
+      origin: "subset",
+      origin_detail: "tab.jsonl",
+    };
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      files: [...baseSnapshot().files, extra],
+    });
+    const wrapper = await mountRecords();
+    const byLabel = (label: string) =>
+      wrapper.findAll(".records-file-actions button").find((button) => button.text().includes(label));
+    await byLabel("Open JSONL")?.trigger("click");
+    expect(runtime.recordsListCommand).toHaveBeenCalledWith("import");
+    await byLabel("Merge files")?.trigger("click");
+    expect(runtime.triggerMerge).toHaveBeenCalled();
+    await byLabel("Create subset")?.trigger("click");
+    expect(runtime.triggerSubset).toHaveBeenCalled();
+    await byLabel("Export")?.trigger("click");
+    expect(runtime.triggerExport).toHaveBeenCalled();
+    await wrapper.get(".records-file-close").trigger("click");
+    expect(runtime.closeWorkspaceFile).toHaveBeenCalledWith("f1");
     wrapper.unmount();
   });
 

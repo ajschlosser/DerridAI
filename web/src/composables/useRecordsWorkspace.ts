@@ -90,8 +90,19 @@ export function useRecordsWorkspace() {
   function shareHref() {
     return runtime.getRecordsListShareHref?.() || location.href;
   }
+  function selectFile(id: string) {
+    runtime.activateFile?.(id);
+    load();
+  }
+  async function closeFile(id: string) {
+    await runtime.closeWorkspaceFile?.(id);
+    load();
+  }
   async function run(command: string) {
-    await runtime.recordsListCommand?.(command);
+    if (command === "merge") await runtime.triggerMerge?.();
+    else if (command === "subset") await runtime.triggerSubset?.();
+    else if (command === "export") await runtime.triggerExport?.();
+    else await runtime.recordsListCommand?.(command);
     load();
   }
 
@@ -117,6 +128,8 @@ export function useRecordsWorkspace() {
     clearFilters,
     clearSelection,
     shareHref,
+    selectFile,
+    closeFile,
     run,
   };
 }

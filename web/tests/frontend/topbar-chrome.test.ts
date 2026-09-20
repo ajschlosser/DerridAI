@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe("TopbarChrome", () => {
-  it("names Help, language, workspace, and the account menu", async () => {
+  it("names Help, language, and the account menu", async () => {
     stubViewport(false);
     const wrapper = mount(TopbarChrome, {
       props: {
@@ -39,14 +39,13 @@ describe("TopbarChrome", () => {
         canFaq: true,
         languages,
         locale: "en-US",
-        fileCount: 2,
       },
       attachTo: document.body,
     });
     await flushPromises();
     expect(wrapper.get("button[aria-label='Help']").exists()).toBe(true);
     expect(wrapper.get("button[aria-label='Interface language, English']").text()).toContain("English");
-    expect(wrapper.get("button[aria-haspopup='menu']").text()).toContain("Workspace");
+    expect(wrapper.findAll("button[aria-haspopup='menu']").map((button) => button.text()).join(" ")).not.toContain("Workspace");
     expect(wrapper.get("button[aria-haspopup='dialog']").attributes("aria-label")).toBe("Account menu for aaron");
     wrapper.unmount();
   });
@@ -61,7 +60,6 @@ describe("TopbarChrome", () => {
         canFaq: true,
         languages,
         locale: "en-US",
-        fileCount: 1,
       },
       attachTo: document.body,
     });
@@ -72,8 +70,8 @@ describe("TopbarChrome", () => {
     const dialog = wrapper.get("[role=dialog]");
     expect(dialog.text()).toContain("Help");
     expect(dialog.text()).toContain("Interface language");
-    expect(dialog.text()).toContain("Workspace");
-    expect(dialog.text()).toContain("Open JSONL");
+    expect(dialog.text()).not.toContain("Workspace");
+    expect(dialog.text()).not.toContain("Open JSONL");
     wrapper.unmount();
   });
 

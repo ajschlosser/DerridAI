@@ -302,12 +302,12 @@ async function confirmAction() {
 
 function syncActive() {
   const file = workspace.files?.find(item => item.id === workspace.activeFileId);
-  if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first", "Load and select a JSONL tab first."), {tone: "warn"});
+  if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first", "Load and select a JSONL file first."), {tone: "warn"});
   void runtime.upsertRows(file.records.map((record: unknown, index: number) => ({file, record, index})), "records").then(() => load());
 }
 function syncAll() {
   const rows = (workspace.files || []).flatMap(file => file.records.map((record, index) => ({file, record, index})));
-  if (!rows.length) return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first", "Load at least one JSONL tab first."), {tone: "warn"});
+  if (!rows.length) return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first", "Load at least one JSONL file first."), {tone: "warn"});
   void runtime.upsertRows(rows, "records").then(() => load());
 }
 
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
                   <div>
                     <span class="section-label">{{ i18n.t("vector.export_from_collection", "Export from collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.open_db_jsonl', 'Open full collection as JSONL tab')" icon="download" @click="runtime.exportStoreJsonl({loadTab: true})" />
+                      <UiButton :label="i18n.t('vector.open_db_jsonl', 'Open full collection as JSONL')" icon="download" @click="runtime.exportStoreJsonl({loadTab: true})" />
                       <UiButton :label="i18n.t('vector.download_db_jsonl', 'Download full collection JSONL')" icon="download" @click="runtime.exportStoreJsonl({downloadFile: true})" />
                     </div>
                   </div>
