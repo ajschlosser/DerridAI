@@ -9,8 +9,11 @@ describe("AuthScreen", () => {
     for(const found of text.match(/\d+\.\d+\.\d+/g)??[])expect(found).toBe(pkg.version);
   });
 
-  it("shows the build stamp next to the product name", () => {
-    expect(mount(AuthScreen).text()).toContain(`DerridAI ${pkg.version} (vitest)`);
+  it("shows the copyright, package version, and build stamp", () => {
+    const text = mount(AuthScreen).text();
+    expect(text).toContain("The New England Transcendental Club of California");
+    expect(text).toContain(`DerridAI ${pkg.version}`);
+    expect(text).toContain("Build vitest");
   });
 });
 

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // (status dots, solid badges). Use a token from src/styles/tokens.css instead of adding one. When
 // you remove a literal, lower these numbers; they must never go up. The views have none left, so
 // they must stay at zero.
-const MAX_LITERALS = { components: 26, views: 0, stylesheet: 89 };
+const MAX_LITERALS = { components: 26, views: 0, stylesheet: 88 };
 
 const hexColour = /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g;
 const declaration = /(-{0,2}[a-zA-Z][a-zA-Z-]*)\s*:\s*([^;{}]+)/g;

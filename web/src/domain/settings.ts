@@ -87,6 +87,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   {id: "theme", section: "workspace", labelKey: "settings.color_theme", labelFallback: "Color theme", helpKey: "settings.appearance_help", helpFallback: "Choose the interface color theme for your workspace."},
   {id: "scheme", section: "workspace", labelKey: "settings.color_scheme", labelFallback: "Color scheme", helpKey: "settings.color_scheme_help", helpFallback: "Light, dark, or follow this device. Stored in this browser."},
   {id: "contrast", section: "workspace", labelKey: "settings.contrast", labelFallback: "Contrast", helpKey: "settings.contrast_help", helpFallback: "Increase contrast for borders and muted text in this workspace."},
+  {id: "about", section: "workspace", labelKey: "about.title", labelFallback: "About DerridAI", helpKey: "about.help", helpFallback: "Release version of this instance. The git commit is shown for administrators and on the sign-in screen."},
   {id: "locale", section: "language", labelKey: "settings.interface_language", labelFallback: "Interface language", helpKey: "settings.interface_language_help", helpFallback: "Applies immediately to labels, dates, and numbers in this browser."},
   {id: "review-provider", section: "review", labelKey: "settings.default_provider", labelFallback: "Default provider profile"},
   {id: "review-preset", section: "review", labelKey: "settings.review_preset", labelFallback: "Default review preset"},

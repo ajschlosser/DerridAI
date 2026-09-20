@@ -1,11 +1,15 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { describe, expect, it } from "vitest";
-import { APP_GIT_COMMIT, APP_VERSION, appVersionLabel } from "../../src/buildInfo";
+import { APP_GIT_COMMIT, APP_VERSION, COPYRIGHT_YEAR, appVersionLabel } from "../../src/buildInfo";
 import pkg from "../../package.json";
 
 describe("buildInfo", () => {
   it("uses the package version", () => {
     expect(APP_VERSION).toBe(pkg.version);
+  });
+
+  it("pins the UI copyright year", () => {
+    expect(COPYRIGHT_YEAR).toBe("2026");
   });
 
   it("puts the commit in parentheses when present", () => {

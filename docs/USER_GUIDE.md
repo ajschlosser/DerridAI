@@ -1,6 +1,6 @@
 # DerridAI User Guide
 
-Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, workspace footer, and browser tab title show the release version next to the git commit that built this instance.
+Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, the account menu, Settings → Workspace → About DerridAI, and the browser tab title show the release version. The git commit that built this instance is shown on sign-in and to administrators.
 
 ## Users and roles
 
@@ -575,7 +575,7 @@ Compare is a Vue-native two-column workspace at **Tools → Compare**. Each colu
 
 Settings is a Vue-native control center at **System → Settings**. A contents rail (a collapsible **Contents** control on smaller screens) groups:
 
-- **Workspace and appearance** — accent theme, light/dark/system color scheme, and contrast. These are stored in this browser workspace, not on the server.
+- **Workspace and appearance** — accent theme, light/dark/system color scheme, contrast, and **About DerridAI** (copyright and version; administrators also see the git commit). Theme choices are stored in this browser workspace, not on the server.
 - **Language and accessibility** — interface language, applied immediately. Dictionary editing remains on **Languages**.
 - **Research defaults** — response language for generated answers. Per-run generation still lives on **Research**.
 - **Review and AI behavior** — default provider profile, review preset, and interactive vs background LLM review.
