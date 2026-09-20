@@ -92,3 +92,43 @@ export const TABLE_DEFAULTS = {
 };
 
 export const SEARCH_LOADED_COLUMNS = ["__db_status", "work", "page_start", "needs_review", "text"];
+
+export const SEARCH_FACET_FIELDS = [
+  "work",
+  "needs_review",
+  "__db_status",
+  "document_author",
+  "quoted_speaker",
+  "speaker",
+  "position_holder",
+  "discourse_role",
+  "document_language",
+  "topics",
+  "concepts",
+];
+export const SEARCH_FILTER_FIELDS = [
+  "work",
+  "document_author",
+  "year",
+  "document_language",
+  "original_language",
+  "speaker",
+  "quoted_speaker",
+  "position_holder",
+  "target",
+  "discourse_role",
+  "proposition_status",
+  "stance",
+  "topics",
+  "concepts",
+  "persons",
+  "needs_review",
+];
+export const SEARCH_AUTOCOMPLETE_EXCLUDED = new Set([
+  "text",
+  "extracted_text",
+  "extractedText",
+  "raw_text",
+  "ocr_text",
+  "updates",
+]);
