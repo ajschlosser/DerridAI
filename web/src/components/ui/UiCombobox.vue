@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
-const props=withDefaults(defineProps<{modelValue:string;options?:string[];label:string;placeholder?:string;disabled?:boolean;allowCustom?:boolean}>(),{options:()=>[],placeholder:"",disabled:false,allowCustom:true});
+const props=withDefaults(defineProps<{modelValue:string;options?:string[];label:string;placeholder?:string;disabled?:boolean;allowCustom?:boolean;multiple?:boolean}>(),{options:()=>[],placeholder:"",disabled:false,allowCustom:true,multiple:false});
 const emit=defineEmits<{"update:modelValue":[value:string];change:[value:string]}>();
 const comboId = useId();
 const open=ref(false);const active=ref(-1);const input=ref<HTMLInputElement|null>(null);const popup=ref({left:0,top:0,width:320,maxHeight:240});
 const unique=computed(()=>Array.from(new Set(props.options.map(v=>String(v).trim()).filter(Boolean))));
-const filtered=computed(()=>{const q=props.modelValue.trim().toLocaleLowerCase();return unique.value.filter(v=>!q||v.toLocaleLowerCase().includes(q)).slice(0,60)});
+const currentValues=computed(()=>new Set(String(props.modelValue||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean).map(v=>v.toLocaleLowerCase())));
+const filtered=computed(()=>{const q=String(props.modelValue||'').trim().toLocaleLowerCase();return unique.value.filter(v=>{const lower=v.toLocaleLowerCase();if(props.multiple&&currentValues.value.has(lower))return false;return !q||lower.includes(q)||q.includes(lower)}).slice(0,60)});
 watch(()=>props.modelValue,()=>{active.value=-1});watch(open,value=>{if(value)void nextTick(positionPopup)});
+function appendValue(current:string,value:string){const entries=String(current||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);const merged=[...new Set([...entries,value.trim()].filter(Boolean))];return merged.join(', ')}
 function positionPopup(){const el=input.value;if(!el)return;const rect=el.getBoundingClientRect();const margin=8;const viewportWidth=Math.max(320,window.innerWidth);const below=window.innerHeight-rect.bottom;const above=rect.top;const maxHeight=Math.max(120,Math.min(320,(below>=180?below:above)-16));const width=Math.min(Math.max(rect.width,240),viewportWidth-margin*2);const left=Math.min(Math.max(margin,rect.left),Math.max(margin,viewportWidth-width-margin));popup.value={left,top:below>=180?rect.bottom+4:Math.max(margin,rect.top-maxHeight-4),width,maxHeight}}
-function commit(value:string){emit('update:modelValue',value);emit('change',value);open.value=false;active.value=-1;void nextTick(()=>input.value?.focus())}
+function commit(value:string){const next=props.multiple?appendValue(props.modelValue,value):value;emit('update:modelValue',next);emit('change',next);open.value=false;active.value=-1;void nextTick(()=>input.value?.focus())}
 function onInput(event:Event){emit('update:modelValue',(event.target as HTMLInputElement).value);open.value=true;positionPopup()}
 function keydown(event:KeyboardEvent){if(event.key==='ArrowDown'){event.preventDefault();open.value=true;positionPopup();active.value=Math.min(filtered.value.length-1,active.value+1)}else if(event.key==='ArrowUp'){event.preventDefault();open.value=true;positionPopup();active.value=Math.max(0,active.value-1)}else if(event.key==='Enter'&&open.value&&active.value>=0){event.preventDefault();commit(filtered.value[active.value])}else if(event.key==='Escape'){open.value=false;active.value=-1}}
 function blur(){window.setTimeout(()=>{open.value=false;active.value=-1},150)}
