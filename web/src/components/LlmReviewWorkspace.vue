@@ -6,9 +6,13 @@ import UiDialog from "./ui/UiDialog.vue";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
 
-type TouchupItem = { file: { name?: string; records: Record<string, any>[] }; index: number; record: Record<string, any>; key: string };
-type TouchupResult = { item: TouchupItem; proposal: any; error?: unknown };
-type WorkspaceInfo = { items: TouchupItem[]; initialMode: string; availableFields: string[]; attributionPreset: string[]; semanticPreset: string[]; defaultSelection: string[]; groups: { name: string; fields: string[] }[]; highRiskFields: string[]; fieldLabels: Record<string, string>; profiles: any[]; providerProfileId: string; defaultMode: string };
+type JsonRecord = Record<string, unknown>;
+type TouchupProfile = { id: string; name?: string; model?: string; [key: string]: unknown };
+type TouchupProposal = { changes?: Record<string, unknown>; rationale?: Record<string, string>; [key: string]: unknown };
+type TouchupStatus = { available?: boolean; configured_model?: string; [key: string]: unknown };
+type TouchupItem = { file: { name?: string; records: JsonRecord[] }; index: number; record: JsonRecord; key: string };
+type TouchupResult = { item: TouchupItem; proposal: TouchupProposal | null; error?: unknown };
+type WorkspaceInfo = { items: TouchupItem[]; initialMode: string; availableFields: string[]; attributionPreset: string[]; semanticPreset: string[]; defaultSelection: string[]; groups: { name: string; fields: string[] }[]; highRiskFields: string[]; fieldLabels: Record<string, string>; profiles: TouchupProfile[]; providerProfileId: string; defaultMode: string };
 
 const i18n = useI18nStore();
 const open = ref(false);
@@ -18,7 +22,7 @@ const profileId = ref("");
 const model = ref("");
 const instructions = ref("");
 const selection = ref<string[]>([]);
-const status = ref<any>(null);
+const status = ref<TouchupStatus | null>(null);
 const running = ref(false);
 const stopped = ref(false);
 const results = ref<Record<string, TouchupResult>>({});
