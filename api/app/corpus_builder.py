@@ -26,6 +26,7 @@ from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
 from .autofill import decide as decide_autofill, in_audit_sample
+from . import experiment
 from .enrichment_metrics import compute as compute_enrichment_metrics
 from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, EnrichmentLedger
 from .main_text_start import infer_main_text_start
@@ -1776,7 +1777,7 @@ class PdfCorpusBuildManager:
         kept = prior_value == new_value
         if info.get("model"):
             kind = ACCEPTED if kept else (REJECTED if new_value in (None, "", []) else CORRECTED)
-            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")))
+            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), **(info.get("conditions") or {}))
         if record is not None and not kept and prior_value not in (None, "", []):
             # Remembered: the next pass is shown this as a value people turned down, and it lowers the
             # model's blended confidence on this field through the ledger.
@@ -3748,10 +3749,18 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 manifest = current_manifest
             profile_id = str(current_build.get("profile_id") or PROFILE_VERSION)
             if not bool(request.get("_interactive_provider_override")):
-                request = self._latest_runtime_request(build_id, request)
+                # The runtime request carries the provider; the run's own identity and experiment switches stay.
+                kept: dict[str, Any] = {key: request[key] for key in ("run_id", "arms", "arm_salt", "ablations", "arm", "model_version") if key in request}
+                request = {**self._latest_runtime_request(build_id, request), **kept}
+        request = experiment.with_arm(request, str(record.get("record_id") or ""))
+        off = experiment.disabled(request)
         self._apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record)
-        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or "")) if build_id else {"conventions": {}, "examples": {}}
+        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or ""), use_global="cross_build_learning" not in off) if build_id else {"conventions": {}, "examples": {}}
+        if "reviewer_conventions" in off:
+            editorial_memory = {**editorial_memory, "conventions": {}, "examples": {}}
+        if "rejection_memory" in off:
+            editorial_memory = {**editorial_memory, "pass_learning": None}
         editorial_context = editorial_memory.get("conventions", {}) if isinstance(editorial_memory, dict) else {}
         editorial_examples = editorial_memory.get("examples", {}) if isinstance(editorial_memory, dict) else {}
         record["editorial_memory_used"] = {
@@ -4064,7 +4073,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True)
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
                 self._record_family_effectiveness(
                     build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
                     provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
@@ -4081,7 +4090,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False)
+                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
                 if stage_callback:
                     stage_callback(record, task_name, "failed", str(exc))
                 if build_id:
@@ -4099,6 +4108,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         """Bind proposals to source evidence while retaining reviewer-owned values."""
         model = str((request or {}).get("model") or "")
         run_id = str((request or {}).get("run_id") or (f"build-{build_id}" if build_id else ""))
+        off = experiment.disabled(request)
+        conditions = experiment.context(request, model=model, record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION)
 
         def autofill(field: str, value: Any, confidence: float | None, evidence_info: dict[str, Any]) -> dict[str, Any] | None:
             """The status for a value the model is sure enough about to fill in, or None.
@@ -4106,14 +4117,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             The blended confidence (see autofill.py) outranks the model's own needs_review flag, but
             never the absence of a cited source block or a self-report at or below the profile floor.
             """
-            if value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
+            if "autofill" in off or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
                 return None
-            reviews, accepted = self._ledger.review_counts(model, field)
+            reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
             decision = decide_autofill(confidence, reviews, accepted)
             if not decision["autofill"]:
                 return None
             audit = in_audit_sample(str(record.get("record_id") or ""), field)
-            self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=decision["confidence"], self_reported=confidence, audit=audit)
+            self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=decision["confidence"], self_reported=confidence, audit=audit, **conditions)
             return {
                 "status": "llm_inferred", "method": "llm", "model": model, "confidence": decision["confidence"],
                 "self_reported_confidence": confidence, "auto_populated": True, "autofilled": True, "audit_sample": audit,
@@ -4388,11 +4399,15 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
 
         for field in sorted(llm_populated_fields):
             proposed_status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
+            if proposed_status.get("method") == "llm":
+                # Later human decisions on this value are attributed to the model and conditions that produced it.
+                proposed_status.setdefault("model", model)
+                proposed_status["conditions"] = conditions
             assessed = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             self._ledger.append(
                 PROPOSED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id,
                 value=record.get(field), self_reported=assessed.get("confidence"),
-                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"),
+                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"), **conditions,
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
@@ -5572,7 +5587,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             if token not in stop
         }
 
-    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "") -> dict[str, Any]:
+    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
         Only human-confirmed/overridden fields are eligible as conventions and few-shot
@@ -5597,6 +5612,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 continue
             if reset_at and str(row.get("human_touched_at") or "") <= reset_at:
                 continue
+            if experiment.is_gold(str(row.get("record_id") or "")):
+                continue  # the frozen gold set is scored, never learned from
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
                 if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
@@ -5644,7 +5661,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 examples[field] = kept
         # Conventions confirmed in other builds fill gaps only; this build's own
         # reviewers always take precedence over the shared ones.
-        for field, convention in self._global_learning.conventions(exclude_build_id=build_id).items():
+        for field, convention in (self._global_learning.conventions(exclude_build_id=build_id).items() if use_global else []):
             conventions.setdefault(field, convention)
         return {"conventions": conventions, "examples": examples, "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id])}
 
@@ -5776,7 +5793,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
                 if info and info.get("status") == "llm_inferred":
                     if info.get("model"):
-                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")))
+                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), **(info.get("conditions") or {}))
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
                     info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()

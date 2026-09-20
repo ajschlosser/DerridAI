@@ -106,23 +106,23 @@ def test_learn_from_review_counts_only_reviewer_decisions():
 def test_learn_from_pass_uses_unreviewed_inferences_and_defers_to_reviewers():
     """A later pass can learn from the last one before any reviewer has judged those fields."""
     rows = [
-        {"record_id": "a", "discourse_role": "analysis", "speaker": "Derrida",
+        {"record_id": "rec-a", "discourse_role": "analysis", "speaker": "Derrida",
          "metadata_field_status": {
              "discourse_role": {"status": "llm_inferred", "confidence": 0.9},
              "speaker": {"status": "llm_inferred", "confidence": 0.88},
          }},
-        {"record_id": "b", "discourse_role": "analysis", "speaker": "Derrida",
+        {"record_id": "rec-b", "discourse_role": "analysis", "speaker": "Derrida",
          "metadata_field_status": {
              "discourse_role": {"status": "llm_inferred", "confidence": 0.8},
              "speaker": {"status": "llm_inferred", "confidence": 0.91},
          }},
-        {"record_id": "c", "discourse_role": "commentary", "stance": "critical",
+        {"record_id": "rec-c", "discourse_role": "commentary", "stance": "critical",
          "metadata_field_status": {
              "discourse_role": {"status": "llm_inferred", "confidence": 0.4},
              "stance": {"status": "human_confirmed"},
          },
          "metadata_disputes": [{"field": "stance", "existing": "neutral", "proposed": "critical"}]},
-        {"record_id": "d", "metadata_disputes": [{"field": "region_type", "existing": "main_text", "proposed": "note"}]},
+        {"record_id": "rec-d", "metadata_disputes": [{"field": "region_type", "existing": "main_text", "proposed": "note"}]},
     ]
     learned = ec.learn_from_pass(rows)
     assert learned["field_stats"] == {"stance": {"accepted": 1, "rejected": 0}}

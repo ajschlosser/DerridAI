@@ -62,6 +62,8 @@ class EnrichmentLedger:
         """(reviews, accepted) for one model on one field, across every build and run."""
         reviews = accepted = 0
         for row in self.events():
+            if row.get("gold"):
+                continue  # gold records are scored, never learned from
             if row.get("model") == model and row.get("field") == field and row.get("kind") in REVIEW_EVENTS:
                 reviews += 1
                 accepted += row["kind"] == ACCEPTED
