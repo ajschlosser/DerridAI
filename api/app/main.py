@@ -2023,9 +2023,12 @@ def list_pdf_corpus_builds(offset: int = Query(default=0, ge=0), limit: int = Qu
 @app.get("/api/pdf/corpus-builds/{build_id}")
 def get_pdf_corpus_build(build_id: str):
     try:
-        return pdf_corpus_repository.get_build(build_id)
+        build = pdf_corpus_repository.get_build(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    # Not stored: it is a live reading of what the build is waiting for right now.
+    build["llm_activity"] = pdf_corpus_builds.llm_activity(build_id)
+    return build
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")

@@ -29,7 +29,17 @@ export interface DocumentLayoutPlan {
   thread_b_language?:string|null;
 }
 
+export interface LlmActivity {
+  state: "loading_model" | "working" | "unknown";
+  task: "manifest" | "segmentation" | "metadata" | "other";
+  model: string;
+  provider: string;
+  seconds: number;
+  calls_in_flight: number;
+}
 export interface CorpusBuild {
+  /** A live reading of the oldest model call in flight; not stored with the build. */
+  llm_activity?: LlmActivity | null;
   build_id: string;
   asset_id: string;
   source_filename: string;
