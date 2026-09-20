@@ -21,7 +21,7 @@ them. Nothing is rewritten. Each move is proven with one of:
    `28a6e77` (the pre-refactor master) across a wide input matrix (then deleted, not committed), and
 2. a committed test with golden values or snapshots taken from that verified output.
 
-## Done so far (runtime.js: 10,472 -> 8,996 lines after merging `development`, which added ~230 lines)
+## Done so far (runtime.js: 10,472 -> 8,803 lines; master 0.62.19 build 4675429 is the base of session 3)
 
 | Module | Contents |
 |---|---|
@@ -40,6 +40,7 @@ them. Nothing is rewritten. Each move is proven with one of:
 | `web/src/domain/corpusAnalytics.ts` | `createCorpusAnalytics({allRows, memoCorpus})` factory: work index, top values, year series, needs-review series, audit feed |
 | `web/src/domain/searchFacets.ts` | `createSearchFacets(deps)` factory: facets, filter descriptors, match reasons, list-filter matching |
 | `web/src/domain/workMetadata.ts`, `touchupFields.ts`, `reviewPresentation.ts` | work metadata summary, touch-up field list, review diff sides / pretty JSON / RAG answer HTML / annotation matching |
+| `web/src/domain/providerProfilesService.ts` | `createProviderProfiles({state, api, persistPrefs, uid, isResearcher, warmupProviderProfile})`: provider profile list, defaults, statuses, `*ForUi` helpers |
 | `web/src/services/workspaceDb.ts` | IndexedDB persistence and "delete all browser state" |
 | `web/src/runtime/runtimeState.ts` | initial shape of the runtime `state` (`createRuntimeState()`) |
 
@@ -50,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 410 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 412 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -87,29 +88,30 @@ import (you write the TS module by hand or with `mv_fn.py`). `mv_fn.py` copies f
 `src/domain/<module>.ts` with typed signatures. `purity.py` lists functions that use no state/DOM/API (the
 extraction candidates), largest first, with the helpers they call.
 
-## Next steps (in order)
+## Session 3 (branch `claude/runtime-refactor-3`, from master 0.62.19)
 
-1. **More extraction with the factory pattern.** Still in `runtime.js` and mechanically movable (run
-   `purity.py`, and a variant that also allows `tr`/`state` reads, to list them): the search-facet functions
-   (`searchFacetRawValues`, `searchFacetMatches`, `buildSearchFacets`, need `recordDbStatus`), list filtering
-   (`rowMatchesListFilters`, `recordsListCell`, `getRecordsListSnapshot`), `operationsBridge`, subset/bulk-edit
-   helpers, the compare-library helpers, provider profile management (`ensureProviderProfiles`,
-   `providerRequestConfig` callers), backup/restore (`downloadFullBackup`/`restoreFullBackup`, DOM/toast-coupled,
-   inject `toast`/`openMessageModal`), job polling (`refreshJobs`, `startJobPolling`).
-2. **State to Pinia** behind getter/setter proxies on `runtime.state` so unmigrated code keeps working:
-   jobs first, then search, records list, vector stores, compare, PDF, research. Keep re-render triggers
-   as they are; do not make `state` deeply reactive without checking `SettingsView`, which reads it directly.
-   `runtimeState.ts` already gives the state one typed home.
-3. **Routing**: extract `urlFromState`/`applyUrlState`/`currentTableUrlState` as pure functions with
-   round-trip tests against links from the old build (`urlState.ts` already holds the encoding); only then move
-   `popstate` ownership to `vue-router`.
-4. **Replace imperative renderers with Vue**, one view or dialog per commit, only when the DOM baseline
-   for it exists and the new component reproduces the same markup, classes, ids and aria attributes.
-   Extend `legacy-dom-baseline.spec.ts` first (dialogs, dark mode, more data). Keep `translateLegacyDom` and the
-   collapsible `MutationObserver` until the last legacy view is gone.
-5. Delete `runtimeBridge.ts`, `RuntimeSurface.vue` and the export block only when nothing consumes them.
-   Analysis found 21 exports with no consumer outside the runtime (e.g. the `touchup*` family, `viewPathMap`,
-   `pathViewMap`); confirm with e2e before removing any.
+Low-risk pure/near-pure extraction is essentially exhausted. Technique used for state-reading services: pass the
+runtime `state` object itself as a dependency (`createX({state, api, ...})`) so bodies stay verbatim; wrap later-declared
+consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer- or render-coupled:
+
+- Job polling/notifications (`refreshJobs`, `startJobPolling`, `syncJobProgressToasts`, `cancelBackgroundJob`,
+  `removeFinishedJob`, `syncUpsertJobReceipts`): touch the operations dock, RAG panel and home card renderers.
+- Backup/restore (`downloadFullBackup`/`restoreFullBackup`), `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals.
+- Legacy annotations renderers (`renderAnnotations`, `annotationItemHtml`, ...): `renderView` still dispatches to them
+  although `/annotations` is Vue-native now. Do not delete without proving they are unreachable (e2e + DOM baseline).
+- Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
+  `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
+
+## Next steps: the risky phase (needs owner go-ahead)
+
+1. Extend `legacy-dom-baseline.spec.ts` first: dashboard (more data states, dark mode, researcher role), Compare, PDF, the
+   modals reachable from the Records command menu. Record from the current build, never regenerate to pass.
+2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
+3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
+   move `popstate` to `vue-router`.
+4. Replace renderers one view/dialog per commit, only against a clean DOM-baseline diff.
+5. Remove `runtimeBridge.ts`, `RuntimeSurface.vue`, and dead exports only when nothing consumes them
+   (21 exports had no consumer outside the runtime at last count).
 
 Time zone note: dashboard date keys use local midnight then `toISOString()`, so they depend on the browser's
 time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
