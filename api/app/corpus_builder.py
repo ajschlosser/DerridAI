@@ -5374,11 +5374,14 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         self.repo.save_build(build)
         return build
 
+    @_serialize_record_mutation
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
+        # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
+        # pass merging results at the same moment must not have its results overwritten by a stale copy.
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
             stage = str(build.get("stage") or "")
-            if stage not in {"enriching", "metadata_retry"}:
+            if stage not in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}:
                 raise ValueError("Document metadata becomes editable after segmentation is complete.")
             if {"main_text_start_page", "main_text_end_page"} & set(changes):
                 raise ValueError("Main-text page boundaries are structural and cannot change while background enrichment is running.")
@@ -5404,6 +5407,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         records = self.repo.load_records(build_id)
         if records:
             for record in records:
+                before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"))
                 field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 for field in MANIFEST_INHERITED_FIELDS:
                     info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
@@ -5417,6 +5421,11 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
+                after = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, inline, full)
+                # A record whose inherited values did not actually change has nothing new to review: leave its
+                # acceptance alone instead of reopening every record for an edit that did not touch it.
+                if after == before:
+                    continue
                 record["accepted"] = False
                 record["needs_review"] = True
                 record["review_reason"] = "Document manifest changed during human review; inherited metadata and citations were regenerated."
