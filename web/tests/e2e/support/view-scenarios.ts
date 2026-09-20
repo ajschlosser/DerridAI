@@ -163,9 +163,22 @@ export const scenarios: Scenario[] = [
       await p.getByRole("button", { name: "Metadata workspace" }).click();
     },
   },
-  // Settings and Compare
+  // Settings, Compare, and Roles
   { id: "settings-default", path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }) },
   { id: "compare-default", path: "/compare", ready: (p) => p.getByRole("heading", { level: 1 }) },
+  {
+    id: "roles-default",
+    path: "/roles",
+    ready: (p) => p.getByRole("heading", { name: /Roles & permissions/ }),
+  },
+  {
+    id: "roles-create-dialog",
+    path: "/roles",
+    ready: (p) => p.getByRole("dialog"),
+    steps: async (p) => {
+      await p.getByRole("button", { name: /^Create role$/ }).click();
+    },
+  },
   // Record (a researcher reads a record from the database)
   {
     id: "record-overview",

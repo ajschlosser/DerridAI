@@ -4164,35 +4164,9 @@ body{font-size:0.9375rem;line-height:1.55}
 .theme-swatch { width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.12); }
 .theme-swatch.green{background:#355f52}.theme-swatch.blue{background:#0b67e8}.theme-swatch.slate{background:#4d6076}
 
-/* Native Roles & permissions page / Storybook component. */
-.roles-layout { display:grid; grid-template-columns:minmax(210px,260px) minmax(0,1fr); gap:16px; align-items:start; }
-.roles-list { padding:8px; display:grid; gap:4px; }
-.role-list-item { width:100%; border:0; background:transparent; border-radius:9px; padding:11px 12px; text-align:left; color:var(--ref-text); cursor:pointer; }
-.role-list-item:hover { background:var(--soft); }
-.role-list-item.active { background:var(--ui-accent-soft); color: var(--accent-fg); }
-.role-list-item span { display:grid; gap:2px; }
-.role-list-item b { font-size:0.875rem; }
-.role-list-item small { font-size:.8125rem; color:var(--ref-muted); }
-.role-editor { overflow:hidden; }
-.role-editor>.info { margin:14px; }
-.permission-matrix { display:grid; gap:1px; background:var(--soft); border-top:1px solid var(--line); }
-.permission-group { border:0; margin:0; padding:15px 17px; background:var(--card); display:grid; gap:6px; }
-.permission-group legend { padding:0 0 7px; font-size:0.8125rem; font-weight:800; color:var(--text-2); }
-.permission-row { display:grid; grid-template-columns:22px minmax(0,1fr); gap:9px; align-items:start; min-height:52px; padding:8px 10px; border:1px solid transparent; border-radius:9px; cursor:pointer; }
-.permission-row:hover { background:var(--card); border-color:var(--line); }
-.permission-row.locked { opacity:.62; cursor:not-allowed; }
-.permission-row input { margin-top:4px; width:17px; height:17px; accent-color:var(--ui-accent); }
-.permission-row>span { display:grid; gap:2px; }
-.permission-row b { font-size:0.875rem; color:var(--ref-text); }
-.permission-row small { font-size:0.8125rem; line-height:1.45; color:var(--ref-muted); }
-.permission-row code { width:fit-content; margin-top:2px; padding:2px 5px; border-radius:4px; background:var(--soft); font-size:.8125rem; color:var(--muted); }
-@media(max-width:760px){.roles-layout{grid-template-columns:1fr}.roles-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
 /* Keep interactive focus visible on all newly introduced controls. */
 .provider-access-switch:focus-within,
-.dashboard-theme-options label:has(input:focus-visible),
-.role-list-item:focus-visible,
-.permission-row:has(input:focus-visible) { outline:3px solid var(--ui-accent-focus); outline-offset:2px; }
+.dashboard-theme-options label:has(input:focus-visible) { outline:3px solid var(--ui-accent-focus); outline-offset:2px; }
 
 /* 0.31.0 — The Pretty Release
    Native Research workspace: the question, answer, and exact evidence are the

@@ -4,12 +4,16 @@ Feature reference for the current release. See the [README](../README.md) for in
 
 ## Users and roles
 
-0.20.0 adds built-in local authentication backed by SQLite (`AUTH_DB_PATH`, default `/data/.home/derridai-auth.sqlite3`). There are no packaged default credentials. On the first browser launch, DerridAI asks you to create the first administrator account. Administrators can then manage accounts from **System → Users & roles**.
+DerridAI uses built-in local authentication backed by SQLite (`AUTH_DB_PATH`, default `/data/.home/derridai-auth.sqlite3`). There are no packaged default credentials. On the first browser launch, DerridAI asks you to create the first administrator account. Administrators then manage accounts from **System → Users** and what each role can do from **System → Roles & permissions**. Settings → Security also links to both pages.
 
-Two roles are currently available:
+Two built-in roles ship with the application:
 
-- **Admin** — full access to JSONL workspaces, record editing/history, vector databases, providers, PDF tools, RAG, configuration, backups, and user administration.
-- **Researcher** — RAG Research plus read-only corpus database/work browsing and semantic search. The API enforces the restriction as well as the UI: corpus mutation/database-management/export endpoints are rejected, RAG jobs are scoped to their owner, and researcher sessions cannot open editable corpus/editor/system routes.
+- **Administrator** — full access. Administrator permissions are locked so administrative control cannot be removed by accident.
+- **Researcher** — the default non-admin role. It can use Research, researcher-safe corpus browsing and search, annotations, and appearance settings. The API enforces the same boundary as the UI: corpus mutation, database management, and export endpoints are rejected, RAG jobs are scoped to their owner, and researcher sessions cannot open administrative routes.
+
+Administrators can create additional **custom roles**. A custom role starts from Researcher (or another non-admin role) and then enables or disables individual researcher-safe pages and features. Administration capabilities — Users, Roles, Languages, LLM profiles, loaded-record management, PDF tools, the Response Library, corpus mutation, and similar — cannot be granted to any non-admin role. Custom roles cannot be deleted while accounts still use them; reassign those users first.
+
+Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.
 
 Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by ` [...] ` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
