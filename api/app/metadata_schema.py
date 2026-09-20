@@ -410,3 +410,19 @@ def default_schema() -> MetadataSchema:
         ],
         fields=fields,
     )
+
+
+def edit_model(schema: MetadataSchema, base: type[BaseModel]) -> type[BaseModel]:
+    """What a person may enter when editing a record: the fixed editable fields, plus this schema's, checked by type.
+
+    `base` is the record-metadata model of the fixed fields. The fields the default schema defines are removed from it,
+    so a schema that leaves one out cannot have it set.
+    """
+    configurable = {f.name for f in default_schema().fields}
+    props: dict[str, Any] = {name: (info.annotation, info) for name, info in base.model_fields.items() if name not in configurable}
+    for field in schema.fields:
+        annotation = _annotation(field)
+        if field.type == "list":
+            annotation = list[str]
+        props[field.name] = (annotation | None if field.type != "list" else annotation, Field(default_factory=list) if field.type == "list" else None)
+    return create_model("RecordEdit", __config__=ConfigDict(extra="forbid"), **props)

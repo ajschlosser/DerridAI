@@ -514,6 +514,7 @@ class PdfCorpusBuildCreate(BaseModel):
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
+    schema_id: str = Field(default="default", min_length=1, max_length=64)
     autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
