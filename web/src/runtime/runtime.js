@@ -40,6 +40,7 @@ import { providerRequestConfig } from "../domain/providerRequest";
 import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
 import { createOperationPresenters } from "../domain/operationPresenters";
+import { createFieldFormatting } from "../domain/fieldFormatting";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
@@ -73,6 +74,7 @@ function translateLegacyDom(root=document.querySelector("#main")){
   return translateLegacyDomCompat(state, root);
 }
 
+const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValue}=createFieldFormatting({tr});
 const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
   tr,trf,
   getLocale:()=>state.translations?.locale||"en-US",
@@ -147,14 +149,6 @@ async function stableJsonlFileIdentity(text){
   const hex=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,"0")).join("");
   return {id:`jsonl-${hex.slice(0,24)}`,content_hash:hex};
 }
-const label = key => tr(`field.${key}`, FIELD_LABELS[key] || key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase()));
-const display = value => {
-  if(value === null || value === undefined || value === "") return "—";
-  if(Array.isArray(value)) return value.length ? value.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ") : "—";
-  if(typeof value === "object") return JSON.stringify(value);
-  if(typeof value === "boolean") return value ? tr("runtime.yes","Yes") : tr("runtime.no","No");
-  return String(value);
-};
 const activeFile = () => state.files.find(f => f.id === state.activeFileId) || null;
 const selectedIndex = f => Math.max(0, Math.min((f?.records.length || 1)-1, state.selected[f?.id] ?? 0));
 const selectedRecord = () => {
@@ -5001,26 +4995,6 @@ function workMetadataControl(field,rows){
   }
   return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply","Apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed?mixedWorkValueButton(rows,field,{compact:true}):""}</div>${control}</div>`;
 }
-function parseWorkMetadataValue(field,control,rows){
-  const exemplar=rows.map(row=>row.record[field]).find(value=>value!==undefined&&value!==null);
-  const raw=control.value;
-  if(typeof exemplar==="boolean"||field==="document_is_translation"){
-    if(raw==="")return null;
-    return raw==="true";
-  }
-  if(Array.isArray(exemplar)||exemplar&&typeof exemplar==="object"){
-    const parsed=JSON.parse(raw||"null");
-    if(exemplar&&Array.isArray(exemplar)&&!Array.isArray(parsed))throw new Error(`${label(field)} must be a JSON array.`);
-    return parsed;
-  }
-  if(typeof exemplar==="number"||["year","publication_year"].includes(field)){
-    if(raw.trim()==="")return null;
-    const value=Number(raw);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} must be numeric.`);
-    return value;
-  }
-  return raw;
-}
 function openWorkMetadataEditor(work,rows){
   if(!rows?.length)return toast("No records found for this work");
   const available=[...new Set([...WORK_METADATA_FIELDS,...rows.flatMap(row=>Object.keys(row.record).filter(field=>/^(document_|publication_|canonical_|publisher$|translator$|isbn$|full_citation$)/.test(field)))])].filter(field=>field!=="updates");
@@ -5166,33 +5140,6 @@ function openWorkMetadataProposalResult(job){
   });
 }
 
-function parseBulkFieldValue(field,raw,rows){
-  const sample=rows.map(row=>row.record?.[field]).find(value=>value!==undefined&&value!==null);
-  const text=String(raw??"");
-  if(text.trim()==="__NULL__")return null;
-  if(typeof sample==="boolean"){
-    const token=text.trim().toLowerCase();
-    if(["true","1","yes","on"].includes(token))return true;
-    if(["false","0","no","off"].includes(token))return false;
-    throw new Error(`Enter true or false for ${label(field)}.`);
-  }
-  if(typeof sample==="number"){
-    const value=Number(text);
-    if(!Number.isFinite(value))throw new Error(`${label(field)} requires a number.`);
-    return value;
-  }
-  if(Array.isArray(sample)||sample&&typeof sample==="object"){
-    try{
-      const value=JSON.parse(text);
-      if(Array.isArray(sample)&&!Array.isArray(value))throw new Error("Expected JSON array.");
-      if(!Array.isArray(sample)&&(Array.isArray(value)||!value||typeof value!=="object"))throw new Error("Expected JSON object.");
-      return value;
-    }catch(error){
-      throw new Error(`${label(field)} requires valid JSON: ${error.message}`);
-    }
-  }
-  return text;
-}
 function bulkEditRowsForScope(scope){
   if(scope==="selected")return selectedReviewItems();
   if(scope==="active"){
@@ -6540,37 +6487,6 @@ function openLlmToolResult(job){
   dialog.querySelector("#useToolText")?.addEventListener("click",()=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${job.model||result.model||"model"}`;close();if(state.view==="pdf")renderPdf(document.querySelector("#main"))});
   dialog.querySelector("#openToolDraft")?.addEventListener("click",()=>{close();openPdfDraftRecord(result.record||{})});
   dialog.querySelector("#applyToolLink")?.addEventListener("click",async()=>{await applyPdfLinkMatch(result.match||{});close()});
-}
-function normalizeRagGrade(value){
-  let grade=value;
-  if(grade&&typeof grade==="object"&&!Array.isArray(grade)){
-    if(grade.grade&&typeof grade.grade==="object"&&!Array.isArray(grade.grade))grade=grade.grade;
-    else if(grade.result&&typeof grade.result==="object"&&!Array.isArray(grade.result))grade=grade.result;
-  }
-  if(!grade||typeof grade!=="object"||Array.isArray(grade))grade={summary:grade==null?"":String(grade)};
-  const scores=grade.scores&&typeof grade.scores==="object"&&!Array.isArray(grade.scores)?grade.scores:{};
-  const list=value=>{
-    if(value==null||value==="")return [];
-    if(Array.isArray(value))return value.flatMap(item=>list(item));
-    if(typeof value==="object")return Object.entries(value).map(([key,item])=>`${label(key)}: ${display(item)}`);
-    return [String(value)];
-  };
-  const score=key=>{
-    const raw=grade[key]??scores[key];
-    if(raw==null||raw==="")return "—";
-    if(typeof raw==="object"){
-      const nested=raw.score??raw.value??raw.rating;
-      return nested==null?display(raw):nested;
-    }
-    return raw;
-  };
-  return {
-    raw:grade,score,
-    summary:String(grade.summary??grade.overall_summary??grade.assessment??""),
-    strengths:list(grade.strengths??grade.strength),
-    weaknesses:list(grade.weaknesses??grade.weakness),
-    unsupported_or_risky_claims:list(grade.unsupported_or_risky_claims??grade.risky_claims??grade.unsupported_claims),
-  };
 }
 function ragGradeHtml(grade={}){
   const normalized=normalizeRagGrade(grade);
