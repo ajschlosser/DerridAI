@@ -163,8 +163,26 @@ export const scenarios: Scenario[] = [
       await p.getByRole("button", { name: "Metadata workspace" }).click();
     },
   },
-  // Settings, Compare, and Roles
+  // Settings, Compare, Roles, and the top-bar chrome
   { id: "settings-default", path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }) },
+  {
+    id: "topbar-help",
+    path: "/settings",
+    ready: (p) => p.getByRole("heading", { name: "Using DerridAI" }),
+    scan: ".ui-dialog",
+    steps: async (p) => {
+      await p.getByRole("button", { name: "Help" }).click();
+    },
+  },
+  {
+    id: "topbar-account",
+    path: "/settings",
+    ready: (p) => p.getByRole("dialog", { name: "Account menu" }),
+    scan: ".topbar-account-panel",
+    steps: async (p) => {
+      await p.getByRole("button", { name: /Account menu for / }).click();
+    },
+  },
   { id: "compare-default", path: "/compare", ready: (p) => p.getByRole("heading", { level: 1 }) },
   {
     id: "roles-default",
