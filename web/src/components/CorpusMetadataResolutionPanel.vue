@@ -7,6 +7,7 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
+import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
 
 const props=defineProps<{record:CorpusRecord;regionTypes:string[];discourseRoles:string[];busy?:boolean;savingField?:string;savedField?:string;confidenceCalibration?:Record<string,Record<string,Record<string,number>>>;knownValues?:Record<string,string[]>}>();
 const emit=defineEmits<{resolve:[field:string,value:unknown];noValue:[field:string];resolveMany:[changes:Record<string,unknown>];source:[field:string];dirty:[dirty:boolean]}>
@@ -42,6 +43,7 @@ function displayValue(field:string){const value=props.record[field];if(value===t
 <template>
 <section class="metadata-review" aria-labelledby="metadata-review-title">
   <header class="metadata-head"><div><h3 id="metadata-review-title">{{i18n.t('pdf_corpus.metadata_tab','Metadata')}}</h3><p>{{i18n.t('pdf_corpus.metadata_streamlined_help','LLM suggestions are prefilled when valid. Deterministic rules resolve obvious relationships; review the remaining exceptions and save only what needs your judgment.')}}</p></div><span class="review-status" :data-state="enrichmentPending?'processing':attentionFields.length?'attention':'ready'">{{enrichmentPending?i18n.t('pdf_corpus.metadata_enrichment_pending','LLM enrichment pending'):attentionFields.length?i18n.tf('pdf_corpus.metadata_decisions_count','{count} decision(s)',{count:attentionFields.length}):i18n.t('pdf_corpus.metadata_ready','Ready')}}</span></header>
+  <CorpusEnrichmentChanges :record="record as unknown as Record<string,unknown>" :busy="busy" @resolve="(field,value)=>emit('resolve',field,value)" />
   <p v-if="enrichmentPending" class="enrichment-note" role="status">{{i18n.t('pdf_corpus.metadata_enrichment_pending_help','This record is editable now, but its background LLM metadata has not settled yet. Confidence and suggestions will appear as each metadata family completes.')}}</p>
   <div v-if="llmSuggestionCount" class="suggestion-toolbar"><div><b>{{i18n.tf('pdf_corpus.llm_suggestions_ready','{count} LLM suggestion(s) ready',{count:llmSuggestionCount})}}</b><span>{{i18n.t('pdf_corpus.llm_suggestions_ready_help','Suggestions are already filled into their controls. Confirm them individually or save all current suggestions at once.')}}</span></div><button type="button" class="btn primary" :disabled="busy" @click="emit('resolveMany',llmSuggestions)">{{i18n.t('pdf_corpus.accept_all_suggestions','Save all suggestions')}}</button></div>
 

@@ -206,7 +206,47 @@ async def authentication_middleware(request: Request, call_next):
     current_reviewer.set(reviewer_id(user.id))
     if user.role != "admin" and not _non_admin_route_allowed(user.role, path, request.method):
         return JSONResponse(status_code=403, content={"detail": "Your role does not have permission to use this API feature."})
-    return await call_next(request)
+    response = await call_next(request)
+    if path.startswith("/api/pdf/corpus-builds"):
+        return await _hide_pending_second_opinions(response)
+    return response
+
+
+def scrub_second_opinions(node: Any) -> bool:
+    """Blank, in place, every answer the current reviewer is still owed an independent second opinion on.
+
+    A record served by any corpus-build route (list, save, accept, split, touch-up, bulk edit…) passes through here, so a
+    second reviewer cannot see the first reviewer's answer through whichever response happens to carry the record.
+    Returns whether anything was hidden.
+    """
+    hidden = False
+    if isinstance(node, dict):
+        if "record_id" in node and isinstance(node.get("second_opinion"), dict):
+            before = json.dumps(node, default=str)
+            pdf_corpus_builds._present_for_reviewer(node)
+            hidden = json.dumps(node, default=str) != before
+        for value in node.values():
+            hidden = scrub_second_opinions(value) or hidden
+    elif isinstance(node, list):
+        for item in node:
+            hidden = scrub_second_opinions(item) or hidden
+    return hidden
+
+
+async def _hide_pending_second_opinions(response):
+    """Apply scrub_second_opinions to a JSON response, reading it only when it mentions a second opinion at all."""
+    if "application/json" not in str(response.headers.get("content-type", "")):
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator]) if hasattr(response, "body_iterator") else bytes(response.body)
+    headers = {k: v for k, v in response.headers.items() if k.lower() not in {"content-length", "content-type"}}
+    if b"second_opinion" in body:
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            payload = None
+        if payload is not None and current_reviewer.get() and scrub_second_opinions(payload):
+            body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    return Response(content=body, status_code=response.status_code, headers=headers, media_type="application/json")
 
 
 def _request_user(request: Request) -> AuthUser:
