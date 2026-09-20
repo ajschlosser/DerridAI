@@ -3641,6 +3641,20 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
                         "reason": region_reason,
                     }
+            # A record that begins before the main text and runs into it cannot be labelled by
+            # page alone: the reviewer chooses main text, front matter, or splits it.
+            issues = [i for i in record.get("boundary_quality_issues") or [] if not (isinstance(i, dict) and i.get("code") == "main_text_start_straddle")]
+            if min(pdf_pages) < start_page <= max(pdf_pages) and region_status.get("status") not in {"human_confirmed", "human_override"}:
+                reason = f"This record starts before the main text (PDF page {start_page}) and continues into it. Choose main text, front matter, or split it."
+                issues.append({"code": "main_text_start_straddle", "edge": "record", "reason": reason})
+                record["needs_review"] = True
+                if not record.get("review_reason") or str(record.get("review_reason")).lower() == "pending human review.":
+                    record["review_reason"] = reason
+            if not any(isinstance(i, dict) and i.get("code") == "main_text_start_straddle" for i in issues) and str(record.get("review_reason") or "").endswith("Choose main text, front matter, or split it."):
+                record["review_reason"] = ""
+                record["needs_review"] = bool(issues)
+            if issues or record.get("boundary_quality_issues"):
+                record["boundary_quality_issues"] = issues
             role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
             # A stale/inferred manifest range must not make a reviewer-defined
             # main-text record paratext. Region/primary structural ownership is
