@@ -5160,3 +5160,12 @@ html[data-color-scheme="dark"][data-contrast="more"]{
   .work-library-card .stats .stat{transition:none}
 }
 
+/* Dark-mode corrections for the legacy Home dashboard. */
+.chart-axis{stroke:var(--line)}
+.brand-mark img,.dashboard-hero-mark{mix-blend-mode:normal}
+.dashboard-metric-dots button{background:var(--muted)}
+.dashboard-corpus-state{background:var(--muted);box-shadow:0 0 0 3px var(--soft)}
+.dashboard-corpus-state.running,.dashboard-corpus-state.queued,.dashboard-corpus-state.cancelling{background:var(--tone-warn-fg);box-shadow:0 0 0 3px var(--tone-warn-bg)}
+.dashboard-corpus-state.completed{background:var(--tone-ok-fg);box-shadow:0 0 0 3px var(--tone-ok-bg)}
+.dashboard-corpus-state.blocked,.dashboard-corpus-state.failed,.dashboard-corpus-state.cancelled{background:var(--tone-danger-fg);box-shadow:0 0 0 3px var(--tone-danger-bg)}
+
