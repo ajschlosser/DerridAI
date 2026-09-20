@@ -9,6 +9,7 @@ import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
 import type { RecordWorkspaceSnapshot } from "../types/record";
+import { annotationsService } from "../services/annotations";
 
 const i18n=useI18nStore();
 const shell=useShellStore();
@@ -60,8 +61,8 @@ async function quickChange(changes:Record<string,unknown>){await refreshAfter(()
 function metadataSearch(field:string,value:string,contains=false){runtime.searchCurrentRecordMetadata(field,value,{contains})}
 function openAnnotation(selection?:{field:string;quote:string}){annotationField.value=selection?.field||'text';annotationQuote.value=selection?.quote||'';annotationNote.value='';annotationTags.value='';annotationError.value='';void nextTick(()=>{if(annotationDialog.value&&!annotationDialog.value.open)annotationDialog.value.showModal();annotationDialog.value?.querySelector<HTMLTextAreaElement>('#recordAnnotationNote')?.focus()})}
 function closeAnnotation(){annotationDialog.value?.close()}
-async function saveAnnotation(){annotationError.value='';try{await runtime.addCurrentRecordAnnotation({field:annotationField.value,quote:annotationQuote.value,note:annotationNote.value,tags:annotationTags.value.split(',').map(v=>v.trim()).filter(Boolean)});closeAnnotation();await load()}catch(exc){annotationError.value=exc instanceof Error?exc.message:String(exc)}}
-async function removeAnnotation(id:string){await refreshAfter(()=>runtime.removeCurrentRecordAnnotation(id))}
+async function saveAnnotation(){annotationError.value='';try{await annotationsService.addToCurrentRecord({field:annotationField.value,quote:annotationQuote.value,note:annotationNote.value,tags:annotationTags.value.split(',').map(v=>v.trim()).filter(Boolean)});closeAnnotation();await load()}catch(exc){annotationError.value=exc instanceof Error?exc.message:String(exc)}}
+async function removeAnnotation(id:string){await refreshAfter(()=>annotationsService.removeFromCurrentRecord(id))}
 async function action(name:string,payload:Record<string,unknown>={}){await refreshAfter(()=>runtime.currentRecordPrimaryAction(name,payload))}
 function startResize(event:PointerEvent){if(window.innerWidth<1180)return;dragging.value=true;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);document.body.classList.add('record-resizing');window.addEventListener('pointermove',resize);window.addEventListener('pointerup',stopResize,{once:true})}
 function resize(event:PointerEvent){if(!dragging.value)return;const workspace=document.querySelector('.record-workspace-grid')?.getBoundingClientRect();if(!workspace)return;const width=Math.max(310,Math.min(440,workspace.right-event.clientX));inspectorWidth.value=width}

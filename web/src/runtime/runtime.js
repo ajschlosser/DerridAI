@@ -10442,7 +10442,6 @@ async function removeAnnotationsWorkspaceItem(item) {
 }
 
 export {
-  getNavItems,
   operationViewModel,
   operationDetailPairs,
   jobProgressText,

@@ -7,6 +7,7 @@ import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import AppIcon from "../components/AppIcon.vue";
 import type { WorksItem, WorksSnapshot } from "../types/works";
+import { annotationsService } from "../services/annotations";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
@@ -71,7 +72,7 @@ function populateMetadata(work: string) {
   runtime.openWorkMetadataLlmDialog?.(work);
 }
 function openAnnotations(work: string) {
-  runtime.openWorkAnnotations?.(work);
+  annotationsService.openWorkAnnotations(work);
 }
 function onCardKeydown(work: string, event: KeyboardEvent) {
   if (event.key !== "Enter" && event.key !== " ") return;

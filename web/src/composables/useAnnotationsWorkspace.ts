@@ -1,6 +1,6 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { ref } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { annotationsService } from "../services/annotations";
 import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../types/annotations";
 
 export function useAnnotationsWorkspace() {
@@ -14,9 +14,9 @@ export function useAnnotationsWorkspace() {
     loading.value = true;
     error.value = "";
     try {
-      snapshot.value = (await runtime.loadAnnotationsWorkspace(
+      snapshot.value = await annotationsService.loadWorkspace(
         force || Boolean(snapshot.value),
-      )) as AnnotationsWorkspaceSnapshot;
+      );
     } catch (exception) {
       error.value = exception instanceof Error ? exception.message : String(exception);
     } finally {
@@ -25,36 +25,37 @@ export function useAnnotationsWorkspace() {
   }
 
   function setQuery(value: string) {
-    runtime.setAnnotationsWorkspaceQuery(value);
+    annotationsService.setQuery(value);
     if (snapshot.value) snapshot.value = { ...snapshot.value, query: value };
     window.clearTimeout(queryTimer);
     queryTimer = window.setTimeout(() => void load(), 150);
   }
 
   function setView(view: "works" | "recent") {
-    runtime.setAnnotationsWorkspaceView(view);
+    annotationsService.setView(view);
     if (snapshot.value) snapshot.value = { ...snapshot.value, view };
   }
 
   function openRecord(annotation: AnnotationWorkspaceItem) {
-    runtime.openAnnotationsWorkspaceRecord(annotation);
+    annotationsService.openRecord(annotation);
   }
 
   function openWork(work: string) {
-    runtime.openAnnotationsWorkspaceWork(work);
+    annotationsService.openWork(work);
   }
 
   async function remove(annotation: AnnotationWorkspaceItem) {
     if (!annotation.removable || removing.value) return false;
     removing.value = annotation.id;
     try {
-      await runtime.removeAnnotationsWorkspaceItem(annotation);
+      await annotationsService.removeWorkspaceItem(annotation);
       await load(true);
       return true;
     } catch (exception) {
-      runtime.notifyToast(exception instanceof Error ? exception.message : String(exception), {
+      window.dispatchEvent(new CustomEvent("derridai:toast", { detail: {
+        message: exception instanceof Error ? exception.message : String(exception),
         tone: "danger",
-      });
+      }}));
       return false;
     } finally {
       removing.value = null;
