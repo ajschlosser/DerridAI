@@ -21,7 +21,7 @@ them. Nothing is rewritten. Each move is proven with one of:
    `28a6e77` (the pre-refactor master) across a wide input matrix (then deleted, not committed), and
 2. a committed test with golden values or snapshots taken from that verified output.
 
-## Done so far (runtime.js: 10,472 -> 9,205 lines)
+## Done so far (runtime.js: 10,472 -> 9,015 lines)
 
 | Module | Contents |
 |---|---|
@@ -37,6 +37,7 @@ them. Nothing is rewritten. Each move is proven with one of:
 | `web/src/domain/recordFormatting.ts`, `recordPayloads.ts` | highlight/snippet/model labels; record payloads, history summary, PDF links |
 | `web/src/domain/operationPresenters.ts` | `createOperationPresenters(deps)` factory: job labels, facts, subtitles, progress (Operations panel view model) |
 | `web/src/domain/fieldFormatting.ts` | `createFieldFormatting({tr})` factory: `label`, `display`, `normalizeRagGrade`, bulk/work-metadata value parsers |
+| `web/src/domain/corpusAnalytics.ts` | `createCorpusAnalytics({allRows, memoCorpus})` factory: work index, top values, year series, needs-review series, audit feed |
 | `web/src/services/workspaceDb.ts` | IndexedDB persistence and "delete all browser state" |
 | `web/src/runtime/runtimeState.ts` | initial shape of the runtime `state` (`createRuntimeState()`) |
 
@@ -47,7 +48,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 378 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 382 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -86,24 +87,30 @@ extraction candidates), largest first, with the helpers they call.
 
 ## Next steps (in order)
 
-1. **More pure extraction.** Candidates from `purity.py`: `recordHistoryVersions`, `upsertAuditDelta`,
-   `providerRequestConfig`, `normalizeRagGrade`, `parsePastedRecord`, `fullHttpErrorDetail`,
-   `topNeedsReviewWorkSeries` and the other chart-series builders (they read `allRows()`; pass rows in),
-   the search-facet functions (need `recordDbStatus`; pass state in). `label()` and `display()` call `tr()`
-   which is bound to `state`; give them a `translate` parameter or leave thin wrappers in the runtime.
-2. **Services** with dependency injection like `createWorkspaceDb`: provider profiles, full backup/restore
-   (`downloadFullBackup`/`restoreFullBackup`, DOM- and toast-coupled), job polling.
-3. **State to Pinia** behind getter/setter proxies on `runtime.state` so unmigrated code keeps working:
+1. **More extraction with the factory pattern.** Still in `runtime.js` and mechanically movable (run
+   `purity.py`, and a variant that also allows `tr`/`state` reads, to list them): the search-facet functions
+   (`searchFacetRawValues`, `searchFacetMatches`, `buildSearchFacets`, need `recordDbStatus`), list filtering
+   (`rowMatchesListFilters`, `recordsListCell`, `getRecordsListSnapshot`), `operationsBridge`, subset/bulk-edit
+   helpers, the compare-library helpers, provider profile management (`ensureProviderProfiles`,
+   `providerRequestConfig` callers), backup/restore (`downloadFullBackup`/`restoreFullBackup`, DOM/toast-coupled,
+   inject `toast`/`openMessageModal`), job polling (`refreshJobs`, `startJobPolling`).
+2. **State to Pinia** behind getter/setter proxies on `runtime.state` so unmigrated code keeps working:
    jobs first, then search, records list, vector stores, compare, PDF, research. Keep re-render triggers
    as they are; do not make `state` deeply reactive without checking `SettingsView`, which reads it directly.
-4. **Routing**: extract `urlFromState`/`applyUrlState`/`currentTableUrlState` as pure functions with
-   round-trip tests against links from the old build; only then move `popstate` ownership to `vue-router`.
-5. **Replace imperative renderers with Vue**, one view or dialog per commit, only when the DOM baseline
+   `runtimeState.ts` already gives the state one typed home.
+3. **Routing**: extract `urlFromState`/`applyUrlState`/`currentTableUrlState` as pure functions with
+   round-trip tests against links from the old build (`urlState.ts` already holds the encoding); only then move
+   `popstate` ownership to `vue-router`.
+4. **Replace imperative renderers with Vue**, one view or dialog per commit, only when the DOM baseline
    for it exists and the new component reproduces the same markup, classes, ids and aria attributes.
-   Keep `translateLegacyDom` and the collapsible `MutationObserver` until the last legacy view is gone.
-6. Delete `runtimeBridge.ts`, `RuntimeSurface.vue` and the export block only when nothing consumes them.
-   `purity.py`-style analysis found 21 exports with no consumer outside the runtime (e.g. the `touchup*`
-   family, `viewPathMap`, `pathViewMap`); confirm with e2e before removing any.
+   Extend `legacy-dom-baseline.spec.ts` first (dialogs, dark mode, more data). Keep `translateLegacyDom` and the
+   collapsible `MutationObserver` until the last legacy view is gone.
+5. Delete `runtimeBridge.ts`, `RuntimeSurface.vue` and the export block only when nothing consumes them.
+   Analysis found 21 exports with no consumer outside the runtime (e.g. the `touchup*` family, `viewPathMap`,
+   `pathViewMap`); confirm with e2e before removing any.
+
+Time zone note: dashboard date keys use local midnight then `toISOString()`, so they depend on the browser's
+time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
 
 ## Gotchas learned
 
