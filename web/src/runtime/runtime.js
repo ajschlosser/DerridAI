@@ -9147,7 +9147,7 @@ function openAiModelMatchesKind(name,kind){
   return (patterns[kind]||[]).some(token=>value.includes(token));
 }
 
-async function openTouchup(inputItems=null,initialMode="foreground"){
+async function legacyOpenTouchup(inputItems=null,initialMode="foreground"){
   const fallback=(()=>{
     const file=activeFile(),record=selectedRecord();
     if(!file||!record)return [];
@@ -9623,6 +9623,90 @@ async function openTouchup(inputItems=null,initialMode="foreground"){
   dialog.querySelector("[data-close]").onclick=close;
   status=await fetchLlmStatus();
   renderSetup();
+}
+
+function normalizeTouchupItems(inputItems=null){
+  const fallback=(()=>{
+    const file=activeFile(),record=selectedRecord();
+    if(!file||!record)return [];
+    const index=selectedIndex(file);
+    return [{file,index,record,key:reviewKey(file,index)}];
+  })();
+  return (inputItems?.length?inputItems:fallback).map(item=>({
+    ...item,
+    record:item.file.records[item.index],
+    key:item.key||reviewKey(item.file,item.index),
+  })).filter(item=>item.record);
+}
+function openTouchup(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  if(!items.length)return;
+  window.dispatchEvent(new CustomEvent("derridai:open-touchup",{detail:{items,initialMode}}));
+}
+function touchupWorkspaceInfo(inputItems=null,initialMode="foreground"){
+  const items=normalizeTouchupItems(inputItems);
+  const availableFields=[];
+  for(const item of items){
+    for(const field of touchupFieldsForRecord(item.record))if(!availableFields.includes(field)&&field!=="updates")availableFields.push(field);
+  }
+  const attributionPreset=["speaker","position_holder","target","is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain"].filter(field=>availableFields.includes(field));
+  const semanticPreset=["discourse_role","proposition_status","semantic_function","stance","claim_scope","topics","concepts","persons","works_referenced"].filter(field=>availableFields.includes(field));
+  const preset=state.appConfig.default_review_preset;
+  return {
+    items,
+    initialMode,
+    availableFields,
+    attributionPreset,
+    semanticPreset,
+    defaultSelection:preset==="text"&&availableFields.includes("text")?["text"]:preset==="semantic"?semanticPreset:attributionPreset,
+    groups:TOUCHUP_GROUPS,
+    highRiskFields:[...HIGH_RISK_TOUCHUP_FIELDS],
+    fieldLabels:Object.fromEntries(availableFields.map(field=>[field,label(field)])),
+    profiles:providerProfiles().map(profile=>({...profile,api_key:undefined})),
+    providerProfileId:state.appConfig.review_provider_profile||state.appConfig.default_provider_profile||defaultProviderProfile()?.id||"",
+    defaultMode:initialMode==="auto"?"auto":state.appConfig.default_llm_run_mode==="foreground"?"foreground":"background",
+  };
+}
+async function touchupProviderStatus(profileId){
+  const profile=providerProfile(profileId);
+  if(!profile)return {provider:"ollama",available:false,models:[],configured_model:"",error:"No provider profile configured"};
+  try{
+    const status=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url||null,api_key:profile.type==="openai"?(profile.api_key||""):null})});
+    state.providerStatuses[profile.id]=status;
+    return status;
+  }catch(error){return {provider:profile.type,available:false,models:[],configured_model:profile.model||"",error:error.message};}
+}
+function touchupRequestConfig(profileId,model,fields=[]){
+  const profile=providerProfile(profileId);
+  const config=providerRequestConfig(profile,{textReview:fields.includes("text")});
+  if(config&&model)config.model=model;
+  return config;
+}
+async function touchupRequest(item,fields,config,instructions=""){
+  return api("/api/llm/touchup",{method:"POST",body:JSON.stringify({
+    record:touchupRecordPayload(item.file.records[item.index],fields),fields,instructions,
+    model:config.model,provider:config.provider,base_url:config.base_url,api_key:config.api_key,ollama:config.ollama,
+  })});
+}
+async function touchupSubmitBackground(items,config,fields,instructions,mode){
+  return submitBackgroundLlmJob(items,config,fields,instructions,mode);
+}
+function touchupApplyResults(items,results,approvals,all=false,reviewOnly=false){
+  const batchId=uid();let appliedFields=0,reviewedRecords=0;
+  for(const item of items){
+    const result=results[item.key];if(!result?.proposal)continue;
+    const fields=reviewOnly?[]:(all?Object.keys(result.proposal.changes||{}):[...(approvals[item.key]||[])]);
+    const changes={};
+    for(const field of fields)if(field in result.proposal.changes)changes[field]=result.proposal.changes[field];
+    const record=item.file.records[item.index];
+    if(record.needs_review===true)changes.needs_review=false;
+    if(record.review_reason!==undefined&&record.review_reason!==null&&record.review_reason!=="")changes.review_reason=null;
+    appliedFields+=applyRecordChanges(item.file,item.index,changes,{source:"llm_review",model:result.proposal.model,batchId,rationale:result.proposal.rationale});
+    reviewedRecords++;
+  }
+  clearReviewSelection();shell();renderView();
+  toast(`Marked ${reviewedRecords} record${reviewedRecords===1?"":"s"} reviewed · ${appliedFields} tracked field change${appliedFields===1?"":"s"}`);
+  return {appliedFields,reviewedRecords};
 }
 
 function backupContainsCredentials(){
@@ -11201,6 +11285,13 @@ export {
   triggerOcrClean,
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
+  openTouchup,
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
   triggerUpsertQueue,
   triggerOperations,
   triggerExport,
