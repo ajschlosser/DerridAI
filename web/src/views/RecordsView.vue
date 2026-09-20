@@ -9,6 +9,7 @@ import CitationMenu from "../components/CitationMenu.vue";
 import HighlightedText from "../components/search/HighlightedText.vue";
 import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader.vue";
+import RecordsFileRail from "../components/records/RecordsFileRail.vue";
 import RecordsColumnsDialog from "../components/records/RecordsColumnsDialog.vue";
 import { useRecordsWorkspace } from "../composables/useRecordsWorkspace";
 import type { RecordsCell, RecordsRow } from "../types/records";
@@ -26,8 +27,8 @@ const density = ref(loadDensity());
 let queryTimer = 0;
 
 const fileSig = computed(() =>
-  shell.snapshot.files
-    .map((file) => `${file.id}:${file.active}:${file.count}:${file.dirty}`)
+  (snapshot.value?.files || shell.snapshot.files)
+    .map((file) => `${file.id}:${file.active}:${file.count}:${file.dirty}:${"origin" in file ? file.origin : ""}`)
     .join("|"),
 );
 const filterCount = computed(
@@ -104,6 +105,14 @@ function applyQuery(value: string) {
 }
 async function run(name: string) {
   await records.run(name);
+  shell.sync();
+}
+function selectFile(id: string) {
+  records.selectFile(id);
+  shell.sync();
+}
+async function closeFile(id: string) {
+  await records.closeFile(id);
   shell.sync();
 }
 function share() {
@@ -193,7 +202,7 @@ onMounted(() => {
     />
 
     <AccessibleEmptyState
-      v-if="!snapshot?.available"
+      v-if="!(snapshot?.files || []).length"
       icon="upload"
       :title="
         snapshot?.shared
@@ -208,14 +217,26 @@ onMounted(() => {
             )
           : i18n.t(
               'records.open_workspace_help',
-              'Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in its own tab and can be edited, compared, searched, exported, or sent to the corpus database.',
+              'Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in the local corpus list and can be edited, compared, searched, exported, or sent to the corpus database.',
             )
       "
       :action-label="i18n.t('records.choose_jsonl', 'Choose JSONL files')"
       @action="run('import')"
     />
 
-    <template v-else-if="snapshot">
+    <div v-else-if="snapshot" class="records-layout">
+      <RecordsFileRail
+        :files="snapshot.files"
+        :can-manage="snapshot.capabilities.can_import"
+        @select="selectFile"
+        @close="closeFile"
+        @open="run('import')"
+        @merge="run('merge')"
+        @subset="run('subset')"
+        @export="run('export')"
+      />
+      <div class="records-main">
+    <template v-if="snapshot.available">
       <section
         class="records-command"
         :aria-label="i18n.t('records.table_controls', 'Records table controls')"
@@ -587,6 +608,8 @@ onMounted(() => {
         </button>
       </nav>
     </template>
+      </div>
+    </div>
 
     <RecordsColumnsDialog
       ref="columnsDialog"
@@ -603,6 +626,17 @@ onMounted(() => {
   gap: 16px;
   max-width: 1600px;
   margin: 0 auto;
+}
+.records-layout {
+  display: grid;
+  grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.records-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 .records-command {
   display: flex;
@@ -756,5 +790,10 @@ onMounted(() => {
   width: 100%;
   min-height: 2rem;
   font-size: 0.8125rem;
+}
+@media (max-width: 900px) {
+  .records-layout {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

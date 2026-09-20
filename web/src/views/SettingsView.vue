@@ -651,7 +651,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           <SettingsSection section-id="backup" :title="i18n.t('settings.backup', 'Backup and restore')" :description="i18n.t('settings.backup_help', 'One portable archive of the browser workspace, loaded records, configuration, the current PDF, and Chroma collections with stored vectors.')" :persistence="persistKind('browser')">
             <p class="info warn">{{ i18n.t("settings.backup_keys_warning", "This full backup can contain provider API keys. Store the ZIP securely. Installed model files are not copied.") }}</p>
             <p class="backup-summary">
-              <span><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.jsonl_tabs", "JSONL tabs") }}</span>
+              <span><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.jsonl_tabs", "JSONL files") }}</span>
               <span><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.active_jobs", "active operations") }}</span>
             </p>
             <input ref="restoreInput" type="file" accept=".zip,application/zip" hidden @change="onRestoreFile">

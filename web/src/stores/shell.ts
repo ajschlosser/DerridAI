@@ -8,6 +8,8 @@ export interface ShellFile {
   count: number;
   dirty: number;
   active: boolean;
+  origin?: string;
+  origin_detail?: string;
 }
 export interface ShellNavItem {
   id: string;

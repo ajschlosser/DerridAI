@@ -4,7 +4,7 @@ import UiMenu from "./UiMenu.vue";
 
 const items = [
   {id: "open", label: "Open JSONL", icon: "upload"},
-  {id: "merge", label: "Merge tabs", icon: "plus", reason: "Load at least two JSONL tabs to merge them."},
+  {id: "merge", label: "Merge files", icon: "plus", reason: "Load at least two JSONL files to merge them."},
   {id: "export", label: "Export", icon: "download"},
 ];
 
