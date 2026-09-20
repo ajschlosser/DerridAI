@@ -25,10 +25,11 @@ from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
 from .enrichment_cycles import CONFIDENCE_FIELDS, HUMAN_OWNED_STATUSES, MAX_PASSES, GlobalLearningStore, learn_from_pass, resolve_conflict, same_value
 from .corpus_publication import validate_publication_record, serialize_public_record
+from .error_severity import severity as error_severity
 from .autofill import decide as decide_autofill, in_audit_sample
 from . import experiment
 from .enrichment_metrics import compute as compute_enrichment_metrics
-from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, EnrichmentLedger
+from .enrichment_ledger import ACCEPTED, AUTOFILLED, CALL, CORRECTED, PROPOSED, REJECTED, RESUMED, SUSPENDED, EnrichmentLedger
 from .main_text_start import infer_main_text_start
 from .sentence_boundaries import snap_boundaries_to_sentences
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -1319,6 +1320,7 @@ class PdfCorpusBuildManager:
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
+        self._suspended: set[tuple[str, str]] = set()
         self._mark_interrupted()
 
     def reset_in_memory_state(self) -> None:
@@ -1545,11 +1547,23 @@ class PdfCorpusBuildManager:
         self.repo.save_build(build)
         return self.resume(build_id, request)
 
-    def enrichment_metrics(self, build_id: str = "", run_id: str = "") -> dict[str, Any]:
+    def enrichment_ledger_csv(self) -> str:
+        return self._ledger.to_csv()
+
+    def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None:
+        """Log the moment autofill is switched off or back on for a model and field, once, not on every value."""
+        with self._lock:
+            was = (model, field) in self._suspended
+            if suspended == was:
+                return
+            (self._suspended.add if suspended else self._suspended.discard)((model, field))
+        self._ledger.append(SUSPENDED if suspended else RESUMED, model=model, field=field, build_id=build_id, run_id=run_id, reviews=reviews, accepted=accepted)
+
+    def enrichment_metrics(self, build_id: str = "", run_id: str = "", arm: str = "", group_by: str = "") -> dict[str, Any]:
         """The ten enrichment measures for the whole ledger, one build, or one run."""
         records = self.repo.load_records(build_id) if build_id else None
         return {
-            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id),
+            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id, arm=arm, group_by=group_by),
             "concurrency": {"limit": max(1, int(settings.enrichment_max_concurrent_runs)), "working": self.active_enrichment_runs()},
         }
 
@@ -1777,7 +1791,7 @@ class PdfCorpusBuildManager:
         kept = prior_value == new_value
         if info.get("model"):
             kind = ACCEPTED if kept else (REJECTED if new_value in (None, "", []) else CORRECTED)
-            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), **(info.get("conditions") or {}))
+            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=prior_value, new_value=new_value, severity=None if kept else error_severity(prior_value, new_value), **(info.get("conditions") or {}))
         if record is not None and not kept and prior_value not in (None, "", []):
             # Remembered: the next pass is shown this as a value people turned down, and it lowers the
             # model's blended confidence on this field through the ledger.
@@ -4121,6 +4135,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 return None
             reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
             decision = decide_autofill(confidence, reviews, accepted)
+            self._note_suspension(model, field, bool(decision["suspended"]), reviews, accepted, build_id, run_id)
             if not decision["autofill"]:
                 return None
             audit = in_audit_sample(str(record.get("record_id") or ""), field)
@@ -4407,7 +4422,8 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
             self._ledger.append(
                 PROPOSED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id,
                 value=record.get(field), self_reported=assessed.get("confidence"),
-                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"), **conditions,
+                grounded=bool((clean_evidence.get(field) or {}).get("block_ids")), outcome=proposed_status.get("status"),
+                supported=experiment.supported_in_text(record.get(field), str(record.get("text") or "")) if field in experiment.FREE_TEXT_FIELDS else None, **conditions,
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
@@ -5793,7 +5809,7 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
                 if info and info.get("status") == "llm_inferred":
                     if info.get("model"):
-                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), **(info.get("conditions") or {}))
+                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=target.get(field), new_value=target.get(field), **(info.get("conditions") or {}))
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
                     info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()

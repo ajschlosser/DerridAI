@@ -10,6 +10,8 @@ cannot interleave inside a line.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import threading
@@ -20,6 +22,7 @@ from typing import Any
 # What can happen to a value. PROPOSED and AUTOFILLED are the model's doing, CALL is one model request
 # (its cost), and the rest are human decisions.
 PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
+SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
 
@@ -68,3 +71,15 @@ class EnrichmentLedger:
                 reviews += 1
                 accepted += row["kind"] == ACCEPTED
         return reviews, accepted
+
+    def to_csv(self) -> str:
+        """One row per event, one column per key; lists and objects are JSON text so no row is ragged."""
+        rows = self.events()
+        lead = ["at", "kind", "run_id", "build_id", "record_id", "model", "field", "arm", "ablations", "gold", "model_version", "prompt_version", "code_version", "temperature", "seed"]
+        columns = lead + sorted({key for row in rows for key in row} - set(lead))
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: (json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v) for k, v in row.items()})
+        return out.getvalue()

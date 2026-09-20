@@ -2310,11 +2310,17 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
 
 
 @app.get("/api/pdf/corpus-enrichment-metrics")
-def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = ""):
+def get_pdf_corpus_enrichment_metrics(build_id: str = "", run_id: str = "", arm: str = "", group_by: str = ""):
     try:
-        return pdf_corpus_builds.enrichment_metrics(build_id, run_id)
+        return pdf_corpus_builds.enrichment_metrics(build_id, run_id, arm, group_by)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@app.get("/api/pdf/corpus-enrichment-ledger.csv")
+def export_pdf_corpus_enrichment_ledger():
+    """Every ledger event as one CSV row with its experiment columns, for analysis outside the app."""
+    return Response(pdf_corpus_builds.enrichment_ledger_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="enrichment-ledger.csv"'})
 
 
 @app.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")

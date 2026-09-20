@@ -60,3 +60,68 @@ def test_slicing_by_run_and_unresolved_count():
 
 def test_no_data_is_none_not_zero():
     assert compute([ev("call", elapsed_ms=5, ok=True)])["models"]["m"]["acceptance_rate"] is None
+
+
+def ts(n):
+    return f"2026-01-01T00:00:{n:02d}+00:00"
+
+
+def test_intervals_accompany_rates():
+    rows = [ev("accepted", confidence=0.9)] * 9 + [ev("corrected", confidence=0.9)]
+    ci = compute(rows)["models"]["m"]["acceptance_ci"]
+    assert ci["n"] == 10 and ci["low"] < 0.9 < ci["high"]
+
+
+def test_correction_severity_and_substantive_rate():
+    rows = [ev("corrected", severity="cosmetic"), ev("corrected", severity="substantive"), ev("accepted"), ev("rejected")]
+    m = compute(rows)["models"]["m"]
+    assert m["correction_severity"] == {"cosmetic": 1, "substantive": 1, "cleared": 1}
+    assert m["substantive_error_rate"]["rate"] == 0.25
+
+
+def test_repeat_of_a_rejected_value():
+    rows = [ev("proposed", value="a", at=ts(1)), ev("corrected", value="a", at=ts(2)),
+            ev("proposed", value="a", at=ts(3)), ev("proposed", value="b", at=ts(4))]
+    m = compute(rows)["models"]["m"]
+    assert m["proposals_after_a_rejection"] == 2 and m["repeat_rate"] == 0.5
+
+
+def test_text_support_rate_counts_only_free_text_checks():
+    rows = [ev("proposed", supported=True), ev("proposed", supported=False), ev("proposed", supported=None)]
+    m = compute(rows)["models"]["m"]
+    assert m["supported_rate"] == 0.5 and m["supported_checked"] == 2
+
+
+def test_review_seconds_drops_breaks():
+    rows = [ev("accepted", at=ts(0)), ev("accepted", at=ts(10)), ev("accepted", at="2026-01-01T00:20:00+00:00")]
+    assert compute(rows)["models"]["m"]["review_seconds_per_decision"] == 10
+
+
+def test_time_to_first_useful_value_and_suspensions():
+    rows = [ev("call", at=ts(0), ok=True, elapsed_ms=1), ev("autofilled", at=ts(12)), ev("suspended", at=ts(20)), ev("resumed", at=ts(30))]
+    m = compute(rows)["models"]["m"]
+    assert m["seconds_to_first_useful_value"] == 12 and (m["autofill_suspensions"], m["autofill_resumptions"]) == (1, 1)
+
+
+def test_contested_outcomes_when_models_disagree():
+    rows = [ev("proposed", value="a"), ev("proposed", value="b", model="n"),
+            ev("corrected", value="a", new_value="b", confidence=0.9)]
+    c = compute(rows)["contested"]["m"]
+    assert c["contested_reviews"] == 1 and c["person_chose_other_models_value"] == 1
+
+
+def test_slices_by_arm_and_filter():
+    rows = [ev("accepted", arm="A"), ev("corrected", arm="B")]
+    out = compute(rows, group_by="arm")
+    assert out["slices"]["groups"]["A"]["m"]["acceptance_rate"] == 1.0
+    assert compute(rows, arm="B")["models"]["m"]["acceptance_rate"] == 0.0
+
+
+def test_csv_export_has_condition_columns(tmp_path):
+    from app.enrichment_ledger import EnrichmentLedger
+
+    ledger = EnrichmentLedger(tmp_path / "l.jsonl")
+    ledger.append("accepted", model="m", field="f", arm="A", ablations=["autofill"], extra_col=1)
+    lines = ledger.to_csv().splitlines()
+    assert lines[0].startswith("at,kind,run_id") and "extra_col" in lines[0]
+    assert '"[""autofill""]"' in lines[1]

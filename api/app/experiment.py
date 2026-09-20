@@ -62,3 +62,21 @@ def context(request: dict[str, Any] | None, *, model: str, record_id: str, code_
         "temperature": generation.get("temperature"),
         "seed": generation.get("seed"),
     }
+
+
+# Fields whose values are names or phrases that should appear in the source text; enumerated
+# fields (discourse role, region type, stance) are choices, not quotations, so text support does
+# not apply to them.
+FREE_TEXT_FIELDS = {"speaker", "position_holder", "target"}
+
+
+def supported_in_text(value: Any, text: str) -> bool | None:
+    """Do the value's words appear in the text it was drawn from? None when the question does not apply."""
+    import re
+
+    items = value if isinstance(value, (list, tuple)) else [value]
+    words = {w for item in items for w in re.findall(r"\w{3,}", str(item).casefold())}
+    if not words:
+        return None
+    haystack = set(re.findall(r"\w{3,}", text.casefold()))
+    return len(words & haystack) / len(words) >= 0.5
