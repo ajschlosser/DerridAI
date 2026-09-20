@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.5 — Iterative Ibis
+
+Metadata enrichment can run as a chain of passes while you keep reviewing, and later passes learn from your decisions and from earlier passes. See [0.62.5](docs/notes/0.62.5.md).
+
 ## 0.62.4 — Whimsical Wombat
 
 The Home Operations panel is rebuilt for keyboard and screen-reader use and to be easier to read, and the remaining accessibility problems on the Home page and sign-in screen are fixed. See [0.62.4](docs/notes/0.62.4.md).

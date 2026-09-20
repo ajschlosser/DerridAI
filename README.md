@@ -3,7 +3,7 @@
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
-Current version: **0.62.4 — Whimsical Wombat** ([release notes](docs/notes/0.62.4.md)).
+Current version: **0.62.5 — Iterative Ibis** ([release notes](docs/notes/0.62.5.md)).
 
 ## Features
 
