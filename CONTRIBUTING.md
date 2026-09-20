@@ -27,9 +27,9 @@ Backend tests need no environment setup: `tests/conftest.py` points storage at a
 | Frontend unit | `cd web && npm run test:unit` (Vitest) |
 | Production build | `cd web && npm run build` |
 | Storybook build | `cd web && npm run build-storybook` |
-| Composed UI, opacity, WCAG 2.0 AA | `cd web && npx playwright install chromium && npm run test:e2e` (Playwright + axe) |
+| Composed UI, opacity, WCAG 2.2 AA (light and dark) | `cd web && npx playwright install chromium && npm run test:e2e` (Playwright + axe) |
 
-`cd web && npm run test:frontend` chains typecheck, unit, build, Storybook build, and e2e. If port 6006 is busy, use a Playwright config that points at another Storybook port; do not weaken a gate to get past a local problem.
+`cd web && npm run test:frontend` chains typecheck, unit, build, Storybook build, and e2e. The e2e run also serves the production build on port 5199 to render the real Vue views against a mock API (`web/tests/e2e/support`), so run `npm run build` first. If port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a gate to get past a local problem.
 
 ## Working rules
 

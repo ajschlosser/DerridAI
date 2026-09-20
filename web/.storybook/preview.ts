@@ -2,6 +2,7 @@ import type { Preview } from "@storybook/vue3-vite";
 import { setup } from "@storybook/vue3-vite";
 import { createPinia } from "pinia";
 import "../src/style.css";
+import "../src/styles/tokens.css";
 
 // Storybook runs outside the application bootstrap path, so install the same
 // global state plugin once for every story. Individual stories remain free to

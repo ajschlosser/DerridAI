@@ -1,15 +1,19 @@
 # DerridAI User Guide
 
-Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, workspace footer, and browser tab title show the release version next to the git commit that built this instance.
+Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, the account menu, Settings → Workspace → About DerridAI, and the browser tab title show the release version. The git commit that built this instance is shown on sign-in and to administrators.
 
 ## Users and roles
 
-0.20.0 adds built-in local authentication backed by SQLite (`AUTH_DB_PATH`, default `/data/.home/derridai-auth.sqlite3`). There are no packaged default credentials. On the first browser launch, DerridAI asks you to create the first administrator account. Administrators can then manage accounts from **System → Users & roles**.
+DerridAI uses built-in local authentication backed by SQLite (`AUTH_DB_PATH`, default `/data/.home/derridai-auth.sqlite3`). There are no packaged default credentials. On the first browser launch, DerridAI asks you to create the first administrator account. Administrators then manage accounts from **System → Users** and what each role can do from **System → Roles & permissions**. Settings → Security also links to both pages.
 
-Two roles are currently available:
+Two built-in roles ship with the application:
 
-- **Admin** — full access to JSONL workspaces, record editing/history, vector databases, providers, PDF tools, RAG, configuration, backups, and user administration.
-- **Researcher** — RAG Research plus read-only corpus database/work browsing and semantic search. The API enforces the restriction as well as the UI: corpus mutation/database-management/export endpoints are rejected, RAG jobs are scoped to their owner, and researcher sessions cannot open editable corpus/editor/system routes.
+- **Administrator** — full access. Administrator permissions are locked so administrative control cannot be removed by accident.
+- **Researcher** — the default non-admin role. It can use Research, researcher-safe corpus browsing and search, annotations, and appearance settings. The API enforces the same boundary as the UI: corpus mutation, database management, and export endpoints are rejected, RAG jobs are scoped to their owner, and researcher sessions cannot open administrative routes.
+
+Administrators can create additional **custom roles**. A custom role starts from Researcher (or another non-admin role) and then enables or disables individual researcher-safe pages and features. Administration capabilities — Users, Roles, Languages, LLM profiles, loaded-record management, PDF tools, the Response Library, corpus mutation, and similar — cannot be granted to any non-admin role. Custom roles cannot be deleted while accounts still use them; reassign those users first.
+
+Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.
 
 Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by ` [...] ` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
@@ -410,8 +414,20 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
 - If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
 - Reviewer-confirmed values are never overwritten by later enrichment.
+- After a pass finishes, **Run another pass** is available in the review workspace immediately. You do not need to accept every record first. The next pass is given what the last pass inferred (working conventions on this build) and any reviewer decisions already made.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
+
+## Corpus Builder review workspace
+
+Once a build has records, the review workspace fills the screen under the top bar: the queue on the left, the record in the middle, and the details (metadata, evidence, source) on the right. Each pane scrolls on its own, and the record's title and its decisions stay in view while you read.
+
+- **Deciding.** The bar under the record is one row: **Skip**, **Reject & next**, and **Accept & next**. If required metadata is unresolved, a note above the bar says which fields, and **Accept & next** stays unavailable until you confirm them.
+- **More actions** (the ⋯ button at the left of that bar) holds **Combine with previous record**, **Combine with next record**, **Slice record** and **Preview JSONL**. An action that is not available stays in the list and says why, for example that there is no previous record to combine with.
+- **Undo** and **Redo** are at the top of the record, next to **Focus view**.
+- **The queue** shows each record's state as an icon and a name (Accepted, Rejected, Reviewable, Metadata, Topology, Source problem). Above it, the queue tabs filter by state, **Bulk actions** holds **Bulk edit metadata** and **Reject selected**, and **Accept clean** accepts every reviewable record at once.
+- **Resizing.** Drag the divider between panes, or focus it and use the arrow keys (Shift for bigger steps, Home and End for the limits); double-click to reset. Each width is remembered in this browser.
+- **Smaller screens.** On a laptop the details sit under the queue and record. On a phone the workspace is an ordinary page.
 
 ## PDF Explorer
 
@@ -574,7 +590,7 @@ Compare is a Vue-native two-column workspace at **Tools → Compare**. Each colu
 
 Settings is a Vue-native control center at **System → Settings**. A contents rail (a collapsible **Contents** control on smaller screens) groups:
 
-- **Workspace and appearance** — accent theme, light/dark/system color scheme, and contrast. These are stored in this browser workspace, not on the server.
+- **Workspace and appearance** — accent theme, light/dark/system color scheme, contrast, and **About DerridAI** (copyright and version; administrators also see the git commit). Theme choices are stored in this browser workspace, not on the server.
 - **Language and accessibility** — interface language, applied immediately. Dictionary editing remains on **Languages**.
 - **Research defaults** — response language for generated answers. Per-run generation still lives on **Research**.
 - **Review and AI behavior** — default provider profile, review preset, and interactive vs background LLM review.

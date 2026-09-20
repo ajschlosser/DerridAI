@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { lightTokens, resolveHex } from "./helpers/css-tokens";
 
 // WCAG 1.4.3 (text >= 4.5:1) and 1.4.11 (UI components and graphics >= 3:1) for every colour pair the
 // Operations panel uses. axe cannot judge count badges, gradients, or non-text contrast, so the tokens
@@ -10,9 +11,9 @@ const source = readFileSync(resolve(process.cwd(), "src/components/OperationsPan
 const compact = source.replace(/\s+/g, "");
 const token = (name: string): string => {
   const match = source.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,6})\\b`));
-  if (!match) throw new Error(`token --${name} not found`);
-  const hex = match[1];
-  return hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join("")}` : hex;
+  const alias = source.match(new RegExp(`--${name}:\\s*([^;]+);`));
+  if (!match && !alias) throw new Error(`token --${name} not found`);
+  return resolveHex(match?.[1] ?? alias![1], lightTokens(source));
 };
 const rgb = (hex: string): [number, number, number] =>
   [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
@@ -69,9 +70,12 @@ describe("Operations panel contrast", () => {
 
   it("the count inside a pressed chip is solid white with accent text, not a translucent overlay", () => {
     // A translucent white chip over the accent lowers the contrast of white text below 4.5:1 on every theme.
-    expect(compact).toMatch(
-      /\.ops-chip\[aria-pressed="true"\]\.ops-chip-count\{background:#fff;color:var\(--ops-accent\);?\}/,
+    const rule = compact.match(
+      /\.ops-chip\[aria-pressed="true"\]\.ops-chip-count\{background:([^;}]+);color:var\(--ops-accent\);?\}/,
     );
+    expect(rule, "the pressed-chip count rule").not.toBeNull();
+    // --accent-on is white in every colour scheme, so the pill stays a solid white knockout in dark mode too.
+    expect(resolveHex(rule![1])).toBe("#ffffff");
   });
 
   it.each(Object.entries(ACCENTS))(
@@ -84,7 +88,7 @@ describe("Operations panel contrast", () => {
   it.each(Object.entries(ACCENTS))(
     "on the %s theme, the progress fill is distinguishable from its track (1.4.11)",
     (_name, accent) => {
-      const track = rgb(compact.match(/\.ops-progress\{[^}]*background:(#[0-9a-fA-F]{6})/)![1]);
+      const track = rgb(token("ops-sunken"));
       expect(ratio(rgb(accent), track)).toBeGreaterThanOrEqual(3);
     },
   );

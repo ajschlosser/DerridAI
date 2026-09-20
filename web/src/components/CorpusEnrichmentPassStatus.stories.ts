@@ -58,6 +58,16 @@ export const Stopped: Story = {
     }),
   },
 };
+export const IdleAfterInitial: Story = {
+  args: {
+    build: {
+      build_id: "demo",
+      status: "awaiting_review",
+      stage: "review",
+      record_count: 60,
+    } as unknown as CorpusBuild,
+  },
+};
 export const Failed: Story = {
   args: { build: build({ state: "failed", error: "Provider profile is unreachable." }) },
 };

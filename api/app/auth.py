@@ -160,7 +160,6 @@ class AuthStore:
                     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                     password_salt TEXT NOT NULL,
                     password_hash TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK(role IN ('admin','researcher')),
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -202,11 +201,15 @@ class AuthStore:
                 "INSERT OR IGNORE INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES('researcher','Researcher','Default non-admin research role. Its permissions are configurable and enforced by both the API and interface.',0,1,?,?)",
                 (now, now),
             )
-            # users.role remains the built-in base role; arbitrary application
-            # roles are represented through the assignment table.
-            conn.execute(
-                "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
-            )
+            legacy_columns = {str(column[1]) for column in conn.execute("PRAGMA table_info(users)")}
+            if "role" in legacy_columns:
+                # Existing installations had a built-in-only users.role value.
+                # Capture it exactly once, then remove the obsolete column so it
+                # cannot diverge from the canonical assignment.
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_role_assignments(user_id,role) SELECT id,role FROM users"
+                )
+                conn.execute("ALTER TABLE users DROP COLUMN role")
             role_rows = conn.execute("SELECT id FROM roles ORDER BY id").fetchall()
             for row in role_rows:
                 role = str(row["id"])
@@ -236,7 +239,7 @@ class AuthStore:
         if row is None:
             return None
         keys = set(row.keys())
-        effective_role = str(row["effective_role"] if "effective_role" in keys else row["role"])
+        effective_role = str(row["role"])
         role_name = str(
             row["role_name"]
             if "role_name" in keys and row["role_name"]
@@ -257,12 +260,10 @@ class AuthStore:
     @staticmethod
     def _user_select(where: str = "", order: str = "") -> str:
         return f"""
-            SELECT u.*,
-                   COALESCE(a.role,u.role) AS effective_role,
-                   COALESCE(r.name,CASE WHEN COALESCE(a.role,u.role)='admin' THEN 'Administrator' ELSE 'Researcher' END) AS role_name
+            SELECT u.*, a.role, r.name AS role_name
             FROM users u
-            LEFT JOIN user_role_assignments a ON a.user_id=u.id
-            LEFT JOIN roles r ON r.id=COALESCE(a.role,u.role)
+            JOIN user_role_assignments a ON a.user_id=u.id
+            JOIN roles r ON r.id=a.role
             {where}
             {order}
         """
@@ -389,14 +390,13 @@ class AuthStore:
             raise ValueError("Password must contain at least 6 characters.")
         if not self.role_exists(role):
             raise ValueError("Selected role does not exist.")
-        base_role = "admin" if role == "admin" else "researcher"
         salt, digest = _hash_password(password)
         now = _iso_now()
         try:
             with self._lock, self._connect() as conn:
                 cursor = conn.execute(
-                    "INSERT INTO users(username,password_salt,password_hash,role,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
-                    (username, salt, digest, base_role, now, now),
+                    "INSERT INTO users(username,password_salt,password_hash,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
+                    (username, salt, digest, now, now),
                 )
                 conn.execute(
                     "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
@@ -584,9 +584,8 @@ class AuthStore:
         if current.role == "admin" and current.active and (next_role != "admin" or not next_active):
             if self._active_admin_count() <= 1:
                 raise ValueError("At least one active administrator is required.")
-        base_role = "admin" if next_role == "admin" else "researcher"
-        clauses = ["role=?", "active=?", "updated_at=?"]
-        values: list[object] = [base_role, int(next_active), _iso_now()]
+        clauses = ["active=?", "updated_at=?"]
+        values: list[object] = [int(next_active), _iso_now()]
         if password is not None:
             salt, digest = _hash_password(password)
             clauses.extend(["password_salt=?", "password_hash=?"])
@@ -623,7 +622,7 @@ class AuthStore:
                     "username": str(row["username"]),
                     "password_salt": str(row["password_salt"]),
                     "password_hash": str(row["password_hash"]),
-                    "role": str(row["effective_role"]),
+                    "role": str(row["role"]),
                     "active": bool(row["active"]),
                     "created_at": str(row["created_at"]),
                     "updated_at": str(row["updated_at"]),
@@ -722,10 +721,9 @@ class AuthStore:
             conn.execute("DELETE FROM users")
             restored_ids: set[int] = set()
             for user_id, username, salt, digest, role, active, created_at, updated_at, last_login, login_count in normalized:
-                base_role = "admin" if role == "admin" else "researcher"
                 cursor = conn.execute(
-                    "INSERT INTO users(id,username,password_salt,password_hash,role,active,created_at,updated_at,last_login,login_count) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    (user_id, username, salt, digest, base_role, active, created_at, updated_at, last_login, login_count),
+                    "INSERT INTO users(id,username,password_salt,password_hash,active,created_at,updated_at,last_login,login_count) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (user_id, username, salt, digest, active, created_at, updated_at, last_login, login_count),
                 )
                 restored_id = int(user_id or cursor.lastrowid)
                 restored_ids.add(restored_id)
@@ -808,7 +806,7 @@ class AuthStore:
 
     def _active_admin_count(self) -> int:
         with self._connect() as conn:
-            return int(conn.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0])
+            return int(conn.execute("SELECT COUNT(*) FROM users u JOIN user_role_assignments a ON a.user_id=u.id WHERE a.role='admin' AND u.active=1").fetchone()[0])
 
 
 auth_store = AuthStore()

@@ -52,10 +52,10 @@ defineProps<{
 .compare-diff-sides{display:grid;grid-template-columns:1fr 1fr}
 .compare-diff-sides section{min-width:0;padding:12px 14px}
 .compare-diff-sides section+section{border-left:1px solid var(--line)}
-.compare-side-kicker{margin:0 0 8px;font-size:.8125rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-2,var(--accent))}
-pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px;line-height:1.5;min-height:1.5em;color:var(--text)}
-pre :deep(.del),pre span.del{color:#3f1010 !important;background:#f7d2d2;text-decoration:line-through;font-weight:700;font-size:14px}
-pre :deep(.ins),pre span.ins{color:#10281c !important;background:#cfe8d6;font-weight:700;font-size:14px}
+.compare-side-kicker{margin:0 0 8px;font-size:.8125rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color: var(--accent-fg)}
+pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:0.875rem;line-height:1.5;min-height:1.5em;color:var(--text)}
+pre :deep(.del),pre span.del{color:var(--tone-danger-fg) !important;background:var(--tone-danger-bg);text-decoration:line-through;font-weight:700;font-size:0.875rem}
+pre :deep(.ins),pre span.ins{color:var(--text) !important;background:var(--tone-ok-bg);font-weight:700;font-size:0.875rem}
 @media (max-width:800px){
   .compare-diff-sides{grid-template-columns:1fr}
   .compare-diff-sides section+section{border-left:0;border-top:1px solid var(--line)}

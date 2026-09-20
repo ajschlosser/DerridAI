@@ -33,7 +33,7 @@ const i18n = useI18nStore();
 </template>
 <style scoped>
 .vector-workspace-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;padding:4px 2px}
-.vector-workspace-copy p{margin:0 0 3px;color:var(--accent-2,var(--accent));font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.vector-workspace-copy p{margin:0 0 3px;color: var(--accent-fg);font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
 .vector-workspace-copy h1{margin:0;font:600 clamp(24px,2.2vw,32px)/1.1 Georgia,"Times New Roman",serif;letter-spacing:-.02em}
 .vector-workspace-copy span{display:block;max-width:72ch;margin-top:8px;color:var(--muted);font-size:.8125rem;line-height:1.5}
 .vector-workspace-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end}

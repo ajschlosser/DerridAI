@@ -3,7 +3,7 @@
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
-Current version: **0.62.5 — Iterative Ibis** ([release notes](docs/notes/0.62.5.md)).
+Current version: **0.62.8 — Spacious Stork** ([release notes](docs/notes/0.62.8.md)).
 
 ## Features
 
@@ -92,4 +92,4 @@ CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, the backend tests
 
 ## License
 
-No license file is currently included. Source files carry `Copyright 2026 Aaron John Schlosser, PhD.` The UI footer reads `© 2026 The New England Transcendental Club of California`.
+No license file is currently included. Source files carry `Copyright 2026 Aaron John Schlosser, PhD.` The sign-in screen, account menu, and Settings → About DerridAI show `© 2026 The New England Transcendental Club of California`.

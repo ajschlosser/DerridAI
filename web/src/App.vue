@@ -4,14 +4,18 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
-import AppIcon from "./components/AppIcon.vue";
 import UiButton from "./components/ui/UiButton.vue";
 import AuthScreen from "./components/AuthScreen.vue";
-import BrandMark from "./components/BrandMark.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import LanguageFlag from "./components/LanguageFlag.vue";
+import AppBuildInfo from "./components/AppBuildInfo.vue";
+import AppNotifications from "./components/AppNotifications.vue";
+import SidebarBrand from "./components/shell/SidebarBrand.vue";
+import SidebarPrimaryNav from "./components/shell/SidebarPrimaryNav.vue";
+import SidebarMoreTools from "./components/shell/SidebarMoreTools.vue";
+import SidebarStatus from "./components/shell/SidebarStatus.vue";
+import type { SidebarNavEntry } from "./components/shell/sidebarNav";
 import * as runtime from "./runtime/runtime.js";
-import { appVersionLabel } from "./buildInfo";
 
 const router=useRouter();
 const route=useRoute();
@@ -67,6 +71,12 @@ const primaryNav=computed(()=>{
   return order.map(id=>byId.get(id)).filter((item):item is ShellNavItem=>Boolean(item));
 });
 const utilityNav=computed(()=>{const ids=new Set(primaryNav.value.map(item=>item.id));return flatNav.value.filter(item=>!ids.has(item.id))});
+const primaryNavItems=computed<SidebarNavEntry[]>(()=>{
+  const items:SidebarNavEntry[]=primaryNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason}));
+  if(auth.isAdmin)items.push({id:"operations",label:i18n.t("ui.operations","Operations"),icon:"history",active:operationsActive.value});
+  return items;
+});
+const utilityNavItems=computed<SidebarNavEntry[]>(()=>utilityNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason})));
 const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):route.name==="compare"?i18n.t("nav.compare","Compare"):route.name==="list"?i18n.t("nav.records","Records"):s.value.context.title||i18n.t("nav.home","Home"));
 const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):route.name==="compare"?i18n.t("context.compare.meta","Inspect field and text differences"):route.name==="list"?i18n.t("context.list.meta","Open a JSONL file"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
@@ -134,8 +144,7 @@ function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="ho
 function closeFile(event:MouseEvent,id:string){event.stopPropagation();if(auth.isAdmin)runtime.closeWorkspaceFile(id)}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function openHelp(){runtime.navigateView("faq")}
-function onMoreToolsToggle(event:Event){
-  const open=Boolean((event.currentTarget as HTMLDetailsElement)?.open);
+function onMoreToolsToggle(open:boolean){
   // A programmatic change already matches the model; only a user toggle differs from it.
   if(open===moreToolsOpen.value)return;
   moreToolsOpen.value=open;
@@ -217,14 +226,20 @@ watch(()=>auth.user?.id,(id)=>{
   <div v-else class="app-shell app-shell-modern" :class="{'sidebar-collapsed':s.sidebarCollapsed}">
     <a class="skip-link" href="#appContent">{{ i18n.t("ui.skip_to_content","Skip to main content") }}</a>
     <aside class="sidebar shell-sidebar">
-      <div class="shell-brand-row"><button class="shell-brand-button" :title="i18n.t('nav.home','Home')" :aria-label="i18n.t('nav.home','Home')" @click="navigate('home')"><BrandMark :size="s.sidebarCollapsed?34:46" compact /><span v-if="!s.sidebarCollapsed" class="shell-brand-word">DerridAI</span></button><button class="sidebar-toggle" :title="s.sidebarCollapsed?i18n.t('ui.expand_sidebar','Expand sidebar'):i18n.t('ui.collapse_sidebar','Collapse sidebar')" @click="runtime.toggleSidebar()">{{s.sidebarCollapsed?'→':'←'}}</button></div>
-      <nav class="side-nav shell-primary-nav" :aria-label="i18n.t('ui.primary_navigation','Primary navigation')">
-        <span v-for="item in primaryNav" :key="item.id" class="nav-tooltip-wrap" :data-tooltip="item.disabledReason||''"><button :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></span>
-        <button v-if="auth.isAdmin" :class="{active:operationsActive}" :title="i18n.t('ui.operations','Operations')" @click="navigate('operations')"><AppIcon name="history"/><span>{{i18n.t('ui.operations','Operations')}}</span></button>
-      </nav>
-      <details v-if="utilityNav.length&&!s.sidebarCollapsed" class="shell-more-tools" :open="moreToolsOpen" @toggle="onMoreToolsToggle"><summary><span>{{i18n.t('nav.more_tools','More tools')}}</span><span>⌄</span></summary><div class="shell-more-tools-list"><button v-for="item in utilityNav" :key="item.id" :class="{active:isNavActive(item)}" :disabled="Boolean(item.disabledReason)" :title="item.disabledReason||item.label" @click="navigate(item.id)"><AppIcon :name="item.icon"/><span>{{item.label}}</span></button></div></details>
+      <SidebarBrand :collapsed="s.sidebarCollapsed" @navigate-home="navigate('home')" @toggle="runtime.toggleSidebar()" />
+      <SidebarPrimaryNav :items="primaryNavItems" @navigate="navigate" />
+      <SidebarMoreTools v-if="utilityNavItems.length&&!s.sidebarCollapsed" :items="utilityNavItems" :open="moreToolsOpen" @update:open="onMoreToolsToggle" @navigate="navigate" />
       <div class="sidebar-spacer"></div>
-      <div v-if="!s.sidebarCollapsed" class="shell-sidebar-footer"><div class="shell-mini-status"><template v-if="auth.isAdmin"><span><i :class="['status-dot',s.hasCorpusDb?'ok':'']"></i>{{s.totalLoaded.toLocaleString(i18n.locale)}} {{i18n.t('dynamic.records','records')}}</span><span v-if="s.corpusStoreCount">{{s.corpusStoreCount}} {{i18n.t('ui.corpus_dbs','corpus DBs')}}</span></template><template v-else><span><i :class="['status-dot',s.hasCorpusDb?'ok':'']"></i>{{s.activeStore||i18n.t('research.none_selected','No database selected')}}</span><span>{{s.dbRecords.toLocaleString(i18n.locale)}} {{i18n.t('dynamic.records','records')}} · {{s.selectedEvidenceCount}} {{i18n.t('dynamic.selected_evidence','selected evidence')}}</span></template></div></div>
+      <SidebarStatus
+        v-if="!s.sidebarCollapsed"
+        :is-admin="auth.isAdmin"
+        :has-corpus-db="s.hasCorpusDb"
+        :total-loaded="s.totalLoaded"
+        :corpus-store-count="s.corpusStoreCount"
+        :active-store="s.activeStore"
+        :db-records="s.dbRecords"
+        :selected-evidence-count="s.selectedEvidenceCount"
+      />
     </aside>
 
     <section class="workspace shell-workspace">
@@ -232,13 +247,12 @@ watch(()=>auth.user?.id,(id)=>{
         <details v-if="auth.isAdmin" class="shell-actions-menu"><summary>{{i18n.t('ui.admin_actions','Actions')}}</summary><div class="shell-actions-popover"><input id="fileInput" ref="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple hidden @change="onFiles"><UiButton :label="i18n.t('ui.open_jsonl','Open JSONL')" icon="upload" @click="chooseFiles"/><UiButton :label="i18n.t('ui.merge_tabs','Merge tabs')" icon="plus" :disabled="s.files.length<2" :disabled-reason="i18n.t('ui.need_two_tabs_merge','Load at least two JSONL tabs to merge them.')" @click="invoke(runtime.triggerMerge)"/><UiButton :label="i18n.t('ui.create_subset','Create subset')" icon="filter" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_subset','Load JSONL records before creating a subset.')" @click="invoke(runtime.triggerSubset)"/><UiButton :label="i18n.t('ui.bulk_edit','Bulk edit field')" icon="edit" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_bulk_edit','Load JSONL records before bulk editing.')" @click="invoke(runtime.triggerBulkEdit)"/><UiButton :label="i18n.t('ui.clean_ocr','Clean OCR Artifacts')" icon="broom" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_ocr','Load JSONL records before cleaning OCR artifacts.')" @click="invoke(runtime.triggerOcrClean)"/><UiButton v-if="s.flagged" :label="i18n.t('ui.review_flagged','Review flagged')" icon="spark" :count="s.flagged" @click="invoke(runtime.triggerReviewFlagged)"/><UiButton :label="i18n.t('ui.operations','Operations')" icon="history" :count="s.activeJobs" @click="invoke(runtime.triggerOperations)"/><UiButton :label="i18n.t('ui.export','Export')" icon="download" :disabled="!s.files.length" :disabled-reason="i18n.t('ui.need_records_export','Load JSONL records before exporting.')" @click="invoke(runtime.triggerExport)"/></div></details>
         <button class="shell-icon-button" type="button" :title="i18n.t('nav.faq','Help')" @click="openHelp">?</button>
         <div class="language-switcher shell-language-switcher"><LanguageFlag :code="i18n.locale" :symbol="currentLocaleInfo?.flag" :label="currentLocaleInfo?.name" size="small"/><select id="localePicker" :aria-label="i18n.t('dashboard.interface_language','Interface language')" :value="i18n.locale" :disabled="i18n.loading" @change="i18n.setLocale(($event.target as HTMLSelectElement).value)"><option v-for="language in i18n.languages" :key="language.code" :value="language.code">{{languageDisplayName(language.code,language.name)}}</option></select></div>
-        <details class="shell-user-menu"><summary><span class="shell-avatar">{{userInitials}}</span><span class="shell-user-copy"><b>{{auth.user.username}}</b><small>{{auth.user.role_name||auth.user.role}}</small></span><span>⌄</span></summary><div class="shell-user-popover"><button class="btn" type="button" @click="logout">{{i18n.t('ui.sign_out','Sign out')}}</button></div></details>
+        <details class="shell-user-menu"><summary><span class="shell-avatar">{{userInitials}}</span><span class="shell-user-copy"><b>{{auth.user.username}}</b><small>{{auth.user.role_name||auth.user.role}}</small></span><span>⌄</span></summary><div class="shell-user-popover"><AppBuildInfo compact :show-commit="auth.isAdmin"/><button class="btn" type="button" @click="logout">{{i18n.t('ui.sign_out','Sign out')}}</button></div></details>
       </div></header>
       <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
       <div v-if="auth.isAdmin&&s.files.length" class="file-tabs shell-file-tabs"><div v-for="file in s.files" :key="file.id" class="tab" :class="{active:file.active}" @click="runtime.activateFile(file.id)"><span v-if="file.dirty" class="dot"></span><span class="tn">{{file.name}}</span><span class="badge">{{file.count.toLocaleString(i18n.locale)}}</span><button class="x" :title="i18n.t('ui.close_file','Close file')" @click="closeFile($event,file.id)">×</button></div></div>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
-      <footer class="app-footer">© 2026 The New England Transcendental Club of California · DerridAI {{appVersionLabel()}}</footer>
     </section>
   </div>
-  <div id="toast" class="toast"></div>
+  <AppNotifications />
 </template>

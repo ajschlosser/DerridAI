@@ -1,0 +1,140 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * Design tokens: the semantic layer components should use instead of literal colours and sizes.
+ *
+ * Neutrals (--bg, --card, --soft, --text, --muted, --line, --line-strong) and the accent family
+ * (--ui-accent*) are defined in style.css; this file adds what was missing:
+ *   - status tones (info / ok / warn / danger), each with fg, bg and border
+ *   - --accent-fg, the accent as readable text on any surface, in every theme
+ *   - the type, spacing, radius, elevation and motion scales
+ * Every tone and accent pair is checked for WCAG contrast in tests/frontend/design-tokens.test.ts.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Status tones. fg on bg is at least 4.5:1; border on the surface is at least 3:1. */
+  --tone-info-fg: #2d4463;
+  --tone-info-bg: #eef5fb;
+  --tone-info-border: #5d84a9;
+  --tone-ok-fg: #245234;
+  --tone-ok-bg: #edf8f1;
+  --tone-ok-border: #4f8f69;
+  --tone-warn-fg: #604300;
+  --tone-warn-bg: #fff8e9;
+  --tone-warn-border: #b58400;
+  --tone-danger-fg: #7d2222;
+  --tone-danger-bg: #fff2f2;
+  --tone-danger-border: #b24b4b;
+
+  /* Softer outlines for containers (cards, panels) that carry a tone; the text and icons inside
+     already identify the status, so the outline does not need the full 3:1 of a control's. */
+  --tone-info-edge: color-mix(in srgb, var(--tone-info-border) 45%, var(--card, #fff));
+  --tone-ok-edge: color-mix(in srgb, var(--tone-ok-border) 45%, var(--card, #fff));
+  --tone-warn-edge: color-mix(in srgb, var(--tone-warn-border) 45%, var(--card, #fff));
+  --tone-danger-edge: color-mix(in srgb, var(--tone-danger-border) 45%, var(--card, #fff));
+
+  /* A text highlighter (search hits): the same yellow with dark text in every scheme, because a
+     yellow fill needs dark text whatever the theme's own text colour is. */
+  --mark-bg: #fff1a8;
+  --mark-fg: #1f1a00;
+
+  /* Secondary text: between --text and --muted. */
+  --text-2: #40516b;
+
+  /* Accent as text/icon colour, and the colour of text placed on a solid accent fill. */
+  --accent-fg: var(--ui-accent-dark, #294c41);
+  --accent-on: #fff;
+
+  /* Type scale (rem, so it follows the reader's font-size setting). 12px is the floor. */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem;
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.7;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 650;
+  --fw-bold: 750;
+  --font-ui:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-reading: "Source Serif 4", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --measure: 68ch;
+
+  /* Spacing, radius, elevation, motion. */
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 56px;
+  --radius-xs: 6px;
+  --radius-pill: 999px;
+  --elev-1: 0 1px 2px rgba(25, 32, 28, 0.06), 0 1px 3px rgba(25, 32, 28, 0.05);
+  --elev-2: 0 4px 14px rgba(25, 32, 28, 0.09);
+  --elev-3: 0 18px 44px rgba(25, 32, 28, 0.16);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Names components already reference, each of which used to be undefined and fell back to a
+     light-theme literal. Defining them here is what lets those components follow the theme. */
+  --warning: var(--tone-warn-fg);
+  --success: var(--tone-ok-fg);
+  --text-muted: var(--muted);
+  --border: var(--line);
+  --surface: var(--card);
+  --accent-border: var(--ui-accent-border, #c9ddd4);
+}
+
+html[data-color-scheme="dark"] {
+  color-scheme: dark;
+  background-color: var(--bg);
+  --tone-info-fg: #bcd3f0;
+  --tone-info-bg: #1b2a3b;
+  --tone-info-border: #5a7ea6;
+  --tone-ok-fg: #a3dbb8;
+  --tone-ok-bg: #152a1e;
+  --tone-ok-border: #4f8d68;
+  --tone-warn-fg: #f2ca7c;
+  --tone-warn-bg: #302510;
+  --tone-warn-border: #a17f2b;
+  --tone-danger-fg: #f5adad;
+  --tone-danger-bg: #331a1a;
+  --tone-danger-border: #a65555;
+  /* Derived from the chosen accent so every accent theme stays legible on dark surfaces. */
+  --text-2: #cbd2cc;
+  --accent-fg: color-mix(in srgb, var(--ui-accent, #355f52) 40%, #ffffff);
+  --ui-accent-soft: color-mix(in srgb, var(--ui-accent, #355f52) 24%, var(--card));
+  --ui-accent-soft-2: color-mix(in srgb, var(--ui-accent, #355f52) 34%, var(--card));
+  --ui-accent-border: color-mix(in srgb, var(--ui-accent, #355f52) 55%, var(--card));
+  --blue-soft: color-mix(in srgb, #4d7fb5 22%, var(--card));
+  --focus-ring: #8ab4ff;
+  --focus-ring-soft: rgba(138, 180, 255, 0.28);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* Increased contrast: outlines take the text colour so boundaries never depend on a pale tint. */
+html[data-contrast="more"] {
+  --tone-info-border: var(--tone-info-fg);
+  --tone-ok-border: var(--tone-ok-fg);
+  --tone-warn-border: var(--tone-warn-fg);
+  --tone-danger-border: var(--tone-danger-fg);
+}
+
+/* Forced colors: the system palette replaces ours, so structure has to come from borders and text. */
+@media (forced-colors: active) {
+  :root {
+    --tone-info-border: CanvasText;
+    --tone-ok-border: CanvasText;
+    --tone-warn-border: CanvasText;
+    --tone-danger-border: CanvasText;
+    --accent-fg: LinkText;
+    --focus-ring: Highlight;
+  }
+}

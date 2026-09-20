@@ -9910,7 +9910,17 @@ async function openProviderModelList(profileId){
 function providerManagerHtml(){
   const cfg=state.appConfig;
   return `<section class="card config-card provider-profile-manager">
-    <div class="cardhead"><div><b>Provider profiles</b><div class="note">Reusable endpoint + model + generation settings for every LLM workflow. OpenAI-compatible profiles query GET /models when the endpoint supports it. Ollama profiles sharing an endpoint share one execution gate and use that endpoint’s lowest configured concurrency cap.</div></div><div class="tools"><button class="btn small" id="addOllamaProfile">${icon("plus")}Add Ollama</button><button class="btn small" id="addOpenaiProfile">${icon("plus")}Add OpenAI-compatible / FreeLLM</button></div></div>
+    <div class="cardhead providers-manager-head">
+      <div class="providers-head-copy">
+        <span class="eyebrow">Provider registry</span>
+        <b>Provider profiles</b>
+        <div class="note">Reusable endpoint, model, and generation settings for every LLM workflow. Ollama profiles sharing an endpoint are constrained by the lowest configured concurrency cap.</div>
+      </div>
+      <div class="tools providers-head-tools">
+        <button class="btn small" id="addOllamaProfile">${icon("plus")}Add Ollama</button>
+        <button class="btn small" id="addOpenaiProfile">${icon("plus")}Add OpenAI-compatible / FreeLLM</button>
+      </div>
+    </div>
     <div class="provider-profile-list">${providerProfiles().map(profile=>{
       const status=state.providerStatuses?.[profile.id]||{};
       const warm=state.providerWarmups?.[profile.id]||{};
@@ -9918,8 +9928,24 @@ function providerManagerHtml(){
       const endpointPeers=profile.type==="ollama"?providerProfiles().filter(item=>item.type==="ollama"&&String(item.base_url||"").replace(/\/$/,"").toLocaleLowerCase()===endpoint):[];
       const sharedLimit=endpointPeers.length?Math.min(...endpointPeers.map(item=>Math.max(1,Number(item.max_concurrent_requests||1)))):Number(profile.max_concurrent_requests||1);
       const researcherEnabled=Boolean(profile.researcher_enabled||(state.researcherProviderProfiles||[]).some(item=>item.id===profile.id));
+      const readinessLabel=status.available?`Ready · ${(status.models||[]).length} models`:status.error||warm.message||"Not verified";
       return `<article class="provider-profile-card ${profile.id===cfg.default_provider_profile?"default-provider":""}" data-provider-profile="${esc(profile.id)}">
-        <div class="provider-profile-card-head"><div><span class="provider-badge">${profile.type==="ollama"?"OLLAMA":"OPENAI-COMPATIBLE"}</span><input class="control provider-profile-name" data-profile-field="name" value="${esc(profile.name||"")}"></div><div class="tools">${profile.id===cfg.default_provider_profile?'<span class="job-applied">default</span>':`<button class="btn tiny" data-make-default-profile="${esc(profile.id)}">Make default</button>`}<button class="btn tiny danger" data-remove-provider-profile="${esc(profile.id)}">Remove</button></div></div>
+        <header class="provider-profile-card-head">
+          <div class="provider-profile-card-title">
+            <span class="provider-badge">${profile.type==="ollama"?"OLLAMA":"OPENAI-COMPATIBLE"}</span>
+            <div class="provider-profile-identity">
+              <input class="control provider-profile-name" data-profile-field="name" value="${esc(profile.name||"")}">
+              <div class="provider-meta-row">
+                <span class="provider-status-pill ${status.available?"ready":"needs-attention"}">${status.available?"Ready":"Needs attention"}</span>
+                <span class="provider-endpoint-pill">${esc(String(profile.base_url||"").replace(/\/$/,""))}</span>
+              </div>
+            </div>
+          </div>
+          <div class="tools provider-card-tools">
+            ${profile.id===cfg.default_provider_profile?'<span class="job-applied">Default</span>':`<button class="btn tiny" data-make-default-profile="${esc(profile.id)}">Set default</button>`}
+            <button class="btn tiny danger" data-remove-provider-profile="${esc(profile.id)}">Remove</button>
+          </div>
+        </header>
         <input type="hidden" data-profile-field="type" value="${esc(profile.type)}">
         <div class="provider-profile-grid">
           <div class="field field-full"><label>Endpoint</label><input class="control" data-profile-field="base_url" value="${esc(profile.base_url||"")}"></div>
@@ -9940,7 +9966,7 @@ function providerManagerHtml(){
           ${profile.type==="ollama"?`<div class="field"><label>mirostat</label><select class="control" data-profile-field="mirostat">${[0,1,2].map(v=>`<option value="${v}" ${Number(profile.mirostat??0)===v?"selected":""}>${v}</option>`).join("")}</select></div><div class="field"><label>mirostat_eta</label><input class="control" type="number" step="0.01" data-profile-field="mirostat_eta" value="${esc(profile.mirostat_eta??"")}"></div><div class="field"><label>mirostat_tau</label><input class="control" type="number" step="0.01" data-profile-field="mirostat_tau" value="${esc(profile.mirostat_tau??"")}"></div><div class="field"><label>keep_alive</label><input class="control" data-profile-field="keep_alive" value="${esc(profile.keep_alive||"10m")}"></div>`:""}
           <div class="field field-full"><label>Advanced options JSON</label><textarea data-profile-field="extra_options" spellcheck="false">${esc(profile.extra_options||"{}")}</textarea></div>
         </div></details>
-        <div class="provider-profile-card-actions"><button class="btn small" data-test-provider-profile="${esc(profile.id)}">${icon("refresh")}Test / discover</button><button class="btn small" data-warm-config-profile="${esc(profile.id)}">${icon("spark")}Warm independently</button><span class="note" data-provider-profile-status="${esc(profile.id)}">${status.available?`Ready · ${(status.models||[]).length} models`:status.error||warm.message||"Not verified"}</span></div>
+        <div class="provider-profile-card-actions"><button class="btn small" data-test-provider-profile="${esc(profile.id)}">${icon("refresh")}Test / discover</button><button class="btn small" data-warm-config-profile="${esc(profile.id)}">${icon("spark")}Warm independently</button><span class="provider-status-text" data-provider-profile-status="${esc(profile.id)}">${readinessLabel}</span></div>
       </article>`;
     }).join("")}</div>
     <div class="config-actions"><button class="btn primary" id="saveProviderProfiles">${icon("check")}Save provider profiles</button></div>
@@ -10053,10 +10079,28 @@ function wireProviderManager(main){
 }
 function renderProviders(main){
   ensureProviderProfiles();
+  const providerList=providerProfiles();
+  const totalProfiles=providerList.length;
+  const ollamaCount=providerList.filter(p=>p.type==="ollama").length;
+  const openAiCount=providerList.filter(p=>p.type==="openai").length;
+  const defaultProfile=defaultProviderProfile();
   main.innerHTML=`<div class="providers-page">
-    <section class="card providers-overview"><div class="cardhead"><div><b>LLM Providers</b><div class="note">Create and configure reusable providers once; select them wherever DerridAI uses an LLM.</div></div><button class="btn" id="providersRefreshAll">${icon("refresh")}Refresh all readiness</button></div>
-      <div class="providers-summary"><span><b>${providerProfiles().length}</b> profiles</span><span><b>${providerProfiles().filter(p=>p.type==="ollama").length}</b> Ollama</span><span><b>${providerProfiles().filter(p=>p.type==="openai").length}</b> OpenAI-compatible / FreeLLM</span><span><b>${esc(providerDisplayName(defaultProviderProfile()))}</b> default</span></div>
-      <div class="info">Concurrency is profile-specific. Ollama normally starts at 1 concurrent request; FreeLLM/OpenAI-compatible profiles default to 32 and can be adjusted from 1–64.</div>
+    <section class="card providers-overview">
+      <div class="cardhead providers-overview-head">
+        <div class="providers-overview-copy">
+          <span class="eyebrow">Model access</span>
+          <b>LLM Providers</b>
+          <div class="note">Create and configure reusable providers once; select them wherever DerridAI uses an LLM.</div>
+        </div>
+        <button class="btn primary" id="providersRefreshAll">${icon("refresh")}Refresh all readiness</button>
+      </div>
+      <div class="providers-summary">
+        <span class="provider-summary-stat"><strong>${totalProfiles}</strong><small>Profiles</small></span>
+        <span class="provider-summary-stat"><strong>${ollamaCount}</strong><small>Ollama</small></span>
+        <span class="provider-summary-stat"><strong>${openAiCount}</strong><small>OpenAI-compatible</small></span>
+        <span class="provider-summary-stat"><strong>${esc(providerDisplayName(defaultProfile) || "—")}</strong><small>Default</small></span>
+      </div>
+      <div class="providers-overview-note">Concurrency is profile-specific. Ollama normally starts at 1 concurrent request; FreeLLM/OpenAI-compatible profiles default to 32 and can be adjusted from 1–64.</div>
     </section>
     ${providerManagerHtml()}
   </div>`;
@@ -10417,6 +10461,50 @@ function getProviderRequestConfigForUi(profileId,{textReview=false}={}){
   return profile?cloneAuditValue(providerRequestConfig(profile,{textReview})):null;
 }
 function getDefaultProviderProfileId(){return state.appConfig.default_provider_profile||defaultProviderProfile()?.id||""}
+function getProviderStatusesForUi(){return cloneAuditValue(state.providerStatuses||{})}
+function getProviderWarmupsForUi(){return cloneAuditValue(state.providerWarmups||{})}
+function saveProviderProfilesForUi(profiles=[]){
+  if(!Array.isArray(profiles)||!profiles.length)throw new Error("At least one provider profile is required.");
+  state.appConfig.provider_profiles=cloneAuditValue(profiles);
+  if(!state.appConfig.provider_profiles.some(profile=>profile.id===state.appConfig.default_provider_profile))state.appConfig.default_provider_profile=state.appConfig.provider_profiles[0].id;
+  const defaultProfile=defaultProviderProfile();
+  if(defaultProfile)state.appConfig.chat_provider=defaultProfile.type;
+  persistPrefs();
+  return getProviderProfilesForUi();
+}
+function addProviderProfileForUi(type){
+  ensureProviderProfiles();
+  const profile=type==="openai"
+    ? {id:`openai-${uid()}`,name:"New OpenAI-compatible / FreeLLM",type:"openai",base_url:"http://host.docker.internal:3001/v1",model:"auto",model_mode:"auto",model_kind:"any",api_key:"",max_concurrent_requests:32,num_predict:4096,temperature:0,top_p:1,seed:"",extra_options:"{}"}
+    : {id:`ollama-${uid()}`,name:"New Ollama",type:"ollama",base_url:"http://host.docker.internal:11434",model:"gemma4:e2b",model_mode:"manual",model_kind:"any",api_key:"",max_concurrent_requests:1,num_ctx:16384,metadata_num_predict:768,num_predict:4096,think:"false",temperature:0,top_k:0,top_p:1,min_p:"",repeat_penalty:1.1,seed:"",mirostat:0,mirostat_eta:"",mirostat_tau:"",keep_alive:"10m",extra_options:"{}"};
+  state.appConfig.provider_profiles=[...providerProfiles(),profile];
+  persistPrefs();
+  return cloneAuditValue(profile);
+}
+function removeProviderProfileForUi(profileId){
+  if(providerProfiles().length<=1)throw new Error("At least one LLM provider profile is required.");
+  state.appConfig.provider_profiles=providerProfiles().filter(profile=>profile.id!==profileId);
+  if(state.appConfig.default_provider_profile===profileId)state.appConfig.default_provider_profile=state.appConfig.provider_profiles[0]?.id||"";
+  persistPrefs();
+  return getProviderProfilesForUi();
+}
+function setDefaultProviderProfileForUi(profileId){
+  if(!providerProfiles().some(profile=>profile.id===profileId))throw new Error("The selected provider profile is no longer available.");
+  state.appConfig.default_provider_profile=profileId;
+  const profile=providerProfile(profileId);if(profile)state.appConfig.chat_provider=profile.type;
+  persistPrefs();
+}
+async function testProviderProfileForUi(profileId){
+  const profile=providerProfile(profileId);if(!profile)throw new Error("The selected provider profile is no longer available.");
+  const result=await api("/api/llm/status",{method:"POST",body:JSON.stringify({provider:profile.type,base_url:profile.base_url,api_key:profile.type==="openai"?profile.api_key:null})});
+  state.providerStatuses[profile.id]=result;
+  return cloneAuditValue(result);
+}
+async function warmProviderProfileForUi(profileId){
+  const profile=providerProfile(profileId);if(!profile)throw new Error("The selected provider profile is no longer available.");
+  await warmupProviderProfile(profile.id);
+  return cloneAuditValue(state.providerWarmups?.[profile.id]||{});
+}
 function closeWorkspaceFile(fileId){return closeFile(fileId)}
 function notifyToast(message,options={}){return toast(message,options)}
 function registerExternalJob(job){
@@ -11230,6 +11318,15 @@ export {
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
   getDefaultProviderProfileId,
+  getProviderStatusesForUi,
+  getProviderWarmupsForUi,
+  saveProviderProfilesForUi,
+  addProviderProfileForUi,
+  removeProviderProfileForUi,
+  setDefaultProviderProfileForUi,
+  testProviderProfileForUi,
+  warmProviderProfileForUi,
+  syncResearcherProviderProfiles,
   notifyToast,
   registerExternalJob,
   dbUnavailableReason,

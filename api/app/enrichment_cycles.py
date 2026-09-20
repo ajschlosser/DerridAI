@@ -2,8 +2,8 @@
 
 Why: a later enrichment pass may disagree with what an earlier pass (or the
 reviewer) already settled. The rules here decide, without an LLM, whether to
-replace, keep, or keep both values, and distill what reviewers accepted or
-rejected into advisory context for the next pass.
+replace, keep, or keep both values, and distill both reviewer decisions and
+unreviewed last-pass inferences into advisory context for the next pass.
 How: pure functions plus a small JSON-backed store for learning that is
 generalizable across builds. Nothing here touches provider calls or records on
 disk, so the rules are unit-testable in isolation.
@@ -29,10 +29,54 @@ DECISION_MARGIN = 0.10
 # Only fields whose values are corpus-independent conventions are shared across
 # builds. Names (speaker, position holder, target) are specific to one corpus.
 GENERALIZABLE_FIELDS = ("discourse_role", "region_type")
+# Within one build, the next pass may also see last-pass inferences on these
+# fields (including names). They stay advisory and never enter the global store.
+PASS_LEARNING_FIELDS = (
+    "discourse_role",
+    "region_type",
+    "primary_text",
+    "speaker",
+    "position_holder",
+    "stance",
+    "proposition_status",
+)
+PRIOR_PASS_MIN_RECORDS = 2
+PRIOR_PASS_MIN_CONFIDENCE = 0.65
+MAX_INFERRED_FIELDS = 8
+MAX_DISPUTED_FIELDS = 8
 GLOBAL_PROMOTION_MIN_BUILDS = 2
 GLOBAL_PROMOTION_MIN_CONFIRMATIONS = 2
 
+# The model's self-reported certainty about a classification. It is telemetry about
+# the value, not a scholarly value, so a pass never disputes or replaces it.
+CONFIDENCE_FIELDS = frozenset({"attribution_confidence", "semantic_classification_confidence"})
+NUMBER_TOLERANCE = 0.05
+LIST_OVERLAP = 0.6
+
 Resolution = Literal["keep_existing", "replace", "keep_both"]
+
+
+def _normalized(item: Any) -> str:
+    text = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+    return " ".join(text.casefold().split())
+
+
+def same_value(old: Any, new: Any) -> bool:
+    """True when a proposal restates the existing value closely enough that it is not a disagreement.
+
+    Wording, case and spacing differences, a numeric wobble, and a list that shares
+    most of its items are agreement. Reviewers should only see real disagreements.
+    """
+    if old == new:
+        return True
+    if isinstance(old, (int, float)) and isinstance(new, (int, float)) and not isinstance(old, bool) and not isinstance(new, bool):
+        return abs(float(old) - float(new)) <= NUMBER_TOLERANCE
+    if isinstance(old, str) and isinstance(new, str):
+        return _normalized(old) == _normalized(new)
+    if isinstance(old, list) and isinstance(new, list):
+        left, right = {_normalized(item) for item in old}, {_normalized(item) for item in new}
+        return bool(left | right) and len(left & right) / len(left | right) >= LIST_OVERLAP
+    return False
 
 
 def _confidence(info: dict[str, Any]) -> float | None:
@@ -106,6 +150,67 @@ def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
                 decided.add(field)
                 tally(str(field), status == "human_confirmed", record, info.get("llm_value"))
     return {"field_stats": stats, "rejected_examples": rejected}
+
+
+def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize the last enrichment pass for the next one, including unreviewed inferences.
+
+    Reviewer decisions still win: they occupy ``field_stats`` / ``rejected_examples``.
+    Values the previous pass wrote as ``llm_inferred`` on two or more records, at or
+    above the 65% auto-fill floor, become ``prior_pass.inferred_conventions``. Those
+    are working conventions for this build only; they are not treated as confirmed
+    and are omitted for any field a reviewer has already judged on any record.
+    """
+    learned = learn_from_review(records)
+    judged = set((learned.get("field_stats") or {}).keys())
+    for record in records:
+        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        for field, info in statuses.items():
+            if isinstance(info, dict) and str(info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                judged.add(str(field))
+    counts: dict[str, dict[str, dict[str, Any]]] = {}
+    disputed: dict[str, int] = {}
+    for record in records:
+        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        for field in PASS_LEARNING_FIELDS:
+            if field in judged:
+                continue
+            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
+            if str(info.get("status") or "") != "llm_inferred":
+                continue
+            confidence = info.get("confidence")
+            if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or float(confidence) < PRIOR_PASS_MIN_CONFIDENCE:
+                continue
+            value = record.get(field)
+            if value in (None, "", []):
+                continue
+            key = json.dumps(value, ensure_ascii=False, sort_keys=True)
+            bucket = counts.setdefault(field, {}).setdefault(
+                key, {"value": value, "records": 0, "confidence_sum": 0.0},
+            )
+            bucket["records"] += 1
+            bucket["confidence_sum"] += float(confidence)
+        for dispute in record.get("metadata_disputes") or []:
+            if not isinstance(dispute, dict):
+                continue
+            field = str(dispute.get("field") or "")
+            if field:
+                disputed[field] = disputed.get(field, 0) + 1
+    inferred: list[tuple[int, str, dict[str, Any]]] = []
+    for field, values in counts.items():
+        best = max(values.values(), key=lambda item: (int(item["records"]), float(item["confidence_sum"])))
+        if int(best["records"]) >= PRIOR_PASS_MIN_RECORDS:
+            inferred.append((int(best["records"]), field, {
+                "value": best["value"],
+                "records": int(best["records"]),
+                "mean_confidence": round(float(best["confidence_sum"]) / int(best["records"]), 3),
+            }))
+    inferred.sort(key=lambda item: item[0], reverse=True)
+    learned["prior_pass"] = {
+        "inferred_conventions": {field: payload for _, field, payload in inferred[:MAX_INFERRED_FIELDS]},
+        "disputed_fields": dict(sorted(disputed.items(), key=lambda item: item[1], reverse=True)[:MAX_DISPUTED_FIELDS]),
+    }
+    return learned
 
 
 class GlobalLearningStore:

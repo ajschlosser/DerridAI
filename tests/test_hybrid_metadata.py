@@ -46,7 +46,7 @@ def test_profile_requires_region_type_primary_text_and_discourse_role():
     checked are the current ones.)
     """
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v10"
     assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]

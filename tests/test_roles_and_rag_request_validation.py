@@ -82,3 +82,67 @@ def test_custom_role_store_round_trip(tmp_path, monkeypatch):
     store.update_user(user.id, role="researcher")
     store.delete_role(created["id"])
     assert created["id"] not in store.role_ids()
+
+
+def test_legacy_role_column_is_backfilled_then_removed(tmp_path, monkeypatch):
+    """Opening a pre-assignment database preserves roles without retaining dual state."""
+    import sqlite3
+    import sys
+    sys.path.insert(0, str(ROOT / "api"))
+    from app import auth
+
+    path = tmp_path / "legacy-auth.sqlite3"
+    with sqlite3.connect(path) as conn:
+        conn.execute("""CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            password_salt TEXT NOT NULL, password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('admin','researcher')), active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_login TEXT, login_count INTEGER NOT NULL DEFAULT 0
+        )""")
+        conn.execute("INSERT INTO users(username,password_salt,password_hash,role,created_at,updated_at) VALUES('legacy-admin','00','00','admin','now','now')")
+    monkeypatch.setattr(auth, "settings", SimpleNamespace(auth_db_path=str(path)))
+    store = auth.AuthStore()
+    user = store.list_users()[0]
+    assert user.role == "admin"
+    with sqlite3.connect(path) as conn:
+        columns = {column[1] for column in conn.execute("PRAGMA table_info(users)")}
+        assignment = conn.execute("SELECT role FROM user_role_assignments WHERE user_id=?", (user.id,)).fetchone()
+    assert "role" not in columns
+    assert assignment == ("admin",)
+
+def test_capability_catalog_has_locale_keys():
+    """Every capability and category in the catalog has matching en-US/fr-CA strings.
+
+    Why: the Roles page translates labels from locale keys derived from capability
+    ids. A catalog entry without those keys would stay English in French.
+    """
+    import ast
+    import sys
+    sys.path.insert(0, str(ROOT / "api"))
+    from app.auth import CAPABILITY_CATALOG
+
+    def locale_keys(path, name):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+                return set(ast.literal_eval(node.value))
+        raise AssertionError(name)
+
+    en = locale_keys(ROOT / "api/app/locales/en_us.py", "EN_US")
+    missing = []
+    categories = {str(meta.get("category") or "Other") for meta in CAPABILITY_CATALOG.values()}
+    for capability, meta in CAPABILITY_CATALOG.items():
+        for key in (f"roles.capability.{capability}", f"roles.capability.{capability}.help"):
+            if key not in en:
+                missing.append(key)
+        assert str(meta.get("label") or "")
+        assert str(meta.get("description") or "")
+    for category in categories:
+        slug = "".join(ch if ch.isalnum() else "_" for ch in category.lower())
+        while "__" in slug:
+            slug = slug.replace("__", "_")
+        slug = slug.strip("_") or "other"
+        key = f"roles.category.{slug}"
+        if key not in en:
+            missing.append(key)
+    assert missing == []

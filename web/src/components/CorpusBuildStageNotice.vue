@@ -13,5 +13,5 @@ const i18n=useI18nStore();
 </template>
 <style scoped>
 .build-stage-active{display:grid;gap:5px;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
-.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.build-stage-active h3{margin:0;font-size:15px}.build-stage-active p{margin:0;max-width:72ch;font-size:13px;line-height:1.5;color:var(--muted)}.build-stage-active small{font-size:.8125rem;color:var(--muted)}
+.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}.build-stage-active h3{margin:0;font-size:0.9375rem}.build-stage-active p{margin:0;max-width:72ch;font-size:0.8125rem;line-height:1.5;color:var(--muted)}.build-stage-active small{font-size:.8125rem;color:var(--muted)}
 </style>

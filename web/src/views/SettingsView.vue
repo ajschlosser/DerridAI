@@ -17,6 +17,7 @@ import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
   APPEARANCE_DEFAULTS,
   RAG_DEFAULTS,
@@ -446,6 +447,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               <UiButton :label="i18n.t('settings.reset_appearance', 'Reset appearance defaults')" :disabled="!canAppearance" @click="resetAppearance" />
             </template>
           </SettingsSection>
+          <SettingsSection
+            section-id="about"
+            :title="i18n.t('about.title', 'About DerridAI')"
+            :description="i18n.t('about.help', 'Release version of this instance. The git commit is shown for administrators and on the sign-in screen.')"
+            :persistence="persistKind('readonly')"
+            status="readonly"
+            :status-label="statusLabel('readonly')"
+          >
+            <AppBuildInfo :show-commit="isAdmin" />
+          </SettingsSection>
         </div>
 
         <div v-show="section === 'language'" id="settings-section-language" role="tabpanel" aria-labelledby="settings-nav-language">
@@ -707,7 +718,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .settings-hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .settings-hero h1{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(1.6rem,3vw,2.1rem);line-height:1.15}
 .settings-hero p{margin:6px 0 0;max-width:68ch;color:var(--muted);line-height:1.5}
-.settings-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2)}
+.settings-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
 .settings-toolbar{display:grid;gap:8px}
 .settings-contents-toggle{display:none}
 .settings-layout{display:grid;grid-template-columns:minmax(196px,240px) minmax(0,1fr);gap:20px;align-items:start}

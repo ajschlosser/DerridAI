@@ -91,6 +91,7 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
     examples=memory['examples']['discourse_role']
     assert {item['record_id'] for item in examples}<={'r1','r2'}
     assert examples and examples[0]['value']=='reported_position'
+    assert 'discourse_role' not in (memory.get('pass_learning') or {}).get('prior_pass', {}).get('inferred_conventions', {})
 
 
 def test_provider_profile_switch_is_secret_safe_and_audited(tmp_path:Path):

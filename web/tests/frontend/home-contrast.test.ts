@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveHex } from "./helpers/css-tokens";
 
 // Home-page and sign-in colours that axe cannot judge (glyph-only icons, small dots) or that once failed.
 // WCAG 1.4.3 text >= 4.5:1, 1.4.11 icons and state indicators >= 3:1, 2.5.8 targets >= 24px.
@@ -19,8 +20,11 @@ const declared = (selector: string, property: string): string => {
   if (!found.length) throw new Error(`${selector} does not set ${property}`);
   return found[found.length - 1];
 };
-const rgb = (hex: string): [number, number, number] =>
-  [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
+// A rule may name a token (var(--muted)); contrast is judged on the colour it resolves to.
+const rgb = (value: string): [number, number, number] => {
+  const hex = resolveHex(value);
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
+};
 const channel = (v: number) => {
   const s = v / 255;
   return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
