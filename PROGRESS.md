@@ -50,7 +50,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 406 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 410 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -123,13 +123,15 @@ time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
 - `scripts/runtime-refactor/deps.py fn1,fn2` lists the runtime names and state fields a group uses; use it to
   choose groups before extracting.
 
-## Blocker found on `origin/development` (not from this branch)
+## Upstream breakage found and repaired (commit fe3322e)
 
-At `e9f42f3` the merged tree does not build: `runtime.js` has duplicate names in its `export {}` block ("Duplicate
-export state/viewConfig/..."), `WorksView.vue` declares `selectWork` twice, `useWorksWorkspace.ts` calls runtime
-functions that are not exported (`populateAllWorksMetadata`, ...), and `router/index.ts` has an unused import.
-Unit tests pass except `works-view.test.ts`. Because of this the last extraction (`recordPresenters`) has unit +
-differential verification but no e2e run. Fix these on `development` first, then run the full e2e.
+`origin/development` (e9f42f3) did not build: a botched conflict resolution left 111 duplicate names in `runtime.js`'s
+`export {}` block, interleaved two versions of `WorksView.vue` (with corrupted characters and a BOM), dropped seven Works
+functions that `useWorksWorkspace.ts` calls, and routed `/works` back to the legacy view. Repaired here by keeping the
+union of exports, restoring the Vue-native WorksView from 5319bc9 and the seven functions verbatim from it, routing
+`/works` to `WorksView`, and dropping Annotations (now Vue-native) from the legacy DOM baseline. After the repair:
+typecheck 0 errors, lint clean, 410 unit tests, build ok, 142 e2e (incl. 3 baseline views) passing.
+Watch for BOMs / mojibake after Windows-side merges.
 
 ## Gotchas learned
 
