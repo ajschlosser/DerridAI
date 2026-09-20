@@ -74,6 +74,8 @@ def test_the_concurrency_limit_refuses_an_extra_run(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "_validate_execution_budget", lambda request: None)
     build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
                                  "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "m", "request": {}})
+    build.update(status="awaiting_review")
+    m.repo.save_build(build)
     import pytest
     with pytest.raises(ValueError, match="already working"):
         m.rerun_metadata_enrichment(build["build_id"], {"model": "m"})
