@@ -913,6 +913,7 @@ def warmup_model(
     model: str | None = None,
     base_url: str | None = None,
     api_key: str | None = None,
+    num_ctx: int | None = None,
 ) -> dict[str, Any]:
     provider = (provider or "ollama").strip().lower()
     selected_model = (
@@ -975,11 +976,16 @@ def warmup_model(
         "options": {
             "temperature": 0,
             "num_predict": 1,
+            # Load the model with the context the real calls will use. Without this Ollama loads it at its own
+            # default (which can be 262144 tokens), and the first real call then forces a second, slower load.
+            **({"num_ctx": int(num_ctx)} if num_ctx else {}),
         },
     }
+    # Loading is the point of a warmup, and a large model can take minutes. A short timeout here abandons the load,
+    # and Ollama aborts a load whose requester has gone, which also fails every other request waiting on it.
     timeout = httpx.Timeout(
         connect=settings.ollama_connect_timeout_seconds,
-        read=min(settings.ollama_timeout_seconds, 60.0),
+        read=min(settings.ollama_timeout_seconds, 900.0),
         write=60.0,
         pool=settings.ollama_connect_timeout_seconds,
     )

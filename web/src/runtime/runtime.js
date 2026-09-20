@@ -3276,6 +3276,8 @@ async function warmupProviderProfile(profileId=null){
   try{
     const result=await api("/api/llm/warmup",{method:"POST",body:JSON.stringify({
       provider:profile.type,model:cfg.model,base_url:cfg.base_url,api_key:cfg.api_key,
+      // Load with the context real calls use, so the model is not loaded twice.
+      num_ctx:Number(cfg.ollama?.num_ctx)>0?Number(cfg.ollama.num_ctx):undefined,
     })});
     const ready={
       status:"ready",message:`${providerDisplayName(profile)} · ${result.model||cfg.model} warmed`,

@@ -83,3 +83,31 @@ for (const scheme of ["light", "dark"] as const) {
     await page.screenshot({ path: `test-results/logo-${scheme}.png`, clip: { x: 0, y: 0, width: 420, height: 140 } });
   });
 }
+
+test("the providers page lists installed models with their sizes, and the list is accessible", async ({ page }) => {
+  await mockBackend(page, {
+    fixtures: {
+      "POST /api/llm/status": {
+        available: true, provider: "ollama", configured_model: "qwen3.5:4b",
+        models: [
+          { name: "qwen3.5:4b", parameter_size: "4.7B", quantization_level: "Q4_K_M" },
+          { name: "hf.co/tvall43/Qwen3.6-14B-A3B:Q6_K", parameter_size: "14B", quantization_level: "Q6_K" },
+        ],
+      },
+    },
+  });
+  await page.goto(`${APP}/providers`);
+  await page.getByRole("button", { name: /view models/i }).first().click();
+  const dialog = page.getByRole("dialog", { name: /available models/i });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("4.7B · Q4_K_M")).toBeVisible();
+  await dialog.getByLabel(/filter models/i).fill("14b");
+  await expect(dialog.getByText(/1 models match/i)).toBeVisible();
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+  expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
+  await page.screenshot({ path: "test-results/provider-models.png" });
+  await dialog.getByRole("button", { name: /use model/i }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".provider-model-field input.control").first()).toHaveValue(/14B/);
+});
