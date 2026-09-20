@@ -8,7 +8,7 @@ import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
 const props=defineProps<{
   field:string; value:unknown; status?:Record<string,unknown>; options?:string[]; required?:boolean;
   control?:"enum"|"combobox"|"multi-combobox"|"boolean"|"number"|"text"; allowCustom?:boolean; busy?:boolean; saving?:boolean; saved?:boolean; open?:boolean;
-  revealed?:unknown; recheck?:{first:unknown;second:unknown;agreed:boolean}; constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
+  revealed?:unknown; label?:string; recheck?:{first:unknown;second:unknown;agreed:boolean}; constraint?:{value:unknown;reason:string}|null; calibratedAcceptance?:{reviewed:number;acceptanceRate:number}|null;
 }>();
 const emit=defineEmits<{save:[value:unknown];noValue:[];source:[];dirty:[dirty:boolean]}>();
 const i18n=useI18nStore();
@@ -54,7 +54,7 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
 <template>
 <article class="metadata-field" :data-attention="status?.status==='unresolved'||status?.status==='invalid'?'true':'false'">
   <div class="field-topline">
-    <div class="field-name"><b>{{i18n.t(`record.${field}`,field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :audit="Boolean(status?.audit_sample)"/></div>
+    <div class="field-name"><b>{{i18n.t(`record.${field}`,label||field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :audit="Boolean(status?.audit_sample)"/></div>
     <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','Evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing;if(!editing)emit('dirty',false)">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
   </div>
   <p v-if="status?.recheck" class="blind-note" role="status">{{i18n.t('pdf_corpus.recheck_prompt','Quality check: enter your value again without looking back. Your earlier answer is shown after you save.')}}</p>
@@ -66,7 +66,7 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
     <div v-if="status?.reason_code==='deterministic_llm_disagreement'" class="disagreement" role="status"><b>{{i18n.t('pdf_corpus.metadata_disagreement','Deterministic and LLM suggestions disagree')}}</b><span>{{i18n.tf('pdf_corpus.deterministic_value','Deterministic: {value}',{value:String(status?.deterministic_value??'—')})}}</span><span>{{i18n.tf('pdf_corpus.llm_value','LLM: {value}',{value:String(status?.llm_value??value??'—')})}}<template v-if="typeof status?.llm_confidence==='number'"> · {{Math.round(Number(status.llm_confidence)*100)}}%</template></span><small v-if="status?.deterministic_reason">{{status.deterministic_reason}}</small><small v-if="status?.llm_reason">{{status.llm_reason}}</small></div><p v-else-if="status?.reason" class="field-reason">{{status.reason}}</p>
     <div v-if="constraint" class="constraint" role="status"><b>{{i18n.t('pdf_corpus.deterministic_suggestion','Deterministic rule')}}</b><span>{{constraint.reason}}</span></div>
     <div class="value-control">
-      <select v-if="control==='enum'" v-model="draft" class="control" :aria-label="i18n.t(`record.${field}`,field.replaceAll('_',' '))" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options||[]" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
+      <select v-if="control==='enum'" v-model="draft" class="control" :aria-label="i18n.t(`record.${field}`,label||field.replaceAll('_',' '))" @change="markDirty"><option value="" disabled>{{i18n.t('pdf_corpus.choose_value','Choose a value…')}}</option><option v-for="option in options||[]" :key="option" :value="option">{{i18n.t(`record.enum.${field}.${option}`,option.replaceAll('_',' '))}}</option></select>
       <fieldset v-else-if="control==='boolean'" class="boolean-choice"><legend class="sr-only">{{i18n.t(`record.${field}`,field)}}</legend><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="true" @change="markDirty"><span>{{i18n.t('ui.yes','Yes')}}</span></label><label><input v-model="draft" type="radio" :name="`${field}-value`" :value="false" @change="markDirty"><span>{{i18n.t('ui.no','No')}}</span></label></fieldset>
       <UiCombobox v-else-if="control==='combobox'" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" @update:model-value="value=>{draft=value;markDirty()}"/>
       <UiCombobox v-else-if="isMultiCombobox" :model-value="String(draft??'')" :options="options||[]" :label="i18n.t(`record.${field}`,field)" :multiple="true" @update:model-value="value=>{draft=value;markDirty()}"/>

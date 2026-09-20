@@ -185,3 +185,43 @@ for (const scheme of ["light", "dark"] as const) {
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }
+
+const SCHEMA = {
+  format_version: 1, id: "default", name: "DerridAI scholarly default", description: "The fields DerridAI has always produced.",
+  groups: [{ key: "discourse", label: "Discourse and attribution", intro: "Infer ONLY discourse metadata.", fields_heading: "Fields:", notes: ["Prefer short names."], trailer: "", footer: "Also return field_assessments for {assessed_fields}.\n" }],
+  fields: [
+    { name: "speaker", label: "Speaker", type: "text", group: "discourse", values: [], strict: false, instruction: "", definitions_heading: "", evidence: true, assess: true, review: true },
+    { name: "stance", label: "Stance", type: "choice", group: "discourse", values: [{ value: "affirm", definition: "Agrees." }, { value: "reject", definition: "" }], strict: false, instruction: "is the orientation. Prefer one of: {values}", definitions_heading: "", evidence: true, assess: true, review: true },
+  ],
+};
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the metadata schema editor is clear and accessible in ${scheme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: scheme });
+    await mockBackend(page, {
+      fixtures: {
+        "/api/pdf/corpus-builds": { items: [], total: 0, offset: 0, limit: 50 },
+        "GET /api/pdf/metadata-schemas": { items: [{ id: "default", name: SCHEMA.name, description: SCHEMA.description, builtin: true, field_count: 5, groups: ["Discourse and attribution"], hash: "h" }] },
+        "GET /api/pdf/metadata-schemas/default": SCHEMA,
+      },
+    });
+    await page.goto(`${APP}/pdf`);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.setAttribute("data-color-scheme", "dark"));
+    const step = page.locator("summary", { hasText: "Metadata schema" }).first();
+    await step.scrollIntoViewIfNeeded();
+    await step.click();
+    await page.getByRole("button", { name: /manage schemas/i }).click();
+    const dialog = page.getByRole("dialog", { name: /metadata schemas/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/locked core/i).first()).toBeVisible();
+    await expect(dialog.getByText("region_type", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /save schema/i })).toBeDisabled();
+    await dialog.getByRole("button", { name: "Duplicate" }).click();
+    await expect(dialog.getByRole("button", { name: /add a field/i }).first()).toBeEnabled();
+    await dialog.screenshot({ path: `test-results/schema-editor-${scheme}.png` });
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
+  });
+}
