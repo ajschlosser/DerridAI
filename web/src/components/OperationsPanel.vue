@@ -387,23 +387,23 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 <style>
 /* Operations panel. Namespaced (.ops-) and unscoped so the row component shares the rules. */
 .ops {
-  --ops-text: #1f2a37;
-  --ops-muted: #4b5b6e;
-  --ops-line: #dbe2ea;
-  --ops-control: #6f7f93;
-  --ops-surface: #fff;
-  --ops-sunken: #f4f6f9;
-  --ops-info-fg: #164a86;
-  --ops-info-bg: #e6f0fb;
-  --ops-success-fg: #17583a;
-  --ops-success-bg: #e5f4ec;
-  --ops-warning-fg: #7a4300;
-  --ops-warning-bg: #fff2d5;
-  --ops-danger-fg: #9b1c1c;
-  --ops-danger-bg: #fdecec;
-  --ops-neutral-fg: #3d4a5c;
-  --ops-neutral-bg: #eceff3;
-  --ops-accent: var(--ui-accent, #355f52);
+  --ops-text: var(--text);
+  --ops-muted: var(--muted);
+  --ops-line: var(--line);
+  --ops-control: var(--line-strong);
+  --ops-surface: var(--card);
+  --ops-sunken: var(--soft);
+  --ops-info-fg: var(--tone-info-fg);
+  --ops-info-bg: var(--tone-info-bg);
+  --ops-success-fg: var(--tone-ok-fg);
+  --ops-success-bg: var(--tone-ok-bg);
+  --ops-warning-fg: var(--tone-warn-fg);
+  --ops-warning-bg: var(--tone-warn-bg);
+  --ops-danger-fg: var(--tone-danger-fg);
+  --ops-danger-bg: var(--tone-danger-bg);
+  --ops-neutral-fg: var(--text-2);
+  --ops-neutral-bg: var(--soft);
+  --ops-accent: var(--ui-accent);
   --ops-radius: 14px;
   container-type: inline-size;
   display: grid;
@@ -413,9 +413,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   border-radius: 18px;
   background: var(--ops-surface);
   color: var(--ops-text);
-  box-shadow:
-    0 1px 2px rgba(31, 42, 55, 0.04),
-    0 8px 24px -12px rgba(31, 42, 55, 0.12);
+  box-shadow: var(--elev-1);
 }
 .ops-head {
   display: flex;
@@ -564,7 +562,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 .ops :where(.ops-more):focus-visible {
   outline: 3px solid var(--ops-accent) !important;
   outline-offset: 2px !important;
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px var(--ops-surface);
 }
 .ops-undo {
   display: flex;
@@ -641,7 +639,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 .ops-row:hover,
 .ops-row:focus-within {
   border-color: var(--ops-control);
-  box-shadow: 0 6px 18px -10px rgba(31, 42, 55, 0.28);
+  box-shadow: var(--elev-2);
 }
 .ops-rail {
   position: absolute;
@@ -787,7 +785,7 @@ svg.ops-status-icon {
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: var(--soft);
+  background: var(--ops-sunken);
   overflow: hidden;
 }
 .ops-progress-fill {
@@ -801,7 +799,7 @@ svg.ops-status-icon {
   background-image: linear-gradient(
     110deg,
     transparent 30%,
-    rgba(255, 255, 255, 0.35) 50%,
+    color-mix(in srgb, var(--accent-on) 35%, transparent) 50%,
     transparent 70%
   );
   background-size: 220px 100%;
@@ -957,10 +955,10 @@ svg.ops-status-icon {
 }
 @keyframes ops-flash {
   0% {
-    box-shadow: 0 0 0 0 rgba(23, 88, 58, 0.35);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ops-success-fg) 35%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 14px rgba(23, 88, 58, 0);
+    box-shadow: 0 0 0 14px transparent;
   }
 }
 @keyframes ops-pop {
