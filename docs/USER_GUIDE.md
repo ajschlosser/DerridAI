@@ -414,6 +414,17 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
 
+## Corpus Builder review workspace
+
+Once a build has records, the review workspace fills the screen under the top bar: the queue on the left, the record in the middle, and the details (metadata, evidence, source) on the right. Each pane scrolls on its own, and the record's title and its decisions stay in view while you read.
+
+- **Deciding.** The bar under the record is one row: **Skip**, **Reject & next**, and **Accept & next**. If required metadata is unresolved, a note above the bar says which fields, and **Accept & next** stays unavailable until you confirm them.
+- **More actions** (the ⋯ button at the left of that bar) holds **Combine with previous record**, **Combine with next record**, **Slice record** and **Preview JSONL**. An action that is not available stays in the list and says why, for example that there is no previous record to combine with.
+- **Undo** and **Redo** are at the top of the record, next to **Focus view**.
+- **The queue** shows each record's state as an icon and a name (Accepted, Rejected, Reviewable, Metadata, Topology, Source problem). Above it, the queue tabs filter by state, **Bulk actions** holds **Bulk edit metadata** and **Reject selected**, and **Accept clean** accepts every reviewable record at once.
+- **Resizing.** Drag the divider between panes, or focus it and use the arrow keys (Shift for bigger steps, Home and End for the limits); double-click to reset. Each width is remembered in this browser.
+- **Smaller screens.** On a laptop the details sit under the queue and record. On a phone the workspace is an ordinary page.
+
 ## PDF Explorer
 
 PDF Explorer reads embedded PDF title/author metadata when available and presents the loaded PDF as a source → work → record relationship rather than as an isolated document viewer.

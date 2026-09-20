@@ -143,6 +143,124 @@ export const FAQ_RECORDS = [
   },
 ];
 
+// A corpus build waiting for review, with records in every queue state, for the Corpus Builder.
+const PROSE = [
+  "The concept of hospitality is never simply given; it is inherited through a tradition that already divides the welcome into a law and its exceptions.",
+  "To ask who is the guest is already to condition the welcome, and yet without that question no one could be received at all.",
+  "The city that shelters the stranger must decide, at each arrival, what it owes to the one it cannot yet name.",
+  "What returns in these pages is a demand that exceeds every particular policy while remaining impossible to practise outside one.",
+  "A duty of hospitality that is only dutiful would already have failed the visitor, who comes not as a case but as a face.",
+  "We should therefore hesitate before treating the refuge as a solution: it is a place where the problem is kept open.",
+];
+const STATES = [
+  "metadata",
+  "metadata",
+  "topology",
+  "ready",
+  "accepted",
+  "ready",
+  "metadata",
+  "rejected",
+];
+export const CORPUS_BUILD_ID = "build-0001";
+export const CORPUS_RECORDS = Array.from({ length: 60 }, (_, i) => {
+  const n = i + 12;
+  const state = STATES[i % STATES.length];
+  const body = Array.from({ length: 9 }, (_, k) => PROSE[(i + k) % PROSE.length]).join(" ");
+  const unresolved = state === "metadata" ? ["target", "stance", "proposition_status"] : [];
+  return {
+    record_id: `derrida-jacques-on-cosmopoli-${String(n).padStart(5, "0")}`,
+    text: body,
+    text_length: body.length,
+    page_start: 5 + Math.floor(i / 3),
+    page_end: 5 + Math.floor(i / 3) + (i % 4 === 0 ? 2 : 0),
+    source_block_ids: [`b${n}a`, `b${n}b`],
+    source_spans: [{ block_id: `b${n}a`, page: 5 + Math.floor(i / 3) }],
+    metadata_field_status: Object.fromEntries(
+      unresolved.map((f, k) => [
+        f,
+        {
+          status: "llm_inferred",
+          method: "llm",
+          confidence: [0.95, 0.85, 0.7][k],
+          reason: "Suggested from the surrounding argument; confirm it against the text.",
+        },
+      ]),
+    ),
+    metadata_incomplete_fields: unresolved,
+    metadata_review_fields: unresolved,
+    acceptance_blocking_fields: unresolved,
+    metadata_complete: unresolved.length === 0,
+    review_state: state,
+    review_disposition:
+      state === "accepted" ? "accepted" : state === "rejected" ? "rejected" : "pending",
+    accepted: state === "accepted",
+    rejected: state === "rejected",
+    needs_review: state === "metadata" || state === "topology",
+    can_accept: unresolved.length === 0,
+    review_issue_codes: state === "topology" ? ["boundary_continuation"] : [],
+    review_reason:
+      state === "topology"
+        ? "Possible sentence/quotation continuation across this record boundary."
+        : "Pending human review.",
+    record_revision: 1,
+    topology_index: i,
+    topology_count: 60,
+    pdf_pages: [5 + Math.floor(i / 3)],
+    speaker: "Derrida",
+    discourse_role: "analysis",
+  };
+});
+const CORPUS_BUILD = {
+  build_id: CORPUS_BUILD_ID,
+  asset_id: "asset-1",
+  source_filename: "derrida-on-cosmopolitanism.pdf",
+  source_sha256: "0".repeat(64),
+  status: "awaiting_review",
+  stage: "review",
+  progress: 0.9,
+  created_at: "2026-09-18T12:00:00Z",
+  record_count: 60,
+  needs_review_count: 30,
+  accepted_count: 8,
+  rejected_count: 8,
+  profile_id: "derrida-v11",
+  provider: "ollama",
+  model: "qwen3:14b",
+  review_queue_counts: {
+    all: 60,
+    ready: 15,
+    issues: 30,
+    metadata: 23,
+    topology: 8,
+    source: 0,
+    accepted: 8,
+    rejected: 8,
+    pending: 44,
+  },
+  manifest: { title: "On Cosmopolitanism and Forgiveness", document_author: "Jacques Derrida" },
+  manifest_confirmed_at: "2026-09-18T12:05:00Z",
+  validation: { valid: true, source_valid: true, metadata_valid: false, coverage: 1 },
+  metadata_issue_summary: {
+    records_incomplete: 23,
+    fields_unresolved: 69,
+    auto_retry_fields: 0,
+    human_review_fields: 69,
+  },
+  publication_readiness: {
+    can_publish: false,
+    next_action: "review",
+    records_total: 60,
+    records_reviewed: 16,
+    records_accepted: 8,
+    records_rejected: 8,
+    records_pending: 44,
+    blockers: [],
+  },
+  metadata_total: 60,
+  metadata_completed: 60,
+};
+
 function defaults(url: URL, method: string, role: Role): unknown {
   const path = url.pathname;
   const user = {
@@ -196,6 +314,45 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/annotations") return { annotations: [] };
   if (path === "/api/response-cache/records")
     return { records: [], count: 0, total: 0, limit: 50, offset: 0, exists: true };
+  if (path === "/api/pdf/corpus-profiles")
+    return { items: [{ id: "derrida-v11", name: "DerridAI corpus profile", version: 11 }] };
+  if (path === "/api/pdf/assets")
+    return {
+      items: [
+        {
+          asset_id: "asset-1",
+          sha256: "0".repeat(64),
+          filename: "derrida-on-cosmopolitanism.pdf",
+          created_at: "2026-09-18T11:00:00Z",
+          page_count: 120,
+          block_count: 1400,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          pages: [],
+        },
+      ],
+    };
+  if (path === "/api/pdf/corpus-builds")
+    return { items: [CORPUS_BUILD], total: 1, offset: 0, limit: 50 };
+  if (path === `/api/pdf/corpus-builds/${CORPUS_BUILD_ID}`) return CORPUS_BUILD;
+  if (path === `/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records`) {
+    const offset = Number(url.searchParams.get("offset") || 0);
+    const limit = Number(url.searchParams.get("limit") || 50);
+    const queue = url.searchParams.get("review_queue") || "";
+    const rows = CORPUS_RECORDS.filter(
+      (r) =>
+        !queue ||
+        queue === "all" ||
+        (queue === "issues"
+          ? r.needs_review
+          : queue === "ready"
+            ? r.review_state === "ready"
+            : r.review_state === queue),
+    );
+    return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
+  }
+  if (/^\/api\/pdf\/assets\/[^/]+\/blocks$/.test(path)) return { items: [], total: 0 };
   return {};
 }
 

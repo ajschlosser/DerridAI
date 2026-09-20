@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.8 — Spacious Stork
+
+The Corpus Builder review workspace fills the screen, keeps its decisions in one row within reach, and its panes can be resized from the keyboard. See [0.62.8](docs/notes/0.62.8.md).
+
 ## 0.62.7 — Nocturnal Newt
 
 The Languages, Response Library, Record, Settings and Compare views follow the theme, so dark mode works there too, and four layout and accessibility defects found on the way are fixed. See [0.62.7](docs/notes/0.62.7.md).
