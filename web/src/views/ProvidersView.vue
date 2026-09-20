@@ -4,8 +4,10 @@ import { computed, onMounted, ref } from "vue";
 import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import ProviderModelPicker from "../components/ProviderModelPicker.vue";
+import { MODEL_KINDS, type DiscoveredModel } from "../domain/providerModels";
 
-type ProviderStatus = { available?: boolean; models?: Array<{name?: string}>; error?: string };
+type ProviderStatus = { available?: boolean; models?: DiscoveredModel[]; error?: string };
 type ProviderWarmup = { message?: string };
 const i18n = useI18nStore();
 const profiles = ref<ProviderProfile[]>([]);
@@ -92,7 +94,9 @@ onMounted(() => { refresh(); loading.value = false; });
         </header>
         <div class="provider-fields">
           <label class="field field-wide"><span>{{ i18n.t("providers.endpoint", "Endpoint") }}</span><input class="control" :value="profile.base_url" @input="update(profile, 'base_url', ($event.target as HTMLInputElement).value)"></label>
-          <label class="field"><span>{{ i18n.t("providers.model", "Model") }}</span><input class="control" :value="profile.model" :list="`models-${profile.id}`" @input="update(profile, 'model', ($event.target as HTMLInputElement).value)" placeholder="auto or model ID"><datalist :id="`models-${profile.id}`"><option v-for="model in statuses[profile.id]?.models || []" :key="model.name" :value="model.name"></option></datalist></label>
+          <ProviderModelPicker :profile-name="profile.name || profile.id" :model-value="profile.type === 'openai' && profile.model_mode === 'auto' ? 'auto' : String(profile.model || '')" :models="statuses[profile.id]?.models || []" :kind="profile.type === 'openai' ? String(profile.model_kind || 'any') : 'any'" :disabled="profile.type === 'openai' && profile.model_mode === 'auto'" :busy="busy[profile.id] === 'test'" :placeholder="profile.type === 'ollama' ? i18n.t('providers.model_placeholder_ollama', 'Type or choose an installed model') : i18n.t('providers.model_placeholder_openai', 'Type or choose a model ID')" @update:model-value="update(profile, 'model', $event)" @discover="run(profile, 'test')" />
+          <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_mode", "Model mode") }}</span><select class="control" :value="profile.model_mode || 'auto'" @change="update(profile, 'model_mode', ($event.target as HTMLSelectElement).value)"><option value="auto">{{ i18n.t("providers.mode_auto", "Auto router") }}</option><option value="discovered">{{ i18n.t("providers.mode_discovered", "Discovered") }}</option><option value="manual">{{ i18n.t("providers.mode_manual", "Manual") }}</option></select><small>{{ i18n.t("providers.model_mode_help", "Auto lets the endpoint choose. Discovered and Manual use the model named here.") }}</small></label>
+          <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_kind", "Model kind") }}</span><select class="control" :value="profile.model_kind || 'any'" @change="update(profile, 'model_kind', ($event.target as HTMLSelectElement).value)"><option v-for="kind in MODEL_KINDS" :key="kind" :value="kind">{{ i18n.t(`providers.kind_${kind}`, kind) }}</option></select><small>{{ i18n.t("providers.model_kind_help", "Narrows the model list by name; it does not change what the endpoint offers.") }}</small></label>
           <label class="field"><span>{{ i18n.t("providers.concurrency", "Max concurrent requests") }}</span><input class="control" type="number" min="1" max="64" :value="sharedLimit(profile)" @input="update(profile, 'max_concurrent_requests', Math.max(1, Math.min(64, numeric(($event.target as HTMLInputElement).value, 1))))"><small>{{ profile.type === 'ollama' && endpointPeers(profile).length > 1 ? i18n.t("providers.shared_endpoint", "Shared Ollama endpoint uses the lowest profile limit.") : i18n.t("providers.concurrency_help", "Background jobs respect this cap.") }}</small></label>
           <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.api_key", "API key") }}</span><input class="control" type="password" autocomplete="off" :value="profile.api_key" @input="update(profile, 'api_key', ($event.target as HTMLInputElement).value)"></label>
           <label class="field"><span>{{ i18n.t("providers.context", "Context tokens") }}</span><input class="control" type="number" min="512" :value="profile.num_ctx || 16384" @input="update(profile, 'num_ctx', numeric(($event.target as HTMLInputElement).value, 16384))"></label>

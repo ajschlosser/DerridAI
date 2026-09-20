@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.15 — Patient Pelican
+
+The build says what it is waiting for, a model load is no longer abandoned, dropped connections are retried, and the providers page has its model list back. See [0.62.15](docs/notes/0.62.15.md).
+
 ## 0.62.14 — Tidy Tern
 
 Corpus Builder fixes: preparing the workspace no longer blocks the page, a redesigned bulk edit, no more clipped record text or cut-off menus, working LLM touch-up, and no placeholder values. See [0.62.14](docs/notes/0.62.14.md).

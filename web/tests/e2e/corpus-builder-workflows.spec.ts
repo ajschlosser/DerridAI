@@ -76,14 +76,15 @@ test.describe("Corpus Builder composed workflow",()=>{
     await expectWcag2AA(page,".corpus-build-progress");
   });
 
-  test("initialization owns focusable build state while topology is being prepared",async({page})=>{
+  test("initialization is an inline panel, not a modal, while topology is being prepared",async({page})=>{
     await page.goto(story("corpus-builder-build-initialization-dialog--segmenting"));
-    const dialog=page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toHaveAttribute("aria-modal","true");
+    const panel=page.locator(".init-panel");
+    await expect(panel).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator("[aria-modal]")).toHaveCount(0);
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow","18");
     await expect(page.getByRole("button",{name:/Cancel build/i})).toBeEnabled();
-    await expectWcag2AA(page,".init-dialog");
+    await expectWcag2AA(page,".init-panel");
   });
 
   test("review queue supports keyboard traversal and explicit issue filtering",async({page})=>{
