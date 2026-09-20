@@ -3,11 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { mockBackend } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
+// Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
 // The runtime decomposition must not change what these views put on the page, so each one is
 // captured as normalized markup and compared with a committed snapshot. If a refactoring step
 // changes a snapshot, that step has changed the UI and must be fixed, not the snapshot.
 //
-// To regenerate after an intentional UI change: npx playwright test legacy-dom-baseline --update-snapshots
+// Snapshots are desktop-only, matching playwright.legacy.config.ts.
+// To regenerate after an intentional UI change: npx playwright test -c playwright.legacy.config.ts --update-snapshots
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 
 const RECORDS = [
@@ -113,11 +115,11 @@ const views: Array<{ name: string; nav: string; load: boolean }> = [
   { name: "home-loaded", nav: "Home", load: true },
   { name: "annotations-empty", nav: "Annotations", load: false },
   { name: "annotations-loaded", nav: "Annotations", load: true },
-  { name: "works-loaded", nav: "Works", load: true },
   { name: "research-empty", nav: "Research", load: false },
 ];
 
 test.describe("legacy runtime DOM baseline", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
   for (const view of views) {
     test(view.name, async ({ page }) => {
       await open(page, view.nav, view.load);
