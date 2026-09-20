@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.62.11 — Measured Marmot
+
+Enrichment is now measured: every model proposal and call is ledgered, ten measures are computed per model and field, runs carry ids, and concurrent runs are limited. See [0.62.11](docs/notes/0.62.11.md).
+
 ## 0.62.10 — Careful Crane
 
 Records no longer start or end mid-sentence, the main-text start page has one source of truth and is suggested from the document's own structure, and confident LLM values are filled in with an audit trail. See [0.62.10](docs/notes/0.62.10.md).
