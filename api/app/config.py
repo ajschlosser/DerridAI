@@ -94,6 +94,8 @@ class Settings:
     system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
     pdf_max_upload_mb: int = _int_env("PDF_MAX_UPLOAD_MB", 500)
+    # How many metadata-enrichment runs may work at once, across all builds. One model per run.
+    enrichment_max_concurrent_runs: int = _int_env("ENRICHMENT_MAX_CONCURRENT_RUNS", 1)
 
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
