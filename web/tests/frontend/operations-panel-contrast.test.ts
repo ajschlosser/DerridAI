@@ -88,12 +88,7 @@ describe("Operations panel contrast", () => {
   it.each(Object.entries(ACCENTS))(
     "on the %s theme, the progress fill is distinguishable from its track (1.4.11)",
     (_name, accent) => {
-      const track = rgb(
-        resolveHex(
-          compact.match(/\.ops-progress\{[^}]*background:([^;}]+)/)![1],
-          lightTokens(source),
-        ),
-      );
+      const track = rgb(token("ops-sunken"));
       expect(ratio(rgb(accent), track)).toBeGreaterThanOrEqual(3);
     },
   );
