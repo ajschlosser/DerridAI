@@ -10,13 +10,14 @@ import CitationMenu from "../components/CitationMenu.vue";
 import HighlightedText from "../components/search/HighlightedText.vue";
 import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader.vue";
+import RecordsColumnsDialog from "../components/records/RecordsColumnsDialog.vue";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
 const snapshot = ref<RecordsListSnapshot | null>(null);
 const query = ref("");
-const columnsDialog = ref<HTMLDialogElement | null>(null);
+const columnsDialog = ref<{open: () => void; close: () => void} | null>(null);
 const draftColumns = ref<string[]>([]);
 const moreOpen = ref(false);
 const liveMessage = ref("");
@@ -82,15 +83,15 @@ function share() {
 }
 function openColumns() {
   draftColumns.value = snapshot.value?.columns.map(column => column.key) || [];
-  columnsDialog.value?.showModal();
+  columnsDialog.value?.open();
 }
 function saveColumns() {
   runtime.setRecordsListColumns?.(draftColumns.value);
-  columnsDialog.value?.close();
   load();
 }
-function addColumn(key: string) {
-  if (key && !draftColumns.value.includes(key)) draftColumns.value = [...draftColumns.value, key];
+function resetColumns() {
+  runtime.resetRecordsListColumns?.();
+  draftColumns.value = ((runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined)?.columns.map(column => column.key) || []);
 }
 function openRow(row: RecordsRow, event?: Event) {
   const target = event?.target as HTMLElement | undefined;
@@ -181,7 +182,7 @@ onMounted(() => {
       <section class="records-command" :aria-label="i18n.t('records.table_controls', 'Records table controls')">
         <label class="records-search">
           <span class="sr-only">{{ i18n.t("records.search_in_file", "Search text in this file") }}</span>
-          <AppIcon name="search"/>
+          <AppIcon class="records-search-icon" name="search"/>
           <input type="search" :value="query" :placeholder="i18n.t('records.search_in_file', 'Search text in this file')" autocomplete="off" @input="applyQuery(($event.target as HTMLInputElement).value)">
         </label>
         <p class="records-count">{{ rangeLabel }}</p>
@@ -315,38 +316,21 @@ onMounted(() => {
       </nav>
     </template>
 
-    <dialog ref="columnsDialog" class="records-columns-dialog" aria-labelledby="records-columns-title">
-      <form method="dialog" class="records-columns-form" @submit.prevent="saveColumns">
-        <h2 id="records-columns-title">{{ i18n.t("records.configure_columns", "Configure columns") }}</h2>
-        <p>{{ i18n.t("records.configure_columns_help", "Choose the fields shown in the records table. Order is preserved.") }}</p>
-        <ul>
-          <li v-for="(key, index) in draftColumns" :key="key">
-            <span>{{ snapshot?.available_columns.find(column => column.key === key)?.label || key }}</span>
-            <button type="button" class="btn tiny" :disabled="index === 0" @click="draftColumns.splice(index - 1, 0, draftColumns.splice(index, 1)[0])">↑</button>
-            <button type="button" class="btn tiny" :disabled="index === draftColumns.length - 1" @click="draftColumns.splice(index + 1, 0, draftColumns.splice(index, 1)[0])">↓</button>
-            <button type="button" class="btn tiny" @click="draftColumns.splice(index, 1)">{{ i18n.t("ui.remove", "Remove") }}</button>
-          </li>
-        </ul>
-        <label>
-          <span>{{ i18n.t("records.add_column", "Add column") }}</span>
-          <select class="control" @change="addColumn(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-            <option value="">{{ i18n.t("records.choose_column", "Choose a field") }}</option>
-            <option v-for="column in snapshot?.available_columns.filter(item => !draftColumns.includes(item.key))" :key="column.key" :value="column.key">{{ column.label }}</option>
-          </select>
-        </label>
-        <div class="records-columns-actions">
-          <button type="button" class="btn" @click="runtime.resetRecordsListColumns?.(); draftColumns = ((runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined)?.columns.map(column => column.key) || [])">{{ i18n.t("records.reset_columns", "Reset defaults") }}</button>
-          <button type="button" class="btn" @click="columnsDialog?.close()">{{ i18n.t("common.cancel", "Cancel") }}</button>
-          <button type="submit" class="btn primary">{{ i18n.t("records.save_columns", "Save columns") }}</button>
-        </div>
-      </form>
-    </dialog>
+    <RecordsColumnsDialog
+      ref="columnsDialog"
+      :available="snapshot?.available_columns || []"
+      v-model="draftColumns"
+      @apply="saveColumns"
+      @reset="resetColumns"
+    />
   </main>
 </template>
 <style scoped>
 .records-page{display:grid;gap:16px;max-width:1600px;margin:0 auto}
 .records-command{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .records-search{display:flex;align-items:center;gap:8px;flex:1 1 16rem;min-height:2.75rem;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel,#fff)}
+.records-search-icon{width:1.125rem;height:1.125rem;flex:0 0 1.125rem;display:block}
+.records-command :deep(.btn svg){width:1rem;height:1rem;flex:0 0 1rem}
 .records-search input{flex:1;min-width:0;border:0;background:transparent;font-size:.875rem}
 .records-count{margin:0;font-size:.8125rem;color:var(--muted)}
 .records-store,.records-page-size{display:grid;gap:4px;font-size:.8125rem;font-weight:700}
@@ -368,10 +352,5 @@ onMounted(() => {
 .sticky-status{left:2.5rem}
 .records-row-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .records-pagination{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;font-size:.8125rem}
-.records-columns-dialog{border:1px solid var(--line);border-radius:16px;padding:0;max-width:32rem;width:calc(100% - 2rem)}
-.records-columns-form{display:grid;gap:12px;padding:18px}
-.records-columns-form ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
-.records-columns-form li{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
-.records-columns-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
 .column-filter{width:100%;min-height:2rem;font-size:.8125rem}
 </style>
