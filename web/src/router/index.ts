@@ -8,11 +8,11 @@ import RecordView from "../views/RecordView.vue";
 import ResponseFaqView from "../views/ResponseFaqView.vue";
 import ToolsView from "../views/ToolsView.vue";
 import CompareView from "../views/CompareView.vue";
-import SystemView from "../views/SystemView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import UsersView from "../views/UsersView.vue";
 import LanguagesView from "../views/LanguagesView.vue";
 import RolesView from "../views/RolesView.vue";
+import ProvidersView from "../views/ProvidersView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes: RouteRecordRaw[] = [
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/rag", name: "rag", component: ResearchView, meta: { view: "rag", capability: "page.research" } },
   { path: "/faq", name: "faq", component: ResponseFaqView, meta: { view: "faq", capability: "page.faq", adminOnly: true, vueNative: true } },
   { path: "/response-cache", name: "responsecache", component: ResearchView, meta: { view: "responsecache", capability: "page.response_cache", adminOnly: true } },
-  { path: "/providers", name: "providers", component: SystemView, meta: { view: "providers", capability: "page.providers", adminOnly: true } },
+  { path: "/providers", name: "providers", component: ProvidersView, meta: { view: "providers", capability: "page.providers", adminOnly: true, vueNative: true } },
   { path: "/settings", name: "config", component: SettingsView, meta: { view: "config", capability: "page.settings", vueNative: true } },
   { path: "/users", name: "users", component: UsersView, meta: { capability: "page.users", adminOnly: true, vueNative: true } },
   { path: "/roles", name: "roles", component: RolesView, meta: { capability: "page.roles", adminOnly: true, vueNative: true } },

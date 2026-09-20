@@ -3191,14 +3191,34 @@ code{overflow-wrap:anywhere}
 /* Provider registry */
 .providers-page{display:grid;gap:12px}
 .providers-overview{border-left:4px solid var(--line-strong)}
-.providers-summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.providers-summary>span{
-  display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:5px 8px;
-  border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:.8125rem
+.providers-overview-head{align-items:flex-start;padding:14px 16px}
+.providers-overview-copy{display:grid;gap:5px;min-width:0}
+.providers-overview-copy b{font-size:1.375rem;letter-spacing:-.02em}
+.providers-overview-note{margin-top:10px;color:var(--muted);font-size:.8125rem;line-height:1.5}
+.providers-summary{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.provider-summary-stat{
+  display:grid;gap:3px;min-width:120px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)
 }
-.providers-summary>span b{color:var(--text)}
-.providers-summary>span small{color:var(--muted)}
+.provider-summary-stat strong{font-size:1.075rem;line-height:1.2;letter-spacing:-.02em}
+.provider-summary-stat small{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.providers-manager-head{align-items:flex-start;padding:14px 16px}
+.providers-head-copy{display:grid;gap:5px;min-width:0}
+.providers-head-tools{flex-wrap:wrap;justify-content:flex-end}
+.provider-profile-card{display:grid;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
 .provider-profile-card.default-provider{box-shadow:inset 4px 0 0 var(--accent);border-color:var(--tone-ok-edge)}
+.provider-profile-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.provider-profile-card-title{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
+.provider-profile-identity{display:grid;gap:6px;min-width:0;flex:1}
+.provider-profile-name{max-width:360px;font-weight:800}
+.provider-meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.provider-status-pill,
+.provider-endpoint-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;font-size:.75rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.provider-status-pill{border:1px solid var(--line);background:var(--soft);color:var(--text-2)}
+.provider-status-pill.ready{background:var(--tone-ok-bg);border-color:var(--tone-ok-edge);color:var(--tone-ok-fg)}
+.provider-status-pill.needs-attention{background:var(--warn-bg);border-color:var(--tone-warn-edge);color:var(--tone-warn-fg)}
+.provider-endpoint-pill{background:var(--soft);color:var(--muted)}
+.provider-card-tools{align-items:center;flex-wrap:wrap}
+.provider-status-text{font-size:.75rem;color:var(--muted);line-height:1.4}
 .provider-config-link-card{border-left:4px solid var(--line-strong)}
 
 /* Response cache */
