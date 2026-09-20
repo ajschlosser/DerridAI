@@ -97,3 +97,29 @@ def test_a_page_range_change_reopens_exactly_the_records_it_reclassifies(tmp_pat
     assert by_id["r1"]["region_type"] == "front_matter" and by_id["r1"]["primary_text"] is False
     assert by_id["r1"]["accepted"] is False, "page 1 is before the new start page, so it was reclassified"
     assert by_id["r2"]["region_type"] == "main_text" and by_id["r2"]["accepted"] is True, "page 30 is unaffected"
+
+
+def test_start_page_edit_updates_the_layout_plan_and_relabels_layout_labelled_records(tmp_path: Path):
+    manager, repo, build_id = make(tmp_path)
+    calls = []
+    manager.repo.get_asset = lambda asset_id: {"document_layout": {"confirmed_by": "human", "main_text_pdf_start": 53, "page_layout": "single"}}
+    manager.repo.update_document_layout = lambda asset_id, plan: calls.append(plan)
+    rows = repo.load_records(build_id)
+    for row in rows:
+        row.update(pdf_pages=[10], region_type="main_text", primary_text=True, metadata_field_status={
+            "region_type": {"status": "deterministic", "method": "human_document_layout"},
+            "primary_text": {"status": "deterministic", "method": "human_document_layout"},
+        })
+    repo.save_records(build_id, rows)
+    manager.patch_manifest(build_id, {"main_text_start_page": 18})
+    assert calls and calls[0]["main_text_pdf_start"] == 18
+    # Page 10 is before the new start page, so the old layout label no longer holds.
+    assert {r["region_type"] for r in repo.load_records(build_id)} == {"front_matter"}
+
+
+def test_start_page_edit_without_a_confirmed_layout_only_changes_the_manifest(tmp_path: Path):
+    manager, repo, build_id = make(tmp_path)
+    manager.repo.get_asset = lambda asset_id: {}
+    manager.repo.update_document_layout = lambda *a: pytest.fail("no layout to update")
+    manager.patch_manifest(build_id, {"main_text_start_page": 18})
+    assert repo.get_build(build_id)["manifest"]["main_text_start_page"] == 18

@@ -5384,6 +5384,23 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         return build
 
     @_serialize_record_mutation
+    def _write_start_page_to_layout(self, asset_id: str, start_page: Any) -> None:
+        """Keep one answer for "where does the main text start" per PDF.
+
+        The reviewer-confirmed layout plan on the source asset is the authority (it also drives
+        printed page numbers and region labels), so a start page edited on the document manifest is
+        written through to it. A PDF with no confirmed layout has only the manifest value.
+        """
+        try:
+            layout = self.repo.get_asset(asset_id).get("document_layout")
+        except Exception:  # noqa: BLE001 - a missing asset means there is no layout to keep in step
+            return
+        if not isinstance(layout, dict) or layout.get("confirmed_by") != "human":
+            return
+        if layout.get("main_text_pdf_start") == start_page:
+            return
+        self.repo.update_document_layout(asset_id, {**layout, "main_text_pdf_start": start_page})
+
     def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
         # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
         # pass merging results at the same moment must not have its results overwritten by a stale copy.
@@ -5407,6 +5424,9 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         validated = DocumentManifestModel.model_validate(candidate).model_dump(mode="json")
         manifest = {**current, **validated}
         manifest["source_asset_id"] = build.get("asset_id")
+        start_changed = "main_text_start_page" in changes and validated.get("main_text_start_page") != current.get("main_text_start_page")
+        if start_changed:
+            self._write_start_page_to_layout(str(build.get("asset_id") or ""), validated.get("main_text_start_page"))
         build["manifest"] = manifest
         build["manifest_revision"] = current_revision + 1
         build["manifest_reviewed_at"] = iso_now()
@@ -5420,6 +5440,12 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 # must count as a change here even though those fields are not inherited from the manifest.
                 before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"), record.get("primary_text"), record.get("region_type"))
                 field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                if start_changed:
+                    # The layout plan labelled these records from the old start page; the new one relabels them.
+                    for field in ("region_type", "primary_text"):
+                        info = field_status.get(field)
+                        if isinstance(info, dict) and info.get("method") == "human_document_layout":
+                            field_status.pop(field, None)
                 for field in MANIFEST_INHERITED_FIELDS:
                     info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
                     if str(info.get("status") or "") in {"human_override", "human_confirmed"}:
