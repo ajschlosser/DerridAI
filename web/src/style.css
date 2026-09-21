@@ -4471,3 +4471,115 @@ html[data-color-scheme="dark"][data-contrast="more"]{
 .dashboard-corpus-state.completed{background:var(--tone-ok-fg);box-shadow:0 0 0 3px var(--tone-ok-bg)}
 .dashboard-corpus-state.blocked,.dashboard-corpus-state.failed,.dashboard-corpus-state.cancelled{background:var(--tone-danger-fg);box-shadow:0 0 0 3px var(--tone-danger-bg)}
 
+/* Unified workbench surface contract. Keep this bridge at the end while runtime markup is
+   migrated; new Vue components and legacy renderers now share the same visual states. */
+:where(.card,.ui-card,.panel,.section,.card-inset) {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+:where(.btn,.ui-button,.ui-menu-trigger) {
+  min-height: var(--control-height);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+}
+:where(.btn,.ui-button,.ui-menu-trigger):hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-interactive);
+  box-shadow: var(--elev-2);
+}
+:where(.btn.primary,.ui-button.variant-primary) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+:where(.btn.primary,.ui-button.variant-primary):hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+:where(.btn.soft,.ui-button.variant-soft) {
+  background: var(--surface-selected);
+  border-color: var(--border-interactive);
+  color: var(--accent-fg);
+}
+:where(.btn.danger,.ui-button.variant-danger) {
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-border);
+  color: var(--tone-danger-fg);
+}
+:where(.btn.ghost,.ui-button.variant-ghost) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+:where(.control,.search input,.field input,.field textarea,.field select,input[type="text"],input[type="search"],input[type="password"],input[type="url"],input[type="number"],select,textarea) {
+  min-height: var(--control-height);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+:where(.control,.search input,.field input,.field textarea,.field select,input[type="text"],input[type="search"],input[type="password"],input[type="url"],input[type="number"],select,textarea):focus {
+  border-color: var(--border-interactive);
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+:where(.topbar,.shell-topbar,.breadcrumb-bar,.shell-breadcrumb,.file-tabs,.dh,.da) {
+  background: var(--surface-glass);
+  border-color: var(--border-subtle);
+}
+:where(.db,.llm-body,.llm-config,.pdf-canvas-wrap,.pdftext) {
+  background: var(--surface-inset);
+}
+:where(.ui-menu-list,.autocomplete-list,.record-citation-popover) {
+  background: var(--surface-overlay);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-overlay);
+}
+:where(.ui-menu-item,.autocomplete-option):hover,
+:where(.ui-menu-item,.autocomplete-option):focus-visible {
+  background: var(--surface-hover);
+}
+:where(th,.work-proposal-table th) {
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  border-color: var(--border-subtle);
+}
+:where(td,.work-proposal-table td) {
+  border-color: var(--border-subtle);
+}
+:where(tbody tr.clickable:hover,.dashboard-overview-grid button:hover,.storeitem:hover,.linked-record:hover) {
+  background: var(--surface-hover);
+}
+:where(tbody tr.row-selected,.storeitem.active,.dashboard-search-tabs button.active,.view-tab.active) {
+  background: var(--surface-selected);
+}
+:where(.toast,.operation-progress) {
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-overlay);
+}
+:where(.shell-sidebar) {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+:where(.shell-primary-nav button.active,.shell-more-tools-list button.active) {
+  background: var(--surface-selected);
+  color: var(--accent-fg);
+}
+@media (forced-colors: active) {
+  :where(.card,.ui-card,.btn,.ui-button,.ui-menu-trigger,.control,.search input,.field input,.field textarea,.field select,.ui-menu-list,.autocomplete-list) {
+    border-color: CanvasText;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.btn,.ui-button,.ui-menu-trigger,.card,.ui-card) {
+    transition: none;
+  }
+}

@@ -51,8 +51,9 @@ watch(activeId, id => { if (id && id !== props.modelValue) emit("update:modelVal
   </div>
 </template>
 <style scoped>
-.ui-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
-.ui-tab{min-height:40px;border:0;border-bottom:2px solid transparent;background:transparent;padding:8px 12px;color:var(--muted);font-size:.8125rem;font-weight:750;cursor:pointer}
-.ui-tab[aria-selected="true"]{color: var(--accent-fg);border-bottom-color:var(--accent)}
-.ui-tab:focus-visible{outline:3px solid var(--focus-ring,var(--accent));outline-offset:2px}
+.ui-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border-subtle);overflow-x:auto}
+.ui-tab{min-height:var(--control-height);border:0;border-bottom:2px solid transparent;background:transparent;padding:8px 12px;color:var(--text-tertiary);font-size:.8125rem;font-weight:750;cursor:pointer}
+.ui-tab:hover{background:var(--surface-hover);color:var(--text-primary)}
+.ui-tab[aria-selected="true"]{color:var(--accent-fg);border-bottom-color:var(--accent)}
+.ui-tab:focus-visible{outline:var(--focus-ring-width) solid var(--focus-ring,var(--accent));outline-offset:var(--focus-ring-offset)}
 </style>
