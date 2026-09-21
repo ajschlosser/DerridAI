@@ -7472,7 +7472,18 @@ CURRENT REVIEWED RECORD TEXT:
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
                     continue
-                decision = resolve_conflict(old_info, new_info)
+                # PR #83 permits a valid LLM proposal to occupy the record while
+                # remaining pending human review. PR #81's generic resolver treats
+                # an unresolved existing value as replaceable; doing that here would
+                # discard the first unverified proposal. When both values are
+                # pending LLM proposals, retain both for reviewer adjudication.
+                both_pending_llm = (
+                    old_info.get("verification_status") == "pending_review"
+                    and new_info.get("verification_status") == "pending_review"
+                    and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                    and (new_info.get("value_source") == "llm" or new_info.get("method") == "llm")
+                )
+                decision = "keep_both" if both_pending_llm else resolve_conflict(old_info, new_info)
                 if decision == "replace":
                     replaced.append({"field": field, "previous": old, "value": new, "confidence": new_info.get("confidence")})
                     live[field] = new
@@ -7483,10 +7494,31 @@ CURRENT REVIEWED RECORD TEXT:
                     kept.append(field)
                 else:
                     known.add((field, json.dumps(new, sort_keys=True, default=str)))
+                    existing_source = (
+                        "llm_pending"
+                        if (
+                            old_info.get("verification_status") == "pending_review"
+                            and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                        )
+                        else "current"
+                    )
+                    existing_candidate = {"value": old, "source": existing_source}
+                    if isinstance(old_info.get("confidence"), (int, float)):
+                        existing_candidate["confidence"] = old_info.get("confidence")
+                    if old_info.get("verification_status"):
+                        existing_candidate["verification_status"] = old_info.get("verification_status")
+
                     candidate_entry = {"value": new, "source": run_id, "model": request.get("model")}
+                    if isinstance(new_info.get("confidence"), (int, float)):
+                        candidate_entry["confidence"] = new_info.get("confidence")
+                    if new_info.get("verification_status"):
+                        candidate_entry["verification_status"] = new_info.get("verification_status")
+
                     prior_dispute = next((item for item in live.get("metadata_disputes") or [] if isinstance(item, dict) and item.get("field") == field), None)
                     if prior_dispute is not None:
-                        candidates = list(prior_dispute.get("candidates") or [{"value": prior_dispute.get("existing"), "source": "current"}])
+                        fallback_existing = dict(existing_candidate)
+                        fallback_existing["value"] = prior_dispute.get("existing")
+                        candidates = list(prior_dispute.get("candidates") or [fallback_existing])
                         if not any(same_value(item.get("value"), new) for item in candidates if isinstance(item, dict)):
                             candidates.append(candidate_entry)
                             prior_dispute["candidates"] = candidates[-12:]
@@ -7495,7 +7527,7 @@ CURRENT REVIEWED RECORD TEXT:
                     else:
                         disputes.append({
                             "field": field, "existing": old, "proposed": new,
-                            "candidates": [{"value": old, "source": "current"}, candidate_entry],
+                            "candidates": [existing_candidate, candidate_entry],
                             "confidence": new_info.get("confidence"), "reason": new_info.get("reason"), "run_id": run_id,
                         })
                     live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}

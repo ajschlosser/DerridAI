@@ -325,7 +325,9 @@ def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: 
         "review_reason": (str, Field(default="", max_length=1000)),
     }
     if assessed_names:
-        assessment_props = {name: (FieldAssessment, ...) for name in assessed_names}
+        assessment_props: dict[str, Any] = {
+            name: (FieldAssessment, ...) for name in assessed_names
+        }
         assessments = create_model(
             f"{group_key.title()}FieldAssessments",
             __config__=ConfigDict(extra="forbid"),
