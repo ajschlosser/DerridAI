@@ -169,7 +169,7 @@ export interface CorpusRecord {
   metadata_review_fields?: string[];
   metadata_reviewed_at?: string;
   metadata_decisions?: Array<{field?:string;value?:unknown;at?:string;source?:string}>;
-  activity?: {human_view_count?:number;human_review_count?:number;llm_review_count?:number;enrichment_pass_count?:number;last_human_viewed_at?:string};
+  activity?: {human_view_count?:number;human_review_count?:number;llm_review_count?:number;enrichment_pass_count?:number;last_human_viewed_at?:string;last_human_reviewed_at?:string;last_llm_reviewed_at?:string;last_enrichment_provider?:string;last_enrichment_model?:string};
   human_view_count?: number;
   metadata_stage_status?: Record<string,string>;
   metadata_execution_ledger?: Record<string,{state?:string;started_at?:string;finished_at?:string|null;elapsed_ms?:number;error?:string|null}>;

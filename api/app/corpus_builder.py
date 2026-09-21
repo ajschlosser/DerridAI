@@ -1940,10 +1940,19 @@ class PdfCorpusBuildManager:
         """
         if group not in {g.key for g in schema.groups}:
             raise ValueError(f"The schema has no group '{group}'.")
-        context = (
-            "Document manifest: {}\nBuild-local editorial conventions: {}\nHuman-confirmed examples: {}\n"
-            "Human-owned fields on this record: {}\nCurrent source block IDs: [\"preview-1\"]\nCURRENT REVIEWED RECORD TEXT:\n" + text + "\n"
-        )
+        # Keep the preview's context envelope identical to the enrichment
+        # prompt. A preview has no build-local values, but it must not use a
+        # second, simplified prompt contract.
+        context = f"""Document manifest: {json.dumps({}, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps({}, ensure_ascii=False)}
+Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps({}, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps({}, ensure_ascii=False)}
+Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({}, ensure_ascii=False)}
+Neighbor context (context only; never cite it as evidence): {json.dumps({"previous_record_tail": "", "next_record_head": ""}, ensure_ascii=False)}
+Current source block IDs: ["preview-1"]
+CURRENT REVIEWED RECORD TEXT:
+{text}
+"""
         profile = CORPUS_PROFILES[PROFILE_VERSION]
         prompt = build_group_prompt(schema, group, base_context=context, allowed_region_types=list(profile.get("region_types") or []), allowed_discourse_roles=list(profile.get("discourse_roles") or []))
         model_cls = response_model_for(schema, group, region_types=list(profile.get("region_types") or []) or None, roles=list(profile.get("discourse_roles") or []) or None)
@@ -6229,6 +6238,10 @@ CURRENT REVIEWED RECORD TEXT:
         record["human_touched_fields"] = touched
         record["human_touched_at"] = iso_now()
         record["human_touched_revision"] = int(record.get("record_revision") or 1) + 1
+        activity = dict(record.get("activity") or {})
+        activity["human_review_count"] = int(activity.get("human_review_count") or 0) + 1
+        activity["last_human_reviewed_at"] = record["human_touched_at"]
+        record["activity"] = activity
 
     @staticmethod
     def _editorial_tokens(value: str) -> set[str]:
@@ -6766,10 +6779,6 @@ CURRENT REVIEWED RECORD TEXT:
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
         self._mark_human_touch(target, [key for key in changes if key not in skipped])
-        activity = dict(target.get("activity") or {})
-        activity["human_review_count"] = int(activity.get("human_review_count") or 0) + 1
-        activity["last_human_reviewed_at"] = target["metadata_reviewed_at"]
-        target["activity"] = activity
         profile = self._profile_for(build_id)
         self._reopen_due_rechecks(build_id, records, target, profile)
         self._sync_record_metadata_state(target, profile)
@@ -6886,10 +6895,6 @@ CURRENT REVIEWED RECORD TEXT:
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"human_confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
             target["metadata_reviewed_at"] = iso_now(); self._mark_human_touch(target,[field])
-            activity = dict(target.get("activity") or {})
-            activity["human_review_count"] = int(activity.get("human_review_count") or 0) + 1
-            activity["last_human_reviewed_at"] = target["metadata_reviewed_at"]
-            target["activity"] = activity
             profile = self._profile_for(build_id)
             self._sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
             self._rewrite_and_validate(build_id, records)
@@ -6897,6 +6902,19 @@ CURRENT REVIEWED RECORD TEXT:
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         records = self.repo.load_records(build_id)
+        for row in records:
+            if str(row.get("record_id") or "") != record_id:
+                continue
+            disputes = row.get("metadata_disputes") if isinstance(row.get("metadata_disputes"), list) else []
+            for dispute in disputes:
+                if isinstance(dispute, dict) and dispute.get("field") == field and not dispute.get("resolved_at"):
+                    dispute["resolved_at"] = iso_now()
+                    dispute["resolved_value"] = value
+                    dispute["resolution_source"] = "human"
+            row["metadata_disputes"] = disputes[-100:]
+            record = row
+            break
+        self._rewrite_and_validate(build_id, records)
         for row in records:
             self._decorate_review_state(row)
         build = self.repo.get_build(build_id)
