@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 439 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 440 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 60 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 62 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -137,6 +137,15 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
 classes move with their renderer when it is replaced.
 
+### Stale-view fixes found by probing (branch `claude/runtime-refactor-12`)
+
+Probe method: open the view, import a file (distinct content: identical content is de-duplicated by content hash), see whether
+the view notices. Found and fixed (each with an e2e test verified to fail without the fix, in `legacy-dom-baseline.spec.ts`,
+"views follow the loaded corpus"): Records (rail file count; earlier commit), Compare (picker kept "No matching records" /
+"Load JSONL files first"), Vector Stores (sync buttons stayed disabled). Works and Search already updated; Annotations and
+Record View showed nothing to update in the same probe. Pattern: watch `corpusState.version` + `activeFileId`. Gotcha: do not
+return the same array from a `computed` and expect re-renders (an unchanged array notifies nobody); return a count/boolean.
+
 ## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
 
 Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
@@ -172,7 +181,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 60 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 62 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -203,7 +212,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (60 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (62 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.

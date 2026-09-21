@@ -6,6 +6,7 @@ import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
 import { useAuthStore } from "../stores/auth";
 import { useVectorStore } from "../stores/workspace";
+import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -33,6 +34,14 @@ type RuntimeOnlyState = {
 };
 const runtimeState = runtime.state as unknown as RuntimeOnlyState;
 const vector = useVectorStore();
+// The loaded files change while this view is open (a file imported or closed). The runtime edits them in place, so the
+// corpus version and active file tell this view when to count them again; without that the sync buttons stayed disabled
+// until you left the view and came back. (A count, not the array: an unchanged array would not re-render anything.)
+const loadedFileCount = computed(() => {
+  void corpusState.version;
+  void corpusState.activeFileId;
+  return (runtimeState.files || []).length;
+});
 // Shape of the shared Vector Stores fields as this view uses them (the store types them loosely).
 const workspace = vector as unknown as {
   activeStore: string;
@@ -544,8 +553,8 @@ onBeforeUnmount(() => {
                   <div>
                     <span class="section-label">{{ i18n.t("vector.sync_into_collection", "Sync into collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncActive" />
-                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncAll" />
+                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!loadedFileCount" @click="syncActive" />
+                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!loadedFileCount" @click="syncAll" />
                     </div>
                   </div>
                   <div>

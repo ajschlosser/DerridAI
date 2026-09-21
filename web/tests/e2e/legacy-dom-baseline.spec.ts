@@ -837,4 +837,42 @@ test.describe("views follow the loaded corpus", () => {
     await expect(page.getByText("Loaded 1 records")).toBeVisible();
     await expect(page.getByText(/Local JSONL\s*2 files/i)).toBeVisible({ timeout: 5000 });
   });
+
+  // The Compare picker searched the records that were loaded when the view opened.
+  test("Compare finds a record imported while it is open", async ({ page }) => {
+    await open(page, { name: "compare-import-while-open", nav: "Compare" });
+    await expect(
+      page.getByText(/Load JSONL files or browse the corpus database first/).first(),
+    ).toBeVisible();
+    await page.setInputFiles("#fileInput", {
+      name: "late.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "late-00001", work: "Late Work" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await page
+      .getByPlaceholder(/Type record ID/)
+      .first()
+      .fill("Late");
+    await expect(page.getByText("No matching records.")).toHaveCount(0);
+    await expect(page.getByText(/late-00001/).first()).toBeVisible({ timeout: 5000 });
+  });
+
+  // The sync buttons stayed disabled after a file was imported while Vector Stores was open.
+  test("Vector Stores enables syncing for a file imported while it is open", async ({ page }) => {
+    await open(page, { name: "vector-import-while-open", nav: "Vector Stores" });
+    const sync = page.locator("main button", { hasText: "Sync active JSONL" });
+    await expect(sync).toBeDisabled();
+    await page.setInputFiles("#fileInput", {
+      name: "late.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "late-00001", work: "Late Work" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await expect(sync).toBeEnabled({ timeout: 5000 });
+  });
 });

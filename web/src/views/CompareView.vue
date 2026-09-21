@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { useAuthStore } from "../stores/auth";
 import { useCompareStore } from "../stores/workspace";
+import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "../components/ui/UiButton.vue";
 import UiCard from "../components/ui/UiCard.vue";
@@ -123,6 +124,9 @@ function statusFor(side: "A" | "B") {
 }
 
 watch([sourceA, sourceB, keyA, keyB, pasteA, pasteB, filter], persist);
+// The picker searches the library read here. Records loaded or edited while Compare is open used to be missing from it
+// until you left the view and came back, so read it again whenever the loaded corpus changes.
+watch(() => [corpusState.version, corpusState.activeFileId], refreshLibrary, { flush: "post" });
 onMounted(async () => {
   if (typeof runtime.ensureCompareLibrary === "function") await runtime.ensureCompareLibrary();
   refreshLibrary();
