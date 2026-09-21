@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 443 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 449 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 98 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 109 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -137,6 +137,18 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
 classes move with their renderer when it is replaced.
 
+### Research workspace + Response Library extracted (branch `claude/runtime-refactor-15`, includes -14 which was not yet merged)
+
+`domain/researchWorkspace.ts` (`createResearchWorkspace({state, ...26 helper lambdas})`, 20 functions: the Research snapshot,
+config, evidence, running/grading/re-running, job commands, `getResponseFaqPage`, `gradeResponseFaqRecord`,
+`rerunResponseFaqRecord`, `rememberRagPrompt`/`rememberRagRun`, `prepareRagRerun`). 11 new baseline scenarios (`research-*`,
+`faq-*`, `styles-research-evidence-light`; 109 total) recorded from the pre-move build in their own commit; the spec gained a
+`path` option to open a Vue-native route directly (needs `main`, not `#main`). `tests/frontend/research-workspace.test.ts`.
+`runtime.js` is 7,794 lines. `shellRefreshHook` is a reassigned `let`, so it is passed as a lambda like the other helpers.
+Machine load matters: when other processes (a Storybook from another checkout, orphaned Playwright browsers) push the load
+average up, baseline scenarios time out at 30 s in random places; check `uptime`, kill orphans (`/tmp/killall_pw.sh` pattern:
+`chrome-headless-shell`, `playwright test`), and run with `--workers=3`. Never `pkill -f` a word that appears in your own command.
+
 ### Annotations workspace extracted (branch `claude/runtime-refactor-14`)
 
 `domain/annotationsWorkspace.ts` (`createAnnotationsWorkspace({state, ...19 helper lambdas})`, 13 functions: gathering local and
@@ -201,7 +213,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 98 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 109 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -232,7 +244,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (98 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (109 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.
