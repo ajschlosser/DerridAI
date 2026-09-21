@@ -178,6 +178,7 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/rerun-metadata"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/publish"),

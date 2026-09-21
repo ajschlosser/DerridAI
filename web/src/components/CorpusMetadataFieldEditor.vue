@@ -13,6 +13,7 @@ const props=defineProps<{
 const emit=defineEmits<{save:[value:unknown];noValue:[];source:[];dirty:[dirty:boolean]}>();
 const i18n=useI18nStore();
 const editing=ref(Boolean(props.open));
+const dirty=ref(false);
 const draft=ref<unknown>("");
 const confidence=computed(()=>typeof props.status?.confidence==='number'&&Number.isFinite(props.status.confidence)?Number(props.status.confidence):null);
 const isLlm=computed(()=>String(props.status?.method||'').includes('llm'));
@@ -27,16 +28,16 @@ const resolvedValue=computed(()=>{
   return normalizeMetadataFieldValue(props.field,props.value??'');
 });
 function editableValue(){const value=resolvedValue.value;return Array.isArray(value)?value.join(', '):value??''}
-watch(()=>[props.field,props.value,props.status?.proposed_value,props.status?.llm_value,props.status?.prefilled_candidate,props.constraint?.value],()=>{draft.value=editableValue()},{immediate:true,deep:true});
-watch(()=>props.open,value=>{if(value)editing.value=true});
+watch(()=>[props.field,props.value,props.status?.proposed_value,props.status?.llm_value,props.status?.prefilled_candidate,props.constraint?.value],()=>{if(!dirty.value)draft.value=editableValue()},{immediate:true,deep:true});
+watch(()=>props.open,value=>{if(value){editing.value=true;dirty.value=false;draft.value=editableValue()}});
 
 function normalized(){
   if(props.control==='multi-combobox')return [...new Set(String(draft.value||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean))];
   if(props.control==='number'&&draft.value!=="")return Number(draft.value);
   return normalizeMetadataFieldValue(props.field,draft.value);
 }
-function save(){emit('save',normalized());emit('dirty',false);editing.value=true}
-function markDirty(){emit('dirty',true)}
+function save(){emit('save',normalized());dirty.value=false;emit('dirty',false);editing.value=true}
+function markDirty(){dirty.value=true;emit('dirty',true)}
 function selectFromText(){
   const selected=String(window.getSelection()?.toString()||'').trim();
   if(!selected)return;
