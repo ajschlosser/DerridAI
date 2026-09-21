@@ -1940,10 +1940,19 @@ class PdfCorpusBuildManager:
         """
         if group not in {g.key for g in schema.groups}:
             raise ValueError(f"The schema has no group '{group}'.")
-        context = (
-            "Document manifest: {}\nBuild-local editorial conventions: {}\nHuman-confirmed examples: {}\n"
-            "Human-owned fields on this record: {}\nCurrent source block IDs: [\"preview-1\"]\nCURRENT REVIEWED RECORD TEXT:\n" + text + "\n"
-        )
+        # Keep the preview's context envelope identical to the enrichment
+        # prompt. A preview has no build-local values, but it must not use a
+        # second, simplified prompt contract.
+        context = f"""Document manifest: {json.dumps({}, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps({}, ensure_ascii=False)}
+Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps({}, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps({}, ensure_ascii=False)}
+Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({}, ensure_ascii=False)}
+Neighbor context (context only; never cite it as evidence): {json.dumps({"previous_record_tail": "", "next_record_head": ""}, ensure_ascii=False)}
+Current source block IDs: ["preview-1"]
+CURRENT REVIEWED RECORD TEXT:
+{text}
+"""
         profile = CORPUS_PROFILES[PROFILE_VERSION]
         prompt = build_group_prompt(schema, group, base_context=context, allowed_region_types=list(profile.get("region_types") or []), allowed_discourse_roles=list(profile.get("discourse_roles") or []))
         model_cls = response_model_for(schema, group, region_types=list(profile.get("region_types") or []) or None, roles=list(profile.get("discourse_roles") or []) or None)
@@ -5092,6 +5101,55 @@ CURRENT REVIEWED RECORD TEXT:
         }
 
     @staticmethod
+    def _trash_quality_report(records: list[dict[str, Any]]) -> dict[str, Any]:
+        """Measure records that are very likely unusable before semantic enrichment.
+
+        This is deliberately deterministic and conservative. Strong extraction
+        findings already live in ``source_quality_issues``; this ratio adds
+        record-level signals for sparse, replacement-heavy, or glyph-fragmented
+        text so a build can warn before spending model calls.
+        """
+        trash: list[dict[str, Any]] = []
+        for record in records:
+            text = unicodedata.normalize("NFC", str(record.get("text") or "")).strip()
+            compact = "".join(ch for ch in text if not ch.isspace())
+            alpha = sum(1 for ch in compact if ch.isalpha())
+            replacement = compact.count("\ufffd")
+            controls = sum(1 for ch in compact if unicodedata.category(ch) == "Cc")
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            micro = sum(1 for line in lines if len(line) <= 2)
+            fragmented = bool(PdfCorpusBuildManager._record_extraction_quality_issues(record))
+            reasons: list[str] = []
+            if len(compact) < 24:
+                reasons.append("very_low_text_density")
+            if replacement >= 2 or controls:
+                reasons.append("corrupt_characters")
+            if fragmented:
+                reasons.append("fragmented_glyph_layout")
+            if compact and alpha / max(1, len(compact)) < 0.25:
+                reasons.append("low_alphabetic_density")
+            if lines and micro / max(1, len(lines)) >= 0.65:
+                reasons.append("micro_line_fragmentation")
+            if reasons:
+                trash.append({
+                    "record_id": str(record.get("record_id") or ""),
+                    "pages": list(record.get("pdf_pages") or []),
+                    "reasons": reasons,
+                    "characters": len(compact),
+                })
+        total = len(records)
+        ratio = len(trash) / max(1, total)
+        return {
+            "record_count": total,
+            "trash_record_count": len(trash),
+            "trash_ratio": round(ratio, 4),
+            "threshold": 0.10,
+            "exceeds_threshold": bool(total and ratio > 0.10),
+            "deterministic": True,
+            "records": trash[:500],
+        }
+
+    @staticmethod
     def validate_records(blocks: list[dict[str, Any]], records: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
         source_ids = [block["block_id"] for block in blocks]
         source_index = {block_id: index for index, block_id in enumerate(source_ids)}
@@ -5436,7 +5494,18 @@ CURRENT REVIEWED RECORD TEXT:
                 record["needs_review"] = True
                 record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
         self.repo.save_records(build_id, records)
-        self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")))
+        trash_quality = self._trash_quality_report(records)
+        current_build = self.repo.get_build(build_id)
+        current_build["trash_quality"] = trash_quality
+        self.repo.save_build(current_build)
+        if trash_quality["exceeds_threshold"]:
+            self._append_warning(
+                build_id,
+                f"{trash_quality['trash_record_count']} of {trash_quality['record_count']} records "
+                f"({round(float(trash_quality['trash_ratio']) * 100, 1)}%) appear unusable. "
+                "Review the source quality before continuing enrichment.",
+            )
+        self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")), trash_quality=trash_quality)
 
         return records
 
@@ -6169,6 +6238,10 @@ CURRENT REVIEWED RECORD TEXT:
         record["human_touched_fields"] = touched
         record["human_touched_at"] = iso_now()
         record["human_touched_revision"] = int(record.get("record_revision") or 1) + 1
+        activity = dict(record.get("activity") or {})
+        activity["human_review_count"] = int(activity.get("human_review_count") or 0) + 1
+        activity["last_human_reviewed_at"] = record["human_touched_at"]
+        record["activity"] = activity
 
     @staticmethod
     def _editorial_tokens(value: str) -> set[str]:
@@ -6785,6 +6858,20 @@ CURRENT REVIEWED RECORD TEXT:
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": self._queue_counts(persisted)}
 
     @_serialize_record_mutation
+    def record_view(self, build_id: str, record_id: str) -> dict[str, Any]:
+        records = self.repo.load_records(build_id)
+        target = next((row for row in records if str(row.get("record_id") or "") == record_id), None)
+        if target is None:
+            raise KeyError(record_id)
+        activity = dict(target.get("activity") or {})
+        activity["human_view_count"] = int(activity.get("human_view_count") or 0) + 1
+        activity["last_human_viewed_at"] = iso_now()
+        target["activity"] = activity
+        target["human_view_count"] = activity["human_view_count"]
+        self._rewrite_and_validate(build_id, records)
+        return {"record_id": record_id, "activity": activity}
+
+    @_serialize_record_mutation
     def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
@@ -6815,6 +6902,19 @@ CURRENT REVIEWED RECORD TEXT:
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         records = self.repo.load_records(build_id)
+        for row in records:
+            if str(row.get("record_id") or "") != record_id:
+                continue
+            disputes = row.get("metadata_disputes") if isinstance(row.get("metadata_disputes"), list) else []
+            for dispute in disputes:
+                if isinstance(dispute, dict) and dispute.get("field") == field and not dispute.get("resolved_at"):
+                    dispute["resolved_at"] = iso_now()
+                    dispute["resolved_value"] = value
+                    dispute["resolution_source"] = "human"
+            row["metadata_disputes"] = disputes[-100:]
+            record = row
+            break
+        self._rewrite_and_validate(build_id, records)
         for row in records:
             self._decorate_review_state(row)
         build = self.repo.get_build(build_id)
@@ -7186,10 +7286,13 @@ CURRENT REVIEWED RECORD TEXT:
             self.repo.save_build(build)
 
     @staticmethod
-    def _enrichment_pass_indices(records: list[dict[str, Any]], scope: str) -> list[int]:
+    def _enrichment_pass_indices(records: list[dict[str, Any]], scope: str, record_ids: list[str] | None = None) -> list[int]:
         """Records a pass should visit. Evaluated per pass: reviewers keep working between passes."""
         indices = []
+        selected = {str(value) for value in (record_ids or []) if str(value)}
         for index, record in enumerate(records):
+            if selected and str(record.get("record_id") or "") not in selected:
+                continue
             disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
             if disposition == "rejected" or (scope == "accepted" and disposition != "accepted") or (scope == "pending" and disposition != "pending"):
                 continue
@@ -7214,7 +7317,10 @@ CURRENT REVIEWED RECORD TEXT:
         groups = self._schema_of_build(build).family_fields()
         families = [str(v) for v in request.get("families") or [] if str(v) in groups] or list(groups)
         passes = max(1, min(MAX_PASSES, int(request.get("passes") or 1)))
-        indices = self._enrichment_pass_indices(self.repo.load_records(build_id), scope)
+        record_ids = [str(value) for value in request.get("record_ids") or [] if str(value)]
+        if scope == "selected" and not record_ids:
+            raise ValueError("Select at least one record for selected-record enrichment.")
+        indices = self._enrichment_pass_indices(self.repo.load_records(build_id), scope, record_ids)
         if not indices:
             raise ValueError("No records match the selected metadata enrichment scope.")
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
@@ -7228,6 +7334,7 @@ CURRENT REVIEWED RECORD TEXT:
             "provider": request.get("provider") or build.get("provider"), "model": request.get("model") or build.get("model"),
             "families": families, "scope": scope,
             "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
+            "record_ids": record_ids,
         }
         for key in ("recheck_rate", "iaa_rate"):
             if request.get(key) is not None:
@@ -7297,7 +7404,21 @@ CURRENT REVIEWED RECORD TEXT:
                     kept.append(field)
                 else:
                     known.add((field, json.dumps(new, sort_keys=True, default=str)))
-                    disputes.append({"field": field, "existing": old, "proposed": new, "confidence": new_info.get("confidence"), "reason": new_info.get("reason"), "run_id": run_id})
+                    candidate_entry = {"value": new, "source": run_id, "model": request.get("model")}
+                    prior_dispute = next((item for item in live.get("metadata_disputes") or [] if isinstance(item, dict) and item.get("field") == field), None)
+                    if prior_dispute is not None:
+                        candidates = list(prior_dispute.get("candidates") or [{"value": prior_dispute.get("existing"), "source": "current"}])
+                        if not any(same_value(item.get("value"), new) for item in candidates if isinstance(item, dict)):
+                            candidates.append(candidate_entry)
+                            prior_dispute["candidates"] = candidates[-12:]
+                            prior_dispute["proposed"] = new
+                            prior_dispute["run_id"] = run_id
+                    else:
+                        disputes.append({
+                            "field": field, "existing": old, "proposed": new,
+                            "candidates": [{"value": old, "source": "current"}, candidate_entry],
+                            "confidence": new_info.get("confidence"), "reason": new_info.get("reason"), "run_id": run_id,
+                        })
                     live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}
         live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
         outcome = "enriched" if added or replaced else "disputed" if disputes else "unchanged"
@@ -7308,6 +7429,14 @@ CURRENT REVIEWED RECORD TEXT:
             "provider_profile_id": request.get("provider_profile_id"), "model": request.get("model"),
         })
         live["metadata_enrichment_history"] = history[-30:]
+        activity = dict(live.get("activity") or {})
+        activity["llm_review_count"] = int(activity.get("llm_review_count") or 0) + 1
+        activity["enrichment_pass_count"] = int(activity.get("enrichment_pass_count") or 0) + 1
+        activity["last_llm_reviewed_at"] = iso_now()
+        activity["last_enrichment_at"] = activity["last_llm_reviewed_at"]
+        activity["last_enrichment_provider"] = request.get("provider")
+        activity["last_enrichment_model"] = request.get("model")
+        live["activity"] = activity
         if added or replaced or disputes:
             live["review_disposition"] = "pending"
             live["accepted"] = False
@@ -7326,7 +7455,7 @@ CURRENT REVIEWED RECORD TEXT:
         manifest = build.get("manifest") or {}
         profile = self._profile_of_build(build)
         snapshot = self.repo.load_records(build_id)
-        indices = self._enrichment_pass_indices(snapshot, scope)
+        indices = self._enrichment_pass_indices(snapshot, scope, [str(value) for value in request.get("record_ids") or []])
         max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
         pass_schema = self._schema_for(build_id)
@@ -7344,7 +7473,7 @@ CURRENT REVIEWED RECORD TEXT:
             live = self._latest_runtime_request(build_id, request)
             return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
-        def candidate_for(index: int) -> dict[str, Any]:
+        def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
             status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
             for family in families:
@@ -7358,14 +7487,15 @@ CURRENT REVIEWED RECORD TEXT:
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
+            request_used = {**effective_request(), "families": families, "_interactive_provider_override": True}
             return self._enrich_record(
                 candidate,
                 manifest,
-                {**effective_request(), "families": families, "_interactive_provider_override": True},
+                request_used,
                 build_id=build_id,
                 previous_text=neighbors["previous_text"],
                 next_text=neighbors["next_text"],
-            )
+            ), request_used
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
             futures = {pool.submit(candidate_for, index): index for index in indices}
@@ -7377,9 +7507,10 @@ CURRENT REVIEWED RECORD TEXT:
                 index = futures[future]
                 record_id = str(snapshot[index].get("record_id") or "")
                 try:
-                    candidate = future.result()
+                    candidate, request_used = future.result()
                 except Exception as exc:
                     candidate = None
+                    request_used = request
                     failure = {"run_id": run_id, "at": iso_now(), "state": "failed", "error": str(exc)}
                 # Merge into the live copy, never the snapshot: the reviewer may have
                 # edited this or any other record while the model was thinking.
@@ -7396,7 +7527,7 @@ CURRENT REVIEWED RECORD TEXT:
                         result = {"outcome": "skipped"}
                     else:
                         was_accepted = str(live.get("review_disposition") or "pending") == "accepted"
-                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request, profile, schema=pass_schema)
+                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema)
                         if was_accepted and result["outcome"] != "unchanged":
                             totals["records_reopened"] += 1
                     self.repo.save_records(build_id, live_records)
@@ -7424,7 +7555,7 @@ CURRENT REVIEWED RECORD TEXT:
                     op.update({key: before[key] + totals.get(key, 0) for key in counter_keys})
                     op.update({"state": "running", "current_pass": pass_number, "records_total": max(int(op.get("records_total") or 0), pass_total)})
                     fraction = ((pass_number - 1) + totals.get("records_processed", 0) / max(1, pass_total)) / passes
-                    self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.97 + 0.025 * fraction))
+                    self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))
 
                 op.update({"state": "running", "current_pass": pass_number})
                 totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, on_progress)

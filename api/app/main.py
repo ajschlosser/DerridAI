@@ -2474,6 +2474,14 @@ def preview_pdf_corpus_record(build_id: str, record_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed")
+def mark_pdf_corpus_record_viewed(build_id: str, record_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.record_view(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup")
 def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusTextTouchupRequest) -> dict[str, Any]:
     try:

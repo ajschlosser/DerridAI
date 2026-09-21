@@ -646,7 +646,8 @@ class PdfCorpusRecordRerun(BaseModel):
     autonomous: PdfCorpusAutonomy | None = None
     semantic_indexing: bool = False
     families: list[Literal["discourse", "quotation", "indexing"]] | None = None
-    scope: Literal["all", "accepted", "pending"] = "all"
+    scope: Literal["all", "accepted", "pending", "selected"] = "all"
+    record_ids: list[str] = Field(default_factory=list, max_length=5000)
     # 1 runs a single pass; more chains passes, each learning from the last.
     passes: int = Field(default=1, ge=1, le=MAX_PASSES)
 

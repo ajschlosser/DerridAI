@@ -27,6 +27,26 @@ from app import enrichment_cycles as ec
 from app.config import APP_VERSION
 
 
+def test_enrichment_scope_can_target_explicit_records() -> None:
+    rows = [
+        {"record_id": "r1", "review_disposition": "pending"},
+        {"record_id": "r2", "review_disposition": "accepted"},
+        {"record_id": "r3", "review_disposition": "pending"},
+    ]
+    assert cb.PdfCorpusBuildManager._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
+
+
+def test_trash_quality_ratio_is_deterministic() -> None:
+    rows = [
+        {"record_id": "good", "text": "A sufficiently legible scholarly passage with normal words."},
+        {"record_id": "bad", "text": "\ufffd\ufffd\nx\nx"},
+    ]
+    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    assert report["deterministic"] is True
+    assert report["trash_record_count"] == 1
+    assert report["exceeds_threshold"] is True
+
+
 class InlineExecutor:
     """Runs submitted work immediately so worker behavior is deterministic."""
 
