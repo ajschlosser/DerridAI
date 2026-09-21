@@ -129,6 +129,14 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
   `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
 
+## style.css audit (branch `claude/runtime-refactor-12`)
+
+`docs/STYLE_AUDIT.md` has the findings and the recommended order; `scripts/runtime-refactor/style_audit.py` (numbers, writes
+`/tmp/style_lists.json`) and `style_prune.py` (removes rules that can never match) reproduce them. Done: 613 dead rules removed
+(5,176 -> 4,514 lines) with 60/60 baseline scenarios (computed styles unchanged) and 199/199 e2e. Next for CSS: move the 306
+Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
+classes move with their renderer when it is replaced.
+
 ## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
 
 Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
