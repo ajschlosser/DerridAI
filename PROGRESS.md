@@ -65,28 +65,40 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 14 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 27 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
-(0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
+(master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
 `npm run build && npx playwright test -c playwright.legacy.config.ts` (starts `vite preview` on 5199; start one
-yourself for fast repeat runs). 15 consecutive runs passed with no flakes.
+yourself for fast repeat runs). 15 consecutive runs of all 27 passed with no flakes.
 
-- **Dashboard (the only view still drawn through `RuntimeSurface`):** empty, loaded, researcher role, with jobs
-  (`/api/jobs` fixture), metric carousel next / next-twice.
-- **Other runtime-drawn surfaces:** PDF Explorer (empty), the `research-empty` Vue page (kept from the first baseline).
-- **Runtime-built `<dialog>`s** reached from the Records commands: merge files (needs a second file), create subset,
-  clean OCR artifacts. (Review / auto-improve needs-review open a Vue dialog, not a runtime one.)
-- **Computed styles** (`styles-*.txt`, one line per element with color, background, border, font, padding, margin ...
-  no layout-dependent values) for the dashboard in light and dark and for the subset dialog in dark. DOM alone cannot
-  see CSS/theme regressions; these can. Dark is applied with `page.emulateMedia({colorScheme})`.
-- Normalization: tooltip wrappers on disabled controls removed, UUIDs and dates masked, `Math.random` pinned to 0,
-  fixed clock, reduced motion. Add scenarios by appending to the `scenarios` array (`steps`, `fixtures`, `role`,
-  `scheme`, `target: "dialog"`, `styles: true`) and record with `--update-snapshots=missing`.
+- **Dashboard (the only view still drawn through `RuntimeSurface`):** empty, loaded, researcher role, with jobs,
+  metric carousel next / next-twice.
+- **Other runtime-drawn surfaces:** PDF Explorer (empty); `research-empty` is a Vue page kept from the first baseline.
+- **Runtime-built `<dialog>`s:** merge files (needs a second file), create subset, clean OCR artifacts, export JSONL,
+  collection wizard (source step, retrieval step), Works: populate-all-metadata and separate-works, job details for an LLM
+  review / PDF build / RAG job, and LLM review results (records resolved through the file's content-hash id, see
+  `SAMPLE_FILE_ID`). Job dialogs read `/api/jobs/{id}`, hence `jobFixtures()`.
+- **Computed styles** (`styles-*.txt`; per element: color, background, border, font, padding, margin ... no
+  layout-dependent values): dashboard light/dark, researcher dashboard dark, PDF Explorer, and the subset, job-results
+  and wizard dialogs in dark. DOM alone cannot see CSS/theme regressions. Dark uses `page.emulateMedia({colorScheme})`
+  (the localStorage pref is not honored by the legacy runtime).
+- Normalization: tooltip wrappers on disabled controls removed (markup) or looked through (styles), UUIDs and dates
+  masked, `Math.random` pinned to 0, fixed clock, reduced motion, markup must be stable for 800 ms before capture.
+  Add scenarios by appending to `scenarios` (`steps`, `fixtures`, `role`, `scheme`, `target: "dialog"`, `styles: true`)
+  and record with `--update-snapshots=missing` (Playwright reports the first write as a failure; rerun).
 
-Not covered yet (add before touching those renderers): the export menu, bulk-edit and upsert-queue dialogs, column chooser,
-job details/results dialogs (need richer job fixtures), the legacy Record/Search/Compare/Annotations renderers (they
-are unreachable from the UI now but `renderView` still dispatches to them).
+Findings while building it: **existing bug** `ReferenceError: wireOperationsPanel is not defined` is thrown on every
+dashboard render (`runtime.js` `renderDashboard`; the function was removed by commit 2c51149 "Rebuild the Home
+Operations panel as a Vue component" but one call remains). It aborts the rest of that wiring line. The baseline records
+behavior as-is; fixing it is a behavior change, so raise it with the owner. Also: Review / Auto-improve needs-review open a
+Vue dialog (`.ui-dialog`), the Records Columns dialog and record edit sheet are Vue; "Open result" on a RAG job navigates
+to the Vue Research page rather than opening a dialog.
+
+Not covered (add before touching them): bulk-edit and upsert-queue dialogs, works-metadata editor / review-flagged /
+auto-improve / remove-work (need a selected work), Delete-collection and other confirm modals, other job types
+(upsert, llm_tool), the legacy Record/Search/Compare/Annotations renderers (unreachable from the UI, but `renderView`
+still dispatches to them).
 
 ## The factory pattern (for functions that need `tr`, `state` or other runtime helpers)
 
@@ -119,7 +131,7 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above. Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (27 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.

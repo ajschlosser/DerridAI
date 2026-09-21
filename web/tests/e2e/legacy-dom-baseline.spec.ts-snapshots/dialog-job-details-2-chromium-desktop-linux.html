@@ -1,0 +1,102 @@
+<dialog class="job-details-dialog" open="">
+<div class="dh">
+    <div>
+<h2 class="dialog-title">RAG pipeline details</h2>
+<div class="dialog-subtitle">job-rag-1 · completed · created <date></div>
+</div>
+    <button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+  </div>
+  <div class="db job-details-body">
+    <section class="job-detail-summary">
+      <div>
+<span>Type</span>
+<b>rag</b>
+</div>
+<div>
+<span>Started by</span>
+<b>admin</b>
+</div>
+<div>
+<span>Status</span>
+<b>completed</b>
+</div>
+<div>
+<span>Provider</span>
+<b>ollama</b>
+</div>
+<div>
+<span>Model</span>
+<b>qwen3.5:4b</b>
+</div>
+<div>
+<span>Progress</span>
+<b>10/10</b>
+</div>
+<div>
+<span>Failed</span>
+<b>0</b>
+</div>
+<div>
+<span>Started</span>
+<b><date></b>
+</div>
+<div>
+<span>Finished</span>
+<b><date></b>
+</div>
+<div>
+<span>Cancel requested</span>
+<b>—</b>
+</div>
+    </section>
+    
+    <section class="card-inset">
+      <div class="rag-result-section-head">
+<div>
+<b>Request configuration</b>
+<div class="note">API keys are intentionally omitted.</div>
+</div>
+</div>
+      <pre class="job-detail-json">{
+  "locales": [
+    "en"
+  ],
+  "k": 8
+}</pre>
+    </section>
+    <section class="card-inset">
+      <div class="rag-result-section-head">
+<div>
+<b>Operation timeline</b>
+<div class="note">0 recorded events</div>
+</div>
+</div>
+      <div class="job-event-list">
+<div class="note">No events recorded.</div>
+</div>
+    </section>
+    <section class="card-inset">
+      <div class="rag-result-section-head">
+<b>Result summary</b>
+</div>
+      <pre class="job-detail-json">{
+  "has_result": true,
+  "evidence_count": 0,
+  "elapsed_seconds": null,
+  "collections": [],
+  "response_cache": null
+}</pre>
+    </section>
+  </div>
+  <div class="da">
+    <button class="btn" data-close="">Close</button>
+    
+    
+    <button class="btn primary" id="detailsOpenResult">Open result</button>
+  </div>
+</dialog>

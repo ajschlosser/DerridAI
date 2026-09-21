@@ -1,0 +1,158 @@
+<dialog class="job-results-dialog" open="">
+<div class="dh">
+<div>
+<h2 class="dialog-title">LLM review changes</h2>
+<div class="dialog-subtitle">6/6 processed · 2 pending results · 3 pending changes · 0 unprocessed · 1 failures · completed</div>
+</div>
+<div class="tools">
+<button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+</div>
+    <div class="db job-change-review">
+      <div class="job-resolution-summary">
+        <span>
+<b>0</b> accepted results</span>
+        <span>
+<b>0</b> accepted fields</span>
+        <span>
+<b>0</b> rejected results</span>
+        <span>
+<b>0</b> rejected fields</span>
+        <span>
+<b>pending</b> decision state</span>
+      </div>
+      <div class="job-change-toolbar">
+<button class="btn small" id="jobSelectAll">Select all changes</button>
+<button class="btn small" id="jobSelectNone">Select none</button>
+<button class="btn small danger" id="jobRejectSelected">Reject selected</button>
+<span class="note">
+<b id="jobSelectedCount">2</b> selected · accepted changes are removed from this pending queue immediately</span>
+</div>
+      <div class="info warn">derrida-cosmopoli-00001: failed</div>
+      <div class="job-change-table-wrap">
+<table class="job-change-table">
+<thead>
+<tr>
+<th>
+</th>
+<th>Record</th>
+<th>Field</th>
+<th>Current</th>
+<th>Proposed</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="">
+<td>
+<input type="checkbox" data-job-change="0" checked="">
+</td>
+<td>
+<div class="job-record-cell">
+<b>derrida-grammatology-00001</b>
+<button class="btn tiny" data-copy-row-key="jsonl-6418a92f81564da4d329096e::0">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="11" height="11" rx="2">
+</rect>
+<path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3">
+</path>
+</svg>Copy</button>
+<button class="btn tiny" data-preview-result="0">Preview record</button>
+</div>
+</td>
+<td>
+<b>Topics</b>
+</td>
+<td>
+<pre class="change-diff current-diff">[
+  "sign",
+  "<span class="del">presence</span>"
+]</pre>
+</td>
+<td>
+<pre class="change-diff proposed-diff">[
+  "sign",
+  "<span class="ins">trace</span>"
+]</pre>
+</td>
+<td>The passage is about the trace.</td>
+</tr>
+<tr class="">
+<td>
+<input type="checkbox" data-job-change="1" checked="">
+</td>
+<td>
+<div class="job-record-cell">
+<b>derrida-grammatology-00001</b>
+<button class="btn tiny" data-copy-row-key="jsonl-6418a92f81564da4d329096e::0">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="11" height="11" rx="2">
+</rect>
+<path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3">
+</path>
+</svg>Copy</button>
+<button class="btn tiny" data-preview-result="1">Preview record</button>
+</div>
+</td>
+<td>
+<b>Speaker</b>
+</td>
+<td>
+<pre class="change-diff current-diff">Derrida</pre>
+</td>
+<td>
+<pre class="change-diff proposed-diff">Derrida</pre>
+</td>
+<td>No rationale supplied.</td>
+</tr>
+</tbody>
+</table>
+</div>
+      <details class="unchanged-review-list">
+<summary>
+<span>
+<b>1 record with no proposed changes</b>
+<small>Expand to inspect or preview these records</small>
+</span>
+</summary>
+<div class="unchanged-review-grid">
+<div class="unchanged-review-row">
+<div>
+<b>derrida-grammatology-00002</b>
+<span>Of Grammatology</span>
+</div>
+<button class="btn tiny" data-preview-unchanged="0">Preview record</button>
+</div>
+</div>
+</details>
+    </div>
+    <div class="da">
+      <button class="btn" data-close="">Close</button>
+      <button class="btn danger subtle-danger" id="rejectJob">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>Discard pending &amp; remove operation</button>
+      
+      <button class="btn" id="markJobReviewed">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>Mark all available reviewed</button>
+<button class="btn primary" id="applyJobSelected">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>Apply selected</button>
+<button class="btn soft" id="applyJobAll">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>Accept all available</button>
+    </div>
+</dialog>
