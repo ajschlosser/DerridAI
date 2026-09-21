@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { createVectorState, vectorState } from "../../src/state/workspaceState";
 
 const runtime = vi.hoisted(() => ({
   setSearchScope: vi.fn(async () => ({})),
@@ -13,23 +14,13 @@ const runtime = vi.hoisted(() => ({
   exportStoreJsonl: vi.fn(),
   triggerUpsertQueue: vi.fn(),
   getShellSnapshot: vi.fn(() => ({})),
+  // Only the runtime-owned fields; the shared Vector Stores fields come from the vector store.
   state: {
-    activeStore: "",
-    vectorTab: "overview",
-    vectorCollectionFilter: "",
-    vectorAutoCreateRequested: false,
     files: [],
     activeFileId: null,
-    storeBrowseMode: "works",
-    storePage: 1,
-    storePageSize: 50,
-    storeWork: "",
-    storeQuery: "",
-    storeSearchMode: "",
     llmStatus: null,
     health: null,
     appConfig: {},
-    stores: [],
   },
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime, __v_isRef: false, __v_isReadonly: false, __v_isShallow: false, __v_skip: true, __v_raw: undefined }));
@@ -81,8 +72,7 @@ async function mountView(role: "admin" | "researcher") {
 describe("VectorStoresView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    runtime.state.vectorAutoCreateRequested = false;
-    runtime.state.activeStore = "";
+    Object.assign(vectorState, createVectorState());
     chromaApi.health.mockResolvedValue(readyHealth);
     chromaApi.collections.mockResolvedValue([]);
   });

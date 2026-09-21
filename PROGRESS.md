@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 420 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 421 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -146,11 +146,18 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   with a `version` for in-place edits) bound onto the runtime `state` with `bindSharedState`; Pinia views in
   `stores/workspace.ts` (`useVectorStore`, `useCompareStore`, `useSearchStore`). Unit tests pin every original initial value
   (`tests/frontend/workspace-state.test.ts`). `VectorStoresView` needed `as unknown as` on its `runtime.state` cast (types only).
-- NEXT: move Vue readers onto the stores (VectorStoresView, CompareView, SearchView, useRecordsWorkspace currently read
-  `runtime.state` or poll snapshots), bump each group's `version` where the runtime re-renders that view, then the remaining
-  groups (records list: `searches`, `sorts`, `pages`, `listFilters`, `selected`, `tableColumns`; PDF; research/RAG config; `view`;
-  files). Known intermittent unit-test flake: `operations-panel.test.ts` sometimes logs "Element is not defined" from a
-  TransitionGroup after teardown (fake bridge, unrelated to the runtime).
+- DONE (branch `claude/runtime-refactor-6`): `VectorStoresView` and `CompareView` read and write the shared fields through
+  `useVectorStore` / `useCompareStore` instead of casting `runtime.state`; non-shared fields go through a separate
+  `runtimeState` cast. Their unit tests reset the shared state (`createVectorState()` / `createCompareState()`).
+  Deliberately NOT done: replacing the views' local refs (`filter`, `tab`, `storePage`, `searchMode`, `activeName`, ...)
+  with store-bound refs. Those refs are copied into the runtime only in `persistWorkspace()`, and some logic depends on that
+  timing: e.g. `VectorStoresView` `load()` tests `!workspace.storeSearchMode` AFTER `persistWorkspace()` has already written
+  "hybrid", so that branch is dead today; binding `searchMode` directly would wake it and change behavior. Do that only with
+  a test pinning the intended behavior first.
+- NEXT: SearchView / `useRecordsWorkspace` / RecordView / WorksView still poll `runtime.get*Snapshot()`; convert them one at a
+  time (snapshot -> store fields + computed), then the remaining state groups (records list: `searches`, `sorts`, `pages`,
+  `listFilters`, `selected`, `tableColumns`; PDF; research/RAG config; `view`; files). Known intermittent unit-test flake:
+  `operations-panel.test.ts` sometimes logs "Element is not defined" from a TransitionGroup after teardown (fake bridge).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 

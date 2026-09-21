@@ -5,6 +5,7 @@ import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
 import { useAuthStore } from "../stores/auth";
+import { useVectorStore } from "../stores/workspace";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -21,25 +22,31 @@ import type { ChromaConnectionUpdate, ChromaHealth, VectorCollection, VectorReco
 
 type VectorTab = "overview" | "data" | "retrieval" | "builds" | "settings";
 type BrowseMode = "works" | "records";
-type RuntimeWorkspace = {
+// Workspace fields the runtime shares with this view live in the vector store; the rest are still read from the
+// runtime's own state.
+type RuntimeOnlyState = {
+  files: Array<{id: string; records: unknown[]}>;
+  activeFileId: string | null;
+  llmStatus: {models?: Array<{name: string}>} | null;
+  health: Record<string, unknown> | null;
+  appConfig: {embedding_provider?: string; embedding_model?: string};
+};
+const runtimeState = runtime.state as unknown as RuntimeOnlyState;
+const vector = useVectorStore();
+// Shape of the shared Vector Stores fields as this view uses them (the store types them loosely).
+const workspace = vector as unknown as {
   activeStore: string;
   vectorTab: string;
   vectorCollectionFilter: string;
   vectorAutoCreateRequested: boolean;
-  files: Array<{id: string; records: unknown[]}>;
-  activeFileId: string | null;
   storeBrowseMode: string;
   storePage: number;
   storePageSize: number;
   storeWork: string;
   storeQuery: string;
   storeSearchMode: string;
-  llmStatus: {models?: Array<{name: string}>} | null;
-  health: Record<string, unknown> | null;
-  appConfig: {embedding_provider?: string; embedding_model?: string};
   stores: VectorCollection[];
 };
-const workspace = runtime.state as unknown as RuntimeWorkspace;
 const VECTOR_TABS: VectorTab[] = ["overview", "data", "retrieval", "builds", "settings"];
 
 const router = useRouter();
@@ -119,7 +126,7 @@ function persistWorkspace() {
 
 function syncHealthIntoRuntime(next: ChromaHealth) {
   health.value = next;
-  workspace.health = {...(workspace.health || {}), chroma: next, chroma_path: next.path};
+  runtimeState.health = {...(runtimeState.health || {}), chroma: next, chroma_path: next.path};
 }
 
 async function load(options: {details?: boolean} = {}) {
@@ -176,10 +183,10 @@ async function loadData() {
 }
 
 function openCreate() {
-  const models = workspace.llmStatus?.models || [];
+  const models = runtimeState.llmStatus?.models || [];
   runtime.openCollectionCreationWizard({
-    defaultProvider: workspace.appConfig?.embedding_provider || "ollama",
-    defaultModel: workspace.appConfig?.embedding_model || "bge-m3:latest",
+    defaultProvider: runtimeState.appConfig?.embedding_provider || "ollama",
+    defaultModel: runtimeState.appConfig?.embedding_model || "bge-m3:latest",
     installedModels: models,
   } as never);
 }
@@ -301,12 +308,12 @@ async function confirmAction() {
 }
 
 function syncActive() {
-  const file = workspace.files?.find(item => item.id === workspace.activeFileId);
+  const file = runtimeState.files?.find(item => item.id === runtimeState.activeFileId);
   if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first", "Load and select a JSONL file first."), {tone: "warn"});
   void runtime.upsertRows(file.records.map((record: unknown, index: number) => ({file, record, index})), "records").then(() => load());
 }
 function syncAll() {
-  const rows = (workspace.files || []).flatMap(file => file.records.map((record, index) => ({file, record, index})));
+  const rows = (runtimeState.files || []).flatMap(file => file.records.map((record, index) => ({file, record, index})));
   if (!rows.length) return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first", "Load at least one JSONL file first."), {tone: "warn"});
   void runtime.upsertRows(rows, "records").then(() => load());
 }
@@ -537,8 +544,8 @@ onBeforeUnmount(() => {
                   <div>
                     <span class="section-label">{{ i18n.t("vector.sync_into_collection", "Sync into collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!workspace.files?.length" @click="syncActive" />
-                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!workspace.files?.length" @click="syncAll" />
+                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncActive" />
+                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncAll" />
                     </div>
                   </div>
                   <div>
