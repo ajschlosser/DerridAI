@@ -279,11 +279,15 @@ const bulkActionItems=computed<CorpusActionMenuItem[]>(()=>{
     {id:"reject",label:i18n.tf("pdf_corpus.reject_selected_count","Reject selected ({count})",{count:selectedReviewCount.value}),reason:rejectReason},
   ];
 });
-function runBulkAction(id:string){
-  if(id==="edit"){
-    if(busy.value||reviewLocked.value||selectedReviewCount.value===0)return;
-    bulkMetadataOpen.value=!bulkMetadataOpen.value;
-  }else if(id==="hands-free")handsFreeOpen.value=true;else if(id==="reject")bulkDisposition("rejected")
+function runBulkAction(id: string) {
+  if (id === "edit") {
+    if (busy.value || reviewLocked.value || selectedReviewCount.value === 0) return;
+    bulkMetadataOpen.value = !bulkMetadataOpen.value;
+  } else if (id === "hands-free") {
+    handsFreeOpen.value = true;
+  } else if (id === "reject") {
+    bulkDisposition("rejected");
+  }
 }
 const activeBuilds=computed(()=>builds.value.filter(build=>["queued","running"].includes(String(build.status||""))));
 const activeBuildCount=computed(()=>activeBuilds.value.length);

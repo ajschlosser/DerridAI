@@ -124,11 +124,17 @@ async function tryGroup(run: boolean) {
   if (result) preview.value = result;
 }
 
-onMounted(() => { void refresh(); });
-watch(() => props.providerProfiles, profiles => {
+onMounted(() => {
+  void refresh();
+});
+watch(
+  () => props.providerProfiles,
+  (profiles) => {
   if (!profiles.length) return;
   if (!profiles.some(profile => profile.id === previewProfile.value)) previewProfile.value = profiles[0].id;
-}, { immediate: true, deep: true });
+  },
+  { immediate: true, deep: true },
+);
 defineExpose({ select, draft });
 </script>
 
