@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 412 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 425 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 27 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 36 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -88,10 +88,10 @@ yourself for fast repeat runs). 15 consecutive runs of all 27 passed with no fla
   Add scenarios by appending to `scenarios` (`steps`, `fixtures`, `role`, `scheme`, `target: "dialog"`, `styles: true`)
   and record with `--update-snapshots=missing` (Playwright reports the first write as a failure; rerun).
 
-Findings while building it: **existing bug** `ReferenceError: wireOperationsPanel is not defined` is thrown on every
-dashboard render (`runtime.js` `renderDashboard`; the function was removed by commit 2c51149 "Rebuild the Home
-Operations panel as a Vue component" but one call remains). It aborts the rest of that wiring line. The baseline records
-behavior as-is; fixing it is a behavior change, so raise it with the owner. Also: Review / Auto-improve needs-review open a
+Findings while building it: the stale `wireOperationsPanel()` call that threw on every dashboard render was FIXED in
+c172814 (a test now guards it). Still open, same class (`// eslint-disable-next-line no-undef -- SA-11` backlog in
+`runtime.js`, five sites): e.g. `openSharedAnnotationRecord` (dashboard latest server annotation click) is not defined.
+Also: Review / Auto-improve needs-review open a
 Vue dialog (`.ui-dialog`), the Records Columns dialog and record edit sheet are Vue; "Open result" on a RAG job navigates
 to the Vue Research page rather than opening a dialog.
 
@@ -129,9 +129,45 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
   `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
 
+## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
+
+Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
+accessors for those fields onto the runtime `state` (`bindJobsState`), so runtime code is unchanged and still gets the very
+same plain arrays/objects back, and expose the object through a Pinia store in `web/src/stores/`. The state is shallow on
+purpose: the runtime mutates in place, so Vue learns about changes through a `version` counter that the runtime bumps where
+it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
+
+- DONE: jobs (`jobs`, `jobsLastFetched`, `jobApplied`, `upsertJobApplied`) -> `state/jobsState.ts`, `stores/jobs.ts`
+  (`useJobsStore`: `jobs`, `lastFetched`, `version`, `activeJobs`). Nothing in Vue reads it yet; `OperationsPanel` still
+  uses the bridge. Unit tests: `tests/frontend/jobs-state.test.ts`.
+- DONE: the Operations panel bridge now subscribes through the store's `version` (synchronous watcher) instead of a
+  private listener set.
+- DONE: per-view groups -> `state/workspaceState.ts` (`vectorState` 26 fields, `compareState` 8, `searchState` 14, each
+  with a `version` for in-place edits) bound onto the runtime `state` with `bindSharedState`; Pinia views in
+  `stores/workspace.ts` (`useVectorStore`, `useCompareStore`, `useSearchStore`). Unit tests pin every original initial value
+  (`tests/frontend/workspace-state.test.ts`). `VectorStoresView` needed `as unknown as` on its `runtime.state` cast (types only).
+- DONE (branch `claude/runtime-refactor-6`): `VectorStoresView` and `CompareView` read and write the shared fields through
+  `useVectorStore` / `useCompareStore` instead of casting `runtime.state`; non-shared fields go through a separate
+  `runtimeState` cast. Their unit tests reset the shared state (`createVectorState()` / `createCompareState()`).
+  Deliberately NOT done: replacing the views' local refs (`filter`, `tab`, `storePage`, `searchMode`, `activeName`, ...)
+  with store-bound refs. Those refs are copied into the runtime only in `persistWorkspace()`, and some logic depends on that
+  timing: e.g. `VectorStoresView` `load()` tests `!workspace.storeSearchMode` AFTER `persistWorkspace()` has already written
+  "hybrid", so that branch is dead today; binding `searchMode` directly would wake it and change behavior. Do that only with
+  a test pinning the intended behavior first.
+- DONE (branch `claude/runtime-refactor-7`): the Search workspace logic left `runtime.js`: `domain/searchWorkspace.ts`
+  (`createSearchWorkspace({state, ...50 helper lambdas})`, 34 functions: snapshot/results/facets/columns building and every
+  command `SearchView` sends). Verbatim move; runtime keeps thin destructured consts, exports unchanged. Params of these
+  legacy functions are typed `Any` on purpose (never typed before). Guarded by 7 new baseline scenarios for the Search view
+  (`search-*`, recorded from the PRE-move build: stash src, build, record, pop, rebuild, compare) plus
+  `tests/frontend/search-workspace.test.ts`. The baseline nav click is now scoped to `nav, aside` (the top bar has its own
+  "Search" button). `SearchView` itself still polls `runtime.getSearchWorkspaceSnapshot()`; next is turning that into store
+  fields + computed inside a composable now that the logic is isolated.
+- NEXT: `useRecordsWorkspace` / RecordView / WorksView still poll `runtime.get*Snapshot()`; same treatment (extract logic
+  factory with baseline scenarios recorded first, then Vue composable over the stores)
+
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (27 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (36 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.

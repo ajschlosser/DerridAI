@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { useAuthStore } from "../stores/auth";
+import { useCompareStore } from "../stores/workspace";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "../components/ui/UiButton.vue";
 import UiCard from "../components/ui/UiCard.vue";
@@ -22,16 +23,18 @@ import {
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
-const workspace = runtime.state as {
+// The shared Compare fields live in the compare store; the researcher's picks are still on the runtime's own state.
+const compare = useCompareStore();
+const runtimeState = runtime.state as unknown as { researcherCompareA: string; researcherCompareB: string };
+const workspace = compare as unknown as {
   compareA: string; compareB: string; compareMode: string; comparePasteA: string; comparePasteB: string;
   compareSourceA?: string; compareSourceB?: string; compareFilter?: string;
-  researcherCompareA: string; researcherCompareB: string;
 };
 const library = ref<CompareLibraryOption[]>([]);
 const sourceA = ref<CompareSource>(workspace.compareSourceA === "scratch" || workspace.compareMode === "paste" ? "scratch" : "library");
 const sourceB = ref<CompareSource>(workspace.compareSourceB === "scratch" || workspace.compareMode === "paste" ? "scratch" : "library");
-const keyA = ref(auth.isResearcher ? workspace.researcherCompareA || "" : workspace.compareA || "");
-const keyB = ref(auth.isResearcher ? workspace.researcherCompareB || "" : workspace.compareB || "");
+const keyA = ref(auth.isResearcher ? runtimeState.researcherCompareA || "" : workspace.compareA || "");
+const keyB = ref(auth.isResearcher ? runtimeState.researcherCompareB || "" : workspace.compareB || "");
 const pasteA = ref(workspace.comparePasteA || "");
 const pasteB = ref(workspace.comparePasteB || "");
 const filter = ref<CompareFilter>(workspace.compareFilter === "all" ? "all" : "changed");
@@ -52,8 +55,8 @@ const ready = computed(() => Boolean(recordA.value && recordB.value));
 function t(key: string, fallback: string) { return i18n.t(key, fallback); }
 function persist() {
   if (auth.isResearcher) {
-    workspace.researcherCompareA = keyA.value;
-    workspace.researcherCompareB = keyB.value;
+    runtimeState.researcherCompareA = keyA.value;
+    runtimeState.researcherCompareB = keyB.value;
   } else {
     workspace.compareA = keyA.value;
     workspace.compareB = keyB.value;

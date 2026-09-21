@@ -18,15 +18,13 @@ const runtime = vi.hoisted(() => ({
   ensureCompareLibrary: vi.fn(async () => undefined),
   copyJsonToClipboard: vi.fn(),
   copyCitation: vi.fn(),
-  state: {
-    compareA: "f::0", compareB: "", compareMode: "workspace", comparePasteA: "", comparePasteB: "",
-    compareSourceA: "library", compareSourceB: "library", compareFilter: "changed",
-    researcherCompareA: "", researcherCompareB: "",
-  },
+  // Only the runtime-owned fields; the shared Compare fields come from the compare store.
+  state: { researcherCompareA: "", researcherCompareB: "" },
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({...runtime}));
 
 import CompareView from "../../src/views/CompareView.vue";
+import { compareState, createCompareState } from "../../src/state/workspaceState";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -45,8 +43,7 @@ async function mountView() {
 
 describe("CompareView", () => {
   beforeEach(() => {
-    runtime.state.comparePasteA = "";
-    runtime.state.comparePasteB = "";
+    Object.assign(compareState, createCompareState(), { compareA: "f::0" });
   });
 
   it("loads a library record into the A editor so copies can be edited beside the original", async () => {

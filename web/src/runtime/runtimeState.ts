@@ -1,10 +1,12 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { bindJobsState } from "../state/jobsState";
+import { bindSharedState, compareState, searchState, vectorState } from "../state/workspaceState";
 
 // Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
 // runtime.js so the shape has one home; the runtime still owns the instance it creates.
 
 export function createRuntimeState() {
-  return {
+  const state = {
     userContext: null,
     files: [],
     activeFileId: null,
@@ -15,18 +17,6 @@ export function createRuntimeState() {
     pages: {},
     pageSize: 100,
     sorts: {},
-    globalSearch: "",
-    globalFilters: [],
-    globalSort: { key: "__file", dir: 1 },
-    globalPage: 1,
-    globalSearchMode: "traditional",
-    dbSearchMethod: "similarity",
-    dbSearchWhere: {},
-    dbSearchFetchK: 100,
-    dbSearchLambda: 0.7,
-    globalAdvancedOpen: false,
-    searchFacetFilters: {},
-    searchDatabaseRan: false,
     worksSearch: "",
     workOverview: "",
     researcherRecordId: "",
@@ -39,8 +29,6 @@ export function createRuntimeState() {
     annotationsFetchedAt: 0,
     dashboardMetricIndex: 0,
     lastViewedRecord: null,
-    globalSearchAutoRun: false,
-    searchResultLayouts: { traditional: "compact", database: "cards" },
     foregroundUpsertCancelRequested: false,
     recordFind: "",
     recordFindKey: "",
@@ -59,37 +47,6 @@ export function createRuntimeState() {
       extractError: "",
       extractionSource: "",
     },
-    compareA: "",
-    compareB: "",
-    compareMode: "workspace",
-    comparePasteA: "",
-    comparePasteB: "",
-    compareSourceA: "library",
-    compareSourceB: "library",
-    compareFilter: "changed",
-    stores: [],
-    storesLastFetchedAt: 0,
-    vectorAutoCreateRequested: false,
-    activeStore: "",
-    storeSearchResults: [],
-    storeSearchLoading: false,
-    storeSearchMessage: "",
-    storeSearchSort: { key: "similarity", dir: -1 },
-    storeRecords: [],
-    storeCount: 0,
-    storePage: 1,
-    storePageSize: 50,
-    storeQuery: "",
-    storeSearchMode: "",
-    storeWork: "",
-    storeSort: { key: "", dir: 1 },
-    storeFilters: {},
-    storeWorks: [],
-    storeWorkStats: [],
-    storeWorksStore: "",
-    storeBrowseMode: "works",
-    vectorTab: "overview",
-    vectorCollectionFilter: "",
     health: null,
     llmStatus: null,
     reviewSelection: new Set(),
@@ -108,15 +65,8 @@ export function createRuntimeState() {
     tableColumns: {},
     upsertState: {},
     upsertIgnored: {},
-    storePresence: {},
-    storePresenceIds: {},
-    storePresenceCheckedAt: {},
     operationProgress: {},
-    jobs: [],
-    jobsLastFetched: 0,
     jobsPollTimer: null,
-    jobApplied: {},
-    upsertJobApplied: {},
     foregroundUpsertActive: false,
     warmup: { status: "idle", message: "" },
     faqSearch: "",
@@ -200,6 +150,12 @@ export function createRuntimeState() {
     },
     storageReady: false,
   };
+  // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
+  // state/workspaceState.ts.
+  return bindSharedState(
+    bindSharedState(bindSharedState(bindJobsState(state), vectorState), compareState),
+    searchState,
+  );
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;

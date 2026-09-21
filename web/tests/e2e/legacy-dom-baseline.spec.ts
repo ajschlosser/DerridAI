@@ -101,7 +101,12 @@ async function open(page: Page, scenario: Scenario) {
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
-    await page.getByRole("button", { name: scenario.nav, exact: true }).click();
+    // The sidebar entry; the top bar has its own "Search" button.
+    await page
+      .locator("nav, aside")
+      .getByRole("button", { name: scenario.nav, exact: true })
+      .first()
+      .click();
   }
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(600);
@@ -123,11 +128,15 @@ async function rawMarkup(page: Page, target: "main" | "dialog"): Promise<string>
     });
     return copy.outerHTML;
   });
-  return html
-    .replace(/></g, ">\n<")
-    .replace(/\s+(style="[^"]*")/g, " $1")
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
-    .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>");
+  return (
+    html
+      .replace(/></g, ">\n<")
+      .replace(/\s+(style="[^"]*")/g, " $1")
+      // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.
+      .replace(/ data-v-[0-9a-f]{8}=""/g, "")
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
+      .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
+  );
 }
 
 const STYLE_PROPERTIES = [
@@ -502,7 +511,71 @@ const scenarios: Scenario[] = [
     },
   },
   { name: "styles-home-researcher-dark", role: "researcher", scheme: "dark", styles: true },
+  // The Search view is Vue, but every command it sends and every result it shows goes through the runtime.
+  { name: "search-loaded", nav: "Search", load: true },
+  {
+    name: "search-query",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByPlaceholder(/Search extracted text/).fill("text");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-facet-topic",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Topics" }).click();
+      await page.locator("details", { hasText: "Topics" }).getByRole("checkbox").first().check();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-sort-page",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Sort:" }).click();
+      await page.getByRole("button", { name: "Page Start" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-layout-cards",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Cards" }).click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-advanced-filter",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Search options" }).click();
+      await page.getByPlaceholder("Type or choose a value…").fill("Of Grammatology");
+      await page.getByRole("button", { name: "Add filter" }).click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-select-record",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("checkbox", { name: /^Select derrida-grammatology-00001/ }).check();
+      await page.waitForTimeout(700);
+    },
+  },
 ];
+
+// Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
+// the snapshots must not depend on the machine that records or checks them.
+test.use({ timezoneId: "UTC", locale: "en-US" });
 
 test.describe("legacy runtime DOM baseline", () => {
   test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
@@ -516,4 +589,21 @@ test.describe("legacy runtime DOM baseline", () => {
       expect(captured).toMatchSnapshot(`${scenario.name}.${scenario.styles ? "txt" : "html"}`);
     });
   }
+});
+
+test.describe("legacy runtime errors", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
+  // renderDashboard once called a function that no longer exists, so every render threw and the
+  // final decorateDisabledControls call never ran.
+  test("the dashboard renders without page errors", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
+    await open(page, { name: "errors", load: true });
+    await markup(page, "main");
+    expect(errors).toEqual([]);
+  });
+  test("disabled dashboard controls are decorated when the dashboard renders", async ({ page }) => {
+    await open(page, { name: "decorated" });
+    await expect(page.locator("#main .disabled-control-tooltip").first()).toBeVisible();
+  });
 });

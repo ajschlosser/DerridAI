@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import AxeBuilder from "@axe-core/playwright";
+import { runAxe } from "./support/axe";
 import { expect, test, type Page } from "@playwright/test";
 import { CORPUS_BUILD_ID, CORPUS_RECORDS, mockBackend } from "./support/mock-backend";
 
@@ -51,7 +51,7 @@ test.describe("the enrichment measurements panel", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
     await page.screenshot({ path: "test-results/enrichment-panel.png", fullPage: false });
-    const scan = await new AxeBuilder({ page }).include("details.enrich-metrics").analyze();
+    const scan = await runAxe(page, (builder) => builder.include("details.enrich-metrics"));
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 });

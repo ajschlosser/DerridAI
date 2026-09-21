@@ -54,6 +54,19 @@ function makeBridge(initial: OperationView[]) {
   return { bridge, set };
 }
 
+// Panels stay mounted (with live timers and transitions) unless a test unmounts them, and Vue can then update them
+// after the test environment is torn down ("Element is not defined"). Unmount whatever a test left behind.
+const mountedPanels: Array<{ unmount: () => void }> = [];
+afterEach(() => {
+  for (const panel of mountedPanels.splice(0)) {
+    try {
+      panel.unmount();
+    } catch {
+      // Already unmounted by the test.
+    }
+  }
+});
+
 async function mountPanel(jobs: OperationView[], props: Record<string, unknown> = {}) {
   setActivePinia(createPinia());
   const fake = makeBridge(jobs);
@@ -62,6 +75,7 @@ async function mountPanel(jobs: OperationView[], props: Record<string, unknown> 
     attachTo: document.body,
     global: { stubs: { TransitionGroup: false } },
   });
+  mountedPanels.push(wrapper);
   await flushPromises();
   return { wrapper, ...fake };
 }
@@ -369,6 +383,7 @@ describe("language and formatting", () => {
       attachTo: document.body,
       global: { stubs: { TransitionGroup: false } },
     });
+    mountedPanels.push(wrapper);
     await flushPromises();
     const meta = wrapper.get(".ops-meta").text();
     expect(meta).toMatch(/il y a\s*5\s*min/i); // relative time from Intl.RelativeTimeFormat
