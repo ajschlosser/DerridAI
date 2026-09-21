@@ -7318,6 +7318,8 @@ CURRENT REVIEWED RECORD TEXT:
         families = [str(v) for v in request.get("families") or [] if str(v) in groups] or list(groups)
         passes = max(1, min(MAX_PASSES, int(request.get("passes") or 1)))
         record_ids = [str(value) for value in request.get("record_ids") or [] if str(value)]
+        if scope == "selected" and not record_ids:
+            raise ValueError("Select at least one record for selected-record enrichment.")
         indices = self._enrichment_pass_indices(self.repo.load_records(build_id), scope, record_ids)
         if not indices:
             raise ValueError("No records match the selected metadata enrichment scope.")
