@@ -308,3 +308,24 @@ Watch for BOMs / mojibake after Windows-side merges.
 - `npm ci` is needed in a fresh worktree. The default Playwright config expects free ports 6006 and 5199, or
   set `APP_PORT`/`STORYBOOK_PORT` (which also disables reuse of running servers).
 - The repo's `.prettierrc` sets printWidth 100. `runtime.js` and most existing files are not Prettier-clean.
+
+
+## Session 4 summary (branches -16 to -18)
+
+runtime.js: 7,571 -> ~3,560 lines. Moved verbatim into `domain/*` factories: backupWorkspace, dashboardRenderer,
+responseCacheRenderer, pdfExplorerRenderer, jobDialogs, workDialogs, recordDialogs, operationDock. Deleted the legacy
+Record/Annotations/List/Global/Compare/Faq/Rag/Works renderers (no route reaches them). The baseline now has 131 scenarios,
+including a `runtime` target (`#main`) and PDF Explorer scenarios (the old pdf-explorer scenarios snapshotted the
+Corpus Builder by mistake).
+
+Found, not fixed (behavior kept):
+- Clicking the "PDF Explorer" tab while a build is selected in the Corpus Builder does not open the Explorer (the
+  builder's URL sync rewrites `mode`); the baseline opens it through a popstate instead.
+- `operationDock.updateOperationStackCount` passes `{active,failed,finished}` to `dockCollapsedSummary`, which reads
+  `activeCount/failedCount/finishedCount`, so the collapsed dock label always sees zeros.
+- The dashboard's latest-annotation click calls an undefined `openSharedAnnotationRecord`.
+
+Left in runtime.js: state/persistence, evidence and selection, navigation/URL, the operations panel, corpus-builds home
+card, modals (`openMessageModal`), compare library, translation of legacy DOM. Next: move those clusters the same way
+(`/tmp`-style helper: mk_factory.py + tsc TS2304 names; pass values by value only if declared before the call site), then
+replace the dashboard, PDF Explorer and response cache with Vue views, one per commit.
