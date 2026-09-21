@@ -6,7 +6,8 @@ import { useI18nStore } from "../stores/i18n";
 // replaced), and the fields where it disagreed with the current value and left it for a person to decide. The record
 // is reopened for review with the words "review the highlighted changes"; this is where they are.
 interface Replaced { field: string; previous: unknown; value: unknown }
-interface Dispute { field: string; existing: unknown; proposed: unknown; candidates?: { value: unknown; source?: string; model?: string }[]; reason?: string | null }
+interface Candidate { value: unknown; source?: string; model?: string }
+interface Dispute { field: string; existing: unknown; proposed: unknown; candidates?: Candidate[]; reason?: string | null }
 interface HistoryEntry { run_id?: string; model?: string; outcome?: string; added_fields?: string[]; replaced?: Replaced[]; disputes?: Dispute[] }
 
 const props = defineProps<{ record: Record<string, unknown>; busy?: boolean }>();
@@ -27,7 +28,8 @@ const disputes = computed(() => (last.value?.disputes ?? []).filter(item => !own
 const visible = computed(() => Boolean(props.record.needs_review) && added.value.length + replaced.value.length + disputes.value.length > 0);
 
 const label = (field: string) => i18n.t(`record.${field}`, field.replaceAll("_", " "));
-const candidatesFor = (item: Dispute): { value: unknown; source?: string; model?: string }[] => item.candidates?.length ? item.candidates : [{ value: item.existing, source: "current" }, { value: item.proposed, source: "proposed" }];
+const candidatesFor = (item: Dispute): Candidate[] => item.candidates?.length ? item.candidates : [{ value: item.existing, source: "current" }, { value: item.proposed, source: "proposed" }];
+const candidateLabel = (candidate: Candidate) => candidate.source === "current" ? i18n.t("pdf_corpus.change_keep_current", "Keep current") : candidate.source === "proposed" && !candidate.model ? i18n.t("pdf_corpus.change_use_proposed", "Use proposed") : i18n.tf("pdf_corpus.change_use_candidate", "Use {candidate}", { candidate: candidate.model || candidate.source || i18n.t("pdf_corpus.change_proposed", "proposed") });
 function show(value: unknown): string {
   if (value === true) return i18n.t("ui.yes", "Yes");
   if (value === false) return i18n.t("ui.no", "No");
@@ -59,7 +61,7 @@ function show(value: unknown): string {
           {{ i18n.tf("pdf_corpus.change_dispute_values", "kept “{existing}”; the pass proposed “{proposed}”.", { existing: show(item.existing), proposed: show(item.proposed) }) }}
         </span>
         <span class="choices">
-          <button v-for="(candidate, index) in candidatesFor(item)" :key="`${item.field}-${index}`" type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, candidate.value)">{{ candidate.source === "current" ? i18n.t("pdf_corpus.change_keep_current", "Keep current") : i18n.tf("pdf_corpus.change_use_candidate", "Use {candidate}", { candidate: candidate.model || candidate.source || i18n.t("pdf_corpus.change_proposed", "proposed") }) }}: {{ show(candidate.value) }}</button>
+          <button v-for="(candidate, index) in candidatesFor(item)" :key="`${item.field}-${index}`" type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, candidate.value)">{{ candidateLabel(candidate) }}<template v-if="candidate.model">: {{ show(candidate.value) }}</template></button>
         </span>
       </li>
     </ul>
