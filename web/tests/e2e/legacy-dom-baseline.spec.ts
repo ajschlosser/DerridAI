@@ -79,6 +79,8 @@ interface Scenario {
   target?: "main" | "dialog" | "app";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
+  /** A viewport size other than the default desktop one, to exercise the responsive rules. */
+  viewport?: { width: number; height: number };
 }
 
 async function open(page: Page, scenario: Scenario) {
@@ -111,6 +113,11 @@ async function open(page: Page, scenario: Scenario) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(600);
   await scenario.steps?.(page);
+  // Resize last: the narrow layouts hide the sidebar the scenarios navigate with.
+  if (scenario.viewport) {
+    await page.setViewportSize(scenario.viewport);
+    await page.waitForTimeout(500);
+  }
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
@@ -821,6 +828,68 @@ const scenarios: Scenario[] = [
   { name: "styles-settings-light", nav: "Settings", styles: true },
   { name: "styles-app-shell-light", load: true, target: "app", styles: true },
   { name: "styles-app-shell-dark", load: true, scheme: "dark", target: "app", styles: true },
+  // Narrow and tablet widths, where the media-query rules apply.
+  {
+    name: "styles-search-narrow",
+    nav: "Search",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-research-narrow",
+    nav: "Research",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-vector-narrow",
+    nav: "Vector Stores",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-records-narrow",
+    nav: "Records",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-users-narrow",
+    nav: "Users",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-app-shell-narrow",
+    load: true,
+    target: "app",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-search-tablet",
+    nav: "Search",
+    load: true,
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
+  {
+    name: "styles-vector-tablet",
+    nav: "Vector Stores",
+    load: true,
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
+  {
+    name: "styles-app-shell-tablet",
+    load: true,
+    target: "app",
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
 ];
 
 // Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
