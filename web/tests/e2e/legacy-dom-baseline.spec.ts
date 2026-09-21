@@ -349,6 +349,17 @@ const liveJobs = (options: { finishAfterListings?: number } = {}): Fixtures => {
   };
 };
 
+/** Settings > System and operations, where the backup and restore buttons are. */
+const inBackupSection = async (page: Page) => {
+  await page.locator("button", { hasText: "System and operations" }).first().click();
+  await page.waitForTimeout(700);
+};
+const RESTORE_RESPONSE = {
+  workspace: { files: [], prefs: {} },
+  chroma: { count: 2 },
+  pdf_available: false,
+};
+
 /** Selects the first record as evidence in the Record view, then opens Research. */
 const researchWithEvidence = async (page: Page) => {
   await page
@@ -1290,6 +1301,74 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.waitForTimeout(800);
+    },
+  },
+  // Backup and restore are started from Settings; the runtime does the work and reports it in a toast.
+  { name: "backup-section", nav: "Settings", load: true, steps: inBackupSection },
+  {
+    name: "backup-confirm",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "backup-created",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await expect(page.getByText(/Full backup created/)).toBeVisible({ timeout: 10_000 });
+    },
+  },
+  {
+    name: "backup-failed",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    fixtures: { "POST /api/admin/backup": () => ({ detail: "disk full" }) },
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    name: "restore-confirm",
+    nav: "Settings",
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("input[type=file][accept*=zip]").setInputFiles({
+        name: "backup.zip",
+        mimeType: "application/zip",
+        buffer: Buffer.from("PK"),
+      });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "restore-done",
+    nav: "Settings",
+    target: "app",
+    fixtures: { "POST /api/admin/restore": () => RESTORE_RESPONSE },
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("input[type=file][accept*=zip]").setInputFiles({
+        name: "backup.zip",
+        mimeType: "application/zip",
+        buffer: Buffer.from("PK"),
+      });
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await expect(page.getByText(/Restore complete/)).toBeVisible({ timeout: 10_000 });
     },
   },
 ];
