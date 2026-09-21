@@ -273,11 +273,18 @@ class FieldEvidence(BaseModel):
     reason: str = ""
 
 
+AssessmentOutcome = Literal["supported_value", "no_supported_value", "uncertain"]
+
+
 class FieldAssessment(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    needs_review: bool = False
-    reason: str = Field(default="", max_length=500)
+    # The key is required even when the model explicitly cannot estimate a
+    # confidence.  ``null`` therefore means "reported unavailable", while an
+    # omitted key is a structured-output failure that should be retried.
+    confidence: float | None = Field(ge=0.0, le=1.0)
+    needs_review: bool
+    reason: str = Field(max_length=500)
+    outcome: AssessmentOutcome
 
 
 def _annotation(field: SchemaField) -> Any:
@@ -293,22 +300,42 @@ def _annotation(field: SchemaField) -> Any:
 
 
 def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: list[str] | None = None, roles: list[str] | None = None) -> type[BaseModel]:
-    """The JSON shape the model must return for one group. Every field is required (null when unsupported), because
-    schema-constrained decoding lets a small model omit optional ones."""
+    """The JSON shape the model must return for one group.
+
+    Metadata keys are required (null/[] when unsupported), and every field the
+    schema marks for assessment has a required assessment object.  This keeps
+    prose instructions and the provider-enforced JSON Schema in agreement.
+    """
     props: dict[str, Any] = {}
     if group_key == CORE_GROUP:
         props["region_type"] = (Literal[tuple(region_types or REGION_TYPES)] | None, ...)
         props["primary_text"] = (bool | None, ...)
         props["discourse_role"] = (Literal[tuple(roles or DISCOURSE_ROLES)] | None, ...)
-    for field in schema.fields_in(group_key):
+    group_fields = schema.fields_in(group_key)
+    for field in group_fields:
         props[field.name] = (_annotation(field), ...)
     metadata = create_model(f"{group_key.title()}Metadata", __config__=ConfigDict(extra="forbid"), **props)
+
+    assessed_names = list(CORE_FIELDS) if group_key == CORE_GROUP else []
+    assessed_names.extend(field.name for field in group_fields if field.assess)
+    assessed_names = list(dict.fromkeys(assessed_names))
+
     fields: dict[str, Any] = {
         "metadata": (metadata, ...),
-        "field_assessments": (dict[str, FieldAssessment], Field(default_factory=dict)),
         "review_reason": (str, Field(default="", max_length=1000)),
     }
-    if group_key == CORE_GROUP or any(f.evidence for f in schema.fields_in(group_key)):
+    if assessed_names:
+        assessment_props = {name: (FieldAssessment, ...) for name in assessed_names}
+        assessments = create_model(
+            f"{group_key.title()}FieldAssessments",
+            __config__=ConfigDict(extra="forbid"),
+            **assessment_props,
+        )
+        fields["field_assessments"] = (assessments, ...)
+    else:
+        # A custom family may intentionally contain no assessed fields.
+        fields["field_assessments"] = (dict[str, FieldAssessment], Field(default_factory=dict))
+    if group_key == CORE_GROUP or any(f.evidence for f in group_fields):
         fields["field_evidence"] = (dict[str, FieldEvidence], Field(default_factory=dict))
     return create_model(f"{group_key.title()}MetadataResponse", __config__=ConfigDict(extra="forbid"), **fields)
 
@@ -341,9 +368,12 @@ _DISCOURSE_TRAILER = (
 _DISCOURSE_FOOTER = (
     "For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include "
     "field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.\n"
-    "Also return field_assessments for {assessed_fields}. Each assessment must contain confidence, needs_review, and a short reason. Mark "
-    "needs_review=true whenever a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or "
-    "confidence is not sufficient for scholarly acceptance.\n"
+    "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment "
+    "must contain all four keys: confidence (a number 0..1, or null only when confidence genuinely cannot be estimated), needs_review, reason, "
+    "and outcome. Use outcome=\"supported_value\" when the returned value is supported, outcome=\"no_supported_value\" when the "
+    "source supports that no value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
+    "a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or confidence is not sufficient "
+    "for scholarly acceptance.\n"
 )
 _QUOTATION_INTRO = (
     "Infer ONLY quotation relations for one immutable DerridAI record.\n"
@@ -354,8 +384,9 @@ _QUOTATION_INTRO = (
 _QUOTATION_FOOTER = (
     "For every populated quoted_* or quotation_chain field, include field_evidence using only current-record block IDs, confidence 0..1, and a "
     "short reason. Use [] when unsupported.\n"
-    "Also return field_assessments for is_direct_quote and every quotation field you populate. Each assessment must include confidence 0..1, "
-    "needs_review, and a concise reason.\n"
+    "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment must "
+    "contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\", "
+    "outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
 )
 _INDEXING_INTRO = (
     "Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.\n"
@@ -365,8 +396,10 @@ _INDEXING_INTRO = (
     "and practice of 'cities of refuge' as a form of cosmopolitics distinct from state sovereignty.\"] is not."
 )
 _INDEXING_FOOTER = (
-    "Return field_assessments for {assessed_fields} whenever you populate those fields. Each assessment must include confidence 0..1, "
-    "needs_review, and a concise reason.\n"
+    "Return one field_assessments entry for every one of {assessed_fields}, even when the corresponding metadata list is empty. Each assessment "
+    "must contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\" for a supported non-empty "
+    "list, outcome=\"no_supported_value\" when the record supports an empty list, and outcome=\"uncertain\" when the field cannot be "
+    "determined.\n"
 )
 
 

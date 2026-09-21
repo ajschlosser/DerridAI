@@ -41,15 +41,17 @@ def test_structured_output_cannot_return_assessments_without_metadata():
         cb.DiscourseMetadataResponseModel.model_validate({"field_assessments": {"speaker": {"confidence": 0.95}}})
     with pytest.raises(ValidationError):
         cb.DiscourseMetadataResponseModel.model_validate({"metadata": {"speaker": "Derrida"}})
-    parsed = cb.DiscourseMetadataResponseModel.model_validate({"metadata": NULL_DISCOURSE})
+    with pytest.raises(ValidationError):
+        cb.DiscourseMetadataResponseModel.model_validate({"metadata": NULL_DISCOURSE})
+    parsed = cb.DiscourseMetadataResponseModel.model_validate({"metadata": NULL_DISCOURSE, "field_assessments": {}})
     assert parsed.metadata.speaker is None
 
 
-def test_confident_llm_value_is_autofilled_and_low_confidence_stays_a_suggestion(tmp_path: Path, monkeypatch):
-    """A value above 65% confidence is written and auto-populated; 50% stays a suggestion.
+def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_for_review(tmp_path: Path, monkeypatch):
+    """Confidence controls verification, not whether a valid proposal is visible.
 
-    speaker "Jacques Derrida" at 95% is set on the record with auto_populated True. stance "describe" at
-    50% is not set; it is kept as proposed_value with auto_populated False.
+    speaker at high confidence is populated and auto-resolved. stance at 50% is also
+    populated, but remains unresolved until a reviewer confirms it.
     """
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = _install_minimal_build(repo)
@@ -66,8 +68,8 @@ def test_confident_llm_value_is_autofilled_and_low_confidence_stays_a_suggestion
                              "discourse_role": "analysis", "speaker": "Jacques Derrida", "stance": "describe"},
                 "field_evidence": {name: evidence for name in ("region_type", "primary_text", "discourse_role", "speaker", "stance")},
                 "field_assessments": {
-                    "speaker": {"confidence": 0.95, "needs_review": False, "reason": "explicit"},
-                    "stance": {"confidence": 0.5, "needs_review": False, "reason": "weak"},
+                    "speaker": {"confidence": 0.95, "needs_review": False, "reason": "explicit", "outcome": "supported_value"},
+                    "stance": {"confidence": 0.5, "needs_review": False, "reason": "weak", "outcome": "supported_value"},
                 },
                 "review_reason": "",
             }
@@ -77,10 +79,13 @@ def test_confident_llm_value_is_autofilled_and_low_confidence_stays_a_suggestion
     manager._enrich_record(record, {}, {"provider": "ollama", "model": "test-model"}, build_id=build["build_id"])
 
     assert record["speaker"] == "Jacques Derrida"
-    assert record["metadata_field_status"]["speaker"]["auto_populated"] is True
-    assert record.get("stance") in (None, "")
+    assert record["metadata_field_status"]["speaker"]["verification_status"] == "auto_resolved"
+    assert record["stance"] == "describe"
     assert record["metadata_field_status"]["stance"]["proposed_value"] == "describe"
-    assert record["metadata_field_status"]["stance"]["auto_populated"] is False
+    assert record["metadata_field_status"]["stance"]["auto_populated"] is True
+    assert record["metadata_field_status"]["stance"]["autofilled"] is False
+    assert record["metadata_field_status"]["stance"]["verification_status"] == "pending_review"
+    assert record["metadata_field_status"]["stance"]["status"] == "unresolved"
 
 
 def _record():
@@ -97,7 +102,7 @@ def _discourse_reply(**metadata):
         "metadata": {**NULL_DISCOURSE, **metadata},
         "field_evidence": {name: evidence for name, value in metadata.items() if value is not None},
         "field_assessments": {
-            name: {"confidence": 0.95, "needs_review": False, "reason": "model says explicit"}
+            name: {"confidence": 0.95, "needs_review": False, "reason": "model says explicit", "outcome": "supported_value"}
             for name in ("region_type", "primary_text", "discourse_role", "speaker", "position_holder", "target", "stance")
         },
         "review_reason": "",
@@ -120,20 +125,40 @@ def _enrich(tmp_path: Path, monkeypatch, record: dict, reply: dict):
     return record
 
 
-def test_confident_assessment_without_a_value_stays_in_review(tmp_path: Path, monkeypatch):
-    """High confidence with no value is unresolved ("no_value_returned"), not an inference.
-
-    The model returns speaker=null but a 95% assessment. Expect the field to be empty, status
-    "unresolved", reason_code "no_value_returned", not auto-populated, and the reason to mention 95%.
-    """
-    record = _enrich(tmp_path, monkeypatch, _record(), _discourse_reply(region_type="main_text", primary_text=True, discourse_role="analysis"))
+def test_explicit_confident_supported_absence_can_auto_resolve_an_optional_field(tmp_path: Path, monkeypatch):
+    """A supported absence is different from a failed/omitted value."""
+    reply = _discourse_reply(region_type="main_text", primary_text=True, discourse_role="analysis")
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.95, "needs_review": False, "reason": "No distinct speaker is supported.", "outcome": "no_supported_value",
+    }
+    record = _enrich(tmp_path, monkeypatch, _record(), reply)
 
     status = record["metadata_field_status"]["speaker"]
     assert record.get("speaker") in (None, "")
+    assert status["status"] == "llm_inferred"
+    assert status["reason_code"] == "no_supported_value"
+    assert status["verification_status"] == "auto_resolved"
+
+
+def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, monkeypatch):
+    """An explicit confidence=null must not hide a valid model proposal."""
+    reply = _discourse_reply(
+        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jacques Derrida",
+    )
+    reply["field_assessments"]["speaker"] = {
+        "confidence": None, "needs_review": True, "reason": "Attribution is plausible but not certain.", "outcome": "supported_value",
+    }
+    reply["field_evidence"]["speaker"] = {"block_ids": ["b1"], "confidence": None, "reason": "speaker cue"}
+    record = _enrich(tmp_path, monkeypatch, _record(), reply)
+
+    status = record["metadata_field_status"]["speaker"]
+    assert record["speaker"] == "Jacques Derrida"
     assert status["status"] == "unresolved"
-    assert status["reason_code"] == "no_value_returned"
-    assert status["auto_populated"] is False
-    assert "95%" in status["reason"]
+    assert status["reason_code"] in {"ambiguous", "confidence_missing"}
+    assert status["auto_populated"] is True
+    assert status["autofilled"] is False
+    assert status["verification_status"] == "pending_review"
+    assert status["llm_checked"] is True
 
 
 def test_deterministic_structure_is_corroborated_by_a_matching_llm_value(tmp_path: Path, monkeypatch):

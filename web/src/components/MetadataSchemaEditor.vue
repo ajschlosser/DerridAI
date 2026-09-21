@@ -98,7 +98,7 @@ function moveField(index: number, by: -1 | 1) {
 }
 function addGroup() {
   const n = (draft.value?.groups.length ?? 0) + 1;
-  draft.value?.groups.push({ key: `group_${n}`, label: `Group ${n}`, intro: "Infer ONLY the following metadata for one immutable DerridAI record.", fields_heading: "", notes: [], trailer: "", footer: "Return field_assessments for {assessed_fields} whenever you populate those fields.\n" });
+  draft.value?.groups.push({ key: `group_${n}`, label: `Group ${n}`, intro: "Infer ONLY the following metadata for one immutable DerridAI record.", fields_heading: "", notes: [], trailer: "", footer: "Return one field_assessments entry for every one of {assessed_fields}. Each assessment must contain confidence (0..1 or null), needs_review, reason, and outcome (supported_value, no_supported_value, or uncertain).\n" });
 }
 function removeGroup(key: string) {
   if (!draft.value || key === CORE_GROUP) return;

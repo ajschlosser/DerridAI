@@ -47,7 +47,7 @@ def test_profile_requires_region_type_primary_text_and_discourse_role():
     checked are the current ones.)
     """
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v10"
+    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v11"
     assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
@@ -103,7 +103,7 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
     record={"record_id":"r1","record_revision":1,"text":"Main text.","text_length":10,"pdf_pages":[1],"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"region_type":"main_text","primary_text":True,"metadata_field_status":{"region_type":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."},"primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."}}}
     def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
         if schema_name=="derridai_record_discourse":
-            return {"metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"assertion"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"assertion"}},"review_reason":""}
+            return {"metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"assertion"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"assertion"}},"field_assessments":{"region_type":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"primary_text":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"discourse_role":{"confidence":.99,"needs_review":False,"reason":"assertion","outcome":"supported_value"}},"review_reason":""}
         if schema_name=="derridai_record_quotation": return {"metadata":{},"field_evidence":{},"review_reason":""}
         return {"metadata":{},"review_reason":""}
     monkeypatch.setattr(manager,"_chat_json",fake_chat)

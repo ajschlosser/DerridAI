@@ -21,16 +21,18 @@ def prompt(schema, group):
     return ms.build_group_prompt(schema, group, base_context=CONTEXT)
 
 
-def test_the_built_in_schema_reproduces_the_prompts_derridai_has_always_used():
+def test_the_built_in_schema_prompts_require_complete_assessments():
     schema = ms.default_schema()
-    # Quotation and indexing are identical. Discourse differs only in the order of two lines (stance before proposition
-    # status, which is the order the assessments were always listed in).
-    assert prompt(schema, "quotation") == LEGACY["quotation"]
-    assert prompt(schema, "indexing") == LEGACY["indexing"]
-    legacy = LEGACY["discourse"].split("\n")
-    a = next(i for i, line in enumerate(legacy) if line.startswith("- proposition_status "))
-    legacy[a], legacy[a + 1] = legacy[a + 1], legacy[a]
-    assert prompt(schema, "discourse") == "\n".join(legacy)
+    discourse = prompt(schema, "discourse")
+    quotation = prompt(schema, "quotation")
+    indexing = prompt(schema, "indexing")
+    for text in (discourse, quotation, indexing):
+        assert "field_assessments" in text
+        assert "no_supported_value" in text
+        assert "uncertain" in text
+    assert "even when its metadata value is null or empty" in discourse
+    assert "every one of is_direct_quote" in quotation
+    assert "even when the corresponding metadata list is empty" in indexing
 
 
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
@@ -51,8 +53,14 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
         want = set(legacy.model_json_schema()["$defs"][legacy.model_fields["metadata"].annotation.__name__]["properties"])
         want -= {"language"}  # the document language is inherited, not asked of the model
         assert got == want, group
-    answer = ms.response_model_for(schema, "quotation").model_validate({"metadata": {"is_direct_quote": None, **{n: [] for n in ("quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain")}}})
+    quotation_fields = ("is_direct_quote", "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain")
+    answer = ms.response_model_for(schema, "quotation").model_validate({
+        "metadata": {"is_direct_quote": None, **{n: [] for n in quotation_fields[1:]}},
+        "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "no_supported_value"} for name in quotation_fields},
+    })
     assert answer.metadata.is_direct_quote is None
+    generated = ms.response_model_for(schema, "discourse").model_json_schema()
+    assert "field_assessments" in generated["required"]
 
 
 def custom():
@@ -76,10 +84,16 @@ def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     assert "Report region_type, primary_text, discourse_role, and mood.\n" in text  # the locked core is always assessed
     assert prompt(schema, "ideas").startswith("List the ideas.\n\n<<CONTEXT>>")
     model = ms.response_model_for(schema, "discourse")
-    ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}})
+    assessments = {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
+    ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": assessments})
     assert ok.metadata.mood == "calm"
     with pytest.raises(Exception):
-        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "furious"}})  # strict values
+        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "furious"}, "field_assessments": assessments})  # strict values
+    with pytest.raises(Exception):
+        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}})
+    bad_assessment = {**assessments, "mood": {"needs_review": False, "reason": "clear", "outcome": "supported_value"}}
+    with pytest.raises(Exception):
+        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": bad_assessment})
     ideas = ms.response_model_for(schema, "ideas").model_validate({"metadata": {"ideas": ["hospitality"], "year_mentioned": 1795.0}})
     assert ideas.metadata.year_mentioned == 1795.0
 
