@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test, type Page } from "@playwright/test";
+import { runAxe } from "./support/axe";
 import { CORPUS_BUILD_ID, CORPUS_RECORDS, mockBackend } from "./support/mock-backend";
 
 // Fixes reported against the Corpus Builder, checked in the real app against the mock API.
@@ -103,8 +104,7 @@ test("the providers page lists installed models with their sizes, and the list i
   await expect(dialog.getByText("4.7B · Q4_K_M")).toBeVisible();
   await dialog.getByLabel(/filter models/i).fill("14b");
   await expect(dialog.getByText(/1 models match/i)).toBeVisible();
-  const { default: AxeBuilder } = await import("@axe-core/playwright");
-  const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+  const scan = await runAxe(page, (builder) => builder.include('[role="dialog"]'));
   expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   await page.screenshot({ path: "test-results/provider-models.png" });
   await dialog.getByRole("button", { name: /use model/i }).click();
@@ -133,8 +133,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(list.getByText("Restore previous")).toBeVisible();
     await list.scrollIntoViewIfNeeded();
     await list.screenshot({ path: `test-results/enrichment-changes-${scheme}.png` });
-    const { default: AxeBuilder } = await import("@axe-core/playwright");
-    const scan = await new AxeBuilder({ page }).include(".enrichment-changes").analyze();
+    const scan = await runAxe(page, (builder) => builder.include(".enrichment-changes"));
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }
@@ -161,8 +160,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(dialog.getByText("14B · Q6_K")).toBeVisible();
     await dialog.getByRole("button", { name: /use model/i }).first().focus();
     await dialog.screenshot({ path: `test-results/provider-models-${scheme}.png` });
-    const { default: AxeBuilder } = await import("@axe-core/playwright");
-    const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    const scan = await runAxe(page, (builder) => builder.include('[role="dialog"]'));
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }
@@ -180,8 +178,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(dialog.getByLabel(/extra enrichment passes/i)).toBeEnabled();
     await expect(dialog.getByRole("checkbox", { name: /publish when every record is accepted/i })).not.toBeChecked();
     await dialog.screenshot({ path: `test-results/hands-free-${scheme}.png` });
-    const { default: AxeBuilder } = await import("@axe-core/playwright");
-    const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    const scan = await runAxe(page, (builder) => builder.include('[role="dialog"]'));
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }
@@ -220,8 +217,7 @@ for (const scheme of ["light", "dark"] as const) {
     await dialog.getByRole("button", { name: "Duplicate" }).click();
     await expect(dialog.getByRole("button", { name: /add a field/i }).first()).toBeEnabled();
     await dialog.screenshot({ path: `test-results/schema-editor-${scheme}.png` });
-    const { default: AxeBuilder } = await import("@axe-core/playwright");
-    const scan = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    const scan = await runAxe(page, (builder) => builder.include('[role="dialog"]'));
     expect(scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   });
 }

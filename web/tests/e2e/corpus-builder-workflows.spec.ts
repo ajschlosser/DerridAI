@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { runAxe } from "./support/axe";
 
 async function expectWcag2AA(page:any,include:string){
   await page.waitForTimeout(100);
   for(let attempt=0;attempt<3;attempt+=1){
     try{
-      const results=await new AxeBuilder({page}).include(include).withTags(["wcag2a","wcag2aa"]).analyze();
+      const results=await runAxe(page, (builder) => builder.include(include).withTags(["wcag2a","wcag2aa"]));
       expect(results.violations,JSON.stringify(results.violations,null,2)).toEqual([]);
       return;
     }catch(error){
