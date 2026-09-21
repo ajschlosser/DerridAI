@@ -112,7 +112,7 @@ const addValue = (field: SchemaField) => field.values.push({ value: "", definiti
 
 // ---- preview ---------------------------------------------------------------------------------------------------
 const previewGroup = ref(CORE_GROUP);
-const previewText = ref("");
+const previewText = ref("In this passage Derrida distinguishes the archive from simple memory. He cites Freud while qualifying the claim: the archive is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.");
 const previewProfile = ref("");
 const preview = ref<SchemaPreview | null>(null);
 async function tryGroup(run: boolean) {
