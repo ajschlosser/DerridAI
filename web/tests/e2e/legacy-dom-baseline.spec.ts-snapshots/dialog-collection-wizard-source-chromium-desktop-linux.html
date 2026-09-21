@@ -1,0 +1,86 @@
+<dialog class="collection-wizard-dialog workflow-dialog collection-wizard-v037" open="">
+<div class="workflow-dialog-head">
+<div>
+<span class="section-label">New vector collection</span>
+<h2>Create a reproducible retrieval collection</h2>
+<p>Choose source material, validate the retrieval contract, then create a manifest-backed collection without blocking the workspace.</p>
+</div>
+<button class="btn icon-only" type="button" data-close="" aria-label="Close">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+<ol class="workflow-steps" aria-label="Collection creation steps">
+<li class="active">
+<span>1</span>
+<b>Source</b>
+</li>
+<li class="">
+<span>2</span>
+<b>Retrieval</b>
+</li>
+<li class="">
+<span>3</span>
+<b>Review &amp; build</b>
+</li>
+</ol>
+<section class="workflow-step-body">
+<div class="workflow-step-copy">
+<span class="section-label">Create collection</span>
+<h3>Choose the source dataset</h3>
+<p>Define the logical collection and the corpus material this build will represent. The source selection is recorded in the build manifest.</p>
+</div>
+<div class="workflow-fields">
+<label class="field">
+<span>Collection name</span>
+<input class="control" id="wizardCollectionName" value="" autocomplete="off" placeholder="derrida-primary">
+<small>3–128 characters; start and end with a letter or number; use letters, numbers, periods, underscores, or hyphens.</small>
+</label>
+<label class="field">
+<span>Description</span>
+<textarea class="control" id="wizardCollectionDescription" rows="2" placeholder="Primary multilingual Derrida research corpus">
+</textarea>
+</label>
+<div class="wizard-work-toolbar">
+<div>
+<b>Available loaded works</b>
+<small>2 works from the current browser workspace</small>
+</div>
+<div class="tools">
+<button class="btn small" type="button" id="wizardSelectWorks">Select all</button>
+<button class="btn small" type="button" id="wizardClearWorks">Clear</button>
+</div>
+</div>
+<div class="wizard-sync-summary">
+<span>
+<b>0</b>works</span>
+<span>
+<b>0</b>records</span>
+</div>
+<div class="wizard-work-list">
+<label class="wizard-work-row">
+<input type="checkbox" data-wizard-work="Of Grammatology">
+<span>
+<b>Of Grammatology</b>
+<small>2 records</small>
+</span>
+</label>
+<label class="wizard-work-row">
+<input type="checkbox" data-wizard-work="On Cosmopolitanism and Forgiveness">
+<span>
+<b>On Cosmopolitanism and Forgiveness</b>
+<small>1 records</small>
+</span>
+</label>
+</div>
+</div>
+</section>
+<div class="workflow-dialog-actions">
+<button class="btn" type="button" data-close="">Cancel</button>
+<div class="workflow-action-spacer">
+</div>
+<button class="btn primary" type="button" id="wizardNext">Next →</button>
+</div>
+</dialog>

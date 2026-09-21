@@ -1,0 +1,132 @@
+<dialog class="collection-wizard-dialog workflow-dialog collection-wizard-v037" open="">
+<div class="workflow-dialog-head">
+<div>
+<span class="section-label">New vector collection</span>
+<h2>Create a reproducible retrieval collection</h2>
+<p>Choose source material, validate the retrieval contract, then create a manifest-backed collection without blocking the workspace.</p>
+</div>
+<button class="btn icon-only" type="button" data-close="" aria-label="Close">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+<ol class="workflow-steps" aria-label="Collection creation steps">
+<li class="done">
+<span>1</span>
+<b>Source</b>
+</li>
+<li class="active">
+<span>2</span>
+<b>Retrieval</b>
+</li>
+<li class="">
+<span>3</span>
+<b>Review &amp; build</b>
+</li>
+</ol>
+<section class="workflow-step-body">
+<div class="workflow-step-copy">
+<span class="section-label">Create collection</span>
+<h3>Define the retrieval contract</h3>
+<p>Embedding identity, vector dimension, distance metric, and retrieval mode are treated as a durable collection contract and validated before creation.</p>
+</div>
+<div class="workflow-fields">
+<div class="wizard-two-col">
+<label class="field">
+<span>Collection role</span>
+<select class="control" id="wizardCollectionRole">
+<option value="primary" selected="">Primary</option>
+<option value="general">General</option>
+<option value="language">Language-specific</option>
+</select>
+</label>
+<fieldset class="vector-language-choice">
+<legend>Language tags</legend>
+<div class="vector-language-options">
+<label>
+<input type="checkbox" data-wizard-language="en">
+<span>English</span>
+</label>
+<label>
+<input type="checkbox" data-wizard-language="fr">
+<span>Français</span>
+</label>
+</div>
+<small>Descriptive/filtering scope only; mixed-language primary collections are preferred over duplicate physical language databases.</small>
+</fieldset>
+</div>
+<fieldset class="vector-provider-choice">
+<legend>Embedding provider</legend>
+<div class="vector-provider-options">
+<label class="selected">
+<input type="radio" name="wizardEmbeddingProviderRadio" value="ollama" checked="">
+<span>
+<b>Ollama</b>
+<small>Generate embeddings with a configured local Ollama model.</small>
+</span>
+</label>
+<label class="">
+<input type="radio" name="wizardEmbeddingProviderRadio" value="chroma">
+<span>
+<b>Chroma default</b>
+<small>Use Chroma's default embedding function.</small>
+</span>
+</label>
+<label class="">
+<input type="radio" name="wizardEmbeddingProviderRadio" value="precomputed">
+<span>
+<b>Precomputed</b>
+<small>Records must already contain vectors; lexical search remains available but semantic query embedding is unavailable.</small>
+</span>
+</label>
+</div>
+</fieldset>
+<div class="wizard-two-col">
+<label class="field ">
+<span>Embedding model</span>
+<input class="control" id="wizardEmbeddingModel" list="wizardEmbeddingModels" value="bge-m3:latest" placeholder="bge-m3:latest">
+<datalist id="wizardEmbeddingModels">
+</datalist>
+</label>
+<label class="field">
+<span>Vector dimension</span>
+<input class="control" id="wizardEmbeddingDimension" inputmode="numeric" value="" placeholder="Detected automatically" disabled="" title="This action is unavailable until its required selection or data is available.">
+<small>DerridAI probes generated embeddings automatically and rejects incompatible dimensions before writing records.</small>
+</label>
+<label class="field">
+<span>Distance metric</span>
+<select class="control" id="wizardDistanceMetric">
+<option value="cosine" selected="">Cosine</option>
+<option value="l2">L2</option>
+<option value="ip">Inner product</option>
+</select>
+</label>
+<label class="field">
+<span>Retrieval mode</span>
+<select class="control" id="wizardRetrievalMode">
+<option value="hybrid" selected="">Hybrid — recommended</option>
+<option value="semantic">Semantic only</option>
+<option value="lexical">Lexical only</option>
+</select>
+<small>Hybrid fuses semantic and exact lexical retrieval so names, quotations, neologisms, and multilingual terminology can surface independently of embeddings.</small>
+</label>
+</div>
+<label class="vector-protection-toggle">
+<input type="checkbox" id="wizardProtected">
+<span>
+<b>Deletion protection</b>
+<small>Prevent accidental collection deletion until protection is explicitly disabled.</small>
+</span>
+</label>
+</div>
+</section>
+<div class="workflow-dialog-actions">
+<button class="btn" type="button" data-close="">Cancel</button>
+<div class="workflow-action-spacer">
+</div>
+<button class="btn" type="button" id="wizardBack">← Back</button>
+<button class="btn primary" type="button" id="wizardNext">Preflight &amp; review →</button>
+</div>
+</dialog>

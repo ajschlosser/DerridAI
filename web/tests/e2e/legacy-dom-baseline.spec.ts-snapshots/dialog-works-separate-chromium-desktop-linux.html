@@ -1,0 +1,48 @@
+<dialog class="work-separate-dialog" open="">
+<div class="dh">
+<div>
+<span class="section-label">JSONL organization</span>
+<h2 class="dialog-title">Separate works from a JSONL file</h2>
+<div class="dialog-subtitle">Create one derived JSONL tab per selected work while preserving record metadata and audit history.</div>
+</div>
+<button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+<div class="db separate-works-body">
+<div class="field">
+<label>Source JSONL</label>
+<select class="control" id="separateWorksSource">
+<option value="jsonl-6418a92f81564da4d329096e">baseline.jsonl · 3 records</option>
+</select>
+</div>
+<div id="separateWorksList" class="separate-works-list">
+<label class="separate-work-row">
+<input type="checkbox" data-separate-work="Of Grammatology" checked="">
+<span>
+<b>Of Grammatology</b>
+<small>2 records</small>
+</span>
+</label>
+<label class="separate-work-row">
+<input type="checkbox" data-separate-work="On Cosmopolitanism and Forgiveness" checked="">
+<span>
+<b>On Cosmopolitanism and Forgiveness</b>
+<small>1 records</small>
+</span>
+</label>
+</div>
+<label class="check-item">
+<input type="checkbox" id="separateWorksRemove">
+<span>Remove separated records from the source tab after creating the new tabs</span>
+</label>
+<div class="info">By default this is non-destructive: new tabs are created as copies. Enable removal only when you want to partition the original loaded JSONL.</div>
+</div>
+<div class="da">
+<button class="btn" data-close="">Cancel</button>
+<button class="btn primary" id="separateWorksCreate">Separate selected works</button>
+</div>
+</dialog>

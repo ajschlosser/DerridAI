@@ -1,0 +1,104 @@
+<dialog class="workflow-dialog work-metadata-llm-dialog" open="">
+<div class="workflow-dialog-header">
+<div class="workflow-heading">
+<span class="workflow-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+</span>
+<div>
+<p>Bibliographic enrichment</p>
+<h2>Populate metadata with LLM</h2>
+<span>DerridAI searches format-appropriate public bibliographic sources (Open Library, Google Books, and Crossref), asks the selected LLM to identify the best match, then returns proposed metadata changes for review. Nothing is applied automatically.</span>
+</div>
+</div>
+<button class="icon-btn workflow-close" data-close="" title="Close">×</button>
+</div>
+    <ol class="workflow-steps">
+<li class="active">
+<span>1</span>
+<b>Works</b>
+</li>
+<li class="active">
+<span>2</span>
+<b>Provider profile</b>
+</li>
+<li>
+<span>3</span>
+<b>Review proposals</b>
+</li>
+</ol>
+    <div class="workflow-form">
+<section class="workflow-section">
+<div class="workflow-section-copy">
+<b>Lookup scope</b>
+<span>Retrieve bibliographic metadata for 2 work(s).</span>
+</div>
+<div class="work-metadata-scope">
+<strong>2 works</strong>
+<div class="work-metadata-sample">
+<span>Of Grammatology</span>
+<span>On Cosmopolitanism and Forgiveness</span>
+</div>
+<small>Proposals can include source type, container/journal, volume/issue/pages, publisher, year, edition, translator/editor, ISBN/DOI, language, MLA citation, and cover image.</small>
+</div>
+</section>
+    <section class="workflow-section">
+<div class="workflow-section-copy">
+<b>Provider profile</b>
+<span>Uses the same configured provider profiles as RAG, PDF tools, and LLM review.</span>
+</div>
+<div class="workflow-provider-area">
+<label class="workflow-field workflow-provider-select-field">
+<span>Provider profile</span>
+<select class="control workflow-provider-select" id="workMetadataProvider">
+<option value="ollama-default" selected="">Local Ollama · Ollama · gemma4:e2b · Default</option>
+<option value="openai-default">FreeLLM / OpenAI-compatible · OpenAI-compatible · auto</option>
+</select>
+<small>Uses the same configured provider profiles as Research, PDF tools, and LLM review.</small>
+</label>
+<div class="workflow-provider-summary" id="workMetadataProviderSummary">
+<span class="workflow-provider-mark">O</span>
+<span>
+<b>Local Ollama</b>
+<small>Ollama · gemma4:e2b</small>
+<small>1 max concurrent request(s)</small>
+</span>
+<span class="provider-default-chip">Default</span>
+</div>
+<button type="button" class="btn small" id="manageWorkProviders">Manage provider profiles</button>
+</div>
+</section>
+    <section class="workflow-review-strip">
+<span class="workflow-summary-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+</span>
+<span>
+<b>Background operation</b>
+<small>You can leave the Works page. Open the completed operation to review and apply proposed changes.</small>
+</span>
+<span>
+<b>Catalogue source</b>
+<small>Open Library · Google Books · Crossref</small>
+</span>
+</section>
+</div>
+    <div class="workflow-actions">
+<button class="btn" data-close="">Cancel</button>
+<button class="btn primary" id="startWorkMetadata">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>Start background lookup</button>
+</div>
+</dialog>
