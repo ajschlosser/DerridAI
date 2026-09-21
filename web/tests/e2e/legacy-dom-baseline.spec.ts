@@ -80,7 +80,7 @@ interface Scenario {
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
-  target?: "main" | "dialog" | "app";
+  target?: "main" | "dialog" | "app" | "dock";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
   /** A viewport size other than the default desktop one, to exercise the responsive rules. */
@@ -131,13 +131,15 @@ async function open(page: Page, scenario: Scenario) {
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
-async function rawMarkup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function rawMarkup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
   const locator =
     target === "dialog"
       ? page.locator("dialog[open]").last()
       : target === "app"
         ? page.locator("#app")
-        : page.locator("main").first();
+        : target === "dock"
+          ? page.locator("#operationProgressStack")
+          : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
@@ -178,13 +180,18 @@ const STYLE_PROPERTIES = [
 ];
 
 /** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
-async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function computedStyles(
+  page: Page,
+  target: "main" | "dialog" | "app" | "dock",
+): Promise<string> {
   const locator =
     target === "dialog"
       ? page.locator("dialog[open]").last()
       : target === "app"
         ? page.locator("#app")
-        : page.locator("main").first();
+        : target === "dock"
+          ? page.locator("#operationProgressStack")
+          : page.locator("main").first();
   return locator.evaluate((root, properties) => {
     const lines: string[] = [];
     const walk = (el: Element, depth: number) => {
@@ -206,7 +213,7 @@ async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Pr
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function markup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
@@ -281,6 +288,65 @@ const RAG_JOBS = {
       request: { locales: ["en"], k: 8 },
     },
   ],
+};
+
+/**
+ * A jobs endpoint that behaves like a server: listing, deleting one, deleting the finished ones and cancelling all change what
+ * the next listing returns, and a running job finishes after a number of listings (so polling has something to discover).
+ */
+const liveJobs = (options: { finishAfterListings?: number } = {}): Fixtures => {
+  const jobs = RAG_JOBS.jobs.map((job) => ({ ...job }));
+  let listings = 0;
+  const byId = (url: URL) => decodeURIComponent(url.pathname.split("/")[3] ?? "");
+  const finished = (status: string) => ["completed", "failed", "cancelled"].includes(status);
+  return {
+    "/api/jobs": (_url: URL, method: string) => {
+      if (method === "DELETE") {
+        for (let i = jobs.length - 1; i >= 0; i--)
+          if (finished(String(jobs[i].status))) jobs.splice(i, 1);
+        return { ok: true };
+      }
+      listings += 1;
+      if (options.finishAfterListings && listings > options.finishAfterListings) {
+        for (const job of jobs) {
+          if (job.status === "running")
+            Object.assign(job, {
+              status: "completed",
+              stage: "done",
+              completed: job.total,
+              finished_at: "2026-03-01T12:00:00Z",
+            });
+        }
+      }
+      return { jobs };
+    },
+    "/api/jobs/job-rag-1": (_url: URL, method: string) => {
+      if (method === "DELETE")
+        jobs.splice(
+          jobs.findIndex((job) => job.id === "job-rag-1"),
+          1,
+        );
+      return jobs.find((job) => job.id === "job-rag-1") ?? { ok: true };
+    },
+    "/api/jobs/job-rag-2": (_url: URL, method: string) => {
+      if (method === "DELETE")
+        jobs.splice(
+          jobs.findIndex((job) => job.id === "job-rag-2"),
+          1,
+        );
+      return jobs.find((job) => job.id === "job-rag-2") ?? { ok: true };
+    },
+    "POST /api/jobs/job-rag-2/cancel": (url: URL) => {
+      const job = jobs.find((item) => item.id === byId(url));
+      if (job)
+        Object.assign(job, {
+          status: "cancelled",
+          stage: "cancelled",
+          finished_at: "2026-03-01T12:00:00Z",
+        });
+      return job ?? { ok: true };
+    },
+  };
 };
 
 /** Selects the first record as evidence in the Record view, then opens Research. */
@@ -1164,6 +1230,66 @@ const scenarios: Scenario[] = [
         .first()
         .click();
       await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
+    },
+  },
+  // Job polling, cancelling and removing, seen on the dashboard's Operations panel and in the progress dock.
+  {
+    name: "jobs-poll-completes",
+    load: true,
+    fixtures: liveJobs({ finishAfterListings: 1 }),
+    steps: async (page) => {
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-refresh",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.locator("#refreshJobs").click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "jobs-cancel",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /^Cancel/ })
+        .first()
+        .click();
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    name: "jobs-remove-finished",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /^Remove/ })
+        .first()
+        .click();
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-clear-finished",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.locator("#clearFinishedJobs").click();
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-dock-running",
+    load: true,
+    target: "dock",
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.waitForTimeout(800);
     },
   },
 ];
