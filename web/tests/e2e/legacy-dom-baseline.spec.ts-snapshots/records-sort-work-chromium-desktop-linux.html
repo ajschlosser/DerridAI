@@ -1,0 +1,463 @@
+<main class="records-page" aria-labelledby="records-page-title">
+<p class="sr-only" aria-live="polite">
+</p>
+<header class="records-hero" aria-labelledby="records-page-title">
+<div>
+<p class="records-kicker">Corpus</p>
+<h1 id="records-page-title">Records</h1>
+<p>Review loaded JSONL records, keep provenance visible, and act on a precise selection without crowding the table.</p>
+</div>
+<div class="records-hero-actions" aria-label="Records view actions">
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 16V4M7 9l5-5 5 5">
+</path>
+<path d="M5 20h14">
+</path>
+</svg>Choose JSONL files</button>
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>Columns</button>
+<button type="button" class="btn soft">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="12" height="12" rx="2">
+</rect>
+<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2">
+</path>
+</svg>Copy link</button>
+</div>
+<ul class="records-stats" aria-label="Workspace statistics">
+<li>
+<b>baseline.jsonl</b>
+<span>Active file</span>
+</li>
+<li>
+<b>3 / 3</b>
+<span>Visible of loaded</span>
+</li>
+<li>
+<b>1</b>
+<span>Need review</span>
+</li>
+<li>
+<b>0</b>
+<span>selected records</span>
+</li>
+</ul>
+</header>
+<div class="records-layout">
+<aside class="card records-file-rail" aria-label="Local JSONL">
+<div class="records-file-head">
+<div>
+<b>Local JSONL</b>
+<span>1 files</span>
+</div>
+</div>
+<p class="records-file-help">Browser-local corpus files. The selected file is the one Records, Vector sync, and PDF matching use.</p>
+<div class="records-file-actions" aria-label="JSONL file actions">
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-small" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 16V4M7 9l5-5 5 5">
+</path>
+<path d="M5 20h14">
+</path>
+</svg>
+<span>Open JSONL</span>
+<!---->
+<!---->
+</button>
+</span>
+<span class="ui-button-wrap" data-tooltip="Load at least two JSONL files to merge them.">
+<button class="ui-button variant-default size-small" type="button" disabled="" aria-disabled="true" title="Load at least two JSONL files to merge them.">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>
+<span>Merge files</span>
+<!---->
+<!---->
+</button>
+</span>
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-small" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 5h18l-7 8v5l-4 2v-7z">
+</path>
+</svg>
+<span>Create subset</span>
+<!---->
+<!---->
+</button>
+</span>
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-small" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 4v12M7 11l5 5 5-5">
+</path>
+<path d="M5 20h14">
+</path>
+</svg>
+<span>Export</span>
+<!---->
+<!---->
+</button>
+</span>
+</div>
+<div class="records-file-list" role="list">
+<div class="records-file-item active" role="listitem">
+<button type="button" class="records-file-select" aria-current="true">
+<span class="records-file-name">baseline.jsonl</span>
+<small>
+<!---->
+<span>Imported</span>
+<span>3 records</span>
+</small>
+</button>
+<button type="button" class="records-file-close" aria-label="Close baseline.jsonl">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</aside>
+<div class="records-main">
+<section class="records-command" aria-label="Records table controls">
+<label class="records-search">
+<span class="sr-only">Search text in this file</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="records-search-icon">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<input type="search" placeholder="Search text in this file" autocomplete="off" value="">
+</label>
+<p class="records-count">1–3 of 3</p>
+<label class="records-store">
+<span>Corpus database</span>
+<select class="control" disabled="" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features." value="">
+<option value="">ChromaDB is unavailable. Start/connect ChromaDB before using database features.</option>
+</select>
+</label>
+<label class="records-page-size">
+<span class="sr-only">Results per page</span>
+<select class="control" value="100">
+<option value="25">25</option>
+<option value="50">50</option>
+<option value="100">100</option>
+<option value="250">250</option>
+</select>
+</label>
+<div class="records-density" role="group" aria-label="Row density">
+<button type="button" class="btn tiny" aria-pressed="true">Comfortable</button>
+<button type="button" class="btn tiny" aria-pressed="false">Compact</button>
+</div>
+<details class="records-more">
+<summary class="btn">More</summary>
+<div class="records-more-menu" role="group" aria-label="More">
+<button type="button" class="btn" disabled="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>Upsert file</button>
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>Select all</button>
+<!---->
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m15 3 6 6-8 8-6-6z">
+</path>
+<path d="M7 11 3 15l6 6 4-4M5 17l2 2M8 14l4 4">
+</path>
+</svg>Clean OCR Artifacts</button>
+<button type="button" class="btn soft">Review needs-review (1)</button>
+<button type="button" class="btn">Auto-improve needs-review</button>
+</div>
+</details>
+</section>
+<!---->
+<!---->
+<div class="records-table-scroll" tabindex="0" aria-label="Records table. Scroll horizontally to view additional columns.">
+<table class="records-table comfortable">
+<caption class="sr-only">1–3 of 3</caption>
+<thead>
+<tr>
+<th class="select-col" scope="col">
+<input type="checkbox" aria-label="Select records on this page">
+</th>
+<th scope="col" class="sticky-status">
+<span>Database status</span>
+</th>
+<th scope="col" aria-sort="ascending" class="">
+<button type="button" class="records-sort" aria-label="Sort by Work">Work <span aria-hidden="true">↑</span>
+</button>
+</th>
+<th scope="col" aria-sort="none" class="">
+<button type="button" class="records-sort" aria-label="Sort by Start page">Start page <!---->
+</button>
+</th>
+<th scope="col" aria-sort="none" class="">
+<button type="button" class="records-sort" aria-label="Sort by Needs review">Needs review <!---->
+</button>
+</th>
+<th scope="col" aria-sort="none" class="text-col">
+<button type="button" class="records-sort" aria-label="Sort by Text">Text <!---->
+</button>
+</th>
+<th class="actions-col" scope="col">Record actions</th>
+</tr>
+<tr class="filter-row">
+<th>
+</th>
+<th>
+<label class="sr-only" for="records-filter-__db_status">Filter Database status</label>
+<input id="records-filter-__db_status" class="column-filter" placeholder="Filter…" value="">
+</th>
+<th>
+<label class="sr-only" for="records-filter-work">Filter Work</label>
+<input id="records-filter-work" class="column-filter" placeholder="Filter…" value="">
+</th>
+<th>
+<label class="sr-only" for="records-filter-page_start">Filter Start page</label>
+<input id="records-filter-page_start" class="column-filter" placeholder="Filter…" value="">
+</th>
+<th>
+<label class="sr-only" for="records-filter-needs_review">Filter Needs review</label>
+<select id="records-filter-needs_review" class="column-filter" value="">
+<option value="">All</option>
+<option value="yes">Needs review</option>
+<option value="no">Reviewed</option>
+</select>
+</th>
+<th>
+<label class="sr-only" for="records-filter-text">Filter Text</label>
+<input id="records-filter-text" class="column-filter" placeholder="Filter…" value="">
+</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>
+<!---->
+<tr class="" tabindex="0" aria-label="Open derrida-grammatology-00001">
+<td class="select-col">
+<input type="checkbox" aria-label="Select derrida-grammatology-00001">
+</td>
+<td class="sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">No database</span>
+</td>
+<td class="">
+<button type="button" class="table-metadata-link">Of Grammatology</button>
+</td>
+<td class="">
+<span>3</span>
+</td>
+<td class="">
+<span class="">—</span>
+</td>
+<td class="text-col">
+<span>The sign and divinity have the same place and time of birth.</span>
+</td>
+<td class="actions-col">
+<div class="records-row-actions">
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-4" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-4" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+<button type="button" class="btn tiny" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg> Add evidence</button>
+</div>
+</td>
+</tr>
+<tr class="" tabindex="0" aria-label="Open derrida-grammatology-00002">
+<td class="select-col">
+<input type="checkbox" aria-label="Select derrida-grammatology-00002">
+</td>
+<td class="sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">No database</span>
+</td>
+<td class="">
+<button type="button" class="table-metadata-link">Of Grammatology</button>
+</td>
+<td class="">
+<span>4–6</span>
+</td>
+<td class="">
+<span class="review">Needs review</span>
+</td>
+<td class="text-col">
+<span>There is nothing outside the text.</span>
+</td>
+<td class="actions-col">
+<div class="records-row-actions">
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+<button type="button" class="btn tiny" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg> Add evidence</button>
+</div>
+</td>
+</tr>
+<tr class="" tabindex="0" aria-label="Open derrida-cosmopoli-00001">
+<td class="select-col">
+<input type="checkbox" aria-label="Select derrida-cosmopoli-00001">
+</td>
+<td class="sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">No database</span>
+</td>
+<td class="">
+<button type="button" class="table-metadata-link">On Cosmopolitanism and Forgiveness</button>
+</td>
+<td class="">
+<span>5</span>
+</td>
+<td class="">
+<span class="">—</span>
+</td>
+<td class="text-col">
+<span>What then would such a concept be?</span>
+</td>
+<td class="actions-col">
+<div class="records-row-actions">
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-6" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-6" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+<button type="button" class="btn tiny" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg> Add evidence</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<nav class="records-pagination" aria-label="Records pages">
+<button type="button" class="btn" disabled="">First</button>
+<button type="button" class="btn" disabled="">Previous</button>
+<span>Page 1 of 1</span>
+<button type="button" class="btn" disabled="">Next</button>
+<button type="button" class="btn" disabled="">Last</button>
+</nav>
+</div>
+</div>
+<dialog class="records-columns-dialog" aria-labelledby="records-columns-title">
+<div class="records-columns-head">
+<div>
+<p class="records-columns-kicker">Table view</p>
+<h2 id="records-columns-title">Configure columns</h2>
+</div>
+<button type="button" class="btn icon-only" aria-label="Close">×</button>
+</div>
+<div class="records-columns-body">
+<p>Choose the fields shown in the records table. Order is preserved.</p>
+<div class="records-columns-grid">
+<section aria-label="Visible columns">
+<h3>Visible columns</h3>
+<ol>
+</ol>
+</section>
+<section aria-label="Available fields">
+<h3>Available fields</h3>
+<label class="records-columns-find">
+<span class="sr-only">Find a field</span>
+<input class="control" type="search" placeholder="Find a field" value="">
+</label>
+<ul class="records-columns-available">
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Concepts</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> DB status</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Document author</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Extracted text</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Needs review</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Page end</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Page start</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Record ID</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Review reason</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Speaker</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Topics</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Work</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Year</button>
+</li>
+<!---->
+</ul>
+</section>
+</div>
+</div>
+<div class="records-columns-foot">
+<button type="button" class="btn">Reset defaults</button>
+<button type="button" class="btn">Cancel</button>
+<button type="button" class="btn primary" disabled="">Save columns</button>
+</div>
+</dialog>
+</main>

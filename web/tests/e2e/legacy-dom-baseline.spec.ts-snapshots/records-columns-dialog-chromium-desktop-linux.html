@@ -1,0 +1,106 @@
+<dialog class="records-columns-dialog" aria-labelledby="records-columns-title" open="">
+<div class="records-columns-head">
+<div>
+<p class="records-columns-kicker">Table view</p>
+<h2 id="records-columns-title">Configure columns</h2>
+</div>
+<button type="button" class="btn icon-only" aria-label="Close">×</button>
+</div>
+<div class="records-columns-body">
+<p>Choose the fields shown in the records table. Order is preserved.</p>
+<div class="records-columns-grid">
+<section aria-label="Visible columns">
+<h3>Visible columns</h3>
+<ol>
+<li>
+<span>DB status</span>
+<div class="records-columns-order">
+<button type="button" class="btn tiny" disabled="" aria-label="Move DB status up">↑</button>
+<button type="button" class="btn tiny" aria-label="Move DB status down">↓</button>
+<button type="button" class="btn tiny" aria-label="Hide DB status">Remove</button>
+</div>
+</li>
+<li>
+<span>Work</span>
+<div class="records-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Work up">↑</button>
+<button type="button" class="btn tiny" aria-label="Move Work down">↓</button>
+<button type="button" class="btn tiny" aria-label="Hide Work">Remove</button>
+</div>
+</li>
+<li>
+<span>Page start</span>
+<div class="records-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Page start up">↑</button>
+<button type="button" class="btn tiny" aria-label="Move Page start down">↓</button>
+<button type="button" class="btn tiny" aria-label="Hide Page start">Remove</button>
+</div>
+</li>
+<li>
+<span>Needs review</span>
+<div class="records-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Needs review up">↑</button>
+<button type="button" class="btn tiny" aria-label="Move Needs review down">↓</button>
+<button type="button" class="btn tiny" aria-label="Hide Needs review">Remove</button>
+</div>
+</li>
+<li>
+<span>Extracted text</span>
+<div class="records-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Extracted text up">↑</button>
+<button type="button" class="btn tiny" disabled="" aria-label="Move Extracted text down">↓</button>
+<button type="button" class="btn tiny" aria-label="Hide Extracted text">Remove</button>
+</div>
+</li>
+</ol>
+</section>
+<section aria-label="Available fields">
+<h3>Available fields</h3>
+<label class="records-columns-find">
+<span class="sr-only">Find a field</span>
+<input class="control" type="search" placeholder="Find a field" value="">
+</label>
+<ul class="records-columns-available">
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Concepts</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Document author</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Page end</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Record ID</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Review reason</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Speaker</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Topics</button>
+</li>
+<li>
+<button type="button" class="records-columns-add">
+<span aria-hidden="true">+</span> Year</button>
+</li>
+<!---->
+</ul>
+</section>
+</div>
+</div>
+<div class="records-columns-foot">
+<button type="button" class="btn">Reset defaults</button>
+<button type="button" class="btn">Cancel</button>
+<button type="button" class="btn primary">Save columns</button>
+</div>
+</dialog>

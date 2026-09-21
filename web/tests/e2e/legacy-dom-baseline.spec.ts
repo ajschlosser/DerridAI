@@ -571,6 +571,73 @@ const scenarios: Scenario[] = [
       await page.waitForTimeout(700);
     },
   },
+  // The Records view is Vue, but its rows, sorting, filtering and selection all come from the runtime.
+  { name: "records-loaded", nav: "Records", load: true },
+  {
+    name: "records-query",
+    nav: "Records",
+    load: true,
+    steps: async (page) => {
+      await page.getByPlaceholder("Search text in this file").fill("text");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "records-sort-work",
+    nav: "Records",
+    load: true,
+    steps: async (page) => {
+      await page.locator("button.records-sort", { hasText: "Work" }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "records-sort-work-descending",
+    nav: "Records",
+    load: true,
+    steps: async (page) => {
+      const sort = page.locator("button.records-sort", { hasText: "Work" });
+      await sort.click();
+      await page.waitForTimeout(400);
+      await sort.click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "records-select-row",
+    nav: "Records",
+    load: true,
+    steps: async (page) => {
+      await page
+        .getByRole("checkbox", { name: /^Select /i })
+        .nth(1)
+        .check();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "records-select-all",
+    nav: "Records",
+    load: true,
+    steps: async (page) => {
+      const target = page.getByRole("button", { name: "Select all" }).first();
+      const menus = page.locator("summary", { hasText: "More" });
+      for (let i = 0; i < (await menus.count()) && !(await target.isVisible()); i++)
+        await menus.nth(i).click();
+      await target.click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "records-columns-dialog",
+    nav: "Records",
+    load: true,
+    target: "dialog",
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Columns" }).click();
+      await expect(page.locator("dialog[open]").last()).toBeVisible();
+    },
+  },
 ];
 
 // Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
