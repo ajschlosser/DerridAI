@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { createHash } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mockBackend, type Fixtures, type Role } from "./support/mock-backend";
+import { FAQ_RECORDS, mockBackend, type Fixtures, type Role } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
 // Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
@@ -72,6 +72,8 @@ interface Scenario {
   scheme?: "light" | "dark";
   /** Load the sample JSONL file before navigating (admin only). */
   load?: boolean;
+  /** Open this route directly instead of navigating from the home page (Vue-native routes only). */
+  path?: string;
   /** Records for the loaded file, instead of the default sample. */
   records?: object[];
   fixtures?: Fixtures;
@@ -88,8 +90,10 @@ interface Scenario {
 async function open(page: Page, scenario: Scenario) {
   await stabilize(page, scenario.scheme ?? "light");
   await mockBackend(page, { role: scenario.role ?? "admin", fixtures: scenario.fixtures });
-  await page.goto(APP + "/");
-  await expect(page.locator("#main")).toBeVisible({ timeout: 15_000 });
+  await page.goto(APP + (scenario.path ?? "/"));
+  await expect(page.locator(scenario.path ? "main" : "#main").first()).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
@@ -224,6 +228,77 @@ const clickThenDialog = (find: (page: Page) => Locator) => async (page: Page) =>
 const worksAction = (name: RegExp | string) => async (page: Page) => {
   await page.locator("main summary", { hasText: "Actions" }).first().click();
   await page.getByRole("button", { name }).first().click();
+};
+
+const FAQ_PAGE = {
+  records: FAQ_RECORDS,
+  count: FAQ_RECORDS.length,
+  total: FAQ_RECORDS.length,
+  limit: 50,
+  offset: 0,
+  exists: true,
+};
+
+const RAG_JOBS = {
+  jobs: [
+    {
+      id: "job-rag-1",
+      type: "rag",
+      status: "completed",
+      stage: "done",
+      source_collection: "derrida_primary",
+      model: "qwen3.5:4b",
+      provider: "ollama",
+      owner: "admin",
+      prompt: "What is the trace?",
+      created_at: "2026-03-01T11:50:00Z",
+      started_at: "2026-03-01T11:50:05Z",
+      finished_at: "2026-03-01T11:51:00Z",
+      total: 10,
+      completed: 10,
+      result: {
+        answer: "The trace is a mark of absence.",
+        prompt: "What is the trace?",
+        model: "qwen3.5:4b",
+        sources: [],
+      },
+      request: { locales: ["en"], k: 8 },
+    },
+    {
+      id: "job-rag-2",
+      type: "rag",
+      status: "running",
+      stage: "retrieval",
+      source_collection: "derrida_primary",
+      model: "qwen3.5:4b",
+      provider: "ollama",
+      owner: "admin",
+      prompt: "What is différance?",
+      created_at: "2026-03-01T11:55:00Z",
+      started_at: "2026-03-01T11:55:05Z",
+      total: 10,
+      completed: 4,
+      request: { locales: ["en"], k: 8 },
+    },
+  ],
+};
+
+/** Selects the first record as evidence in the Record view, then opens Research. */
+const researchWithEvidence = async (page: Page) => {
+  await page
+    .locator("nav, aside")
+    .getByRole("button", { name: "Record View", exact: true })
+    .first()
+    .click();
+  await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Add evidence" }).first().click();
+  await page.waitForTimeout(400);
+  await page
+    .locator("nav, aside")
+    .getByRole("button", { name: "Research", exact: true })
+    .first()
+    .click();
+  await page.waitForTimeout(1500);
 };
 
 const inRecords = async (page: Page) => {
@@ -998,6 +1073,98 @@ const scenarios: Scenario[] = [
     load: true,
     records: ANNOTATED_RECORDS,
     styles: true,
+  },
+  // The Research view is Vue, but its evidence, configuration, runs and jobs all come from the runtime.
+  { name: "research-with-evidence", load: true, steps: researchWithEvidence },
+  {
+    name: "research-question",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.locator("#researchQuestion").fill("What is the trace?");
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "research-remove-evidence",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page
+        .getByRole("button", { name: /Remove from evidence/ })
+        .first()
+        .click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-clear-evidence",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Clear" }).first().click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-expert-settings",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Expert settings" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "research-runs-drawer",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Runs", exact: true }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-with-jobs",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: researchWithEvidence,
+  },
+  {
+    name: "research-open-job",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page
+        .getByRole("button", { name: /What is différance/ })
+        .first()
+        .click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "styles-research-evidence-light",
+    load: true,
+    styles: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: researchWithEvidence,
+  },
+  // The Response Library is Vue too; it reads cached research answers through the runtime.
+  { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
+  {
+    name: "faq-archive-dialog",
+    path: "/faq",
+    target: "dialog",
+    fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /Browse saved research/ })
+        .first()
+        .click();
+      await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
+    },
   },
 ];
 
