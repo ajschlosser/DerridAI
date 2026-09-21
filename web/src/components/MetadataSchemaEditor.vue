@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
 import {
@@ -124,7 +124,17 @@ async function tryGroup(run: boolean) {
   if (result) preview.value = result;
 }
 
-onMounted(() => { void refresh(); });
+onMounted(() => {
+  void refresh();
+});
+watch(
+  () => props.providerProfiles,
+  (profiles) => {
+  if (!profiles.length) return;
+  if (!profiles.some(profile => profile.id === previewProfile.value)) previewProfile.value = profiles[0].id;
+  },
+  { immediate: true, deep: true },
+);
 defineExpose({ select, draft });
 </script>
 

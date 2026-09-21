@@ -274,12 +274,21 @@ function runRecordAction(id:string){if(id==="previous")merge("previous");else if
 const bulkActionItems=computed<CorpusActionMenuItem[]>(()=>{
   const rejectReason=busy.value!==""?i18n.t("pdf_corpus.reason.busy","Wait for the current action to finish."):reviewLocked.value?i18n.t("pdf_corpus.reason.review_locked","Review is unavailable while the build is running."):selectedReviewCount.value===0?i18n.t("pdf_corpus.reason.select_records_first","Select one or more records first."):undefined;
   return [
-    {id:"edit",label:i18n.t("pdf_corpus.bulk_edit_metadata","Bulk edit metadata")},
+    {id:"edit",label:i18n.t("pdf_corpus.bulk_edit_metadata","Bulk edit metadata"),reason:busy.value!==""?rejectReason:reviewLocked.value?rejectReason:undefined},
     {id:"hands-free",label:i18n.t("pdf_corpus.run_hands_free","Run hands-free…"),reason:busy.value!==""?i18n.t("pdf_corpus.reason.busy","Wait for the current action to finish."):reviewLocked.value?i18n.t("pdf_corpus.reason.review_locked","Review is unavailable while the build is running."):undefined},
     {id:"reject",label:i18n.tf("pdf_corpus.reject_selected_count","Reject selected ({count})",{count:selectedReviewCount.value}),reason:rejectReason},
   ];
 });
-function runBulkAction(id:string){if(id==="edit")bulkMetadataOpen.value=!bulkMetadataOpen.value;else if(id==="hands-free")handsFreeOpen.value=true;else if(id==="reject")bulkDisposition("rejected")}
+function runBulkAction(id: string) {
+  if (id === "edit") {
+    if (busy.value || reviewLocked.value) return;
+    bulkMetadataOpen.value = !bulkMetadataOpen.value;
+  } else if (id === "hands-free") {
+    handsFreeOpen.value = true;
+  } else if (id === "reject") {
+    bulkDisposition("rejected");
+  }
+}
 const activeBuilds=computed(()=>builds.value.filter(build=>["queued","running"].includes(String(build.status||""))));
 const activeBuildCount=computed(()=>activeBuilds.value.length);
 const selectedProfileActiveBuildCount=computed(()=>selectedProviderId.value?activeBuilds.value.filter(build=>String(build.request?.provider_profile_id||"")===selectedProviderId.value).length:0);

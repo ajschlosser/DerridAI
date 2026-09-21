@@ -31,7 +31,7 @@ const legacyGroups:BulkGroup[]=[
 const identityGroup=legacyGroups.find(group=>group.key==="identity")!;
 // With a schema, the groups and fields are the schema's (the locked core first, in the discourse group); document details stay last.
 const groups=computed<BulkGroup[]>(()=>props.schema?[
-  ...props.schema.groups.map(group=>({key:group.key,label:group.label,fallback:group.label,help:"pdf_corpus.bulk_schema_group_help",helpFallback:"",fields:[...(group.key==="discourse"?["region_type","primary_text","discourse_role"]:[]),...props.schema!.fields.filter(field=>field.group===group.key).map(field=>field.name)]})),
+  ...props.schema.groups.map(group=>({key:group.key,label:group.label,fallback:group.label,help:"pdf_corpus.bulk_schema_group_help",helpFallback:"",fields:Array.from(new Set([...(group.key==="discourse"?["region_type","primary_text","discourse_role"]:[]),...props.schema!.fields.filter(field=>field.group===group.key).map(field=>field.name)]))})),
   identityGroup,
 ]:legacyGroups);
 const schemaFieldMap=computed(()=>Object.fromEntries((props.schema?.fields||[]).map(field=>[field.name,field])));
