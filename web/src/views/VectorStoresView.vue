@@ -438,10 +438,15 @@ onBeforeUnmount(() => {
                     <UiButton :label="i18n.t('ui.next', 'Next')" :disabled="storePage >= maxPage" @click="storePage += 1; persistWorkspace(); loadData()" />
                   </div>
                 </div>
-                <div class="tablewrap">
-                  <table class="store-table">
+                <div
+                  class="tablewrap ui-table-scroll"
+                  role="region"
+                  :aria-label="i18n.t('dashboard.records', 'Records')"
+                  tabindex="0"
+                >
+                  <table class="store-table ui-table">
                     <caption class="sr-only">{{ i18n.t("dashboard.records", "Records") }}</caption>
-                    <thead><tr><th>{{ i18n.t("field.work", "Work") }}</th><th>{{ i18n.t("field.record_id", "Record ID") }}</th><th>{{ i18n.t("record.page", "Page") }}</th><th>{{ i18n.t("record.text", "Text") }}</th></tr></thead>
+                    <thead><tr><th scope="col">{{ i18n.t("field.work", "Work") }}</th><th scope="col">{{ i18n.t("field.record_id", "Record ID") }}</th><th scope="col">{{ i18n.t("record.page", "Page") }}</th><th scope="col">{{ i18n.t("record.text", "Text") }}</th></tr></thead>
                     <tbody>
                       <tr v-for="record in records" :key="String(record._chroma_id || record.record_id)">
                         <td>{{ record.work || "—" }}</td>
