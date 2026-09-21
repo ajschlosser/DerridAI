@@ -12,6 +12,7 @@ import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader
 import RecordsFileRail from "../components/records/RecordsFileRail.vue";
 import RecordsColumnsDialog from "../components/records/RecordsColumnsDialog.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
+import { statusTone } from "../domain/status";
 import { useRecordsWorkspace } from "../composables/useRecordsWorkspace";
 import type { RecordsCell, RecordsRow } from "../types/records";
 
@@ -95,13 +96,6 @@ function columnLabel(key: string, fallback: string) {
 function sortState(key: string) {
   if (snapshot.value?.sort.key !== key) return "none";
   return snapshot.value.sort.dir > 0 ? "ascending" : "descending";
-}
-function statusTone(kind: string): "neutral" | "info" | "success" | "warning" | "danger" {
-  if (kind === "synced") return "success";
-  if (kind === "changed") return "warning";
-  if (kind === "exists") return "info";
-  if (kind === "absent") return "danger";
-  return "neutral";
 }
 function load() {
   records.load();
