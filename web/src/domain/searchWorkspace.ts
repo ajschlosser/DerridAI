@@ -540,7 +540,9 @@ export function createSearchWorkspace(deps: Deps) {
       state.storeSearchResults = [];
       state.searchDatabaseRan = false;
     } else {
-      const nextOp = filterOpsForField(field).some(([candidate]: Any) => candidate === op) ? op : "eq";
+      const nextOp = filterOpsForField(field).some(([candidate]: Any) => candidate === op)
+        ? op
+        : "eq";
       if (!["empty", "notempty"].includes(nextOp) && !value) return;
       state.globalFilters = [
         ...(state.globalFilters || []),
