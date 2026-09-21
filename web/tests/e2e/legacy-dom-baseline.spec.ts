@@ -157,6 +157,7 @@ async function rawMarkup(page: Page, target: "main" | "dialog" | "app" | "dock")
       .replace(/\s+(style="[^"]*")/g, " $1")
       // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.
       .replace(/ data-v-[0-9a-f]{8}=""/g, "")
+      .replace(/Build [0-9a-f]{7}\b/g, "Build <hash>")
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
   );
