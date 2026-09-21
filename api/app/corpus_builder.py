@@ -119,6 +119,7 @@ from .enrichment_metrics import compute as compute_enrichment_metrics
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
 from .metadata_schema import (
+    CORE_FIELDS,
     CORE_GROUP,
     DEFAULT_SCHEMA_ID,
     MetadataSchema,
@@ -135,7 +136,7 @@ from .sentence_boundaries import snap_boundaries_to_sentences
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v10"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v11"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
 DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
 PROFILE_VERSION = "derrida-scholarly-v12"
@@ -610,11 +611,11 @@ class DiscourseMetadataModel(BaseModel):
 
 class RecordFieldAssessmentModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # Missing model confidence is unknown, not 0%. This distinction matters in
-    # review UI and avoids manufacturing false certainty from omitted fields.
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    needs_review: bool = False
-    reason: str = Field(default="", max_length=500)
+    # The property is required; an explicit null means confidence is unavailable.
+    confidence: float | None = Field(ge=0.0, le=1.0)
+    needs_review: bool
+    reason: str = Field(max_length=500)
+    outcome: Literal["supported_value", "no_supported_value", "uncertain"]
 
 
 class DiscourseMetadataResponseModel(BaseModel):
@@ -622,7 +623,7 @@ class DiscourseMetadataResponseModel(BaseModel):
     # Required so schema-constrained decoding cannot return assessments alone.
     metadata: DiscourseMetadataModel
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
-    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
+    field_assessments: dict[str, RecordFieldAssessmentModel]
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -643,7 +644,7 @@ class QuotationMetadataResponseModel(BaseModel):
     # Required so schema-constrained decoding cannot return assessments alone.
     metadata: QuotationMetadataModel
     field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
-    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
+    field_assessments: dict[str, RecordFieldAssessmentModel]
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -666,7 +667,7 @@ class IndexMetadataResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # Required so schema-constrained decoding cannot return assessments alone.
     metadata: IndexMetadataModel
-    field_assessments: dict[str, RecordFieldAssessmentModel] = Field(default_factory=dict)
+    field_assessments: dict[str, RecordFieldAssessmentModel]
     review_reason: str = Field(default="", max_length=1000)
 
 
@@ -4658,6 +4659,7 @@ CURRENT REVIEWED RECORD TEXT:
         allowed_fields = self._allowed_for(schema)
         attribution_fields = schema.attribution_fields()
         evidence_required_fields = schema.evidence_fields()
+        assessment_required_fields = set(CORE_FIELDS) | {field.name for field in schema.fields if field.assess}
         model = str((request or {}).get("model") or "")
         run_id = str((request or {}).get("run_id") or (f"build-{build_id}" if build_id else ""))
         off = experiment.disabled(request)
@@ -4712,7 +4714,11 @@ CURRENT REVIEWED RECORD TEXT:
         field_assessments: dict[str, dict[str, Any]] = {}
         llm_populated_fields: set[str] = set()
         raw_llm_values: dict[str, Any] = {}
-        llm_checked_fields: set[str] = set()
+        # Presence in the required metadata object means the field was requested,
+        # not that the model supplied an assessment. Keep those facts separate.
+        llm_requested_fields: set[str] = set()
+        llm_value_returned_fields: set[str] = set()
+        llm_checked_fields: set[str] = set()  # compatibility alias: actually assessed
         successful_tasks = 0
 
         for task_name, result, failure in stage_results:
@@ -4729,8 +4735,10 @@ CURRENT REVIEWED RECORD TEXT:
             for key, value in metadata.items():
                 if key not in allowed_fields or key in SOURCE_BOUND_FIELDS:
                     continue
-                llm_checked_fields.add(key)
+                llm_requested_fields.add(key)
                 value, raw_llm_value = _normalize_semantic_value(key, value)
+                if value not in (None, "", []):
+                    llm_value_returned_fields.add(key)
                 if raw_llm_value is not None:
                     raw_llm_values[key] = raw_llm_value
                 existing_status = field_status.get(key) if isinstance(field_status.get(key), dict) else {}
@@ -4751,7 +4759,10 @@ CURRENT REVIEWED RECORD TEXT:
                     deterministic_method = str(existing_status.get("method") or "")
                     strong_structure = deterministic_method in STRONG_STRUCTURAL_METHODS
                     existing_status = dict(existing_status)
-                    existing_status["llm_checked"] = True
+                    existing_status["llm_requested"] = True
+                    existing_status["llm_value_returned"] = value not in (None, "", [])
+                    existing_status["llm_assessed"] = bool(assessment)
+                    existing_status["llm_checked"] = bool(assessment)  # backward-compatible UI/API key
                     existing_status["llm_value"] = value
                     existing_status["llm_confidence"] = confidence
                     if value is None:
@@ -4811,21 +4822,9 @@ CURRENT REVIEWED RECORD TEXT:
                 if key == "stance" and value is not None and value not in STANCE_VALUES:
                     field_status[key] = {"status": "invalid", "method": "llm", "reason_code": "invalid_value", "proposed_value": value, "raw_llm_value": raw_llm_value or value, "llm_checked": True, "reason": f"Model returned an unsupported stance: {value}"}
                     continue
-                assessment = field_assessments.get(key) if isinstance(field_assessments.get(key), dict) else {}
-                result_evidence = result.get("field_evidence") if isinstance(result.get("field_evidence"), dict) else {}
-                key_evidence = result_evidence.get(key) if isinstance(result_evidence.get(key), dict) else {}
-                proposal_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else (key_evidence.get("confidence") if isinstance(key_evidence.get("confidence"), (int, float)) else None)
-                if value not in (None, "", []) and (proposal_confidence is None or float(proposal_confidence) <= minimum):
-                    # Keep low/unknown-confidence output as an explicit suggestion, not
-                    # as the record's current value. The UI may display the proposal,
-                    # but automatic population starts strictly above the configured threshold.
-                    field_status[key] = {
-                        "status": "unresolved", "method": "llm", "confidence": proposal_confidence,
-                        "auto_populated": False, "proposed_value": value,
-                        "reason_code": "low_confidence" if proposal_confidence is not None else "confidence_missing",
-                        "reason": str(assessment.get("reason") or "Model proposal requires reviewer confirmation before population."),
-                    }
-                    continue
+                # A valid model value is a proposal and should be visible to the reviewer
+                # regardless of confidence. Confidence/evidence determine whether it is
+                # auto-resolved, not whether the record is populated.
                 record[key] = value
                 if value not in (None, "", []):
                     llm_populated_fields.add(key)
@@ -4888,17 +4887,51 @@ CURRENT REVIEWED RECORD TEXT:
             evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
             needs_human = bool(assessment.get("needs_review"))
-            auto = autofill(field, record.get(field), confidence, evidence_info) 
+            requires_confidence = field in assessment_required_fields or field in evidence_required_fields
+            evidence_failed = field in evidence_required_fields and (
+                not evidence_info.get("block_ids")
+                or not isinstance(evidence_info.get("confidence"), (int, float))
+                or float(evidence_info.get("confidence")) <= minimum
+            )
+            auto = autofill(field, record.get(field), confidence, evidence_info)
             if auto:
+                auto["value_source"] = "llm"
+                auto["verification_status"] = "auto_resolved"
                 field_status[field] = auto
                 continue
+            if needs_human or (requires_confidence and confidence is None) or (requires_confidence and confidence <= minimum) or evidence_failed:
+                if needs_human:
+                    reason_code = "ambiguous"
+                elif requires_confidence and confidence is None:
+                    reason_code = "confidence_missing"
+                elif requires_confidence and confidence <= minimum:
+                    reason_code = "low_confidence"
+                else:
+                    reason_code = "evidence_failed"
+                field_status[field] = {
+                    "status": "unresolved",
+                    "method": "llm",
+                    "confidence": confidence,
+                    # The value is populated; it simply has not been verified.
+                    "auto_populated": True,
+                    "autofilled": False,
+                    "value_source": "llm",
+                    "verification_status": "pending_review",
+                    "proposed_value": record.get(field),
+                    "reason_code": reason_code,
+                    "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal requires reviewer confirmation."),
+                }
+                continue
             field_status[field] = {
-                "status": "unresolved" if needs_human else "llm_inferred",
+                "status": "llm_inferred",
                 "method": "llm",
                 "confidence": confidence,
-                "auto_populated": bool(confidence is not None and confidence > minimum and record.get(field) not in (None, "", [])),
+                "auto_populated": True,
+                "autofilled": True,
+                "value_source": "llm",
+                "verification_status": "auto_resolved",
                 "proposed_value": record.get(field),
-                "reason_code": "ambiguous" if needs_human else "resolved",
+                "reason_code": "resolved",
                 "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal."),
             }
         review_metadata_fields = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
@@ -4914,21 +4947,53 @@ CURRENT REVIEWED RECORD TEXT:
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
             reason = str(assessment.get("reason") or evidence_info.get("reason") or "Model assessment.")
             needs_human = bool(assessment.get("needs_review"))
+            outcome = str(assessment.get("outcome") or "")
             if field not in required_metadata_fields and value in (None, "", []) and not assessment:
-                # Optional attribution fields can be genuinely absent. If the model
-                # made no assessment and proposed no value, do not manufacture an
-                # uncertainty item merely because the field exists in the schema.
+                # Backward compatibility for old persisted model output that had no
+                # assessment object at all. New structured output requires one.
                 continue
-            auto = autofill(field, value, confidence, evidence_info) 
+            if field not in required_metadata_fields and value in (None, "", []) and outcome == "no_supported_value":
+                if confidence is not None and confidence > minimum and not needs_human:
+                    field_status[field] = {
+                        "status": "llm_inferred", "method": "llm", "confidence": confidence,
+                        "auto_populated": False, "autofilled": True, "value_source": "llm",
+                        "verification_status": "auto_resolved", "proposed_value": None,
+                        "reason_code": "no_supported_value", "reason": reason or "Model found no supported value for this field.",
+                    }
+                else:
+                    field_status[field] = {
+                        "status": "unresolved", "method": "llm", "confidence": confidence,
+                        "auto_populated": False, "autofilled": False, "value_source": "llm",
+                        "verification_status": "pending_review", "proposed_value": None,
+                        "reason_code": "ambiguous" if needs_human else ("confidence_missing" if confidence is None else "low_confidence"),
+                        "reason": reason or "Model proposed that no supported value applies; reviewer confirmation is required.",
+                    }
+                continue
+            if value in (None, "", []) and outcome == "uncertain":
+                field_status[field] = {
+                    "status": "unresolved", "method": "llm", "confidence": confidence,
+                    "auto_populated": False, "autofilled": False, "value_source": "llm",
+                    "verification_status": "pending_review", "proposed_value": None,
+                    "reason_code": "ambiguous", "reason": reason or "The model could not determine a supported value.",
+                }
+                continue
+            auto = autofill(field, value, confidence, evidence_info)
             if auto:
+                auto["value_source"] = "llm"
+                auto["verification_status"] = "auto_resolved"
                 field_status[field] = auto
             elif field in required_metadata_fields and value in (None, "", []):
                 field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
-                # Model self-confidence is never publication authority. Any LLM
-                # proposal below the profile threshold is routed to the human
-                # exception queue even when the model forgot to set needs_review.
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "low_confidence", "reason": reason or f"Model confidence is below {minimum:.2f}."}
+                # The proposal is already populated. Missing/low confidence blocks
+                # automatic resolution, not visibility of the value.
+                field_status[field] = {
+                    "status": "unresolved", "method": "llm", "confidence": confidence,
+                    "auto_populated": True, "autofilled": False, "value_source": "llm",
+                    "verification_status": "pending_review", "proposed_value": value,
+                    "reason_code": "confidence_missing" if confidence is None else "low_confidence",
+                    "reason": reason or ("Model confidence was not reported." if confidence is None else f"Model confidence is below {minimum:.2f}."),
+                }
             elif value in (None, "", []) and field in evidence_required_fields and confidence is not None and confidence > minimum and not needs_human:
                 # A confident assessment with no value cannot be shown as an
                 # inference: there is nothing to display, populate, or cite. Keep it
@@ -4939,17 +5004,31 @@ CURRENT REVIEWED RECORD TEXT:
                     "reason": f"The model reported {round(confidence * 100)}% confidence but returned no value. {reason}".strip(),
                 }
             elif needs_human or (value not in (None, "", []) and field in evidence_required_fields and (not evidence_info.get("block_ids") or not isinstance(evidence_info.get("confidence"), (int, float)) or float(evidence_info.get("confidence")) <= minimum)):
-                field_status[field] = {"status": "unresolved", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason}
+                field_status[field] = {
+                    "status": "unresolved", "method": "llm", "confidence": confidence,
+                    "auto_populated": value not in (None, "", []), "autofilled": False, "value_source": "llm",
+                    "verification_status": "pending_review", "proposed_value": value,
+                    "reason_code": "ambiguous" if needs_human else "evidence_failed", "reason": reason,
+                }
             else:
-                field_status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence, "auto_populated": bool(confidence is not None and confidence > minimum and value not in (None, "", [])), "proposed_value": value, "reason_code": "resolved", "reason": reason}
+                field_status[field] = {
+                    "status": "llm_inferred", "method": "llm", "confidence": confidence,
+                    "auto_populated": value not in (None, "", []), "autofilled": True, "value_source": "llm",
+                    "verification_status": "auto_resolved", "proposed_value": value, "reason_code": "resolved", "reason": reason,
+                }
 
         apply_metadata_constraints(record)
-        for checked_field in llm_checked_fields:
-            checked_status = field_status.get(checked_field)
-            if isinstance(checked_status, dict):
-                checked_status.setdefault("llm_checked", True)
-                if checked_field in raw_llm_values:
-                    checked_status.setdefault("raw_llm_value", raw_llm_values[checked_field])
+        for requested_field in llm_requested_fields:
+            requested_status = field_status.get(requested_field)
+            if isinstance(requested_status, dict):
+                requested_status.setdefault("llm_requested", True)
+                requested_status.setdefault("llm_value_returned", requested_field in llm_value_returned_fields)
+                requested_status.setdefault("llm_assessed", requested_field in llm_checked_fields)
+                # Kept for API/UI compatibility; it now means "the model returned a
+                # field assessment", not merely "metadata JSON contained this key".
+                requested_status.setdefault("llm_checked", requested_field in llm_checked_fields)
+                if requested_field in raw_llm_values:
+                    requested_status.setdefault("raw_llm_value", raw_llm_values[requested_field])
 
         shown: dict[str, Any] = {}
         for field in sorted(llm_populated_fields):
@@ -7393,7 +7472,18 @@ CURRENT REVIEWED RECORD TEXT:
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
                     continue
-                decision = resolve_conflict(old_info, new_info)
+                # PR #83 permits a valid LLM proposal to occupy the record while
+                # remaining pending human review. PR #81's generic resolver treats
+                # an unresolved existing value as replaceable; doing that here would
+                # discard the first unverified proposal. When both values are
+                # pending LLM proposals, retain both for reviewer adjudication.
+                both_pending_llm = (
+                    old_info.get("verification_status") == "pending_review"
+                    and new_info.get("verification_status") == "pending_review"
+                    and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                    and (new_info.get("value_source") == "llm" or new_info.get("method") == "llm")
+                )
+                decision = "keep_both" if both_pending_llm else resolve_conflict(old_info, new_info)
                 if decision == "replace":
                     replaced.append({"field": field, "previous": old, "value": new, "confidence": new_info.get("confidence")})
                     live[field] = new
@@ -7404,10 +7494,31 @@ CURRENT REVIEWED RECORD TEXT:
                     kept.append(field)
                 else:
                     known.add((field, json.dumps(new, sort_keys=True, default=str)))
+                    existing_source = (
+                        "llm_pending"
+                        if (
+                            old_info.get("verification_status") == "pending_review"
+                            and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                        )
+                        else "current"
+                    )
+                    existing_candidate = {"value": old, "source": existing_source}
+                    if isinstance(old_info.get("confidence"), (int, float)):
+                        existing_candidate["confidence"] = old_info.get("confidence")
+                    if old_info.get("verification_status"):
+                        existing_candidate["verification_status"] = old_info.get("verification_status")
+
                     candidate_entry = {"value": new, "source": run_id, "model": request.get("model")}
+                    if isinstance(new_info.get("confidence"), (int, float)):
+                        candidate_entry["confidence"] = new_info.get("confidence")
+                    if new_info.get("verification_status"):
+                        candidate_entry["verification_status"] = new_info.get("verification_status")
+
                     prior_dispute = next((item for item in live.get("metadata_disputes") or [] if isinstance(item, dict) and item.get("field") == field), None)
                     if prior_dispute is not None:
-                        candidates = list(prior_dispute.get("candidates") or [{"value": prior_dispute.get("existing"), "source": "current"}])
+                        fallback_existing = dict(existing_candidate)
+                        fallback_existing["value"] = prior_dispute.get("existing")
+                        candidates = list(prior_dispute.get("candidates") or [fallback_existing])
                         if not any(same_value(item.get("value"), new) for item in candidates if isinstance(item, dict)):
                             candidates.append(candidate_entry)
                             prior_dispute["candidates"] = candidates[-12:]
@@ -7416,7 +7527,7 @@ CURRENT REVIEWED RECORD TEXT:
                     else:
                         disputes.append({
                             "field": field, "existing": old, "proposed": new,
-                            "candidates": [{"value": old, "source": "current"}, candidate_entry],
+                            "candidates": [existing_candidate, candidate_entry],
                             "confidence": new_info.get("confidence"), "reason": new_info.get("reason"), "run_id": run_id,
                         })
                     live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}

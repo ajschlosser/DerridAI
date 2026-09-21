@@ -23,7 +23,10 @@ const resolvedValue=computed(()=>{
   const status=props.status||{};
   if(status.reason_code==='deterministic_llm_disagreement'&&status.prefilled_candidate==='llm'&&hasValue(status.llm_value))return normalizeMetadataFieldValue(props.field,status.llm_value);
   if(hasValue(props.value))return normalizeMetadataFieldValue(props.field,props.value);
-  if(confidence.value!==null&&confidence.value>0.65&&hasValue(status.proposed_value))return normalizeMetadataFieldValue(props.field,status.proposed_value);
+  // Backward compatibility for records created before populated-but-unverified
+  // proposals were written into the record itself. Confidence affects review
+  // state, not whether the reviewer may see the proposed value.
+  if(!status.blind&&hasValue(status.proposed_value))return normalizeMetadataFieldValue(props.field,status.proposed_value);
   if(hasValue(props.constraint?.value))return normalizeMetadataFieldValue(props.field,props.constraint?.value);
   return normalizeMetadataFieldValue(props.field,props.value??'');
 });
@@ -50,6 +53,8 @@ function selectFromText(){
 }
 function display(value:unknown){if(value===true)return i18n.t('ui.yes','Yes');if(value===false)return i18n.t('ui.no','No');if(Array.isArray(value))return value.join(', ')||'—';return value===null||value===undefined||value===''?'—':String(value)}
 const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.confidence_not_reported','Confidence not reported'):i18n.tf('pdf_corpus.confidence_percent','Confidence: {percent}%',{percent:Math.round(confidence.value*100)}));
+const verificationStatus=computed(()=>String(props.status?.verification_status||''));
+const autoResolved=computed(()=>verificationStatus.value==='auto_resolved'||props.status?.autofilled===true);
 </script>
 
 <template>
@@ -80,9 +85,10 @@ const confidenceLabel=computed(()=>confidence.value===null?i18n.t('pdf_corpus.co
     </div>
     <p v-if="control==='combobox'||control==='multi-combobox'||control==='text'" class="selection-help">{{i18n.t('pdf_corpus.select_from_text_help','Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.')}}</p>
     <div class="field-meta">
-      <span v-if="isLlm&&hasValue(resolvedValue)" class="proposal">{{status?.auto_populated?i18n.t('pdf_corpus.llm_suggestion_autofilled','LLM value auto-filled from a >65% confidence suggestion'):i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM suggestion prefilled — verify before saving')}}</span>
-      <span v-if="status?.llm_checked===true">{{i18n.t('pdf_corpus.llm_field_checked','LLM checked this field')}}</span>
-      <span v-else-if="status?.llm_checked===false&&status?.llm_skip_reason">{{i18n.tf('pdf_corpus.llm_field_not_checked','LLM not checked: {reason}',{reason:String(status?.llm_skip_reason)})}}</span>
+      <span v-if="isLlm&&hasValue(resolvedValue)" class="proposal">{{autoResolved?i18n.t('pdf_corpus.llm_value_auto_resolved','LLM value populated and auto-resolved'):i18n.t('pdf_corpus.llm_suggestion_prefilled','LLM value populated — verify before saving')}}</span>
+      <span v-if="status?.llm_assessed===true||status?.llm_checked===true">{{i18n.t('pdf_corpus.llm_field_assessed','LLM assessed this field')}}</span>
+      <span v-else-if="status?.llm_value_returned===true">{{i18n.t('pdf_corpus.llm_value_without_assessment','LLM returned a value without a field assessment')}}</span>
+      <span v-else-if="status?.llm_checked===false&&status?.llm_skip_reason">{{i18n.tf('pdf_corpus.llm_field_not_checked','LLM not assessed: {reason}',{reason:String(status?.llm_skip_reason)})}}</span>
       <span v-if="status?.raw_llm_value&&status?.raw_llm_value!==resolvedValue">{{i18n.tf('pdf_corpus.llm_value_normalized','LLM returned “{raw}”; normalized to “{value}”.',{raw:String(status?.raw_llm_value),value:String(resolvedValue)})}}</span>
       <span>{{confidenceLabel}}</span>
       <span v-if="calibratedAcceptance&&calibratedAcceptance.reviewed>=3">{{i18n.tf('pdf_corpus.calibrated_acceptance','Historically accepted {percent}% of the time ({count} reviews)',{percent:Math.round(calibratedAcceptance.acceptanceRate*100),count:calibratedAcceptance.reviewed})}}</span>

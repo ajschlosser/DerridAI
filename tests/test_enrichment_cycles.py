@@ -306,3 +306,59 @@ def test_initial_enrichment_operation_marks_the_first_pass_complete():
     assert op["passes_completed"] == 1
     assert op["records_processed"] == 2
     assert op["started_at"] == "t0"
+
+def test_pending_llm_proposals_are_preserved_as_dispute_candidates(tmp_path: Path):
+    # PR #81 disputes must preserve PR #83's populated-but-unverified proposal.
+    live = {
+        "record_id": "r1",
+        "text": "record 1",
+        "stance": "neutral",
+        "metadata_field_status": {
+            "stance": {
+                "status": "unresolved",
+                "method": "llm",
+                "confidence": None,
+                "value_source": "llm",
+                "verification_status": "pending_review",
+                "proposed_value": "neutral",
+            }
+        },
+    }
+    manager, repo, build_id = make_manager(tmp_path, [live])
+    current = repo.load_records(build_id)[0]
+
+    candidate = dict(current)
+    candidate["stance"] = "critical"
+    candidate["metadata_field_status"] = {
+        **dict(current.get("metadata_field_status") or {}),
+        "stance": {
+            "status": "unresolved",
+            "method": "llm",
+            "confidence": 0.4,
+            "value_source": "llm",
+            "verification_status": "pending_review",
+            "proposed_value": "critical",
+        },
+    }
+
+    result = manager._merge_enrichment_candidate(
+        current,
+        candidate,
+        ["discourse"],
+        "run-2",
+        {"provider": "ollama", "model": "m"},
+        manager._profile_for(build_id),
+        schema=manager._schema_for(build_id),
+    )
+
+    assert result["outcome"] == "disputed"
+    assert current["stance"] == "neutral"
+    dispute = current["metadata_disputes"][0]
+    assert dispute["existing"] == "neutral"
+    assert dispute["proposed"] == "critical"
+    assert [item["value"] for item in dispute["candidates"]] == ["neutral", "critical"]
+    assert dispute["candidates"][0]["source"] == "llm_pending"
+    assert dispute["candidates"][0]["verification_status"] == "pending_review"
+    assert dispute["candidates"][1]["source"] == "run-2"
+    assert dispute["candidates"][1]["verification_status"] == "pending_review"
+    assert dispute["candidates"][1]["confidence"] == 0.4
