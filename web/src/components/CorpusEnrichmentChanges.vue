@@ -6,7 +6,7 @@ import { useI18nStore } from "../stores/i18n";
 // replaced), and the fields where it disagreed with the current value and left it for a person to decide. The record
 // is reopened for review with the words "review the highlighted changes"; this is where they are.
 interface Replaced { field: string; previous: unknown; value: unknown }
-interface Dispute { field: string; existing: unknown; proposed: unknown; reason?: string | null }
+interface Dispute { field: string; existing: unknown; proposed: unknown; candidates?: { value: unknown; source?: string; model?: string }[]; reason?: string | null }
 interface HistoryEntry { run_id?: string; model?: string; outcome?: string; added_fields?: string[]; replaced?: Replaced[]; disputes?: Dispute[] }
 
 const props = defineProps<{ record: Record<string, unknown>; busy?: boolean }>();
@@ -58,8 +58,7 @@ function show(value: unknown): string {
           {{ i18n.tf("pdf_corpus.change_dispute_values", "kept “{existing}”; the pass proposed “{proposed}”.", { existing: show(item.existing), proposed: show(item.proposed) }) }}
         </span>
         <span class="choices">
-          <button type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, item.existing)">{{ i18n.t("pdf_corpus.change_keep_current", "Keep current") }}</button>
-          <button type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, item.proposed)">{{ i18n.t("pdf_corpus.change_use_proposed", "Use proposed") }}</button>
+          <button v-for="(candidate, index) in (item.candidates?.length ? item.candidates : [{value:item.existing,source:'current'},{value:item.proposed,source:'proposed'}])" :key="`${item.field}-${index}`" type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, candidate.value)">{{ candidate.source === "current" ? i18n.t("pdf_corpus.change_keep_current", "Keep current") : i18n.tf("pdf_corpus.change_use_candidate", "Use {candidate}", { candidate: candidate.model || candidate.source || i18n.t("pdf_corpus.change_proposed", "proposed") }) }}: {{ show(candidate.value) }}</button>
         </span>
       </li>
     </ul>
