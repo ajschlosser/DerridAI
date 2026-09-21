@@ -238,6 +238,8 @@ const worksAction = (name: RegExp | string) => async (page: Page) => {
   await page.getByRole("button", { name }).first().click();
 };
 
+const CHROMA_UP = { "/api/health": { ok: true, chroma: { available: true } } };
+
 const FAQ_PAGE = {
   records: FAQ_RECORDS,
   count: FAQ_RECORDS.length,
@@ -1228,6 +1230,44 @@ const scenarios: Scenario[] = [
     styles: true,
     fixtures: jobFixtures(RAG_JOBS),
     steps: researchWithEvidence,
+  },
+  // The response cache page is the one Research-area page the runtime still draws.
+  {
+    name: "response-cache-empty",
+    nav: "Response Cache",
+    fixtures: {
+      ...CHROMA_UP,
+      "/api/response-cache/records": { records: [], total: 0, exists: false },
+    },
+  },
+  {
+    name: "response-cache-records",
+    nav: "Response Cache",
+    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
+  },
+  {
+    name: "response-cache-clear-confirm",
+    nav: "Response Cache",
+    target: "dialog",
+    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Clear cache" }).click();
+      await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
+    },
+  },
+  {
+    name: "response-cache-cleared",
+    nav: "Response Cache",
+    fixtures: {
+      ...CHROMA_UP,
+      "/api/response-cache/records": FAQ_PAGE,
+      "DELETE /api/stores/_response_cache": () => ({ ok: true }),
+    },
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Clear cache" }).click();
+      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
+      await page.waitForTimeout(700);
+    },
   },
   // The Response Library is Vue too; it reads cached research answers through the runtime.
   { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
