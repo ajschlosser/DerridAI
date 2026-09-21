@@ -343,7 +343,13 @@ export function createOperationDock(deps: Deps) {
       return;
     }
     const stats = operationDockCardStats(stack);
-    const summary = dockCollapsedSummary(stats as Any);
+    const summary = dockCollapsedSummary({
+      activeCount: stats.active,
+      failedCount: stats.failed,
+      finishedCount: stats.finished,
+      primaryLabel: stats.primaryLabel,
+      primaryPercent: stats.primaryPercent,
+    });
     const label = stack.querySelector("#operationStackCount");
     if (label) {
       label.textContent = trf(summary.key, summary.fallback, summary.values);
