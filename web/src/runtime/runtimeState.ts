@@ -1,6 +1,13 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { bindJobsState } from "../state/jobsState";
-import { bindSharedState, compareState, searchState, vectorState } from "../state/workspaceState";
+import {
+  bindSharedState,
+  compareState,
+  corpusState,
+  searchState,
+  vectorState,
+  worksState,
+} from "../state/workspaceState";
 
 // Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
 // runtime.js so the shape has one home; the runtime still owns the instance it creates.
@@ -8,8 +15,6 @@ import { bindSharedState, compareState, searchState, vectorState } from "../stat
 export function createRuntimeState() {
   const state = {
     userContext: null,
-    files: [],
-    activeFileId: null,
     view: "home",
     selected: {},
     searches: {},
@@ -17,8 +22,6 @@ export function createRuntimeState() {
     pages: {},
     pageSize: 100,
     sorts: {},
-    worksSearch: "",
-    workOverview: "",
     researcherRecordId: "",
     researcherCompareA: "",
     researcherCompareB: "",
@@ -152,10 +155,12 @@ export function createRuntimeState() {
   };
   // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
   // state/workspaceState.ts.
-  return bindSharedState(
-    bindSharedState(bindSharedState(bindJobsState(state), vectorState), compareState),
-    searchState,
-  );
+  const withJobs = bindJobsState(state);
+  const withVector = bindSharedState(withJobs, vectorState);
+  const withCompare = bindSharedState(withVector, compareState);
+  const withSearch = bindSharedState(withCompare, searchState);
+  const withWorks = bindSharedState(withSearch, worksState);
+  return bindSharedState(withWorks, corpusState);
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;

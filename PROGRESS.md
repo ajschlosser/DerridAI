@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 437 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 438 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -179,12 +179,20 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   (`works-*`, `dialog-works-*`; 59 total) were recorded from the PRE-move build in their own commit and compared (59/59, 3 runs);
   `tests/frontend/works-workspace.test.ts`. Baseline gotchas: the per-work "Open N records" buttons are stat links whose
   accessible name starts "Open N records for ..."; each work card has its own Actions menu. `runtime.js` is 8,274 lines.
-- NEXT: the four workspaces (Search, Records, Record, Works) are now isolated behind factories with baselines. Convert their
-  Vue consumers (`SearchView`, `useRecordsWorkspace`, `RecordView`, `useWorksWorkspace`) from snapshot polling to store fields +
-  computed inside composables, one at a time, each with a test pinning when the snapshot's side effects (`persistPrefs`,
-  `refreshStores`, presence checks, `refreshServerAnnotations`) run. Other remaining runtime chunks: the compare/annotations
-  workspace commands (`annotationsService` shim), providers/settings `*ForUi` (already a factory), research/RAG commands
-  (`getResearchWorkspaceSnapshot`, `startResearchRun`, ...), Response Library (`getResponseFaqPage`), job polling, backup/restore.
+- DONE (branch `claude/runtime-refactor-11`, includes runtime-refactor-10 which was NOT yet merged to master when this branch
+  was cut, so merge order is 10 then 11): `files` and `activeFileId` moved into `state/workspaceState.ts` `corpusState`, and
+  `worksSearch` / `workOverview` into `worksState`; `useCorpusStore` and `useWorksStore` added. `invalidateCorpusCache()` (called
+  after every corpus edit) now also calls `touchCorpus()`, so `corpusState.version` changes whenever the loaded corpus does.
+  Nothing in Vue reads these yet (198/198 e2e, 59/59 baseline, 438 unit).
+- DECISION NEEDED (why the consumer conversion stopped): the snapshot functions (`getWorksWorkspaceSnapshot`,
+  `getRecordsListSnapshot`, `getSearchWorkspaceSnapshot`, `getRecordWorkspaceSnapshot`) are read-only, so a composable can
+  expose the snapshot as a `computed` over `corpusState.version` + the group fields + a manual refresh key. But that makes
+  Vue views update AUTOMATICALLY when the runtime changes state elsewhere (for example a file imported while the Works page is
+  open), which today only refresh after the view's own commands. That is a visible behavior change (arguably a fix), so it
+  needs the owner's approval. Without approval a conversion would only rename `load()`. The four workspaces are otherwise
+  ready (factories, baselines, stores).
+- NEXT (once decided): convert `useWorksWorkspace` first (pure snapshot, smallest), then `useRecordsWorkspace`, RecordView, SearchView.
+  Other remaining runtime chunks: the annotations service shim, Research/RAG commands, Response Library, job polling, backup/restore.
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
