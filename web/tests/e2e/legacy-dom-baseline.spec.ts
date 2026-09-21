@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { createHash } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mockBackend, type Fixtures, type Role } from "./support/mock-backend";
+import { FAQ_RECORDS, mockBackend, type Fixtures, type Role } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
 // Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
@@ -72,11 +72,15 @@ interface Scenario {
   scheme?: "light" | "dark";
   /** Load the sample JSONL file before navigating (admin only). */
   load?: boolean;
+  /** Open this route directly instead of navigating from the home page (Vue-native routes only). */
+  path?: string;
+  /** Records for the loaded file, instead of the default sample. */
+  records?: object[];
   fixtures?: Fixtures;
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
-  target?: "main" | "dialog" | "app";
+  target?: "main" | "dialog" | "app" | "dock";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
   /** A viewport size other than the default desktop one, to exercise the responsive rules. */
@@ -86,8 +90,10 @@ interface Scenario {
 async function open(page: Page, scenario: Scenario) {
   await stabilize(page, scenario.scheme ?? "light");
   await mockBackend(page, { role: scenario.role ?? "admin", fixtures: scenario.fixtures });
-  await page.goto(APP + "/");
-  await expect(page.locator("#main")).toBeVisible({ timeout: 15_000 });
+  await page.goto(APP + (scenario.path ?? "/"));
+  await expect(page.locator(scenario.path ? "main" : "#main").first()).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
@@ -97,9 +103,13 @@ async function open(page: Page, scenario: Scenario) {
     await page.setInputFiles("#fileInput", {
       name: "baseline.jsonl",
       mimeType: "application/x-ndjson",
-      buffer: Buffer.from(SAMPLE_TEXT),
+      buffer: Buffer.from(
+        scenario.records ? scenario.records.map((r) => JSON.stringify(r)).join("\n") : SAMPLE_TEXT,
+      ),
     });
-    await expect(page.getByText("Loaded 3 records")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(`Loaded ${scenario.records?.length ?? 3} records`)).toBeVisible({
+      timeout: 10_000,
+    });
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
@@ -121,13 +131,15 @@ async function open(page: Page, scenario: Scenario) {
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
-async function rawMarkup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function rawMarkup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
   const locator =
     target === "dialog"
       ? page.locator("dialog[open]").last()
       : target === "app"
         ? page.locator("#app")
-        : page.locator("main").first();
+        : target === "dock"
+          ? page.locator("#operationProgressStack")
+          : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
@@ -145,6 +157,7 @@ async function rawMarkup(page: Page, target: "main" | "dialog" | "app"): Promise
       .replace(/\s+(style="[^"]*")/g, " $1")
       // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.
       .replace(/ data-v-[0-9a-f]{8}=""/g, "")
+      .replace(/Build [0-9a-f]{7}\b/g, "Build <hash>")
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
   );
@@ -168,13 +181,18 @@ const STYLE_PROPERTIES = [
 ];
 
 /** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
-async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function computedStyles(
+  page: Page,
+  target: "main" | "dialog" | "app" | "dock",
+): Promise<string> {
   const locator =
     target === "dialog"
       ? page.locator("dialog[open]").last()
       : target === "app"
         ? page.locator("#app")
-        : page.locator("main").first();
+        : target === "dock"
+          ? page.locator("#operationProgressStack")
+          : page.locator("main").first();
   return locator.evaluate((root, properties) => {
     const lines: string[] = [];
     const walk = (el: Element, depth: number) => {
@@ -196,7 +214,7 @@ async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Pr
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
+async function markup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
@@ -218,6 +236,147 @@ const clickThenDialog = (find: (page: Page) => Locator) => async (page: Page) =>
 const worksAction = (name: RegExp | string) => async (page: Page) => {
   await page.locator("main summary", { hasText: "Actions" }).first().click();
   await page.getByRole("button", { name }).first().click();
+};
+
+const FAQ_PAGE = {
+  records: FAQ_RECORDS,
+  count: FAQ_RECORDS.length,
+  total: FAQ_RECORDS.length,
+  limit: 50,
+  offset: 0,
+  exists: true,
+};
+
+const RAG_JOBS = {
+  jobs: [
+    {
+      id: "job-rag-1",
+      type: "rag",
+      status: "completed",
+      stage: "done",
+      source_collection: "derrida_primary",
+      model: "qwen3.5:4b",
+      provider: "ollama",
+      owner: "admin",
+      prompt: "What is the trace?",
+      created_at: "2026-03-01T11:50:00Z",
+      started_at: "2026-03-01T11:50:05Z",
+      finished_at: "2026-03-01T11:51:00Z",
+      total: 10,
+      completed: 10,
+      result: {
+        answer: "The trace is a mark of absence.",
+        prompt: "What is the trace?",
+        model: "qwen3.5:4b",
+        sources: [],
+      },
+      request: { locales: ["en"], k: 8 },
+    },
+    {
+      id: "job-rag-2",
+      type: "rag",
+      status: "running",
+      stage: "retrieval",
+      source_collection: "derrida_primary",
+      model: "qwen3.5:4b",
+      provider: "ollama",
+      owner: "admin",
+      prompt: "What is différance?",
+      created_at: "2026-03-01T11:55:00Z",
+      started_at: "2026-03-01T11:55:05Z",
+      total: 10,
+      completed: 4,
+      request: { locales: ["en"], k: 8 },
+    },
+  ],
+};
+
+/**
+ * A jobs endpoint that behaves like a server: listing, deleting one, deleting the finished ones and cancelling all change what
+ * the next listing returns, and a running job finishes after a number of listings (so polling has something to discover).
+ */
+const liveJobs = (options: { finishAfterListings?: number } = {}): Fixtures => {
+  const jobs = RAG_JOBS.jobs.map((job) => ({ ...job }));
+  let listings = 0;
+  const byId = (url: URL) => decodeURIComponent(url.pathname.split("/")[3] ?? "");
+  const finished = (status: string) => ["completed", "failed", "cancelled"].includes(status);
+  return {
+    "/api/jobs": (_url: URL, method: string) => {
+      if (method === "DELETE") {
+        for (let i = jobs.length - 1; i >= 0; i--)
+          if (finished(String(jobs[i].status))) jobs.splice(i, 1);
+        return { ok: true };
+      }
+      listings += 1;
+      if (options.finishAfterListings && listings > options.finishAfterListings) {
+        for (const job of jobs) {
+          if (job.status === "running")
+            Object.assign(job, {
+              status: "completed",
+              stage: "done",
+              completed: job.total,
+              finished_at: "2026-03-01T12:00:00Z",
+            });
+        }
+      }
+      return { jobs };
+    },
+    "/api/jobs/job-rag-1": (_url: URL, method: string) => {
+      if (method === "DELETE")
+        jobs.splice(
+          jobs.findIndex((job) => job.id === "job-rag-1"),
+          1,
+        );
+      return jobs.find((job) => job.id === "job-rag-1") ?? { ok: true };
+    },
+    "/api/jobs/job-rag-2": (_url: URL, method: string) => {
+      if (method === "DELETE")
+        jobs.splice(
+          jobs.findIndex((job) => job.id === "job-rag-2"),
+          1,
+        );
+      return jobs.find((job) => job.id === "job-rag-2") ?? { ok: true };
+    },
+    "POST /api/jobs/job-rag-2/cancel": (url: URL) => {
+      const job = jobs.find((item) => item.id === byId(url));
+      if (job)
+        Object.assign(job, {
+          status: "cancelled",
+          stage: "cancelled",
+          finished_at: "2026-03-01T12:00:00Z",
+        });
+      return job ?? { ok: true };
+    },
+  };
+};
+
+/** Settings > System and operations, where the backup and restore buttons are. */
+const inBackupSection = async (page: Page) => {
+  await page.locator("button", { hasText: "System and operations" }).first().click();
+  await page.waitForTimeout(700);
+};
+const RESTORE_RESPONSE = {
+  workspace: { files: [], prefs: {} },
+  chroma: { count: 2 },
+  pdf_available: false,
+};
+
+/** Selects the first record as evidence in the Record view, then opens Research. */
+const researchWithEvidence = async (page: Page) => {
+  await page
+    .locator("nav, aside")
+    .getByRole("button", { name: "Record View", exact: true })
+    .first()
+    .click();
+  await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Add evidence" }).first().click();
+  await page.waitForTimeout(400);
+  await page
+    .locator("nav, aside")
+    .getByRole("button", { name: "Research", exact: true })
+    .first()
+    .click();
+  await page.waitForTimeout(1500);
 };
 
 const inRecords = async (page: Page) => {
@@ -381,6 +540,49 @@ const FINISHED_JOBS = {
     },
   ],
 };
+
+const ANNOTATED_RECORDS = [
+  {
+    record_id: "grammatology-00001",
+    work: "Of Grammatology",
+    page_start: 3,
+    text: "The sign and divinity have the same place and time of birth.",
+    annotations: [
+      {
+        id: "n1",
+        note: "Central claim",
+        quote: "the sign",
+        tags: ["sign", "presence"],
+        author: "admin",
+        created_at: "2026-02-01T10:00:00Z",
+        field: "text",
+      },
+      {
+        id: "n2",
+        note: "Cf. Glas",
+        tags: ["glas"],
+        author: "reviewer",
+        created_at: "2026-02-03T10:00:00Z",
+      },
+    ],
+  },
+  {
+    record_id: "glas-00001",
+    work: "Glas",
+    page_start: 5,
+    text: "What remains of the text remains to be read.",
+    annotations: [
+      {
+        id: "n3",
+        note: "On remains",
+        quote: "remains",
+        tags: ["remains"],
+        author: "admin",
+        created_at: "2026-02-02T10:00:00Z",
+      },
+    ],
+  },
+];
 
 /** The job list, and the per-job endpoint the details and results dialogs read. */
 const jobFixtures = (payload: { jobs: Array<{ id: string }> }): Fixtures => ({
@@ -889,6 +1091,286 @@ const scenarios: Scenario[] = [
     target: "app",
     styles: true,
     viewport: { width: 820, height: 1000 },
+  },
+  // The Annotations view is Vue, but the annotations it lists, filters and removes come from the runtime.
+  { name: "annotations-empty", nav: "Annotations" },
+  { name: "annotations-loaded", nav: "Annotations", load: true, records: ANNOTATED_RECORDS },
+  {
+    name: "annotations-recent",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Recent" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "annotations-search",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByPlaceholder(/Search annotations/).fill("remains");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-open-work",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Open work overview" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-open-record",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.locator("main button", { hasText: "↗" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-remove",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Remove" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "styles-annotations-light",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    styles: true,
+  },
+  // The Research view is Vue, but its evidence, configuration, runs and jobs all come from the runtime.
+  { name: "research-with-evidence", load: true, steps: researchWithEvidence },
+  {
+    name: "research-question",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.locator("#researchQuestion").fill("What is the trace?");
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "research-remove-evidence",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page
+        .getByRole("button", { name: /Remove from evidence/ })
+        .first()
+        .click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-clear-evidence",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Clear" }).first().click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-expert-settings",
+    load: true,
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Expert settings" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "research-runs-drawer",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page.getByRole("button", { name: "Runs", exact: true }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "research-with-jobs",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: researchWithEvidence,
+  },
+  {
+    name: "research-open-job",
+    load: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: async (page) => {
+      await researchWithEvidence(page);
+      await page
+        .getByRole("button", { name: /What is différance/ })
+        .first()
+        .click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "styles-research-evidence-light",
+    load: true,
+    styles: true,
+    fixtures: jobFixtures(RAG_JOBS),
+    steps: researchWithEvidence,
+  },
+  // The Response Library is Vue too; it reads cached research answers through the runtime.
+  { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
+  {
+    name: "faq-archive-dialog",
+    path: "/faq",
+    target: "dialog",
+    fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /Browse saved research/ })
+        .first()
+        .click();
+      await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
+    },
+  },
+  // Job polling, cancelling and removing, seen on the dashboard's Operations panel and in the progress dock.
+  {
+    name: "jobs-poll-completes",
+    load: true,
+    fixtures: liveJobs({ finishAfterListings: 1 }),
+    steps: async (page) => {
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-refresh",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.locator("#refreshJobs").click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "jobs-cancel",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /^Cancel/ })
+        .first()
+        .click();
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    name: "jobs-remove-finished",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /^Remove/ })
+        .first()
+        .click();
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-clear-finished",
+    load: true,
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.locator("#clearFinishedJobs").click();
+      await page.waitForTimeout(6500);
+    },
+  },
+  {
+    name: "jobs-dock-running",
+    load: true,
+    target: "dock",
+    fixtures: liveJobs(),
+    steps: async (page) => {
+      await page.waitForTimeout(800);
+    },
+  },
+  // Backup and restore are started from Settings; the runtime does the work and reports it in a toast.
+  { name: "backup-section", nav: "Settings", load: true, steps: inBackupSection },
+  {
+    name: "backup-confirm",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "backup-created",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await expect(page.getByText(/Full backup created/)).toBeVisible({ timeout: 10_000 });
+    },
+  },
+  {
+    name: "backup-failed",
+    nav: "Settings",
+    load: true,
+    target: "app",
+    fixtures: { "POST /api/admin/backup": () => ({ detail: "disk full" }) },
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("button", { hasText: "Download full backup" }).first().click();
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    name: "restore-confirm",
+    nav: "Settings",
+    target: "app",
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("input[type=file][accept*=zip]").setInputFiles({
+        name: "backup.zip",
+        mimeType: "application/zip",
+        buffer: Buffer.from("PK"),
+      });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "restore-done",
+    nav: "Settings",
+    target: "app",
+    fixtures: { "POST /api/admin/restore": () => RESTORE_RESPONSE },
+    steps: async (page) => {
+      await inBackupSection(page);
+      await page.locator("input[type=file][accept*=zip]").setInputFiles({
+        name: "backup.zip",
+        mimeType: "application/zip",
+        buffer: Buffer.from("PK"),
+      });
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+      await expect(page.getByText(/Restore complete/)).toBeVisible({ timeout: 10_000 });
+    },
   },
 ];
 

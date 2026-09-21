@@ -1,0 +1,456 @@
+<main id="main" class="runtime-surface" aria-live="polite">
+<div class="dashboard-page">
+    <section class="dashboard-page-top">
+<article class="card dashboard-hero">
+<img src="/brand/derridai-mark.png" alt="" class="dashboard-hero-mark">
+<div class="dashboard-hero-copy">
+<h1>Welcome to DerridAI</h1>
+<p class="dashboard-hero-tagline">Search. Compare. Annotate. Always already.</p>
+<blockquote>“Il n’y a pas de hors-texte.”</blockquote>
+<small>— Jacques Derrida</small>
+<div class="dashboard-hero-actions">
+<button class="btn dark" id="dashStartSearch">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>Start searching</button>
+<button class="btn" id="dashBrowseWorks">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>Browse works</button>
+</div>
+</div>
+</article>
+    <article class="card dashboard-search-card">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+</span>
+<b>Global Search</b>
+</div>
+<div class="dashboard-search-tabs">
+<button class="active" data-dash-search-mode="traditional">Traditional search</button>
+<button class="" data-dash-search-mode="database">Semantic DB Search</button>
+</div>
+<div class="dashboard-search-line">
+<div class="dashboard-search-input">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<input id="dashSearchQuery" value="" placeholder="Search the corpus…">
+</div>
+<select id="dashSearchWork" class="control" aria-label="Work">
+<option value="">All works</option>
+<option value="Of Grammatology">Of Grammatology</option>
+<option value="On Cosmopolitanism and Forgiveness">On Cosmopolitanism and Forgiveness</option>
+</select>
+<button class="btn dark" id="dashRunSearch">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>Search</button>
+</div>
+<div class="dashboard-search-footer">
+<button class="dashboard-advanced-link" id="dashAdvancedSearch">Advanced filters →</button>
+<p class="dashboard-search-help">Search across works, metadata, annotations, and—when available—the semantic database.</p>
+</div>
+</article>
+</section>
+    <section class="dashboard-page-middle">
+<article class="card dashboard-overview-card">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+</span>
+<b>Corpus Overview</b>
+</div>
+<div class="dashboard-overview-grid">
+<button data-dashboard-nav="works">
+<span class="dashboard-overview-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+</span>
+<strong>2</strong>
+<small>Works</small>
+</button>
+<button data-dashboard-nav="list">
+<span class="dashboard-overview-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+</span>
+<strong>3</strong>
+<small>Records</small>
+</button>
+<button>
+<span class="dashboard-overview-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+</span>
+<strong>25</strong>
+<small>Total words</small>
+</button>
+<button data-dashboard-nav="vector">
+<span class="dashboard-overview-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+</span>
+<strong>0</strong>
+<small>Databases</small>
+</button>
+</div>
+</article>
+    <article class="card dashboard-average-card dashboard-metric-carousel" aria-roledescription="carousel">
+<div class="dashboard-metric-head">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 20V10M10 20V4M16 20v-7M22 20v-11">
+</path>
+<path d="M2 20h21">
+</path>
+</svg>
+</span>
+<b>Top 5 Works by Average Record Length</b>
+</div>
+<div class="dashboard-metric-controls">
+<button class="dashboard-metric-arrow" id="dashMetricPrev" type="button" aria-label="Previous chart">←</button>
+<span>1 / 5</span>
+<button class="dashboard-metric-arrow" id="dashMetricNext" type="button" aria-label="Next chart">→</button>
+</div>
+</div>
+<div class="dashboard-metric-body">
+<div class="dashboard-average-list">
+<button class="dashboard-average-row" data-dashboard-work="Of Grammatology">
+<span>Of Grammatology</span>
+<i>
+<em style="width:100%">
+</em>
+</i>
+<b>9</b>
+</button>
+<button class="dashboard-average-row" data-dashboard-work="On Cosmopolitanism and Forgiveness">
+<span>On Cosmopolitanism and Forgiveness</span>
+<i>
+<em style="width:78%">
+</em>
+</i>
+<b>7</b>
+</button>
+</div>
+</div>
+<div class="dashboard-metric-dots" role="tablist" aria-label="Work charts">
+<button type="button" role="tab" data-dashboard-metric="0" class="active" aria-label="Top 5 Works by Average Record Length" aria-selected="true" tabindex="0">
+</button>
+<button type="button" role="tab" data-dashboard-metric="1" class="" aria-label="Top 5 Works by Total Words" aria-selected="false" tabindex="-1">
+</button>
+<button type="button" role="tab" data-dashboard-metric="2" class="" aria-label="Top 5 Works by Number of Records" aria-selected="false" tabindex="-1">
+</button>
+<button type="button" role="tab" data-dashboard-metric="3" class="" aria-label="Works as percentage of total records" aria-selected="false" tabindex="-1">
+</button>
+<button type="button" role="tab" data-dashboard-metric="4" class="" aria-label="Works as percentage of total words" aria-selected="false" tabindex="-1">
+</button>
+</div>
+</article>
+    <article class="card dashboard-activity-card">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+</span>
+<b>Recent Activity</b>
+</div>
+<div class="dashboard-activity-list">
+<div class="dashboard-activity-empty">No recent activity in areas available to this account.</div>
+</div>
+</article>
+</section>
+    <section class="card dashboard-works-card">
+<div class="dashboard-section-heading">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+</span>
+<b>Works</b>
+</div>
+<button class="dashboard-text-link" id="dashViewAllWorks">View all works →</button>
+</div>
+<div class="dashboard-work-carousel-shell">
+<button class="carousel-arrow" id="dashWorksPrev" type="button" title="Previous" aria-label="Previous">‹</button>
+<div class="dashboard-work-strip" id="dashWorksCarousel">
+<button class="dashboard-work-card" data-dashboard-work="Of Grammatology">
+<span class="dashboard-book-cover placeholder">01</span>
+<span>
+<b>Of Grammatology</b>
+<small>1967</small>
+<small>2 records</small>
+</span>
+</button>
+<button class="dashboard-work-card" data-dashboard-work="On Cosmopolitanism and Forgiveness">
+<span class="dashboard-book-cover placeholder">02</span>
+<span>
+<b>On Cosmopolitanism and Forgiveness</b>
+<small>2001</small>
+<small>1 records</small>
+</span>
+</button>
+</div>
+<button class="carousel-arrow" id="dashWorksNext" type="button" title="Next" aria-label="Next">›</button>
+</div>
+</section>
+    <section class="dashboard-page-lower">
+<article class="card dashboard-quick-card dashboard-language-card">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>
+</span>
+<b>Language Settings</b>
+</div>
+<p>Choose the interface language and manage translation dictionaries.</p>
+<div class="dashboard-quick-field dashboard-locale-field">
+<span>Interface language</span>
+<b>
+<i class="dashboard-locale-symbol">us</i>English (United States)</b>
+</div>
+<button class="btn primary" id="dashLanguages">Manage languages</button>
+</article>
+    <article class="card dashboard-quick-card dashboard-provider-card">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+</span>
+<b>LLM Provider Settings</b>
+</div>
+<p>Configure the provider used for LLM-assisted workflows.</p>
+<div class="dashboard-provider-fields">
+<div class="dashboard-quick-field">
+<span>Default provider</span>
+<b>Local Ollama</b>
+</div>
+<div class="dashboard-quick-field">
+<span>Model</span>
+<b>gemma4:e2b</b>
+</div>
+</div>
+<button class="btn" id="dashProviders">Manage provider</button>
+</article>
+    <article class="card dashboard-quick-card dashboard-record-preview">
+<div class="dashboard-section-heading">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+</span>
+<b>Record View</b>
+</div>
+<button class="dashboard-text-link" id="dashRecordView">Open →</button>
+</div>
+<div class="dashboard-record-state">A record from the corpus</div>
+<div class="dashboard-record-meta">
+<b>Of Grammatology</b>
+<span class="dashboard-record-pages">p. 3</span>
+</div>
+<div class="dashboard-record-text">The sign and divinity have the same place and time of birth.</div>
+</article>
+    <article class="card dashboard-quick-card dashboard-annotations-card">
+<div class="dashboard-section-heading">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+</span>
+<b>Annotations</b>
+</div>
+<button class="dashboard-text-link" id="dashAnnotations">Open →</button>
+</div>
+<p>Collect notes, tags, and discussion threads attached to corpus evidence.</p>
+</article>
+    </section>
+<section class="card dashboard-corpus-builds" aria-label="Corpus builds">
+    <div class="dashboard-section-heading">
+<div class="dashboard-card-title">
+<span class="dashboard-title-icon">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 2h9l5 5v15H6z">
+</path>
+<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+</path>
+</svg>
+</span>
+<b>Corpus builds</b>
+</div>
+<button class="dashboard-text-link" id="dashCorpusBuilder">Open Corpus Builder →</button>
+</div>
+    <p class="dashboard-corpus-help">Recent PDF-to-corpus pipelines stay visible here even after you leave Corpus Builder.</p>
+    <div class="dashboard-corpus-list">
+<div class="dashboard-corpus-empty">No corpus builds yet. Start with a source PDF in Corpus Builder.</div>
+</div>
+  </section>
+<div id="operationsPanelHost" data-v-app="">
+<section id="operationsPanel" class="ops" aria-labelledby="ops-heading">
+<header class="ops-head">
+<div class="ops-head-copy">
+<h2 id="ops-heading" tabindex="-1" class="ops-h2">Background operations</h2>
+<p class="ops-lede">LLM, RAG, PDF corpus builds, and Chroma upserts share this queue</p>
+</div>
+<div class="ops-head-actions">
+<button type="button" class="ops-btn" id="refreshJobs">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
+</path>
+<path d="M3 4v6h6">
+</path>
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg>Refresh</button>
+<button type="button" class="ops-btn" id="clearFinishedJobs" disabled="">Clear finished</button>
+</div>
+</header>
+<div class="ops-filters" role="group" aria-label="Show operations">
+<button type="button" class="ops-chip" aria-pressed="true">All <span class="ops-chip-count">1</span>
+</button>
+<button type="button" class="ops-chip" aria-pressed="false">Running <span class="ops-chip-count">1</span>
+</button>
+<button type="button" class="ops-chip" aria-pressed="false">Needs attention <span class="ops-chip-count">0</span>
+</button>
+<button type="button" class="ops-chip" aria-pressed="false">Finished <span class="ops-chip-count">0</span>
+</button>
+</div>
+<!---->
+<!---->
+<!---->
+<section class="ops-section" aria-labelledby="ops-h-active">
+<h3 id="ops-h-active" class="ops-h3">In progress <span class="ops-count">1</span>
+</h3>
+<ul class="ops-list">
+<li class="ops-row tone-info is-active" data-op-id="job-rag-2" aria-labelledby="ops-title-job-rag-2">
+<span class="ops-rail" aria-hidden="true">
+</span>
+<span class="ops-type" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+</span>
+<div class="ops-main">
+<div class="ops-heading">
+<h4 id="ops-title-job-rag-2" class="ops-title">RAG pipeline</h4>
+<span class="ops-status tone-info">
+<span class="ops-status-icon ops-spinner" aria-hidden="true">
+</span> Running</span>
+</div>
+<p class="ops-subtitle">retrieval</p>
+<div class="ops-progress-area">
+<div class="ops-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="4 of 10 (40%) · About 7 min 23 sec left" aria-label="Progress of RAG pipeline">
+<span class="ops-progress-fill" style="width: 40%;">
+</span>
+</div>
+<p class="ops-progress-text">4 of 10 (40%) · About 7 min 23 sec left</p>
+</div>
+<!---->
+<p class="ops-meta">
+<time datetime="2026-03-01T11:55:05Z" title="Mar 1, 2026, 11:55 AM">Started 5 minutes ago</time>
+<span class="sr-only">. </span>
+<span>Running for 4 min 55 sec</span>
+<span class="sr-only">. </span>
+<span>by admin</span>
+</p>
+<dl class="ops-facts">
+<div>
+<dt>Generation</dt>
+<dd>qwen3.5:4b</dd>
+</div>
+<div>
+<dt>Collection</dt>
+<dd>derrida_primary</dd>
+</div>
+<div>
+<dt>Languages</dt>
+<dd>en</dd>
+</div>
+<div>
+<dt>k / fetch_k</dt>
+<dd>8 / —</dd>
+</div>
+</dl>
+</div>
+<div class="ops-actions">
+<!---->
+<button type="button" class="ops-btn" aria-label="Details for RAG pipeline" data-primary="">Details</button>
+<button type="button" class="ops-btn is-danger" aria-label="Cancel RAG pipeline">Cancel</button>
+</div>
+</li>
+</ul>
+</section>
+<!---->
+<div class="sr-only" role="status" aria-live="polite" aria-atomic="true">Removed RAG pipeline. Undo is available for a few seconds.</div>
+</section>
+</div>
+</div>
+</main>

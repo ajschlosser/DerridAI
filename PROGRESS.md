@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 440 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 454 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 90 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 115 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -123,7 +123,7 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 
 - Job polling/notifications (`refreshJobs`, `startJobPolling`, `syncJobProgressToasts`, `cancelBackgroundJob`,
   `removeFinishedJob`, `syncUpsertJobReceipts`): touch the operations dock, RAG panel and home card renderers.
-- Backup/restore (`downloadFullBackup`/`restoreFullBackup`), `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals.
+- `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals. (Backup/restore moved to `domain/backupWorkspace.ts`.)
 - Legacy annotations renderers (`renderAnnotations`, `annotationItemHtml`, ...): `renderView` still dispatches to them
   although `/annotations` is Vue-native now. Do not delete without proving they are unreachable (e2e + DOM baseline).
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
@@ -136,6 +136,44 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 (5,176 -> 4,514 lines) with 60/60 baseline scenarios (computed styles unchanged) and 199/199 e2e. Next for CSS: move the 306
 Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
 classes move with their renderer when it is replaced.
+
+### Job polling extracted (branch `claude/runtime-refactor-16`, includes -15 which was not yet merged)
+
+`domain/jobsWorkspace.ts` (`createJobsWorkspace({state, ...21 helper lambdas})`, 12 functions: `refreshJobs`, `startJobPolling`,
+`pauseRuntime`, `pruneClientJobState`, `removeFinishedJob`, `clearFinishedOperations`, `syncUpsertJobReceipts`,
+`cancelBackgroundJob`, `submitBackgroundLlmJob`, `registerExternalJob`, `maybeDesktopNotify`, `syncJobProgressToasts`). The two module
+objects those functions share (`jobCompletionNotified`, `completedJobToastTimers`) now live inside the factory. The operation dock and
+toast DOM code (`ensureJobProgressCard`, `showOperationProgress`, `progressStack`, `updateOperationStackCount`, ...) stays in the
+runtime and is passed in. Six new baseline scenarios (`jobs-*`; 115 total) use `liveJobs()`, a stateful jobs endpoint fixture (listing,
+deleting, clearing, cancelling change later listings; a running job finishes after N listings) and a `dock` target
+(`#operationProgressStack`); recorded before the move. `tests/frontend/jobs-workspace.test.ts`. `runtime.js` is 7,571 lines.
+Remaining runtime chunks: backup/restore (`downloadFullBackup`/`restoreFullBackup`, DOM buttons + modals + toasts), `checkHealth`,
+the operation dock/toast DOM code, the modals, and the legacy renderers (dashboard, PDF Explorer, dead Record/Compare/FAQ/RAG
+pages).
+
+### Research workspace + Response Library extracted (branch `claude/runtime-refactor-15`, includes -14 which was not yet merged)
+
+`domain/researchWorkspace.ts` (`createResearchWorkspace({state, ...26 helper lambdas})`, 20 functions: the Research snapshot,
+config, evidence, running/grading/re-running, job commands, `getResponseFaqPage`, `gradeResponseFaqRecord`,
+`rerunResponseFaqRecord`, `rememberRagPrompt`/`rememberRagRun`, `prepareRagRerun`). 11 new baseline scenarios (`research-*`,
+`faq-*`, `styles-research-evidence-light`; 109 total) recorded from the pre-move build in their own commit; the spec gained a
+`path` option to open a Vue-native route directly (needs `main`, not `#main`). `tests/frontend/research-workspace.test.ts`.
+`runtime.js` is 7,794 lines. `shellRefreshHook` is a reassigned `let`, so it is passed as a lambda like the other helpers.
+Machine load matters: when other processes (a Storybook from another checkout, orphaned Playwright browsers) push the load
+average up, baseline scenarios time out at 30 s in random places; check `uptime`, kill orphans (`/tmp/killall_pw.sh` pattern:
+`chrome-headless-shell`, `playwright test`), and run with `--workers=3`. Never `pkill -f` a word that appears in your own command.
+
+### Annotations workspace extracted (branch `claude/runtime-refactor-14`)
+
+`domain/annotationsWorkspace.ts` (`createAnnotationsWorkspace({state, ...19 helper lambdas})`, 13 functions: gathering local and
+shared annotations, describing them for the view, and every command `annotationsService` sends). Eight Annotations baseline
+scenarios (`annotations-*`, `styles-annotations-light`; 98 total) recorded from the pre-move build in their own commit; the
+scenario `records` option loads custom records (annotated ones) instead of the default sample. `tests/frontend/annotations-workspace.test.ts`.
+`runtime.js` is 8,120 lines. `annotationsService` is still a thin delegate to the runtime (its functions now come from the factory);
+converting it to call the factory directly comes with the composable conversion. Merged master (Copilot PR #81) into this branch.
+Known flakes seen once each and not reproducible on rerun: a Corpus Builder dark-mode axe sweep (`corpus-builder-theme-sweep`,
+slow, 7+ minutes) and one `styles-app-shell-*` computed-style snapshot in 1 of ~6 runs (investigate if it recurs: likely timing of
+the shell's activity badges).
 
 ### CSS move (branch `claude/runtime-refactor-13`)
 
@@ -189,7 +227,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 90 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 115 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -220,7 +258,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (90 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (115 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.
