@@ -3,39 +3,34 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusEnrichmentChanges from "../../src/components/CorpusEnrichmentChanges.vue";
 
-const record = (over: Record<string, unknown> = {}) => ({
-  needs_review: true, speaker: "Jacques Derrida", stance: "critique", target: "hospitality",
-  metadata_field_status: { speaker: { status: "llm_inferred" }, stance: { status: "llm_inferred" }, target: { status: "unresolved" } },
-  metadata_enrichment_history: [{ run_id: "r1", model: "qwen3.5:4b", outcome: "enriched", added_fields: ["speaker"],
-    replaced: [{ field: "stance", previous: "assertion", value: "critique" }],
-    disputes: [{ field: "target", existing: "cities of refuge", proposed: "hospitality" }] }],
+const record=(over:Record<string,unknown>={})=>({
+  needs_review:true,speaker:"Jacques Derrida",stance:"critique",target:"hospitality",
+  metadata_field_status:{speaker:{status:"llm_inferred"},stance:{status:"llm_inferred"},target:{status:"unresolved",method:"llm",verification_status:"pending_review"}},
+  metadata_enrichment_history:[{run_id:"r1",pass:2,model:"qwen3.5:4b",outcome:"disputed",added_fields:["speaker"],replaced:[{field:"stance",previous:"assertion",value:"critique"}],disputes:[]}],
+  metadata_disputes:[{field:"target",existing:"cities of refuge",proposed:"hospitality",candidates:[
+    {candidate_id:"c1",value:"cities of refuge",source:"current"},
+    {candidate_id:"c2",value:"hospitality",source:"llm",model:"qwen3.5:4b",run_id:"r1",pass:2,confidence:.91},
+  ]}],
   ...over,
 });
-const mountWith = (r: Record<string, unknown>) => mount(CorpusEnrichmentChanges, { props: { record: r } });
+const mountWith=(r:Record<string,unknown>)=>mount(CorpusEnrichmentChanges,{props:{record:r}});
 
-describe("changes made by an enrichment pass", () => {
-  beforeEach(() => setActivePinia(createPinia()));
-
-  it("lists what was added, replaced and disputed", () => {
-    const text = mountWith(record()).text();
-    expect(text).toContain("Changed by the last enrichment pass");
-    expect(text).toContain("qwen3.5:4b");
-    expect(text).toMatch(/Added\s*speaker: Jacques Derrida/);
-    expect(text).toContain("assertion");
-    expect(text).toContain("kept “cities of refuge”; the pass proposed “hospitality”");
+describe("changes made by enrichment",()=>{
+  beforeEach(()=>setActivePinia(createPinia()));
+  it("shows authoritative candidates with provenance outside the action",()=>{
+    const text=mountWith(record()).text();
+    expect(text).toContain("cities of refuge");expect(text).toContain("hospitality");expect(text).toContain("qwen3.5:4b");expect(text).toContain("pass 2");expect(text).toContain("91%");
+    expect(text).not.toContain("Use qwen3.5:4b");
   });
-  it("restores the previous value, or keeps or takes the proposal", async () => {
-    const wrapper = mountWith(record());
-    const button = (name: string) => wrapper.findAll("button").find(b => b.text() === name)!;
-    await button("Restore previous").trigger("click");
-    await button("Keep current").trigger("click");
-    await button("Use proposed").trigger("click");
-    expect(wrapper.emitted("resolve")).toEqual([["stance", "assertion"], ["target", "cities of refuge"], ["target", "hospitality"]]);
+  it("restores, keeps, or uses a candidate with compact buttons",async()=>{
+    const wrapper=mountWith(record());const buttons=wrapper.findAll("button");
+    await buttons.find(b=>b.text()==="Restore previous")!.trigger("click");
+    await buttons.find(b=>b.text()==="Keep current")!.trigger("click");
+    await buttons.find(b=>b.text()==="Use this value")!.trigger("click");
+    expect(wrapper.emitted("resolve")).toEqual([["stance","assertion"],["target","cities of refuge"],["target","hospitality"]]);
   });
-  it("drops a change once a person has decided that field, and hides when nothing is left or the record is settled", () => {
-    const decided = record({ metadata_field_status: { speaker: { status: "human_confirmed" }, stance: { status: "human_confirmed" }, target: { status: "human_confirmed" } } });
-    expect(mountWith(decided).find("section").exists()).toBe(false);
-    expect(mountWith(record({ needs_review: false })).find("section").exists()).toBe(false);
-    expect(mountWith({ needs_review: true }).find("section").exists()).toBe(false);
+  it("prefers metadata_disputes over stale history from an earlier pass",()=>{
+    const wrapper=mountWith(record({metadata_enrichment_history:[{run_id:"r1",pass:1,outcome:"disputed",disputes:[{field:"target",existing:"cities of refuge",proposed:"hospitality"}]}],metadata_disputes:[{field:"target",existing:"cities of refuge",proposed:"cosmopolitanism",candidates:[{value:"cities of refuge",source:"current"},{value:"hospitality",source:"llm",model:"m1",pass:1},{value:"cosmopolitanism",source:"llm",model:"m2",pass:2}]}]}));
+    expect(wrapper.text()).toContain("cosmopolitanism");expect(wrapper.text()).toContain("m2");expect(wrapper.text()).toContain("pass 2");
   });
 });

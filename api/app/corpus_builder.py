@@ -4923,16 +4923,20 @@ CURRENT REVIEWED RECORD TEXT:
                 }
                 continue
             field_status[field] = {
-                "status": "llm_inferred",
+                "status": "unresolved",
                 "method": "llm",
                 "confidence": confidence,
                 "auto_populated": True,
-                "autofilled": True,
+                "autofilled": False,
                 "value_source": "llm",
-                "verification_status": "auto_resolved",
+                "verification_status": "pending_review",
                 "proposed_value": record.get(field),
-                "reason_code": "resolved",
-                "reason": str(assessment.get("reason") or evidence_info.get("reason") or "Model proposal."),
+                "reason_code": "autofill_not_approved",
+                "reason": str(
+                    assessment.get("reason")
+                    or evidence_info.get("reason")
+                    or "Model value was populated, but calibrated autofill did not approve automatic verification."
+                ),
             }
         review_metadata_fields = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
         for field in review_metadata_fields:
@@ -4956,7 +4960,7 @@ CURRENT REVIEWED RECORD TEXT:
                 if confidence is not None and confidence > minimum and not needs_human:
                     field_status[field] = {
                         "status": "llm_inferred", "method": "llm", "confidence": confidence,
-                        "auto_populated": False, "autofilled": True, "value_source": "llm",
+                        "auto_populated": False, "autofilled": False, "value_source": "llm",
                         "verification_status": "auto_resolved", "proposed_value": None,
                         "reason_code": "no_supported_value", "reason": reason or "Model found no supported value for this field.",
                     }
@@ -5012,9 +5016,11 @@ CURRENT REVIEWED RECORD TEXT:
                 }
             else:
                 field_status[field] = {
-                    "status": "llm_inferred", "method": "llm", "confidence": confidence,
-                    "auto_populated": value not in (None, "", []), "autofilled": True, "value_source": "llm",
-                    "verification_status": "auto_resolved", "proposed_value": value, "reason_code": "resolved", "reason": reason,
+                    "status": "unresolved", "method": "llm", "confidence": confidence,
+                    "auto_populated": value not in (None, "", []), "autofilled": False, "value_source": "llm",
+                    "verification_status": "pending_review", "proposed_value": value,
+                    "reason_code": "autofill_not_approved",
+                    "reason": reason or "Model value was populated, but calibrated autofill did not approve automatic verification.",
                 }
 
         apply_metadata_constraints(record)
@@ -5878,6 +5884,19 @@ CURRENT REVIEWED RECORD TEXT:
             record["metadata_attention_reasons"] = ["Record metadata requires a human decision before acceptance."]
         else:
             record["metadata_attention_reasons"] = []
+
+    @staticmethod
+    def _settle_enrichment_review_reason(record: dict[str, Any]) -> None:
+        if str(record.get("review_reason") or "") != "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes.":
+            return
+        unresolved_disputes = any(
+            isinstance(item, dict) and not item.get("resolved_at")
+            for item in (record.get("metadata_disputes") or [])
+        )
+        if record.get("metadata_incomplete_fields") or record.get("metadata_review_fields") or unresolved_disputes:
+            return
+        record["review_reason"] = "Pending human review."
+        record["needs_review"] = True
 
     @classmethod
     def _review_issue_codes(cls, record: dict[str, Any]) -> list[str]:
@@ -6861,6 +6880,7 @@ CURRENT REVIEWED RECORD TEXT:
         profile = self._profile_for(build_id)
         self._reopen_due_rechecks(build_id, records, target, profile)
         self._sync_record_metadata_state(target, profile)
+        self._settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
         _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
@@ -6991,6 +7011,8 @@ CURRENT REVIEWED RECORD TEXT:
                     dispute["resolved_value"] = value
                     dispute["resolution_source"] = "human"
             row["metadata_disputes"] = disputes[-100:]
+            self._sync_record_metadata_state(row, self._profile_for(build_id))
+            self._settle_enrichment_review_reason(row)
             record = row
             break
         self._rewrite_and_validate(build_id, records)
@@ -7437,10 +7459,17 @@ CURRENT REVIEWED RECORD TEXT:
 
     def _merge_enrichment_candidate(
         self, live: dict[str, Any], candidate: dict[str, Any], families: list[str], run_id: str, request: dict[str, Any], profile: dict[str, Any],
-        schema: MetadataSchema | None = None,
+        schema: MetadataSchema | None = None, pass_number: int = 1,
     ) -> dict[str, Any]:
         """Fold one pass's candidate into the live record. Human-owned fields are never touched."""
         groups = (schema or default_schema()).family_fields()
+
+        def candidate_id(field: str, value: Any, source: str, model: str = "", pass_no: int | None = None) -> str:
+            payload = json.dumps(
+                {"field": field, "value": value, "source": source, "model": model, "run_id": run_id, "pass": pass_no},
+                ensure_ascii=False, sort_keys=True, default=str,
+            )
+            return "cand-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         live_status = live.setdefault("metadata_field_status", {})
         cand_status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
         cand_evidence = candidate.get("metadata_evidence") if isinstance(candidate.get("metadata_evidence"), dict) else {}
@@ -7449,6 +7478,7 @@ CURRENT REVIEWED RECORD TEXT:
         replaced: list[dict[str, Any]] = []
         kept: list[str] = []
         disputes: list[dict[str, Any]] = []
+        history_disputes: list[dict[str, Any]] = []
         known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
         for family in families:
             for field in groups[family]:
@@ -7495,26 +7525,42 @@ CURRENT REVIEWED RECORD TEXT:
                 else:
                     known.add((field, json.dumps(new, sort_keys=True, default=str)))
                     existing_source = (
-                        "llm_pending"
+                        "llm"
                         if (
                             old_info.get("verification_status") == "pending_review"
                             and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
                         )
                         else "current"
                     )
-                    existing_candidate = {"value": old, "source": existing_source}
+                    existing_model = str(old_info.get("model") or "")
+                    existing_pass = old_info.get("pass") if isinstance(old_info.get("pass"), int) else None
+                    existing_candidate = {
+                        "candidate_id": candidate_id(field, old, existing_source, existing_model, existing_pass),
+                        "value": old, "source": existing_source, "model": existing_model or None,
+                        "run_id": old_info.get("run_id"), "pass": existing_pass,
+                        "created_at": old_info.get("updated_at") or old_info.get("created_at"),
+                    }
                     if isinstance(old_info.get("confidence"), (int, float)):
                         existing_candidate["confidence"] = old_info.get("confidence")
                     if old_info.get("verification_status"):
                         existing_candidate["verification_status"] = old_info.get("verification_status")
 
-                    candidate_entry = {"value": new, "source": run_id, "model": request.get("model")}
+                    model_name = str(request.get("model") or new_info.get("model") or "")
+                    candidate_entry = {
+                        "candidate_id": candidate_id(field, new, "llm", model_name, pass_number),
+                        "value": new, "source": "llm", "model": model_name or None,
+                        "run_id": run_id, "pass": pass_number, "created_at": iso_now(),
+                    }
                     if isinstance(new_info.get("confidence"), (int, float)):
                         candidate_entry["confidence"] = new_info.get("confidence")
                     if new_info.get("verification_status"):
                         candidate_entry["verification_status"] = new_info.get("verification_status")
 
-                    prior_dispute = next((item for item in live.get("metadata_disputes") or [] if isinstance(item, dict) and item.get("field") == field), None)
+                    prior_dispute = next(
+                        (item for item in live.get("metadata_disputes") or []
+                         if isinstance(item, dict) and item.get("field") == field and not item.get("resolved_at")),
+                        None,
+                    )
                     if prior_dispute is not None:
                         fallback_existing = dict(existing_candidate)
                         fallback_existing["value"] = prior_dispute.get("existing")
@@ -7524,19 +7570,25 @@ CURRENT REVIEWED RECORD TEXT:
                             prior_dispute["candidates"] = candidates[-12:]
                             prior_dispute["proposed"] = new
                             prior_dispute["run_id"] = run_id
+                            prior_dispute["pass"] = pass_number
+                            prior_dispute["updated_at"] = iso_now()
+                            history_disputes.append(json.loads(json.dumps(prior_dispute)))
                     else:
-                        disputes.append({
+                        dispute = {
                             "field": field, "existing": old, "proposed": new,
                             "candidates": [existing_candidate, candidate_entry],
-                            "confidence": new_info.get("confidence"), "reason": new_info.get("reason"), "run_id": run_id,
-                        })
+                            "confidence": new_info.get("confidence"), "reason": new_info.get("reason"),
+                            "run_id": run_id, "pass": pass_number, "created_at": iso_now(),
+                        }
+                        disputes.append(dispute)
+                        history_disputes.append(json.loads(json.dumps(dispute)))
                     live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}
         live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
-        outcome = "enriched" if added or replaced else "disputed" if disputes else "unchanged"
+        outcome = "enriched" if added or replaced else "disputed" if history_disputes else "unchanged"
         history = list(live.get("metadata_enrichment_history") or [])
         history.append({
-            "run_id": run_id, "at": iso_now(), "state": "complete", "outcome": outcome, "added_fields": added,
-            "replaced": replaced, "kept_existing": kept, "disputes": disputes,
+            "run_id": run_id, "pass": pass_number, "at": iso_now(), "state": "complete", "outcome": outcome, "added_fields": added,
+            "replaced": replaced, "kept_existing": kept, "disputes": history_disputes,
             "provider_profile_id": request.get("provider_profile_id"), "model": request.get("model"),
         })
         live["metadata_enrichment_history"] = history[-30:]
@@ -7548,18 +7600,18 @@ CURRENT REVIEWED RECORD TEXT:
         activity["last_enrichment_provider"] = request.get("provider")
         activity["last_enrichment_model"] = request.get("model")
         live["activity"] = activity
-        if added or replaced or disputes:
+        if added or replaced or history_disputes:
             live["review_disposition"] = "pending"
             live["accepted"] = False
             live["rejected"] = False
             live["needs_review"] = True
             live["review_reason"] = "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes."
             self._sync_record_metadata_state(live, profile)
-        return {"outcome": outcome, "added": len(added), "replaced": len(replaced), "kept": len(kept), "disputed": len(disputes)}
+        return {"outcome": outcome, "added": len(added), "replaced": len(replaced), "kept": len(kept), "disputed": len(history_disputes)}
 
     def _run_enrichment_pass(
         self, build_id: str, request: dict[str, Any], run_id: str, scope: str, families: list[str],
-        on_progress: Callable[[dict[str, int], int], None],
+        pass_number: int, on_progress: Callable[[dict[str, int], int], None],
     ) -> dict[str, int]:
         """Run one pass over the records currently in scope, merging results into live state."""
         build = self.repo.get_build(build_id)
@@ -7638,7 +7690,7 @@ CURRENT REVIEWED RECORD TEXT:
                         result = {"outcome": "skipped"}
                     else:
                         was_accepted = str(live.get("review_disposition") or "pending") == "accepted"
-                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema)
+                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema, pass_number=pass_number)
                         if was_accepted and result["outcome"] != "unchanged":
                             totals["records_reopened"] += 1
                     self.repo.save_records(build_id, live_records)
@@ -7669,7 +7721,7 @@ CURRENT REVIEWED RECORD TEXT:
                     self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))
 
                 op.update({"state": "running", "current_pass": pass_number})
-                totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, on_progress)
+                totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, pass_number, on_progress)
                 changed = totals.get("fields_added", 0) + totals.get("fields_replaced", 0) + totals.get("fields_disputed", 0)
                 op["passes_completed"] = pass_number
                 op["pass_results"] = list(op.get("pass_results") or []) + [{"pass": pass_number, "changed_fields": changed, **totals}]

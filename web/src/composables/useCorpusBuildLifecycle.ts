@@ -13,7 +13,8 @@ export function useCorpusBuildLifecycle(
   const readyCount=computed(()=>Number(reviewQueueCounts.value.ready??Math.max(0,pendingCount.value-issueCount.value)));
   const topologyIssueCount=computed(()=>Number(reviewQueueCounts.value.topology??0));
   const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
-  const reviewLocked=computed(()=>Boolean(buildRunning.value&&!['enriching','metadata_retry'].includes(String(currentBuild.value?.stage||''))));
+  const reviewCompatibleStages=new Set(["enriching","metadata_retry","metadata_enrichment_rerun"]);
+  const reviewLocked=computed(()=>Boolean(buildRunning.value&&!reviewCompatibleStages.has(String(currentBuild.value?.stage||""))));
   const structuralReviewLocked=computed(()=>buildRunning.value);
   const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
   const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));

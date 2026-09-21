@@ -1148,7 +1148,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                     <CorpusActionMenu :label="i18n.t('pdf_corpus.more_actions','More actions')" :menu-label="i18n.t('pdf_corpus.more_record_actions','More record actions')" :items="recordActionItems" :disabled="busy!==''" placement="top" @select="runRecordAction"/>
                     <div class="decision-actions">
                       <button type="button" class="btn small" @click="skipRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.skip','Skip')}}</button>
-                      <button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button>
+                      <button type="button" class="btn small danger" @click="rejectRecord" :disabled="busy!==''">{{i18n.t('pdf_corpus.reject_next','Reject & next')}}</button>
                       <button ref="acceptButtonEl" type="button" class="btn small primary" @click="toggleAccept" :disabled="busy!==''||reviewLocked" :aria-describedby="selectedMetadataBlocked?'record-metadata-blocker':undefined">{{selectedRecord.accepted?i18n.t('pdf_corpus.reopen','Reopen'):i18n.t('pdf_corpus.accept_next','Accept & next')}}</button>
                     </div>
                   </div>

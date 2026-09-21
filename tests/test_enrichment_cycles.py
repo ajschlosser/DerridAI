@@ -307,6 +307,51 @@ def test_initial_enrichment_operation_marks_the_first_pass_complete():
     assert op["records_processed"] == 2
     assert op["started_at"] == "t0"
 
+def test_updated_existing_dispute_counts_as_a_change_and_keeps_pass_provenance(tmp_path: Path):
+    live = {
+        "record_id": "r1", "text": "record 1", "stance": "neutral",
+        "metadata_field_status": {
+            "stance": {"status": "unresolved", "method": "llm", "confidence": 0.70, "value_source": "llm", "verification_status": "pending_review"}
+        },
+    }
+    manager, repo, build_id = make_manager(tmp_path, [live])
+    current = repo.load_records(build_id)[0]
+
+    first = proposal(current, stance=("critical", 0.75))
+    first["metadata_field_status"]["stance"].update(value_source="llm", verification_status="pending_review")
+    one = manager._merge_enrichment_candidate(
+        current, first, ["discourse"], "run-x", {"model": "m1"},
+        manager._profile_for(build_id), schema=manager._schema_for(build_id), pass_number=1,
+    )
+    assert one["outcome"] == "disputed"
+
+    second = proposal(current, stance=("qualified", 0.78))
+    second["metadata_field_status"]["stance"].update(value_source="llm", verification_status="pending_review")
+    two = manager._merge_enrichment_candidate(
+        current, second, ["discourse"], "run-x", {"model": "m2"},
+        manager._profile_for(build_id), schema=manager._schema_for(build_id), pass_number=2,
+    )
+    assert two["outcome"] == "disputed"
+    assert two["disputed"] == 1
+    dispute = current["metadata_disputes"][0]
+    assert [item["value"] for item in dispute["candidates"]] == ["neutral", "critical", "qualified"]
+    assert dispute["candidates"][-1]["model"] == "m2"
+    assert dispute["candidates"][-1]["pass"] == 2
+    assert current["metadata_enrichment_history"][-1]["pass"] == 2
+
+
+def test_settled_enrichment_reason_is_not_left_as_a_fake_blocker():
+    record = {
+        "needs_review": True,
+        "review_reason": "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes.",
+        "metadata_incomplete_fields": [],
+        "metadata_review_fields": [],
+        "metadata_disputes": [{"field": "stance", "resolved_at": "now"}],
+    }
+    cb.PdfCorpusBuildManager._settle_enrichment_review_reason(record)
+    assert record["review_reason"] == "Pending human review."
+
+
 def test_pending_llm_proposals_are_preserved_as_dispute_candidates(tmp_path: Path):
     # PR #81 disputes must preserve PR #83's populated-but-unverified proposal.
     live = {
@@ -349,6 +394,7 @@ def test_pending_llm_proposals_are_preserved_as_dispute_candidates(tmp_path: Pat
         {"provider": "ollama", "model": "m"},
         manager._profile_for(build_id),
         schema=manager._schema_for(build_id),
+        pass_number=2,
     )
 
     assert result["outcome"] == "disputed"
@@ -357,8 +403,10 @@ def test_pending_llm_proposals_are_preserved_as_dispute_candidates(tmp_path: Pat
     assert dispute["existing"] == "neutral"
     assert dispute["proposed"] == "critical"
     assert [item["value"] for item in dispute["candidates"]] == ["neutral", "critical"]
-    assert dispute["candidates"][0]["source"] == "llm_pending"
+    assert dispute["candidates"][0]["source"] == "llm"
     assert dispute["candidates"][0]["verification_status"] == "pending_review"
-    assert dispute["candidates"][1]["source"] == "run-2"
+    assert dispute["candidates"][1]["source"] == "llm"
+    assert dispute["candidates"][1]["run_id"] == "run-2"
+    assert dispute["candidates"][1]["pass"] == 2
     assert dispute["candidates"][1]["verification_status"] == "pending_review"
     assert dispute["candidates"][1]["confidence"] == 0.4
