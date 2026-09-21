@@ -101,7 +101,12 @@ async function open(page: Page, scenario: Scenario) {
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
-    await page.getByRole("button", { name: scenario.nav, exact: true }).click();
+    // The sidebar entry; the top bar has its own "Search" button.
+    await page
+      .locator("nav, aside")
+      .getByRole("button", { name: scenario.nav, exact: true })
+      .first()
+      .click();
   }
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(600);
@@ -506,6 +511,66 @@ const scenarios: Scenario[] = [
     },
   },
   { name: "styles-home-researcher-dark", role: "researcher", scheme: "dark", styles: true },
+  // The Search view is Vue, but every command it sends and every result it shows goes through the runtime.
+  { name: "search-loaded", nav: "Search", load: true },
+  {
+    name: "search-query",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByPlaceholder(/Search extracted text/).fill("text");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-facet-topic",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Topics" }).click();
+      await page.locator("details", { hasText: "Topics" }).getByRole("checkbox").first().check();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-sort-page",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Sort:" }).click();
+      await page.getByRole("button", { name: "Page Start" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-layout-cards",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Cards" }).click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-advanced-filter",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "Search options" }).click();
+      await page.getByPlaceholder("Type or choose a value…").fill("Of Grammatology");
+      await page.getByRole("button", { name: "Add filter" }).click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "search-select-record",
+    nav: "Search",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("checkbox", { name: /^Select derrida-grammatology-00001/ }).check();
+      await page.waitForTimeout(700);
+    },
+  },
 ];
 
 test.describe("legacy runtime DOM baseline", () => {

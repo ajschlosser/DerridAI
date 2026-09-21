@@ -1,0 +1,664 @@
+<main class="vue-native-page search-native-page" aria-busy="false" aria-labelledby="search-page-title">
+<header class="search-workspace-header" aria-labelledby="search-page-title">
+<div class="search-workspace-heading">
+<span class="section-label">Corpus exploration</span>
+<h1 id="search-page-title">Search</h1>
+<p>Explore loaded records or search the corpus database without losing the context of your query, filters, and evidence.</p>
+</div>
+<div class="search-workspace-actions" aria-label="Search view actions">
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>Saved views</button>
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Save view</button>
+<button type="button" class="btn soft">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="12" height="12" rx="2">
+</rect>
+<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2">
+</path>
+</svg>Copy link</button>
+</div>
+<div class="search-scope-row">
+<div class="search-scope-switch" role="group" aria-label="Search scope">
+<button type="button" class="active" aria-pressed="true" title="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+<span>Loaded records</span>
+<small>3</small>
+</button>
+<button type="button" class="" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>Corpus database</span>
+<small>1</small>
+</button>
+</div>
+<div class="search-workspace-stats" aria-live="polite">
+<span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>0 selected evidence</span>
+</div>
+</div>
+</header>
+<section class="search-command-surface" aria-label="Search controls">
+<!---->
+<form class="search-command-row">
+<label class="search-command-input">
+<span class="sr-only">Search query</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<input type="search" placeholder="Search extracted text across loaded records…" autocomplete="off" value="">
+<!---->
+</label>
+<!---->
+</form>
+<!---->
+<details class="search-options">
+<summary>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>Search options<!---->
+</summary>
+<div class="search-options-body">
+<!---->
+<div class="search-advanced-filter-builder">
+<div class="search-options-heading">
+<div>
+<span class="section-label">Advanced filters</span>
+<h3>Precise metadata filter</h3>
+</div>
+<p>Use field-level conditions when the facet sidebar is not specific enough.</p>
+</div>
+<div class="search-filter-builder-grid">
+<label>
+<span>Field</span>
+<select class="control">
+<option value="concepts">Concepts</option>
+<option value="discourse_role">Discourse role</option>
+<option value="document_author">Document author</option>
+<option value="document_language">Document language</option>
+<option value="needs_review">Needs review</option>
+<option value="original_language">Original language</option>
+<option value="page_end">Page end</option>
+<option value="page_start">Page start</option>
+<option value="persons">Persons</option>
+<option value="position_holder">Position holder</option>
+<option value="proposition_status">Proposition status</option>
+<option value="quoted_speaker">Quoted speaker</option>
+<option value="record_id">Record ID</option>
+<option value="review_reason">Review reason</option>
+<option value="speaker">Speaker</option>
+<option value="stance">Stance</option>
+<option value="target">Target</option>
+<option value="topics">Topics</option>
+<option value="work">Work</option>
+<option value="year">Year</option>
+</select>
+</label>
+<label>
+<span>Condition</span>
+<select class="control">
+<option value="eq">equals</option>
+<option value="neq">not equal</option>
+<option value="has">contains</option>
+<option value="nhas">does not contain</option>
+<option value="empty">is empty</option>
+<option value="notempty">is not empty</option>
+</select>
+</label>
+<label>
+<span>Value</span>
+<input class="control" list="search-suggestions-work" placeholder="Type or choose a value…">
+<datalist id="search-suggestions-work">
+<option value="Of Grammatology">
+</option>
+<option value="On Cosmopolitanism and Forgiveness">
+</option>
+</datalist>
+</label>
+<button type="button" class="btn search-add-filter" disabled="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Add filter</button>
+</div>
+</div>
+</div>
+</details>
+</section>
+<!---->
+<section class="search-explorer-grid">
+<button type="button" class="btn search-mobile-filter-button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 5h18l-7 8v5l-4 2v-7z">
+</path>
+</svg>Filters<!---->
+</button>
+<!---->
+<div class="search-facet-shell">
+<button type="button" class="search-facet-close" aria-label="Close">×</button>
+<aside class="search-facets" aria-label="Filters">
+<div class="search-facets-head">
+<div>
+<span class="section-label">Refine</span>
+<h2>Filters</h2>
+</div>
+<!---->
+</div>
+<label class="search-facet-find">
+<span class="sr-only">Filter facet values</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<input type="search" placeholder="Filter values…">
+</label>
+<div class="search-facet-groups">
+<details class="search-facet-group" open="">
+<summary>
+<span>Work</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Of Grammatology">Of Grammatology</span>
+<span class="search-facet-count">2</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="On Cosmopolitanism and Forgiveness">On Cosmopolitanism and Forgiveness</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group" open="">
+<summary>
+<span>Needs review</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Reviewed">Reviewed</span>
+<span class="search-facet-count">2</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Needs review">Needs review</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group" open="">
+<summary>
+<span>DB status</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="No database">No database</span>
+<span class="search-facet-count">3</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group" open="">
+<summary>
+<span>Document author</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Jacques Derrida">Jacques Derrida</span>
+<span class="search-facet-count">3</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Speaker</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Derrida">Derrida</span>
+<span class="search-facet-count">2</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Topics</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="hospitality">hospitality</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="presence">presence</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="sign">sign</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="text">text</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Concepts</span>
+<!---->
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="logocentrism">logocentrism</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+</div>
+</aside>
+</div>
+<section class="search-results-panel" aria-labelledby="search-results-title">
+<div class="search-results-toolbar">
+<div class="search-results-count">
+<span class="section-label">Results</span>
+<h2 id="search-results-title">3 results</h2>
+<!---->
+</div>
+<div class="search-results-controls">
+<details class="search-sort-menu" open="">
+<summary class="btn">Sort: Page Start <span aria-hidden="true">⌄</span>
+</summary>
+<div class="search-sort-popover">
+<button type="button" class="">Work<!---->
+</button>
+<button type="button" class="active">Page Start<span aria-hidden="true">↑</span>
+</button>
+<button type="button" class="">Record ID<!---->
+</button>
+</div>
+</details>
+<div class="search-layout-switcher" role="group" aria-label="Result layout">
+<button type="button" class="btn tiny active" aria-pressed="true">Compact table</button>
+<button type="button" class="btn tiny" aria-pressed="false">Comfortable table</button>
+<button type="button" class="btn tiny" aria-pressed="false">Cards</button>
+</div>
+<!---->
+<label class="search-page-size">
+<span class="sr-only">Results per page</span>
+<select class="control" value="100">
+<option value="25">25 / page</option>
+<option value="50">50 / page</option>
+<option value="100">100 / page</option>
+<option value="250">250 / page</option>
+</select>
+</label>
+</div>
+</div>
+<div class="search-table-scroll" tabindex="0" aria-label="Search results table. Scroll horizontally to reveal additional columns.">
+<table class="search-results-table compact can-select">
+<caption class="sr-only">3 results</caption>
+<thead>
+<tr>
+<th class="search-select-column">
+<input type="checkbox" aria-label="Select records on this page">
+</th>
+<th class="search-col---db-status sticky-status">
+<span>DB status</span>
+<!---->
+</th>
+<th class="search-col-work">
+<button type="button" class="search-sort-header">Work<!---->
+</button>
+<!---->
+</th>
+<th class="search-col-page-start">
+<button type="button" class="search-sort-header">Page start<span aria-hidden="true">↑</span>
+</button>
+<!---->
+</th>
+<th class="search-col-needs-review">
+<button type="button" class="search-sort-header">Needs review<!---->
+</button>
+<!---->
+</th>
+<th class="search-col-text">
+<button type="button" class="search-sort-header">Extracted text<!---->
+</button>
+<!---->
+</th>
+<th class="search-actions-column">Actions</th>
+</tr>
+</thead>
+<tbody>
+<tr class="">
+<td class="search-select-column">
+<input type="checkbox" aria-label="Select derrida-grammatology-00001">
+</td>
+<td class="search-col---db-status sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">
+<i>
+</i>No database</span>
+</td>
+<td class="search-col-work">Of Grammatology</td>
+<td class="search-col-page-start">3</td>
+<td class="search-col-needs-review">
+<span>—</span>
+</td>
+<td class="search-col-text search-text-cell">
+<div class="search-table-text">
+<span>The sign and divinity have the same place and time of birth.</span>
+</div>
+<!---->
+<!---->
+</td>
+<td class="search-actions-column">
+<div class="search-record-actions">
+<button type="button" class="btn tiny">Open</button>
+<button type="button" class="btn tiny">Evidence</button>
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-4" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-4" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+</div>
+</td>
+</tr>
+<tr class="">
+<td class="search-select-column">
+<input type="checkbox" aria-label="Select derrida-grammatology-00002">
+</td>
+<td class="search-col---db-status sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">
+<i>
+</i>No database</span>
+</td>
+<td class="search-col-work">Of Grammatology</td>
+<td class="search-col-page-start">4–6</td>
+<td class="search-col-needs-review">
+<span class="review">Needs review</span>
+</td>
+<td class="search-col-text search-text-cell">
+<div class="search-table-text">
+<span>There is nothing outside the text.</span>
+</div>
+<!---->
+<!---->
+</td>
+<td class="search-actions-column">
+<div class="search-record-actions">
+<button type="button" class="btn tiny">Open</button>
+<button type="button" class="btn tiny">Evidence</button>
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+</div>
+</td>
+</tr>
+<tr class="">
+<td class="search-select-column">
+<input type="checkbox" aria-label="Select derrida-cosmopoli-00001">
+</td>
+<td class="search-col---db-status sticky-status">
+<span class="db-status none" title="ChromaDB is unavailable. Start/connect ChromaDB before using database features.">
+<i>
+</i>No database</span>
+</td>
+<td class="search-col-work">On Cosmopolitanism and Forgiveness</td>
+<td class="search-col-page-start">5</td>
+<td class="search-col-needs-review">
+<span>—</span>
+</td>
+<td class="search-col-text search-text-cell">
+<div class="search-table-text">
+<span>What then would such a concept be?</span>
+</div>
+<!---->
+<!---->
+</td>
+<td class="search-actions-column">
+<div class="search-record-actions">
+<button type="button" class="btn tiny">Open</button>
+<button type="button" class="btn tiny">Evidence</button>
+<span class="citation-menu-native">
+<button type="button" class="btn tiny" popovertarget="citation-v-6" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+</button>
+<div id="citation-v-6" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" class="btn tiny">Full</button>
+</div>
+</span>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!---->
+</section>
+</section>
+<dialog class="search-config-dialog" aria-labelledby="search-columns-dialog-title">
+<div class="dh">
+<div>
+<span class="section-label">Table view</span>
+<h2 id="search-columns-dialog-title">Configure columns</h2>
+</div>
+<button type="button" class="btn icon-only" aria-label="Close">×</button>
+</div>
+<div class="db search-column-dialog-body">
+<p>Choose the fields shown in the table and order them for this search view.</p>
+<div class="search-column-list">
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Concepts</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>DB status</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Document author</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Extracted text</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>File</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Needs review</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Page end</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Page start</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Record ID</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Review reason</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Speaker</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Topics</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Work</span>
+</label>
+<!---->
+</div>
+<div class="search-column-choice">
+<label>
+<input type="checkbox">
+<span>Year</span>
+</label>
+<!---->
+</div>
+</div>
+</div>
+<div class="da">
+<button type="button" class="btn">Reset defaults</button>
+<button type="button" class="btn">Cancel</button>
+<button type="button" class="btn primary" disabled="">Apply</button>
+</div>
+</dialog>
+<dialog class="search-config-dialog search-save-dialog" aria-labelledby="search-save-dialog-title">
+<form>
+<div class="dh">
+<div>
+<span class="section-label">Saved views</span>
+<h2 id="search-save-dialog-title">Save view</h2>
+</div>
+<button type="button" class="btn icon-only" aria-label="Close">×</button>
+</div>
+<div class="db">
+<label class="field">
+<span>View name</span>
+<input class="control" required="" maxlength="80" placeholder="e.g. Adieu passages needing review">
+</label>
+<p class="note">Saved views preserve the current shareable URL, including scope, query, filters, sort, columns, and layout.</p>
+</div>
+<div class="da">
+<button type="button" class="btn">Cancel</button>
+<button type="submit" class="btn primary" disabled="">Save view</button>
+</div>
+</form>
+</dialog>
+<dialog class="search-config-dialog search-views-dialog" aria-labelledby="search-views-dialog-title">
+<div class="dh">
+<div>
+<span class="section-label">Exploration history</span>
+<h2 id="search-views-dialog-title">Saved &amp; recent searches</h2>
+</div>
+<button type="button" class="btn icon-only" aria-label="Close">×</button>
+</div>
+<div class="db search-views-body">
+<section>
+<div class="search-options-heading">
+<div>
+<h3>Saved views</h3>
+<p>Reusable search workspaces stored in this browser.</p>
+</div>
+<button type="button" class="btn">Save current</button>
+</div>
+<p class="note">No saved views yet.</p>
+</section>
+<section>
+<div class="search-options-heading">
+<div>
+<h3>Recent searches</h3>
+<p>Recent exploration states from this browser.</p>
+</div>
+</div>
+<p class="note">No recent searches yet.</p>
+</section>
+</div>
+<div class="da">
+<button type="button" class="btn">Close</button>
+</div>
+</dialog>
+</main>

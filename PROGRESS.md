@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 421 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 425 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 27 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 36 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -154,14 +154,20 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   timing: e.g. `VectorStoresView` `load()` tests `!workspace.storeSearchMode` AFTER `persistWorkspace()` has already written
   "hybrid", so that branch is dead today; binding `searchMode` directly would wake it and change behavior. Do that only with
   a test pinning the intended behavior first.
-- NEXT: SearchView / `useRecordsWorkspace` / RecordView / WorksView still poll `runtime.get*Snapshot()`; convert them one at a
-  time (snapshot -> store fields + computed), then the remaining state groups (records list: `searches`, `sorts`, `pages`,
-  `listFilters`, `selected`, `tableColumns`; PDF; research/RAG config; `view`; files). Known intermittent unit-test flake:
-  `operations-panel.test.ts` sometimes logs "Element is not defined" from a TransitionGroup after teardown (fake bridge).
+- DONE (branch `claude/runtime-refactor-7`): the Search workspace logic left `runtime.js`: `domain/searchWorkspace.ts`
+  (`createSearchWorkspace({state, ...50 helper lambdas})`, 34 functions: snapshot/results/facets/columns building and every
+  command `SearchView` sends). Verbatim move; runtime keeps thin destructured consts, exports unchanged. Params of these
+  legacy functions are typed `Any` on purpose (never typed before). Guarded by 7 new baseline scenarios for the Search view
+  (`search-*`, recorded from the PRE-move build: stash src, build, record, pop, rebuild, compare) plus
+  `tests/frontend/search-workspace.test.ts`. The baseline nav click is now scoped to `nav, aside` (the top bar has its own
+  "Search" button). `SearchView` itself still polls `runtime.getSearchWorkspaceSnapshot()`; next is turning that into store
+  fields + computed inside a composable now that the logic is isolated.
+- NEXT: `useRecordsWorkspace` / RecordView / WorksView still poll `runtime.get*Snapshot()`; same treatment (extract logic
+  factory with baseline scenarios recorded first, then Vue composable over the stores)
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (27 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (36 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.
