@@ -72,6 +72,8 @@ interface Scenario {
   scheme?: "light" | "dark";
   /** Load the sample JSONL file before navigating (admin only). */
   load?: boolean;
+  /** Records for the loaded file, instead of the default sample. */
+  records?: object[];
   fixtures?: Fixtures;
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
@@ -97,9 +99,13 @@ async function open(page: Page, scenario: Scenario) {
     await page.setInputFiles("#fileInput", {
       name: "baseline.jsonl",
       mimeType: "application/x-ndjson",
-      buffer: Buffer.from(SAMPLE_TEXT),
+      buffer: Buffer.from(
+        scenario.records ? scenario.records.map((r) => JSON.stringify(r)).join("\n") : SAMPLE_TEXT,
+      ),
     });
-    await expect(page.getByText("Loaded 3 records")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(`Loaded ${scenario.records?.length ?? 3} records`)).toBeVisible({
+      timeout: 10_000,
+    });
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
@@ -381,6 +387,49 @@ const FINISHED_JOBS = {
     },
   ],
 };
+
+const ANNOTATED_RECORDS = [
+  {
+    record_id: "grammatology-00001",
+    work: "Of Grammatology",
+    page_start: 3,
+    text: "The sign and divinity have the same place and time of birth.",
+    annotations: [
+      {
+        id: "n1",
+        note: "Central claim",
+        quote: "the sign",
+        tags: ["sign", "presence"],
+        author: "admin",
+        created_at: "2026-02-01T10:00:00Z",
+        field: "text",
+      },
+      {
+        id: "n2",
+        note: "Cf. Glas",
+        tags: ["glas"],
+        author: "reviewer",
+        created_at: "2026-02-03T10:00:00Z",
+      },
+    ],
+  },
+  {
+    record_id: "glas-00001",
+    work: "Glas",
+    page_start: 5,
+    text: "What remains of the text remains to be read.",
+    annotations: [
+      {
+        id: "n3",
+        note: "On remains",
+        quote: "remains",
+        tags: ["remains"],
+        author: "admin",
+        created_at: "2026-02-02T10:00:00Z",
+      },
+    ],
+  },
+];
 
 /** The job list, and the per-job endpoint the details and results dialogs read. */
 const jobFixtures = (payload: { jobs: Array<{ id: string }> }): Fixtures => ({
@@ -889,6 +938,66 @@ const scenarios: Scenario[] = [
     target: "app",
     styles: true,
     viewport: { width: 820, height: 1000 },
+  },
+  // The Annotations view is Vue, but the annotations it lists, filters and removes come from the runtime.
+  { name: "annotations-empty", nav: "Annotations" },
+  { name: "annotations-loaded", nav: "Annotations", load: true, records: ANNOTATED_RECORDS },
+  {
+    name: "annotations-recent",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Recent" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "annotations-search",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByPlaceholder(/Search annotations/).fill("remains");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-open-work",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Open work overview" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-open-record",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.locator("main button", { hasText: "↗" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "annotations-remove",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Remove" }).first().click();
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "styles-annotations-light",
+    nav: "Annotations",
+    load: true,
+    records: ANNOTATED_RECORDS,
+    styles: true,
   },
 ];
 
