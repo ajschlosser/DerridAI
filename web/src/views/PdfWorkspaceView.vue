@@ -12,9 +12,11 @@ const router=useRouter();
 const requestedMode=()=>route.query.mode==="explorer"?"explorer":"builder";
 const mode=ref<"explorer"|"builder">(requestedMode());
 async function setMode(next:"explorer"|"builder"){
-  mode.value=next;
+  // Switch the URL first: the Explorer's runtime surface syncs the URL as soon as it mounts, and if the mode is not in
+  // the URL yet it writes the old one back and the tab appears not to work.
   const query={...route.query,mode:next};
   await router.replace({query});
+  mode.value=next;
   if(next==="explorer"){
     await nextTick();
     await runtime.renderView();

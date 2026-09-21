@@ -275,11 +275,7 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  // The Explorer tab races the builder's own URL sync when a build is selected, so open it the way a link does.
-  await page.evaluate(() => {
-    history.pushState(history.state, "", "/pdf?mode=explorer");
-    window.dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
-  });
+  await page.getByRole("button", { name: /PDF Explorer/ }).click();
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(800);
   if (!open) return;
