@@ -123,11 +123,15 @@ async function rawMarkup(page: Page, target: "main" | "dialog"): Promise<string>
     });
     return copy.outerHTML;
   });
-  return html
-    .replace(/></g, ">\n<")
-    .replace(/\s+(style="[^"]*")/g, " $1")
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
-    .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>");
+  return (
+    html
+      .replace(/></g, ">\n<")
+      .replace(/\s+(style="[^"]*")/g, " $1")
+      // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.
+      .replace(/ data-v-[0-9a-f]{8}=""/g, "")
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
+      .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
+  );
 }
 
 const STYLE_PROPERTIES = [
@@ -516,4 +520,21 @@ test.describe("legacy runtime DOM baseline", () => {
       expect(captured).toMatchSnapshot(`${scenario.name}.${scenario.styles ? "txt" : "html"}`);
     });
   }
+});
+
+test.describe("legacy runtime errors", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
+  // renderDashboard once called a function that no longer exists, so every render threw and the
+  // final decorateDisabledControls call never ran.
+  test("the dashboard renders without page errors", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
+    await open(page, { name: "errors", load: true });
+    await markup(page, "main");
+    expect(errors).toEqual([]);
+  });
+  test("disabled dashboard controls are decorated when the dashboard renders", async ({ page }) => {
+    await open(page, { name: "decorated" });
+    await expect(page.locator("#main .disabled-control-tooltip").first()).toBeVisible();
+  });
 });
