@@ -30,6 +30,7 @@ type Helper =
   | "memoCorpus"
   | "mountOperationsPanelHost"
   | "navigateTo"
+  | "openAnnotationsWorkspaceRecord"
   | "openDatabaseCreationFromResearch"
   | "persistPrefs"
   | "pieShareSeries"
@@ -75,6 +76,7 @@ export function createDashboardRenderer(deps: Deps) {
     memoCorpus,
     mountOperationsPanelHost,
     navigateTo,
+    openAnnotationsWorkspaceRecord,
     openDatabaseCreationFromResearch,
     persistPrefs,
     pieShareSeries,
@@ -206,6 +208,10 @@ export function createDashboardRenderer(deps: Deps) {
       target: { kind: "workspace", fileId: item.file.id, index: item.index },
       lastViewed: false,
     };
+  }
+  /** Opens the record a shared (server) annotation is attached to, in the store it belongs to. */
+  function openSharedAnnotationRecord(store: Any, recordId: Any) {
+    openAnnotationsWorkspaceRecord({ server: true, source: store, record_id: recordId });
   }
   async function renderDashboard(main: Any) {
     if (isResearcher()) {
@@ -619,7 +625,6 @@ export function createDashboardRenderer(deps: Deps) {
     main
       .querySelector("[data-recent-server-annotation-record]")
       ?.addEventListener("click", (event: Any) =>
-        // @ts-expect-error SA-11: existing missing handler; the dashboard's latest-annotation click already fails here.
         openSharedAnnotationRecord(
           event.currentTarget.dataset.recentServerAnnotationStore,
           event.currentTarget.dataset.recentServerAnnotationRecord,
@@ -629,6 +634,7 @@ export function createDashboardRenderer(deps: Deps) {
     decorateDisabledControls(main);
   }
   return {
+    openSharedAnnotationRecord,
     dashboardTotals,
     dashboardWorkspaceRecordTarget,
     dashboardRecordPreview,

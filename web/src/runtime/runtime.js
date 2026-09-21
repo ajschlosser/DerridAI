@@ -377,8 +377,9 @@ const {backupContainsCredentials,downloadFullBackup,restoreFullBackup}=createBac
   toast:(...args)=>toast(...args),
   workspacePrefs:(...args)=>workspacePrefs(...args),
 });
-const {dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview,renderDashboard}=createDashboardRenderer({
+const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview,renderDashboard}=createDashboardRenderer({
   state,
+  openAnnotationsWorkspaceRecord:(...args)=>openAnnotationsWorkspaceRecord(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   allRows:(...args)=>allRows(...args),
   api:(...args)=>api(...args),
