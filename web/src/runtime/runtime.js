@@ -49,7 +49,7 @@ import { createCorpusAnalytics } from "../domain/corpusAnalytics";
 import { createSearchFacets } from "../domain/searchFacets";
 import { createRecordPresenters } from "../domain/recordPresenters";
 import { createProviderProfiles } from "../domain/providerProfilesService";
-import { touchJobs } from "../state/jobsState";
+import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
@@ -2659,17 +2659,13 @@ function recentRagRunsHtml(){
 // The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
 // job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
 // model from here and calls back into the existing functions.
-const operationsListeners=new Set();
 function notifyOperationsChanged(){
   touchJobs();
-  for(const listener of [...operationsListeners]){
-    try{listener()}catch(error){console.warn("Operations panel listener failed",error)}
-  }
 }
 function operationsBridge(){
   return {
     snapshot:()=>(state.jobs||[]).map(operationViewModel),
-    subscribe:listener=>{operationsListeners.add(listener);return()=>operationsListeners.delete(listener)},
+    subscribe:listener=>subscribeToJobChanges(listener),
     refresh:async()=>{await refreshJobs({rerender:true})},
     openDetails:id=>{void openJobDetails(id)},
     openResult:id=>{void openJobResults(id)},

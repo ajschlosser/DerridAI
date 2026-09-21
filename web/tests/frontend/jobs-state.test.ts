@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
-import { jobsState, touchJobs } from "../../src/state/jobsState";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { jobsState, subscribeToJobChanges, touchJobs } from "../../src/state/jobsState";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { useJobsStore } from "../../src/stores/jobs";
 
@@ -53,5 +53,29 @@ describe("jobs state shared between the runtime and Vue", () => {
     touchJobs();
     expect(store.version).toBe(1);
     expect(store.activeJobs).toHaveLength(2);
+  });
+
+  it("calls subscribers synchronously on every change, and stops when unsubscribed", () => {
+    const calls: number[] = [];
+    const stop = subscribeToJobChanges(() => calls.push(jobsState.version));
+    touchJobs();
+    expect(calls).toEqual([1]);
+    touchJobs();
+    expect(calls).toEqual([1, 2]);
+    stop();
+    touchJobs();
+    expect(calls).toEqual([1, 2]);
+  });
+
+  it("keeps notifying other subscribers when one throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const seen: string[] = [];
+    subscribeToJobChanges(() => {
+      throw new Error("boom");
+    });
+    subscribeToJobChanges(() => seen.push("second"));
+    touchJobs();
+    expect(seen).toEqual(["second"]);
+    expect(warn).toHaveBeenCalled();
   });
 });

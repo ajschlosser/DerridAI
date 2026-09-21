@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { shallowReactive } from "vue";
+import { shallowReactive, watch } from "vue";
 
 // Background-job state that used to live only on the legacy runtime's `state` object. It is one shared,
 // shallow-reactive object: the runtime reads and writes it through accessors on its own `state` (so its code is
@@ -55,4 +55,22 @@ export function bindJobsState<T extends object>(
     });
   }
   return target as T & Pick<JobsState, (typeof JOBS_RUNTIME_KEYS)[number]>;
+}
+
+/**
+ * Calls `listener` every time the runtime reports a change to the jobs, synchronously (the runtime used to call its
+ * listeners directly, and the Operations panel relies on that timing). Returns the function that stops listening.
+ */
+export function subscribeToJobChanges(listener: () => void): () => void {
+  return watch(
+    () => jobsState.version,
+    () => {
+      try {
+        listener();
+      } catch (error) {
+        console.warn("Operations panel listener failed", error);
+      }
+    },
+    { flush: "sync" },
+  );
 }
