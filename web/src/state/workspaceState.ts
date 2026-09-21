@@ -84,6 +84,36 @@ export function createSearchState() {
 }
 export const searchState = shallowReactive(createSearchState());
 
+/** Works workspace: the title filter and the work whose overview is open. */
+export function createWorksState() {
+  return {
+    worksSearch: "",
+    workOverview: "",
+    /** Bumped by the runtime when it re-renders this workspace, so Vue code can watch for in-place changes. */
+    version: 0,
+  };
+}
+export const worksState = shallowReactive(createWorksState());
+
+/**
+ * The loaded corpus: the JSONL files and the active one. The runtime edits the files and their records in place, so
+ * `version` is bumped every time it invalidates its own corpus caches (which it already does after every corpus edit).
+ */
+export function createCorpusState() {
+  return {
+    files: [] as Loose[],
+    activeFileId: null as string | null,
+    /** Bumped whenever the loaded corpus changes, so Vue code can watch for in-place edits. */
+    version: 0,
+  };
+}
+export const corpusState = shallowReactive(createCorpusState());
+
+/** Records that the loaded corpus changed. */
+export function touchCorpus(): void {
+  corpusState.version += 1;
+}
+
 /** Makes each field of `shared` read and write the shared state through `target`, enumerable like the plain field it replaces. */
 export function bindSharedState<T extends object, S extends object>(
   target: T,

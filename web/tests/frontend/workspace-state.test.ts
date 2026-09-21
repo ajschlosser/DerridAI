@@ -3,8 +3,21 @@ import { describe, expect, it } from "vitest";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, watch } from "vue";
-import { compareState, searchState, vectorState } from "../../src/state/workspaceState";
-import { useCompareStore, useSearchStore, useVectorStore } from "../../src/stores/workspace";
+import {
+  compareState,
+  corpusState,
+  searchState,
+  touchCorpus,
+  vectorState,
+  worksState,
+} from "../../src/state/workspaceState";
+import {
+  useCompareStore,
+  useCorpusStore,
+  useSearchStore,
+  useVectorStore,
+  useWorksStore,
+} from "../../src/stores/workspace";
 
 // The values below are what the runtime's own state object held before these fields moved into shared state.
 const ORIGINAL_INITIAL_VALUES = {
@@ -56,6 +69,10 @@ const ORIGINAL_INITIAL_VALUES = {
   searchDatabaseRan: false,
   searchResultLayouts: { traditional: "compact", database: "cards" },
   globalSearchAutoRun: false,
+  worksSearch: "",
+  workOverview: "",
+  files: [],
+  activeFileId: null,
 };
 
 describe("per-view workspace state", () => {
@@ -113,5 +130,34 @@ describe("per-view workspace state", () => {
     state.activeStore = "";
     state.globalSearch = "";
     state.compareMode = "workspace";
+  });
+
+  it("shares the loaded files and the works fields, and reports corpus edits through the version", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState() as unknown as Record<string, unknown>;
+    const corpus = useCorpusStore();
+    const works = useWorksStore();
+    const files = [{ id: "f1", name: "a.jsonl", records: [] }];
+    state.files = files;
+    state.activeFileId = "f1";
+    expect(corpus.files).toBe(files);
+    expect(corpusState.activeFileId).toBe("f1");
+    const seen: number[] = [];
+    watch(
+      () => corpus.version,
+      (version) => seen.push(version),
+      { flush: "sync" },
+    );
+    touchCorpus();
+    touchCorpus();
+    expect(seen).toEqual([corpus.version - 1, corpus.version]);
+    state.worksSearch = "Glas";
+    state.workOverview = "Glas";
+    expect(works.worksSearch).toBe("Glas");
+    expect(worksState.workOverview).toBe("Glas");
+    state.files = [];
+    state.activeFileId = null;
+    state.worksSearch = "";
+    state.workOverview = "";
   });
 });

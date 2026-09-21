@@ -53,6 +53,7 @@ import { createSearchWorkspace } from "../domain/searchWorkspace";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
+import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 
@@ -378,6 +379,7 @@ const selectedRecord = () => {
 const corpusCache={rows:null,fields:null,memo:new Map(),version:0};
 let recordFingerprintCache=new WeakMap();
 function invalidateCorpusCache(){
+  touchCorpus();
   corpusCache.rows=null;
   corpusCache.fields=null;
   corpusCache.memo.clear();
