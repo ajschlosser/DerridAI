@@ -9,6 +9,7 @@ export default defineConfig({
   testMatch: "legacy-dom-baseline.spec.ts",
   timeout: 30_000,
   fullyParallel: true,
+  snapshotPathTemplate: "{snapshotDir}/{testFilePath}-snapshots/{arg}{ext}",
   reporter: "list",
   projects: [
     {
