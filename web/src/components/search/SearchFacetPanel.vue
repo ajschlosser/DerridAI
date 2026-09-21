@@ -42,3 +42,12 @@ const activeCount=computed(()=>props.facets.reduce((sum,facet)=>sum+facet.values
     <p v-else class="search-facet-empty">{{i18n.t('search.no_facet_values','No facet values match this filter.')}}</p>
   </aside>
 </template>
+
+<style scoped>
+.search-facet-empty {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: .8125rem;
+  line-height: 1.45;
+}
+</style>

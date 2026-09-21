@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 62 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 90 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -137,6 +137,14 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
 classes move with their renderer when it is replaced.
 
+### CSS move (branch `claude/runtime-refactor-13`)
+
+`style_move.py` (see `docs/STYLE_AUDIT.md`, "Progress") moved 207 rules from `style.css` into 15 components' scoped styles; 90
+computed-style/DOM baseline scenarios (desktop, tablet, phone, light/dark) unchanged, full e2e and Storybook build green.
+Excluded on purpose: `CommandSearch.vue` (moving its rules changed the search box's look). Copilot's PR #81 (Corpus Builder,
+no `style.css`/runtime/e2e changes) uses none of the classes whose rules were pruned earlier. Next for CSS: hand-resolve the
+classes whose rules span several components (merge duplicates, then move the group), then extract the shared base layer.
+
 ### Stale-view fixes found by probing (branch `claude/runtime-refactor-12`)
 
 Probe method: open the view, import a file (distinct content: identical content is de-duplicated by content hash), see whether
@@ -181,7 +189,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 62 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 90 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -212,7 +220,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (62 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (90 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.

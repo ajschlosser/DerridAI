@@ -107,3 +107,119 @@ const statusLabel=computed(()=>{
     </template>
   </section>
 </template>
+
+<style scoped>
+.research-answer-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent-fg);
+  font-size: .8125rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.research-answer-prose {
+  max-width: 960px;
+  padding: 28px 34px 36px;
+  color: var(--text);
+  font: 15.5px/1.75 Georgia,"Times New Roman",serif;
+}
+.research-answer-prose p {
+  margin: 0 0 1.2em;
+  white-space: pre-line;
+}
+.research-answer-prose h3 {
+  margin: 1.8em 0 .55em;
+  font: 700 15px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;
+  color: var(--text);
+}
+.research-run-state {
+  min-height: 430px;
+  display: grid;
+  grid-template-columns: 52px minmax(0,1fr);
+  align-content: center;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: 700px;
+  margin: auto;
+  padding: 44px;
+}
+.research-run-state h2 {
+  margin: 2px 0 4px;
+  font-size: 1.125rem;
+}
+.research-run-state p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.research-run-orb {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ui-accent-soft);
+}
+.research-run-orb span {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  animation: research-pulse 1.4s ease-in-out infinite;
+}
+@media (max-width:860px) {
+  .research-answer-prose {
+    padding: 23px 22px 30px;
+  }
+}
+@media (max-width:560px) {
+  .research-answer-prose {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    padding: 20px 17px 27px;
+  }
+}
+.research-answer-prose ol,
+.research-answer-prose ul {
+  margin: 0 0 1.35em;
+  padding-left: 1.55em;
+}
+.research-answer-prose li {
+  margin: .38em 0;
+  padding-left: .16em;
+}
+.research-answer-prose li::marker {
+  color: var(--muted);
+  font-family: system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size: .85em;
+  font-weight: 700;
+}
+.research-inline-citation {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  margin: 0 .08em;
+  padding: 0 .28em;
+  border: 0;
+  border-radius: 5px;
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font: 700 .9em/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.research-inline-citation:hover {
+  box-shadow: inset 0 0 0 1px var(--ui-accent-border);
+}
+.research-inline-citation:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion:reduce) {
+  .research-run-orb span {
+    animation: none;
+  }
+}
+</style>

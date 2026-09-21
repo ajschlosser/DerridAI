@@ -70,3 +70,20 @@ Recommended order:
 4. **Renderer replacement:** as each legacy renderer becomes a Vue component, move its runtime-only classes into that
    component's scoped style in the same commit, so the dashboard and dialogs stop depending on the global sheet.
 5. **Then** normalise breakpoints and replace hard-coded colors with tokens, and only then chip away at `!important`.
+
+## Progress: rules moved into components (branch `claude/runtime-refactor-13`)
+
+`scripts/runtime-refactor/style_move.py` moves whole rules out of `style.css` into the `<style scoped>` block of the one
+component that owns them, formatted one declaration per line. A class is only moved when that component is the only file
+that mentions it, the component has no `v-html`, the class is not built dynamically, no component already styles it, and every
+global rule that mentions it involves only classes that move to the same component (so no outside rule can tie with or
+override the moved one). 207 rules (of 3,382) qualified: Research (evidence panel, runs drawer, pipeline bar, answer workspace,
+composer), Search view and facet panel, Vector Stores view, hero and rail, Users, Languages, auth screen, `App.vue` and the
+sidebar status. `CommandSearch.vue` was excluded: its rules used to lose to a competing global rule, and moving them changed the
+search box's look (a background and border it did not have before), which the computed-style baseline caught.
+
+What guards it: 90 baseline scenarios with computed styles for the Vue views and the whole app shell at desktop (light and dark),
+tablet (820 px) and phone (390 px) widths, recorded before any rule moved and unchanged after; the full e2e suite; and the
+Storybook build. Interaction states (hover, focus) and rarely reached UI states are not covered, so keep moves small and
+re-run the baseline for each batch. The strict rule is why only about 6 percent moved: most classes have rules that involve other
+components, which have to be resolved by hand (merge the duplicates, then move the group).

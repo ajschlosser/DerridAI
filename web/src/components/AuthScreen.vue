@@ -34,3 +34,111 @@ async function submit(){error.value="";if(auth.bootstrapRequired&&password.value
     <AppBuildInfo class="auth-build" landmark show-commit />
   </div>
 </template>
+
+<style scoped>
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: radial-gradient(circle at 20% 10%,rgba(79,70,229,.08),transparent 34%),var(--bg,#f5f7fa);
+}
+.auth-card {
+  width: min(460px,100%);
+  background: var(--panel,#fff);
+  border: 1px solid var(--line,#e5e7eb);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(15,23,42,.12);
+  padding: 30px;
+}
+.auth-form {
+  display: grid;
+  gap: 15px;
+  margin-top: 25px;
+}
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  font-size: .8125rem;
+  font-weight: 700;
+}
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+  min-height: 42px;
+}
+.auth-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(185,28,28,.2);
+  background: rgba(185,28,28,.06);
+  color: var(--tone-danger-fg);
+  font-size: .8125rem;
+}
+.auth-note {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line,#e5e7eb);
+  font-size: .8125rem;
+  line-height: 1.5;
+  color: var(--muted,#667085);
+}
+.auth-build {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--muted,#667085);
+  font-size: .8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.auth-page {
+  min-height: 100vh;
+  background: linear-gradient(120deg,var(--card) 0,var(--tone-info-bg) 100%);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.auth-card {
+  width: min(780px,calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 26px 80px rgba(15,23,42,.09);
+  padding: 24px;
+}
+.auth-card-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+.auth-language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.auth-language-switcher select {
+  border: 0;
+  background: transparent;
+}
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+.auth-form label {
+  display: grid;
+  gap: 5px;
+}
+.auth-submit {
+  justify-content: center;
+}
+.auth-note {
+  margin-top: 12px;
+  font-size: .8125rem;
+  color: var(--tone-info-fg);
+}
+</style>

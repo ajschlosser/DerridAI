@@ -64,3 +64,12 @@ function statusOf(store: VectorCollection) {
     </div>
   </aside>
 </template>
+
+<style scoped>
+.vector-rail-empty {
+  padding: 18px 12px;
+  color: var(--muted);
+  font-size: .82rem;
+  text-align: center;
+}
+</style>

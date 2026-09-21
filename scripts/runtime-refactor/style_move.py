@@ -1,6 +1,6 @@
 """Move global rules that belong to exactly one Vue component into that component's <style scoped> block.
 
-Run from web/. Usage: style_move.py [--dry-run] [--only path/to/File.vue ...]
+Run from web/. Usage: style_move.py [--dry-run] [--only path/to/File.vue ...] [--skip path/to/File.vue ...]
 
 A class is movable to component F when
   * F is the only source file that mentions it (Vue templates/scripts, runtime, domain, tests, stories all counted),
@@ -19,8 +19,14 @@ from collections import defaultdict
 CSS = "src/style.css"
 dry = "--dry-run" in sys.argv
 only = set()
+skip = set()
 if "--only" in sys.argv:
-    only = set(sys.argv[sys.argv.index("--only") + 1 :])
+    only = set(a for a in sys.argv[sys.argv.index("--only") + 1 :] if not a.startswith("--"))
+if "--skip" in sys.argv:
+    i = sys.argv.index("--skip") + 1
+    while i < len(sys.argv) and not sys.argv[i].startswith("--"):
+        skip.add(sys.argv[i])
+        i += 1
 raw = open(CSS).read()
 masked = re.sub(r"/\*.*?\*/", lambda m: " " * len(m.group(0)), raw, flags=re.S)
 class_re = re.compile(r"\.(-?[_a-zA-Z][_a-zA-Z0-9-]*)")
@@ -66,6 +72,48 @@ walk(0, len(masked), [])
 
 def rule_classes(sel):
     return set(class_re.findall(re.sub(r"\[[^\]]*\]", "", sel)))
+
+
+def split_declarations(body):
+    out, depth, quote, cur = [], 0, "", ""
+    for ch in body:
+        if quote:
+            cur += ch
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "\"'":
+            quote = ch
+            cur += ch
+        elif ch == "(":
+            depth += 1
+            cur += ch
+        elif ch == ")":
+            depth -= 1
+            cur += ch
+        elif ch == ";" and depth == 0:
+            if cur.strip():
+                out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+def pretty_declaration(d):
+    name, sep, value = d.rstrip(";").partition(":")
+    return f"{name.strip()}: {value.strip()}" if sep else d
+
+
+def pretty_rule(text, indent=""):
+    """One declaration per line; the selector list one selector per line. Same rule, easier to read."""
+    head, _, rest = text.partition("{")
+    body = rest[: rest.rindex("}")]
+    sels = ",\n".join(indent + x.strip() for x in head.split(",") if x.strip())
+    decls = "\n".join(f"{indent}  {pretty_declaration(d)};" for d in split_declarations(body))
+    return f"{sels} {{\n{decls}\n{indent}}}"
 
 
 for r in rules:
@@ -123,7 +171,7 @@ for p, t in files:
             in_component_styles.update(class_re.findall(m.group(1)))
 
 cand = {c: owner_file(c) for c in all_classes if c not in in_component_styles}
-cand = {c: f for c, f in cand.items() if f and (not only or f in only)}
+cand = {c: f for c, f in cand.items() if f and (not only or f in only) and f not in skip}
 
 # fixpoint: a class stays a candidate only if every rule mentioning it has all its classes candidates for the same file
 by_class = defaultdict(list)
@@ -160,9 +208,12 @@ for f, rs in moves.items():
     rs.sort(key=lambda r: r["start"])
     parts = []
     for r in rs:
-        text = r["text"].strip()
-        for head in reversed(r["media"]):
-            text = head + " {\n" + text + "\n}"
+        inner = "  " * len(r["media"])
+        text = pretty_rule(r["text"].strip(), inner)
+        for depth in range(len(r["media"]), 0, -1):
+            head = re.sub(r"\s+", " ", r["media"][depth - 1]).replace("@media(", "@media (")
+            pad = "  " * (depth - 1)
+            text = pad + head + " {\n" + text + "\n" + pad + "}"
         parts.append(text)
     block = "\n".join(parts)
     src = open(f).read()

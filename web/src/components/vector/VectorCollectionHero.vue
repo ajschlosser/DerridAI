@@ -83,4 +83,69 @@ const syncLabel = computed(() => props.pendingCount
 <style scoped>
 .vector-hero-kicker{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .vector-hero-menu-popover{display:grid;gap:6px;min-width:220px;padding:8px}
+.vector-collection-hero-v037 {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+.vector-hero-copy {
+  min-width: 0;
+}
+.vector-collection-description {
+  margin: 5px 0 10px;
+  color: var(--muted);
+  max-width: 78ch;
+}
+.vector-collection-contract,
+.vector-collection-provenance {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.vector-collection-contract span {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: .78rem;
+}
+.vector-collection-provenance {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: .76rem;
+}
+.vector-collection-provenance span+span:before {
+  content: "·";
+  margin-right: 7px;
+}
+.vector-collection-provenance code {
+  font-size: .8125rem;
+}
+.vector-hero-actions {
+  justify-content: flex-end;
+  max-width: 420px;
+}
+.vector-hero-menu {
+  position: relative;
+}
+.vector-hero-menu>summary {
+  list-style: none;
+  cursor: pointer;
+}
+.vector-hero-menu>summary::-webkit-details-marker {
+  display: none;
+}
+@media (max-width:820px) {
+  .vector-collection-hero-v037 {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width:820px) {
+  .vector-hero-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+}
 </style>

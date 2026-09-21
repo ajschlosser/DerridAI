@@ -50,3 +50,158 @@ defineExpose({open,close});
     </div>
   </dialog>
 </template>
+
+<style scoped>
+.research-run-card-main {
+  width: 100%;
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 10px minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px;
+  text-align: left;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.research-run-card-main:hover {
+  background: var(--card);
+}
+.research-run-card-main:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+}
+.research-run-card-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.research-run-card-copy b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78125rem;
+}
+.research-run-card-copy small,
+.research-run-card-copy>span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: .8125rem;
+}
+.research-run-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 6px;
+}
+@media (max-width:560px) {
+  .research-run-card-main {
+    grid-template-columns: 10px minmax(0,1fr);
+  }
+}
+.research-run-inspector {
+  display: grid;
+  gap: 12px;
+  margin: 12px 12px 4px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.research-run-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.research-run-inspector-head h3 {
+  margin: 2px 0 3px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.research-run-inspector-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .8125rem;
+}
+.research-stage-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(112px,1fr));
+  gap: 6px;
+}
+.research-stage-timeline>div {
+  display: grid;
+  grid-template-columns: 24px minmax(0,1fr);
+  grid-template-rows: auto auto;
+  gap: 1px 6px;
+  align-items: center;
+  padding: 7px;
+  border-radius: 7px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.research-stage-timeline>div>span {
+  grid-row: 1/3;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font-size: .8125rem;
+  font-weight: 800;
+}
+.research-stage-timeline b {
+  font-size: .8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.research-stage-timeline small {
+  font-size: .8125rem;
+  color: var(--muted);
+}
+.research-run-diagnostics {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.research-run-diagnostics>summary {
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: .8125rem;
+  font-weight: 700;
+}
+.research-run-diagnostics>summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  border-radius: 5px;
+}
+.research-run-diagnostics>div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 7px;
+}
+.research-run-diagnostics pre {
+  max-height: 230px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--text-2);
+  font: 12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width:560px) {
+  .research-run-diagnostics>div {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

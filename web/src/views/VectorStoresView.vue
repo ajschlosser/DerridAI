@@ -615,4 +615,116 @@ onBeforeUnmount(() => {
 .vector-native-page :deep(.control){min-height:40px}
 .vector-native-page :is(button,input,select,textarea,summary):focus-visible{outline:3px solid var(--focus-ring,var(--accent));outline-offset:2px}
 @media(max-width:760px){.vector-search-row{grid-template-columns:1fr}}
+.store-result {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.result-main {
+  min-width: 0;
+  flex: 1;
+}
+.vector-store-layout {
+  display: grid!important;
+  grid-template-columns: minmax(230px,280px) minmax(0,1fr)!important;
+  gap: 12px!important;
+  align-items: start;
+}
+.vector-store-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.vector-search-results {
+  padding: 0 12px 12px;
+}
+@media (max-width:1050px) {
+  .vector-store-layout {
+    grid-template-columns: 220px minmax(0,1fr)!important;
+  }
+}
+@media (max-width:760px) {
+  .vector-store-layout {
+    grid-template-columns: 1fr!important;
+  }
+}
+.vector-manifest-card {
+  display: grid;
+  gap: 14px;
+}
+.vector-manifest-review {
+  margin-top: 0;
+}
+.vector-build-history {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.vector-build-history>summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.vector-build-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vector-build-list article {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.vector-build-list article>div {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+}
+.vector-build-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.vector-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.vector-overview-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+}
+.vector-overview-card>span {
+  font-size: .8125rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.vector-overview-card>b {
+  font-size: .98rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vector-overview-card>small {
+  color: var(--muted);
+  font-size: .76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width:1180px) {
+  .vector-overview-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+@media (max-width:760px) {
+  .vector-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
