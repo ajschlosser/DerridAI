@@ -820,3 +820,21 @@ test.describe("legacy runtime errors", () => {
     await expect(page.locator("#main .disabled-control-tooltip").first()).toBeVisible();
   });
 });
+
+test.describe("views follow the loaded corpus", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
+  // A file imported while Records was open used to appear only after leaving and coming back.
+  test("Records lists a file imported while it is open", async ({ page }) => {
+    await open(page, { name: "import-while-open", nav: "Records", load: true });
+    await expect(page.getByText(/Local JSONL\s*1 files?/i)).toBeVisible();
+    await page.setInputFiles("#fileInput", {
+      name: "second.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "second-00001", work: "Glas" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await expect(page.getByText(/Local JSONL\s*2 files/i)).toBeVisible({ timeout: 5000 });
+  });
+});
