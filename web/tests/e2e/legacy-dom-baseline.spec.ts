@@ -199,6 +199,12 @@ const clickThenDialog = (find: (page: Page) => Locator) => async (page: Page) =>
   await expect(page.locator("dialog[open]").last()).toBeVisible();
 };
 
+/** Opens the first work's Actions menu and runs one of the actions in it. */
+const worksAction = (name: RegExp | string) => async (page: Page) => {
+  await page.locator("main summary", { hasText: "Actions" }).first().click();
+  await page.getByRole("button", { name }).first().click();
+};
+
 const inRecords = async (page: Page) => {
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await page.waitForLoadState("networkidle");
@@ -711,6 +717,70 @@ const scenarios: Scenario[] = [
     target: "dialog",
     steps: async (page) => {
       await page.getByRole("button", { name: "Edit record" }).click();
+      await expect(page.locator("dialog[open]").last()).toBeVisible();
+    },
+  },
+  // The Works view is Vue, but the works, their overview and every action it offers come from the runtime.
+  { name: "works-loaded", nav: "Works", load: true },
+  {
+    name: "works-search",
+    nav: "Works",
+    load: true,
+    steps: async (page) => {
+      await page.locator("#worksSearch").fill("Cosmopolitanism");
+      await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: "works-open-records",
+    nav: "Works",
+    load: true,
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /^Open \d+ records for / })
+        .first()
+        .click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    name: "works-open-records-needing-review",
+    nav: "Works",
+    load: true,
+    steps: async (page) => {
+      await page
+        .getByRole("button", { name: /records needing review for/ })
+        .first()
+        .click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    name: "works-actions-menu",
+    nav: "Works",
+    load: true,
+    steps: async (page) => {
+      await page.locator("main summary", { hasText: "Actions" }).first().click();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "dialog-works-edit-metadata",
+    nav: "Works",
+    load: true,
+    target: "dialog",
+    steps: async (page) => {
+      await worksAction("Edit metadata")(page);
+      await expect(page.locator("dialog[open]").last()).toBeVisible();
+    },
+  },
+  {
+    name: "dialog-works-remove-work",
+    nav: "Works",
+    load: true,
+    target: "dialog",
+    steps: async (page) => {
+      await worksAction("Remove entire work")(page);
       await expect(page.locator("dialog[open]").last()).toBeVisible();
     },
   },
