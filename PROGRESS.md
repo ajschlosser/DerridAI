@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 433 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 437 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 52 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 59 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -164,7 +164,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 52 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 59 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -173,14 +173,22 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   PRE-move build in their own commit, then compared against the moved code (52/52, 3 runs); `tests/frontend/record-workspace.test.ts`.
   Note for extractions: after Prettier expands a dense `try{...}catch{}` the `eslint-disable no-empty` directive no longer
   lines up; replace the empty catch with a commented one. `runtime.js` is 8,424 lines.
-- NEXT: WorksView (`getWorksWorkspaceSnapshot` and the Works commands) gets the same treatment (baseline first, then factory);
-  then `SearchView`, `useRecordsWorkspace`, `RecordView`, `WorksView` can be converted from snapshot polling to store fields +
+- DONE (branch `claude/runtime-refactor-10`, from master after PR #78): the Works workspace logic left `runtime.js`:
+  `domain/worksWorkspace.ts` (`createWorksWorkspace({state, ...37 helper lambdas})`, 22 functions: work descriptions, the
+  workspace snapshot/preparation, and every command `useWorksWorkspace` sends). Seven more Works baseline scenarios
+  (`works-*`, `dialog-works-*`; 59 total) were recorded from the PRE-move build in their own commit and compared (59/59, 3 runs);
+  `tests/frontend/works-workspace.test.ts`. Baseline gotchas: the per-work "Open N records" buttons are stat links whose
+  accessible name starts "Open N records for ..."; each work card has its own Actions menu. `runtime.js` is 8,274 lines.
+- NEXT: the four workspaces (Search, Records, Record, Works) are now isolated behind factories with baselines. Convert their
+  Vue consumers (`SearchView`, `useRecordsWorkspace`, `RecordView`, `useWorksWorkspace`) from snapshot polling to store fields +
   computed inside composables, one at a time, each with a test pinning when the snapshot's side effects (`persistPrefs`,
-  `refreshStores`, presence checks) run.
+  `refreshStores`, presence checks, `refreshServerAnnotations`) run. Other remaining runtime chunks: the compare/annotations
+  workspace commands (`annotationsService` shim), providers/settings `*ForUi` (already a factory), research/RAG commands
+  (`getResearchWorkspaceSnapshot`, `startResearchRun`, ...), Response Library (`getResponseFaqPage`), job polling, backup/restore.
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (52 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (59 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.
