@@ -10,7 +10,7 @@ import {
 // Define which metadata fields a corpus record has, what each may hold and what the model is told to look for.
 // Three fields (region type, primary text, discourse role) are the locked core: they are in every schema and are
 // not edited here. A build copies the schema it starts with, so nothing done here changes a build already made.
-const props = withDefaults(defineProps<{ providerProfiles?: { id: string; name?: string; model?: string }[]; runPreview?: (payload: Record<string, unknown>) => Promise<SchemaPreview> }>(), { providerProfiles: () => [] });
+const props = withDefaults(defineProps<{ providerProfiles?: { id: string; name?: string; model?: string }[] }>(), { providerProfiles: () => [] });
 const emit = defineEmits<{ saved: [id: string]; changed: [] }>();
 const i18n = useI18nStore();
 
@@ -120,7 +120,7 @@ async function tryGroup(run: boolean) {
   if (!schema || !previewText.value.trim()) return;
   const payload: Record<string, unknown> = { schema, group: previewGroup.value, text: previewText.value, run };
   if (run && previewProfile.value) payload.provider_profile_id = previewProfile.value;
-  const result = await guarded(() => (props.runPreview ? props.runPreview(payload) : metadataSchemasApi.preview(payload)));
+  const result = await guarded(() => metadataSchemasApi.preview(payload));
   if (result) preview.value = result;
 }
 
