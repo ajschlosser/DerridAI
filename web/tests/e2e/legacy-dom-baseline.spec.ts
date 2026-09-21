@@ -76,9 +76,11 @@ interface Scenario {
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
-  target?: "main" | "dialog";
+  target?: "main" | "dialog" | "app";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
+  /** A viewport size other than the default desktop one, to exercise the responsive rules. */
+  viewport?: { width: number; height: number };
 }
 
 async function open(page: Page, scenario: Scenario) {
@@ -111,12 +113,21 @@ async function open(page: Page, scenario: Scenario) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(600);
   await scenario.steps?.(page);
+  // Resize last: the narrow layouts hide the sidebar the scenarios navigate with.
+  if (scenario.viewport) {
+    await page.setViewportSize(scenario.viewport);
+    await page.waitForTimeout(500);
+  }
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
-async function rawMarkup(page: Page, target: "main" | "dialog"): Promise<string> {
+async function rawMarkup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   const locator =
-    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+    target === "dialog"
+      ? page.locator("dialog[open]").last()
+      : target === "app"
+        ? page.locator("#app")
+        : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
@@ -157,9 +168,13 @@ const STYLE_PROPERTIES = [
 ];
 
 /** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
-async function computedStyles(page: Page, target: "main" | "dialog"): Promise<string> {
+async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   const locator =
-    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+    target === "dialog"
+      ? page.locator("dialog[open]").last()
+      : target === "app"
+        ? page.locator("#app")
+        : page.locator("main").first();
   return locator.evaluate((root, properties) => {
     const lines: string[] = [];
     const walk = (el: Element, depth: number) => {
@@ -181,7 +196,7 @@ async function computedStyles(page: Page, target: "main" | "dialog"): Promise<st
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page, target: "main" | "dialog"): Promise<string> {
+async function markup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
@@ -784,6 +799,97 @@ const scenarios: Scenario[] = [
       await expect(page.locator("dialog[open]").last()).toBeVisible();
     },
   },
+  // Computed styles for the Vue views, so styles can move out of the global sheet into components without changing them.
+  { name: "styles-search-light", nav: "Search", load: true, styles: true },
+  { name: "styles-search-dark", nav: "Search", load: true, scheme: "dark", styles: true },
+  {
+    name: "styles-search-cards-light",
+    nav: "Search",
+    load: true,
+    styles: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Cards" }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  { name: "styles-research-light", nav: "Research", styles: true },
+  { name: "styles-research-dark", nav: "Research", scheme: "dark", styles: true },
+  { name: "styles-vector-light", nav: "Vector Stores", load: true, styles: true },
+  { name: "styles-vector-dark", nav: "Vector Stores", load: true, scheme: "dark", styles: true },
+  { name: "styles-records-light", nav: "Records", load: true, styles: true },
+  { name: "styles-records-dark", nav: "Records", load: true, scheme: "dark", styles: true },
+  { name: "styles-record-light", nav: "Record View", load: true, styles: true },
+  { name: "styles-works-light", nav: "Works", load: true, styles: true },
+  { name: "styles-compare-light", nav: "Compare", load: true, styles: true },
+  { name: "styles-providers-light", nav: "LLM Providers", styles: true },
+  { name: "styles-users-light", nav: "Users", styles: true },
+  { name: "styles-roles-light", nav: "Roles & permissions", styles: true },
+  { name: "styles-languages-light", nav: "Manage languages", styles: true },
+  { name: "styles-settings-light", nav: "Settings", styles: true },
+  { name: "styles-app-shell-light", load: true, target: "app", styles: true },
+  { name: "styles-app-shell-dark", load: true, scheme: "dark", target: "app", styles: true },
+  // Narrow and tablet widths, where the media-query rules apply.
+  {
+    name: "styles-search-narrow",
+    nav: "Search",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-research-narrow",
+    nav: "Research",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-vector-narrow",
+    nav: "Vector Stores",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-records-narrow",
+    nav: "Records",
+    load: true,
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-users-narrow",
+    nav: "Users",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-app-shell-narrow",
+    load: true,
+    target: "app",
+    styles: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "styles-search-tablet",
+    nav: "Search",
+    load: true,
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
+  {
+    name: "styles-vector-tablet",
+    nav: "Vector Stores",
+    load: true,
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
+  {
+    name: "styles-app-shell-tablet",
+    load: true,
+    target: "app",
+    styles: true,
+    viewport: { width: 820, height: 1000 },
+  },
 ];
 
 // Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
@@ -818,5 +924,61 @@ test.describe("legacy runtime errors", () => {
   test("disabled dashboard controls are decorated when the dashboard renders", async ({ page }) => {
     await open(page, { name: "decorated" });
     await expect(page.locator("#main .disabled-control-tooltip").first()).toBeVisible();
+  });
+});
+
+test.describe("views follow the loaded corpus", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
+  // A file imported while Records was open used to appear only after leaving and coming back.
+  test("Records lists a file imported while it is open", async ({ page }) => {
+    await open(page, { name: "import-while-open", nav: "Records", load: true });
+    await expect(page.getByText(/Local JSONL\s*1 files?/i)).toBeVisible();
+    await page.setInputFiles("#fileInput", {
+      name: "second.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "second-00001", work: "Glas" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await expect(page.getByText(/Local JSONL\s*2 files/i)).toBeVisible({ timeout: 5000 });
+  });
+
+  // The Compare picker searched the records that were loaded when the view opened.
+  test("Compare finds a record imported while it is open", async ({ page }) => {
+    await open(page, { name: "compare-import-while-open", nav: "Compare" });
+    await expect(
+      page.getByText(/Load JSONL files or browse the corpus database first/).first(),
+    ).toBeVisible();
+    await page.setInputFiles("#fileInput", {
+      name: "late.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "late-00001", work: "Late Work" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await page
+      .getByPlaceholder(/Type record ID/)
+      .first()
+      .fill("Late");
+    await expect(page.getByText("No matching records.")).toHaveCount(0);
+    await expect(page.getByText(/late-00001/).first()).toBeVisible({ timeout: 5000 });
+  });
+
+  // The sync buttons stayed disabled after a file was imported while Vector Stores was open.
+  test("Vector Stores enables syncing for a file imported while it is open", async ({ page }) => {
+    await open(page, { name: "vector-import-while-open", nav: "Vector Stores" });
+    const sync = page.locator("main button", { hasText: "Sync active JSONL" });
+    await expect(sync).toBeDisabled();
+    await page.setInputFiles("#fileInput", {
+      name: "late.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "late-00001", work: "Late Work" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await expect(sync).toBeEnabled({ timeout: 5000 });
   });
 });

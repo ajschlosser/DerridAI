@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 438 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 440 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 59 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 90 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -129,6 +129,31 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
   `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
 
+## style.css audit (branch `claude/runtime-refactor-12`)
+
+`docs/STYLE_AUDIT.md` has the findings and the recommended order; `scripts/runtime-refactor/style_audit.py` (numbers, writes
+`/tmp/style_lists.json`) and `style_prune.py` (removes rules that can never match) reproduce them. Done: 613 dead rules removed
+(5,176 -> 4,514 lines) with 60/60 baseline scenarios (computed styles unchanged) and 199/199 e2e. Next for CSS: move the 306
+Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
+classes move with their renderer when it is replaced.
+
+### CSS move (branch `claude/runtime-refactor-13`)
+
+`style_move.py` (see `docs/STYLE_AUDIT.md`, "Progress") moved 207 rules from `style.css` into 15 components' scoped styles; 90
+computed-style/DOM baseline scenarios (desktop, tablet, phone, light/dark) unchanged, full e2e and Storybook build green.
+Excluded on purpose: `CommandSearch.vue` (moving its rules changed the search box's look). Copilot's PR #81 (Corpus Builder,
+no `style.css`/runtime/e2e changes) uses none of the classes whose rules were pruned earlier. Next for CSS: hand-resolve the
+classes whose rules span several components (merge duplicates, then move the group), then extract the shared base layer.
+
+### Stale-view fixes found by probing (branch `claude/runtime-refactor-12`)
+
+Probe method: open the view, import a file (distinct content: identical content is de-duplicated by content hash), see whether
+the view notices. Found and fixed (each with an e2e test verified to fail without the fix, in `legacy-dom-baseline.spec.ts`,
+"views follow the loaded corpus"): Records (rail file count; earlier commit), Compare (picker kept "No matching records" /
+"Load JSONL files first"), Vector Stores (sync buttons stayed disabled). Works and Search already updated; Annotations and
+Record View showed nothing to update in the same probe. Pattern: watch `corpusState.version` + `activeFileId`. Gotcha: do not
+return the same array from a `computed` and expect re-renders (an unchanged array notifies nobody); return a count/boolean.
+
 ## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
 
 Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
@@ -164,7 +189,7 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   fields + computed inside a composable now that the logic is isolated.
 - DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
   `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 59 scenarios total) were
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 90 scenarios total) were
   recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
   pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
 - DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
@@ -184,19 +209,18 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   `worksSearch` / `workOverview` into `worksState`; `useCorpusStore` and `useWorksStore` added. `invalidateCorpusCache()` (called
   after every corpus edit) now also calls `touchCorpus()`, so `corpusState.version` changes whenever the loaded corpus does.
   Nothing in Vue reads these yet (198/198 e2e, 59/59 baseline, 438 unit).
-- DECISION NEEDED (why the consumer conversion stopped): the snapshot functions (`getWorksWorkspaceSnapshot`,
-  `getRecordsListSnapshot`, `getSearchWorkspaceSnapshot`, `getRecordWorkspaceSnapshot`) are read-only, so a composable can
-  expose the snapshot as a `computed` over `corpusState.version` + the group fields + a manual refresh key. But that makes
-  Vue views update AUTOMATICALLY when the runtime changes state elsewhere (for example a file imported while the Works page is
-  open), which today only refresh after the view's own commands. That is a visible behavior change (arguably a fix), so it
-  needs the owner's approval. Without approval a conversion would only rename `load()`. The four workspaces are otherwise
-  ready (factories, baselines, stores).
-- NEXT (once decided): convert `useWorksWorkspace` first (pure snapshot, smallest), then `useRecordsWorkspace`, RecordView, SearchView.
-  Other remaining runtime chunks: the annotations service shim, Research/RAG commands, Response Library, job polling, backup/restore.
+- DECIDED (owner: behavior changes are fine if they fix obvious bugs, but check first): I checked before changing anything by
+  importing a file while each view was open (probe, then a permanent e2e test). Works and Search already update; **Records did
+  not** (toast "Loaded 1 records" but the rail kept saying "Local JSONL 1 files" until you left and came back), which is an
+  obvious bug. Fixed in `useRecordsWorkspace`: it now re-reads its snapshot when `corpusState.version` or `activeFileId`
+  changes (only once a snapshot has been loaded). Guarded by `tests/frontend/records-workspace-refresh.test.ts` and the e2e test
+  "Records lists a file imported while it is open" (verified to fail without the fix). RecordView showed no visible staleness
+  in the same probe, so it is unchanged. Check any further conversion the same way: probe the current behavior first, convert
+  only where it is stale or wrong.
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (59 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (90 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.

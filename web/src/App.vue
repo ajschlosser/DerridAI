@@ -247,3 +247,83 @@ watch(()=>auth.user?.id,(id)=>{
   <LlmReviewWorkspace />
   <AppNotifications />
 </template>
+
+<style scoped>
+.vue-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--muted,#667085);
+  font-size: 0.875rem;
+  background: var(--bg,#f5f7fa);
+}
+.app-shell-modern {
+  grid-template-columns: var(--ref-sidebar) minmax(0,1fr);
+  min-height: 100vh;
+  background: var(--ref-bg);
+}
+.shell-workspace {
+  min-width: 0;
+  background: linear-gradient(180deg,var(--card) 0,var(--card) 100%);
+}
+.shell-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shell-breadcrumb-meta {
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 8px;
+  z-index: 2000;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: #17233b;
+  color: var(--accent-on);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  transform: translateY(-150%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid var(--card)!important;
+  box-shadow: 0 0 0 5px var(--ui-accent);
+}
+@media (prefers-reduced-motion:reduce) {
+  .skip-link {
+    transition: none;
+  }
+}
+@media (max-width:900px) {
+  .app-shell-modern {
+    grid-template-columns: 64px minmax(0,1fr);
+  }
+}
+@media (max-width:650px) {
+  .app-shell-modern {
+    display: block;
+  }
+}
+@media (max-width:650px) {
+  .shell-top-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+}
+@media (max-width:650px) {
+  .app-content-region {
+    padding-bottom: 64px;
+  }
+}
+</style>

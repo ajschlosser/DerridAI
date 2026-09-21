@@ -6,6 +6,7 @@ import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
 import { useAuthStore } from "../stores/auth";
 import { useVectorStore } from "../stores/workspace";
+import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -33,6 +34,14 @@ type RuntimeOnlyState = {
 };
 const runtimeState = runtime.state as unknown as RuntimeOnlyState;
 const vector = useVectorStore();
+// The loaded files change while this view is open (a file imported or closed). The runtime edits them in place, so the
+// corpus version and active file tell this view when to count them again; without that the sync buttons stayed disabled
+// until you left the view and came back. (A count, not the array: an unchanged array would not re-render anything.)
+const loadedFileCount = computed(() => {
+  void corpusState.version;
+  void corpusState.activeFileId;
+  return (runtimeState.files || []).length;
+});
 // Shape of the shared Vector Stores fields as this view uses them (the store types them loosely).
 const workspace = vector as unknown as {
   activeStore: string;
@@ -544,8 +553,8 @@ onBeforeUnmount(() => {
                   <div>
                     <span class="section-label">{{ i18n.t("vector.sync_into_collection", "Sync into collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncActive" />
-                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!runtimeState.files?.length" @click="syncAll" />
+                      <UiButton :label="i18n.t('vector.sync_active_jsonl', 'Sync active JSONL')" icon="database" :disabled="!loadedFileCount" @click="syncActive" />
+                      <UiButton :label="i18n.t('vector.sync_all_loaded', 'Sync all loaded JSONL')" icon="database" :disabled="!loadedFileCount" @click="syncAll" />
                     </div>
                   </div>
                   <div>
@@ -606,4 +615,116 @@ onBeforeUnmount(() => {
 .vector-native-page :deep(.control){min-height:40px}
 .vector-native-page :is(button,input,select,textarea,summary):focus-visible{outline:3px solid var(--focus-ring,var(--accent));outline-offset:2px}
 @media(max-width:760px){.vector-search-row{grid-template-columns:1fr}}
+.store-result {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.result-main {
+  min-width: 0;
+  flex: 1;
+}
+.vector-store-layout {
+  display: grid!important;
+  grid-template-columns: minmax(230px,280px) minmax(0,1fr)!important;
+  gap: 12px!important;
+  align-items: start;
+}
+.vector-store-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.vector-search-results {
+  padding: 0 12px 12px;
+}
+@media (max-width:1050px) {
+  .vector-store-layout {
+    grid-template-columns: 220px minmax(0,1fr)!important;
+  }
+}
+@media (max-width:760px) {
+  .vector-store-layout {
+    grid-template-columns: 1fr!important;
+  }
+}
+.vector-manifest-card {
+  display: grid;
+  gap: 14px;
+}
+.vector-manifest-review {
+  margin-top: 0;
+}
+.vector-build-history {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.vector-build-history>summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.vector-build-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vector-build-list article {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.vector-build-list article>div {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+}
+.vector-build-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.vector-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.vector-overview-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+}
+.vector-overview-card>span {
+  font-size: .8125rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.vector-overview-card>b {
+  font-size: .98rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vector-overview-card>small {
+  color: var(--muted);
+  font-size: .76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width:1180px) {
+  .vector-overview-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+@media (max-width:760px) {
+  .vector-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

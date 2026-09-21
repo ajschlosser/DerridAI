@@ -146,3 +146,39 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
     </footer>
   </section>
 </template>
+
+<style scoped>
+.research-history-list {
+  max-height: 300px;
+  overflow: auto;
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+}
+.research-history-list button {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 8px 9px;
+  text-align: left;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.research-history-list button:hover,
+.research-history-list button:focus-visible {
+  background: var(--soft);
+  outline: 0;
+}
+.research-history-list b {
+  font-size: 0.78125rem;
+  font-weight: 680;
+  line-height: 1.35;
+}
+.research-history-list small {
+  font-size: .8125rem;
+  color: var(--muted);
+}
+</style>

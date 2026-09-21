@@ -27,3 +27,28 @@ const i18n = useI18nStore();
     </div>
   </div>
 </template>
+
+<style scoped>
+.shell-mini-status {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: .8125rem;
+  padding: 0 5px;
+}
+.shell-mini-status span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-height:820px) and (min-width:901px) {
+  .shell-mini-status {
+    font-size: .8125rem!important;
+    gap: 2px!important;
+  }
+}
+</style>

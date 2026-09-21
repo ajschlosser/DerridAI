@@ -24,7 +24,7 @@ const runtime = vi.hoisted(() => ({
 vi.mock("../../src/runtime/runtime.js", () => ({...runtime}));
 
 import CompareView from "../../src/views/CompareView.vue";
-import { compareState, createCompareState } from "../../src/state/workspaceState";
+import { compareState, createCompareState, touchCorpus } from "../../src/state/workspaceState";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -64,5 +64,15 @@ describe("CompareView", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("changed");
     expect(wrapper.text()).toContain("text");
+  });
+
+  it("reads the record library again when the loaded corpus changes while it is open", async () => {
+    const wrapper = await mountView();
+    const before = runtime.getCompareLibrary.mock.calls.length;
+    runtime.getCompareLibrary.mockReturnValueOnce([{value: "f2::0", label: "new.jsonl · r-new · Late Work", search: "late"}] as never);
+    touchCorpus();
+    await flushPromises();
+    expect(runtime.getCompareLibrary.mock.calls.length).toBeGreaterThan(before);
+    wrapper.unmount();
   });
 });

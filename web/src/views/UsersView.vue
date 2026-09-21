@@ -130,3 +130,67 @@ onMounted(refresh);
     </dialog>
   </main>
 </template>
+
+<style scoped>
+.user-create-card,
+.users-table-card {
+  overflow: hidden;
+}
+.user-list {
+  display: grid;
+}
+.user-row {
+  display: grid;
+  grid-template-columns: 38px minmax(180px,1fr) 160px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-top: 1px solid var(--line,#e5e7eb);
+}
+.user-row.inactive {
+  opacity: .58;
+}
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: rgba(79,70,229,.08);
+  color: var(--accent-fg);
+  font-weight: 800;
+}
+.user-role-select {
+  min-width: 140px;
+}
+.user-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.users-loading {
+  padding: 24px;
+  color: var(--muted,#667085);
+  font-size: .8125rem;
+}
+.user-admin-dialog {
+  width: min(520px,calc(100vw - 32px));
+}
+@media (max-width:900px) {
+  .user-row {
+    grid-template-columns: 36px 1fr;
+  }
+}
+@media (max-width:900px) {
+  .user-role-select,
+  .user-actions {
+    grid-column: 2;
+  }
+}
+@media (max-width:900px) {
+  .user-actions {
+    justify-content: flex-start;
+  }
+}
+</style>
