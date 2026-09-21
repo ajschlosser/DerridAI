@@ -50,6 +50,8 @@ import { createSearchFacets } from "../domain/searchFacets";
 import { createRecordPresenters } from "../domain/recordPresenters";
 import { createProviderProfiles } from "../domain/providerProfilesService";
 import { createSearchWorkspace } from "../domain/searchWorkspace";
+import { createRecordsWorkspace } from "../domain/recordsWorkspace";
+import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
@@ -198,6 +200,95 @@ const {localSearchBaseRows,searchScope,searchLayout,searchResultFromKey,buildWor
   uid:(...args)=>uid(...args),
   urlFromState:(...args)=>urlFromState(...args),
   workspaceEvidenceSelectionKey:(...args)=>workspaceEvidenceSelectionKey(...args),
+});
+const {clearRecordsListFilters,clearRecordsListSelection,copyRecordsListCitation,copyRecordsListJson,getRecordsListShareHref,getRecordsListSnapshot,openRecordsListRecord,recordsListCommand,resetRecordsListColumns,selectRecordsListMatches,setRecordsListColumns,setRecordsListFilter,setRecordsListPage,setRecordsListPageSelected,setRecordsListPageSize,setRecordsListQuery,setRecordsListRowSelected,setRecordsListSort,setRecordsListStore,toggleRecordsListEvidence}=createRecordsWorkspace({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  activeFile:(...args)=>activeFile(...args),
+  canUse:(...args)=>canUse(...args),
+  clearReviewSelection:(...args)=>clearReviewSelection(...args),
+  copyCitation:(...args)=>copyCitation(...args),
+  copyJsonToClipboard:(...args)=>copyJsonToClipboard(...args),
+  dbUnavailableReason:(...args)=>dbUnavailableReason(...args),
+  evidenceIsSelected:(...args)=>evidenceIsSelected(...args),
+  getTableColumns:(...args)=>getTableColumns(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  hasCorpusDb:(...args)=>hasCorpusDb(...args),
+  label:(...args)=>label(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  needsReviewItems:(...args)=>needsReviewItems(...args),
+  openBulkFieldEditor:(...args)=>openBulkFieldEditor(...args),
+  openOcrCleanupDialog:(...args)=>openOcrCleanupDialog(...args),
+  openTouchup:(...args)=>openTouchup(...args),
+  pageInfo:(...args)=>pageInfo(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  recordDbStatus:(...args)=>recordDbStatus(...args),
+  recordStores:(...args)=>recordStores(...args),
+  recordsListCell:(...args)=>recordsListCell(...args),
+  refreshPresenceForRows:(...args)=>refreshPresenceForRows(...args),
+  reviewKey:(...args)=>reviewKey(...args),
+  rowMatchesListFilters:(...args)=>rowMatchesListFilters(...args),
+  rowsFromReviewSelection:(...args)=>rowsFromReviewSelection(...args),
+  selectedReviewItems:(...args)=>selectedReviewItems(...args),
+  setActiveStore:(...args)=>setActiveStore(...args),
+  setListFilterValue:(...args)=>setListFilterValue(...args),
+  setReviewSelected:(...args)=>setReviewSelected(...args),
+  shell:(...args)=>shell(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  tableAvailableFields:(...args)=>tableAvailableFields(...args),
+  toast:(...args)=>toast(...args),
+  toggleSort:(...args)=>toggleSort(...args),
+  toggleWorkspaceEvidence:(...args)=>toggleWorkspaceEvidence(...args),
+  tr:(...args)=>tr(...args),
+  upsertRows:(...args)=>upsertRows(...args),
+  urlFromState:(...args)=>urlFromState(...args),
+  workspaceEvidenceSelectionKey:(...args)=>workspaceEvidenceSelectionKey(...args),
+});
+const {recordWorkspaceRecord,researcherCurrentRecord,getRecordWorkspaceSnapshot,recordWorkspaceNavigate,setRecordWorkspaceFind,toggleCurrentRecordEvidence,toggleCurrentRecordReviewSelection,copyCurrentRecordCitation,copyCurrentRecordJson,saveCurrentRecordChanges,addCurrentRecordAnnotation,removeCurrentRecordAnnotation,currentRecordPrimaryAction,searchCurrentRecordMetadata,navigateRecordWorkspace}=createRecordWorkspace({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  activeFile:(...args)=>activeFile(...args),
+  api:(...args)=>api(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  canAccessPage:(...args)=>canAccessPage(...args),
+  canUse:(...args)=>canUse(...args),
+  cleanRecord:(...args)=>cleanRecord(...args),
+  copyJsonToClipboard:(...args)=>copyJsonToClipboard(...args),
+  dbEvidenceKey:(...args)=>dbEvidenceKey(...args),
+  evidenceIsSelected:(...args)=>evidenceIsSelected(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  hasCorpusDb:(...args)=>hasCorpusDb(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  linkPdfPage:(...args)=>linkPdfPage(...args),
+  loadStorePage:(...args)=>loadStorePage(...args),
+  loadedPdfPagesForRecord:(...args)=>loadedPdfPagesForRecord(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  normalizedRecordAnnotation:(...args)=>normalizedRecordAnnotation(...args),
+  openLoadedPdfPage:(...args)=>openLoadedPdfPage(...args),
+  openPdfExplorerWorkspace:(...args)=>openPdfExplorerWorkspace(...args),
+  openRecordHistoryBrowser:(...args)=>openRecordHistoryBrowser(...args),
+  openTouchup:(...args)=>openTouchup(...args),
+  pdfDisplayTitle:(...args)=>pdfDisplayTitle(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  refreshServerAnnotations:(...args)=>refreshServerAnnotations(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  researcherDbRecords:(...args)=>researcherDbRecords(...args),
+  reviewKey:(...args)=>reviewKey(...args),
+  searchByMetadata:(...args)=>searchByMetadata(...args),
+  selectedIndex:(...args)=>selectedIndex(...args),
+  selectedRecord:(...args)=>selectedRecord(...args),
+  setReviewSelected:(...args)=>setReviewSelected(...args),
+  shell:(...args)=>shell(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  toast:(...args)=>toast(...args),
+  toggleDbEvidence:(...args)=>toggleDbEvidence(...args),
+  toggleWorkspaceEvidence:(...args)=>toggleWorkspaceEvidence(...args),
+  tr:(...args)=>tr(...args),
+  uid:(...args)=>uid(...args),
+  unlinkAllPdfLinks:(...args)=>unlinkAllPdfLinks(...args),
+  unlinkPdfLink:(...args)=>unlinkPdfLink(...args),
+  upsertRows:(...args)=>upsertRows(...args),
+  workspaceEvidenceKey:(...args)=>workspaceEvidenceKey(...args),
 });
 const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
   tr,trf,
@@ -5455,158 +5546,8 @@ function wireFilterRow(row,main){
 /** @param {{field?: string, op?: string, value?: string}} [options] */
 
 
-function getRecordsListSnapshot(){
-  const files=state.files.map(file=>describeRecordsFile(file,state.activeFileId));
-  const stores=recordStores();
-  const shared=Boolean(new URLSearchParams(location.search).get("file"));
-  const capabilities={
-    can_select:canUse("editLocalRecords"),
-    can_review:canUse("editLocalRecords"),
-    can_bulk_edit:canUse("editLocalRecords"),
-    can_upsert:canUse("manageCorpus")&&hasCorpusDb(),
-    can_import:canUse("manageCorpus"),
-    can_select_evidence:hasCapability("evidence.select"),
-  };
-  const f=activeFile();
-  if(!f){
-    return {
-      available:false,shared,files,file:null,query:"",rows:[],columns:[],available_columns:[],
-      sort:{key:"page_start",dir:1},filters:{},page:1,pages:1,page_size:state.pageSize,start:0,end:0,
-      matched:0,total:0,flagged:0,selection_count:state.reviewSelection.size,page_selected:false,
-      stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
-      active_store:state.activeStore||"",has_database:stores.length>0,
-      db_unavailable_reason:dbUnavailableReason(),capabilities,
-    };
-  }
-  const query=state.searches[f.id]||"";
-  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
-  const filters=state.listFilters[f.id]||{};
-  let rows=f.records.map((record,index)=>({file:f,record,index}))
-    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-    .filter(x=>rowMatchesListFilters(x,filters));
-  rows=sortRows(rows,sort);
-  const pg=pageInfo(rows.length,state.pages[f.id]||1);state.pages[f.id]=pg.page;
-  const slice=rows.slice(pg.start,pg.end);
-  try{refreshPresenceForRows(slice)}catch{/* presence is best-effort */}
-  const flagged=needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))).length;
-  const pageSelected=slice.length>0&&slice.every(x=>state.reviewSelection.has(reviewKey(f,x.index)));
-  const available=tableAvailableFields(f.records.map((record,index)=>({file:f,record,index})),["__db_status","work","page_start","needs_review","text"]);
-  const columnKeys=getTableColumns("list",available);
-  return {
-    available:true,shared,files,
-    file:describeRecordsFile(f,state.activeFileId),
-    query,rows:slice.map(x=>{
-      const key=reviewKey(f,x.index);
-      const evidenceKey=workspaceEvidenceSelectionKey(f,x.index);
-      const status=recordDbStatus(f,x.index,x.record);
-      return {
-        index:x.index,key,record_id:String(x.record.record_id||`#${x.index+1}`),
-        work:String(x.record.work||""),selected:state.reviewSelection.has(key),
-        evidence_selected:evidenceIsSelected(evidenceKey),
-        db_status:{kind:status.kind,label:status.label,title:status.title||""},
-        cells:columnKeys.map(column=>recordsListCell(x,column,query)),
-      };
-    }),
-    columns:columnKeys.map(key=>({key,label:label(key)})),
-    available_columns:available.map(key=>({key,label:label(key)})),
-    sort:{key:sort.key,dir:sort.dir},filters:{...filters},
-    page:pg.page,pages:pg.pages,page_size:state.pageSize,start:pg.start,end:pg.end,
-    matched:rows.length,total:f.records.length,flagged,selection_count:state.reviewSelection.size,
-    page_selected:pageSelected,
-    stores:stores.map(store=>({name:store.name,count:Number(store.count||0)})),
-    active_store:state.activeStore||"",has_database:stores.length>0,
-    db_unavailable_reason:dbUnavailableReason(),capabilities,
-  };
-}
-function setRecordsListQuery(value){
-  const f=activeFile();if(!f)return;
-  state.searches[f.id]=String(value||"");state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
-}
-function setRecordsListStore(name){setActiveStore(name);shell()}
-function setRecordsListPage(page){
-  const f=activeFile();if(!f)return;
-  state.pages[f.id]=Math.max(1,Number(page)||1);persistPrefs();syncUrl({replace:true});
-}
-function setRecordsListPageSize(size){
-  const f=activeFile();if(!f)return;
-  state.pageSize=Number(size)||state.pageSize;state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
-}
-function setRecordsListSort(key){
-  const f=activeFile();if(!f)return;
-  const sort=state.sorts[f.id]||(state.sorts[f.id]={key:"page_start",dir:1});
-  toggleSort(sort,key);state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
-}
-function setRecordsListFilter(key,value){
-  const f=activeFile();if(!f)return;
-  setListFilterValue(f.id,key,value);state.pages[f.id]=1;syncUrl({replace:true});
-}
-function clearRecordsListFilters(){
-  const f=activeFile();if(!f)return;
-  state.listFilters[f.id]={};state.pages[f.id]=1;persistPrefs();syncUrl({replace:true});
-}
-function setRecordsListRowSelected(index,selected){
-  const f=activeFile();if(!f)return;
-  setReviewSelected(f,index,selected);syncUrl({replace:true});
-}
-function setRecordsListPageSelected(selected){
-  const snapshot=getRecordsListSnapshot();
-  const f=activeFile();if(!f)return;
-  for(const row of snapshot.rows)setReviewSelected(f,row.index,selected);
-  syncUrl({replace:true});
-}
-function selectRecordsListMatches(){
-  const f=activeFile();if(!f)return;
-  const query=state.searches[f.id]||"";
-  const filters=state.listFilters[f.id]||{};
-  const rows=f.records.map((record,index)=>({file:f,record,index}))
-    .filter(x=>!query||String(x.record.text||"").toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-    .filter(x=>rowMatchesListFilters(x,filters));
-  for(const x of rows)state.reviewSelection.add(reviewKey(f,x.index));
-  persistPrefs();syncUrl({replace:true});
-}
-function clearRecordsListSelection(){clearReviewSelection();syncUrl({replace:true})}
-function openRecordsListRecord(index){
-  const f=activeFile();if(!f)return;
-  navigateTo("record",{fileId:f.id,index});
-}
-function copyRecordsListJson(index){
-  const f=activeFile();const record=f?.records?.[index];
-  if(record)copyJsonToClipboard(record,record.record_id||"record");
-}
-function copyRecordsListCitation(index,kind){
-  const f=activeFile();const record=f?.records?.[index];
-  if(record)copyCitation(record,kind||"inline");
-}
-function toggleRecordsListEvidence(index){
-  const f=activeFile();if(!f)return;
-  toggleWorkspaceEvidence(f,index);shell();
-}
 function recordsListMetadataSearch(field,value,contains){
   return searchByMetadata(field,value,{contains:Boolean(contains)});
-}
-function setRecordsListColumns(keys){
-  const list=Array.isArray(keys)?keys.filter(Boolean):[];
-  if(list.length)state.tableColumns.list=list;
-  persistPrefs();syncUrl({replace:true});
-}
-function resetRecordsListColumns(){
-  state.tableColumns.list=[...TABLE_DEFAULTS.list];
-  persistPrefs();syncUrl({replace:true});
-}
-function getRecordsListShareHref(){const path=urlFromState();return new URL(path,location.origin).href}
-function recordsListCommand(name){
-  const f=activeFile();
-  if(name==="import"){document.querySelector("#fileInput")?.click();return Promise.resolve()}
-  if(name==="ocr")return Promise.resolve(canUse("editLocalRecords")?openOcrCleanupDialog():toast("Your role does not have permission to edit records."));
-  if(!f)return Promise.resolve();
-  if(name==="reviewSelected")return Promise.resolve(openTouchup(selectedReviewItems()));
-  if(name==="improveSelected")return Promise.resolve(openTouchup(selectedReviewItems(),"auto"));
-  if(name==="bulkSelected")return Promise.resolve(openBulkFieldEditor({rows:selectedReviewItems(),title:tr("search.bulk_edit_selected","Bulk edit selected records")}));
-  if(name==="upsertSelected")return upsertRows(rowsFromReviewSelection(),"selected records");
-  if(name==="reviewFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index})))));
-  if(name==="improveFlagged")return Promise.resolve(openTouchup(needsReviewItems(f.records.map((record,index)=>({file:f,record,index}))),"auto"));
-  if(name==="upsertFile")return upsertRows(f.records.map((record,index)=>({file:f,record,index})),"records");
-  return Promise.resolve();
 }
 
 const ligatures={"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"};
@@ -7977,194 +7918,6 @@ function prepareResearchRerun(job){
 // only the current record data and actions needed by that workspace. Audit
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
-function recordWorkspaceRecord(record){
-  const out=recordPayload(record,{includeChromaId:true});
-  delete out.updates;
-  delete out.annotations;
-  return cloneAuditValue(out);
-}
-async function researcherCurrentRecord(){
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  try{await refreshServerAnnotations()}catch{}
-  if(!state.activeStore){
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    try{await refreshStores()}catch{}
-    if(!state.activeStore)return null;
-  }
-  let id=state.researcherRecordId;
-  let record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(id));
-  if(!record&&id){try{record=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(id)}`)}catch{record=null}}
-  if(!record){
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-    if(!state.storeRecords.length){try{await loadStorePage()}catch{}}
-    record=state.storeRecords[0]||null;
-    id=String(record?._chroma_id||record?.record_id||"");
-    state.researcherRecordId=id;
-  }
-  return record;
-}
-async function getRecordWorkspaceSnapshot(){
-  if(isResearcher()){
-    const record=await researcherCurrentRecord();
-    if(!record)return {available:false,mode:"database",reason:tr("research.no_records","No records available")};
-    const id=String(record._chroma_id||record.record_id||state.researcherRecordId||"");
-    const list=researcherDbRecords();
-    const currentIndex=list.findIndex(item=>String(item._chroma_id||item.record_id||"")===id);
-    const annotations=(state.serverAnnotations||[])
-      .filter(item=>String(item.store||"")===String(state.activeStore)&&String(item.record_id||"")===id)
-      .map((item,index)=>normalizedRecordAnnotation(item,index,{removable:false}));
-    const text=String(record.text||"");
-    const q=String(state.recordFind||"");
-    const key=dbEvidenceKey(state.activeStore,id);
-    return {
-      available:true,mode:"database",record:recordWorkspaceRecord(record),record_id:id,
-      file_name:null,collection:state.activeStore||"",current_index:currentIndex,total:list.length,
-      has_previous:currentIndex>0,has_next:currentIndex>=0&&currentIndex<list.length-1,
-      find_query:q,find_matches:countOccurrences(text,q),word_count:text.trim()?text.trim().split(/\s+/).length:0,character_count:text.length,
-      evidence_selected:evidenceIsSelected(key),review_selected:false,
-      annotations,pdf_links:[],history:[],history_count:0,
-      inline_citation:inlineCitation(record),full_citation:fullCitation(record),page_span:mlaPageSpan(record),
-      capabilities:{
-        edit:false,annotate:hasCapability("annotations.write"),evidence:hasCapability("evidence.select"),
-        review:false,upsert:false,llm_review:false,pdf:false,history:false,copy:true,
-      },
-      pdf:{loaded:false,related:false,current_page:null,title:"",name:""},
-    };
-  }
-  const file=activeFile(),index=file?selectedIndex(file):0,record=file?.records?.[index];
-  if(!file||!record)return {available:false,mode:"workspace",reason:tr("record.no_record_selected","No record selected.")};
-  const pointer={kind:"workspace",fileId:file.id,index};
-  if(JSON.stringify(state.lastViewedRecord)!==JSON.stringify(pointer)){state.lastViewedRecord=pointer;persistPrefs()}
-  const text=String(record.text||"");
-  const q=String(state.recordFind||"");
-  const links=pdfLinks(record);
-  const loadedPages=loadedPdfPagesForRecord(record);
-  const related=Boolean(state.pdf.file&&state.pdf.name&&loadedPages.length);
-  const annotations=(Array.isArray(record.annotations)?record.annotations:[]).map((item,annotationIndex)=>normalizedRecordAnnotation(item,annotationIndex,{removable:true}));
-  const key=workspaceEvidenceKey(file,index);
-  return {
-    available:true,mode:"workspace",record:recordWorkspaceRecord(record),record_id:String(record.record_id||index+1),
-    file_id:file.id,file_name:file.name,collection:state.activeStore||"",current_index:index,total:file.records.length,
-    has_previous:index>0,has_next:index<file.records.length-1,
-    find_query:q,find_matches:countOccurrences(text,q),word_count:text.trim()?text.trim().split(/\s+/).length:0,character_count:text.length,
-    evidence_selected:evidenceIsSelected(key),review_selected:state.reviewSelection.has(reviewKey(file,index)),
-    annotations,pdf_links:cloneAuditValue(links),history:compactRecordHistory(record),history_count:Array.isArray(record.updates)?record.updates.length:0,
-    inline_citation:inlineCitation(record),full_citation:fullCitation(record),page_span:mlaPageSpan(record),
-    capabilities:{
-      edit:canUse("editLocalRecords"),annotate:hasCapability("annotations.write"),evidence:hasCapability("evidence.select"),
-      review:canUse("editLocalRecords"),upsert:canUse("manageCorpus")&&hasCorpusDb(),llm_review:canUse("editLocalRecords"),
-      pdf:canAccessPage("pdf"),history:canUse("editLocalRecords"),copy:true,
-    },
-    pdf:{
-      loaded:Boolean(state.pdf.file&&state.pdf.name),related,current_page:state.pdf.page||null,
-      current_linked:related&&loadedPages.includes(Number(state.pdf.page)),title:pdfDisplayTitle(),name:state.pdf.name||"",
-      loaded_pages:loadedPages,
-    },
-  };
-}
-async function recordWorkspaceNavigate(delta){
-  const step=Number(delta)||0;if(!step)return getRecordWorkspaceSnapshot();
-  if(isResearcher()){
-    const current=await researcherCurrentRecord();if(!current)return getRecordWorkspaceSnapshot();
-    const id=String(current._chroma_id||current.record_id||"");
-    const list=researcherDbRecords();const index=list.findIndex(item=>String(item._chroma_id||item.record_id||"")===id);
-    const next=list[index+step];if(next){state.researcherRecordId=String(next._chroma_id||next.record_id||"");persistPrefs();syncUrl({replace:true});shell()}
-    return getRecordWorkspaceSnapshot();
-  }
-  const file=activeFile();if(!file)return getRecordWorkspaceSnapshot();
-  const index=selectedIndex(file),next=Math.max(0,Math.min(file.records.length-1,index+step));
-  state.selected[file.id]=next;persistPrefs();syncUrl({replace:true});shell();
-  return getRecordWorkspaceSnapshot();
-}
-function setRecordWorkspaceFind(value){state.recordFind=String(value||"");persistPrefs();syncUrl({replace:true});return state.recordFind}
-async function toggleCurrentRecordEvidence(){
-  if(isResearcher()){
-    const record=await researcherCurrentRecord();if(!record)return getRecordWorkspaceSnapshot();
-    toggleDbEvidence(state.activeStore,String(record._chroma_id||record.record_id||""),record);
-  }else{const file=activeFile();if(file)toggleWorkspaceEvidence(file,selectedIndex(file))}
-  return getRecordWorkspaceSnapshot();
-}
-async function toggleCurrentRecordReviewSelection(){
-  if(isResearcher())return getRecordWorkspaceSnapshot();
-  const file=activeFile();if(!file)return getRecordWorkspaceSnapshot();const index=selectedIndex(file);const selected=state.reviewSelection.has(reviewKey(file,index));setReviewSelected(file,index,!selected);shell();return getRecordWorkspaceSnapshot();
-}
-async function copyCurrentRecordCitation(kind="inline"){
-  const snapshot=await getRecordWorkspaceSnapshot();if(!snapshot?.available)return false;
-  const text=kind==="full"?snapshot.full_citation:snapshot.inline_citation;
-  try{await navigator.clipboard.writeText(String(text||""));toast(tr(kind==="full"?"record.full_citation_copied":"record.inline_citation_copied",kind==="full"?"Full citation copied":"Inline citation copied"),{tone:"success"});return true}
-  catch(error){toast(`${tr("record.copy_failed","Could not copy citation")}: ${error.message}`,{tone:"danger"});return false}
-}
-async function copyCurrentRecordJson(){
-  if(isResearcher()){
-    const record=await researcherCurrentRecord();if(!record)return false;await copyJsonToClipboard(recordWorkspaceRecord(record),tr("record.record_json","record"));return true;
-  }
-  const record=selectedRecord();if(!record)return false;await copyJsonToClipboard(recordWorkspaceRecord(record),tr("record.record_json","record"));return true;
-}
-async function saveCurrentRecordChanges(changes={}){
-  if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));
-  const file=activeFile();if(!file)throw new Error(tr("record.no_record_selected","No record selected."));
-  const index=selectedIndex(file);const safe={};
-  for(const [field,value] of Object.entries(changes||{})){if(field!=="updates"&&!String(field).startsWith("_"))safe[field]=value}
-  const count=applyRecordChanges(file,index,safe,{source:"record_workspace"});shell();
-  if(count)toast(tr("record.saved","Record changes saved"),{tone:"success"});
-  else toast(tr("record.no_changes","No record fields changed"),{tone:"info"});
-  return getRecordWorkspaceSnapshot();
-}
-async function addCurrentRecordAnnotation(payload={}){
-  if(!hasCapability("annotations.write"))throw new Error(tr("permissions.annotations_denied","Your role cannot create annotations."));
-  const field=String(payload.field||"text"),quote=String(payload.quote||"").trim(),note=String(payload.note||"").trim(),tags=Array.isArray(payload.tags)?payload.tags.map(String).filter(Boolean):[];
-  if(!quote&&!note&&!tags.length)throw new Error(tr("annotations.empty","Add a quotation, note, or tag first."));
-  if(isResearcher()){
-    const record=await researcherCurrentRecord();if(!record)throw new Error(tr("record.no_record_selected","No record selected."));
-    await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore,record_id:String(record._chroma_id||record.record_id||""),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});
-    state.annotationsFetchedAt=0;await refreshServerAnnotations(true);toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});return getRecordWorkspaceSnapshot();
-  }
-  const file=activeFile();if(!file)throw new Error(tr("record.no_record_selected","No record selected."));const index=selectedIndex(file),record=file.records[index];
-  const shared=await api("/api/annotations",{method:"POST",body:JSON.stringify({store:state.activeStore||null,record_id:String(record._chroma_id||record.record_id||index+1),work:String(record.work||""),page_start:record.page_start??null,page_end:record.page_end??null,field,quote,note,tags})});
-  const annotations=Array.isArray(record.annotations)?record.annotations.map(cloneAuditValue):[];
-  annotations.push({id:uid(),shared_annotation_id:shared?.id||null,field,quote,note,tags,created_at:shared?.created_at||new Date().toISOString(),initiated_by:state.userContext?.username||null});
-  applyRecordChanges(file,index,{annotations},{source:"annotation"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true);shell();toast(tr("annotations.saved","Record annotation saved"),{tone:"success"});return getRecordWorkspaceSnapshot();
-}
-async function removeCurrentRecordAnnotation(annotationId){
-  if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));
-  const file=activeFile();if(!file)throw new Error(tr("record.no_record_selected","No record selected."));const index=selectedIndex(file),record=file.records[index];
-  const annotations=Array.isArray(record.annotations)?record.annotations.map(cloneAuditValue):[];
-  const at=annotations.findIndex((item,i)=>String(item.id||item.shared_annotation_id||`annotation-${i}`)===String(annotationId));if(at<0)return getRecordWorkspaceSnapshot();
-  const sharedId=annotations[at]?.shared_annotation_id;if(sharedId){await api(`/api/annotations/${encodeURIComponent(sharedId)}`,{method:"DELETE"});state.annotationsFetchedAt=0;await refreshServerAnnotations(true)}
-  annotations.splice(at,1);applyRecordChanges(file,index,{annotations},{source:"annotation"});shell();toast(tr("annotations.removed","Record annotation removed"),{tone:"success"});return getRecordWorkspaceSnapshot();
-}
-async function currentRecordPrimaryAction(action,payload={}){
-  if(action==="upsert"){
-    if(isResearcher()||!canUse("manageCorpus"))throw new Error(tr("permissions.corpus_denied","Your role cannot manage corpus databases."));const file=activeFile();if(!file)return false;await upsertRows([{file,record:file.records[selectedIndex(file)],index:selectedIndex(file)}],"record");return true;
-  }
-  if(action==="llm"){
-    if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));const file=activeFile();if(!file)return false;const index=selectedIndex(file);openTouchup([{file,index,record:file.records[index],key:reviewKey(file,index)}]);return true;
-  }
-  if(action==="ocr"){
-    if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));const file=activeFile();if(!file)return false;cleanRecord(file,selectedIndex(file));return true;
-  }
-  if(action==="history"){
-    if(isResearcher()||!canUse("editLocalRecords"))throw new Error(tr("permissions.record_edit_denied","Your role cannot edit local records."));const file=activeFile();if(!file)return false;openRecordHistoryBrowser(file,selectedIndex(file));return true;
-  }
-  if(action==="open_pdf"){
-    if(!canAccessPage("pdf"))throw new Error(tr("permissions.pdf_denied","Your role cannot open PDF Explorer."));
-    const snapshot=await getRecordWorkspaceSnapshot();const link=snapshot?.pdf_links?.[Number(payload.index)||0];if(!link)return false;
-    if(state.pdf.file&&link.pdf_file===state.pdf.name)openLoadedPdfPage(link.pdf_page);else{openPdfExplorerWorkspace();toast(tr("record.open_pdf_first",`Open ${link.pdf_file} in PDF Explorer to jump to the linked page.`).replace("{file}",link.pdf_file),{tone:"info"})}return true;
-  }
-  if(action==="pdf_explorer"){if(!canAccessPage("pdf"))throw new Error(tr("permissions.pdf_denied","Your role cannot open PDF Explorer."));openPdfExplorerWorkspace();return true}
-  if(action==="link_pdf"){
-    if(isResearcher())return false;const file=activeFile();if(!file)return false;await linkPdfPage(file,selectedIndex(file),state.pdf.page);return true;
-  }
-  if(action==="remove_pdf"){
-    if(isResearcher())return false;const file=activeFile();if(!file)return false;const record=file.records[selectedIndex(file)],links=pdfLinks(record),link=links[Number(payload.index)||0];if(link)unlinkPdfLink(file,selectedIndex(file),link);return true;
-  }
-  if(action==="remove_all_pdf"){
-    if(isResearcher())return false;const file=activeFile();if(!file)return false;unlinkAllPdfLinks(file,selectedIndex(file));return true;
-  }
-  return false;
-}
-function searchCurrentRecordMetadata(field,value,{contains=false}={}){return searchByMetadata(field,value,{contains})}
-function navigateRecordWorkspace(destination){if(["global","works","pdf"].includes(destination))navigateTo(destination)}
 
 function describeAdminWork(item,{insights=false}={}){
   const publisher=worksBiblioValue(item.rows,"publisher");

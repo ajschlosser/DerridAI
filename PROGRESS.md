@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 425 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 433 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -65,7 +65,7 @@ APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-deskt
 Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
 the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 36 scenarios)
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 52 scenarios)
 
 Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
 (master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
@@ -162,12 +162,25 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
   `tests/frontend/search-workspace.test.ts`. The baseline nav click is now scoped to `nav, aside` (the top bar has its own
   "Search" button). `SearchView` itself still polls `runtime.getSearchWorkspaceSnapshot()`; next is turning that into store
   fields + computed inside a composable now that the logic is isolated.
-- NEXT: `useRecordsWorkspace` / RecordView / WorksView still poll `runtime.get*Snapshot()`; same treatment (extract logic
-  factory with baseline scenarios recorded first, then Vue composable over the stores)
+- DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
+  `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
+  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 52 scenarios total) were
+  recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
+  pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
+- DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
+  (`createRecordWorkspace({state, ...helper lambdas})`, 15 functions: the record snapshot, navigation, and every
+  `*CurrentRecord*` / `*RecordWorkspace*` command). Nine Record-view baseline scenarios (`record-*`, 52 total) recorded from the
+  PRE-move build in their own commit, then compared against the moved code (52/52, 3 runs); `tests/frontend/record-workspace.test.ts`.
+  Note for extractions: after Prettier expands a dense `try{...}catch{}` the `eslint-disable no-empty` directive no longer
+  lines up; replace the empty catch with a commented one. `runtime.js` is 8,424 lines.
+- NEXT: WorksView (`getWorksWorkspaceSnapshot` and the Works commands) gets the same treatment (baseline first, then factory);
+  then `SearchView`, `useRecordsWorkspace`, `RecordView`, `WorksView` can be converted from snapshot polling to store fields +
+  computed inside composables, one at a time, each with a test pinning when the snapshot's side effects (`persistPrefs`,
+  `refreshStores`, presence checks) run.
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
-1. DONE (session 4): the DOM + computed-style baseline above (36 scenarios). Extend it for anything not covered before touching it.
+1. DONE (session 4): the DOM + computed-style baseline above (52 scenarios). Extend it for anything not covered before touching it.
 2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
 3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
    move `popstate` to `vue-router`.
