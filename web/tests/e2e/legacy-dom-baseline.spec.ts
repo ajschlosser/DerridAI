@@ -76,7 +76,7 @@ interface Scenario {
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
-  target?: "main" | "dialog";
+  target?: "main" | "dialog" | "app";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
 }
@@ -114,9 +114,13 @@ async function open(page: Page, scenario: Scenario) {
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
-async function rawMarkup(page: Page, target: "main" | "dialog"): Promise<string> {
+async function rawMarkup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   const locator =
-    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+    target === "dialog"
+      ? page.locator("dialog[open]").last()
+      : target === "app"
+        ? page.locator("#app")
+        : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
@@ -157,9 +161,13 @@ const STYLE_PROPERTIES = [
 ];
 
 /** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
-async function computedStyles(page: Page, target: "main" | "dialog"): Promise<string> {
+async function computedStyles(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   const locator =
-    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+    target === "dialog"
+      ? page.locator("dialog[open]").last()
+      : target === "app"
+        ? page.locator("#app")
+        : page.locator("main").first();
   return locator.evaluate((root, properties) => {
     const lines: string[] = [];
     const walk = (el: Element, depth: number) => {
@@ -181,7 +189,7 @@ async function computedStyles(page: Page, target: "main" | "dialog"): Promise<st
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page, target: "main" | "dialog"): Promise<string> {
+async function markup(page: Page, target: "main" | "dialog" | "app"): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
@@ -784,6 +792,35 @@ const scenarios: Scenario[] = [
       await expect(page.locator("dialog[open]").last()).toBeVisible();
     },
   },
+  // Computed styles for the Vue views, so styles can move out of the global sheet into components without changing them.
+  { name: "styles-search-light", nav: "Search", load: true, styles: true },
+  { name: "styles-search-dark", nav: "Search", load: true, scheme: "dark", styles: true },
+  {
+    name: "styles-search-cards-light",
+    nav: "Search",
+    load: true,
+    styles: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Cards" }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  { name: "styles-research-light", nav: "Research", styles: true },
+  { name: "styles-research-dark", nav: "Research", scheme: "dark", styles: true },
+  { name: "styles-vector-light", nav: "Vector Stores", load: true, styles: true },
+  { name: "styles-vector-dark", nav: "Vector Stores", load: true, scheme: "dark", styles: true },
+  { name: "styles-records-light", nav: "Records", load: true, styles: true },
+  { name: "styles-records-dark", nav: "Records", load: true, scheme: "dark", styles: true },
+  { name: "styles-record-light", nav: "Record View", load: true, styles: true },
+  { name: "styles-works-light", nav: "Works", load: true, styles: true },
+  { name: "styles-compare-light", nav: "Compare", load: true, styles: true },
+  { name: "styles-providers-light", nav: "LLM Providers", styles: true },
+  { name: "styles-users-light", nav: "Users", styles: true },
+  { name: "styles-roles-light", nav: "Roles & permissions", styles: true },
+  { name: "styles-languages-light", nav: "Manage languages", styles: true },
+  { name: "styles-settings-light", nav: "Settings", styles: true },
+  { name: "styles-app-shell-light", load: true, target: "app", styles: true },
+  { name: "styles-app-shell-dark", load: true, scheme: "dark", target: "app", styles: true },
 ];
 
 // Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
