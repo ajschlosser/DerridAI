@@ -4573,13 +4573,61 @@ html[data-color-scheme="dark"][data-contrast="more"]{
   background: var(--surface-selected);
   color: var(--accent-fg);
 }
+/* Shared dense-workspace table contract. Domain views keep their own column sizing and actions. */
+:where(.ui-table-scroll) {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+}
+:where(.ui-table) {
+  color: var(--text-primary);
+}
+:where(.ui-table thead th) {
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+:where(.ui-table tbody tr) {
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+:where(.ui-table tbody tr:hover),
+:where(.ui-table tbody tr:focus-visible) {
+  background: var(--surface-hover);
+}
+:where(.ui-table tbody tr.selected) {
+  background: var(--surface-selected);
+}
+:where(.ui-table-sticky-start),
+:where(.ui-table-sticky-end) {
+  background: var(--surface-card);
+}
+:where(.ui-table tbody tr:hover .ui-table-sticky-start),
+:where(.ui-table tbody tr:hover .ui-table-sticky-end),
+:where(.ui-table tbody tr:focus-visible .ui-table-sticky-start),
+:where(.ui-table tbody tr:focus-visible .ui-table-sticky-end) {
+  background: var(--surface-hover);
+}
+:where(.ui-table tbody tr.selected .ui-table-sticky-start),
+:where(.ui-table tbody tr.selected .ui-table-sticky-end) {
+  background: var(--surface-selected);
+}
 @media (forced-colors: active) {
   :where(.card,.ui-card,.btn,.ui-button,.ui-menu-trigger,.control,.search input,.field input,.field textarea,.field select,.ui-menu-list,.autocomplete-list) {
     border-color: CanvasText;
   }
+  :where(.ui-table-scroll,.ui-table th,.ui-table td) {
+    border-color: CanvasText;
+  }
+  :where(.ui-table thead th) {
+    background: Canvas;
+    color: CanvasText;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   :where(.btn,.ui-button,.ui-menu-trigger,.card,.ui-card) {
+    transition: none;
+  }
+  :where(.ui-table tbody tr) {
     transition: none;
   }
 }
