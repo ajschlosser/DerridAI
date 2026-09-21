@@ -1,0 +1,135 @@
+<dialog class="subset-dialog" open="">
+<div class="dh subset-dialog-head">
+<div>
+<span class="section-label">Corpus utility</span>
+<h2 class="dialog-title">Create JSONL subset</h2>
+<div class="dialog-subtitle">Build reusable record filters without editing the source JSONL.</div>
+</div>
+<button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+  <div class="db subset-body subset-body-v3">
+    <section class="subset-config-card">
+<div class="subset-config-copy">
+<b>Source &amp; output</b>
+<span>Choose the loaded records to filter and the name of the derived JSONL tab.</span>
+</div>
+<div class="subset-head-grid">
+<div class="field">
+<label>Source</label>
+<select class="control" id="subsetSource">
+<option value="active">Active JSONL · baseline.jsonl</option>
+<option value="all">All loaded JSONL files</option>
+<option value="jsonl-6418a92f81564da4d329096e">Only baseline.jsonl · 3 records</option>
+</select>
+</div>
+<div class="field">
+<label>New JSONL tab name</label>
+<input class="control" id="subsetName" value="baseline-subset.jsonl">
+</div>
+<label class="check-item subset-case">
+<input type="checkbox" id="subsetCase">
+<span>Case-sensitive matching</span>
+</label>
+</div>
+</section>
+    <section class="subset-config-card">
+<div class="subset-config-copy">
+<b>Saved filter profile</b>
+<span>Reuse common corpus slices such as primary Derrida text, one language, or records needing review.</span>
+</div>
+<div class="subset-profile-row">
+<select class="control" id="subsetProfile">
+<option value="">No saved profile</option>
+</select>
+<button class="btn small" id="saveSubsetProfile">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Save current</button>
+<button class="btn small danger" id="deleteSubsetProfile" disabled="">Delete</button>
+</div>
+</section>
+    <section class="subset-config-card subset-filter-card">
+<div class="subset-config-copy">
+<b>Filter expression</b>
+<span>Conditions are readable, grouped explicitly, and previewed against the selected source as you edit.</span>
+</div>
+<div class="subset-expression" id="subsetExpression">
+<div class="subset-expression-item subset-top-rule" data-kind="rule">
+<select class="control subset-join" disabled="" title="This action is unavailable until its required selection or data is available.">
+<option value="AND">AND</option>
+<option value="OR">OR</option>
+</select>
+<div class="subset-rule-row">
+<div class="subset-rule-core">
+<select class="control subset-field">
+<option value="concepts">Concepts · concepts</option>
+<option value="document_author">Document author · document_author</option>
+<option value="needs_review">Needs review · needs_review</option>
+<option value="page_end">Page end · page_end</option>
+<option value="page_start">Page start · page_start</option>
+<option value="record_id">Record ID · record_id</option>
+<option value="review_reason">Review reason · review_reason</option>
+<option value="speaker">Speaker · speaker</option>
+<option value="text">Extracted text · text</option>
+<option value="topics">Topics · topics</option>
+<option value="work">Work · work</option>
+<option value="year">Year · year</option>
+</select>
+<select class="control subset-operator">
+<option value="equals">Equals</option>
+<option value="not_equals">Does not equal</option>
+<option value="contains">Contains</option>
+<option value="not_contains">Does not contain</option>
+<option value="array_contains">Array contains exact value</option>
+<option value="exists">Exists / non-empty</option>
+<option value="missing">Missing / empty</option>
+<option value="truthy">Truthy</option>
+<option value="falsy">Falsy</option>
+<option value="regex">Regular expression</option>
+</select>
+<input class="control subset-value" placeholder="Value" autocomplete="off" list="subset-values-<uuid>" title="1 unique values from the selected JSONL source.">
+<datalist class="subset-value-options" id="subset-values-<uuid>">
+<option value="Jacques Derrida">
+</option>
+</datalist>
+<button class="btn icon-only danger subset-remove" type="button" title="Remove condition" aria-label="Remove condition">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="subset-builder-actions">
+<button class="btn small" id="addSubsetRule">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Condition</button>
+<button class="btn small" id="addSubsetGroup">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Group</button>
+<span class="subset-match-count" id="subsetPreview">3 of 3 source records match</span>
+</div>
+<div class="subset-expression-preview" id="subsetExpressionPreview">
+<b>Expression</b>
+<code>Document author Equals “Jacques Derrida”</code>
+</div>
+</section>
+  </div>
+  <div class="da">
+<button class="btn" data-close="">Cancel</button>
+<button class="btn" id="createSubsetDownload">Create &amp; download</button>
+<button class="btn primary" id="createSubset">Create subset tab</button>
+</div>
+</dialog>

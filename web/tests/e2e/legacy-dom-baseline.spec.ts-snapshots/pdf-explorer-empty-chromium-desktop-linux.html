@@ -1,0 +1,1976 @@
+<main data-v-185cb0d2="" class="build-main">
+<section data-v-185cb0d2="" class="build-summary" aria-labelledby="pdf-corpus-current-build">
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+</section>
+<section data-v-8e28dee5="" data-v-185cb0d2="" class="provider-switcher" aria-labelledby="corpus-provider-switcher-title">
+<p data-v-8e28dee5="" class="sr-only" aria-live="polite">Current enrichment model: qwen3:14b</p>
+<div data-v-8e28dee5="" class="provider-switcher-copy">
+<span data-v-8e28dee5="" class="eyebrow">Live enrichment</span>
+<b data-v-8e28dee5="" id="corpus-provider-switcher-title">Enrichment provider &amp; model</b>
+<span data-v-8e28dee5="">Changes affect only newly scheduled metadata tasks. In-flight requests finish with the provider and model that started them.</span>
+</div>
+<div data-v-8e28dee5="" class="switch-controls">
+<label data-v-8e28dee5="">
+<span data-v-8e28dee5="">Provider profile</span>
+<select data-v-8e28dee5="" class="control" disabled="">
+<option data-v-8e28dee5="" value="primary">Local Ollama</option>
+<option data-v-8e28dee5="" value="ollama-default">Local Ollama</option>
+<option data-v-8e28dee5="" value="openai-default">FreeLLM / OpenAI-compatible</option>
+</select>
+</label>
+<label data-v-8e28dee5="">
+<span data-v-8e28dee5="">Model for newly scheduled tasks</span>
+<input data-v-8e28dee5="" class="control" list="live-models-" disabled="" placeholder="Choose or type a model ID">
+<datalist data-v-8e28dee5="" id="live-models-">
+</datalist>
+</label>
+<button data-v-8e28dee5="" class="btn" type="button" disabled="">Apply to new tasks</button>
+<!---->
+</div>
+<!---->
+</section>
+<!---->
+<section data-v-edefc5bf="" data-v-185cb0d2="" class="pass-status" data-state="idle" role="status" aria-live="polite" aria-labelledby="pass-status-title">
+<div data-v-edefc5bf="" class="pass-copy">
+<span data-v-edefc5bf="" class="eyebrow">Metadata enrichment</span>
+<b data-v-edefc5bf="" id="pass-status-title">The last enrichment pass has finished. You can start another without reviewing every record.</b>
+<small data-v-edefc5bf="">The next pass uses what the last pass inferred and any reviewer decisions already made.</small>
+</div>
+<div data-v-edefc5bf="" class="pass-actions">
+<span data-v-a79234ce="" data-v-edefc5bf="" class="ui-button-wrap" data-tooltip="">
+<button data-v-a79234ce="" class="ui-button variant-primary size-default" type="button">
+<!---->
+<span data-v-a79234ce="">Run another pass</span>
+<!---->
+<!---->
+</button>
+</span>
+<!---->
+</div>
+</section>
+<!---->
+<details data-v-ee11bf9f="" data-v-185cb0d2="" class="enrich-metrics">
+<summary data-v-ee11bf9f="">How well is enrichment working?</summary>
+<!---->
+</details>
+<!---->
+<!---->
+<section data-v-70e26124="" data-v-185cb0d2="" class="review-session" aria-labelledby="review-session-title">
+<div data-v-70e26124="" class="review-identity">
+<span data-v-70e26124="" class="eyebrow">Record review</span>
+<b data-v-70e26124="" id="review-session-title">derrida-on-cosmopolitanism.pdf</b>
+<small data-v-70e26124="">qwen3:14b · build-0001</small>
+</div>
+<dl data-v-70e26124="" class="review-stats">
+<div data-v-70e26124="">
+<dd data-v-70e26124="">8</dd>
+<dt data-v-70e26124="">accepted</dt>
+</div>
+<div data-v-70e26124="">
+<dd data-v-70e26124="">15</dd>
+<dt data-v-70e26124="">Reviewable</dt>
+</div>
+<div data-v-70e26124="">
+<dd data-v-70e26124="">44</dd>
+<dt data-v-70e26124="">remaining</dt>
+</div>
+<div data-v-70e26124="">
+<dd data-v-70e26124="">30</dd>
+<dt data-v-70e26124="">need attention</dt>
+</div>
+</dl>
+<span data-v-a79234ce="" data-v-70e26124="" class="ui-button-wrap" data-tooltip="">
+<button data-v-a79234ce="" class="ui-button variant-default size-small" type="button">
+<!---->
+<span data-v-a79234ce="">Focus view</span>
+<!---->
+<!---->
+</button>
+</span>
+</section>
+<div data-v-185cb0d2="" class="review-frame">
+<section data-v-185cb0d2="" class="review-toolbar" aria-label="Record review controls">
+<div data-v-c4f4ff5d="" data-v-185cb0d2="" class="queue-controls">
+<div data-v-c4f4ff5d="" class="queue-tabs" role="toolbar" aria-label="Review queue">
+<button data-v-c4f4ff5d="" type="button" class="queue-tab" data-review-queue="all" aria-pressed="true" tabindex="0">
+<span data-v-c4f4ff5d="">All</span>
+<strong data-v-c4f4ff5d="">60</strong>
+</button>
+<button data-v-c4f4ff5d="" type="button" class="queue-tab" data-review-queue="ready" aria-pressed="false" tabindex="-1">
+<span data-v-c4f4ff5d="">Reviewable</span>
+<strong data-v-c4f4ff5d="">15</strong>
+</button>
+<button data-v-c4f4ff5d="" type="button" class="queue-tab" data-review-queue="issues" aria-pressed="false" tabindex="-1">
+<span data-v-c4f4ff5d="">Issues</span>
+<strong data-v-c4f4ff5d="">30</strong>
+</button>
+<button data-v-c4f4ff5d="" type="button" class="queue-tab" data-review-queue="accepted" aria-pressed="false" tabindex="-1">
+<span data-v-c4f4ff5d="">Accepted</span>
+<strong data-v-c4f4ff5d="">8</strong>
+</button>
+<button data-v-c4f4ff5d="" type="button" class="queue-tab" data-review-queue="rejected" aria-pressed="false" tabindex="-1">
+<span data-v-c4f4ff5d="">Rejected</span>
+<strong data-v-c4f4ff5d="">8</strong>
+</button>
+</div>
+<!---->
+</div>
+<label data-v-185cb0d2="" class="sr-only" for="pdf-corpus-record-search">Search generated records</label>
+<input data-v-185cb0d2="" id="pdf-corpus-record-search" class="control" placeholder="Search generated records">
+<div data-v-185cb0d2="" class="workspace-switcher" role="group" aria-label="Review workspace">
+<button data-v-185cb0d2="" type="button" class="btn small" aria-pressed="true">Record</button>
+<button data-v-185cb0d2="" type="button" class="btn small" aria-pressed="false" aria-label="Metadata workspace">Metadata</button>
+<button data-v-185cb0d2="" type="button" class="btn small" aria-pressed="false" aria-label="Source workspace">Source</button>
+</div>
+<div data-v-185cb0d2="" class="review-bulk">
+<button data-v-185cb0d2="" type="button" class="btn small primary">Accept clean (15)</button>
+<div data-v-bc7d3d5e="" data-v-185cb0d2="" class="action-menu" data-placement="bottom" data-align="start">
+<button data-v-bc7d3d5e="" type="button" class="btn small action-menu-trigger" aria-haspopup="menu" aria-expanded="false">
+<span data-v-bc7d3d5e="" class="action-menu-label">Bulk actions</span>
+<span data-v-bc7d3d5e="" class="action-menu-dots" aria-hidden="true">
+</span>
+<span data-v-bc7d3d5e="" class="action-menu-caret" aria-hidden="true">
+</span>
+</button>
+<!---->
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-185cb0d2="" class="pager">
+<button data-v-185cb0d2="" type="button" class="btn small" disabled="">Previous</button>
+<span data-v-185cb0d2="">1 / 2</span>
+<button data-v-185cb0d2="" type="button" class="btn small">Next</button>
+</div>
+</section>
+<section data-v-185cb0d2="" class="review-grid record-first-review" aria-busy="false" style="--rw-queue: 256px; --rw-inspector: 368px;">
+<nav data-v-185cb0d2="" class="records-pane" tabindex="-1" aria-labelledby="pdf-corpus-records-pane">
+<div data-v-185cb0d2="" class="pane-head">
+<b data-v-185cb0d2="" id="pdf-corpus-records-pane">Review queue</b>
+<button data-v-185cb0d2="" type="button" class="link-button queue-toggle">Hide queue</button>
+<label data-v-185cb0d2="" class="select-visible">
+<input data-v-185cb0d2="" type="checkbox">
+<span data-v-185cb0d2="">Select visible</span>
+</label>
+<span data-v-185cb0d2="">60</span>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00012">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00012</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row active" aria-current="true">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00012</b>
+<small data-v-185cb0d2="">pp. 5–7 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00013">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00013</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00013</b>
+<small data-v-185cb0d2="">pp. 5–5 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00014">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00014</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00014</b>
+<small data-v-185cb0d2="">pp. 5–5 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00015">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00015</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00015</b>
+<small data-v-185cb0d2="">pp. 6–6 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00016">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00016</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00016</b>
+<small data-v-185cb0d2="">pp. 6–8 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00017">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00017</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00017</b>
+<small data-v-185cb0d2="">pp. 6–6 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00018">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00018</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00018</b>
+<small data-v-185cb0d2="">pp. 7–7 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00019">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00019</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00019</b>
+<small data-v-185cb0d2="">pp. 7–7 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00020">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00020</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00020</b>
+<small data-v-185cb0d2="">pp. 7–9 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00021">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00021</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00021</b>
+<small data-v-185cb0d2="">pp. 8–8 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00022">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00022</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00022</b>
+<small data-v-185cb0d2="">pp. 8–8 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00023">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00023</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00023</b>
+<small data-v-185cb0d2="">pp. 8–8 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00024">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00024</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00024</b>
+<small data-v-185cb0d2="">pp. 9–11 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00025">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00025</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00025</b>
+<small data-v-185cb0d2="">pp. 9–9 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00026">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00026</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00026</b>
+<small data-v-185cb0d2="">pp. 9–9 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00027">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00027</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00027</b>
+<small data-v-185cb0d2="">pp. 10–10 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00028">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00028</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00028</b>
+<small data-v-185cb0d2="">pp. 10–12 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00029">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00029</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00029</b>
+<small data-v-185cb0d2="">pp. 10–10 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00030">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00030</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00030</b>
+<small data-v-185cb0d2="">pp. 11–11 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00031">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00031</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00031</b>
+<small data-v-185cb0d2="">pp. 11–11 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00032">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00032</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00032</b>
+<small data-v-185cb0d2="">pp. 11–13 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00033">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00033</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00033</b>
+<small data-v-185cb0d2="">pp. 12–12 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00034">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00034</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00034</b>
+<small data-v-185cb0d2="">pp. 12–12 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00035">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00035</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00035</b>
+<small data-v-185cb0d2="">pp. 12–12 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00036">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00036</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00036</b>
+<small data-v-185cb0d2="">pp. 13–15 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00037">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00037</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00037</b>
+<small data-v-185cb0d2="">pp. 13–13 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00038">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00038</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00038</b>
+<small data-v-185cb0d2="">pp. 13–13 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00039">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00039</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00039</b>
+<small data-v-185cb0d2="">pp. 14–14 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00040">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00040</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00040</b>
+<small data-v-185cb0d2="">pp. 14–16 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00041">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00041</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00041</b>
+<small data-v-185cb0d2="">pp. 14–14 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00042">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00042</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00042</b>
+<small data-v-185cb0d2="">pp. 15–15 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00043">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00043</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00043</b>
+<small data-v-185cb0d2="">pp. 15–15 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00044">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00044</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00044</b>
+<small data-v-185cb0d2="">pp. 15–17 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00045">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00045</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00045</b>
+<small data-v-185cb0d2="">pp. 16–16 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00046">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00046</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00046</b>
+<small data-v-185cb0d2="">pp. 16–16 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00047">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00047</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00047</b>
+<small data-v-185cb0d2="">pp. 16–16 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00048">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00048</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00048</b>
+<small data-v-185cb0d2="">pp. 17–19 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00049">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00049</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00049</b>
+<small data-v-185cb0d2="">pp. 17–17 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00050">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00050</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00050</b>
+<small data-v-185cb0d2="">pp. 17–17 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00051">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00051</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00051</b>
+<small data-v-185cb0d2="">pp. 18–18 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00052">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00052</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00052</b>
+<small data-v-185cb0d2="">pp. 18–20 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00053">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00053</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00053</b>
+<small data-v-185cb0d2="">pp. 18–18 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00054">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00054</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="topology" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00054</b>
+<small data-v-185cb0d2="">pp. 19–19 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="topology">topology</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00055">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00055</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00055</b>
+<small data-v-185cb0d2="">pp. 19–19 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00056">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00056</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="accepted" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00056</b>
+<small data-v-185cb0d2="">pp. 19–21 · 1,110 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="accepted">accepted</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00057">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00057</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="ready" aria-hidden="true">
+<!---->
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00057</b>
+<small data-v-185cb0d2="">pp. 20–20 · 1,117 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="ready">Ready</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00058">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00058</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00058</b>
+<small data-v-185cb0d2="">pp. 20–20 · 1,138 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00059">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00059</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="rejected" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00059</b>
+<small data-v-185cb0d2="">pp. 20–20 · 1,141 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="rejected">rejected</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00060">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00060</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00060</b>
+<small data-v-185cb0d2="">pp. 21–23 · 1,134 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<div data-v-185cb0d2="" class="record-row-wrap">
+<label data-v-185cb0d2="" class="record-select">
+<input data-v-185cb0d2="" type="checkbox" aria-label="Select derrida-jacques-on-cosmopoli-00061">
+<span data-v-185cb0d2="" class="sr-only">Select derrida-jacques-on-cosmopoli-00061</span>
+</label>
+<button data-v-185cb0d2="" type="button" class="record-row">
+<span data-v-185cb0d2="" class="record-state-icon" data-state="metadata" aria-hidden="true">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 2.5 20h19L12 3Z">
+</path>
+<path d="M12 9v5M12 17h.01">
+</path>
+</svg>
+</span>
+<span data-v-185cb0d2="" class="record-row-main">
+<b data-v-185cb0d2="">derrida-jacques-on-cosmopoli-00061</b>
+<small data-v-185cb0d2="">pp. 21–21 · 1,113 chars</small>
+<span data-v-185cb0d2="" class="record-row-status" data-state="metadata">metadata</span>
+<!---->
+</span>
+</button>
+</div>
+<!---->
+</nav>
+<div data-v-185cb0d2="" class="review-splitter" data-splitter="queue" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize review queue" aria-valuemin="224" aria-valuemax="420" aria-valuenow="256">
+</div>
+<article data-v-185cb0d2="" class="record-review-pane" aria-labelledby="review-record-title">
+<header data-v-185cb0d2="" class="record-review-head">
+<div data-v-185cb0d2="">
+<!---->
+<span data-v-185cb0d2="" class="eyebrow">Proposed record</span>
+<h3 data-v-185cb0d2="" id="review-record-title">derrida-jacques-on-cosmopoli-00012</h3>
+<p data-v-185cb0d2="">pp. 5–7 · 1,134 chars</p>
+</div>
+<div data-v-185cb0d2="" class="record-head-actions">
+<div data-v-185cb0d2="" class="decision-history" role="group" aria-label="Review history">
+<button data-v-185cb0d2="" type="button" class="btn small">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+<span data-v-185cb0d2="" class="btn-text">Undo</span>
+</button>
+<button data-v-185cb0d2="" type="button" class="btn small">
+<svg data-v-185cb0d2="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flip-inline">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+<span data-v-185cb0d2="" class="btn-text">Redo</span>
+</button>
+</div>
+<button data-v-185cb0d2="" type="button" class="btn small">Focus view</button>
+</div>
+</header>
+<!---->
+<section data-v-185cb0d2="" class="record-text-review" aria-labelledby="reviewed-record-text-title">
+<header data-v-185cb0d2="">
+<div data-v-185cb0d2="">
+<b data-v-185cb0d2="" id="reviewed-record-text-title">Reviewed record text</b>
+<!---->
+</div>
+<div data-v-185cb0d2="" class="record-text-head-actions">
+<!---->
+<!---->
+<button data-v-185cb0d2="" type="button" class="btn small">Mark reviewed</button>
+<button data-v-185cb0d2="" type="button" class="btn small">Edit text</button>
+</div>
+</header>
+<div data-v-185cb0d2="" class="record-primary-text">The concept of hospitality is never simply given; it is inherited through a tradition that already divides the welcome into a law and its exceptions. To ask who is the guest is already to condition the welcome, and yet without that question no one could be received at all. The city that shelters the stranger must decide, at each arrival, what it owes to the one it cannot yet name. What returns in these pages is a demand that exceeds every particular policy while remaining impossible to practise outside one. A duty of hospitality that is only dutiful would already have failed the visitor, who comes not as a case but as a face. We should therefore hesitate before treating the refuge as a solution: it is a place where the problem is kept open. The concept of hospitality is never simply given; it is inherited through a tradition that already divides the welcome into a law and its exceptions. To ask who is the guest is already to condition the welcome, and yet without that question no one could be received at all. The city that shelters the stranger must decide, at each arrival, what it owes to the one it cannot yet name.</div>
+<!---->
+</section>
+<footer data-v-185cb0d2="" class="record-decision-dock">
+<p data-v-185cb0d2="" id="record-metadata-blocker" class="metadata-accept-blocker" role="status">
+<b data-v-185cb0d2="">Metadata decision required</b> Confirm target, stance, proposition status before accepting this record.</p>
+<div data-v-185cb0d2="" class="decision-bar" role="group" aria-label="Record decision">
+<div data-v-bc7d3d5e="" data-v-185cb0d2="" class="action-menu" data-placement="top" data-align="start">
+<button data-v-bc7d3d5e="" type="button" class="btn small action-menu-trigger" aria-haspopup="menu" aria-expanded="false">
+<span data-v-bc7d3d5e="" class="action-menu-label">More actions</span>
+<span data-v-bc7d3d5e="" class="action-menu-dots" aria-hidden="true">
+</span>
+<span data-v-bc7d3d5e="" class="action-menu-caret" aria-hidden="true">
+</span>
+</button>
+<!---->
+</div>
+<div data-v-185cb0d2="" class="decision-actions">
+<button data-v-185cb0d2="" type="button" class="btn small">Skip</button>
+<button data-v-185cb0d2="" type="button" class="btn small danger">Reject &amp; next</button>
+<button data-v-185cb0d2="" type="button" class="btn small primary" aria-describedby="record-metadata-blocker">Accept &amp; next</button>
+</div>
+</div>
+</footer>
+</article>
+<div data-v-185cb0d2="" class="review-splitter" data-splitter="inspector" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize review details" aria-valuemin="320" aria-valuemax="640" aria-valuenow="368">
+</div>
+<aside data-v-185cb0d2="" class="review-inspector" aria-label="Review details">
+<!---->
+<div data-v-185cb0d2="" class="review-inspector-tabs" role="tablist" aria-label="Review detail views">
+<button data-v-185cb0d2="" id="review-tab-metadata" data-review-tab="metadata" type="button" role="tab" aria-controls="review-panel-metadata" aria-selected="true" tabindex="0">Metadata<span data-v-185cb0d2="">3</span>
+</button>
+<button data-v-185cb0d2="" id="review-tab-evidence" data-review-tab="evidence" type="button" role="tab" aria-controls="review-panel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
+<button data-v-185cb0d2="" id="review-tab-source" data-review-tab="source" type="button" role="tab" aria-controls="review-panel-source" aria-selected="false" tabindex="-1">Source</button>
+</div>
+<section data-v-185cb0d2="" id="review-panel-metadata" class="review-inspector-panel" role="tabpanel" aria-labelledby="review-tab-metadata" tabindex="0">
+<section data-v-f4346e00="" data-v-185cb0d2="" class="metadata-review" aria-labelledby="metadata-review-title">
+<header data-v-f4346e00="" class="metadata-head">
+<div data-v-f4346e00="">
+<h3 data-v-f4346e00="" id="metadata-review-title">Metadata</h3>
+<p data-v-f4346e00="">LLM suggestions are prefilled when valid. Deterministic rules resolve obvious relationships; review the remaining exceptions and save only what needs your judgment.</p>
+</div>
+<span data-v-f4346e00="" class="review-status" data-state="attention">3 decision(s)</span>
+</header>
+<!---->
+<!---->
+<!---->
+<div data-v-f4346e00="" class="metadata-grid" role="list" aria-label="Metadata needing review">
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">target</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="info" title="Proposed by the language model and retained with provenance.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>LLM inferred<span data-v-ac2adead="" class="sr-only"> — Proposed by the language model and retained with provenance.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Done</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-editor">
+<p data-v-ee379061="" class="field-reason">Suggested from the surrounding argument; confirm it against the text.</p>
+<!---->
+<div data-v-ee379061="" class="value-control">
+<div data-v-65892522="" data-v-ee379061="" class="ui-combobox">
+<input data-v-65892522="" class="control" role="combobox" aria-label="target" aria-autocomplete="list" aria-expanded="false" aria-controls="v-20-listbox" placeholder="" value="">
+</div>
+<!---->
+</div>
+<div data-v-ee379061="" class="editor-actions">
+<button data-v-ee379061="" type="button" class="btn primary" disabled="">Save value</button>
+<button data-v-ee379061="" type="button" class="btn">No supported value</button>
+<button data-v-ee379061="" type="button" class="btn subtle">Select from text</button>
+</div>
+<p data-v-ee379061="" class="selection-help">Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.</p>
+<div data-v-ee379061="" class="field-meta">
+<!---->
+<!---->
+<!---->
+<span data-v-ee379061="">Confidence: 95%</span>
+<!---->
+<!---->
+</div>
+</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">stance</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="info" title="Proposed by the language model and retained with provenance.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>LLM inferred<span data-v-ac2adead="" class="sr-only"> — Proposed by the language model and retained with provenance.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Done</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-editor">
+<p data-v-ee379061="" class="field-reason">Suggested from the surrounding argument; confirm it against the text.</p>
+<!---->
+<div data-v-ee379061="" class="value-control">
+<select data-v-ee379061="" class="control" aria-label="stance">
+<option data-v-ee379061="" disabled="" value="">Choose a value…</option>
+<option data-v-ee379061="" value="affirm">affirm</option>
+<option data-v-ee379061="" value="reject">reject</option>
+<option data-v-ee379061="" value="criticize">criticize</option>
+<option data-v-ee379061="" value="question">question</option>
+<option data-v-ee379061="" value="qualify">qualify</option>
+<option data-v-ee379061="" value="suspend">suspend</option>
+<option data-v-ee379061="" value="neutral">neutral</option>
+<option data-v-ee379061="" value="describe">describe</option>
+</select>
+<!---->
+</div>
+<div data-v-ee379061="" class="editor-actions">
+<button data-v-ee379061="" type="button" class="btn primary" disabled="">Save value</button>
+<button data-v-ee379061="" type="button" class="btn">No supported value</button>
+<!---->
+</div>
+<!---->
+<div data-v-ee379061="" class="field-meta">
+<!---->
+<!---->
+<!---->
+<span data-v-ee379061="">Confidence: 85%</span>
+<!---->
+<!---->
+</div>
+</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">proposition status</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="info" title="Proposed by the language model and retained with provenance.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>LLM inferred<span data-v-ac2adead="" class="sr-only"> — Proposed by the language model and retained with provenance.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Done</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-editor">
+<p data-v-ee379061="" class="field-reason">Suggested from the surrounding argument; confirm it against the text.</p>
+<!---->
+<div data-v-ee379061="" class="value-control">
+<select data-v-ee379061="" class="control" aria-label="proposition status">
+<option data-v-ee379061="" disabled="" value="">Choose a value…</option>
+<option data-v-ee379061="" value="asserted">asserted</option>
+<option data-v-ee379061="" value="affirmed">affirmed</option>
+<option data-v-ee379061="" value="rejected">rejected</option>
+<option data-v-ee379061="" value="criticized">criticized</option>
+<option data-v-ee379061="" value="questioned">questioned</option>
+<option data-v-ee379061="" value="qualified">qualified</option>
+<option data-v-ee379061="" value="hypothetical">hypothetical</option>
+<option data-v-ee379061="" value="attributed">attributed</option>
+<option data-v-ee379061="" value="reported">reported</option>
+<option data-v-ee379061="" value="conceded">conceded</option>
+<option data-v-ee379061="" value="suspended">suspended</option>
+</select>
+<!---->
+</div>
+<div data-v-ee379061="" class="editor-actions">
+<button data-v-ee379061="" type="button" class="btn primary" disabled="">Save value</button>
+<button data-v-ee379061="" type="button" class="btn">No supported value</button>
+<!---->
+</div>
+<!---->
+<div data-v-ee379061="" class="field-meta">
+<!---->
+<!---->
+<!---->
+<span data-v-ee379061="">Confidence: 70%</span>
+<!---->
+<!---->
+</div>
+</div>
+</article>
+</div>
+</div>
+<details data-v-f4346e00="" class="settled-metadata">
+<summary data-v-f4346e00="">Populated metadata <span data-v-f4346e00="">2</span>
+</summary>
+<div data-v-f4346e00="" class="metadata-grid" role="list">
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">discourse role</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">analysis</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">speaker</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">Derrida</div>
+</article>
+</div>
+</div>
+</details>
+<details data-v-f4346e00="" class="settled-metadata add-metadata">
+<summary data-v-f4346e00="">Add more details <span data-v-f4346e00="">18</span>
+</summary>
+<p data-v-f4346e00="" class="add-metadata-help">These fields are empty on this record. Fill in any that apply, such as a quoted speaker.</p>
+<div data-v-f4346e00="" class="metadata-grid" role="list">
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">region type</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">primary text</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">region author</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">position holder</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">claim scope</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">semantic function</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">is direct quote</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted speaker</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted author</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted work</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted position holder</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted addressee</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quoted referent</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">quotation chain</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">topics</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">concepts</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">persons</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+<div data-v-f4346e00="" class="metadata-list-item" role="listitem">
+<article data-v-ee379061="" data-v-f4346e00="" class="metadata-field" data-attention="false">
+<div data-v-ee379061="" class="field-topline">
+<div data-v-ee379061="" class="field-name">
+<b data-v-ee379061="">works referenced</b>
+<span data-v-4c711b81="" data-v-ee379061="" class="ownership-badges">
+<span data-v-ac2adead="" data-v-4c711b81="" class="ui-status-badge" data-tone="neutral" title="No ownership provenance has been recorded.">
+<span data-v-ac2adead="" class="ui-status-dot" aria-hidden="true">
+</span>Unclassified<span data-v-ac2adead="" class="sr-only"> — No ownership provenance has been recorded.</span>
+</span>
+<!---->
+</span>
+</div>
+<div data-v-ee379061="" class="field-actions">
+<button data-v-ee379061="" type="button" class="link-button">Evidence</button>
+<button data-v-ee379061="" type="button" class="btn small">Edit</button>
+</div>
+</div>
+<!---->
+<!---->
+<div data-v-ee379061="" class="field-current">—</div>
+</article>
+</div>
+</div>
+</details>
+<!---->
+</section>
+<section data-v-185cb0d2="" class="document-metadata-launch">
+<div data-v-185cb0d2="">
+<b data-v-185cb0d2="">Document metadata defaults</b>
+<span data-v-185cb0d2="">Edit inherited bibliographic defaults in a dedicated workspace. Record-level overrides remain untouched.</span>
+</div>
+<button data-v-185cb0d2="" type="button" class="btn">Edit document metadata</button>
+</section>
+<details data-v-185cb0d2="" class="record-data">
+<summary data-v-185cb0d2="">Advanced metadata</summary>
+<p data-v-185cb0d2="" class="help">Typed controls above are preferred. This advanced editor is for supported interpretive metadata only; source-bound fields remain protected.</p>
+<section data-v-88b24c54="" data-v-185cb0d2="" class="llm-execution" role="group" aria-label="LLM execution">
+<div data-v-88b24c54="" class="llm-notice">
+<div data-v-88b24c54="">
+<b data-v-88b24c54="">This action uses an LLM</b>
+<small data-v-88b24c54="">Rerun metadata with the selected LLM profile. Existing human-confirmed values remain authoritative.</small>
+</div>
+</div>
+<label data-v-88b24c54="">
+<span data-v-88b24c54="">Provider profile</span>
+<select data-v-88b24c54="" class="control" value="ollama-default">
+<option data-v-88b24c54="" disabled="" value="">Choose a provider profile…</option>
+<option data-v-88b24c54="" value="primary">Local Ollama</option>
+<option data-v-88b24c54="" value="ollama-default">Local Ollama</option>
+<option data-v-88b24c54="" value="openai-default">FreeLLM / OpenAI-compatible</option>
+</select>
+</label>
+<label data-v-88b24c54="">
+<span data-v-88b24c54="">Model for this operation</span>
+<input data-v-88b24c54="" class="control" list="llm-models-ollama-default" placeholder="Choose or type a model ID" value="gemma4:e2b">
+<datalist data-v-88b24c54="" id="llm-models-ollama-default">
+<option data-v-88b24c54="" value="gemma4:e2b">
+</option>
+</datalist>
+<small data-v-88b24c54="">Model discovery is optional. You can type a model ID even when the provider does not expose a model list.</small>
+</label>
+<!---->
+<!---->
+</section>
+<label data-v-185cb0d2="" class="sr-only" for="pdf-corpus-metadata">Interpretive metadata</label>
+<textarea data-v-185cb0d2="" id="pdf-corpus-metadata" class="metadata-json" spellcheck="false">
+</textarea>
+<div data-v-185cb0d2="" class="data-actions">
+<button data-v-185cb0d2="" type="button" class="btn small">Save metadata</button>
+<label data-v-185cb0d2="" class="rerun-family">
+<span data-v-185cb0d2="">Rerun</span>
+<select data-v-185cb0d2="" class="control small">
+<option data-v-185cb0d2="" value="all">All metadata families</option>
+<option data-v-185cb0d2="" value="discourse">Discourse / attribution</option>
+<option data-v-185cb0d2="" value="quotation">Quotation relations</option>
+<option data-v-185cb0d2="" value="indexing">Semantic indexing</option>
+</select>
+</label>
+<button data-v-185cb0d2="" type="button" class="btn small">Rerun metadata</button>
+<button data-v-185cb0d2="" type="button" class="btn small">Run metadata enrichment again</button>
+</div>
+</details>
+</section>
+</aside>
+</section>
+</div>
+</main>

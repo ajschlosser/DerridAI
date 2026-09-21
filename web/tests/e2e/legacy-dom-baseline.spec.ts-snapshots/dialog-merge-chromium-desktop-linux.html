@@ -1,0 +1,49 @@
+<dialog class="merge-dialog" open="">
+<div class="dh">
+<div>
+<h2 class="dialog-title">Merge JSONL tabs</h2>
+<div class="dialog-subtitle">Choose any subset. The selected source tabs will be replaced in the workspace by the merged tab.</div>
+</div>
+<button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+<div class="db">
+<div class="merge-actions">
+<button class="btn small" id="mergeSelectAll">Select all</button>
+<button class="btn small" id="mergeSelectNone">Clear</button>
+</div>
+<div class="merge-file-list">
+<label class="merge-file-item">
+<input type="checkbox" data-merge-file="jsonl-6418a92f81564da4d329096e" checked="">
+<span>
+<b>baseline.jsonl</b>
+<small>3 records</small>
+</span>
+</label>
+<label class="merge-file-item">
+<input type="checkbox" data-merge-file="jsonl-2d5901188bd9dd6bb7a7d291" checked="">
+<span>
+<b>second.jsonl</b>
+<small>1 records</small>
+</span>
+</label>
+</div>
+<div class="field">
+<label>Merged file name</label>
+<input class="control" id="mergeName" value="derridai-merged.jsonl">
+</div>
+<label class="check-item">
+<input type="checkbox" id="mergeDownload">
+<span>Download merged JSONL immediately</span>
+</label>
+<div class="info">Unselected tabs remain unchanged. Selected tabs are removed from the workspace after the merge is created; their underlying source files on disk are not deleted.</div>
+</div>
+<div class="da">
+<button class="btn" data-close="">Cancel</button>
+<button class="btn primary" id="mergeCreate">Merge and replace selected tabs</button>
+</div>
+</dialog>

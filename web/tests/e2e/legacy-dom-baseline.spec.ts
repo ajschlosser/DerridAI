@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test, type Page } from "@playwright/test";
-import { mockBackend } from "./support/mock-backend";
+import { mockBackend, type Fixtures, type Role } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
 // Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
@@ -53,26 +53,44 @@ const RECORDS = [
 ];
 
 /** Fixed clock and random source, and no animation, so the markup is the same on every run. */
-async function stabilize(page: Page) {
-  await page.addInitScript(() => {
+async function stabilize(page: Page, scheme: "light" | "dark") {
+  await page.addInitScript((value) => {
     // The dashboard picks a random record and re-renders a variable number of times as data arrives.
     Math.random = () => 0;
-    localStorage.setItem("derridai.ui.scheme", "light");
-  });
+    localStorage.setItem("derridai.ui.scheme", value);
+  }, scheme);
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: scheme });
   await page.clock.setFixedTime(new Date("2026-03-01T12:00:00Z"));
 }
 
-async function open(page: Page, nav: string, load: boolean) {
-  await stabilize(page);
-  await mockBackend(page, { role: "admin" });
+interface Scenario {
+  name: string;
+  /** In-app navigation, as a person would do it, after the app has started. */
+  nav?: string;
+  role?: Role;
+  scheme?: "light" | "dark";
+  /** Load the sample JSONL file before navigating (admin only). */
+  load?: boolean;
+  fixtures?: Fixtures;
+  /** Interactions that reach the state, after navigation. */
+  steps?: (page: Page) => Promise<void>;
+  /** What to capture: the page's main region (default) or the open dialog. */
+  target?: "main" | "dialog";
+  /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
+  styles?: boolean;
+}
+
+async function open(page: Page, scenario: Scenario) {
+  await stabilize(page, scenario.scheme ?? "light");
+  await mockBackend(page, { role: scenario.role ?? "admin", fixtures: scenario.fixtures });
   await page.goto(APP + "/");
   await expect(page.locator("#main")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "Annotations", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(1000);
-  if (load) {
+  if (scenario.load) {
     await page.setInputFiles("#fileInput", {
       name: "baseline.jsonl",
       mimeType: "application/x-ndjson",
@@ -81,60 +99,239 @@ async function open(page: Page, nav: string, load: boolean) {
     await expect(page.getByText("Loaded 3 records")).toBeVisible({ timeout: 10_000 });
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
-  if (nav !== "Home") await page.getByRole("button", { name: nav, exact: true }).click();
-  // Let asynchronous rendering (progressive render, health checks, fonts) settle.
+  if (scenario.nav && scenario.nav !== "Home") {
+    await page.getByRole("button", { name: scenario.nav, exact: true }).click();
+  }
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(600);
+  await scenario.steps?.(page);
 }
 
-async function rawMarkup(page: Page): Promise<string> {
-  // The runtime wraps disabled controls in a tooltip span some time after render. When that happens
-  // depends on timing, so undo it and compare the markup underneath.
-  const html = await page
-    .locator("main")
-    .first()
-    .evaluate((el) => {
-      const copy = el.cloneNode(true) as HTMLElement;
-      copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
-        const tip = wrap.getAttribute("data-tooltip");
-        wrap.querySelectorAll("[title]").forEach((node) => {
-          if (node.getAttribute("title") === tip) node.removeAttribute("title");
-        });
-        wrap.replaceWith(...wrap.childNodes);
+/** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
+async function rawMarkup(page: Page, target: "main" | "dialog"): Promise<string> {
+  const locator =
+    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+  const html = await locator.evaluate((el) => {
+    const copy = el.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
+      const tip = wrap.getAttribute("data-tooltip");
+      wrap.querySelectorAll("[title]").forEach((node) => {
+        if (node.getAttribute("title") === tip) node.removeAttribute("title");
       });
-      return copy.outerHTML;
+      wrap.replaceWith(...wrap.childNodes);
     });
+    return copy.outerHTML;
+  });
   return html
     .replace(/></g, ">\n<")
     .replace(/\s+(style="[^"]*")/g, " $1")
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
     .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>");
 }
 
-const views: Array<{ name: string; nav: string; load: boolean }> = [
-  { name: "home-empty", nav: "Home", load: false },
-  { name: "home-loaded", nav: "Home", load: true },
-  { name: "research-empty", nav: "Research", load: false },
+const STYLE_PROPERTIES = [
+  "display",
+  "color",
+  "background-color",
+  "border-top-color",
+  "border-top-width",
+  "border-radius",
+  "font-size",
+  "font-weight",
+  "font-family",
+  "line-height",
+  "padding",
+  "margin",
+  "text-transform",
+  "opacity",
 ];
 
-test.describe("legacy runtime DOM baseline", () => {
-  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
-  for (const view of views) {
-    test(view.name, async ({ page }) => {
-      await open(page, view.nav, view.load);
-      expect(await markup(page)).toMatchSnapshot(`${view.name}.html`);
-    });
-  }
-});
+/** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
+async function computedStyles(page: Page, target: "main" | "dialog"): Promise<string> {
+  const locator =
+    target === "dialog" ? page.locator("dialog[open]").last() : page.locator("main").first();
+  return locator.evaluate((root, properties) => {
+    const lines: string[] = [];
+    const walk = (el: Element, depth: number) => {
+      const style = getComputedStyle(el);
+      const label = `${el.tagName.toLowerCase()}${[...el.classList].map((c) => `.${c}`).join("")}`;
+      lines.push(
+        `${" ".repeat(depth)}${label} | ${properties.map((p) => `${p}:${style.getPropertyValue(p)}`).join("; ")}`,
+      );
+      for (const child of Array.from(el.children)) walk(child, depth + 1);
+    };
+    walk(root, 0);
+    return lines.join("\n");
+  }, STYLE_PROPERTIES);
+}
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page): Promise<string> {
-  let last = await rawMarkup(page);
+async function markup(page: Page, target: "main" | "dialog"): Promise<string> {
+  let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
     await page.waitForTimeout(200);
-    const next = await rawMarkup(page);
+    const next = await rawMarkup(page, target);
     stableFor = next === last ? stableFor + 1 : 0;
     last = next;
   }
   return last;
 }
+
+const inRecords = async (page: Page) => {
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(800);
+};
+const openDialogFromRecords =
+  (button: RegExp | string, options: { secondFile?: boolean } = {}) =>
+  async (page: Page) => {
+    if (options.secondFile) {
+      await page.setInputFiles("#fileInput", {
+        name: "second.jsonl",
+        mimeType: "application/x-ndjson",
+        buffer: Buffer.from(
+          JSON.stringify({ ...RECORDS[0], record_id: "second-00001", work: "Glas" }),
+        ),
+      });
+      await expect(page.getByText("Loaded 1 records")).toBeVisible({ timeout: 10_000 });
+    }
+    await inRecords(page);
+    const target = page.getByRole("button", { name: button }).first();
+    // Some commands live in the "More" menu.
+    if (!(await target.isVisible())) {
+      const menus = page.locator("summary", { hasText: "More" });
+      for (let i = 0; i < (await menus.count()) && !(await target.isVisible()); i++)
+        await menus.nth(i).click();
+    }
+    await target.click();
+    await expect(page.locator("dialog[open]").last()).toBeVisible();
+  };
+
+const JOBS = {
+  jobs: [
+    {
+      id: "job-rag-1",
+      type: "rag",
+      status: "running",
+      stage: "retrieval",
+      stage_detail: "fetching passages",
+      source_collection: "derrida_primary",
+      model: "qwen3.5:4b",
+      provider: "ollama",
+      owner: "admin",
+      created_at: "2026-03-01T11:50:00Z",
+      started_at: "2026-03-01T11:50:05Z",
+      total: 10,
+      completed: 4,
+      request: { locales: ["en"], k: 8, fetch_k: 50 },
+    },
+    {
+      id: "job-llm-1",
+      type: "llm",
+      status: "completed",
+      mode: "review",
+      model: "qwen3.5:4b",
+      fields: ["topics"],
+      owner: "admin",
+      created_at: "2026-03-01T11:00:00Z",
+      started_at: "2026-03-01T11:00:05Z",
+      finished_at: "2026-03-01T11:04:00Z",
+      total: 6,
+      completed: 6,
+      pending_result_count: 2,
+      pending_change_count: 3,
+    },
+    {
+      id: "job-pdf-1",
+      type: "pdf_corpus",
+      status: "failed",
+      source_filename: "grammatology.pdf",
+      stage: "segmenting",
+      fatal_error: "Source could not be read",
+      owner: "admin",
+      created_at: "2026-03-01T10:00:00Z",
+      started_at: "2026-03-01T10:00:05Z",
+      finished_at: "2026-03-01T10:01:00Z",
+      total: 4,
+      completed: 1,
+    },
+  ],
+};
+
+const scenarios: Scenario[] = [
+  // The dashboard is the one view still drawn by the runtime through RuntimeSurface.
+  { name: "home-empty" },
+  { name: "home-loaded", load: true },
+  { name: "styles-home-light", load: true, styles: true },
+  { name: "styles-home-dark", load: true, scheme: "dark", styles: true },
+  { name: "home-researcher", role: "researcher" },
+  { name: "home-with-jobs", load: true, fixtures: { "/api/jobs": JOBS } },
+  {
+    name: "home-metric-next",
+    load: true,
+    steps: async (page) => {
+      await page.locator("#dashMetricNext").click();
+    },
+  },
+  {
+    name: "home-metric-next-twice",
+    load: true,
+    steps: async (page) => {
+      await page.locator("#dashMetricNext").click();
+      await page.locator("#dashMetricNext").click();
+    },
+  },
+  { name: "research-empty", nav: "Research" },
+  // PDF Explorer is drawn by the runtime inside the Corpus Builder workspace.
+  {
+    name: "pdf-explorer-empty",
+    nav: "Corpus Builder",
+    steps: async (page) => {
+      await page.getByRole("button", { name: /PDF Explorer/ }).click();
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(600);
+    },
+  },
+  // Dialogs the runtime builds as HTML strings, reached from the Records commands.
+  {
+    name: "dialog-merge",
+    load: true,
+    target: "dialog",
+    steps: openDialogFromRecords("Merge files", { secondFile: true }),
+  },
+  {
+    name: "dialog-subset",
+    load: true,
+    target: "dialog",
+    steps: openDialogFromRecords("Create subset"),
+  },
+  {
+    name: "styles-dialog-subset-dark",
+    load: true,
+    scheme: "dark",
+    target: "dialog",
+    styles: true,
+    steps: openDialogFromRecords("Create subset"),
+  },
+  {
+    name: "dialog-ocr-cleanup",
+    load: true,
+    target: "dialog",
+    steps: openDialogFromRecords("Clean OCR Artifacts"),
+  },
+];
+
+test.describe("legacy runtime DOM baseline", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
+  for (const scenario of scenarios) {
+    test(scenario.name, async ({ page }) => {
+      await open(page, scenario);
+      const target = scenario.target ?? "main";
+      const captured = scenario.styles
+        ? await computedStyles(page, target)
+        : await markup(page, target);
+      expect(captured).toMatchSnapshot(`${scenario.name}.${scenario.styles ? "txt" : "html"}`);
+    });
+  }
+});
