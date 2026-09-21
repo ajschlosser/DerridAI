@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { corpusState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
 
 /**
@@ -18,6 +19,17 @@ export function useRecordsWorkspace() {
     const next = runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined;
     if (next) snapshot.value = next;
   }
+  // The loaded corpus also changes outside this view: a file imported or closed, or a record edited elsewhere. Read the
+  // snapshot again then, so the rail and table do not keep showing the corpus as it was (a file imported while Records was
+  // open used to appear only after leaving and coming back).
+  watch(
+    () => [corpusState.version, corpusState.activeFileId],
+    () => {
+      if (snapshot.value) load();
+    },
+    { flush: "post" },
+  );
+
   function activate() {
     runtime.state.view = "list";
     load();
