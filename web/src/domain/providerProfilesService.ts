@@ -32,7 +32,7 @@ export function createProviderProfiles(deps: Deps) {
           name: "Local Ollama",
           type: "ollama",
           base_url: state.appConfig.ollama_base_url || "http://host.docker.internal:11434",
-          model: state.appConfig.chat_model || "gemma4:e2b",
+          model: state.appConfig.ollama_model || state.appConfig.chat_model || "gemma4:e2b",
           model_mode: "manual",
           model_kind: "any",
           api_key: "",
