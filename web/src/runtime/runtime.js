@@ -54,6 +54,7 @@ import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
+import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
@@ -356,6 +357,18 @@ const {refreshJobs,startJobPolling,pauseRuntime,pruneClientJobState,removeFinish
   trf:(...args)=>trf(...args),
   updateDbStatusElements:(...args)=>updateDbStatusElements(...args),
   updateOperationStackCount:(...args)=>updateOperationStackCount(...args),
+});
+const {backupContainsCredentials,downloadFullBackup,restoreFullBackup}=createBackupWorkspace({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  deleteWorkspaceDatabase:(...args)=>deleteWorkspaceDatabase(...args),
+  idbPut:(...args)=>idbPut(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  providerProfiles:(...args)=>providerProfiles(...args),
+  serializableFile:(...args)=>serializableFile(...args),
+  toast:(...args)=>toast(...args),
+  workspacePrefs:(...args)=>workspacePrefs(...args),
 });
 const {researchConfigForUi,getResearchWorkspaceSnapshot,updateResearchConfig,removeResearchEvidence,clearResearchEvidence,discoverResearchModels,refreshResearchJobs,getResearchJob,cancelResearchJob,deleteResearchJob,generationFromProfile,startResearchRun,gradeResearchJob,prepareResearchRerun,getResponseFaqPage,gradeResponseFaqRecord,rerunResponseFaqRecord,rememberRagPrompt,rememberRagRun,prepareRagRerun}=createResearchWorkspace({
   state,
@@ -6889,127 +6902,6 @@ function touchupApplyResults(items,results,approvals,all=false,reviewOnly=false)
   return {appliedFields,reviewedRecords};
 }
 
-function backupContainsCredentials(){
-  return providerProfiles().some(profile=>Boolean(profile.api_key));
-}
-async function downloadFullBackup({confirmed=false}={}){
-  const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
-  if(activeJobs.length){
-    return toast(`Wait for or cancel ${activeJobs.length} active background operation${activeJobs.length===1?"":"s"} before backing up.`);
-  }
-  const hasCredentials=backupContainsCredentials();
-  const warning=hasCredentials
-    ? "This full backup contains provider API keys/credentials configured in DerridAI. Treat the ZIP as sensitive. Continue?"
-    : "Create a full DerridAI backup containing all loaded JSONL records, configuration, audit history, UI workspace state, the current PDF, and every Chroma collection with its stored embeddings?";
-  if(!confirmed&&!await openMessageModal({title:"Create full backup?",message:warning,tone:hasCredentials?"danger":"info",confirmLabel:"Create backup",cancelLabel:"Cancel"}))return;
-  const button=document.querySelector("#downloadFullBackup");
-  if(button){button.disabled=true;button.textContent="Creating backup…"}
-  try{
-    for(const file of state.files)await persistFileNow(file);
-    const workspace={
-      backup_client_version:"0.40.10",
-      created_at:new Date().toISOString(),
-      files:state.files.map(serializableFile),
-      prefs:workspacePrefs(),
-    };
-    const form=new FormData();
-    form.append("workspace",new Blob([JSON.stringify(workspace)],{type:"application/json"}),"workspace.json");
-    form.append("pdf_metadata",JSON.stringify({
-      name:state.pdf.name||"",
-      title:state.pdf.title||"",
-      author:state.pdf.author||"",
-      page:state.pdf.page||1,
-      rotation:state.pdf.rotation||0,
-      text:state.pdf.text||"",
-      search:state.pdf.search||"",
-      relatedSearch:state.pdf.relatedSearch||"",
-      extractionSource:state.pdf.extractionSource||"",
-      extractError:state.pdf.extractError||"",
-    }));
-    if(state.pdf.file)form.append("current_pdf",state.pdf.file,state.pdf.name||state.pdf.file.name||"current.pdf");
-    const response=await fetch("/api/admin/backup",{method:"POST",body:form});
-    if(!response.ok){
-      let detail=`HTTP ${response.status}`;
-      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-      try{const payload=await response.json();detail=payload.detail||detail}catch{}
-      throw new Error(detail);
-    }
-    const blob=await response.blob();
-    const disposition=response.headers.get("content-disposition")||"";
-    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
-    const match=disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
-    // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it.
-    const filename=decodeURIComponent((match?.[1]||`derridai-full-backup-${new Date().toISOString().slice(0,10)}.zip`).replace(/^\"|\"$/g,""));
-    const url=URL.createObjectURL(blob);
-    const anchor=document.createElement("a");
-    anchor.href=url;anchor.download=filename;document.body.appendChild(anchor);anchor.click();anchor.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    toast(`Full backup created · ${(blob.size/1024/1024).toFixed(1)} MB`);
-  }catch(error){
-    toast(`Backup failed: ${error.message}`);
-  }finally{
-    const current=document.querySelector("#downloadFullBackup");
-    if(current){current.disabled=false;current.textContent="Download full backup"}
-  }
-}
-async function restoreFullBackup(file,{confirmed=false}={}){
-  if(!file)return;
-  const activeJobs=state.jobs.filter(job=>["queued","running","cancelling"].includes(job.status));
-  if(activeJobs.length)return toast("Cancel or wait for all background operations before restoring a backup.");
-  if(!confirmed&&!await openMessageModal({title:"Restore full DerridAI backup?",message:"This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",tone:"danger",confirmLabel:"Restore backup",cancelLabel:"Cancel"}))return;
-  const button=document.querySelector("#restoreFullBackup");
-  if(button){button.disabled=true;button.textContent="Restoring…"}
-  try{
-    const form=new FormData();form.append("backup",file,file.name);
-    const response=await fetch("/api/admin/restore",{method:"POST",body:form});
-    let payload;
-    try{payload=await response.json()}catch{payload=null}
-    if(!response.ok)throw new Error(payload?.detail||`HTTP ${response.status}`);
-    const workspace=payload?.workspace;
-    if(!workspace||!Array.isArray(workspace.files)||!workspace.prefs||typeof workspace.prefs!=="object")throw new Error("Backup restore returned an invalid workspace.");
-
-    await deleteWorkspaceDatabase();
-    state.storageReady=false;
-    for(const saved of workspace.files){
-      if(!saved?.id||!Array.isArray(saved.records))continue;
-      await idbPut("files",{
-        ...saved,
-        dirty:Array.isArray(saved.dirty)?saved.dirty:[],
-        errors:Array.isArray(saved.errors)?saved.errors:[],
-      });
-    }
-    await idbPut("prefs",{...workspace.prefs,key:"workspace"});
-
-    if(payload.pdf_available){
-      const pdfResponse=await fetch("/api/admin/restore/current-pdf");
-      if(pdfResponse.ok){
-        const blob=await pdfResponse.blob();
-        const meta=payload.pdf?.metadata||{};
-        await idbPut("assets",{
-          key:"current_pdf",
-          blob,
-          name:payload.pdf?.filename||meta.name||"restored.pdf",
-          title:meta.title||"",
-          author:meta.author||"",
-          page:Math.max(1,Number(meta.page)||1),
-          rotation:Number(meta.rotation||0)%360,
-          text:String(meta.text||""),
-          search:String(meta.search||""),
-          relatedSearch:String(meta.relatedSearch||""),
-          extractionSource:String(meta.extractionSource||""),
-          extractError:String(meta.extractError||""),
-          saved_at:new Date().toISOString(),
-        });
-      }
-    }
-    toast(`Restore complete · ${payload.chroma?.count||0} Chroma collections restored`);
-    setTimeout(()=>location.reload(),500);
-  }catch(error){
-    toast(`Restore failed: ${error.message}`);
-    const current=document.querySelector("#restoreFullBackup");
-    if(current){current.disabled=false;current.textContent="Load from backup"}
-  }
-}
 
 async function syncResearcherProviderProfiles(){
   const approved=providerProfiles().filter(profile=>profile.researcher_enabled).map(profile=>({...profile}));

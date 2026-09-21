@@ -123,7 +123,7 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
 
 - Job polling/notifications (`refreshJobs`, `startJobPolling`, `syncJobProgressToasts`, `cancelBackgroundJob`,
   `removeFinishedJob`, `syncUpsertJobReceipts`): touch the operations dock, RAG panel and home card renderers.
-- Backup/restore (`downloadFullBackup`/`restoreFullBackup`), `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals.
+- `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals. (Backup/restore moved to `domain/backupWorkspace.ts`.)
 - Legacy annotations renderers (`renderAnnotations`, `annotationItemHtml`, ...): `renderView` still dispatches to them
   although `/annotations` is Vue-native now. Do not delete without proving they are unreachable (e2e + DOM baseline).
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
