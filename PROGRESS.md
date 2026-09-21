@@ -318,12 +318,8 @@ Record/Annotations/List/Global/Compare/Faq/Rag/Works renderers (no route reaches
 including a `runtime` target (`#main`) and PDF Explorer scenarios (the old pdf-explorer scenarios snapshotted the
 Corpus Builder by mistake).
 
-Found, not fixed (behavior kept):
-- Clicking the "PDF Explorer" tab while a build is selected in the Corpus Builder does not open the Explorer (the
-  builder's URL sync rewrites `mode`); the baseline opens it through a popstate instead.
-- `operationDock.updateOperationStackCount` passes `{active,failed,finished}` to `dockCollapsedSummary`, which reads
-  `activeCount/failedCount/finishedCount`, so the collapsed dock label always sees zeros.
-- The dashboard's latest-annotation click calls an undefined `openSharedAnnotationRecord`.
+Bugs found while moving code, now fixed (each with a test): the PDF Explorer tab not opening with a selected build, the
+collapsed operation dock label always showing zeros, and the dashboard's latest-annotation click calling an undefined function.
 
 Left in runtime.js: state/persistence, evidence and selection, navigation/URL, the operations panel, corpus-builds home
 card, modals (`openMessageModal`), compare library, translation of legacy DOM. Next: move those clusters the same way
