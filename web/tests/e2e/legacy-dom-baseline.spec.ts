@@ -573,6 +573,10 @@ const scenarios: Scenario[] = [
   },
 ];
 
+// Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
+// the snapshots must not depend on the machine that records or checks them.
+test.use({ timezoneId: "UTC", locale: "en-US" });
+
 test.describe("legacy runtime DOM baseline", () => {
   test.beforeEach(({}, info) => test.skip(info.project.name !== "chromium-desktop", "Runs once."));
   for (const scenario of scenarios) {
