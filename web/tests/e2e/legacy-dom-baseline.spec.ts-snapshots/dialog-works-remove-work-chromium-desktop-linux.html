@@ -1,0 +1,37 @@
+<dialog class="message-dialog danger remove-work-dialog" open="">
+<div class="dh">
+<div>
+<h2 class="dialog-title">Remove entire work</h2>
+<div class="dialog-subtitle">Of Grammatology · destructive operation</div>
+</div>
+<button class="btn icon-only" data-close="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</div>
+    <div class="db remove-work-body">
+<div class="info warn">Remove every record for this work from selected loaded JSONL files and, optionally, from the selected Chroma collection. Primary collection deletion also removes matching records from its language collections.</div>
+    <div class="remove-work-files">
+<label class="check-item">
+<input type="checkbox" data-remove-work-file="jsonl-6418a92f81564da4d329096e" checked="">
+<span>
+<b>baseline.jsonl</b>
+<small>2 matching records</small>
+</span>
+</label>
+</div>
+    <label class="check-item">
+<input type="checkbox" id="removeWorkDb">
+<span>
+<b>Also remove from Chroma</b>
+<small>derrida_primary</small>
+</span>
+</label>
+</div>
+    <div class="da">
+<button class="btn" data-close="">Cancel</button>
+<button class="btn danger" id="confirmRemoveWork">Remove work</button>
+</div>
+</dialog>
