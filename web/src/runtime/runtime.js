@@ -53,6 +53,7 @@ import { createSearchWorkspace } from "../domain/searchWorkspace";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
+import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
@@ -328,6 +329,29 @@ const {describeAdminWork,worksSnapshotBase,prepareWorksWorkspace,getWorksWorkspa
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
   worksBiblioValue:(...args)=>worksBiblioValue(...args),
+});
+const {serverAnnotationItems,refreshServerAnnotations,allAnnotations,recentAnnotations,annotationTimeline,getAnnotationsWorkspaceSnapshot,annotationWorkspaceItem,loadAnnotationsWorkspace,setAnnotationsWorkspaceQuery,setAnnotationsWorkspaceView,openAnnotationsWorkspaceRecord,openAnnotationsWorkspaceWork,removeAnnotationsWorkspaceItem}=createAnnotationsWorkspace({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  api:(...args)=>api(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  canUse:(...args)=>canUse(...args),
+  dateKeys:(...args)=>dateKeys(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  label:(...args)=>label(...args),
+  memoCorpus:(...args)=>memoCorpus(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  notifyToast:(...args)=>notifyToast(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  recordStores:(...args)=>recordStores(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  reviewItemFromKey:(...args)=>reviewItemFromKey(...args),
+  reviewKey:(...args)=>reviewKey(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  tr:(...args)=>tr(...args),
 });
 const {jobLabel,jobProviderSummary,jobElapsedSeconds,humanDuration,fact,decisionLabel,operationIcon,operationResultKind,operationSubtitle,jobProgressText,operationDetailPairs,operationViewModel}=createOperationPresenters({
   tr,trf,
@@ -2643,56 +2667,6 @@ async function submitBackgroundLlmJob(items,config,fields,instructions,mode){
   return job;
 }
 
-function serverAnnotationItems(){
-  return (state.serverAnnotations||[]).map(annotation=>({
-    file:null,
-    record:{record_id:annotation.record_id,work:annotation.work||"",page_start:annotation.page_start,page_end:annotation.page_end,_chroma_id:annotation.record_id},
-    index:null,
-    annotation,
-    annotationIndex:null,
-    work:String(annotation.work||"(Untitled work)"),
-    server:true,
-    store:annotation.store||"",
-  }));
-}
-async function refreshServerAnnotations(force=false){
-  if(isResearcher()&&!hasCapability("annotations.read")){state.serverAnnotations=[];state.serverAnnotationsStore="";return []}
-  const storeName=isResearcher()?String(state.activeStore||""):"";
-  if(!force&&Date.now()-Number(state.annotationsFetchedAt||0)<15000&&(!isResearcher()||state.serverAnnotationsStore===storeName))return state.serverAnnotations||[];
-  try{
-    const suffix=storeName?`?store=${encodeURIComponent(storeName)}`:"";
-    const data=await api(`/api/annotations${suffix}`);
-    state.serverAnnotations=data.annotations||[];
-    state.serverAnnotationsStore=storeName;
-    state.annotationsFetchedAt=Date.now();
-  }catch(error){console.warn("Could not load shared annotations",error)}
-  return state.serverAnnotations||[];
-}
-function allAnnotations(){
-  const local=isResearcher()?[]:memoCorpus("annotations-all",()=>{
-    const items=[];
-    for(const {file,record,index} of allRows()){
-      const annotations=Array.isArray(record.annotations)?record.annotations:[];
-      annotations.forEach((annotation,annotationIndex)=>items.push({file,record,index,annotation,annotationIndex,work:String(record.work||"(Untitled work)"),server:false}));
-    }
-    return items;
-  });
-  // Administrator annotations are mirrored to the shared annotation store so
-  // researcher accounts can see them. Avoid showing the local + shared copy
-  // twice in an administrator workspace.
-  const mirroredIds=new Set(local.map(item=>String(item.annotation?.shared_annotation_id||"")).filter(Boolean));
-  const shared=serverAnnotationItems().filter(item=>!mirroredIds.has(String(item.annotation?.id||"")));
-  return [...local,...shared].sort((a,b)=>new Date(b.annotation.created_at||0)-new Date(a.annotation.created_at||0));
-}
-function recentAnnotations(limit=10){return allAnnotations().slice(0,limit)}
-function annotationTimeline(days=14){
-  const keys=dateKeys(days),counts=new Map(keys.map(key=>[key,0]));
-  for(const item of allAnnotations()){
-    const key=String(item.annotation?.created_at||"").slice(0,10);
-    if(counts.has(key))counts.set(key,(counts.get(key)||0)+1);
-  }
-  return keys.map(key=>({key,value:counts.get(key)||0}));
-}
 function annotationItemHtml(item){
   const annotation=item.annotation||{};
   const tags=(annotation.tags||[]).map(tag=>`<span class="chip">${esc(tag)}</span>`).join("");
@@ -7959,136 +7933,6 @@ function prepareResearchRerun(job){
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
 
-function getAnnotationsWorkspaceSnapshot() {
-  const all = allAnnotations();
-  const query = String(state.annotationSearch || "")
-    .trim()
-    .toLocaleLowerCase();
-  const filtered = all.filter((item) => annotationMatches(item, query));
-  const byWork = new Map();
-  for (const item of filtered) {
-    if (!byWork.has(item.work)) byWork.set(item.work, []);
-    byWork.get(item.work).push(item);
-  }
-  return {
-    query: String(state.annotationSearch || ""),
-    view: state.annotationView === "recent" ? "recent" : "works",
-    annotations: filtered.map(annotationWorkspaceItem),
-    groups: [...byWork.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([work, items]) => ({
-        work,
-        annotations: items.map(annotationWorkspaceItem),
-        records: new Set(items.map((item) => item.record?.record_id || item.index)).size,
-      })),
-    total: filtered.length,
-  };
-}
-function annotationWorkspaceItem(item) {
-  const annotation = item.annotation || {};
-  const canDeleteServer =
-    item.server &&
-    (state.userContext?.role === "admin" ||
-      Number(annotation.user_id || 0) === Number(state.userContext?.id || -1));
-  const canDeleteLocal = !item.server && canUse("editLocalRecords");
-  return {
-    id: String(
-      annotation.id || `${item.file?.id || "annotation"}-${item.index}-${item.annotationIndex}`,
-    ),
-    record_id: String(item.record?.record_id || tr("nav.record", "Record")),
-    work: item.work,
-    field: annotation.field
-      ? label(annotation.field)
-      : tr("annotations.record_note", "Record note"),
-    quote: String(annotation.quote || ""),
-    note: String(annotation.note || ""),
-    tags: Array.isArray(annotation.tags) ? annotation.tags.map(String) : [],
-    author: String(
-      annotation.initiated_by ||
-        annotation.author ||
-        tr("annotations.unknown_author", "Unknown author"),
-    ),
-    source: item.server
-      ? annotation.store || tr("annotations.shared", "Shared annotation")
-      : String(item.file?.name || ""),
-    created_at: annotation.created_at || null,
-    server: Boolean(item.server),
-    removable: Boolean(canDeleteServer || canDeleteLocal),
-    local_file_id: item.file?.id || null,
-    local_index: item.index == null ? null : Number(item.index),
-    local_annotation_index: item.annotationIndex == null ? null : Number(item.annotationIndex),
-    shared_annotation_id: annotation.shared_annotation_id || null,
-  };
-}
-async function loadAnnotationsWorkspace(force = false) {
-  if (isResearcher() && !state.activeStore) {
-    try {
-      await refreshStores();
-      state.activeStore = recordStores()[0]?.name || "";
-    } catch (error) {
-      console.warn("Could not select an annotations store", error);
-    }
-  }
-  await refreshServerAnnotations(
-    force || (isResearcher() && state.serverAnnotationsStore !== String(state.activeStore || "")),
-  );
-  return getAnnotationsWorkspaceSnapshot();
-}
-function setAnnotationsWorkspaceQuery(value) {
-  state.annotationSearch = String(value || "");
-  persistPrefs();
-  syncUrl({ replace: true });
-}
-function setAnnotationsWorkspaceView(value) {
-  state.annotationView = value === "recent" ? "recent" : "works";
-  persistPrefs();
-  syncUrl({ replace: true });
-}
-function openAnnotationsWorkspaceRecord(item) {
-  if (item.server) {
-    state.activeStore = String(item.source || state.activeStore || "");
-    state.researcherRecordId = String(item.record_id || "");
-    persistPrefs();
-    navigateTo("record");
-    return;
-  }
-  navigateTo("record", { fileId: item.local_file_id, index: item.local_index });
-}
-function openAnnotationsWorkspaceWork(work) {
-  state.workOverview = String(work || "");
-  persistPrefs();
-  navigateTo("works");
-}
-async function removeAnnotationsWorkspaceItem(item) {
-  if (!item.removable) return;
-  if (item.server) {
-    await api(`/api/annotations/${encodeURIComponent(item.id)}`, { method: "DELETE" });
-  } else {
-    const local = reviewItemFromKey(reviewKey(item.local_file_id, item.local_index));
-    const annotations = Array.isArray(local?.record?.annotations) ? local.record.annotations : [];
-    const annotationIndex = Number(item.local_annotation_index);
-    const annotation = Number.isInteger(annotationIndex) ? annotations[annotationIndex] : null;
-    if (!local || !annotation) return;
-    const sharedId = String(annotation.shared_annotation_id || "").trim();
-    if (sharedId) {
-      try {
-        await api(`/api/annotations/${encodeURIComponent(sharedId)}`, { method: "DELETE" });
-      } catch (error) {
-        if (Number(error?.status || 0) !== 404) throw error;
-      }
-    }
-    applyRecordChanges(
-      local.file,
-      local.index,
-      { annotations: annotations.filter((_, index) => index !== annotationIndex) },
-      { source: "annotation-delete" },
-    );
-    await persistFileNow(local.file);
-  }
-  state.annotationsFetchedAt = 0;
-  await refreshServerAnnotations(true);
-  notifyToast(tr("annotations.removed", "Annotation removed."), { tone: "success" });
-}
 
 export {
   operationViewModel,
