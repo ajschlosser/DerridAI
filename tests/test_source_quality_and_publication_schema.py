@@ -21,7 +21,7 @@ from app.models import PdfCorpusBuildCreate
 def test_profile_prompt_and_publication_schema_ids():
     """Pin profile, prompt and publication schema ids; only one profile is registered."""
     assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v10"
+    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v11"
     assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
     assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v12"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
