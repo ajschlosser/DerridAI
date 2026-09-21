@@ -289,10 +289,6 @@ const canStartConcurrentBuild=computed(()=>Boolean(selectedAsset.value&&contextS
 const llmContribution=computed(()=>currentBuild.value?.llm_contribution||{});
 const transientNetworkError=computed(()=>Boolean(buildRunning.value&&/networkerror|failed to fetch|network error/i.test(error.value)));
 const displayError=computed(()=>transientNetworkError.value?i18n.t("pdf_corpus.status_refresh_failed","Status refresh failed. The build may still be running; DerridAI will retry automatically."):error.value);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
-const metadataEnrichedCount=computed(()=>Number(currentBuild.value?.metadata_enriched_count||0));
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
-const metadataEnrichmentTotal=computed(()=>Number(currentBuild.value?.metadata_enrichment_total||currentBuild.value?.record_count||0));
 const activeProviderProfileLabel=computed<string>(()=>{
   const build=currentBuild.value;
   if(!build)return "—";

@@ -7473,7 +7473,7 @@ CURRENT REVIEWED RECORD TEXT:
             live = self._latest_runtime_request(build_id, request)
             return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
-        def candidate_for(index: int) -> dict[str, Any]:
+        def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
             status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
             for family in families:
@@ -7487,14 +7487,15 @@ CURRENT REVIEWED RECORD TEXT:
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
+            request_used = {**effective_request(), "families": families, "_interactive_provider_override": True}
             return self._enrich_record(
                 candidate,
                 manifest,
-                {**effective_request(), "families": families, "_interactive_provider_override": True},
+                request_used,
                 build_id=build_id,
                 previous_text=neighbors["previous_text"],
                 next_text=neighbors["next_text"],
-            )
+            ), request_used
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
             futures = {pool.submit(candidate_for, index): index for index in indices}
@@ -7506,9 +7507,10 @@ CURRENT REVIEWED RECORD TEXT:
                 index = futures[future]
                 record_id = str(snapshot[index].get("record_id") or "")
                 try:
-                    candidate = future.result()
+                    candidate, request_used = future.result()
                 except Exception as exc:
                     candidate = None
+                    request_used = request
                     failure = {"run_id": run_id, "at": iso_now(), "state": "failed", "error": str(exc)}
                 # Merge into the live copy, never the snapshot: the reviewer may have
                 # edited this or any other record while the model was thinking.
@@ -7525,7 +7527,7 @@ CURRENT REVIEWED RECORD TEXT:
                         result = {"outcome": "skipped"}
                     else:
                         was_accepted = str(live.get("review_disposition") or "pending") == "accepted"
-                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, effective_request(), profile, schema=pass_schema)
+                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema)
                         if was_accepted and result["outcome"] != "unchanged":
                             totals["records_reopened"] += 1
                     self.repo.save_records(build_id, live_records)
