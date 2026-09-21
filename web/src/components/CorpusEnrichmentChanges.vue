@@ -27,6 +27,7 @@ const disputes = computed(() => (last.value?.disputes ?? []).filter(item => !own
 const visible = computed(() => Boolean(props.record.needs_review) && added.value.length + replaced.value.length + disputes.value.length > 0);
 
 const label = (field: string) => i18n.t(`record.${field}`, field.replaceAll("_", " "));
+const candidatesFor = (item: Dispute): { value: unknown; source?: string; model?: string }[] => item.candidates?.length ? item.candidates : [{ value: item.existing, source: "current" }, { value: item.proposed, source: "proposed" }];
 function show(value: unknown): string {
   if (value === true) return i18n.t("ui.yes", "Yes");
   if (value === false) return i18n.t("ui.no", "No");
@@ -58,7 +59,7 @@ function show(value: unknown): string {
           {{ i18n.tf("pdf_corpus.change_dispute_values", "kept “{existing}”; the pass proposed “{proposed}”.", { existing: show(item.existing), proposed: show(item.proposed) }) }}
         </span>
         <span class="choices">
-          <button v-for="(candidate, index) in (item.candidates?.length ? item.candidates : [{value:item.existing,source:'current'},{value:item.proposed,source:'proposed'}])" :key="`${item.field}-${index}`" type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, candidate.value)">{{ candidate.source === "current" ? i18n.t("pdf_corpus.change_keep_current", "Keep current") : i18n.tf("pdf_corpus.change_use_candidate", "Use {candidate}", { candidate: candidate.model || candidate.source || i18n.t("pdf_corpus.change_proposed", "proposed") }) }}: {{ show(candidate.value) }}</button>
+          <button v-for="(candidate, index) in candidatesFor(item)" :key="`${item.field}-${index}`" type="button" class="btn small" :disabled="busy" @click="emit('resolve', item.field, candidate.value)">{{ candidate.source === "current" ? i18n.t("pdf_corpus.change_keep_current", "Keep current") : i18n.tf("pdf_corpus.change_use_candidate", "Use {candidate}", { candidate: candidate.model || candidate.source || i18n.t("pdf_corpus.change_proposed", "proposed") }) }}: {{ show(candidate.value) }}</button>
         </span>
       </li>
     </ul>
