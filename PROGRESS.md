@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 412 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 415 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -88,10 +88,10 @@ yourself for fast repeat runs). 15 consecutive runs of all 27 passed with no fla
   Add scenarios by appending to `scenarios` (`steps`, `fixtures`, `role`, `scheme`, `target: "dialog"`, `styles: true`)
   and record with `--update-snapshots=missing` (Playwright reports the first write as a failure; rerun).
 
-Findings while building it: **existing bug** `ReferenceError: wireOperationsPanel is not defined` is thrown on every
-dashboard render (`runtime.js` `renderDashboard`; the function was removed by commit 2c51149 "Rebuild the Home
-Operations panel as a Vue component" but one call remains). It aborts the rest of that wiring line. The baseline records
-behavior as-is; fixing it is a behavior change, so raise it with the owner. Also: Review / Auto-improve needs-review open a
+Findings while building it: the stale `wireOperationsPanel()` call that threw on every dashboard render was FIXED in
+c172814 (a test now guards it). Still open, same class (`// eslint-disable-next-line no-undef -- SA-11` backlog in
+`runtime.js`, five sites): e.g. `openSharedAnnotationRecord` (dashboard latest server annotation click) is not defined.
+Also: Review / Auto-improve needs-review open a
 Vue dialog (`.ui-dialog`), the Records Columns dialog and record edit sheet are Vue; "Open result" on a RAG job navigates
 to the Vue Research page rather than opening a dialog.
 
@@ -128,6 +128,20 @@ consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer
   although `/annotations` is Vue-native now. Do not delete without proving they are unreachable (e2e + DOM baseline).
 - Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
   `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
+
+## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
+
+Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
+accessors for those fields onto the runtime `state` (`bindJobsState`), so runtime code is unchanged and still gets the very
+same plain arrays/objects back, and expose the object through a Pinia store in `web/src/stores/`. The state is shallow on
+purpose: the runtime mutates in place, so Vue learns about changes through a `version` counter that the runtime bumps where
+it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
+
+- DONE: jobs (`jobs`, `jobsLastFetched`, `jobApplied`, `upsertJobApplied`) -> `state/jobsState.ts`, `stores/jobs.ts`
+  (`useJobsStore`: `jobs`, `lastFetched`, `version`, `activeJobs`). Nothing in Vue reads it yet; `OperationsPanel` still
+  uses the bridge. Unit tests: `tests/frontend/jobs-state.test.ts`.
+- NEXT: migrate readers to the store (OperationsPanel via `watch(version)`, shell store's job counts), then the next groups
+  (search, records list, vector stores, compare, PDF, research). Do not deep-reactive `state`: `SettingsView` reads it directly.
 
 ## Next steps: the risky phase (needs owner go-ahead)
 

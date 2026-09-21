@@ -1,10 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { bindJobsState } from "../state/jobsState";
 
 // Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
 // runtime.js so the shape has one home; the runtime still owns the instance it creates.
 
 export function createRuntimeState() {
-  return {
+  const state = {
     userContext: null,
     files: [],
     activeFileId: null,
@@ -112,11 +113,7 @@ export function createRuntimeState() {
     storePresenceIds: {},
     storePresenceCheckedAt: {},
     operationProgress: {},
-    jobs: [],
-    jobsLastFetched: 0,
     jobsPollTimer: null,
-    jobApplied: {},
-    upsertJobApplied: {},
     foregroundUpsertActive: false,
     warmup: { status: "idle", message: "" },
     faqSearch: "",
@@ -200,6 +197,8 @@ export function createRuntimeState() {
     },
     storageReady: false,
   };
+  // Background-job fields live in a store shared with Vue code; see state/jobsState.ts.
+  return bindJobsState(state);
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;
