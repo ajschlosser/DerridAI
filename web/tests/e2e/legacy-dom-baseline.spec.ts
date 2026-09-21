@@ -638,6 +638,82 @@ const scenarios: Scenario[] = [
       await expect(page.locator("dialog[open]").last()).toBeVisible();
     },
   },
+  // The Record view is Vue, but the record it shows, navigation, evidence and edits all come from the runtime.
+  { name: "record-loaded", nav: "Record View", load: true },
+  {
+    name: "record-next",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: /Next record/ }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "record-find",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByPlaceholder(/Find in record/i).fill("outside");
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "record-add-evidence",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Add evidence" }).first().click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "record-add-to-selection",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.locator("summary", { hasText: "•••" }).click();
+      await page.getByText("Add to selection", { exact: true }).click();
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: "record-tab-provenance",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Provenance" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "record-tab-annotations",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Annotations" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "record-tab-history",
+    nav: "Record View",
+    load: true,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "History" }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "record-edit-sheet",
+    nav: "Record View",
+    load: true,
+    target: "dialog",
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Edit record" }).click();
+      await expect(page.locator("dialog[open]").last()).toBeVisible();
+    },
+  },
 ];
 
 // Times are rendered in the browser's zone (for example the title of a job's finish time), so pin the zone and locale:
