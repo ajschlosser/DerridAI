@@ -3,73 +3,184 @@ import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchEvidenceSelection, ResearchResultEvidence } from "../../types/research";
 
-const props=withDefaults(defineProps<{
-  selectedEvidence?:ResearchEvidenceSelection[];
-  resultEvidence?:ResearchResultEvidence[];
-  activeIndex?:number;
-  canRemove?:boolean;
-  researcher?:boolean;
-}>(),{selectedEvidence:()=>[],resultEvidence:()=>[],activeIndex:0,canRemove:false,researcher:false});
-const emit=defineEmits<{select:[index:number];remove:[key:string];clear:[]}>();
-const i18n=useI18nStore();
-const showingResult=computed(()=>props.resultEvidence.length>0);
-const active=computed(()=>showingResult.value?props.resultEvidence[Math.max(0,Math.min(props.activeIndex,props.resultEvidence.length-1))]:null);
-const record=computed(()=>active.value?.record||{});
-function pageLabel(record:Record<string,unknown>){
-  const start=record.page_start??record.page??null,end=record.page_end??null;
-  if(start==null)return "";
-  return end!=null&&String(end)!==String(start)?`${start}–${end}`:String(start);
+const props = withDefaults(
+  defineProps<{
+    selectedEvidence?: ResearchEvidenceSelection[];
+    resultEvidence?: ResearchResultEvidence[];
+    activeIndex?: number;
+    canRemove?: boolean;
+    researcher?: boolean;
+  }>(),
+  {
+    selectedEvidence: () => [],
+    resultEvidence: () => [],
+    activeIndex: 0,
+    canRemove: false,
+    researcher: false,
+  },
+);
+const emit = defineEmits<{ select: [index: number]; remove: [key: string]; clear: [] }>();
+const i18n = useI18nStore();
+const showingResult = computed(() => props.resultEvidence.length > 0);
+const active = computed(() =>
+  showingResult.value
+    ? props.resultEvidence[
+        Math.max(0, Math.min(props.activeIndex, props.resultEvidence.length - 1))
+      ]
+    : null,
+);
+const record = computed(() => active.value?.record || {});
+function pageLabel(record: Record<string, unknown>) {
+  const start = record.page_start ?? record.page ?? null,
+    end = record.page_end ?? null;
+  if (start == null) return "";
+  return end != null && String(end) !== String(start) ? `${start}–${end}` : String(start);
 }
-function selectedPage(item:ResearchEvidenceSelection){
-  if(item.page_start==null)return "";
-  return item.page_end!=null&&String(item.page_end)!==String(item.page_start)?`${item.page_start}–${item.page_end}`:String(item.page_start);
+function selectedPage(item: ResearchEvidenceSelection) {
+  if (item.page_start == null) return "";
+  return item.page_end != null && String(item.page_end) !== String(item.page_start)
+    ? `${item.page_start}–${item.page_end}`
+    : String(item.page_start);
 }
-function display(value:unknown){
-  if(Array.isArray(value))return value.join(", ");
-  if(value==null)return "";
+function display(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (value == null) return "";
   return String(value);
 }
-const relationRows=computed(()=>[
-  [i18n.t('research.speaker','Speaker'),record.value.speaker],
-  [i18n.t('research.position_holder','Position holder'),record.value.position_holder],
-  [i18n.t('research.stance','Stance'),record.value.stance],
-  [i18n.t('research.discourse_role','Discourse role'),record.value.discourse_role],
-  [i18n.t('research.proposition_status','Proposition status'),record.value.proposition_status],
-  [i18n.t('research.target','Target'),record.value.target],
-  [i18n.t('research.quoted_speaker','Quoted speaker'),record.value.quoted_speaker],
-].filter(([,value])=>display(value)));
+const relationRows = computed(() =>
+  [
+    [i18n.t("research.speaker", "Speaker"), record.value.speaker],
+    [i18n.t("research.position_holder", "Position holder"), record.value.position_holder],
+    [i18n.t("research.stance", "Stance"), record.value.stance],
+    [i18n.t("research.discourse_role", "Discourse role"), record.value.discourse_role],
+    [i18n.t("research.proposition_status", "Proposition status"), record.value.proposition_status],
+    [i18n.t("research.target", "Target"), record.value.target],
+    [i18n.t("research.quoted_speaker", "Quoted speaker"), record.value.quoted_speaker],
+  ].filter(([, value]) => display(value)),
+);
 </script>
 
 <template>
-  <aside id="researchEvidencePanel" class="research-evidence-panel card" :aria-label="i18n.t('research.evidence_panel','Evidence')">
+  <aside
+    id="researchEvidencePanel"
+    class="research-evidence-panel card"
+    :aria-label="i18n.t('research.evidence_panel', 'Evidence')"
+  >
     <header class="research-panel-heading">
-      <div><b>{{showingResult?i18n.t('research.answer_evidence','Answer evidence'):i18n.t('rag.selected_evidence','Selected evidence')}}</b><small>{{showingResult?resultEvidence.length:selectedEvidence.length}} {{i18n.t('research.records','records')}}</small></div>
-      <button v-if="!showingResult&&selectedEvidence.length&&canRemove" class="research-text-action" type="button" @click="emit('clear')">{{i18n.t('ui.clear','Clear')}}</button>
+      <div>
+        <b>{{
+          showingResult
+            ? i18n.t("research.answer_evidence", "Answer evidence")
+            : i18n.t("rag.selected_evidence", "Selected evidence")
+        }}</b
+        ><small
+          >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
+          {{ i18n.t("research.records", "records") }}</small
+        >
+      </div>
+      <button
+        v-if="!showingResult && selectedEvidence.length && canRemove"
+        class="research-text-action"
+        type="button"
+        @click="emit('clear')"
+      >
+        {{ i18n.t("ui.clear", "Clear") }}
+      </button>
     </header>
 
     <template v-if="showingResult">
-      <div class="research-evidence-index" role="list" :aria-label="i18n.t('research.evidence_list','Evidence list')">
-        <button v-for="(item,index) in resultEvidence" :key="item.evidence_id||index" type="button" role="listitem" :class="{active:index===activeIndex}" @click="emit('select',index)">
-          <span class="research-evidence-tag">{{item.evidence_id||`E${index}`}}</span>
-          <span><b>{{display(item.record?.work)||display(item.record?.record_id)||i18n.t('research.evidence','Evidence')}}</b><small><template v-if="pageLabel(item.record||{})">pp. {{pageLabel(item.record||{})}} · </template>{{item.inline_citation||item.collection||''}}</small></span>
+      <div
+        class="research-evidence-index"
+        role="list"
+        :aria-label="i18n.t('research.evidence_list', 'Evidence list')"
+      >
+        <button
+          v-for="(item, index) in resultEvidence"
+          :key="item.evidence_id || index"
+          type="button"
+          role="listitem"
+          :class="{ active: index === activeIndex }"
+          @click="emit('select', index)"
+        >
+          <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
+          <span
+            ><b>{{
+              display(item.record?.work) ||
+              display(item.record?.record_id) ||
+              i18n.t("research.evidence", "Evidence")
+            }}</b
+            ><small
+              ><template v-if="pageLabel(item.record || {})"
+                >pp. {{ pageLabel(item.record || {}) }} · </template
+              >{{ item.inline_citation || item.collection || "" }}</small
+            ></span
+          >
         </button>
       </div>
       <section v-if="active" class="research-evidence-inspector" aria-live="polite">
         <div class="research-evidence-inspector-head">
-          <span class="research-evidence-tag large">{{active.evidence_id||`E${activeIndex}`}}</span>
-          <div><b>{{display(record.work)||display(record.record_id)||i18n.t('research.evidence','Evidence')}}</b><small>{{active.inline_citation||''}}</small></div>
+          <span class="research-evidence-tag large">{{
+            active.evidence_id || `E${activeIndex}`
+          }}</span>
+          <div>
+            <b>{{
+              display(record.work) ||
+              display(record.record_id) ||
+              i18n.t("research.evidence", "Evidence")
+            }}</b
+            ><small>{{ active.inline_citation || "" }}</small>
+          </div>
         </div>
         <dl v-if="relationRows.length" class="research-relation-grid">
-          <template v-for="([label,value],index) in relationRows" :key="index"><dt>{{label}}</dt><dd>{{display(value)}}</dd></template>
+          <template v-for="([label, value], index) in relationRows" :key="index"
+            ><dt>{{ label }}</dt>
+            <dd>{{ display(value) }}</dd></template
+          >
         </dl>
-        <p v-if="display(record.text)" class="research-evidence-text">{{display(record.text)}}</p>
-        <p v-else class="note">{{researcher?i18n.t('research.researcher_evidence_summary','Corpus text may be summarized for researcher accounts.'):i18n.t('research.no_evidence_text','No retained passage text for this evidence item.')}}</p>
-        <div v-if="active.full_citation||active.collection||active.rerank_score!=null||display(record.topics)||display(record.concepts)" class="research-evidence-metadata">
-          <span v-if="active.full_citation"><b>{{i18n.t('research.full_citation','Full citation')}}</b>{{active.full_citation}}</span>
-          <span v-if="active.collection"><b>{{i18n.t('research.collection','Collection')}}</b>{{active.collection}}</span>
-          <span v-if="active.rerank_score!=null"><b>{{i18n.t('research.rerank_score','Rerank score')}}</b>{{Number(active.rerank_score).toFixed(3)}}</span>
-          <span v-if="display(record.topics)"><b>{{i18n.t('research.topics','Topics')}}</b>{{display(record.topics)}}</span>
-          <span v-if="display(record.concepts)"><b>{{i18n.t('research.concepts','Concepts')}}</b>{{display(record.concepts)}}</span>
+        <p v-if="display(record.text)" class="research-evidence-text">{{ display(record.text) }}</p>
+        <p v-else class="note">
+          {{
+            researcher
+              ? i18n.t(
+                  "research.researcher_evidence_summary",
+                  "Corpus text may be summarized for researcher accounts.",
+                )
+              : i18n.t(
+                  "research.no_evidence_text",
+                  "No retained passage text for this evidence item.",
+                )
+          }}
+        </p>
+        <div
+          v-if="
+            active.full_citation ||
+            active.collection ||
+            active.rerank_score != null ||
+            display(record.topics) ||
+            display(record.concepts)
+          "
+          class="research-evidence-metadata"
+        >
+          <span v-if="active.full_citation"
+            ><b>{{ i18n.t("research.full_citation", "Full citation") }}</b
+            >{{ active.full_citation }}</span
+          >
+          <span v-if="active.collection"
+            ><b>{{ i18n.t("research.collection", "Collection") }}</b
+            >{{ active.collection }}</span
+          >
+          <span v-if="active.rerank_score != null"
+            ><b>{{ i18n.t("research.rerank_score", "Rerank score") }}</b
+            >{{ Number(active.rerank_score).toFixed(3) }}</span
+          >
+          <span v-if="display(record.topics)"
+            ><b>{{ i18n.t("research.topics", "Topics") }}</b
+            >{{ display(record.topics) }}</span
+          >
+          <span v-if="display(record.concepts)"
+            ><b>{{ i18n.t("research.concepts", "Concepts") }}</b
+            >{{ display(record.concepts) }}</span
+          >
         </div>
       </section>
     </template>
@@ -79,29 +190,89 @@ const relationRows=computed(()=>[
         <article v-for="item in selectedEvidence" :key="item.key" role="listitem">
           <details class="research-selected-details">
             <summary>
-              <span><b>{{item.work||item.record_id||i18n.t('research.evidence','Evidence')}}</b><small>{{item.record_id}}<template v-if="selectedPage(item)"> · pp. {{selectedPage(item)}}</template><template v-if="item.inline_citation"> · {{item.inline_citation}}</template></small></span>
+              <span
+                ><b>{{ item.work || item.record_id || i18n.t("research.evidence", "Evidence") }}</b
+                ><small
+                  >{{ item.record_id
+                  }}<template v-if="selectedPage(item)"> · pp. {{ selectedPage(item) }}</template
+                  ><template v-if="item.inline_citation">
+                    · {{ item.inline_citation }}</template
+                  ></small
+                ></span
+              >
               <span aria-hidden="true" class="research-selected-chevron">⌄</span>
             </summary>
             <div class="research-selected-preview">
-              <dl v-if="item.speaker||item.position_holder||item.stance||item.discourse_role||item.proposition_status||item.target" class="research-relation-grid compact">
-                <template v-if="item.speaker"><dt>{{i18n.t('research.speaker','Speaker')}}</dt><dd>{{item.speaker}}</dd></template>
-                <template v-if="item.position_holder"><dt>{{i18n.t('research.position_holder','Position holder')}}</dt><dd>{{item.position_holder}}</dd></template>
-                <template v-if="item.stance"><dt>{{i18n.t('research.stance','Stance')}}</dt><dd>{{item.stance}}</dd></template>
-                <template v-if="item.discourse_role"><dt>{{i18n.t('research.discourse_role','Discourse role')}}</dt><dd>{{item.discourse_role}}</dd></template>
-                <template v-if="item.proposition_status"><dt>{{i18n.t('research.proposition_status','Proposition status')}}</dt><dd>{{item.proposition_status}}</dd></template>
-                <template v-if="item.target"><dt>{{i18n.t('research.target','Target')}}</dt><dd>{{item.target}}</dd></template>
+              <dl
+                v-if="
+                  item.speaker ||
+                  item.position_holder ||
+                  item.stance ||
+                  item.discourse_role ||
+                  item.proposition_status ||
+                  item.target
+                "
+                class="research-relation-grid compact"
+              >
+                <template v-if="item.speaker"
+                  ><dt>{{ i18n.t("research.speaker", "Speaker") }}</dt>
+                  <dd>{{ item.speaker }}</dd></template
+                >
+                <template v-if="item.position_holder"
+                  ><dt>{{ i18n.t("research.position_holder", "Position holder") }}</dt>
+                  <dd>{{ item.position_holder }}</dd></template
+                >
+                <template v-if="item.stance"
+                  ><dt>{{ i18n.t("research.stance", "Stance") }}</dt>
+                  <dd>{{ item.stance }}</dd></template
+                >
+                <template v-if="item.discourse_role"
+                  ><dt>{{ i18n.t("research.discourse_role", "Discourse role") }}</dt>
+                  <dd>{{ item.discourse_role }}</dd></template
+                >
+                <template v-if="item.proposition_status"
+                  ><dt>{{ i18n.t("research.proposition_status", "Proposition status") }}</dt>
+                  <dd>{{ item.proposition_status }}</dd></template
+                >
+                <template v-if="item.target"
+                  ><dt>{{ i18n.t("research.target", "Target") }}</dt>
+                  <dd>{{ item.target }}</dd></template
+                >
               </dl>
-              <p v-if="item.text_preview">{{item.text_preview}}<template v-if="item.text_preview.length>=280">…</template></p>
-              <p v-else class="note">{{i18n.t('research.selected_preview_unavailable','Passage preview is unavailable for evidence selected before this release; the full record is resolved when Research runs.')}}</p>
+              <p v-if="item.text_preview">
+                {{ item.text_preview }}<template v-if="item.text_preview.length >= 280">…</template>
+              </p>
+              <p v-else class="note">
+                {{
+                  i18n.t(
+                    "research.selected_preview_unavailable",
+                    "Passage preview is unavailable for evidence selected before this release; the full record is resolved when Research runs.",
+                  )
+                }}
+              </p>
             </div>
           </details>
-          <button v-if="canRemove" type="button" :aria-label="`${i18n.t('ui.remove_evidence','Remove from evidence')}: ${item.record_id||item.work}`" @click="emit('remove',item.key)">×</button>
+          <button
+            v-if="canRemove"
+            type="button"
+            :aria-label="`${i18n.t('ui.remove_evidence', 'Remove from evidence')}: ${item.record_id || item.work}`"
+            @click="emit('remove', item.key)"
+          >
+            ×
+          </button>
         </article>
       </div>
       <div v-else class="research-evidence-empty">
         <span aria-hidden="true">∴</span>
-        <b>{{i18n.t('research.no_selected_evidence','No pinned evidence')}}</b>
-        <p>{{i18n.t('research.no_selected_evidence_help','Add records from Search, Works, or Record View. Retrieval can still find evidence automatically.')}}</p>
+        <b>{{ i18n.t("research.no_selected_evidence", "No pinned evidence") }}</b>
+        <p>
+          {{
+            i18n.t(
+              "research.no_selected_evidence_help",
+              "Add records from Search, Works, or Record View. Retrieval can still find evidence automatically.",
+            )
+          }}
+        </p>
       </div>
     </template>
   </aside>
@@ -114,12 +285,12 @@ const relationRows=computed(()=>[
 }
 .research-evidence-inspector-head {
   display: grid;
-  grid-template-columns: auto minmax(0,1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
   align-items: center;
   margin-bottom: 12px;
 }
-.research-evidence-inspector-head>div {
+.research-evidence-inspector-head > div {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -128,13 +299,16 @@ const relationRows=computed(()=>[
   font-size: 0.8125rem;
 }
 .research-evidence-inspector-head small {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 .research-evidence-text {
   margin: 0;
   color: var(--text-2);
-  font: 13px/1.65 Georgia,"Times New Roman",serif;
+  font:
+    13px/1.65 Georgia,
+    "Times New Roman",
+    serif;
   white-space: pre-line;
 }
 .research-evidence-metadata {
@@ -146,12 +320,12 @@ const relationRows=computed(()=>[
   display: grid;
   gap: 2px;
   color: var(--muted);
-  font-size: .8125rem;
+  font-size: 0.8125rem;
 }
 .research-evidence-metadata b {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
-  letter-spacing: .045em;
+  letter-spacing: 0.045em;
   color: var(--muted);
 }
 .research-selected-list {
@@ -163,34 +337,34 @@ const relationRows=computed(()=>[
 .research-selected-list article {
   min-height: 52px;
   display: grid;
-  grid-template-columns: minmax(0,1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 34px;
   gap: 8px;
   align-items: center;
   padding: 7px 7px 7px 9px;
   border-radius: 8px;
 }
 .research-selected-list article:hover {
-  background: var(--card);
+  background: var(--surface-raised);
 }
-.research-selected-list article>div {
+.research-selected-list article > div {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 .research-selected-list b {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .research-selected-list small {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.research-selected-list article>button {
+.research-selected-list article > button {
   width: 32px;
   height: 32px;
   border: 0;
@@ -200,11 +374,11 @@ const relationRows=computed(()=>[
   font-size: 1.125rem;
   cursor: pointer;
 }
-.research-selected-list article>button:hover {
+.research-selected-list article > button:hover {
   background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
 }
-.research-selected-list article>button:focus-visible {
+.research-selected-list article > button:focus-visible {
   outline: 3px solid var(--ui-accent-focus);
 }
 .research-selected-list article {
@@ -213,10 +387,10 @@ const relationRows=computed(()=>[
 .research-selected-details {
   min-width: 0;
 }
-.research-selected-details>summary {
+.research-selected-details > summary {
   min-height: 38px;
   display: grid;
-  grid-template-columns: minmax(0,1fr) 18px;
+  grid-template-columns: minmax(0, 1fr) 18px;
   gap: 8px;
   align-items: center;
   cursor: pointer;
@@ -224,14 +398,14 @@ const relationRows=computed(()=>[
   border-radius: 7px;
   padding: 3px 4px;
 }
-.research-selected-details>summary::-webkit-details-marker {
+.research-selected-details > summary::-webkit-details-marker {
   display: none;
 }
-.research-selected-details>summary:focus-visible {
+.research-selected-details > summary:focus-visible {
   outline: 3px solid var(--ui-accent-focus);
   outline-offset: 1px;
 }
-.research-selected-details>summary>span:first-child {
+.research-selected-details > summary > span:first-child {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -239,7 +413,7 @@ const relationRows=computed(()=>[
 .research-selected-chevron {
   justify-self: end;
   color: var(--muted);
-  transition: transform .16s ease;
+  transition: transform 0.16s ease;
 }
 .research-selected-details[open] .research-selected-chevron {
   transform: rotate(180deg);
@@ -249,15 +423,18 @@ const relationRows=computed(()=>[
   gap: 9px;
   padding: 8px 4px 5px;
 }
-.research-selected-preview>p {
+.research-selected-preview > p {
   margin: 0;
   color: var(--text-2);
-  font: 12px/1.55 Georgia,"Times New Roman",serif;
+  font:
+    12px/1.55 Georgia,
+    "Times New Roman",
+    serif;
 }
-.research-selected-list article>button {
+.research-selected-list article > button {
   margin-top: 3px;
 }
-@media (prefers-reduced-motion:reduce) {
+@media (prefers-reduced-motion: reduce) {
   .research-selected-chevron {
     transition: none;
   }
