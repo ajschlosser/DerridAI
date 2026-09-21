@@ -197,6 +197,12 @@ export const scenarios: Scenario[] = [
       await p.getByRole("button", { name: /^Create role$/ }).click();
     },
   },
+  {
+    id: "users-default",
+    path: "/users",
+    role: "admin",
+    ready: (p) => p.getByRole("heading", { name: "Users" }),
+  },
   // Record (a researcher reads a record from the database)
   {
     id: "record-overview",
