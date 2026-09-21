@@ -7611,7 +7611,7 @@ CURRENT REVIEWED RECORD TEXT:
 
     def _run_enrichment_pass(
         self, build_id: str, request: dict[str, Any], run_id: str, scope: str, families: list[str],
-        pass_number: int, on_progress: Callable[[dict[str, int], int], None],
+        on_progress: Callable[[dict[str, int], int], None], pass_number: int = 1,
     ) -> dict[str, int]:
         """Run one pass over the records currently in scope, merging results into live state."""
         build = self.repo.get_build(build_id)
@@ -7721,7 +7721,7 @@ CURRENT REVIEWED RECORD TEXT:
                     self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))
 
                 op.update({"state": "running", "current_pass": pass_number})
-                totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, pass_number, on_progress)
+                totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, on_progress, pass_number=pass_number)
                 changed = totals.get("fields_added", 0) + totals.get("fields_replaced", 0) + totals.get("fields_disputed", 0)
                 op["passes_completed"] = pass_number
                 op["pass_results"] = list(op.get("pass_results") or []) + [{"pass": pass_number, "changed_fields": changed, **totals}]
