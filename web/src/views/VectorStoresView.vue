@@ -39,7 +39,7 @@ type RuntimeWorkspace = {
   appConfig: {embedding_provider?: string; embedding_model?: string};
   stores: VectorCollection[];
 };
-const workspace = runtime.state as RuntimeWorkspace;
+const workspace = runtime.state as unknown as RuntimeWorkspace;
 const VECTOR_TABS: VectorTab[] = ["overview", "data", "retrieval", "builds", "settings"];
 
 const router = useRouter();

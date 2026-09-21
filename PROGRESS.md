@@ -51,7 +51,7 @@ The runtime still owns the one `state` instance (`const state = createRuntimeSta
 From `web/`:
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 415 unit tests at last count
+npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 420 unit tests at last count
 npm run build
 npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
 ```
@@ -140,8 +140,17 @@ it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
 - DONE: jobs (`jobs`, `jobsLastFetched`, `jobApplied`, `upsertJobApplied`) -> `state/jobsState.ts`, `stores/jobs.ts`
   (`useJobsStore`: `jobs`, `lastFetched`, `version`, `activeJobs`). Nothing in Vue reads it yet; `OperationsPanel` still
   uses the bridge. Unit tests: `tests/frontend/jobs-state.test.ts`.
-- NEXT: migrate readers to the store (OperationsPanel via `watch(version)`, shell store's job counts), then the next groups
-  (search, records list, vector stores, compare, PDF, research). Do not deep-reactive `state`: `SettingsView` reads it directly.
+- DONE: the Operations panel bridge now subscribes through the store's `version` (synchronous watcher) instead of a
+  private listener set.
+- DONE: per-view groups -> `state/workspaceState.ts` (`vectorState` 26 fields, `compareState` 8, `searchState` 14, each
+  with a `version` for in-place edits) bound onto the runtime `state` with `bindSharedState`; Pinia views in
+  `stores/workspace.ts` (`useVectorStore`, `useCompareStore`, `useSearchStore`). Unit tests pin every original initial value
+  (`tests/frontend/workspace-state.test.ts`). `VectorStoresView` needed `as unknown as` on its `runtime.state` cast (types only).
+- NEXT: move Vue readers onto the stores (VectorStoresView, CompareView, SearchView, useRecordsWorkspace currently read
+  `runtime.state` or poll snapshots), bump each group's `version` where the runtime re-renders that view, then the remaining
+  groups (records list: `searches`, `sorts`, `pages`, `listFilters`, `selected`, `tableColumns`; PDF; research/RAG config; `view`;
+  files). Known intermittent unit-test flake: `operations-panel.test.ts` sometimes logs "Element is not defined" from a
+  TransitionGroup after teardown (fake bridge, unrelated to the runtime).
 
 ## Next steps: the risky phase (needs owner go-ahead)
 
