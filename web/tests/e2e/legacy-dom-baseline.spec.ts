@@ -80,7 +80,7 @@ interface Scenario {
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
-  target?: "main" | "dialog" | "app" | "dock";
+  target?: "main" | "runtime" | "dialog" | "app" | "dock";
   /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
   styles?: boolean;
   /** A viewport size other than the default desktop one, to exercise the responsive rules. */
@@ -131,7 +131,10 @@ async function open(page: Page, scenario: Scenario) {
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
-async function rawMarkup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
+async function rawMarkup(
+  page: Page,
+  target: "main" | "runtime" | "dialog" | "app" | "dock",
+): Promise<string> {
   const locator =
     target === "dialog"
       ? page.locator("dialog[open]").last()
@@ -139,7 +142,9 @@ async function rawMarkup(page: Page, target: "main" | "dialog" | "app" | "dock")
         ? page.locator("#app")
         : target === "dock"
           ? page.locator("#operationProgressStack")
-          : page.locator("main").first();
+          : target === "runtime"
+            ? page.locator("#main")
+            : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
@@ -183,7 +188,7 @@ const STYLE_PROPERTIES = [
 /** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
 async function computedStyles(
   page: Page,
-  target: "main" | "dialog" | "app" | "dock",
+  target: "main" | "runtime" | "dialog" | "app" | "dock",
 ): Promise<string> {
   const locator =
     target === "dialog"
@@ -192,7 +197,9 @@ async function computedStyles(
         ? page.locator("#app")
         : target === "dock"
           ? page.locator("#operationProgressStack")
-          : page.locator("main").first();
+          : target === "runtime"
+            ? page.locator("#main")
+            : page.locator("main").first();
   return locator.evaluate((root, properties) => {
     const lines: string[] = [];
     const walk = (el: Element, depth: number) => {
@@ -214,7 +221,10 @@ async function computedStyles(
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
-async function markup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
+async function markup(
+  page: Page,
+  target: "main" | "runtime" | "dialog" | "app" | "dock",
+): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
   for (let i = 0; i < 40 && stableFor < 4; i++) {
@@ -237,6 +247,45 @@ const worksAction = (name: RegExp | string) => async (page: Page) => {
   await page.locator("main summary", { hasText: "Actions" }).first().click();
   await page.getByRole("button", { name }).first().click();
 };
+
+/** A two-page PDF with a line of text on each page, built by hand so the test needs no binary fixture. */
+function samplePdf(): Buffer {
+  const pageContent = ["Trace and difference", "Supplement of origin"].map(
+    (text) => `BT /F1 18 Tf 72 700 Td (${text}) Tj ET`,
+  );
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>",
+    ...pageContent.map((c) => `<< /Length ${c.length} >>\nstream\n${c}\nendstream`),
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.forEach((o) => (pdf += `${String(o).padStart(10, "0")} 00000 n \n`));
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(pdf, "latin1");
+}
+
+const inPdfExplorer = async (page: Page, { open = true } = {}) => {
+  await page.getByRole("button", { name: /PDF Explorer/ }).click();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(800);
+  if (!open) return;
+  await page
+    .locator("#pdfInput")
+    .setInputFiles({ name: "trace.pdf", mimeType: "application/pdf", buffer: samplePdf() });
+  await page.waitForTimeout(1500);
+};
+
+const CHROMA_UP = { "/api/health": { ok: true, chroma: { available: true } } };
 
 const FAQ_PAGE = {
   records: FAQ_RECORDS,
@@ -617,11 +666,62 @@ const scenarios: Scenario[] = [
   // PDF Explorer is drawn by the runtime inside the Corpus Builder workspace.
   {
     name: "pdf-explorer-empty",
+    target: "runtime",
+    nav: "Corpus Builder",
+    steps: (page) => inPdfExplorer(page, { open: false }),
+  },
+  {
+    name: "pdf-explorer-loaded",
+    target: "runtime",
+    nav: "Corpus Builder",
+    steps: (page) => inPdfExplorer(page),
+  },
+  {
+    name: "pdf-explorer-loaded-records",
+    target: "runtime",
+    nav: "Corpus Builder",
+    load: true,
+    steps: (page) => inPdfExplorer(page),
+  },
+  {
+    name: "pdf-explorer-extract",
+    target: "runtime",
     nav: "Corpus Builder",
     steps: async (page) => {
-      await page.getByRole("button", { name: /PDF Explorer/ }).click();
-      await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(600);
+      await inPdfExplorer(page);
+      await page.locator("#extractPage").click();
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    name: "pdf-explorer-next-page",
+    target: "runtime",
+    nav: "Corpus Builder",
+    steps: async (page) => {
+      await inPdfExplorer(page);
+      await page.locator("#pdfNext").click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    name: "pdf-explorer-rotate",
+    target: "runtime",
+    nav: "Corpus Builder",
+    steps: async (page) => {
+      await inPdfExplorer(page);
+      await page.locator("#pdfRotateRight").click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    name: "pdf-explorer-link-page",
+    target: "runtime",
+    nav: "Corpus Builder",
+    load: true,
+    steps: async (page) => {
+      await inPdfExplorer(page);
+      await page.locator("#linkCurrentPdf").click();
+      await page.waitForTimeout(800);
     },
   },
   // Dialogs the runtime builds as HTML strings, reached from the Records commands.
@@ -725,13 +825,10 @@ const scenarios: Scenario[] = [
   },
   {
     name: "styles-pdf-explorer-light",
+    target: "runtime",
     nav: "Corpus Builder",
     styles: true,
-    steps: async (page) => {
-      await page.getByRole("button", { name: /PDF Explorer/ }).click();
-      await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(600);
-    },
+    steps: (page) => inPdfExplorer(page, { open: false }),
   },
   { name: "styles-home-researcher-dark", role: "researcher", scheme: "dark", styles: true },
   // The Search view is Vue, but every command it sends and every result it shows goes through the runtime.
@@ -1228,6 +1325,44 @@ const scenarios: Scenario[] = [
     styles: true,
     fixtures: jobFixtures(RAG_JOBS),
     steps: researchWithEvidence,
+  },
+  // The response cache page is the one Research-area page the runtime still draws.
+  {
+    name: "response-cache-empty",
+    nav: "Response Cache",
+    fixtures: {
+      ...CHROMA_UP,
+      "/api/response-cache/records": { records: [], total: 0, exists: false },
+    },
+  },
+  {
+    name: "response-cache-records",
+    nav: "Response Cache",
+    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
+  },
+  {
+    name: "response-cache-clear-confirm",
+    nav: "Response Cache",
+    target: "dialog",
+    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Clear cache" }).click();
+      await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
+    },
+  },
+  {
+    name: "response-cache-cleared",
+    nav: "Response Cache",
+    fixtures: {
+      ...CHROMA_UP,
+      "/api/response-cache/records": FAQ_PAGE,
+      "DELETE /api/stores/_response_cache": () => ({ ok: true }),
+    },
+    steps: async (page) => {
+      await page.getByRole("button", { name: "Clear cache" }).click();
+      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
+      await page.waitForTimeout(700);
+    },
   },
   // The Response Library is Vue too; it reads cached research answers through the runtime.
   { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
