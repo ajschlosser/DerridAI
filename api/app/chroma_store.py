@@ -195,10 +195,25 @@ class Embeddings:
                 f"{settings.ollama_base_url}/api/embed",
                 json={"model": model, "input": texts},
             )
+            if response.status_code == 404:
+                vectors: list[list[float]] = []
+                for text in texts:
+                    legacy = client.post(
+                        f"{settings.ollama_base_url}/api/embeddings",
+                        json={"model": model, "prompt": text},
+                    )
+                    legacy.raise_for_status()
+                    embedding = legacy.json().get("embedding")
+                    if not isinstance(embedding, list):
+                        raise RuntimeError("Ollama returned an unexpected legacy embedding response.")
+                    vectors.append(list(map(float, embedding)))
+                return vectors
             response.raise_for_status()
             payload = response.json()
 
         vectors = payload.get("embeddings")
+        if vectors is None and isinstance(payload.get("embedding"), list) and len(texts) == 1:
+            vectors = [payload["embedding"]]
         if not isinstance(vectors, list) or len(vectors) != len(texts):
             raise RuntimeError("Ollama returned an unexpected embedding response.")
         return [list(map(float, vector)) for vector in vectors]

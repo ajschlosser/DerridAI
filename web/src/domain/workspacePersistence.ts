@@ -59,6 +59,20 @@ export function createWorkspacePersistence(deps: Deps) {
     fileTimers.set(file.id, timer);
   }
   function workspacePrefs() {
+    const cloneable = (value: Any): Any => {
+      if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
+      if (value instanceof Date) return value.toISOString();
+      if (value instanceof Set) return [...value].map(cloneable);
+      if (Array.isArray(value)) return value.map(cloneable).filter((item) => item !== undefined);
+      if (typeof value === "object") {
+        return Object.fromEntries(
+          Object.entries(value)
+            .filter(([, item]) => typeof item !== "function" && item !== undefined)
+            .map(([key, item]) => [key, cloneable(item)]),
+        );
+      }
+      return undefined;
+    };
     return {
       key: "workspace",
       activeFileId: state.activeFileId,
@@ -107,8 +121,8 @@ export function createWorkspacePersistence(deps: Deps) {
       vectorTab: state.vectorTab,
       vectorCollectionFilter: state.vectorCollectionFilter,
       llmConfig: state.llmConfig,
-      appConfig: state.appConfig,
-      ragConfig: state.ragConfig,
+      appConfig: cloneable(state.appConfig),
+      ragConfig: cloneable(state.ragConfig),
       faqSearch: state.faqSearch,
       faqPage: state.faqPage,
       faqExpanded: state.faqExpanded,

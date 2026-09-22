@@ -35,7 +35,10 @@ export function providerRequestConfig(
     base_url: profile.base_url || null,
     api_key: profile.type === "openai" ? profile.api_key || "" : null,
     ollama: {
-      num_ctx: profile.type === "ollama" && profile.num_ctx !== "" ? Number(profile.num_ctx) : null,
+      num_ctx:
+        profile.type === "ollama" && Number(profile.num_ctx) >= 512 && Number(profile.num_ctx) <= 262144
+          ? Number(profile.num_ctx)
+          : null,
       num_predict: Number(
         textReview
           ? (profile.num_predict ?? 4096)

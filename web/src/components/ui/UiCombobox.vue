@@ -6,7 +6,15 @@ const comboId = useId();
 const open=ref(false);const active=ref(-1);const input=ref<HTMLInputElement|null>(null);const popup=ref({left:0,top:0,width:320,maxHeight:240});
 const unique=computed(()=>Array.from(new Set(props.options.map(v=>String(v).trim()).filter(Boolean))));
 const currentValues=computed(()=>new Set(String(props.modelValue||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean).map(v=>v.toLocaleLowerCase())));
-const filtered=computed(()=>{const q=String(props.modelValue||'').trim().toLocaleLowerCase();return unique.value.filter(v=>{const lower=v.toLocaleLowerCase();if(props.multiple&&currentValues.value.has(lower))return false;return !q||lower.includes(q)||q.includes(lower)}).slice(0,60)});
+const filtered=computed(()=>{
+  const raw=String(props.modelValue||'');
+  const q=(props.multiple?raw.split(/[\n,]/).at(-1)||raw:raw).trim().toLocaleLowerCase();
+  return unique.value.filter(v=>{
+    const lower=v.toLocaleLowerCase();
+    if(props.multiple&&currentValues.value.has(lower))return false;
+    return !q||lower.includes(q)||q.includes(lower);
+  }).slice(0,60);
+});
 watch(()=>props.modelValue,()=>{active.value=-1});watch(open,value=>{if(value)void nextTick(positionPopup)});
 function appendValue(current:string,value:string){const entries=String(current||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);const merged=[...new Set([...entries,value.trim()].filter(Boolean))];return merged.join(', ')}
 function positionPopup(){const el=input.value;if(!el)return;const rect=el.getBoundingClientRect();const margin=8;const viewportWidth=Math.max(320,window.innerWidth);const below=window.innerHeight-rect.bottom;const above=rect.top;const maxHeight=Math.max(120,Math.min(320,(below>=180?below:above)-16));const width=Math.min(Math.max(rect.width,240),viewportWidth-margin*2);const left=Math.min(Math.max(margin,rect.left),Math.max(margin,viewportWidth-width-margin));popup.value={left,top:below>=180?rect.bottom+4:Math.max(margin,rect.top-maxHeight-4),width,maxHeight}}

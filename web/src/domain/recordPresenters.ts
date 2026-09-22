@@ -101,9 +101,12 @@ export function createRecordPresenters(deps: Deps) {
   }
   function topRecordFieldShare(rows: Loose[], field: string, limit = 5) {
     const counts = new Map();
-    for (const row of rows || [])
-      for (const value of flattenedMetricValues(row.record?.[field]))
-        counts.set(value, (counts.get(value) || 0) + 1);
+    for (const row of rows || []) {
+      const record = row.record || row;
+      const value = record[field] ?? record.indexing?.[field] ?? record.metadata?.[field];
+      for (const item of flattenedMetricValues(value))
+        counts.set(item, (counts.get(item) || 0) + 1);
+    }
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     const top: Loose[] = sorted.slice(0, limit).map(([key, value]) => ({ key, value }));
     const other = sorted.slice(limit).reduce((sum, [, value]) => sum + Number(value || 0), 0);
@@ -112,9 +115,12 @@ export function createRecordPresenters(deps: Deps) {
   }
   function topRecordFieldValues(rows: Loose[], field: string, limit = 5) {
     const counts = new Map();
-    for (const row of rows || [])
-      for (const value of flattenedMetricValues(row.record?.[field]))
-        counts.set(value, (counts.get(value) || 0) + 1);
+    for (const row of rows || []) {
+      const record = row.record || row;
+      const value = record[field] ?? record.indexing?.[field] ?? record.metadata?.[field];
+      for (const item of flattenedMetricValues(value))
+        counts.set(item, (counts.get(item) || 0) + 1);
+    }
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, limit)

@@ -10,7 +10,7 @@ const currentStep=computed(()=>{
   const status=String(props.status||"");
   if(props.published||status==="published")return 4;
   if(["ready"].includes(stage)||status==="ready"||Boolean(props.canPublish))return 4;
-  if(["enriching","review","metadata_retry"].includes(stage)||status==="awaiting_review"||Number(props.recordCount||0)>0)return 3;
+  if(["enriching","review","metadata_retry"].includes(stage)||status==="awaiting_review")return 3;
   if(["analyzing","extracting","manifest","segmenting","constructing_records","reconciling"].includes(stage)||["queued","running","awaiting_manifest_review"].includes(status))return 2;
   return 1;
 });
