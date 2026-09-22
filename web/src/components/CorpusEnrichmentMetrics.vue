@@ -78,7 +78,7 @@ async function load() {
       </div>
       <div class="verdicts">
         <section v-for="[model, m] in rows" :key="`verdict-${model}`" class="verdict-model">
-          <h3>{{ model || "—" }}</h3>
+          <p class="verdict-model-name">{{ model || "—" }}</p>
           <p>{{ i18n.tf("pdf_corpus.enrich_metrics.verdict_sample", "{reviews} reviewed of {proposed} proposed", { reviews: m.reviews, proposed: m.proposals }) }}</p>
           <div class="verdict-grid">
             <article :data-tone="rateTone(m.acceptance_rate)">
@@ -199,7 +199,7 @@ async function load() {
 .verdict-grid article[data-tone="danger"], td[data-tone="danger"] { border-color: var(--tone-danger-edge); background: var(--tone-danger-bg); color: var(--tone-danger-fg); }
 .next-work article[data-tone="warn"] span, .verdict-grid article[data-tone="warn"] small, .verdict-grid article[data-tone="ok"] small { color: inherit; }
 .verdict-model { display: grid; gap: 6px; margin-bottom: 0.75rem; }
-.verdict-model h3 { margin: 0; font-size: 0.875rem; overflow-wrap: anywhere; }
+.verdict-model-name { margin: 0; font-size: 0.875rem; font-weight: 700; overflow-wrap: anywhere; }
 .verdict-model > p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
 .verdict-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .verdict-grid span { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
