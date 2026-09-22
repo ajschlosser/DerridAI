@@ -65,6 +65,7 @@ import { createModalDialogs } from "../domain/modalDialogs";
 import { createNavigation } from "../domain/navigation";
 import { pathViewMap, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
+import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -426,6 +427,21 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {reviewKey,reviewItemFromKey,selectedReviewItems,copyCitation,workspaceEvidenceKey,dbEvidenceKey,selectedEvidenceEntries,evidenceIsSelected,setEvidence,workspaceDbEvidenceTarget,workspaceEvidenceSelectionKey,toggleWorkspaceEvidence,toggleDbEvidence,clearSelectedEvidence,selectedEvidencePayload,setReviewSelected,clearReviewSelection}=createEvidenceSelection({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  fullCitation:(...args)=>fullCitation(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  inlineCitation:(...args)=>inlineCitation(...args),
+  localRecordKey:(...args)=>localRecordKey(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  ragEvidenceRecordPayload:(...args)=>ragEvidenceRecordPayload(...args),
+  recordDbStatus:(...args)=>recordDbStatus(...args),
+  shellRefreshHook:(...args)=>shellRefreshHook(...args),
+  storeReceipt:(...args)=>storeReceipt(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
 });
 const {getUrlSyncHook,viewLabel,navSnapshot,sameSnapshot,applyNavSnapshot,setUrlSyncHook,currentTableUrlState,applyCompressedTableUrlState,urlFromState,syncUrl,applyUrlState,navigateTo,goBack,goForward}=createNavigation({
   state,
@@ -1008,101 +1024,7 @@ async function restoreCurrentPdfAsset(){
 function serializableFile(file){
   return serializableRecordsFile(file);
 }
-function reviewKey(file,index){return `${file.id}::${index}`}
-function reviewItemFromKey(key){
-  const split=String(key).lastIndexOf("::");
-  if(split<0)return null;
-  const fileId=key.slice(0,split),index=Number(key.slice(split+2));
-  const file=state.files.find(f=>f.id===fileId);
-  if(!file||!Number.isInteger(index)||!file.records[index])return null;
-  return {file,index,record:file.records[index],key};
-}
-function selectedReviewItems(){return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean)}
 
-async function copyCitation(record,kind="inline"){
-  const text=kind==="full"?fullCitation(record):inlineCitation(record);
-  try{await navigator.clipboard.writeText(text);toast(`Copied ${kind} citation`,{tone:"success"})}
-  catch(error){toast(`Could not copy citation: ${error.message}`,{tone:"danger"})}
-}
-function workspaceEvidenceKey(file,index){return `workspace:${file.id}:${index}`}
-function dbEvidenceKey(collection,id){return `db:${collection}:${id}`}
-function selectedEvidenceEntries(){return Object.values(state.selectedEvidence||{}).filter(Boolean)}
-function evidenceIsSelected(key){return Boolean(state.selectedEvidence?.[key])}
-function setEvidence(key,item,selected=true){
-  if(!state.selectedEvidence||typeof state.selectedEvidence!=="object")state.selectedEvidence={};
-  if(selected)state.selectedEvidence[key]=item;else delete state.selectedEvidence[key];
-  persistPrefs();
-  shellRefreshHook();
-}
-function workspaceDbEvidenceTarget(file,index,record=file?.records?.[index]){
-  if(!record||!state.activeStore)return null;
-  const status=recordDbStatus(file,index,record);
-  if(!["synced","exists"].includes(status.kind))return null;
-  const receipt=storeReceipt(state.activeStore,file,index);
-  const key=localRecordKey(file,index);
-  const confirmedId=state.storePresenceIds?.[state.activeStore]?.[key];
-  const id=String(receipt?.chroma_id||confirmedId||record.record_id||"").trim();
-  return id?{collection:state.activeStore,id,key:dbEvidenceKey(state.activeStore,id)}:null;
-}
-function workspaceEvidenceSelectionKey(file,index){
-  const local=workspaceEvidenceKey(file,index);
-  if(evidenceIsSelected(local))return local;
-  return workspaceDbEvidenceTarget(file,index)?.key||local;
-}
-function toggleWorkspaceEvidence(file,index){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  const record=file?.records?.[index];if(!record)return;
-  const localKey=workspaceEvidenceKey(file,index);
-  if(evidenceIsSelected(localKey)){setEvidence(localKey,null,false);return}
-  const dbTarget=workspaceDbEvidenceTarget(file,index,record);
-  if(dbTarget){toggleDbEvidence(dbTarget.collection,dbTarget.id,record);return}
-  setEvidence(localKey,{
-    key:localKey,kind:"workspace",file_id:file.id,index,record_id:record.record_id||"",work:record.work||"",
-    page_start:record.page_start??record.page??null,page_end:record.page_end??null,
-    speaker:record.speaker||null,position_holder:record.position_holder||null,stance:record.stance||null,
-    discourse_role:record.discourse_role||null,target:record.target||null,proposition_status:record.proposition_status||null,
-    inline_citation:record.inline_citation||null,text_preview:String(record.text||"").replace(/\s+/g," ").trim().slice(0,280),
-    label:`${record.record_id||`Record ${index+1}`} · ${record.work||file.name}`
-  },true);
-}
-function toggleDbEvidence(collection,id,record={}){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  if(!collection||!id)return;
-  const key=dbEvidenceKey(collection,id);
-  setEvidence(key,{
-    key,kind:"db",collection,chroma_id:id,record_id:record.record_id||id,work:record.work||"",
-    page_start:record.page_start??record.page??null,page_end:record.page_end??null,
-    speaker:record.speaker||null,position_holder:record.position_holder||null,stance:record.stance||null,
-    discourse_role:record.discourse_role||null,target:record.target||null,proposition_status:record.proposition_status||null,
-    inline_citation:record.inline_citation||null,text_preview:String(record.text||"").replace(/\s+/g," ").trim().slice(0,280),
-    label:`${record.record_id||id} · ${record.work||collection}`
-  },!evidenceIsSelected(key));
-}
-function clearSelectedEvidence(){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  state.selectedEvidence={};persistPrefs();shellRefreshHook()
-}
-function selectedEvidencePayload(){
-  const payload=[];
-  for(const item of selectedEvidenceEntries()){
-    if(item.kind==="db")payload.push({collection:item.collection,chroma_id:item.chroma_id});
-    else if(item.kind==="workspace"){
-      const file=state.files.find(file=>file.id===item.file_id);
-      const record=file?.records?.[Number(item.index)];
-      if(record)payload.push({record:ragEvidenceRecordPayload(record)});
-    }
-  }
-  return payload;
-}
-function setReviewSelected(file,index,selected){
-  const key=reviewKey(file,index);
-  selected?state.reviewSelection.add(key):state.reviewSelection.delete(key);
-  persistPrefs();
-}
-function clearReviewSelection(){
-  state.reviewSelection.clear();
-  persistPrefs();
-}
 
 // 0.30.11 packet discipline: API boundaries receive only fields required by
 // the operation. Audit history is intentionally opt-in because it can dwarf
