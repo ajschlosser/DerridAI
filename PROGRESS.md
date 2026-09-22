@@ -71,7 +71,29 @@ done
 `providerProfiles`'s call, one in `searchFacets`'s call, both referencing `recordDbStatus` unwrapped).
 
 **Was about to start, not done:** continuing the mechanical extraction (little left, see above) and then moving into
-section B (Vue replacement of the dashboard/PDF Explorer/response cache). **Start there next.**
+section B (Vue replacement of the dashboard/PDF Explorer/response cache). That first Vue-surface tranche is now
+complete; the current next step is the remaining legacy surfaces listed below.
+
+## Copilot progress through PR #93 (2026-09-22)
+
+The work described above has since been carried forward and merged into `master`:
+
+- The Response Cache, Dashboard, and PDF Explorer now have Vue-owned route/surface boundaries while preserving
+  their legacy DOM IDs, classes, URL synchronization, dialogs, disabled states, and characterization coverage.
+- The unified theme work and related provider-layout changes were merged without changing the runtime contract.
+- The corpus and metadata fixes addressed indexed-value extraction, accumulated autocomplete suggestions and repeated
+  array additions, slice requeueing, Corpus Builder step progression, metadata-schema preview providers, provider
+  routing, invalid `generation.num_ctx`, and Ollama embedding endpoint compatibility.
+- Duplicate backend locale keys that blocked lint were removed without changing the canonical translations.
+- Settings persistence now sanitizes the complete IndexedDB preference payload before structured cloning. PR #93
+  contains that fix and merged on 2026-09-22.
+- Validation completed for the merged work included frontend tests, typecheck, lint, production build, Storybook,
+  DOM baselines, and Playwright/axe. Backend quality gates passed in GitHub Actions; local Windows validation did
+  not have a Python launcher.
+
+This is the end of the first Vue-surface tranche, not the end of the runtime decomposition. `runtime.js` remains
+approximately 2,376 lines and `RuntimeSurface.vue` remains the compatibility host for surfaces that have not yet
+been migrated.
 
 ## What is left, in order
 
@@ -205,8 +227,13 @@ sample JSONL), `records`, `role`, `scheme`, `viewport`, `fixtures` (API mocks; `
 `kill_port.sh`, `deps.py` (names and state fields a group uses), `purity.py`, `mv_fn.py`, `splice.py` (older pure-helper moves),
 `style_audit.py`, `style_prune.py`, `style_move.py` (CSS; see `docs/STYLE_AUDIT.md`).
 
-## Open PRs and branches
+## Merged PRs and next branch
 
-PR #86 (`claude/runtime-refactor-18`) holds everything since #84: the dashboard, PDF Explorer and response cache renderers, three
-dialog factories, the operation dock, the backup/restore and response cache baseline, and three bug fixes (PDF Explorer tab,
-collapsed dock label, dashboard annotation click). Next branch: cut `claude/runtime-refactor-19` from master after #86 merges.
+PR #86 (`claude/runtime-refactor-18`) delivered the dashboard, PDF Explorer and response cache renderers, three dialog
+factories, the operation dock, backup/restore and response-cache coverage, and three runtime bug fixes. The follow-up
+theme and bug-fix work merged through PRs #90, #91, #92, and #93.
+
+The next runtime tranche must be cut from the latest `master` and should begin with one remaining legacy surface,
+preferably Corpus Builder or Tools, after confirming its current DOM baseline. Do not combine that migration with
+unrelated CSS cleanup or provider changes. Preserve the existing runtime exports and delete compatibility code only
+after every dependent surface has moved.
