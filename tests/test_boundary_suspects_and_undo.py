@@ -86,7 +86,6 @@ def test_slice_moves_text_to_beginning_of_next_record_and_requeues_metadata(tmp_
     cut=target['text'].index('Proper')
     result=manager.slice_to_neighbor(build['build_id'],'r2','next',cut,1)
     rows=repo.load_records(build['build_id'])
-    assert rows[2]['text'].startswith('Misplaced beginning.')
-    assert result['record']['text'].startswith('Proper current text.')
+    assert rows[2]['text'].startswith('Proper current text.')
+    assert result['record']['text'].startswith('Misplaced beginning.')
     assert all(row['needs_review'] and row['metadata_needs_attention'] for row in rows[1:3])
-
