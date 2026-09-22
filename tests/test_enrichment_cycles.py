@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 from app import corpus_builder as cb
 from app import enrichment_cycles as ec
-from app.corpus_review_mutations import requeue_record_metadata
 from app.config import APP_VERSION
+from app.corpus_review_mutations import requeue_record_metadata
 
 
 def test_enrichment_scope_can_target_explicit_records() -> None:

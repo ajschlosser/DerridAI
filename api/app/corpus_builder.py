@@ -31,6 +31,7 @@ from .autofill import in_audit_sample
 from .autonomous import Policy as AutonomousPolicy
 from .autonomous import may_accept, settle_record
 from .config import APP_VERSION, settings
+from .corpus_enrichment_feedback import enrichment_informational_event
 
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -93,7 +94,6 @@ from .corpus_metadata import (
 from .corpus_pipeline import BuildScope
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .corpus_review_mutations import requeue_record_metadata
-from .corpus_enrichment_feedback import enrichment_informational_event
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     HUMAN_OWNED_STATUSES,

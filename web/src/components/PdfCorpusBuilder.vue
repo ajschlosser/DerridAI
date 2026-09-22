@@ -1535,7 +1535,9 @@ function selectRecord(record: CorpusRecord) {
     let saved = "";
     try {
       saved = localStorage.getItem(textDraftKey(selectedBuildId.value, record.record_id)) || "";
-    } catch {}
+    } catch {
+      // Best effort: browser storage is optional.
+    }
     textDraft.value = saved || String(record.text || "");
     editingText.value = Boolean(saved && saved !== String(record.text || ""));
   }
@@ -1572,7 +1574,9 @@ function cancelTextEdit() {
   textDraft.value = String(selectedRecord.value.text || "");
   try {
     localStorage.removeItem(textDraftKey(selectedBuildId.value, selectedRecord.value.record_id));
-  } catch {}
+  } catch {
+    // Best effort: stale local drafts are ignored.
+  }
 }
 function toggleReviewSelection(recordId: string, checked: boolean) {
   const next = new Set(selectedReviewIds.value);
@@ -2332,7 +2336,9 @@ async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
     resolveSourceOnTextSave.value = false;
     try {
       localStorage.removeItem(textDraftKey(selectedBuildId.value, row.record_id));
-    } catch {}
+    } catch {
+      // Best effort: an unavailable browser API does not block review.
+    }
     const idx = records.value.findIndex((item) => item.record_id === recordId);
     if (idx >= 0) records.value.splice(idx, 1, row);
     await refreshBuild();
@@ -2401,7 +2407,9 @@ async function saveMetadata() {
     metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
     try {
       localStorage.removeItem(metadataDraftKey(currentBuild.value.build_id, row.record_id));
-    } catch {}
+    } catch {
+      // Best effort: a missing stored preference uses the default.
+    }
     await refreshBuild();
     await refreshRecords(false, row.record_id);
     await restoreReviewViewport(viewport);
@@ -3207,7 +3215,9 @@ watch(
     if (!selectedBuildId.value || !selectedRecordId.value) return;
     try {
       localStorage.setItem(metadataDraftKey(selectedBuildId.value, selectedRecordId.value), value);
-    } catch {}
+    } catch {
+      // Best effort: persistence is optional.
+    }
   },
   { flush: "post" },
 );
@@ -3218,7 +3228,9 @@ watch(
     if (!editingText.value || !selectedBuildId.value || !selectedRecordId.value) return;
     try {
       localStorage.setItem(textDraftKey(selectedBuildId.value, selectedRecordId.value), value);
-    } catch {}
+    } catch {
+      // Best effort: private browsing may reject storage access.
+    }
   },
   { flush: "post" },
 );
