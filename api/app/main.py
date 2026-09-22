@@ -2004,14 +2004,21 @@ def list_pdf_corpus_profiles() -> dict[str, Any]:
     return {"items": list(CORPUS_PROFILES.values())}
 
 
+def _supplied_secret(value: Any) -> str | None:
+    """A blank string was not sent. Only a real value should override a stored secret."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
 def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     """Resolve server-owned researcher profiles without rejecting admin profiles.
 
-    Administrator requests may supply an explicit provider configuration, while
-    researcher-approved profiles are persisted server-side. When a profile id is known to
-    the server we resolve its secrets there; otherwise an explicit provider
-    configuration supplied by the authenticated admin request is used.  Secrets
-    are stripped by the build manager before the public build manifest is saved.
+    Administrator profiles keep the OpenAI key in the browser and send it on the
+    request. A published researcher profile keeps its key on the server. A key or
+    endpoint on the request wins; a stored value is used only when the request
+    omits it. Secrets are stripped before the public build manifest is saved.
     """
     resolved = dict(payload)
     # Experiment conditions travel as flat request keys inside the pipeline.
@@ -2038,10 +2045,10 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
             profile_generation = _profile_generation_options(profile) or {}
             profile_generation.update({key: value for key, value in generation_override.items() if value is not None})
             resolved.update({
-                "provider": profile.get("type") or "ollama",
+                "provider": profile.get("type") or resolved.get("provider") or "ollama",
                 "model": requested_model or profile.get("model"),
-                "base_url": profile.get("base_url"),
-                "api_key": profile.get("api_key"),
+                "base_url": _supplied_secret(resolved.get("base_url")) or profile.get("base_url"),
+                "api_key": _supplied_secret(resolved.get("api_key")) or profile.get("api_key"),
                 "generation": profile_generation or None,
                 "provider_profile_id": profile_id,
             })
@@ -2052,12 +2059,13 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     if review_profile_id:
         review_profile = system_store.researcher_profile(review_profile_id)
         if review_profile is not None:
+            supplied = direct_review if isinstance(direct_review, dict) else {}
             resolved["_review_provider"] = {
-                "provider": review_profile.get("type") or "ollama",
-                "model": review_profile.get("model"),
-                "base_url": review_profile.get("base_url"),
-                "api_key": review_profile.get("api_key"),
-                "generation": _profile_generation_options(review_profile) or None,
+                "provider": review_profile.get("type") or supplied.get("provider") or "ollama",
+                "model": supplied.get("model") or review_profile.get("model"),
+                "base_url": _supplied_secret(supplied.get("base_url")) or review_profile.get("base_url"),
+                "api_key": _supplied_secret(supplied.get("api_key")) or review_profile.get("api_key"),
+                "generation": _profile_generation_options(review_profile) or supplied.get("generation") or None,
                 "provider_profile_id": review_profile_id,
             }
         elif isinstance(direct_review, dict) and direct_review.get("provider"):
