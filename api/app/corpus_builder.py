@@ -5517,6 +5517,8 @@ CURRENT REVIEWED RECORD TEXT:
         """Schedule incomplete records and merge worker checkpoints with live human edits."""
         total = max(1, len(records))
         pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
+        priority_ids = {str(value) for value in request.get("_priority_record_ids", [])}
+        pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
         already_complete = len(records) - len(pending)
         metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
         self._update(
@@ -5656,10 +5658,13 @@ CURRENT REVIEWED RECORD TEXT:
             # A boundary edit may arrive while the first worker pass is still
             # running. Clear the one-shot marker and immediately schedule the
             # changed records again against their new reviewed text.
+            priority_ids = [str(row.get("record_id") or "") for row in requeued]
             for row in requeued:
                 row.pop("metadata_requeue_requested", None)
             self.repo.save_records(build_id, settled_records)
-            return self._schedule_build_enrichment(build_id, request, manifest, settled_records)
+            prioritized_request = dict(request)
+            prioritized_request["_priority_record_ids"] = priority_ids
+            return self._schedule_build_enrichment(build_id, prioritized_request, manifest, settled_records)
         settled_states = self._metadata_family_states(settled_records)
         self._update(
             build_id,
@@ -7856,11 +7861,13 @@ SOURCE_TEXT:
         proposed = _sanitize_touchup_output(str(result.get("text") or ""), current_text)
         if not proposed:
             raise ValueError("LLM text touch-up returned empty text.")
+        no_change = proposed == current_text
         provider, model, _, _, _ = self._llm_config(active_request)
         return {
             "record_id": record_id,
             "source_text": current_text,
             "proposed_text": proposed,
+            "no_change": no_change,
             "changes": list(result.get("changes") or []),
             "warnings": list(result.get("warnings") or []),
             "provider": provider,

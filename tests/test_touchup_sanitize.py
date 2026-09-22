@@ -27,3 +27,8 @@ def test_markup_that_belongs_to_the_source_is_kept():
 def test_clean_output_is_left_alone():
     assert clean(SRC, SRC) == SRC
     assert clean("A line with < and > signs, 3 < 4.", "a line") == "A line with < and > signs, 3 < 4."
+
+
+def test_identical_sanitized_output_is_detectable_as_no_change():
+    proposed = clean("<SOURCE_TEXT>" + SRC + "</SOURCE_TEXT>", SRC)
+    assert proposed == SRC

@@ -250,7 +250,8 @@ const llmTouchupResult = ref<{
   changes: string[];
   warnings: string[];
   model: string;
-}>({ source_text: "", proposed_text: "", changes: [], warnings: [], model: "" });
+  no_change: boolean;
+}>({ source_text: "", proposed_text: "", changes: [], warnings: [], model: "", no_change: false });
 const llmTouchupError = ref("");
 const metadataEditorDirty = ref(false);
 const editorialMemoryOpen = ref(false);
@@ -2827,6 +2828,7 @@ function openLlmTouchup(text: string) {
     changes: [],
     warnings: [],
     model: "",
+    no_change: false,
   };
   llmActionProviderId.value =
     llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
@@ -2860,6 +2862,7 @@ async function runLlmTouchup(
       changes: result.changes || [],
       warnings: result.warnings || [],
       model: result.model || "",
+      no_change: Boolean(result.no_change),
     };
   } catch (exc) {
     llmTouchupError.value = exc instanceof Error ? exc.message : String(exc);
@@ -3360,7 +3363,7 @@ onBeforeUnmount(() => {
       <section class="setup-section setup-source-section" aria-labelledby="pdf-corpus-source-title">
         <div class="setup-section-head">
           <div>
-            <span class="setup-step">1</span>
+            <span class="setup-step">A</span>
             <div>
               <h3 id="pdf-corpus-source-title">
                 {{ i18n.t("pdf_corpus.source_setup_title", "Source PDF") }}
@@ -3447,7 +3450,7 @@ onBeforeUnmount(() => {
         aria-labelledby="pdf-corpus-structure-phase-title"
       >
         <div class="phase-label">
-          <span class="setup-step">2</span>
+          <span class="setup-step">B</span>
           <div>
             <h3 id="pdf-corpus-structure-phase-title">
               {{ i18n.t("pdf_corpus.document_structure", "Document structure & pagination") }}
@@ -3477,7 +3480,7 @@ onBeforeUnmount(() => {
 
       <details class="setup-section setup-disclosure" open>
         <summary>
-          <span class="setup-step">3</span
+          <span class="setup-step">C</span
           ><span
             ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title", "LLM & enrichment") }}</b
             ><small
@@ -3701,7 +3704,7 @@ onBeforeUnmount(() => {
 
       <details class="setup-section setup-disclosure">
         <summary>
-          <span class="setup-step">4</span
+          <span class="setup-step">D</span
           ><span
             ><b>{{ i18n.t("pdf_corpus.record_construction", "Record construction") }}</b
             ><small>{{
@@ -3718,7 +3721,7 @@ onBeforeUnmount(() => {
       </details>
       <details class="setup-section setup-disclosure">
         <summary>
-          <span class="setup-step">5</span
+          <span class="setup-step">E</span
           ><span
             ><b>{{ i18n.t("schemas.title", "Metadata schema") }}</b
             ><small
@@ -3758,7 +3761,7 @@ onBeforeUnmount(() => {
 
       <details class="setup-section setup-disclosure">
         <summary>
-          <span class="setup-step">6</span
+          <span class="setup-step">F</span
           ><span
             ><b>{{ i18n.t("pdf_corpus.hands_free_title", "Hands-free mode") }}</b
             ><small>{{
@@ -3778,7 +3781,7 @@ onBeforeUnmount(() => {
 
       <div class="setup-section execution-wrapper">
         <div class="setup-section-inline-head">
-          <span class="setup-step">5</span
+          <span class="setup-step">G</span
           ><span
             ><b>{{ i18n.t("pdf_corpus.advanced_execution", "Advanced execution") }}</b
             ><small>{{
@@ -5310,6 +5313,7 @@ onBeforeUnmount(() => {
       :changes="llmTouchupResult.changes"
       :warnings="llmTouchupResult.warnings"
       :model="llmTouchupResult.model"
+      :no-change="llmTouchupResult.no_change"
       :error="llmTouchupError"
       :busy="busy === 'text-touchup'"
       :profiles="providerProfiles"

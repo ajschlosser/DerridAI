@@ -80,3 +80,13 @@ def test_slice_moves_prefix_to_previous_and_undo_redo_walk_history(tmp_path:Path
     assert repo.load_records(build['build_id'])[1]['text'].startswith('Proper current text')
 
 
+def test_slice_moves_text_to_beginning_of_next_record_and_requeues_metadata(tmp_path:Path):
+    repo,build=install(tmp_path); manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    target=repo.load_records(build['build_id'])[1]
+    cut=target['text'].index('Proper')
+    result=manager.slice_to_neighbor(build['build_id'],'r2','next',cut,1)
+    rows=repo.load_records(build['build_id'])
+    assert rows[2]['text'].startswith('Misplaced beginning.')
+    assert result['record']['text'].startswith('Proper current text.')
+    assert all(row['needs_review'] and row['metadata_needs_attention'] for row in rows[1:3])
+
