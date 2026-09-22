@@ -67,6 +67,7 @@ import { pathViewMap, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
+import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -108,7 +109,8 @@ function translateLegacyDom(root=document.querySelector("#main")){
 const {workIndex,dateKeys,topNeedsReviewWorkSeries,needsReviewTimeline,topFieldValues,publicationYearSeries,workRecordShares,averageRecordLengthForTopWorks,recentAuditChanges}=createCorpusAnalytics({allRows,memoCorpus});
 const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValue}=createFieldFormatting({tr});
 const {searchFacetRawValues,searchFacetDisplay,searchFacetMatches,searchRowMatchesFacets,searchRecordMatchesFacets,searchFacetCountsFromRows,searchFacetCountsFromRecords,buildSearchFacets,searchSuggestions,searchFilterDescriptor,dbSearchFilterDescriptors,searchColumnOptions,searchSimilarity,searchMatchReasons,rowMatchesListFilters}=createSearchFacets({
-  tr,label,display,recordDbStatus,pages,recordFields,uid:()=>uid(),dbSearchWhere,filterOpsForField,
+  tr,label,display,pages,recordFields,uid:()=>uid(),dbSearchWhere,filterOpsForField,
+  recordDbStatus:(...args)=>recordDbStatus(...args),
   getSearchFacetFilters:()=>state.searchFacetFilters,
 });
 const {
@@ -137,7 +139,8 @@ const {
     recordOptionLabel,
     ragGradeEvidencePayload,
   }=createRecordPresenters({
-  tr,trf,pages,recordDbStatus,label,display,
+  tr,trf,pages,label,display,
+  recordDbStatus:(...args)=>recordDbStatus(...args),
   allAnnotations:()=>allAnnotations(),
   compareSearchIndex:()=>compareSearchIndex(),
 });
@@ -732,6 +735,35 @@ const selectedRecord = () => {
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
 const corpusCache={rows:null,fields:null,memo:new Map(),version:0};
+const {recordDbStatus,workDbStatus,refreshPresenceForRows,updateDbStatusElements,ignoredFingerprint,pendingUpsertRows,pendingChangesForRow,removeFromUpsertQueue,buildUpsertItems,upsertRows,rowsFromReviewSelection}=createDbPresenceUpsert({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  api:(...args)=>api(...args),
+  candidateChromaIds:(...args)=>candidateChromaIds(...args),
+  corpusCache:(...args)=>corpusCache(...args),
+  corpusStoreExists:(...args)=>corpusStoreExists(...args),
+  dbUnavailableReason:(...args)=>dbUnavailableReason(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  hasCorpusDb:(...args)=>hasCorpusDb(...args),
+  localRecordKey:(...args)=>localRecordKey(...args),
+  notifyVectorStoresChanged:(...args)=>notifyVectorStoresChanged(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  recordFingerprint:(...args)=>recordFingerprint(...args),
+  refreshOperationsPanelOnly:(...args)=>refreshOperationsPanelOnly(...args),
+  reviewItemFromKey:(...args)=>reviewItemFromKey(...args),
+  selectedReviewItems:(...args)=>selectedReviewItems(...args),
+  startJobPolling:(...args)=>startJobPolling(...args),
+  storeReceipt:(...args)=>storeReceipt(...args),
+  syncJobProgressToasts:(...args)=>syncJobProgressToasts(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
+  upsertAuditDelta:(...args)=>upsertAuditDelta(...args),
+  upsertRecordPayload:(...args)=>upsertRecordPayload(...args),
+  workIndex:(...args)=>workIndex(...args),
+});
 const {openMixedWorkValuesDialog,openWorkMetadataEditor,openWorkMetadataLlmDialog,openWorkMetadataProposalResult,openRemoveWorkModal,openSeparateWorksModal}=createWorkDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -1139,139 +1171,6 @@ function candidateChromaIds(file,index,record){
   }
   return [...new Set(ids)];
 }
-function recordDbStatus(file,index,record,store=state.activeStore){
-  if(!hasCorpusDb())return {kind:"none",label:"No database",title:dbUnavailableReason()};
-  if(!store)return {kind:"none",label:"No collection",title:"Select a Chroma collection"};
-  if(!corpusStoreExists(store))return {kind:"none",label:"No collection",title:"The selected collection no longer exists"};
-  const key=localRecordKey(file,index);
-  const receipt=state.upsertState?.[store]?.[key]||null;
-  const presence=state.storePresence?.[store]?.[key];
-  const fingerprint=recordFingerprint(record);
-  if(receipt&&receipt.fingerprint===fingerprint&&presence!==false)return {kind:"synced",label:"Synced",title:`Upserted ${formatTimestamp(receipt.timestamp)}`};
-  if(receipt&&receipt.fingerprint!==fingerprint)return {kind:"changed",label:"Pending",title:"Changed since last upsert"};
-  if(presence===true)return {kind:"exists",label:"In DB",title:"Record exists in the selected collection; local sync time is unknown"};
-  if(presence===false)return {kind:"absent",label:"Not in DB",title:"Record was not found in the selected collection"};
-  return {kind:"unknown",label:"Unknown",title:"Database presence has not been checked yet"};
-}
-function workDbStatus(rows,workName=null){
-  if(!hasCorpusDb())return {kind:"none",label:"No database"};
-  if(!state.activeStore)return {kind:"none",label:"No collection"};
-  if(!corpusStoreExists(state.activeStore))return {kind:"none",label:"No collection"};
-  const receipts=rows.map(row=>state.upsertState?.[state.activeStore]?.[localRecordKey(row.file,row.index)]||null);
-  if(rows.some((row,index)=>receipts[index]&&receipts[index].fingerprint!==recordFingerprint(row.record)))return {kind:"changed",label:"Pending changes"};
-  if(rows.length&&rows.every((row,index)=>receipts[index]?.fingerprint===recordFingerprint(row.record)))return {kind:"synced",label:"Synced"};
-  if(state.storeWorksStore===state.activeStore){
-    const name=workName??String(rows[0]?.record?.work||"(Untitled work)");
-    const stat=(state.storeWorkStats||[]).find(item=>String(item.work||"(Untitled work)")===String(name));
-    const dbCount=Number(stat?.count||0);
-    if(dbCount>=rows.length&&rows.length)return {kind:"exists",label:"In DB"};
-    if(dbCount>0)return {kind:"exists",label:`Partly in DB (${dbCount}/${rows.length})`};
-    return {kind:"absent",label:"Not in DB"};
-  }
-  return {kind:"unknown",label:"DB status loading"};
-}
-async function refreshPresenceForRows(rows,{force=false}={}){
-  const store=state.activeStore;
-  if(!hasCorpusDb()||!store||!rows.length)return;
-  if(!state.storePresence[store])state.storePresence[store]={};
-  if(!state.storePresenceIds[store])state.storePresenceIds[store]={};
-  if(!state.storePresenceCheckedAt[store])state.storePresenceCheckedAt[store]={};
-  const now=Date.now(),ttl=15000;
-  const staleRows=force?rows:rows.filter(row=>now-Number(state.storePresenceCheckedAt[store][localRecordKey(row.file,row.index)]||0)>ttl);
-  if(!staleRows.length)return;
-  const ids=[...new Set(staleRows.flatMap(row=>candidateChromaIds(row.file,row.index,row.record)))];
-  if(!ids.length)return;
-  const found=new Set();
-  try{
-    for(let start=0;start<ids.length;start+=500){
-      const data=await api(`/api/stores/${encodeURIComponent(store)}/records/status`,{
-        method:"POST",
-        body:JSON.stringify({ids:ids.slice(start,start+500)}),
-      });
-      for(const id of data.existing_ids||[])found.add(id);
-    }
-    for(const row of staleRows){
-      const key=localRecordKey(row.file,row.index);
-      const candidates=candidateChromaIds(row.file,row.index,row.record);
-      const matchedId=candidates.find(id=>found.has(id))||"";
-      state.storePresence[store][key]=Boolean(matchedId);
-      state.storePresenceIds[store][key]=matchedId;
-      state.storePresenceCheckedAt[store][key]=now;
-    }
-    pendingUpsertCache.key="";
-    updateDbStatusElements();
-  }catch(error){
-    console.warn("Could not refresh Chroma presence",error);
-  }
-}
-function updateDbStatusElements(){
-  document.querySelectorAll("[data-db-status-key]").forEach(el=>{
-    const item=reviewItemFromKey(el.dataset.dbStatusKey);
-    if(!item)return;
-    const info=recordDbStatus(item.file,item.index,item.file.records[item.index]);
-    el.className=`db-status ${info.kind}`;
-    el.title=info.title;
-    el.innerHTML=`<i></i>${esc(info.label)}`;
-  });
-  document.querySelectorAll("[data-work-status]").forEach(el=>{
-    const work=el.dataset.workStatus;
-    const rows=workIndex().get(work)?.rows||[];
-    const info=workDbStatus(rows,work);
-    el.className=`db-status ${info.kind}`;
-    el.innerHTML=`<i></i>${esc(info.label)}`;
-  });
-}
-function ignoredFingerprint(store,file,index){
-  return state.upsertIgnored?.[store]?.[localRecordKey(file,index)]||null;
-}
-let pendingUpsertCache={key:"",at:0,rows:[]};
-function pendingUpsertRows(){
-  if(!hasCorpusDb()||!state.activeStore)return [];
-  const dirtyCount=state.files.reduce((sum,file)=>sum+(file.dirty?.size||0),0);
-  const key=`${state.activeStore}|${corpusCache.version}|${dirtyCount}|${Number(state.upsertJobApplied?Object.values(state.upsertJobApplied).reduce((a,b)=>a+Number(b||0),0):0)}`;
-  const now=performance.now();
-  if(pendingUpsertCache.key===key&&now-pendingUpsertCache.at<750)return pendingUpsertCache.rows;
-  const rows=allRows().filter(row=>{
-    const fingerprint=recordFingerprint(row.record);
-    if(ignoredFingerprint(state.activeStore,row.file,row.index)===fingerprint)return false;
-    const info=recordDbStatus(row.file,row.index,row.record);
-    return info.kind==="changed" || info.kind==="absent" || (row.file.dirty.has(row.index)&&info.kind!=="synced");
-  });
-  pendingUpsertCache={key,at:now,rows};
-  return rows;
-}
-function pendingChangesForRow(row){
-  const store=state.activeStore;
-  const receipt=storeReceipt(store,row.file,row.index);
-  const since=receipt?.timestamp?new Date(receipt.timestamp).getTime():0;
-  const updates=Array.isArray(row.record.updates)?row.record.updates:[];
-  const changed=updates.filter(update=>{
-    const time=new Date(update.timestamp||0).getTime();
-    return !since || Number.isNaN(time) || time>since;
-  });
-  if(changed.length)return changed;
-  if(!receipt)return [{
-    field_name:"record",
-    old_value:null,
-    new_value:"Not previously upserted from this workspace",
-    source:"workspace",
-    timestamp:null,
-  }];
-  return [{
-    field_name:"record",
-    old_value:"Last upserted fingerprint",
-    new_value:"Current record differs",
-    source:"fingerprint",
-    timestamp:null,
-  }];
-}
-function removeFromUpsertQueue(row){
-  const store=state.activeStore;
-  if(!store)return;
-  if(!state.upsertIgnored[store])state.upsertIgnored[store]={};
-  state.upsertIgnored[store][localRecordKey(row.file,row.index)]=recordFingerprint(row.record);
-  persistPrefs();
-}
 function recordFields(){
   if(corpusCache.fields)return corpusCache.fields;
   const set=new Set();
@@ -1391,57 +1290,7 @@ function setActiveStore(name){
   syncUrl({replace:true});
 }
 
-async function buildUpsertItems(rows,store,{yieldEvery=0}={}){
-  const idCounts=new Map();
-  for(let i=0;i<rows.length;i++){const row=rows[i],id=String(row.file.records[row.index]?.record_id??"");idCounts.set(id,(idCounts.get(id)||0)+1);if(yieldEvery&&i&&i%yieldEvery===0)await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)))}
-  const items=[];
-  for(let i=0;i<rows.length;i++){
-    const row=rows[i],current=row.file.records[row.index],logical=String(current?.record_id??""),receipt=storeReceipt(store,row.file,row.index),chromaId=receipt?.chroma_id||((idCounts.get(logical)||0)>1?`${row.file.name}::${logical}`:logical);
-    const key=localRecordKey(row.file,row.index);
-    const audit=upsertAuditDelta(current,receipt,state.storePresence?.[store]?.[key]);
-    items.push({key,record:current,fingerprint:recordFingerprint(current),chroma_id:chromaId,file_name:row.file.name,...audit});
-    if(yieldEvery&&i&&i%yieldEvery===0)await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
-  }
-  return items;
-}
-async function upsertRows(rows,labelText="records",{largeSyncConfirmed=false}={}){
-  if(!hasCorpusDb())return openMessageModal({title:"Vector database required",message:dbUnavailableReason(),confirmLabel:"OK"});
-  if(!state.activeStore)return toast("Select a Chroma collection first");
-  if(!rows.length)return toast("No records selected for upsert");
-  const activeUpsert=state.jobs.find(job=>job.type==="upsert"&&["queued","running","cancelling"].includes(job.status));
-  if(activeUpsert)return openMessageModal({title:tr("operations.vector_sync_active_title","A vector sync is already active"),message:trf("operations.vector_sync_active_help","{label} must finish or be cancelled before another collection build starts.",{label:activeUpsert.label||activeUpsert.store_name||"The current sync"}),confirmLabel:"OK"});
-  const store=state.activeStore;
-  await refreshPresenceForRows(rows,{force:true});
-  if(rows.length>500&&!largeSyncConfirmed){
-    const approved=await openMessageModal({title:tr("operations.large_sync_background_title","Build collection in the background?"),message:trf("operations.large_sync_background_help","{count} records will be prepared once, then DerridAI will build and validate the collection as a background operation. You may continue working in this tab while the build runs.",{count:rows.length.toLocaleString()}),confirmLabel:tr("operations.start_background_build","Start background build"),cancelLabel:tr("ui.cancel","Cancel")});
-    if(!approved)return false;
-  }
-  const items=await buildUpsertItems(rows,store,{yieldEvery:rows.length>500?80:0});
-  try{
-    const transportItems=items.map(item=>({
-      key:item.key,
-      record:upsertRecordPayload(item.record),
-      fingerprint:item.fingerprint,
-      chroma_id:item.chroma_id,
-      file_name:item.file_name,
-      audit_entries:item.audit_entries||[],
-      replace_updates:item.replace_updates,
-      updates_count:item.updates_count,
-    }));
-    const sourceWorks=[...new Set(rows.map(row=>String(row.record?.work||row.file?.records?.[row.index]?.work||"").trim()).filter(Boolean))];
-    const job=await api("/api/jobs/upsert",{method:"POST",body:JSON.stringify({store_name:store,items:transportItems,document_field:"text",embedding_field:"embedding",batch_size:500,mirror_languages:true,label:labelText,source_kind:"browser_workspace",source_label:labelText,source_works:sourceWorks})});
-    state.jobs=[job,...state.jobs.filter(existing=>existing.id!==job.id)];
-    syncJobProgressToasts();startJobPolling();
-    toast(trf("operations.vector_build_queued","Queued {count} records for background build of {store}",{count:rows.length.toLocaleString(),store}),{tone:"success"});
-    notifyVectorStoresChanged();
-    if(state.view==="home")refreshOperationsPanelOnly();
-    return true;
-  }catch(error){toast(`Could not start vector build: ${error.message}`);return false}
-}
 
-function rowsFromReviewSelection(){
-  return selectedReviewItems().map(item=>({file:item.file,record:item.file.records[item.index],index:item.index}));
-}
 function linkedPdfRows(page=state.pdf.page){
   return allRows().filter(({record})=>pdfLinks(record).some(link=>{
     if(Number(link.pdf_page)!==Number(page))return false;
