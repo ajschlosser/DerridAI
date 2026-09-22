@@ -10,6 +10,7 @@ import UiButton from "../components/ui/UiButton.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import UiTabs from "../components/ui/UiTabs.vue";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import ComparePicker from "../components/compare/ComparePicker.vue";
 import CompareDiff from "../components/compare/CompareDiff.vue";
 import {
@@ -203,25 +204,24 @@ onMounted(async () => {
 <template>
   <main class="compare-page" aria-labelledby="compare-title">
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
-    <header class="compare-hero">
-      <div>
-        <p class="compare-kicker">{{ t("section.tools", "Tools") }}</p>
-        <h1 id="compare-title">{{ t("nav.compare", "Compare") }}</h1>
-        <p>
-          {{
-            auth.isResearcher
-              ? t(
-                  "research.compare_help",
-                  "Compare researcher-visible summarized records side by side.",
-                )
-              : t(
-                  "compare.page_help",
-                  "Compare record metadata and text with focused, side-by-side field differences.",
-                )
-          }}
-        </p>
-      </div>
-      <div class="compare-hero-actions">
+    <UiPageHeader
+      :kicker="t('section.tools', 'Tools')"
+      :title="t('nav.compare', 'Compare')"
+      title-id="compare-title"
+      :description="
+        auth.isResearcher
+          ? t(
+              'research.compare_help',
+              'Compare researcher-visible summarized records side by side.',
+            )
+          : t(
+              'compare.page_help',
+              'Compare record metadata and text with focused, side-by-side field differences.',
+            )
+      "
+      :actions-label="t('compare.page_actions', 'Compare actions')"
+    >
+      <template #actions>
         <UiButton :label="t('compare.swap', 'Swap A and B')" icon="compare" @click="swapSides" />
         <UiButton
           :label="t('compare.copy_a_to_b', 'Copy A into B')"
@@ -229,8 +229,8 @@ onMounted(async () => {
           :disabled-reason="t('compare.need_a', 'Select or paste record A first.')"
           @click="copyAtoB"
         />
-      </div>
-    </header>
+      </template>
+    </UiPageHeader>
 
     <p v-if="auth.isResearcher" class="compare-note">
       {{
@@ -446,10 +446,8 @@ onMounted(async () => {
 <style scoped>
 .compare-page {
   display: grid;
-  gap: 18px;
-  max-width: 1280px;
+  gap: var(--page-gap);
 }
-.compare-hero,
 .compare-board-head,
 .compare-pane-head {
   display: flex;
@@ -466,18 +464,11 @@ onMounted(async () => {
   text-transform: uppercase;
   color: var(--accent-fg);
 }
-h1 {
-  margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2rem;
-  line-height: 1.2;
-}
 h2 {
   margin: 0;
   font-size: 1.15rem;
   line-height: 1.3;
 }
-.compare-hero p,
 .compare-note,
 .compare-scratch-help,
 .compare-empty span {
@@ -487,7 +478,6 @@ h2 {
   font-size: 0.875rem;
   line-height: 1.5;
 }
-.compare-hero-actions,
 .compare-editor-actions {
   display: flex;
   flex-wrap: wrap;

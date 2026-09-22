@@ -2421,7 +2421,7 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 @app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice")
 def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision)
+        return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision, body.keep_end)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

@@ -23,7 +23,6 @@ type Helper =
   | "dbUnavailableReason"
   | "decorateDisabledControls"
   | "download"
-  | "downloadBlob"
   | "fieldEditor"
   | "fileJsonl"
   | "formatTimestamp"
@@ -32,7 +31,6 @@ type Helper =
   | "idbDelete"
   | "jsonPretty"
   | "label"
-  | "loadSubsetProfiles"
   | "localRecordKey"
   | "navigateTo"
   | "needsReviewItems"
@@ -51,16 +49,13 @@ type Helper =
   | "renderView"
   | "restoreRecordHistoryVersion"
   | "sameValue"
-  | "saveSubsetProfiles"
   | "selectedIndex"
   | "selectedRecord"
   | "selectedReviewItems"
   | "shell"
   | "showAppModal"
-  | "subsetRuleMatches"
   | "toast"
   | "tr"
-  | "trf"
   | "uid"
   | "upsertRows";
 type Deps = { state: Loose; fileTimers: Map<string, ReturnType<typeof setTimeout>> } & Record<
@@ -147,7 +142,6 @@ export function createRecordDialogs(deps: Deps) {
     dbUnavailableReason,
     decorateDisabledControls,
     download,
-    downloadBlob,
     fieldEditor,
     fileJsonl,
     fileTimers,
@@ -157,7 +151,6 @@ export function createRecordDialogs(deps: Deps) {
     idbDelete,
     jsonPretty,
     label,
-    loadSubsetProfiles,
     localRecordKey,
     navigateTo,
     needsReviewItems,
@@ -176,16 +169,13 @@ export function createRecordDialogs(deps: Deps) {
     renderView,
     restoreRecordHistoryVersion,
     sameValue,
-    saveSubsetProfiles,
     selectedIndex,
     selectedRecord,
     selectedReviewItems,
     shell,
     showAppModal,
-    subsetRuleMatches,
     toast,
     tr,
-    trf,
     uid,
     upsertRows,
   } = deps;
@@ -278,420 +268,6 @@ export function createRecordDialogs(deps: Deps) {
         `Merged and replaced ${files.length} tabs · ${records.length.toLocaleString()} records`,
       );
     };
-  }
-  function openSubsetBuilder() {
-    if (!state.files.length) return toast("Load one or more JSONL files first");
-    const dialog = document.createElement("dialog");
-    dialog.className = "subset-dialog";
-    const fields = recordFields().filter((field: Any) => !field.startsWith("_"));
-    const sourceOptions = [
-      `<option value="active">Active JSONL · ${esc(activeFile()?.name || "")}</option>`,
-      `<option value="all">All loaded JSONL files</option>`,
-      ...state.files.map(
-        (file: Any) =>
-          `<option value="${esc(file.id)}">Only ${esc(file.name)} · ${file.records.length.toLocaleString()} records</option>`,
-      ),
-    ].join("");
-    const fieldOptions = fields
-      .map(
-        (field: Any) =>
-          `<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`,
-      )
-      .join("");
-    const operatorOptions = [
-      ["equals", "Equals"],
-      ["not_equals", "Does not equal"],
-      ["contains", "Contains"],
-      ["not_contains", "Does not contain"],
-      ["array_contains", "Array contains exact value"],
-      ["exists", "Exists / non-empty"],
-      ["missing", "Missing / empty"],
-      ["truthy", "Truthy"],
-      ["falsy", "Falsy"],
-      ["regex", "Regular expression"],
-    ]
-      .map(([value, name]) => `<option value="${value}">${name}</option>`)
-      .join("");
-    const profiles = loadSubsetProfiles();
-    dialog.innerHTML = `<div class="dh subset-dialog-head"><div><span class="section-label">Corpus utility</span><h2 class="dialog-title">Create JSONL subset</h2><div class="dialog-subtitle">Build reusable record filters without editing the source JSONL.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db subset-body subset-body-v3">
-    <section class="subset-config-card"><div class="subset-config-copy"><b>Source & output</b><span>Choose the loaded records to filter and the name of the derived JSONL tab.</span></div><div class="subset-head-grid"><div class="field"><label>Source</label><select class="control" id="subsetSource">${sourceOptions}</select></div><div class="field"><label>New JSONL tab name</label><input class="control" id="subsetName" value="${esc((activeFile()?.name || "subset.jsonl").replace(/\.jsonl$/i, ""))}-subset.jsonl"></div><label class="check-item subset-case"><input type="checkbox" id="subsetCase"><span>Case-sensitive matching</span></label></div></section>
-    <section class="subset-config-card"><div class="subset-config-copy"><b>Saved filter profile</b><span>Reuse common corpus slices such as primary Derrida text, one language, or records needing review.</span></div><div class="subset-profile-row"><select class="control" id="subsetProfile"><option value="">No saved profile</option>${profiles.map((profile: Any) => `<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join("")}</select><button class="btn small" id="saveSubsetProfile">${icon("plus")}Save current</button><button class="btn small danger" id="deleteSubsetProfile" disabled>Delete</button></div></section>
-    <section class="subset-config-card subset-filter-card"><div class="subset-config-copy"><b>Filter expression</b><span>Conditions are readable, grouped explicitly, and previewed against the selected source as you edit.</span></div><div class="subset-expression" id="subsetExpression"></div><div class="subset-builder-actions"><button class="btn small" id="addSubsetRule">${icon("plus")}Condition</button><button class="btn small" id="addSubsetGroup">${icon("plus")}Group</button><span class="subset-match-count" id="subsetPreview">Add at least one condition.</span></div><div class="subset-expression-preview" id="subsetExpressionPreview"></div></section>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn" id="createSubsetDownload">Create & download</button><button class="btn primary" id="createSubset">Create subset tab</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    const expression = dialog.querySelector("#subsetExpression");
-    let previewTimer: Any = null;
-    const schedulePreview = () => {
-      clearTimeout(previewTimer);
-      previewTimer = setTimeout(updatePreview, 120);
-    };
-
-    const subsetAutocompleteExcluded = new Set([
-      "text",
-      "extracted_text",
-      "extractedText",
-      "raw_text",
-      "ocr_text",
-    ]);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- moved verbatim; the row markup ignores these defaults
-    function ruleHtml({ field = "work", operator = "equals", value = "" } = {}) {
-      return `<div class="subset-rule-core"><select class="control subset-field">${fieldOptions}</select><select class="control subset-operator">${operatorOptions}</select><input class="control subset-value" placeholder="${esc(tr("subset.value", "Value"))}" autocomplete="off"><datalist class="subset-value-options"></datalist><button class="btn icon-only danger subset-remove" type="button" title="${esc(tr("subset.remove_condition", "Remove condition"))}" aria-label="${esc(tr("subset.remove_condition", "Remove condition"))}">${icon("close")}</button></div>`;
-    }
-    function initializeRule(row: Any, { field = "work", operator = "equals", value = "" } = {}) {
-      row.querySelector(".subset-field").value = fields.includes(field) ? field : fields[0] || "";
-      row.querySelector(".subset-operator").value = operator;
-      row.querySelector(".subset-value").value = value;
-      const input = row.querySelector(".subset-value"),
-        datalist = row.querySelector(".subset-value-options");
-      const listId = `subset-values-${uid()}`;
-      datalist.id = listId;
-      const syncSuggestions = () => {
-        const fieldName = row.querySelector(".subset-field").value;
-        if (subsetAutocompleteExcluded.has(fieldName)) {
-          input.removeAttribute("list");
-          datalist.innerHTML = "";
-          input.title = tr(
-            "subset.autocomplete_large_field",
-            "Autocomplete is disabled for large text fields.",
-          );
-          return;
-        }
-        const values = new Set<Any>();
-        for (const { record } of selectedRows()) {
-          const raw = record?.[fieldName];
-          const items = Array.isArray(raw) ? raw : [raw];
-          for (const item of items) {
-            if (item === null || item === undefined || typeof item === "object") continue;
-            const text = String(item).trim();
-            if (text) values.add(text);
-          }
-        }
-        const ordered = [...values].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
-        );
-        datalist.innerHTML = ordered
-          .map((option) => `<option value="${esc(option)}"></option>`)
-          .join("");
-        if (ordered.length) {
-          input.setAttribute("list", listId);
-          input.title = trf(
-            "subset.autocomplete_count",
-            "{count} unique values from the selected JSONL source.",
-            { count: ordered.length.toLocaleString() },
-          );
-        } else {
-          input.removeAttribute("list");
-          input.title = "";
-        }
-      };
-      const syncValue = () => {
-        const noValue = ["exists", "missing", "truthy", "falsy"].includes(
-          row.querySelector(".subset-operator").value,
-        );
-        input.disabled = noValue;
-        input.placeholder = noValue
-          ? tr("subset.no_value", "No value required")
-          : tr("subset.value", "Value");
-        if (noValue) input.value = "";
-        if (noValue) input.removeAttribute("list");
-        else syncSuggestions();
-      };
-      row.querySelectorAll("select,input").forEach((control: Any) =>
-        control.addEventListener("input", () => {
-          syncValue();
-          schedulePreview();
-        }),
-      );
-      row.querySelector(".subset-remove").onclick = () => {
-        const group = row.closest(".subset-group");
-        row.remove();
-        if (group && !group.querySelector(".subset-group-rules .subset-rule-row")) group.remove();
-        normalizeTopJoins();
-        updatePreview();
-      };
-      syncValue();
-    }
-    function topJoinHtml() {
-      return `<select class="control subset-join"><option value="AND">AND</option><option value="OR">OR</option></select>`;
-    }
-    function addTopRule(config = {}) {
-      const item = document.createElement("div");
-      item.className = "subset-expression-item subset-top-rule";
-      item.dataset.kind = "rule";
-      item.innerHTML = `${topJoinHtml()}<div class="subset-rule-row">${ruleHtml(config)}</div>`;
-      expression.appendChild(item);
-      initializeRule(item.querySelector(".subset-rule-row"), config);
-      item.querySelector(".subset-join").addEventListener("change", schedulePreview);
-      normalizeTopJoins();
-      updatePreview();
-    }
-    function addGroup({ mode = "OR", rules = null }: Any = {}) {
-      const item = document.createElement("div");
-      item.className = "subset-expression-item subset-group";
-      item.dataset.kind = "group";
-      item.innerHTML = `${topJoinHtml()}<div class="subset-group-box"><div class="subset-group-head"><div><b>Grouped conditions</b><span>Parentheses: evaluate this block as one boolean value</span></div><div class="tools"><select class="control subset-group-mode"><option value="OR">Match ANY (OR)</option><option value="AND">Match ALL (AND)</option></select><button class="btn tiny" type="button" data-add-group-rule>${icon("plus")}Condition</button><button class="btn tiny danger" type="button" data-remove-group>Remove group</button></div></div><div class="subset-group-rules"></div></div>`;
-      expression.appendChild(item);
-      item.querySelector(".subset-group-mode").value = mode;
-      const list = item.querySelector(".subset-group-rules");
-      const addInner = (config = {}) => {
-        const row = document.createElement("div");
-        row.className = "subset-rule-row";
-        row.innerHTML = ruleHtml(config);
-        list.appendChild(row);
-        initializeRule(row, config);
-        updatePreview();
-      };
-      (rules?.length
-        ? rules
-        : [
-            { field: "topics", operator: "array_contains", value: "" },
-            { field: "concepts", operator: "array_contains", value: "" },
-          ]
-      ).forEach(addInner);
-      item.querySelector("[data-add-group-rule]").onclick = () =>
-        addInner({
-          field: fields.includes("topics") ? "topics" : fields[0],
-          operator: "contains",
-          value: "",
-        });
-      item.querySelector("[data-remove-group]").onclick = () => {
-        item.remove();
-        normalizeTopJoins();
-        updatePreview();
-      };
-      item.querySelector(".subset-group-mode").addEventListener("change", schedulePreview);
-      item.querySelector(".subset-join").addEventListener("change", schedulePreview);
-      normalizeTopJoins();
-      updatePreview();
-    }
-    function normalizeTopJoins() {
-      [...expression.querySelectorAll(":scope > .subset-expression-item")].forEach(
-        (item, index) => {
-          const join = item.querySelector(":scope > .subset-join");
-          join.disabled = index === 0;
-          if (index === 0) join.value = "AND";
-        },
-      );
-    }
-    function selectedRows() {
-      const source = dialog.querySelector("#subsetSource").value;
-      if (source === "all") return allRows();
-      if (source === "active") {
-        const file = activeFile();
-        return file ? file.records.map((record: Any, index: Any) => ({ file, record, index })) : [];
-      }
-      const file = state.files.find((item: Any) => item.id === source);
-      return file ? file.records.map((record: Any, index: Any) => ({ file, record, index })) : [];
-    }
-    function readRule(row: Any) {
-      return {
-        field: row.querySelector(".subset-field").value,
-        operator: row.querySelector(".subset-operator").value,
-        value: row.querySelector(".subset-value").value,
-      };
-    }
-    function readExpression() {
-      return [...expression.querySelectorAll(":scope > .subset-expression-item")].map(
-        (item, index) => {
-          const base = {
-            join: index === 0 ? "AND" : item.querySelector(":scope > .subset-join").value,
-            type: item.dataset.kind,
-          };
-          if (item.dataset.kind === "group")
-            return {
-              ...base,
-              mode: item.querySelector(".subset-group-mode").value,
-              rules: [...item.querySelectorAll(".subset-group-rules .subset-rule-row")].map(
-                readRule,
-              ),
-            };
-          return { ...base, rule: readRule(item.querySelector(".subset-rule-row")) };
-        },
-      );
-    }
-    function itemMatches(record: Any, item: Any, caseSensitive: Any) {
-      if (item.type === "group") {
-        const values = item.rules.map((rule: Any) =>
-          subsetRuleMatches(record, rule, caseSensitive),
-        );
-        return item.mode === "AND" ? values.every(Boolean) : values.some(Boolean);
-      }
-      return subsetRuleMatches(record, item.rule, caseSensitive);
-    }
-    function recordMatchesExpression(record: Any, items: Any, caseSensitive: Any) {
-      if (!items.length) return false;
-      const groups = [];
-      let group = [];
-      for (const item of items) {
-        if (item.join === "OR" && group.length) {
-          groups.push(group);
-          group = [];
-        }
-        group.push(item);
-      }
-      if (group.length) groups.push(group);
-      return groups.some((itemsInAndGroup) =>
-        itemsInAndGroup.every((item) => itemMatches(record, item, caseSensitive)),
-      );
-    }
-    function expressionText(items: Any) {
-      const oneRule = (rule: Any) =>
-        `${label(rule.field)} ${dialog.querySelector(`.subset-operator option[value="${CSS.escape(rule.operator)}"]`)?.textContent || rule.operator}${["exists", "missing", "truthy", "falsy"].includes(rule.operator) ? "" : ` “${rule.value}”`}`;
-      return items
-        .map((item: Any, index: Any) => {
-          const prefix = index ? ` ${item.join} ` : "";
-          if (item.type === "group")
-            return `${prefix}(${item.rules.map(oneRule).join(` ${item.mode} `)})`;
-          return `${prefix}${oneRule(item.rule)}`;
-        })
-        .join("");
-    }
-    function matchedRows() {
-      const items = readExpression();
-      if (!items.length) return [];
-      const caseSensitive = dialog.querySelector("#subsetCase").checked;
-      return selectedRows().filter(({ record }: Any) =>
-        recordMatchesExpression(record, items, caseSensitive),
-      );
-    }
-    function updatePreview() {
-      const items = readExpression(),
-        sourceCount = selectedRows().length,
-        matched = items.length ? matchedRows().length : 0;
-      dialog.querySelector("#subsetPreview").textContent = items.length
-        ? `${matched.toLocaleString()} of ${sourceCount.toLocaleString()} source records match`
-        : "Add at least one condition.";
-      dialog.querySelector("#subsetExpressionPreview").innerHTML = items.length
-        ? `<b>Expression</b><code>${esc(expressionText(items))}</code>`
-        : "";
-      decorateDisabledControls(dialog);
-    }
-    const refreshSubsetSuggestions = () =>
-      expression
-        .querySelectorAll(".subset-rule-row")
-        .forEach((row: Any) =>
-          row.querySelector(".subset-field")?.dispatchEvent(new Event("input", { bubbles: false })),
-        );
-    const applyProfile = (profile: Any) => {
-      expression.innerHTML = "";
-      for (const item of profile?.expression || []) {
-        if (item?.type === "group") {
-          addGroup({ mode: item.mode || "OR", rules: item.rules || [] });
-          const added = expression.lastElementChild;
-          if (added && item.join) added.querySelector(":scope > .subset-join").value = item.join;
-        } else if (item?.rule) {
-          addTopRule(item.rule);
-          const added = expression.lastElementChild;
-          if (added && item.join) added.querySelector(":scope > .subset-join").value = item.join;
-        }
-      }
-      dialog.querySelector("#subsetCase").checked = Boolean(profile?.caseSensitive);
-      normalizeTopJoins();
-      refreshSubsetSuggestions();
-      updatePreview();
-    };
-    const profileSelect = dialog.querySelector("#subsetProfile");
-    profileSelect?.addEventListener("change", () => {
-      const profile = loadSubsetProfiles().find((item: Any) => item.id === profileSelect.value);
-      dialog.querySelector("#deleteSubsetProfile").disabled = !profile;
-      if (profile) applyProfile(profile);
-    });
-    dialog.querySelector("#saveSubsetProfile")?.addEventListener("click", async () => {
-      const items = readExpression();
-      if (!items.length) return toast("Add at least one condition before saving a profile");
-      const name = prompt("Filter profile name");
-      if (!name?.trim()) return;
-      const profiles = loadSubsetProfiles();
-      const profile = {
-        id: uid(),
-        name: name.trim(),
-        expression: items,
-        caseSensitive: dialog.querySelector("#subsetCase").checked,
-        created_at: new Date().toISOString(),
-      };
-      profiles.push(profile);
-      saveSubsetProfiles(profiles);
-      profileSelect.insertAdjacentHTML(
-        "beforeend",
-        `<option value="${esc(profile.id)}">${esc(profile.name)}</option>`,
-      );
-      profileSelect.value = profile.id;
-      dialog.querySelector("#deleteSubsetProfile").disabled = false;
-      toast(`Saved filter profile “${profile.name}”`, { tone: "success" });
-    });
-    dialog.querySelector("#deleteSubsetProfile")?.addEventListener("click", () => {
-      const id = profileSelect.value;
-      if (!id) return;
-      const profiles = loadSubsetProfiles();
-      const profile = profiles.find((item: Any) => item.id === id);
-      saveSubsetProfiles(profiles.filter((item: Any) => item.id !== id));
-      profileSelect.querySelector(`option[value="${CSS.escape(id)}"]`)?.remove();
-      profileSelect.value = "";
-      dialog.querySelector("#deleteSubsetProfile").disabled = true;
-      if (profile) toast(`Deleted filter profile “${profile.name}”`);
-    });
-    dialog.querySelector("#addSubsetRule").onclick = () =>
-      addTopRule({
-        field: fields.includes("work") ? "work" : fields[0],
-        operator: "equals",
-        value: "",
-      });
-    dialog.querySelector("#addSubsetGroup").onclick = () => addGroup();
-    dialog.querySelector("#subsetSource")?.addEventListener("change", () => {
-      refreshSubsetSuggestions();
-      schedulePreview();
-    });
-    dialog.querySelector("#subsetCase")?.addEventListener("change", schedulePreview);
-    const createSubset = async (downloadFile: Any) => {
-      const items = readExpression();
-      const rows = matchedRows();
-      if (!items.length) return toast("Add at least one subset condition");
-      if (!rows.length) return toast("No records match the subset expression");
-      let name = dialog.querySelector("#subsetName").value.trim() || "subset.jsonl";
-      if (!name.toLowerCase().endsWith(".jsonl")) name += ".jsonl";
-      const file = {
-        id: uid(),
-        name,
-        records: rows.map(({ record }: Any) => cloneAuditValue(record)),
-        errors: [],
-        dirty: new Set(),
-        imported_at: new Date().toISOString(),
-        subset: {
-          created_at: new Date().toISOString(),
-          source: dialog.querySelector("#subsetSource").value,
-          logic: "grouped_boolean_v2",
-          expression: items,
-        },
-      };
-      state.files.push(file);
-      state.activeFileId = file.id;
-      await persistFileNow(file);
-      if (downloadFile) {
-        const blob = new Blob(
-          [file.records.map((record: Any) => JSON.stringify(record)).join("\n") + "\n"],
-          { type: "application/x-ndjson" },
-        );
-        downloadBlob(blob, name);
-      }
-      close();
-      navigateTo("list", { fileId: file.id });
-      toast(`Created ${name} with ${file.records.length.toLocaleString()} records`);
-    };
-    dialog.querySelector("#createSubset").onclick = () => createSubset(false);
-    dialog.querySelector("#createSubsetDownload").onclick = () => createSubset(true);
-    addTopRule({
-      field: fields.includes("document_author") ? "document_author" : fields[0],
-      operator: "equals",
-      value: "Jacques Derrida",
-    });
   }
   function openBulkFieldEditor({ rows = null, title = "Bulk edit one field" } = {}) {
     if (!state.files.length) return toast("Load JSONL records first");
@@ -1154,7 +730,6 @@ export function createRecordDialogs(deps: Deps) {
   }
   return {
     openMergeDialog,
-    openSubsetBuilder,
     openBulkFieldEditor,
     openOcrCleanupDialog,
     openEditor,

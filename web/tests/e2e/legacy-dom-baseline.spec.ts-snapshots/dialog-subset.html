@@ -1,135 +1,125 @@
-<dialog class="subset-dialog" open="">
-<div class="dh subset-dialog-head">
-<div>
-<span class="section-label">Corpus utility</span>
-<h2 class="dialog-title">Create JSONL subset</h2>
-<div class="dialog-subtitle">Build reusable record filters without editing the source JSONL.</div>
+<section class="ui-dialog" data-size="xlarge" role="dialog" aria-modal="true" aria-labelledby="v-5-title" aria-describedby="v-5-description">
+<header class="ui-dialog-header">
+<div class="ui-dialog-heading">
+<h2 id="v-5-title" tabindex="-1">Create JSONL subset</h2>
+<p id="v-5-description">Create a new local JSONL file from the records that match a filter. The source file is not changed, and each record keeps its record ID.</p>
 </div>
-<button class="btn icon-only" data-close="">
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-ghost size-small icon-only" type="button" aria-label="Close" title="Close">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m6 6 12 12M18 6 6 18">
+<path d="M6 6l12 12M18 6 6 18">
 </path>
 </svg>
+<!---->
+<!---->
 </button>
-</div>
-  <div class="db subset-body subset-body-v3">
-    <section class="subset-config-card">
-<div class="subset-config-copy">
-<b>Source &amp; output</b>
-<span>Choose the loaded records to filter and the name of the derived JSONL tab.</span>
-</div>
-<div class="subset-head-grid">
-<div class="field">
-<label>Source</label>
-<select class="control" id="subsetSource">
-<option value="active">Active JSONL · baseline.jsonl</option>
-<option value="all">All loaded JSONL files</option>
+</span>
+</header>
+<div class="ui-dialog-body" tabindex="0" role="region" aria-labelledby="v-5-title">
+<div class="subset">
+<section class="subset-card" aria-labelledby="v-4-output">
+<h3 id="v-4-output">Source and output</h3>
+<div class="subset-grid">
+<label class="subset-field">
+<span>Source</span>
+<select class="control">
+<option value="active">Active file · baseline.jsonl</option>
+<option value="all">All loaded files · 3 records</option>
 <option value="jsonl-6418a92f81564da4d329096e">Only baseline.jsonl · 3 records</option>
 </select>
-</div>
-<div class="field">
-<label>New JSONL tab name</label>
-<input class="control" id="subsetName" value="baseline-subset.jsonl">
-</div>
-<label class="check-item subset-case">
-<input type="checkbox" id="subsetCase">
-<span>Case-sensitive matching</span>
+</label>
+<label class="subset-field">
+<span>New file name</span>
+<input class="control" autocomplete="off">
 </label>
 </div>
-</section>
-    <section class="subset-config-card">
-<div class="subset-config-copy">
-<b>Saved filter profile</b>
-<span>Reuse common corpus slices such as primary Derrida text, one language, or records needing review.</span>
+<div class="subset-check">
+<label>
+<input type="checkbox" aria-describedby="v-4-case-help">
+<span>Case-sensitive</span>
+</label>
+<p id="v-4-case-help" class="subset-help">Off: capitals are ignored, so “derrida” also matches “Derrida” and “DERRIDA”. On: the value must match letter for letter, including capitals. Applies to equals, contains, array and regular-expression conditions.</p>
 </div>
-<div class="subset-profile-row">
-<select class="control" id="subsetProfile">
+</section>
+<section class="subset-card" aria-labelledby="v-4-profiles">
+<h3 id="v-4-profiles">Saved filter profiles</h3>
+<p class="subset-help">Reuse common filters, such as one language or records needing review. Profiles are kept in this browser; export them to move or share them as a JSON file. Importing replaces profiles with the same name and adds the rest.</p>
+<div class="subset-row">
+<label class="subset-field subset-grow">
+<span class="sr-only">Saved profile</span>
+<select class="control" value="">
 <option value="">No saved profile</option>
 </select>
-<button class="btn small" id="saveSubsetProfile">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M12 5v14M5 12h14">
-</path>
-</svg>Save current</button>
-<button class="btn small danger" id="deleteSubsetProfile" disabled="">Delete</button>
+</label>
+<button type="button" class="btn">Save current…</button>
+<button type="button" class="btn danger" disabled="">Delete</button>
+<button type="button" class="btn" disabled="">Export all profiles</button>
+<button type="button" class="btn">Import profiles</button>
+<input type="file" accept="application/json,.json" hidden="">
 </div>
+<!---->
 </section>
-    <section class="subset-config-card subset-filter-card">
-<div class="subset-config-copy">
-<b>Filter expression</b>
-<span>Conditions are readable, grouped explicitly, and previewed against the selected source as you edit.</span>
-</div>
-<div class="subset-expression" id="subsetExpression">
-<div class="subset-expression-item subset-top-rule" data-kind="rule">
-<select class="control subset-join" disabled="" title="This action is unavailable until its required selection or data is available.">
-<option value="AND">AND</option>
-<option value="OR">OR</option>
+<section class="subset-card" aria-labelledby="v-4-filter">
+<h3 id="v-4-filter">Filter</h3>
+<p class="subset-help">Conditions are combined in order; AND binds before OR. A group is evaluated as one condition, like parentheses.</p>
+<ol class="subset-items">
+<li class="subset-item">
+<span class="subset-join subset-where">Where</span>
+<div class="subset-condition">
+<select class="control" aria-label="Field for item 1">
+<option value="concepts">Concepts</option>
+<option value="document_author">Document author</option>
+<option value="needs_review">Needs review</option>
+<option value="page_end">Page end</option>
+<option value="page_start">Page start</option>
+<option value="record_id">Record ID</option>
+<option value="review_reason">Review reason</option>
+<option value="speaker">Speaker</option>
+<option value="text">Extracted text</option>
+<option value="topics">Topics</option>
+<option value="work">Work</option>
+<option value="year">Year</option>
 </select>
-<div class="subset-rule-row">
-<div class="subset-rule-core">
-<select class="control subset-field">
-<option value="concepts">Concepts · concepts</option>
-<option value="document_author">Document author · document_author</option>
-<option value="needs_review">Needs review · needs_review</option>
-<option value="page_end">Page end · page_end</option>
-<option value="page_start">Page start · page_start</option>
-<option value="record_id">Record ID · record_id</option>
-<option value="review_reason">Review reason · review_reason</option>
-<option value="speaker">Speaker · speaker</option>
-<option value="text">Extracted text · text</option>
-<option value="topics">Topics · topics</option>
-<option value="work">Work · work</option>
-<option value="year">Year · year</option>
+<select class="control" aria-label="Comparison for item 1" value="equals">
+<option value="equals">equals</option>
+<option value="not_equals">not_equals</option>
+<option value="contains">contains</option>
+<option value="not_contains">not_contains</option>
+<option value="array_contains">array_contains</option>
+<option value="exists">exists</option>
+<option value="missing">missing</option>
+<option value="truthy">truthy</option>
+<option value="falsy">falsy</option>
+<option value="regex">regex</option>
 </select>
-<select class="control subset-operator">
-<option value="equals">Equals</option>
-<option value="not_equals">Does not equal</option>
-<option value="contains">Contains</option>
-<option value="not_contains">Does not contain</option>
-<option value="array_contains">Array contains exact value</option>
-<option value="exists">Exists / non-empty</option>
-<option value="missing">Missing / empty</option>
-<option value="truthy">Truthy</option>
-<option value="falsy">Falsy</option>
-<option value="regex">Regular expression</option>
-</select>
-<input class="control subset-value" placeholder="Value" autocomplete="off" list="subset-values-<uuid>" title="1 unique values from the selected JSONL source.">
-<datalist class="subset-value-options" id="subset-values-<uuid>">
+<input class="control" autocomplete="off" placeholder="Value" list="subset-values-v-11" aria-label="Value for item 1">
+<datalist id="subset-values-v-11">
 <option value="Jacques Derrida">
 </option>
 </datalist>
-<button class="btn icon-only danger subset-remove" type="button" title="Remove condition" aria-label="Remove condition">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m6 6 12 12M18 6 6 18">
-</path>
-</svg>
-</button>
+<button type="button" class="btn danger" aria-label="Remove item 1">Remove</button>
 </div>
+</li>
+</ol>
+<div class="subset-row">
+<button type="button" class="btn">Add condition</button>
+<button type="button" class="btn">Add group</button>
+<p class="subset-count" role="status" aria-live="polite">3 of 3 source records match</p>
 </div>
-</div>
-</div>
-<div class="subset-builder-actions">
-<button class="btn small" id="addSubsetRule">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M12 5v14M5 12h14">
-</path>
-</svg>Condition</button>
-<button class="btn small" id="addSubsetGroup">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M12 5v14M5 12h14">
-</path>
-</svg>Group</button>
-<span class="subset-match-count" id="subsetPreview">3 of 3 source records match</span>
-</div>
-<div class="subset-expression-preview" id="subsetExpressionPreview">
-<b>Expression</b>
-<code>Document author Equals “Jacques Derrida”</code>
-</div>
+<p class="subset-expression">
+<strong>Expression</strong>
+<code>Document author equals “Jacques Derrida”</code>
+</p>
 </section>
-  </div>
-  <div class="da">
-<button class="btn" data-close="">Cancel</button>
-<button class="btn" id="createSubsetDownload">Create &amp; download</button>
-<button class="btn primary" id="createSubset">Create subset tab</button>
 </div>
-</dialog>
+</div>
+<footer class="ui-dialog-footer">
+<span>
+</span>
+<div class="subset-actions">
+<button type="button" class="btn">Cancel</button>
+<button type="button" class="btn">Create and download</button>
+<button type="button" class="btn primary">Create subset file</button>
+</div>
+</footer>
+</section>

@@ -216,7 +216,8 @@ async function tryGroup(run: boolean) {
     text: previewText.value,
     run,
   };
-  const profileId = previewProfile.value || props.defaultProviderId;
+  const profileId =
+    previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id;
   if (run && profileId) Object.assign(payload, previewProvider(profileId));
   const result = await guarded(() => metadataSchemasApi.preview(payload));
   if (result) preview.value = result;
@@ -231,6 +232,8 @@ watch(
     if (!profiles.length) return;
     if (previewProfile.value && !profiles.some((profile) => profile.id === previewProfile.value))
       previewProfile.value = "";
+    if (!previewProfile.value && !props.defaultProviderId)
+      previewProfile.value = profiles[0]?.id || "";
   },
   { immediate: true, deep: true },
 );
@@ -250,7 +253,10 @@ defineExpose({ select, draft });
           >
             <b>{{ item.name }}</b>
             <small
-              >{{ item.builtin ? t("builtin", "Built in") : "" }}
+              >{{ item.builtin ? t("builtin", "Built in") : "" }} · v{{
+                item.schema_version || "1.0.0"
+              }}
+              ·
               {{
                 i18n.tf("schemas.field_count", "{count} fields", { count: item.field_count })
               }}</small
@@ -301,6 +307,12 @@ defineExpose({ select, draft });
           ><span>{{ t("name", "Name") }}</span
           ><input v-model="draft.name" class="control" maxlength="80"
         /></label>
+        <p class="schema-version">
+          {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b
+          ><span>{{
+            t("version_help", "Versions change automatically when the saved schema changes.")
+          }}</span>
+        </p>
         <label class="schema-field"
           ><span>{{ t("description", "Description") }}</span
           ><textarea

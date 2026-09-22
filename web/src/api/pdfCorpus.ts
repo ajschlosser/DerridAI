@@ -13,7 +13,7 @@ export interface PdfAsset {
   metadata: Record<string, unknown>;
   document_layout?: DocumentLayoutPlan;
   document_layout_revision?: number;
-  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string;logical_pages?:Array<{slot:string;printed_page_label?:string|null}>;deterministic_region_type?:string;thread_ids?:string[]}>;
+  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string;image_count?:number;logical_pages?:Array<{slot:string;printed_page_label?:string|null}>;deterministic_region_type?:string;thread_ids?:string[]}>;
 }
 
 
@@ -73,6 +73,7 @@ export interface CorpusBuild {
   provider?: string | null;
   profile_id: string;
   schema_version?: string;
+  metadata_schema_version?: string;
   segmentation_prompt_version?: string;
   metadata_prompt_version?: string;
   document_prompt_version?: string;
@@ -140,15 +141,15 @@ export interface CorpusBuild {
     issues?:Array<{record_id?:string;field?:string;issue_type?:string;retryable?:boolean;status?:string;reason?:string;method?:string;confidence?:number|null;current_value?:unknown;page_start?:number|string|null;page_end?:number|string|null}>;
     records?:Array<{record_id?:string;fields?:string[];issues?:Array<Record<string,unknown>>;page_start?:number|string|null;page_end?:number|string|null}>
   };
-  metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null;passes_requested?:number;passes_completed?:number;current_pass?:number;converged?:boolean;records_disputed?:number;fields_replaced?:number;fields_kept?:number;pass_results?:{pass:number;records_processed?:number;fields_added?:number}[]};
-  trash_quality?: {record_count?:number;trash_record_count?:number;trash_ratio?:number;threshold?:number;exceeds_threshold?:boolean;deterministic?:boolean};
-  source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
+  metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;records_unchanged?:number;records_enriched?:number;records_reopened?:number;records_skipped?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null;passes_requested?:number;passes_completed?:number;current_pass?:number;current_record_id?:string|null;current_task?:string|null;active_tasks?:Array<{record_id?:string;task?:string;state?:string;started_at?:string}>;converged?:boolean;records_disputed?:number;fields_replaced?:number;fields_kept?:number;pass_results?:{pass:number;records_processed?:number;fields_added?:number}[]};
+  trash_quality?: {record_count?:number;trash_record_count?:number;trash_ratio?:number;threshold?:number;exceeds_threshold?:boolean;deterministic?:boolean;unusable_page_count?:number;unusable_page_ratio?:number};
+  source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;image_only_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
   pipeline_state?: {current?:string;stages?:Record<string,{state?:string;[key:string]:unknown}>};
   publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];required_document_fields?:string[];missing_document_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean;no_publishable_records?:boolean};
   build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
   request?: Record<string,unknown>;
   llm_metrics?: {calls?:number;retries?:number;structured_output_failures?:number;escalations?:number;editorial_examples_used?:number};
-  llm_contribution?: {inherited_fields?:number;deterministic_fields?:number;llm_fields_usable?:number;llm_fields_review?:number;human_fields?:number;family_calls?:number;elapsed_ms?:number;useful_fields_per_minute?:number;tasks_complete?:number;tasks_failed?:number;tasks_skipped?:number;enrichment_mode?:string;semantic_indexing?:boolean};
+  llm_contribution?: {inherited_fields?:number;deterministic_fields?:number;llm_fields_usable?:number;llm_fields_proposed?:number;llm_fields_review?:number;human_fields?:number;family_calls?:number;elapsed_ms?:number;useful_fields_per_minute?:number;tasks_complete?:number;tasks_failed?:number;tasks_skipped?:number;enrichment_mode?:string;semantic_indexing?:boolean};
   llm_family_effectiveness?: Record<string,{calls?:number;proposed_fields?:number;elapsed_ms?:number;human_accepted_fields?:number;human_corrected_fields?:number;last_updated_at?:string;last_human_feedback_at?:string}>;
   llm_model_effectiveness?: Record<string,{provider_profile_id?:string|null;provider?:string|null;model?:string|null;calls?:number;proposed_fields?:number;elapsed_ms?:number}>;
   llm_confidence_calibration?: Record<string,Record<string,{reviewed?:number;accepted?:number;corrected?:number;acceptance_rate?:number}>>;
@@ -159,16 +160,24 @@ export interface CorpusRecord {
   record_id: string;
   text: string;
   text_length: number;
+  source_document_id?: string;
+  source_unit_ids?: string[];
   page_start?: number | string | null;
   page_end?: number | string | null;
   source_block_ids: string[];
-  source_spans: Array<{block_id:string;page:number;bbox?:number[];extraction_method?:string}>;
+  source_spans: Array<{source_unit_id?:string;block_id?:string;page:number;bbox?:number[];extraction_method?:string}>;
   metadata_evidence?: Record<string,{block_ids?:string[];confidence?:number;reason?:string;reviewed_by?:string;reviewed_at?:string}>;
   metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number|null;reason?:string;reason_code?:string;proposed_value?:unknown;auto_populated?:boolean;autofilled?:boolean;verification_status?:"pending_review"|"auto_resolved"|"human_confirmed"|string;value_source?:"llm"|"deterministic"|"human"|string;llm_requested?:boolean;llm_value_returned?:boolean;llm_assessed?:boolean;llm_checked?:boolean;audit_sample?:boolean;self_reported_confidence?:number;model?:string}>;
   metadata_incomplete_fields?: string[];
   metadata_review_fields?: string[];
   metadata_reviewed_at?: string;
   metadata_decisions?: Array<{field?:string;value?:unknown;at?:string;source?:string}>;
+  metadata_enrichment_history?: Array<{
+    run_id?:string;pass?:number;at?:string;state?:string;outcome?:string;model?:string;
+    added_fields?:string[];replaced?:Array<{field?:string;previous?:unknown;value?:unknown}>;
+    disputes?:Array<Record<string,unknown>>;
+    informational?:Array<{kind?:string;field?:string;authoritative_value?:unknown;proposed_value?:unknown;confidence?:number;reason?:string;run_id?:string;pass?:number;model?:string|null;at?:string}>;
+  }>;
   activity?: {human_view_count?:number;human_review_count?:number;llm_review_count?:number;enrichment_pass_count?:number;last_human_viewed_at?:string;last_human_reviewed_at?:string;last_llm_reviewed_at?:string;last_enrichment_provider?:string;last_enrichment_model?:string};
   human_view_count?: number;
   metadata_stage_status?: Record<string,string>;
@@ -185,6 +194,7 @@ export interface CorpusRecord {
   resolved_source_quality_issues?: Array<Record<string,unknown>>;
   source_extracted_text?: string;
   text_review_status?: "human_corrected"|string;
+  text_touchup_proposal?: {status?:string;source_text?:string;proposed_text?:string;changes?:string[];warnings?:string[];provider?:string;model?:string;created_at?:string};
   text_reviewed_at?: string;
   text_revision_history?: Array<{at?:string;source?:string;previous_sha256?:string;text_sha256?:string;previous_length?:number;text_length?:number;diff?:string;resolved_source_issues?:boolean}>;
   review_events?: Array<{at?:string;event?:string;transaction_id?:string;direction?:string;source_record_id?:string;[key:string]:unknown}>;
@@ -230,7 +240,7 @@ export const pdfCorpusApi = {
   patchManifest: (buildId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),
   switchProviderProfile: (buildId:string, payload:Record<string,unknown>) => apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`, {method:"PATCH",body:JSON.stringify(payload)}),
   createBuild: (payload:Record<string,unknown>) => apiRequest<CorpusBuild>("/api/pdf/corpus-builds", {method:"POST",body:JSON.stringify(payload)}),
-  records: (buildId:string, offset=0, limit=50, reviewQueue="", query="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewQueue&&reviewQueue!=="all"?`&review_queue=${encodeURIComponent(reviewQueue)}`:""}${query?`&query=${encodeURIComponent(query)}`:""}`),
+  records: (buildId:string, offset=0, limit=50, reviewQueue="", query="") => apiRequest<{items:CorpusRecord[];total:number;offset:number;limit:number;queue_counts?:CorpusBuild["review_queue_counts"]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewQueue&&reviewQueue!=="all"?`&review_queue=${encodeURIComponent(reviewQueue)}`:""}${query?`&query=${encodeURIComponent(query)}`:""}`),
   markViewed: (buildId:string, recordId:string) => apiRequest<{record_id:string;activity:CorpusRecord["activity"]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/viewed`, {method:"POST"}),
   accept: (buildId:string, recordId:string, accepted=true, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/accept`, {method:"POST",body:JSON.stringify({accepted,expected_revision:expectedRevision})}),
   disposition: (buildId:string, recordId:string, disposition:"pending"|"accepted"|"rejected", reason="", expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/disposition`, {method:"POST",body:JSON.stringify({disposition,reason,expected_revision:expectedRevision})}),
@@ -240,7 +250,7 @@ export const pdfCorpusApi = {
   bulkMetadata: (buildId:string, changes:Record<string,unknown>, options:{recordIds?:string[];applyToAll?:boolean;reviewQueue?:string|null;query?:string}={}) => apiRequest<{changed:number;record_ids:string[];queue_counts?:CorpusBuild["review_queue_counts"]}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/metadata`, {method:"PATCH",body:JSON.stringify({changes,record_ids:options.recordIds||[],apply_to_all:Boolean(options.applyToAll),review_queue:options.reviewQueue&&!['all'].includes(options.reviewQueue)?options.reviewQueue:null,query:options.query||""})}),
   undoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number;can_undo?:boolean;can_redo?:boolean}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/undo`, {method:"POST"}),
   redoReview: (buildId:string) => apiRequest<{restored:boolean;action?:string;selected_record_id?:string;record_count:number;can_undo?:boolean;can_redo?:boolean}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/review/redo`, {method:"POST"}),
-  sliceRecord: (buildId:string, recordId:string, direction:"previous"|"next", offset:number, expectedRevision?:number) => apiRequest<{record:CorpusRecord;neighbor:CorpusRecord;direction:string;transaction_id:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/slice`, {method:"POST",body:JSON.stringify({direction,offset,expected_revision:expectedRevision})}),
+  sliceRecord: (buildId:string, recordId:string, direction:"previous"|"next"|"keep", offset:number, expectedRevision?:number, keepEnd?:number) => apiRequest<{record:CorpusRecord;neighbor:CorpusRecord;left_neighbor?:CorpusRecord;right_neighbor?:CorpusRecord;direction:string;transaction_id:string}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/slice`, {method:"POST",body:JSON.stringify({direction,offset,keep_end:keepEnd,expected_revision:expectedRevision})}),
   adjudicateBoundary: (buildId:string, recordId:string, direction:"previous"|"next", payload:Record<string,unknown>={}) => apiRequest<{decision:Record<string,unknown>;left_record:CorpusRecord;right_record:CorpusRecord;build:CorpusBuild}>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/boundary-adjudication`, {method:"POST",body:JSON.stringify({direction,...payload})}),
   patchText: (buildId:string, recordId:string, text:string, expectedRevision?:number, resolveSourceIssues=false) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/text`, {method:"PATCH",body:JSON.stringify({text,expected_revision:expectedRevision,resolve_source_issues:resolveSourceIssues})}),
   patchMetadata: (buildId:string, recordId:string, changes:Record<string,unknown>, expectedRevision?:number) => apiRequest<CorpusRecord>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata`, {method:"PATCH",body:JSON.stringify({changes,expected_revision:expectedRevision})}),

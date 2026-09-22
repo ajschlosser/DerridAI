@@ -17,6 +17,7 @@ import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
   APPEARANCE_DEFAULTS,
@@ -386,16 +387,23 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 </script>
 
 <template>
-  <main class="vue-native-page settings-page">
+  <main class="vue-native-page settings-page" aria-labelledby="settings-page-title">
     <div class="sr-only" aria-live="polite">{{ liveMessage }}</div>
-    <header class="settings-hero">
-      <div>
-        <p class="settings-kicker">{{ i18n.t("section.system", "System") }}</p>
-        <h1>{{ i18n.t("context.config.title", "Settings") }}</h1>
-        <p>{{ i18n.t("settings.page_help", "Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.") }}</p>
-      </div>
-      <SettingsSaveState :status="pageStatus" :label="statusLabel(pageStatus)" />
-    </header>
+    <UiPageHeader
+      :kicker="i18n.t('section.system', 'System')"
+      :title="i18n.t('context.config.title', 'Settings')"
+      title-id="settings-page-title"
+      :description="
+        i18n.t(
+          'settings.page_help',
+          'Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.',
+        )
+      "
+    >
+      <template #actions>
+        <SettingsSaveState :status="pageStatus" :label="statusLabel(pageStatus)" />
+      </template>
+    </UiPageHeader>
     <p v-if="pageError" class="info error" role="alert">{{ pageError }}</p>
     <div class="settings-toolbar">
       <SettingsSearch
@@ -714,11 +722,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 </template>
 
 <style scoped>
-.settings-page{display:grid;gap:18px;max-width:1280px}
-.settings-hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
-.settings-hero h1{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(1.6rem,3vw,2.1rem);line-height:1.15}
-.settings-hero p{margin:6px 0 0;max-width:68ch;color:var(--muted);line-height:1.5}
-.settings-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
+.settings-page{display:grid;gap:var(--page-gap)}
 .settings-toolbar{display:grid;gap:8px}
 .settings-contents-toggle{display:none}
 .settings-layout{display:grid;grid-template-columns:minmax(196px,240px) minmax(0,1fr);gap:20px;align-items:start}

@@ -101,6 +101,8 @@ Each operation exposes:
 
 The expanded dock shows a compact row for each operation: status, progress, the current stage, and the next action. Full request details, event timelines, and result summaries remain on Dashboard and in the operation inspector.
 
+The dock can be dragged anywhere. When it is expanded from a spot near the right or bottom edge, it slides back so the whole panel stays on screen; collapsing it returns it to where you left it.
+
 ### Cancellation semantics
 
 Cancellation is deliberately explicit:
@@ -237,6 +239,19 @@ Multiple JSONL files remain open as a local working set and persist through brow
 Persistence is browser-origin-specific.
 
 **Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Loaded JSONL files appear in a local-file rail on this page, with origin (imported, subset, merge, split by work, or from a collection) and whether the file has been edited since it was loaded. Administrators open, merge, subset, export, and close files from that rail, or from the empty state. Researcher accounts do not use this page.
+
+- **Columns** chooses, orders and sizes the table's columns. Each shown column has a width as a percentage of the table; the widths always total 100%, so widening one column narrows the others in proportion (no column goes below 5%). **Even widths** splits the space equally, and **Reset defaults** restores the default columns and widths. Search uses the same column dialog for choosing and ordering columns.
+- **Comfortable** rows show the full extracted text. **Compact** rows are tighter, narrow the text column, and show the text on one line; where it is cut off, **Expand** shows the rest of that row's text.
+- **Get Citation** copies an inline or full citation. The notification quotes exactly what was copied. The menu closes on a choice, on Escape, or on a click elsewhere.
+- **Copy view link** copies a link that reopens this table as shown: file name, search, column filters, sort, page and columns. JSONL records stay in this browser, so whoever opens the link is asked for the same file. The notification shows the copied link.
+
+### Create a JSONL subset
+
+**Create subset** in the local-file rail makes a new local JSONL file from the records that match a filter. The source file is not changed, and each copied record keeps its record ID and audit history. The source can be the active file, all loaded files, or one file; the match count updates as you edit the filter.
+
+A filter is a list of conditions (field, comparison, value) joined by AND or OR, where AND binds before OR. A group is evaluated as one condition, like parentheses, and matches when any or all of its conditions match. **Case-sensitive** is off by default, so `derrida` also matches `Derrida`; turn it on to require the same capitals. It applies to the equals, contains, list and regular-expression comparisons. The new file records the filter, whether matching was case-sensitive, and which file it came from.
+
+Saved filter profiles are kept in this browser. **Save current…** names the filter (saving under an existing name updates that profile). **Export all profiles** saves them as one JSON file; **Import profiles** reads such a file, replaces profiles with the same name, and adds the rest. A profile with a condition that cannot be read is skipped whole rather than imported with the condition dropped, and the notification says how many were added, replaced or skipped.
 
 ### Merge files
 
@@ -418,6 +433,10 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Enrichment is persisted record by record, not only at the end. The live operation reports the selected provider, model, pass, and processed-record count; a later run can target all records, an accepted/pending scope, or an explicit subset.
 - Each record keeps activity telemetry for human opens and saves, LLM reviews, enrichment passes, and the last provider/model that touched it. This is audit information, not a replacement for field-level provenance.
 - Before semantic enrichment, the builder computes a deterministic trash-record ratio from extraction corruption, sparse text, and glyph fragmentation. A ratio above 10% is shown as a source-quality warning; the build may proceed when the reviewer chooses to continue.
+- The Source PDF step reports extracted **SourceUnits** (addressable PDF/OCR layout units), not Records. `OCR page(s)` counts pages where OCR was used; zero means the native PDF text layer was used. Image-only pages remain visible as source-quality findings instead of disappearing from the 10% check.
+- When embedded PDF metadata contains an author, the builder carries it forward as a deterministic, reviewable document-author assertion. It is not silently treated as an LLM inference.
+- **Clean all Record text before enrichment** is deterministic preprocessing. **Use LLM to touch-up text as part of enrichment** creates a conservative, reviewable proposal for extraction errata, diacritics, formatting, quotations, and line breaks. The proposal does not change authoritative reviewed text until a person reviews and saves it.
+- Metadata schemas are semantic-versioned independently of the application and corpus contracts. New schemas start at `1.0.0`; unchanged saves retain their version; adding fields increments the minor version, removing fields increments the major version, and changing existing definitions increments the patch version.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
 
@@ -427,6 +446,7 @@ Once a build has records, the review workspace fills the screen under the top ba
 
 - **Deciding.** The bar under the record is one row: **Skip**, **Reject & next**, and **Accept & next**. If required metadata is unresolved, a note above the bar says which fields, and **Accept & next** stays unavailable until you confirm them.
 - **More actions** (the ⋯ button at the left of that bar) holds **Combine with previous record**, **Combine with next record**, **Slice record** and **Preview JSONL**. An action that is not available stays in the list and says why, for example that there is no previous record to combine with.
+- **Slicing.** Cursor mode moves text to one neighboring Record. Selecting a chunk and choosing **Keep selected** leaves the selection in the current Record, moves the preceding text to the previous Record, and moves the following text to the next Record. Affected Records retain slice lineage, reopen metadata review, and are re-enqueued for enrichment.
 - **Undo** and **Redo** are at the top of the record, next to **Focus view**.
 - **The queue** shows each record's state as an icon and a name (Accepted, Rejected, Reviewable, Metadata, Topology, Source problem). Above it, the queue tabs filter by state, **Bulk actions** holds **Bulk edit metadata** and **Reject selected**, and **Accept clean** accepts every reviewable record at once.
 - **Resizing.** Drag the divider between panes, or focus it and use the arrow keys (Shift for bigger steps, Home and End for the limits); double-click to reset. Each width is remembered in this browser.

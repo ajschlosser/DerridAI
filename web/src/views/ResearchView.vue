@@ -17,6 +17,7 @@ import type {
   ResearchWorkspaceSnapshot,
 } from "../types/research";
 import * as runtime from "../runtime/runtime.js";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -524,31 +525,38 @@ onBeforeUnmount(() => {
       @action="runtime.openDatabaseCreationFromResearch?.()"
     />
     <template v-else-if="workspace && config">
-      <div class="research-page-intro">
-        <div>
-          <span class="section-label">{{
-            i18n.t("research.page_kicker", "Evidence-grounded inquiry")
-          }}</span>
-          <h1 id="research-page-title">
-            {{ i18n.t("research.page_title", "Research workspace") }}
-          </h1>
-          <p>
-            {{
-              i18n.t(
-                "research.page_subtitle",
-                "Ask the corpus, inspect the evidence, and keep provenance attached to the answer.",
-              )
-            }}
-          </p>
-        </div>
-        <div class="research-page-state">
-          <span><i></i>{{ stores.length }} {{ i18n.t("dashboard.databases", "databases") }}</span
-          ><span
-            >{{ selectedEvidence.length }}
-            {{ i18n.t("rag.selected_evidence", "selected evidence") }}</span
-          >
-        </div>
-      </div>
+      <UiPageHeader
+        :kicker="i18n.t('research.page_kicker', 'Evidence-grounded inquiry')"
+        :title="i18n.t('research.page_title', 'Research workspace')"
+        title-id="research-page-title"
+        :description="
+          i18n.t(
+            'research.page_subtitle',
+            'Ask the corpus, inspect the evidence, and keep provenance attached to the answer.',
+          )
+        "
+        :actions-label="i18n.t('research.page_state', 'Research workspace status')"
+      >
+        <template #actions>
+          <div class="research-page-state">
+            <span
+              ><i></i
+              >{{
+                i18n.tf(
+                  stores.length === 1
+                    ? "research.database_count_one"
+                    : "research.database_count_other",
+                  stores.length === 1 ? "{count} database" : "{count} databases",
+                  { count: stores.length.toLocaleString(i18n.locale) },
+                )
+              }}</span
+            ><span
+              >{{ selectedEvidence.length }}
+              {{ i18n.t("rag.selected_evidence", "selected evidence") }}</span
+            >
+          </div>
+        </template>
+      </UiPageHeader>
 
       <ResearchComposer
         v-model:prompt="prompt"

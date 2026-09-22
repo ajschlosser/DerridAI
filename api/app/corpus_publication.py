@@ -30,6 +30,20 @@ def validate_publication_record(record: dict[str, Any]) -> list[str]:
 
 
 def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
+    public_record = dict(record)
+    if not public_record.get("source_document_id") and public_record.get("source_asset_id"):
+        public_record["source_document_id"] = public_record["source_asset_id"]
+    source_document_id = public_record.get("source_document_id")
+    if source_document_id and isinstance(public_record.get("source_spans"), list):
+        public_record["source_spans"] = [
+            {
+                **span,
+                "source_document_id": span.get("source_document_id") or source_document_id,
+                "source_unit_id": span.get("source_unit_id") or span.get("block_id"),
+            }
+            for span in public_record["source_spans"]
+            if isinstance(span, dict)
+        ]
     internal_fields = {
         "accepted",
         "rejected",
@@ -49,8 +63,8 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "record_sizing_policy",
         "topology_quality",
         "source_asset_id",
+        "source_unit_ids",
         "source_block_ids",
-        "source_spans",
         "source_extracted_text",
         "pdf_pages",
         "topology_index",
@@ -84,6 +98,6 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         k: v
-        for k, v in record.items()
+        for k, v in public_record.items()
         if k not in internal_fields and not k.startswith("_")
     }

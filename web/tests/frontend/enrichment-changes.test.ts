@@ -33,4 +33,21 @@ describe("changes made by enrichment",()=>{
     const wrapper=mountWith(record({metadata_enrichment_history:[{run_id:"r1",pass:1,outcome:"disputed",disputes:[{field:"target",existing:"cities of refuge",proposed:"hospitality"}]}],metadata_disputes:[{field:"target",existing:"cities of refuge",proposed:"cosmopolitanism",candidates:[{value:"cities of refuge",source:"current"},{value:"hospitality",source:"llm",model:"m1",pass:1},{value:"cosmopolitanism",source:"llm",model:"m2",pass:2}]}]}));
     expect(wrapper.text()).toContain("cosmopolitanism");expect(wrapper.text()).toContain("m2");expect(wrapper.text()).toContain("pass 2");
   });
+  it("shows protected suggestions and agreement without requiring review",()=>{
+    const wrapper=mountWith(record({
+      needs_review:false,
+      metadata_enrichment_history:[{
+        run_id:"r2",pass:3,model:"qwen3.5:4b",outcome:"unchanged",disputes:[],
+        informational:[
+          {kind:"protected_suggestion",field:"speaker",authoritative_value:"Jacques Derrida",proposed_value:"Another author",model:"qwen3.5:4b",pass:3,confidence:.92,reason:"Human-owned value retained."},
+          {kind:"agreement",field:"stance",authoritative_value:"critical",proposed_value:"critical",model:"qwen3.5:4b",pass:3,reason:"No new supported value."},
+        ],
+      }],
+      metadata_disputes:[],
+    }));
+    expect(wrapper.text()).toContain("Protected value retained");
+    expect(wrapper.text()).toContain("Another author");
+    expect(wrapper.text()).toContain("No new supported value");
+    expect(wrapper.findAll("button")).toHaveLength(0);
+  });
 });

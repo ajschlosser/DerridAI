@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import UiPageHeader from "../ui/UiPageHeader.vue";
@@ -16,6 +17,12 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ share: []; columns: []; import: [] }>();
 const i18n = useI18nStore();
+const copyLinkHelp = computed(() =>
+  i18n.t(
+    "records.copy_view_link_help",
+    "Copies a link that reopens this table exactly as shown: file name, search, column filters, sort, page and columns. Records stay on this device, so whoever opens the link must choose the same JSONL file.",
+  ),
+);
 </script>
 <template>
   <UiPageHeader
@@ -39,9 +46,15 @@ const i18n = useI18nStore();
         <button type="button" class="btn" @click="emit('columns')">
           <AppIcon name="list" />{{ i18n.t("records.columns", "Columns") }}
         </button>
-        <button type="button" class="btn soft" @click="emit('share')">
-          <AppIcon name="copy" />{{ i18n.t("records.copy_link", "Copy link") }}
+        <button
+          type="button"
+          class="btn soft"
+          aria-describedby="records-copy-link-help"
+          @click="emit('share')"
+        >
+          <AppIcon name="copy" />{{ i18n.t("records.copy_view_link", "Copy view link") }}
         </button>
+        <span id="records-copy-link-help" class="sr-only">{{ copyLinkHelp }}</span>
       </div>
     </template>
     <template #meta>
