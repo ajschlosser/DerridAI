@@ -204,8 +204,8 @@ def test_pass_preserves_edits_made_while_it_runs(tmp_path: Path):
 def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_converged(tmp_path: Path):
     """Pass 1 decides confident conflicts; pass 2 sees nothing new and ends the chain."""
     rows = [
-        {"stance": "neutral", "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.5}}},
-        {"stance": "neutral", "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.8}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.5}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.8}}},
         {"stance": "neutral", "metadata_field_status": {"stance": {"status": "human_confirmed"}}},
     ]
     manager, repo, build_id = make_manager(tmp_path, rows)
@@ -219,6 +219,7 @@ def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_conver
     op = repo.get_build(build_id)["metadata_operation"]
     assert op["passes_completed"] == 2 and op["converged"] is True
     assert op["state"] == "completed", op.get("error")
+    assert op["records_reopened"] == 2
 
 
 def test_review_action_during_a_pass_does_not_end_the_running_state(tmp_path: Path):

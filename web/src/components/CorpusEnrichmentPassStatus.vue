@@ -116,6 +116,20 @@ const heading = computed(() => {
             "You can keep reviewing while this runs. New suggestions appear in the queue as they arrive.",
           )
         }}</small>
+        <small v-if="operation.current_record_id">{{
+          i18n.tf(
+            "pdf_corpus.enrichment_current_task",
+            "Working on Record {record} · {task}",
+            { record: operation.current_record_id, task: operation.current_task || i18n.t("pdf_corpus.metadata_enrichment", "metadata") },
+          )
+        }}</small>
+        <small v-if="(operation.active_tasks || []).length > 1">{{
+          i18n.tf(
+            "pdf_corpus.enrichment_active_tasks",
+            "{count} metadata tasks currently active",
+            { count: operation.active_tasks?.length || 0 },
+          )
+        }}</small>
       </template>
       <span v-else-if="isEnrichmentOp && state === 'failed'">{{ operation.error }}</span>
       <template v-else-if="isEnrichmentOp">

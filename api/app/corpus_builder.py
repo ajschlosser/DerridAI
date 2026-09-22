@@ -7580,7 +7580,7 @@ CURRENT REVIEWED RECORD TEXT:
             "provider": request.get("provider") or build.get("provider"), "model": request.get("model") or build.get("model"),
             "families": families, "scope": scope,
             "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
-            "record_ids": record_ids,
+            "record_ids": record_ids, "active_tasks": [], "current_record_id": None, "current_task": None,
         }
         for key in ("recheck_rate", "iaa_rate"):
             if request.get(key) is not None:
@@ -7781,6 +7781,15 @@ CURRENT REVIEWED RECORD TEXT:
             live = self._latest_runtime_request(build_id, request)
             return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
+        def operation_stage_callback(record: dict[str, Any], task_name: str, state: str, _error: str | None) -> None:
+            self._update_enrichment_operation_task(
+                build_id,
+                run_id,
+                str(record.get("record_id") or ""),
+                task_name,
+                state,
+            )
+
         def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
             status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
@@ -7803,6 +7812,7 @@ CURRENT REVIEWED RECORD TEXT:
                 build_id=build_id,
                 previous_text=neighbors["previous_text"],
                 next_text=neighbors["next_text"],
+                stage_callback=operation_stage_callback,
             ), request_used
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
@@ -7846,6 +7856,33 @@ CURRENT REVIEWED RECORD TEXT:
                 on_progress(dict(totals), len(indices))
         return dict(totals)
 
+    def _update_enrichment_operation_task(
+        self, build_id: str, operation_id: str, record_id: str, task_name: str, state: str,
+    ) -> None:
+        """Expose the active rerun family without changing the aggregate counters."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            operation = dict(build.get("metadata_operation") or {})
+            if operation.get("operation_id") != operation_id:
+                return
+            active = [
+                item for item in operation.get("active_tasks") or []
+                if isinstance(item, dict)
+                and not (str(item.get("record_id") or "") == record_id and str(item.get("task") or "") == task_name)
+            ]
+            if state == "running":
+                active.append({
+                    "record_id": record_id,
+                    "task": task_name,
+                    "state": state,
+                    "started_at": iso_now(),
+                })
+            operation["active_tasks"] = active[:32]
+            current = active[0] if active else {}
+            operation["current_record_id"] = current.get("record_id")
+            operation["current_task"] = current.get("task")
+            self._update(build_id, metadata_operation=operation)
+
     def _metadata_enrichment_rerun_worker(self, build_id: str, request: dict[str, Any], operation_id: str, scope: str, families: list[str], passes: int) -> None:
         op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
         try:
@@ -7861,6 +7898,10 @@ CURRENT REVIEWED RECORD TEXT:
 
                 def on_progress(totals: dict[str, int], pass_total: int, pass_number: int = pass_number, before: dict[str, int] = before) -> None:
                     op.update({key: before[key] + totals.get(key, 0) for key in counter_keys})
+                    live_operation = self.repo.get_build(build_id).get("metadata_operation")
+                    if isinstance(live_operation, dict):
+                        for key in ("active_tasks", "current_record_id", "current_task"):
+                            op[key] = live_operation.get(key)
                     op.update({"state": "running", "current_pass": pass_number, "records_total": max(int(op.get("records_total") or 0), pass_total)})
                     fraction = ((pass_number - 1) + totals.get("records_processed", 0) / max(1, pass_total)) / passes
                     self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))
