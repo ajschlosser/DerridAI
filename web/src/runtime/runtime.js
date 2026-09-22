@@ -55,7 +55,6 @@ import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
-import { createResponseCacheRenderer } from "../domain/responseCacheRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
@@ -666,19 +665,6 @@ const {renderPdf,renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfP
   tr:(...args)=>tr(...args),
   unlinkPdfLink:(...args)=>unlinkPdfLink(...args),
   workspaceEvidenceSelectionKey:(...args)=>workspaceEvidenceSelectionKey(...args),
-});
-const {renderResponseCache}=createResponseCacheRenderer({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  api:(...args)=>api(...args),
-  formatTimestamp:(...args)=>formatTimestamp(...args),
-  navigateTo:(...args)=>navigateTo(...args),
-  openMessageModal:(...args)=>openMessageModal(...args),
-  persistPrefs:(...args)=>persistPrefs(...args),
-  refreshStores:(...args)=>refreshStores(...args),
-  responseCacheStore:(...args)=>responseCacheStore(...args),
-  showViewLoading:(...args)=>showViewLoading(...args),
-  toast:(...args)=>toast(...args),
 });
 const {researchConfigForUi,getResearchWorkspaceSnapshot,updateResearchConfig,removeResearchEvidence,clearResearchEvidence,discoverResearchModels,refreshResearchJobs,getResearchJob,cancelResearchJob,deleteResearchJob,generationFromProfile,startResearchRun,gradeResearchJob,prepareResearchRerun,getResponseFaqPage,gradeResponseFaqRecord,rerunResponseFaqRecord,rememberRagPrompt,rememberRagRun,prepareRagRerun}=createResearchWorkspace({
   state,
@@ -1431,7 +1417,6 @@ function renderView(){
   let result;
   if(state.view==="home") result=renderDashboard(main);
   else if(state.view==="pdf") result=renderPdf(main);
-  else if(state.view==="responsecache") result=renderResponseCache(main);
   else result=null;
   Promise.resolve(result).finally(()=>requestAnimationFrame(()=>{enhanceCollapsibles(main);decorateDisabledControls(main);translateLegacyDom(main)}));
   return result;
