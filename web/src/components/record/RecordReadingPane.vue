@@ -146,12 +146,13 @@ function captureSelection() {
     top: `${Math.max(12, rect.top - 52)}px`,
   };
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 async function copySelection() {
   if (!selectedQuote.value) return;
   try {
     await navigator.clipboard.writeText(selectedQuote.value);
-  } catch {}
+  } catch {
+    // Clipboard access can be unavailable in embedded or restricted browser contexts.
+  }
   selectedQuote.value = "";
 }
 function annotate() {

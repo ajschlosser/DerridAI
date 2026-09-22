@@ -213,6 +213,22 @@ async function computedStyles(
   }, STYLE_PROPERTIES);
 }
 
+async function freezeComputedStyleState(page: Page) {
+  await page.addStyleTag({
+    content: `
+      *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+      :is(:hover, :focus, :focus-visible, :active) {
+        transition: none !important;
+      }
+    `,
+  });
+  await page.mouse.move(2, 2);
+  await page.locator("body").focus();
+}
+
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
 async function markup(page: Page, target: "main" | "dialog" | "app" | "dock"): Promise<string> {
   let last = await rawMarkup(page, target);
@@ -1386,6 +1402,7 @@ test.describe("legacy runtime DOM baseline", () => {
       const target = scenario.target ?? "main";
       // Styles are read once the markup has stopped changing, so late-arriving data cannot make them vary.
       const stableMarkup = await markup(page, target);
+      if (scenario.styles) await freezeComputedStyleState(page);
       const captured = scenario.styles ? await computedStyles(page, target) : stableMarkup;
       expect(captured).toMatchSnapshot(`${scenario.name}.${scenario.styles ? "txt" : "html"}`);
     });
