@@ -70,6 +70,7 @@ import { createRecordEditing } from "../domain/recordEditing";
 import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
+import { createAppLifecycle } from "../domain/appLifecycle";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -433,6 +434,36 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {warmupProviderProfile,warmupConfiguredLlm,importFiles,closeFile,checkHealth}=createAppLifecycle({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  applyCompressedTableUrlState:(...args)=>applyCompressedTableUrlState(...args),
+  clearFileDerivedState:(...args)=>clearFileDerivedState(...args),
+  decompressUrlState:(...args)=>decompressUrlState(...args),
+  defaultProviderProfile:(...args)=>defaultProviderProfile(...args),
+  ensureProviderProfiles:(...args)=>ensureProviderProfiles(...args),
+  idbDelete:(...args)=>idbDelete(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  parseJsonl:(...args)=>parseJsonl(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  providerDisplayName:(...args)=>providerDisplayName(...args),
+  providerProfile:(...args)=>providerProfile(...args),
+  providerRequestConfig:(...args)=>providerRequestConfig(...args),
+  refreshProviderStatuses:(...args)=>refreshProviderStatuses(...args),
+  refreshStoreWorks:(...args)=>refreshStoreWorks(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  renderDashboard:(...args)=>renderDashboard(...args),
+  renderView:(...args)=>renderView(...args),
+  shell:(...args)=>shell(...args),
+  stableJsonlFileIdentity:(...args)=>stableJsonlFileIdentity(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  toast:(...args)=>toast(...args),
+  updateSystemCard:(...args)=>updateSystemCard(...args),
 });
 const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdfMetadata,openPdfExplorerWorkspace,openLoadedPdfPage,linkedPdfRows,linkPdfPage,unlinkPdfLink,unlinkAllPdfLinks}=createPdfLinking({
   state,
@@ -1282,51 +1313,7 @@ function setActiveStore(name){
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
 
-async function warmupProviderProfile(profileId=null){
-  const profile=providerProfile(profileId||state.appConfig.default_provider_profile);
-  if(!profile)return;
-  const current=state.providerWarmups?.[profile.id]||{};
-  if(current.status==="running")return;
-  const cfg=providerRequestConfig(profile,{textReview:false});
-  const started=performance.now();
-  const startedAt=new Date().toISOString();
-  const running={
-    status:"running",message:`Warming ${cfg.model}…`,profile_id:profile.id,
-    provider:profile.type,model:cfg.model,base_url:cfg.base_url,
-    started_at:startedAt,completed_at:null,elapsed_seconds:null,error:null,
-  };
-  state.providerWarmups[profile.id]=running;
-  if(profile.id===state.appConfig.default_provider_profile)state.warmup=running;
-  if(state.view==="home")renderDashboard(document.querySelector("#main"));
-  try{
-    const result=await api("/api/llm/warmup",{method:"POST",body:JSON.stringify({
-      provider:profile.type,model:cfg.model,base_url:cfg.base_url,api_key:cfg.api_key,
-      // Load with the context real calls use, so the model is not loaded twice.
-      num_ctx:Number(cfg.ollama?.num_ctx)>0?Number(cfg.ollama.num_ctx):undefined,
-    })});
-    const ready={
-      status:"ready",message:`${providerDisplayName(profile)} · ${result.model||cfg.model} warmed`,
-      profile_id:profile.id,provider:profile.type,model:result.model||cfg.model,
-      base_url:result.base_url||cfg.base_url,started_at:startedAt,completed_at:new Date().toISOString(),
-      elapsed_seconds:(performance.now()-started)/1000,error:null,
-    };
-    state.providerWarmups[profile.id]=ready;
-    if(profile.id===state.appConfig.default_provider_profile)state.warmup=ready;
-  }catch(error){
-    const failed={
-      status:"failed",message:error.message,profile_id:profile.id,provider:profile.type,model:cfg.model,
-      base_url:cfg.base_url,started_at:startedAt,completed_at:new Date().toISOString(),
-      elapsed_seconds:(performance.now()-started)/1000,error:error.message,
-    };
-    state.providerWarmups[profile.id]=failed;
-    if(profile.id===state.appConfig.default_provider_profile)state.warmup=failed;
-  }
-  if(state.view==="home")renderDashboard(document.querySelector("#main"));
-}
 
-async function warmupConfiguredLlm(){
-  return warmupProviderProfile(state.appConfig.default_provider_profile);
-}
 
 
 
@@ -1431,43 +1418,6 @@ function renderView(){
 }
 
 
-async function importFiles(fileList){
-  if(isResearcher())return toast("Researcher accounts cannot load or edit corpus files.");
-  const shareParams=new URLSearchParams(location.search);
-  const requestedFileId=shareParams.get("file");
-  const requestedUrlState=shareParams.get("ts");
-  let first=null, total=0, errors=0;
-  for(const file of [...fileList]){
-    const text=await file.text();
-    const parsed=parseJsonl(text);
-    if(!parsed.records.length){errors+=parsed.errors.length||1;continue}
-    const identity=await stableJsonlFileIdentity(text);
-    const existing=state.files.find(item=>item.id===identity.id);
-    if(existing){
-      first ||= existing.id;
-      total+=existing.records.length;
-      errors+=existing.errors?.length||0;
-      continue;
-    }
-    const item={...identity,name:file.name,records:parsed.records,errors:parsed.errors,dirty:new Set(),imported_at:new Date().toISOString()};
-    state.files.push(item);persistFileNow(item);first ||= item.id;total+=item.records.length;errors+=item.errors.length;
-  }
-  if(requestedFileId&&state.files.some(item=>item.id===requestedFileId)){
-    state.activeFileId=requestedFileId;
-    if(requestedUrlState)applyCompressedTableUrlState(decompressUrlState(requestedUrlState),state.view);
-  }else if(first)state.activeFileId=first;
-  persistPrefs();shell();renderView();syncUrl({replace:true});toast(`Loaded ${total} records${errors?` · ${errors} parse issues`:""}`);
-}
-async function closeFile(id){
-  const f=state.files.find(x=>x.id===id);if(!f)return;
-  if(f.dirty.size && !await openMessageModal({title:"Close modified JSONL?",message:`${f.name} has modified records. Close anyway?`,tone:"danger",confirmLabel:"Close file",cancelLabel:"Keep open"}))return;
-  const i=state.files.indexOf(f);state.files.splice(i,1);delete state.searches[id];delete state.listFilters[id];delete state.pages[id];delete state.sorts[id];
-  clearFileDerivedState(id);
-  invalidateCorpusCache();
-  idbDelete("files",id).catch(error=>console.error("Could not remove saved file",error));
-  if(state.activeFileId===id)state.activeFileId=state.files[Math.min(i,state.files.length-1)]?.id||null;
-  persistPrefs();shell();renderView();
-}
 
 
 
@@ -1973,33 +1923,6 @@ async function syncResearcherProviderProfiles(){
   state.researcherProviderProfiles=result.profiles||[];
 }
 
-async function checkHealth(){
-  try{
-    state.health=await api("/api/health");
-    ensureProviderProfiles();
-    await refreshProviderStatuses();
-  }catch(error){
-    state.health={ok:false,error:error.message};
-    state.providerStatuses={};
-    state.llmStatus={
-      provider:defaultProviderProfile()?.type||"ollama",
-      available:false,
-      models:[],
-      error:error.message,
-    };
-  }
-  updateSystemCard();
-  if(state.health?.chroma?.available){
-    try{
-      await refreshStores();
-      if(isResearcher()&&state.activeStore)await refreshStoreWorks(true);
-      persistPrefs();
-      const active=document.activeElement;
-      const userIsEditing=active&&active!==document.body&&["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
-      if(!userIsEditing){shell();renderView()}
-    }catch(error){console.warn("Initial Chroma collection refresh failed",error)}
-  }
-}
 
 
 
