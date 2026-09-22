@@ -92,6 +92,8 @@ from .corpus_metadata import (
 )
 from .corpus_pipeline import BuildScope
 from .corpus_publication import serialize_public_record, validate_publication_record
+from .corpus_review_mutations import requeue_record_metadata
+from .corpus_enrichment_feedback import enrichment_informational_event
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     HUMAN_OWNED_STATUSES,
@@ -1556,30 +1558,6 @@ class PdfCorpusBuildManager:
         merged = dict(base)
         merged.update(chosen)
         return merged
-
-    @staticmethod
-    def _requeue_record_metadata(record: dict[str, Any], reason: str) -> bool:
-        stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
-        has_prior_adjudication = bool(
-            record.get("metadata_enrichment_finished")
-            or str(record.get("metadata_enrichment_state") or "") in {"running", "complete", "failed"}
-            or any(str(value) in {"running", "complete", "failed", "needs_review"} for value in stage_status.values())
-        )
-        record["metadata_needs_attention"] = True
-        record["metadata_attention_reasons"] = list(dict.fromkeys(
-            [*(record.get("metadata_attention_reasons") or []), reason]
-        ))[-50:]
-        if not has_prior_adjudication:
-            return False
-        record["metadata_enrichment_state"] = "stale"
-        record["metadata_complete"] = False
-        record["metadata_enrichment_finished"] = False
-        record["metadata_stage_status"] = {
-            family: "queued" for family in ("discourse", "quotation", "indexing")
-        }
-        record["metadata_execution_ledger"] = {}
-        record["metadata_requeue_requested"] = True
-        return True
 
     def switch_provider_profile(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Change the provider used by metadata tasks scheduled after this point.
@@ -7282,7 +7260,7 @@ CURRENT REVIEWED RECORD TEXT:
             row["rejected"] = False
             row["needs_review"] = True
             row["review_reason"] = "Record boundary adjusted during human review; verify neighboring text and affected metadata."
-            self._requeue_record_metadata(
+            requeue_record_metadata(
                 row,
                 "Record boundary changed; metadata whose interpretation depends on moved text may need review.",
             )
@@ -7369,7 +7347,7 @@ CURRENT REVIEWED RECORD TEXT:
         merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
         # Keep the first record's immutable identity. Unrelated downstream IDs never change.
         merged["record_id"] = first.get("record_id")
-        self._requeue_record_metadata(
+        requeue_record_metadata(
             merged,
             "Record boundaries were merged during human review; metadata enrichment must rerun against the merged text.",
         )
@@ -7648,28 +7626,6 @@ CURRENT REVIEWED RECORD TEXT:
         known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
         model_name = str(request.get("model") or "")
 
-        def add_informational(
-            kind: str, field: str, *, authoritative: Any = None, proposed: Any = None,
-            confidence: Any = None, reason: str | None = None,
-        ) -> None:
-            event: dict[str, Any] = {
-                "kind": kind,
-                "field": field,
-                "run_id": run_id,
-                "pass": pass_number,
-                "model": model_name or None,
-                "at": iso_now(),
-            }
-            if authoritative is not None:
-                event["authoritative_value"] = authoritative
-            if proposed is not None:
-                event["proposed_value"] = proposed
-            if isinstance(confidence, (int, float)):
-                event["confidence"] = confidence
-            if reason:
-                event["reason"] = reason
-            informational.append(event)
-
         for family in families:
             for field in groups[family]:
                 new, old = candidate.get(field), live.get(field)
@@ -7678,9 +7634,12 @@ CURRENT REVIEWED RECORD TEXT:
                 if new in (None, "", []):
                     continue
                 if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "agreement" if same_value(old, new) else "protected_suggestion",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
@@ -7689,7 +7648,7 @@ CURRENT REVIEWED RECORD TEXT:
                             if same_value(old, new)
                             else "The model proposed a different value, but the human-owned value remains authoritative."
                         ),
-                    )
+                    ))
                     continue
                 if old in (None, "", []):
                     live[field] = new
@@ -7701,26 +7660,32 @@ CURRENT REVIEWED RECORD TEXT:
                 if field in CONFIDENCE_FIELDS:
                     continue
                 if same_value(old, new):
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "agreement",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
                         reason="The model found no new supported value.",
-                    )
+                    ))
                     if field in cand_evidence:
                         live_evidence[field] = cand_evidence[field]
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "duplicate",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
                         reason="The model repeated an existing unresolved candidate.",
-                    )
+                    ))
                     continue
                 # PR #83 permits a valid LLM proposal to occupy the record while
                 # remaining pending human review. PR #81's generic resolver treats

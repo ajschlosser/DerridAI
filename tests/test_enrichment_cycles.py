@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 from app import corpus_builder as cb
 from app import enrichment_cycles as ec
+from app.corpus_review_mutations import requeue_record_metadata
 from app.config import APP_VERSION
 
 
@@ -236,9 +237,9 @@ def test_boundary_mutation_only_requeues_records_that_have_started_enrichment():
         "metadata_enrichment_finished": True,
         "metadata_stage_status": {"discourse": "complete", "quotation": "skipped", "indexing": "skipped"},
     }
-    assert cb.PdfCorpusBuildManager._requeue_record_metadata(queued, "changed") is False
+    assert requeue_record_metadata(queued, "changed") is False
     assert "metadata_requeue_requested" not in queued
-    assert cb.PdfCorpusBuildManager._requeue_record_metadata(completed, "changed") is True
+    assert requeue_record_metadata(completed, "changed") is True
     assert completed["metadata_requeue_requested"] is True
 
 
