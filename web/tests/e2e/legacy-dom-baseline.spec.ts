@@ -236,9 +236,11 @@ async function freezeComputedStyleState(page: Page) {
       }
     `,
   });
-  await page.mouse.move(2, 2);
+  const viewport = page.viewportSize();
+  await page.mouse.move((viewport?.width ?? 1280) - 2, (viewport?.height ?? 720) - 2);
   await page.evaluate(() => {
     (document.activeElement as HTMLElement | null)?.blur();
+    document.body.setAttribute("tabindex", "-1");
     document.body.focus();
   });
   await page.waitForTimeout(50);
