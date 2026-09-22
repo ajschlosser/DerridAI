@@ -6,7 +6,7 @@ another Claude) can continue if the current one stops.
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
-Vue-facing API; 10,472 lines at the start, **3,421 now**) toward modern Vue patterns.
+Vue-facing API; 10,472 lines at the start, **2,376 now**) toward modern Vue patterns.
 
 - **No functionality changes or loss. No layout, UI or UX changes.** Rendered markup and computed styles stay identical.
 - A behavior change is allowed only to fix an obvious bug, and only after checking: probe the current behavior, add a test that
@@ -39,20 +39,52 @@ imports (do not change export names). Everything else lives in `web/src/domain/*
   `renderView()` dispatches only `home` (dashboard), `pdf` (PDF Explorer) and `responsecache`. `RuntimeSurface.vue` mounts `#main`
   for exactly those three (see `views/DashboardView.vue`, `PdfWorkspaceView.vue`, `ResearchView.vue`).
 
+## Session 5 status (branch `claude/runtime-refactor-19`, stopped here — see below)
+
+Since this file was last written (PR #86 merged), all of section A's remaining clusters have been extracted, each in its
+own commit, each verified with unit tests, build, the 131-scenario baseline and the full 270-test e2e suite before
+committing: modalDialogs, navigation, workspacePersistence, evidenceSelection, recordEditing, dbPresenceUpsert,
+operationsPanelBridge, pdfLinking, appLifecycle, compareLibrary. `runtime.js` is now **2,376 lines** (was 3,421 at the
+start of this session; 10,472 at the very start).
+
+**Section A (mechanical cluster moves) is essentially done.** What's left in `runtime.js` is mostly: `translateLegacyDom`
+and the collapsible MutationObserver (deliberately kept until the last legacy view is gone, see section B), the small
+shared runtime helpers (`tr`, `trf`, `esc`-adjacent wiring, `shell()`, `setShellRefreshHook`), `getShellSnapshot`,
+`translatedNavLabel`/`translatedSectionLabel`, `currentContext`, and glue that is not worth its own factory. Skim
+`runtime.js` top to bottom before assuming there's another clean cluster; most of what's left is either tiny or
+DOM/render-coupled and belongs with section B instead.
+
+**New gotcha found this session, added below too:** a cluster move can silently introduce a **TDZ (temporal dead zone)
+crash** even when `extract_factory.sh` reports no errors and `tsc`/eslint are clean, if some *other*, earlier factory
+call in `runtime.js` references one of the moved names directly (not wrapped in a lambda) — e.g.
+`const {...} = createX({state, api, persistPrefs, ...})` instead of `persistPrefs:(...args)=>persistPrefs(...args)`.
+This compiles fine (both are function-typed) but throws `Cannot access 'NAME' before initialization` at runtime,
+because the new call site is much later in the file than the old one was. **`npx vitest run` will fail dozens of
+unrelated test files at import** — that's the signal. Grep for it before trusting a clean typecheck:
+
+```bash
+N=$(grep -n "=create<Factory>(" src/runtime/runtime.js | cut -d: -f1)
+for n in fn1 fn2 ...; do
+  head -$N src/runtime/runtime.js | grep -nE "[,{ ]$n[,}:]" | grep -v ":(\.\.\.args)=>$n(\.\.\.args)"
+done
+```//run this after every extraction, before `npx vitest run`. It caught two live bugs this session (one in
+`providerProfiles`'s call, one in `searchFacets`'s call, both referencing `recordDbStatus` unwrapped).
+
+**Was about to start, not done:** continuing the mechanical extraction (little left, see above) and then moving into
+section B (Vue replacement of the dashboard/PDF Explorer/response cache). **Start there next.**
+
 ## What is left, in order
 
-### A. Move the remaining runtime.js clusters (mechanical, low risk each)
+### A. Move the remaining runtime.js clusters (mechanical, low risk each) — mostly DONE, see Session 5 status above
 
-Still in `runtime.js`: workspace persistence (`persistPrefs`, `flushWorkspacePrefs`, `restoreWorkspace`, `workspacePrefs`,
-`persistFileNow`, IndexedDB helpers); evidence and review selection (`reviewKey`, `selectedEvidenceEntries`, `setEvidence`,
-`toggleWorkspaceEvidence`, `toggleDbEvidence`, ...); record editing and audit (`applyRecordChanges`, `clearRecordUpdates`,
-`historyVersionChanges`, `restoreRecordHistoryVersion`); DB presence and upsert (`recordDbStatus`, `refreshPresenceForRows`,
-`buildUpsertItems`, `upsertRows`, the pending upsert queue); navigation and URL sync (`navSnapshot`, `applyNavSnapshot`,
-`urlFromState`, `syncUrl`, `applyUrlState`, `navigateTo`, `goBack`, `goForward`, `currentTableUrlState`); the operations panel host
-and RAG progress panel (`renderOperationsPanel`, `ragProgressPanelHtml`, `renderCorpusBuildsHomeCard`,
-`wireCorpusBuildsHomeCard`); modal helpers (`openMessageModal`, `showAppModal`, `copyJsonToClipboard`); the compare library; PDF
-linking (`linkPdfPage`, `unlinkPdfLink`, `loadPdfMetadata`, ...); `checkHealth`, `warmupProviderProfile`, `importFiles`,
-`closeFile`, export helpers. `translateLegacyDom` and the collapsible MutationObserver stay until the last legacy view is gone.
+All the clusters originally listed here (workspace persistence, evidence/review selection, record editing, DB
+presence/upsert, navigation/URL, the operations panel + RAG progress panel, modal helpers, the compare library, PDF
+linking, app lifecycle) have been extracted into their own `domain/*.ts` factories (see the module list under "State of
+the code" — add: modalDialogs, navigation, workspacePersistence, evidenceSelection, recordEditing, dbPresenceUpsert,
+operationsPanelBridge, pdfLinking, appLifecycle, compareLibrary). What's left in `runtime.js` is small glue and the
+render/DOM-coupled code that belongs with section B (`translateLegacyDom`, the collapsible MutationObserver, `shell()`,
+`getShellSnapshot`, nav label translation). Skim the file before assuming another clean cluster exists; if one does,
+follow the same procedure below.
 
 Procedure per cluster (about 10 minutes each), from `web/`:
 
@@ -149,6 +181,9 @@ sample JSONL), `records`, `role`, `scheme`, `viewport`, `fixtures` (API mocks; `
   `--workers=3`.
 - Factory call sites must come after the `const`s they receive by value; hoisted `function`s are safe, later `const`s need a lambda.
   TDZ errors break dozens of unit test files at import.
+  **This also happens if an *earlier* factory call references the moved name directly instead of as a lambda** — grep for it
+  after every extraction (see Session 5 status above for the exact command); a clean `tsc`/eslint does not catch it, only
+  `npx vitest run` failing many unrelated files does.
 - `mk_factory.py` never indents bodies (template literals must stay byte-identical).
 - After Prettier expands a dense `try{}catch{}`, an `eslint-disable no-empty` comment no longer lines up: use a commented empty catch.
   Prettier also breaks Python `str.replace` patterns aimed at formatted code: use regex or line-based edits.
