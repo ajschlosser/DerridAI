@@ -61,6 +61,17 @@ import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
 import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
+import { createModalDialogs } from "../domain/modalDialogs";
+import { createNavigation } from "../domain/navigation";
+import { pathViewMap, viewPathMap } from "../domain/navigation";
+import { createWorkspacePersistence } from "../domain/workspacePersistence";
+import { createEvidenceSelection } from "../domain/evidenceSelection";
+import { createRecordEditing } from "../domain/recordEditing";
+import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
+import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
+import { createPdfLinking } from "../domain/pdfLinking";
+import { createAppLifecycle } from "../domain/appLifecycle";
+import { createCompareLibrary } from "../domain/compareLibrary";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -102,7 +113,8 @@ function translateLegacyDom(root=document.querySelector("#main")){
 const {workIndex,dateKeys,topNeedsReviewWorkSeries,needsReviewTimeline,topFieldValues,publicationYearSeries,workRecordShares,averageRecordLengthForTopWorks,recentAuditChanges}=createCorpusAnalytics({allRows,memoCorpus});
 const {label,display,normalizeRagGrade,parseBulkFieldValue,parseWorkMetadataValue}=createFieldFormatting({tr});
 const {searchFacetRawValues,searchFacetDisplay,searchFacetMatches,searchRowMatchesFacets,searchRecordMatchesFacets,searchFacetCountsFromRows,searchFacetCountsFromRecords,buildSearchFacets,searchSuggestions,searchFilterDescriptor,dbSearchFilterDescriptors,searchColumnOptions,searchSimilarity,searchMatchReasons,rowMatchesListFilters}=createSearchFacets({
-  tr,label,display,recordDbStatus,pages,recordFields,uid:()=>uid(),dbSearchWhere,filterOpsForField,
+  tr,label,display,pages,recordFields,uid:()=>uid(),dbSearchWhere,filterOpsForField,
+  recordDbStatus:(...args)=>recordDbStatus(...args),
   getSearchFacetFilters:()=>state.searchFacetFilters,
 });
 const {
@@ -131,7 +143,8 @@ const {
     recordOptionLabel,
     ragGradeEvidencePayload,
   }=createRecordPresenters({
-  tr,trf,pages,recordDbStatus,label,display,
+  tr,trf,pages,label,display,
+  recordDbStatus:(...args)=>recordDbStatus(...args),
   allAnnotations:()=>allAnnotations(),
   compareSearchIndex:()=>compareSearchIndex(),
 });
@@ -156,7 +169,8 @@ const {
     getProviderStatusesForUi,
     getProviderWarmupsForUi,
   }=createProviderProfiles({
-  state,api,persistPrefs,isResearcher,
+  state,api,isResearcher,
+  persistPrefs:(...args)=>persistPrefs(...args),
   uid:()=>uid(),
   warmupProviderProfile:(...args)=>warmupProviderProfile(...args),
 });
@@ -422,6 +436,130 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
 });
+const {compareSearchIndex,lookupRecord,getCompareLibrary,getCompareRecord,ensureCompareLibrary}=createCompareLibrary({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  loadStorePage:(...args)=>loadStorePage(...args),
+  memoCorpus:(...args)=>memoCorpus(...args),
+  recordOptionLabel:(...args)=>recordOptionLabel(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  researcherDbRecords:(...args)=>researcherDbRecords(...args),
+});
+const {warmupProviderProfile,warmupConfiguredLlm,importFiles,closeFile,checkHealth}=createAppLifecycle({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  applyCompressedTableUrlState:(...args)=>applyCompressedTableUrlState(...args),
+  clearFileDerivedState:(...args)=>clearFileDerivedState(...args),
+  decompressUrlState:(...args)=>decompressUrlState(...args),
+  defaultProviderProfile:(...args)=>defaultProviderProfile(...args),
+  ensureProviderProfiles:(...args)=>ensureProviderProfiles(...args),
+  idbDelete:(...args)=>idbDelete(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  parseJsonl:(...args)=>parseJsonl(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  providerDisplayName:(...args)=>providerDisplayName(...args),
+  providerProfile:(...args)=>providerProfile(...args),
+  providerRequestConfig:(...args)=>providerRequestConfig(...args),
+  refreshProviderStatuses:(...args)=>refreshProviderStatuses(...args),
+  refreshStoreWorks:(...args)=>refreshStoreWorks(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  renderDashboard:(...args)=>renderDashboard(...args),
+  renderView:(...args)=>renderView(...args),
+  shell:(...args)=>shell(...args),
+  stableJsonlFileIdentity:(...args)=>stableJsonlFileIdentity(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  toast:(...args)=>toast(...args),
+  updateSystemCard:(...args)=>updateSystemCard(...args),
+});
+const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdfMetadata,openPdfExplorerWorkspace,openLoadedPdfPage,linkedPdfRows,linkPdfPage,unlinkPdfLink,unlinkAllPdfLinks}=createPdfLinking({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  normalizePdfLinkChanges:(...args)=>normalizePdfLinkChanges(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  pdfLinks:(...args)=>pdfLinks(...args),
+  renderPdf:(...args)=>renderPdf(...args),
+  renderView:(...args)=>renderView(...args),
+  shell:(...args)=>shell(...args),
+  toast:(...args)=>toast(...args),
+});
+const {notifyOperationsChanged,operationsBridge,renderOperationsPanel,mountOperationsPanelHost,refreshOperationsPanelOnly,wireCorpusBuildsHomeCard,refreshCorpusBuildsHomeCardOnly,gradeRagResponse,removeRagJob,clearFinishedRagJobs,ragProgressPanelHtml,wireRagProgressPanel,refreshRagProgressPanel,renderCorpusBuildsHomeCard}=createOperationsPanelBridge({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  cancelBackgroundJob:(...args)=>cancelBackgroundJob(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  humanDuration:(...args)=>humanDuration(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  jobElapsedSeconds:(...args)=>jobElapsedSeconds(...args),
+  openJobDetails:(...args)=>openJobDetails(...args),
+  openJobResults:(...args)=>openJobResults(...args),
+  openLlmTaskLauncher:(...args)=>openLlmTaskLauncher(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  operationViewModel:(...args)=>operationViewModel(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  pruneClientJobState:(...args)=>pruneClientJobState(...args),
+  ragGradeEvidencePayload:(...args)=>ragGradeEvidencePayload(...args),
+  ragGradeHtml:(...args)=>ragGradeHtml(...args),
+  refreshJobs:(...args)=>refreshJobs(...args),
+  showAppModal:(...args)=>showAppModal(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+});
+const {applyRecordChanges,clearRecordUpdates,clearAllUpdates,historyVersionChanges,restoreRecordHistoryVersion}=createRecordEditing({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  cloneAuditValue:(...args)=>cloneAuditValue(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  label:(...args)=>label(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistFile:(...args)=>persistFile(...args),
+  renderView:(...args)=>renderView(...args),
+  sameValue:(...args)=>sameValue(...args),
+  shell:(...args)=>shell(...args),
+  toast:(...args)=>toast(...args),
+  uid:(...args)=>uid(...args),
+});
+const {reviewKey,reviewItemFromKey,selectedReviewItems,copyCitation,workspaceEvidenceKey,dbEvidenceKey,selectedEvidenceEntries,evidenceIsSelected,setEvidence,workspaceDbEvidenceTarget,workspaceEvidenceSelectionKey,toggleWorkspaceEvidence,toggleDbEvidence,clearSelectedEvidence,selectedEvidencePayload,setReviewSelected,clearReviewSelection}=createEvidenceSelection({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  fullCitation:(...args)=>fullCitation(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  inlineCitation:(...args)=>inlineCitation(...args),
+  localRecordKey:(...args)=>localRecordKey(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  ragEvidenceRecordPayload:(...args)=>ragEvidenceRecordPayload(...args),
+  recordDbStatus:(...args)=>recordDbStatus(...args),
+  shellRefreshHook:(...args)=>shellRefreshHook(...args),
+  storeReceipt:(...args)=>storeReceipt(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+});
+const {getUrlSyncHook,viewLabel,navSnapshot,sameSnapshot,applyNavSnapshot,setUrlSyncHook,currentTableUrlState,applyCompressedTableUrlState,urlFromState,syncUrl,applyUrlState,navigateTo,goBack,goForward}=createNavigation({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  activeFile:(...args)=>activeFile(...args),
+  canAccessPage:(...args)=>canAccessPage(...args),
+  dbSearchWhere:(...args)=>dbSearchWhere(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  renderView:(...args)=>renderView(...args),
+  selectedIndex:(...args)=>selectedIndex(...args),
+  shell:(...args)=>shell(...args),
+});
+const {openMessageModal,copyJsonToClipboard}=createModalDialogs({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  showAppModal:(...args)=>showAppModal(...args),
+  toast:(...args)=>toast(...args),
+});
 const {toast,applyOperationStackPosition,setOperationDockMinimized,announceOperationDock,operationDockCardStats,wireOperationStackDrag,progressStack,updateOperationStackCount,showOperationProgress,updateOperationProgress,hideOperationProgress,ensureJobProgressCard}=createOperationDock({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -488,7 +626,7 @@ const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openL
   tr:(...args)=>tr(...args),
   uid:(...args)=>uid(...args),
   upsertRecordPayload:(...args)=>upsertRecordPayload(...args),
-  getUrlSyncHook:()=>urlSyncHook,
+  getUrlSyncHook:()=>getUrlSyncHook(),
   warmupProviderProfile:(...args)=>warmupProviderProfile(...args),
 });
 const {renderPdf,renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfPageSmart,extractPdfAllSmart}=createPdfExplorerRenderer({
@@ -678,6 +816,35 @@ const selectedRecord = () => {
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
 const corpusCache={rows:null,fields:null,memo:new Map(),version:0};
+const {recordDbStatus,workDbStatus,refreshPresenceForRows,updateDbStatusElements,ignoredFingerprint,pendingUpsertRows,pendingChangesForRow,removeFromUpsertQueue,buildUpsertItems,upsertRows,rowsFromReviewSelection}=createDbPresenceUpsert({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  api:(...args)=>api(...args),
+  candidateChromaIds:(...args)=>candidateChromaIds(...args),
+  corpusCache:(...args)=>corpusCache(...args),
+  corpusStoreExists:(...args)=>corpusStoreExists(...args),
+  dbUnavailableReason:(...args)=>dbUnavailableReason(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  hasCorpusDb:(...args)=>hasCorpusDb(...args),
+  localRecordKey:(...args)=>localRecordKey(...args),
+  notifyVectorStoresChanged:(...args)=>notifyVectorStoresChanged(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  recordFingerprint:(...args)=>recordFingerprint(...args),
+  refreshOperationsPanelOnly:(...args)=>refreshOperationsPanelOnly(...args),
+  reviewItemFromKey:(...args)=>reviewItemFromKey(...args),
+  selectedReviewItems:(...args)=>selectedReviewItems(...args),
+  startJobPolling:(...args)=>startJobPolling(...args),
+  storeReceipt:(...args)=>storeReceipt(...args),
+  syncJobProgressToasts:(...args)=>syncJobProgressToasts(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
+  upsertAuditDelta:(...args)=>upsertAuditDelta(...args),
+  upsertRecordPayload:(...args)=>upsertRecordPayload(...args),
+  workIndex:(...args)=>workIndex(...args),
+});
 const {openMixedWorkValuesDialog,openWorkMetadataEditor,openWorkMetadataLlmDialog,openWorkMetadataProposalResult,openRemoveWorkModal,openSeparateWorksModal}=createWorkDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -841,6 +1008,20 @@ function workspaceDbName(){
 }
 let prefsTimer=null;
 const fileTimers=new Map();
+const {persistFileNow,persistFile,workspacePrefs,persistPrefs,flushWorkspacePrefs,restoreWorkspace}=createWorkspacePersistence({
+  state,
+  fileTimers,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  applyUiTheme:(...args)=>applyUiTheme(...args),
+  ensureProviderProfiles:(...args)=>ensureProviderProfiles(...args),
+  idbGet:(...args)=>idbGet(...args),
+  idbGetAll:(...args)=>idbGetAll(...args),
+  idbPut:(...args)=>idbPut(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  restoreCurrentPdfAsset:(...args)=>restoreCurrentPdfAsset(...args),
+  serializableFile:(...args)=>serializableFile(...args),
+  toast:(...args)=>toast(...args),
+});
 const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openStoreRecordEditor,openRecordHistoryBrowser,openUpsertQueue}=createRecordDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -972,249 +1153,7 @@ async function restoreCurrentPdfAsset(){
 function serializableFile(file){
   return serializableRecordsFile(file);
 }
-async function persistFileNow(file){
-  invalidateCorpusCache();
-  try{
-    await idbPut("files",serializableFile(file));
-  }catch(error){
-    console.error("IndexedDB file persistence failed",error);
-    toast(`Local persistence failed: ${error.message}`);
-  }
-}
-function persistFile(file){
-  invalidateCorpusCache();
-  clearTimeout(fileTimers.get(file.id));
-  const timer=setTimeout(()=>{fileTimers.delete(file.id);persistFileNow(file)},250);
-  fileTimers.set(file.id,timer);
-}
-function workspacePrefs(){
-  return {
-    key:"workspace",
-    activeFileId:state.activeFileId,
-    view:state.view,
-    selected:state.selected,
-    searches:state.searches,
-    listFilters:state.listFilters,
-    pages:state.pages,
-    pageSize:state.pageSize,
-    sorts:state.sorts,
-    globalSearch:state.globalSearch,
-    globalFilters:state.globalFilters,
-    globalSort:state.globalSort,
-    globalPage:state.globalPage,
-    globalSearchMode:state.globalSearchMode,
-    dbSearchMethod:state.dbSearchMethod,
-    dbSearchWhere:state.dbSearchWhere,
-    dbSearchFetchK:state.dbSearchFetchK,
-    dbSearchLambda:state.dbSearchLambda,
-    globalAdvancedOpen:state.globalAdvancedOpen,
-    searchFacetFilters:state.searchFacetFilters,
-    worksSearch:state.worksSearch,
-    workOverview:state.workOverview,
-    researcherRecordId:state.researcherRecordId,
-    researcherCompareA:state.researcherCompareA,
-    researcherCompareB:state.researcherCompareB,
-    dashboardMetricIndex:state.dashboardMetricIndex,
-    lastViewedRecord:state.lastViewedRecord,
-    compareA:state.compareA,
-    compareB:state.compareB,
-    compareMode:state.compareMode,
-    comparePasteA:state.comparePasteA,
-    comparePasteB:state.comparePasteB,
-    compareSourceA:state.compareSourceA,
-    compareSourceB:state.compareSourceB,
-    compareFilter:state.compareFilter,
-    activeStore:state.activeStore,
-    storePage:state.storePage,
-    storePageSize:state.storePageSize,
-    storeQuery:state.storeQuery,
-    storeSearchMode:state.storeSearchMode,
-    storeWork:state.storeWork,
-    storeSort:state.storeSort,
-    storeFilters:state.storeFilters,
-    storeBrowseMode:state.storeBrowseMode,
-    vectorTab:state.vectorTab,
-    vectorCollectionFilter:state.vectorCollectionFilter,
-    llmConfig:state.llmConfig,
-    appConfig:state.appConfig,
-    ragConfig:state.ragConfig,
-    faqSearch:state.faqSearch,
-    faqPage:state.faqPage,
-    faqExpanded:state.faqExpanded,
-    navHistory:state.navHistory,
-    navForward:state.navForward,
-    sidebarCollapsed:state.sidebarCollapsed,
-    collectionsCollapsed:state.collectionsCollapsed,
-    operationToastsMinimized:state.operationToastsMinimized,
-    operationStackPosition:state.operationStackPosition,
-    collapsedPanels:state.collapsedPanels,
-    tableColumns:state.tableColumns,
-    upsertState:state.upsertState,
-    upsertIgnored:state.upsertIgnored,
-    jobApplied:state.jobApplied,
-    upsertJobApplied:state.upsertJobApplied,
-    reviewSelection:[...state.reviewSelection],
-    selectedEvidence:state.selectedEvidence,
-    storeSearchSort:state.storeSearchSort,
-  };
-}
-function persistPrefs(){
-  if(!state.storageReady)return;
-  clearTimeout(prefsTimer);
-  prefsTimer=setTimeout(()=>idbPut("prefs",workspacePrefs()).catch(error=>console.error("IndexedDB preference persistence failed",error)),400);
-}
-async function flushWorkspacePrefs(){
-  if(!state.storageReady)throw new Error("Workspace storage is not ready yet.");
-  clearTimeout(prefsTimer);
-  await idbPut("prefs",workspacePrefs());
-}
-async function restoreWorkspace(){
-  try{
-    const [savedFiles,prefs]=await Promise.all([idbGetAll("files"),idbGet("prefs","workspace")]);
-    state.files=(savedFiles||[]).map(file=>({
-      ...file,
-      dirty:new Set(file.dirty||[]),
-      errors:file.errors||[],
-    }));
-    // getShellSnapshot/workIndex can be queried before IndexedDB restore finishes.
-    // Always drop derived corpus indexes after reattaching persisted files so the
-    // Works page and corpus metrics cannot remain stuck on a cached empty corpus.
-    invalidateCorpusCache();
-    if(prefs){
-      const preservedAppDefaults={...state.appConfig};
-      const preservedLlmDefaults={...state.llmConfig};
-      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","compareSourceA","compareSourceB","compareFilter","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
-        if(prefs[key]!==undefined)state[key]=prefs[key];
-      }
-      state.appConfig={...preservedAppDefaults,...(prefs.appConfig||{})};
-      applyUiTheme(state.appConfig.ui_color_theme);
-      state.llmConfig={...preservedLlmDefaults,...(prefs.llmConfig||{})};
-      state.ragConfig={...state.ragConfig,...(prefs.ragConfig||{})};
-      if(!state.faqExpanded||typeof state.faqExpanded!=="object"||Array.isArray(state.faqExpanded))state.faqExpanded={};
-      state.ragConfig.locales=Array.isArray(state.ragConfig.locales)?state.ragConfig.locales.filter(value=>value==="en"||value==="fr"):["en","fr"];
-      if(!state.ragConfig.locales.length)state.ragConfig.locales=["en","fr"];
-      state.ragConfig.prompt=String(state.ragConfig.prompt||"");
-      state.ragConfig.instructions=String(state.ragConfig.instructions||"");
-      if(!Array.isArray(state.ragConfig.history))state.ragConfig.history=[];
-      state.ragConfig.history=state.ragConfig.history.slice(0,100);
-      if(!Array.isArray(state.ragConfig.run_history))state.ragConfig.run_history=[];
-      state.ragConfig.run_history=state.ragConfig.run_history.slice(0,250);
-      if(!state.appConfig.default_review_preset)state.appConfig.default_review_preset="text";
-      if(!state.appConfig.default_llm_run_mode)state.appConfig.default_llm_run_mode="foreground";
-      ensureProviderProfiles();
-      if(Number.isFinite(+prefs.pageSize))state.pageSize=+prefs.pageSize;
-      if(typeof prefs.view==="string")state.view=prefs.view;
-      state.reviewSelection=new Set(prefs.reviewSelection||[]);
-      state.activeFileId=state.files.some(f=>f.id===prefs.activeFileId)?prefs.activeFileId:(state.files[0]?.id||null);
-    }else{
-      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-      state.activeFileId=state.files[0]?.id||null;ensureProviderProfiles();try{state.appConfig.ui_color_theme=localStorage.getItem("derridai.ui.theme")||state.appConfig.ui_color_theme||"green"}catch{}applyUiTheme(state.appConfig.ui_color_theme);
-    }
-    const validPrefixes=new Set(state.files.map(f=>f.id));
-    state.reviewSelection=new Set([...state.reviewSelection].filter(key=>validPrefixes.has(String(key).split("::")[0])));
-    await restoreCurrentPdfAsset();
-  }catch(error){
-    console.error("Could not restore IndexedDB workspace",error);
-    toast(`Could not restore saved workspace: ${error.message}`);
-  }finally{
-    state.storageReady=true;
-  }
-}
-function reviewKey(file,index){return `${file.id}::${index}`}
-function reviewItemFromKey(key){
-  const split=String(key).lastIndexOf("::");
-  if(split<0)return null;
-  const fileId=key.slice(0,split),index=Number(key.slice(split+2));
-  const file=state.files.find(f=>f.id===fileId);
-  if(!file||!Number.isInteger(index)||!file.records[index])return null;
-  return {file,index,record:file.records[index],key};
-}
-function selectedReviewItems(){return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean)}
 
-async function copyCitation(record,kind="inline"){
-  const text=kind==="full"?fullCitation(record):inlineCitation(record);
-  try{await navigator.clipboard.writeText(text);toast(`Copied ${kind} citation`,{tone:"success"})}
-  catch(error){toast(`Could not copy citation: ${error.message}`,{tone:"danger"})}
-}
-function workspaceEvidenceKey(file,index){return `workspace:${file.id}:${index}`}
-function dbEvidenceKey(collection,id){return `db:${collection}:${id}`}
-function selectedEvidenceEntries(){return Object.values(state.selectedEvidence||{}).filter(Boolean)}
-function evidenceIsSelected(key){return Boolean(state.selectedEvidence?.[key])}
-function setEvidence(key,item,selected=true){
-  if(!state.selectedEvidence||typeof state.selectedEvidence!=="object")state.selectedEvidence={};
-  if(selected)state.selectedEvidence[key]=item;else delete state.selectedEvidence[key];
-  persistPrefs();
-  shellRefreshHook();
-}
-function workspaceDbEvidenceTarget(file,index,record=file?.records?.[index]){
-  if(!record||!state.activeStore)return null;
-  const status=recordDbStatus(file,index,record);
-  if(!["synced","exists"].includes(status.kind))return null;
-  const receipt=storeReceipt(state.activeStore,file,index);
-  const key=localRecordKey(file,index);
-  const confirmedId=state.storePresenceIds?.[state.activeStore]?.[key];
-  const id=String(receipt?.chroma_id||confirmedId||record.record_id||"").trim();
-  return id?{collection:state.activeStore,id,key:dbEvidenceKey(state.activeStore,id)}:null;
-}
-function workspaceEvidenceSelectionKey(file,index){
-  const local=workspaceEvidenceKey(file,index);
-  if(evidenceIsSelected(local))return local;
-  return workspaceDbEvidenceTarget(file,index)?.key||local;
-}
-function toggleWorkspaceEvidence(file,index){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  const record=file?.records?.[index];if(!record)return;
-  const localKey=workspaceEvidenceKey(file,index);
-  if(evidenceIsSelected(localKey)){setEvidence(localKey,null,false);return}
-  const dbTarget=workspaceDbEvidenceTarget(file,index,record);
-  if(dbTarget){toggleDbEvidence(dbTarget.collection,dbTarget.id,record);return}
-  setEvidence(localKey,{
-    key:localKey,kind:"workspace",file_id:file.id,index,record_id:record.record_id||"",work:record.work||"",
-    page_start:record.page_start??record.page??null,page_end:record.page_end??null,
-    speaker:record.speaker||null,position_holder:record.position_holder||null,stance:record.stance||null,
-    discourse_role:record.discourse_role||null,target:record.target||null,proposition_status:record.proposition_status||null,
-    inline_citation:record.inline_citation||null,text_preview:String(record.text||"").replace(/\s+/g," ").trim().slice(0,280),
-    label:`${record.record_id||`Record ${index+1}`} · ${record.work||file.name}`
-  },true);
-}
-function toggleDbEvidence(collection,id,record={}){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  if(!collection||!id)return;
-  const key=dbEvidenceKey(collection,id);
-  setEvidence(key,{
-    key,kind:"db",collection,chroma_id:id,record_id:record.record_id||id,work:record.work||"",
-    page_start:record.page_start??record.page??null,page_end:record.page_end??null,
-    speaker:record.speaker||null,position_holder:record.position_holder||null,stance:record.stance||null,
-    discourse_role:record.discourse_role||null,target:record.target||null,proposition_status:record.proposition_status||null,
-    inline_citation:record.inline_citation||null,text_preview:String(record.text||"").replace(/\s+/g," ").trim().slice(0,280),
-    label:`${record.record_id||id} · ${record.work||collection}`
-  },!evidenceIsSelected(key));
-}
-function clearSelectedEvidence(){
-  if(!hasCapability("evidence.select")){toast(tr("permissions.evidence_denied","Your role cannot change selected evidence."),{tone:"warn"});return}
-  state.selectedEvidence={};persistPrefs();shellRefreshHook()
-}
-function selectedEvidencePayload(){
-  const payload=[];
-  for(const item of selectedEvidenceEntries()){
-    if(item.kind==="db")payload.push({collection:item.collection,chroma_id:item.chroma_id});
-    else if(item.kind==="workspace"){
-      const file=state.files.find(file=>file.id===item.file_id);
-      const record=file?.records?.[Number(item.index)];
-      if(record)payload.push({record:ragEvidenceRecordPayload(record)});
-    }
-  }
-  return payload;
-}
-function setReviewSelected(file,index,selected){
-  const key=reviewKey(file,index);
-  selected?state.reviewSelection.add(key):state.reviewSelection.delete(key);
-  persistPrefs();
-}
-function clearReviewSelection(){
-  state.reviewSelection.clear();
-  persistPrefs();
-}
 
 // 0.30.11 packet discipline: API boundaries receive only fields required by
 // the operation. Audit history is intentionally opt-in because it can dwarf
@@ -1246,137 +1185,15 @@ function touchupRecordPayload(record,fields=[]){
 function ragEvidenceRecordPayload(record){
   return recordPayload(record,{fields:RAG_EVIDENCE_TRANSPORT_FIELDS});
 }
-function applyRecordChanges(file,index,changes,{source="manual",model=null,batchId=null,rationale=null}={}){
-  const current=file.records[index];
-  if(!current)return 0;
-  const pending={};
-  for(const [field,newValue] of Object.entries(changes||{})){
-    if(field==="updates")continue;
-    if(!sameValue(current[field],newValue))pending[field]=newValue;
-  }
-  if("text" in pending && "text_length" in current && !("text_length" in pending)){
-    const length=String(pending.text??"").length;
-    if(!sameValue(current.text_length,length))pending.text_length=length;
-  }
-  const entries=Object.entries(pending);
-  if(!entries.length)return 0;
-  const timestamp=new Date().toISOString();
-  const operationId=batchId||uid();
-  const history=Array.isArray(current.updates)?current.updates.map(cloneAuditValue):[];
-  const next={...current};
-  for(const [field,newValue] of entries){
-    const entry={
-      field_name:field,
-      old_value:cloneAuditValue(current[field]),
-      new_value:cloneAuditValue(newValue),
-      timestamp,
-      source,
-      batch_id:operationId,
-      initiated_by:state.userContext?.username||null,
-    };
-    if(model)entry.model=model;
-    if(rationale?.[field])entry.reason=String(rationale[field]);
-    history.push(entry);
-    next[field]=newValue;
-  }
-  next.updates=history;
-  file.records[index]=next;
-  file.dirty.add(index);
-  invalidateCorpusCache();
-  persistFile(file);
-  if(state.view==="record"&&typeof window!=="undefined")window.dispatchEvent(new CustomEvent("derridai:record-updated"));
-  return entries.length;
-}
 
-async function clearRecordUpdates(file,index,{confirmFirst=true}={}){
-  const record=file?.records?.[index];
-  const count=Array.isArray(record?.updates)?record.updates.length:0;
-  if(!record||!count){
-    toast("This record has no updates history");
-    return false;
-  }
-  if(confirmFirst&&!await openMessageModal({title:"Clear record update history?",message:`Clear all ${count} updates entries from ${record.record_id||`record ${index+1}`}? This history cannot be reconstructed automatically.`,tone:"danger",confirmLabel:"Clear history",cancelLabel:"Cancel"}))return false;
-  file.records[index]={...record,updates:[]};
-  file.dirty.add(index);
-  persistFile(file);
-  return true;
-}
-async function clearAllUpdates({confirmed=false}={}){
-  const rows=allRows().filter(row=>Array.isArray(row.record.updates)&&row.record.updates.length);
-  if(!rows.length)return toast("No loaded records have updates history");
-  const entries=rows.reduce((sum,row)=>sum+row.record.updates.length,0);
-  if(!confirmed&&!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
-  const files=new Set();
-  for(const row of rows){
-    row.file.records[row.index]={...row.record,updates:[]};
-    row.file.dirty.add(row.index);
-    files.add(row.file);
-  }
-  for(const file of files)persistFile(file);
-  shell();renderView();
-  toast(`Cleared updates history from ${rows.length.toLocaleString()} records`);
-}
 
 function formatTimestamp(value){
   if(!value)return "";
   const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
 }
-function historyVersionChanges(previous,current){
-  const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
-  return [...keys].filter(key=>key!=="updates"&&!key.startsWith("_")&&!sameValue(previous?.[key],current?.[key])).sort((a,b)=>label(a).localeCompare(label(b)));
-}
-function restoreRecordHistoryVersion(file,index,version){
-  const current=file?.records?.[index];
-  if(!current||!version?.record)return 0;
-  const keys=new Set([...Object.keys(current),...Object.keys(version.record)]);
-  const changes={};
-  for(const field of keys){
-    if(field==="updates"||field.startsWith("_"))continue;
-    const value=Object.prototype.hasOwnProperty.call(version.record,field)?cloneAuditValue(version.record[field]):null;
-    if(!sameValue(current[field],value))changes[field]=value;
-  }
-  return applyRecordChanges(file,index,changes,{source:"history_restore",batchId:uid(),rationale:Object.fromEntries(Object.keys(changes).map(field=>[field,`Restored from ${version.label}`]))});
-}
 
 
-function openMessageModal({
-  title="Notice",
-  message="",
-  detail="",
-  tone="info",
-  confirmLabel="OK",
-  cancelLabel=null,
-}={}){
-  return new Promise(resolve=>{
-    const dialog=document.createElement("dialog");
-    dialog.className=`message-dialog ${tone}`;
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2>${detail?`<div class="dialog-subtitle">${esc(detail)}</div>`:""}</div><button class="btn icon-only" data-cancel>${icon("close")}</button></div><div class="db"><div class="message-modal-body">${esc(message).replace(/\n/g,"<br>")}</div></div><div class="da">${cancelLabel?`<button class="btn" data-cancel>${esc(cancelLabel)}</button>`:""}<button class="btn ${tone==="danger"?"danger":"primary"}" data-confirm>${esc(confirmLabel)}</button></div>`;
-    document.body.appendChild(dialog);
-    const finish=value=>{dialog.close();dialog.remove();resolve(value)};
-    dialog.querySelectorAll("[data-cancel]").forEach(button=>button.onclick=()=>finish(false));
-    dialog.querySelector("[data-confirm]").onclick=()=>finish(true);
-    dialog.addEventListener("cancel",event=>{event.preventDefault();finish(false)},{once:true});
-    showAppModal(dialog);
-  });
-}
-async function copyJsonToClipboard(value,labelText="record"){
-  const text=JSON.stringify(value,null,2);
-  try{
-    await navigator.clipboard.writeText(text);
-    toast(`Copied ${labelText} JSON`);
-  }catch(error){
-    const area=document.createElement("textarea");
-    area.value=text;
-    area.style.position="fixed";
-    area.style.opacity="0";
-    document.body.appendChild(area);
-    area.select();
-    try{document.execCommand("copy");toast(`Copied ${labelText} JSON`)}
-    catch{openMessageModal({title:"Could not copy",message:error.message,tone:"danger"})}
-    finally{area.remove()}
-  }
-}
 function isResponseCacheStore(store){
   return Boolean(store&&(store.name==="_response_cache"||store.storage_name==="derridai_response_cache"||store.metadata?.derridai_system_collection==="response_cache"));
 }
@@ -1435,139 +1252,6 @@ function candidateChromaIds(file,index,record){
   }
   return [...new Set(ids)];
 }
-function recordDbStatus(file,index,record,store=state.activeStore){
-  if(!hasCorpusDb())return {kind:"none",label:"No database",title:dbUnavailableReason()};
-  if(!store)return {kind:"none",label:"No collection",title:"Select a Chroma collection"};
-  if(!corpusStoreExists(store))return {kind:"none",label:"No collection",title:"The selected collection no longer exists"};
-  const key=localRecordKey(file,index);
-  const receipt=state.upsertState?.[store]?.[key]||null;
-  const presence=state.storePresence?.[store]?.[key];
-  const fingerprint=recordFingerprint(record);
-  if(receipt&&receipt.fingerprint===fingerprint&&presence!==false)return {kind:"synced",label:"Synced",title:`Upserted ${formatTimestamp(receipt.timestamp)}`};
-  if(receipt&&receipt.fingerprint!==fingerprint)return {kind:"changed",label:"Pending",title:"Changed since last upsert"};
-  if(presence===true)return {kind:"exists",label:"In DB",title:"Record exists in the selected collection; local sync time is unknown"};
-  if(presence===false)return {kind:"absent",label:"Not in DB",title:"Record was not found in the selected collection"};
-  return {kind:"unknown",label:"Unknown",title:"Database presence has not been checked yet"};
-}
-function workDbStatus(rows,workName=null){
-  if(!hasCorpusDb())return {kind:"none",label:"No database"};
-  if(!state.activeStore)return {kind:"none",label:"No collection"};
-  if(!corpusStoreExists(state.activeStore))return {kind:"none",label:"No collection"};
-  const receipts=rows.map(row=>state.upsertState?.[state.activeStore]?.[localRecordKey(row.file,row.index)]||null);
-  if(rows.some((row,index)=>receipts[index]&&receipts[index].fingerprint!==recordFingerprint(row.record)))return {kind:"changed",label:"Pending changes"};
-  if(rows.length&&rows.every((row,index)=>receipts[index]?.fingerprint===recordFingerprint(row.record)))return {kind:"synced",label:"Synced"};
-  if(state.storeWorksStore===state.activeStore){
-    const name=workName??String(rows[0]?.record?.work||"(Untitled work)");
-    const stat=(state.storeWorkStats||[]).find(item=>String(item.work||"(Untitled work)")===String(name));
-    const dbCount=Number(stat?.count||0);
-    if(dbCount>=rows.length&&rows.length)return {kind:"exists",label:"In DB"};
-    if(dbCount>0)return {kind:"exists",label:`Partly in DB (${dbCount}/${rows.length})`};
-    return {kind:"absent",label:"Not in DB"};
-  }
-  return {kind:"unknown",label:"DB status loading"};
-}
-async function refreshPresenceForRows(rows,{force=false}={}){
-  const store=state.activeStore;
-  if(!hasCorpusDb()||!store||!rows.length)return;
-  if(!state.storePresence[store])state.storePresence[store]={};
-  if(!state.storePresenceIds[store])state.storePresenceIds[store]={};
-  if(!state.storePresenceCheckedAt[store])state.storePresenceCheckedAt[store]={};
-  const now=Date.now(),ttl=15000;
-  const staleRows=force?rows:rows.filter(row=>now-Number(state.storePresenceCheckedAt[store][localRecordKey(row.file,row.index)]||0)>ttl);
-  if(!staleRows.length)return;
-  const ids=[...new Set(staleRows.flatMap(row=>candidateChromaIds(row.file,row.index,row.record)))];
-  if(!ids.length)return;
-  const found=new Set();
-  try{
-    for(let start=0;start<ids.length;start+=500){
-      const data=await api(`/api/stores/${encodeURIComponent(store)}/records/status`,{
-        method:"POST",
-        body:JSON.stringify({ids:ids.slice(start,start+500)}),
-      });
-      for(const id of data.existing_ids||[])found.add(id);
-    }
-    for(const row of staleRows){
-      const key=localRecordKey(row.file,row.index);
-      const candidates=candidateChromaIds(row.file,row.index,row.record);
-      const matchedId=candidates.find(id=>found.has(id))||"";
-      state.storePresence[store][key]=Boolean(matchedId);
-      state.storePresenceIds[store][key]=matchedId;
-      state.storePresenceCheckedAt[store][key]=now;
-    }
-    pendingUpsertCache.key="";
-    updateDbStatusElements();
-  }catch(error){
-    console.warn("Could not refresh Chroma presence",error);
-  }
-}
-function updateDbStatusElements(){
-  document.querySelectorAll("[data-db-status-key]").forEach(el=>{
-    const item=reviewItemFromKey(el.dataset.dbStatusKey);
-    if(!item)return;
-    const info=recordDbStatus(item.file,item.index,item.file.records[item.index]);
-    el.className=`db-status ${info.kind}`;
-    el.title=info.title;
-    el.innerHTML=`<i></i>${esc(info.label)}`;
-  });
-  document.querySelectorAll("[data-work-status]").forEach(el=>{
-    const work=el.dataset.workStatus;
-    const rows=workIndex().get(work)?.rows||[];
-    const info=workDbStatus(rows,work);
-    el.className=`db-status ${info.kind}`;
-    el.innerHTML=`<i></i>${esc(info.label)}`;
-  });
-}
-function ignoredFingerprint(store,file,index){
-  return state.upsertIgnored?.[store]?.[localRecordKey(file,index)]||null;
-}
-let pendingUpsertCache={key:"",at:0,rows:[]};
-function pendingUpsertRows(){
-  if(!hasCorpusDb()||!state.activeStore)return [];
-  const dirtyCount=state.files.reduce((sum,file)=>sum+(file.dirty?.size||0),0);
-  const key=`${state.activeStore}|${corpusCache.version}|${dirtyCount}|${Number(state.upsertJobApplied?Object.values(state.upsertJobApplied).reduce((a,b)=>a+Number(b||0),0):0)}`;
-  const now=performance.now();
-  if(pendingUpsertCache.key===key&&now-pendingUpsertCache.at<750)return pendingUpsertCache.rows;
-  const rows=allRows().filter(row=>{
-    const fingerprint=recordFingerprint(row.record);
-    if(ignoredFingerprint(state.activeStore,row.file,row.index)===fingerprint)return false;
-    const info=recordDbStatus(row.file,row.index,row.record);
-    return info.kind==="changed" || info.kind==="absent" || (row.file.dirty.has(row.index)&&info.kind!=="synced");
-  });
-  pendingUpsertCache={key,at:now,rows};
-  return rows;
-}
-function pendingChangesForRow(row){
-  const store=state.activeStore;
-  const receipt=storeReceipt(store,row.file,row.index);
-  const since=receipt?.timestamp?new Date(receipt.timestamp).getTime():0;
-  const updates=Array.isArray(row.record.updates)?row.record.updates:[];
-  const changed=updates.filter(update=>{
-    const time=new Date(update.timestamp||0).getTime();
-    return !since || Number.isNaN(time) || time>since;
-  });
-  if(changed.length)return changed;
-  if(!receipt)return [{
-    field_name:"record",
-    old_value:null,
-    new_value:"Not previously upserted from this workspace",
-    source:"workspace",
-    timestamp:null,
-  }];
-  return [{
-    field_name:"record",
-    old_value:"Last upserted fingerprint",
-    new_value:"Current record differs",
-    source:"fingerprint",
-    timestamp:null,
-  }];
-}
-function removeFromUpsertQueue(row){
-  const store=state.activeStore;
-  if(!store)return;
-  if(!state.upsertIgnored[store])state.upsertIgnored[store]={};
-  state.upsertIgnored[store][localRecordKey(row.file,row.index)]=recordFingerprint(row.record);
-  persistPrefs();
-}
 function recordFields(){
   if(corpusCache.fields)return corpusCache.fields;
   const set=new Set();
@@ -1602,68 +1286,6 @@ function setListFilterValue(fileId,key,value){
 }
 
 
-function pdfDisplayTitle(){
-  return state.pdf.title||state.pdf.name||"PDF";
-}
-function loadedPdfPagesForRecord(record){
-  if(!state.pdf.name)return [];
-  return pdfLinks(record)
-    .filter(link=>link.pdf_file===state.pdf.name)
-    .map(link=>Number(link.pdf_page))
-    .filter(page=>Number.isFinite(page)&&page>0)
-    .sort((a,b)=>a-b);
-}
-function allLinkedRowsForLoadedPdf(){
-  if(!state.pdf.name)return [];
-  const rows=[];
-  for(const {file,record,index} of allRows()){
-    const pages=loadedPdfPagesForRecord(record);
-    if(pages.length)rows.push({file,record,index,pages});
-  }
-  return rows.sort((a,b)=>
-    (a.pages[0]||0)-(b.pages[0]||0)
-    ||String(a.record.work||"").localeCompare(String(b.record.work||""))
-    ||String(a.record.record_id||"").localeCompare(String(b.record.record_id||""))
-  );
-}
-async function loadPdfMetadata(doc,fileName){
-  const fallback=String(fileName||"").replace(/\.pdf$/i,"");
-  if(!doc)return {title:fallback,author:""};
-  try{
-    const metadata=await doc.getMetadata();
-    const info=metadata?.info||{};
-    const xmp=metadata?.metadata;
-    const title=String(
-      info.Title
-      ||xmp?.get?.("dc:title")
-      ||xmp?.get?.("pdf:title")
-      ||fallback
-      ||""
-    ).trim();
-    const author=String(
-      info.Author
-      ||xmp?.get?.("dc:creator")
-      ||xmp?.get?.("pdf:author")
-      ||""
-    ).trim();
-    return {title:title||fallback,author};
-  }catch(error){
-    console.warn("Could not read PDF metadata",error);
-    return {title:fallback,author:""};
-  }
-}
-function openPdfExplorerWorkspace(){
-  window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/pdf?mode=explorer",runtimeView:"pdf"}}));
-}
-function openLoadedPdfPage(page){
-  if(!state.pdf.doc&& !state.pdf.file)return toast("Open the linked PDF in PDF Explorer first");
-  const max=state.pdf.doc?.numPages||Number(page)||1;
-  state.pdf.page=Math.max(1,Math.min(max,Number(page)||1));
-  state.pdf.text="";
-  state.pdf.extractError="";
-  state.pdf.extractionSource="";
-  openPdfExplorerWorkspace();
-}
 
 function needsReviewItems(rows=null){
   if(rows===null){
@@ -1687,312 +1309,9 @@ function setActiveStore(name){
   syncUrl({replace:true});
 }
 
-async function buildUpsertItems(rows,store,{yieldEvery=0}={}){
-  const idCounts=new Map();
-  for(let i=0;i<rows.length;i++){const row=rows[i],id=String(row.file.records[row.index]?.record_id??"");idCounts.set(id,(idCounts.get(id)||0)+1);if(yieldEvery&&i&&i%yieldEvery===0)await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)))}
-  const items=[];
-  for(let i=0;i<rows.length;i++){
-    const row=rows[i],current=row.file.records[row.index],logical=String(current?.record_id??""),receipt=storeReceipt(store,row.file,row.index),chromaId=receipt?.chroma_id||((idCounts.get(logical)||0)>1?`${row.file.name}::${logical}`:logical);
-    const key=localRecordKey(row.file,row.index);
-    const audit=upsertAuditDelta(current,receipt,state.storePresence?.[store]?.[key]);
-    items.push({key,record:current,fingerprint:recordFingerprint(current),chroma_id:chromaId,file_name:row.file.name,...audit});
-    if(yieldEvery&&i&&i%yieldEvery===0)await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
-  }
-  return items;
-}
-async function upsertRows(rows,labelText="records",{largeSyncConfirmed=false}={}){
-  if(!hasCorpusDb())return openMessageModal({title:"Vector database required",message:dbUnavailableReason(),confirmLabel:"OK"});
-  if(!state.activeStore)return toast("Select a Chroma collection first");
-  if(!rows.length)return toast("No records selected for upsert");
-  const activeUpsert=state.jobs.find(job=>job.type==="upsert"&&["queued","running","cancelling"].includes(job.status));
-  if(activeUpsert)return openMessageModal({title:tr("operations.vector_sync_active_title","A vector sync is already active"),message:trf("operations.vector_sync_active_help","{label} must finish or be cancelled before another collection build starts.",{label:activeUpsert.label||activeUpsert.store_name||"The current sync"}),confirmLabel:"OK"});
-  const store=state.activeStore;
-  await refreshPresenceForRows(rows,{force:true});
-  if(rows.length>500&&!largeSyncConfirmed){
-    const approved=await openMessageModal({title:tr("operations.large_sync_background_title","Build collection in the background?"),message:trf("operations.large_sync_background_help","{count} records will be prepared once, then DerridAI will build and validate the collection as a background operation. You may continue working in this tab while the build runs.",{count:rows.length.toLocaleString()}),confirmLabel:tr("operations.start_background_build","Start background build"),cancelLabel:tr("ui.cancel","Cancel")});
-    if(!approved)return false;
-  }
-  const items=await buildUpsertItems(rows,store,{yieldEvery:rows.length>500?80:0});
-  try{
-    const transportItems=items.map(item=>({
-      key:item.key,
-      record:upsertRecordPayload(item.record),
-      fingerprint:item.fingerprint,
-      chroma_id:item.chroma_id,
-      file_name:item.file_name,
-      audit_entries:item.audit_entries||[],
-      replace_updates:item.replace_updates,
-      updates_count:item.updates_count,
-    }));
-    const sourceWorks=[...new Set(rows.map(row=>String(row.record?.work||row.file?.records?.[row.index]?.work||"").trim()).filter(Boolean))];
-    const job=await api("/api/jobs/upsert",{method:"POST",body:JSON.stringify({store_name:store,items:transportItems,document_field:"text",embedding_field:"embedding",batch_size:500,mirror_languages:true,label:labelText,source_kind:"browser_workspace",source_label:labelText,source_works:sourceWorks})});
-    state.jobs=[job,...state.jobs.filter(existing=>existing.id!==job.id)];
-    syncJobProgressToasts();startJobPolling();
-    toast(trf("operations.vector_build_queued","Queued {count} records for background build of {store}",{count:rows.length.toLocaleString(),store}),{tone:"success"});
-    notifyVectorStoresChanged();
-    if(state.view==="home")refreshOperationsPanelOnly();
-    return true;
-  }catch(error){toast(`Could not start vector build: ${error.message}`);return false}
-}
 
-function rowsFromReviewSelection(){
-  return selectedReviewItems().map(item=>({file:item.file,record:item.file.records[item.index],index:item.index}));
-}
-function linkedPdfRows(page=state.pdf.page){
-  return allRows().filter(({record})=>pdfLinks(record).some(link=>{
-    if(Number(link.pdf_page)!==Number(page))return false;
-    return !state.pdf.name||link.pdf_file===state.pdf.name;
-  }));
-}
-async function linkPdfPage(file,index,page){
-  if(!state.pdf.name)return toast("Open a PDF first");
-  const record=file.records[index];
-  let links=pdfLinks(record);
-  const target={pdf_file:state.pdf.name,pdf_page:Number(page)};
-  if(links.some(link=>link.pdf_file===target.pdf_file&&Number(link.pdf_page)===target.pdf_page))return toast(`Record is already linked to page ${page}`);
-  if(links.length&&links.some(link=>link.pdf_file!==target.pdf_file)){
-    if(!await openMessageModal({title:"Replace PDF links?",message:`This record is linked to ${links[0].pdf_file}. Replace those PDF links with ${target.pdf_file}?`,tone:"danger",confirmLabel:"Replace links",cancelLabel:"Cancel"}))return;
-    links=[];
-  }
-  const next=[...links,target].sort((a,b)=>a.pdf_page-b.pdf_page);
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,next),{source:"pdf_link"});
-  shell();renderView();
-  toast(count?`Linked record to PDF page ${page}`:"PDF link unchanged");
-}
-function unlinkPdfLink(file,index,link,{stayInPdf=false}={}){
-  const record=file?.records?.[index];
-  if(!record)return;
-  const links=pdfLinks(record);
-  const next=links.filter(item=>!(item.pdf_file===link.pdf_file&&Number(item.pdf_page)===Number(link.pdf_page)));
-  if(next.length===links.length)return toast("That PDF link was not found");
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,next),{source:"pdf_unlink"});
-  if(stayInPdf)renderPdf(document.querySelector("#main"));
-  else{shell();renderView()}
-  toast(count?`Unlinked ${link.pdf_file} page ${link.pdf_page}`:"PDF link unchanged");
-}
-function unlinkAllPdfLinks(file,index){
-  const record=file?.records?.[index];
-  if(!record||!pdfLinks(record).length)return toast("This record has no PDF links");
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,[]),{source:"pdf_unlink"});
-  shell();renderView();
-  toast(count?"All PDF links removed":"No PDF links changed");
-}
 
-function viewLabel(view){
-  return viewConfig.find(item=>item.id===view)?.label||view;
-}
-function navSnapshot(){
-  const file=activeFile();
-  return {
-    view:state.view,
-    activeFileId:state.activeFileId,
-    selectedIndex:file?selectedIndex(file):0,
-    activeStore:state.activeStore||"",
-    storeWork:state.storeWork||"",
-    storePage:state.storePage||1,
-    storeBrowseMode:state.storeBrowseMode||"works",
-    pdfPage:state.pdf.page||1,
-    // Breadcrumb back/forward restores the same state that a copied URL does,
-    // rather than only restoring the page shell.
-    urlState:cloneAuditValue(currentTableUrlState(state.view)),
-  };
-}
-function sameSnapshot(a,b){
-  if(!a||!b)return false;
-  return JSON.stringify(a)===JSON.stringify(b);
-}
-function applyNavSnapshot(target){
-  if(!target)return;
-  if(target.activeFileId&&state.files.some(file=>file.id===target.activeFileId))state.activeFileId=target.activeFileId;
-  state.view=target.view||"home";
-  if(state.activeFileId&&Number.isFinite(+target.selectedIndex))state.selected[state.activeFileId]=+target.selectedIndex;
-  if(target.activeStore!==undefined)state.activeStore=target.activeStore||"";
-  if(target.storeWork!==undefined)state.storeWork=target.storeWork||"";
-  if(Number.isFinite(+target.storePage))state.storePage=Math.max(1,+target.storePage);
-  if(target.storeBrowseMode)state.storeBrowseMode=target.storeBrowseMode;
-  if(Number.isFinite(+target.pdfPage))state.pdf.page=Math.max(1,+target.pdfPage);
-  if(target.urlState)applyCompressedTableUrlState(target.urlState,state.view);
-}
-const viewPathMap={home:"/",list:"/records",record:"/record",works:"/works",global:"/search",annotations:"/annotations",pdf:"/pdf",compare:"/compare",vector:"/databases",rag:"/rag",faq:"/faq",responsecache:"/response-cache",providers:"/providers",config:"/settings"};
-const pathViewMap=Object.fromEntries(Object.entries(viewPathMap).map(([view,path])=>[path,view]));
-let urlSyncHook=null;
-function setUrlSyncHook(hook){urlSyncHook=typeof hook==="function"?hook:null}
-function currentTableUrlState(view=state.view){
-  // URL state is intentionally view-scoped. It is the public/shareable state
-  // contract for a page; IndexedDB remains only a convenience for restoring a
-  // user's workspace when no URL overrides are present.
-  if(view==="list"){
-    const f=activeFile();if(!f)return null;
-    return {c:state.tableColumns.list||null,s:state.sorts[f.id]||null,f:state.listFilters[f.id]||null,p:state.pages[f.id]||1,z:state.pageSize,q:state.searches[f.id]||""};
-  }
-  if(view==="global")return {c:state.tableColumns.global||null,s:state.globalSort,f:state.globalFilters,sf:state.searchFacetFilters||{},p:state.globalPage,z:state.pageSize,q:state.globalSearch,m:state.globalSearchMode,dm:state.dbSearchMethod,dw:state.dbSearchWhere,dk:state.dbSearchFetchK,dl:state.dbSearchLambda,ao:Boolean(state.globalAdvancedOpen),l:state.searchResultLayouts};
-  if(view==="vector")return {c:state.tableColumns.vector||null,s:state.storeSort,f:state.storeFilters,p:state.storePage,z:state.storePageSize,w:state.storeWork,b:state.storeBrowseMode,ss:state.storeSearchSort,q:state.storeQuery};
-  if(view==="works")return {q:state.worksSearch||"",w:state.workOverview||""};
-  if(view==="annotations")return {q:state.annotationSearch||"",m:state.annotationView||"works"};
-  if(view==="home")return {m:Number(state.dashboardMetricIndex)||0,sm:state.globalSearchMode||"traditional",q:state.globalSearch||""};
-  if(view==="record")return {q:state.recordFind||"",rr:state.researcherRecordId||""};
-  if(view==="faq")return {q:state.faqSearch||"",p:state.faqPage||1};
-  return null;
-}
-function applyCompressedTableUrlState(value,view=state.view){
-  if(!value||typeof value!=="object")return;
-  if(view==="list"){
-    const f=activeFile();if(!f)return;
-    if(Array.isArray(value.c))state.tableColumns.list=value.c;
-    if(value.s)state.sorts[f.id]=value.s;
-    if(value.f&&typeof value.f==="object")state.listFilters[f.id]=value.f;
-    if(Number.isFinite(+value.p))state.pages[f.id]=Math.max(1,+value.p);
-    if(Number.isFinite(+value.z))state.pageSize=Math.max(10,+value.z);
-    if(typeof value.q==="string")state.searches[f.id]=value.q;
-  }else if(view==="global"){
-    if(Array.isArray(value.c))state.tableColumns.global=value.c;
-    if(value.s)state.globalSort=value.s;
-    if(Array.isArray(value.f))state.globalFilters=value.f;
-    if(value.sf&&typeof value.sf==="object"&&!Array.isArray(value.sf))state.searchFacetFilters=Object.fromEntries(Object.entries(value.sf).map(([field,values])=>[field,Array.isArray(values)?values.map(String):[]]).filter(([,values])=>values.length));
-    if(Number.isFinite(+value.p))state.globalPage=Math.max(1,+value.p);
-    if(Number.isFinite(+value.z))state.pageSize=Math.max(10,+value.z);
-    if(typeof value.q==="string")state.globalSearch=value.q;
-    if(["traditional","database"].includes(value.m))state.globalSearchMode=value.m;
-    if(["similarity","mmr","filter"].includes(value.dm))state.dbSearchMethod=value.dm;
-    if(value.dw&&typeof value.dw==="object"&&!Array.isArray(value.dw))state.dbSearchWhere=value.dw;
-    if(Number.isFinite(+value.dk))state.dbSearchFetchK=Math.max(1,+value.dk);
-    if(Number.isFinite(+value.dl))state.dbSearchLambda=Math.max(0,Math.min(1,+value.dl));
-    if(typeof value.ao==="boolean")state.globalAdvancedOpen=value.ao;
-    if(value.l&&typeof value.l==="object")state.searchResultLayouts={...state.searchResultLayouts,...value.l};
-    if(state.globalSearchMode==="database"&&(state.globalSearch||Object.keys(dbSearchWhere()).length))state.globalSearchAutoRun=true;
-  }else if(view==="vector"){
-    if(Array.isArray(value.c))state.tableColumns.vector=value.c;
-    if(value.s)state.storeSort=value.s;
-    if(value.f&&typeof value.f==="object")state.storeFilters=value.f;
-    if(Number.isFinite(+value.p))state.storePage=Math.max(1,+value.p);
-    if(Number.isFinite(+value.z))state.storePageSize=Math.max(10,+value.z);
-    if(typeof value.w==="string")state.storeWork=value.w;
-    if(["works","records"].includes(value.b))state.storeBrowseMode=value.b;
-    if(value.ss)state.storeSearchSort=value.ss;
-    if(typeof value.q==="string")state.storeQuery=value.q;
-  }else if(view==="works"){
-    if(typeof value.q==="string")state.worksSearch=value.q;
-    if(typeof value.w==="string")state.workOverview=value.w;
-  }else if(view==="annotations"){
-    if(typeof value.q==="string")state.annotationSearch=value.q;
-    if(["works","recent"].includes(value.m))state.annotationView=value.m;
-  }else if(view==="home"){
-    if(Number.isFinite(+value.m))state.dashboardMetricIndex=Math.max(0,+value.m);
-    if(["traditional","database"].includes(value.sm))state.globalSearchMode=value.sm;
-    if(typeof value.q==="string")state.globalSearch=value.q;
-  }else if(view==="record"){
-    if(typeof value.q==="string")state.recordFind=value.q;
-    if(typeof value.rr==="string")state.researcherRecordId=value.rr;
-  }else if(view==="faq"){
-    if(typeof value.q==="string")state.faqSearch=value.q;
-    if(Number.isFinite(+value.p))state.faqPage=Math.max(1,+value.p);
-  }
-}
 
-function urlFromState(){
-  const url=new URL(location.href);
-  const params=url.searchParams;
-  for(const key of ["view","file","record","store","work","dbpage","browse","pdfpage","ts"])params.delete(key);
-  params.set("view",state.view||"home");
-  if(state.activeFileId)params.set("file",state.activeFileId);
-  const file=activeFile();
-  if(file&&Number.isFinite(selectedIndex(file)))params.set("record",String(selectedIndex(file)));
-  if(state.activeStore)params.set("store",state.activeStore);
-  if(state.storeWork)params.set("work",state.storeWork);
-  if(state.storePage>1)params.set("dbpage",String(state.storePage));
-  if(state.storeBrowseMode&&state.storeBrowseMode!=="works")params.set("browse",state.storeBrowseMode);
-  if(state.view==="pdf"&&state.pdf.page>1)params.set("pdfpage",String(state.pdf.page));
-  const tableState=currentTableUrlState();
-  if(tableState){const compressed=compressUrlState(tableState);if(compressed)params.set("ts",compressed)}
-  const path=viewPathMap[state.view]||"/";
-  const query=params.toString();
-  return `${path}${query?`?${query}`:""}${url.hash}`;
-}
-function syncUrl({replace=false,href=null}={}){
-  href=href||urlFromState();
-  const current=`${location.pathname}${location.search}${location.hash}`;
-  if(href===current)return;
-  const snapshot=navSnapshot();
-  if(urlSyncHook){urlSyncHook(href,{replace,snapshot});return}
-  try{
-    history[replace?"replaceState":"pushState"](snapshot,"",href);
-  }catch(error){console.warn("Could not update browser URL state",error)}
-}
-function applyUrlState(){
-  const params=new URLSearchParams(location.search);
-  const pathView=pathViewMap[location.pathname];
-  const view=pathView||params.get("view");
-  if(view&&viewConfig.some(item=>item.id===view))state.view=view;
-  const file=params.get("file");
-  // A file parameter is authoritative. If the referenced browser-local JSONL
-  // is not loaded yet, show the corpus-workspace CTA instead of silently
-  // substituting another file from IndexedDB. Once the same content is loaded,
-  // its stable content-derived id lets the rest of the URL state apply.
-  if(file)state.activeFileId=state.files.some(item=>item.id===file)?file:null;
-  const record=Number(params.get("record"));
-  if(state.activeFileId&&Number.isInteger(record)&&record>=0)state.selected[state.activeFileId]=record;
-  const store=params.get("store");
-  if(store)state.activeStore=store;
-  const work=params.get("work");
-  if(work!==null)state.storeWork=work;
-  const dbPage=Number(params.get("dbpage"));
-  if(Number.isFinite(dbPage)&&dbPage>0)state.storePage=dbPage;
-  const browse=params.get("browse");
-  if(["works","records"].includes(browse))state.storeBrowseMode=browse;
-  const pdfPage=Number(params.get("pdfpage"));
-  if(Number.isFinite(pdfPage)&&pdfPage>0)state.pdf.page=pdfPage;
-  const compressed=params.get("ts");
-  if(compressed)applyCompressedTableUrlState(decompressUrlState(compressed));
-}
-function navigateTo(view,{fileId=null,index=null,push=true,href=null}={}){
-  if(!canAccessPage(view))view="home";
-  // Research performs an authoritative store refresh on entry. Do not redirect
-  // from this legacy navigation bridge using the cached hasCorpusDb() value; a
-  // newly created/restored collection may not have reached shell state yet.
-  const before=navSnapshot();
-  if(push){
-    const last=state.navHistory[state.navHistory.length-1];
-    if(!sameSnapshot(last,before)){
-      state.navHistory.push(before);
-      if(state.navHistory.length>50)state.navHistory.shift();
-    }
-    state.navForward=[];
-  }
-  if(fileId&&state.files.some(file=>file.id===fileId))state.activeFileId=fileId;
-  if(index!==null&&state.activeFileId)state.selected[state.activeFileId]=Number(index);
-  if(state.view==="vector"&&view!=="vector"){
-    // Store pages/search results duplicate records already persisted in Chroma.
-    // Drop those transient copies when leaving Vector Stores.
-    state.storeRecords=[];
-    state.storeSearchResults=[];
-  }
-  state.view=view;
-  persistPrefs();
-  syncUrl({replace:!push,href});
-  shell();
-  renderView();
-}
-function goBack(){
-  while(state.navHistory.length){
-    const target=state.navHistory.pop();
-    if(!target)continue;
-    if(target.activeFileId&&!state.files.some(file=>file.id===target.activeFileId))continue;
-    state.navForward.push(navSnapshot());
-    if(state.navForward.length>50)state.navForward.shift();
-    applyNavSnapshot(target);
-    persistPrefs();syncUrl({replace:true});shell();renderView();return;
-  }
-}
-function goForward(){
-  while(state.navForward.length){
-    const target=state.navForward.pop();
-    if(!target)continue;
-    if(target.activeFileId&&!state.files.some(file=>file.id===target.activeFileId))continue;
-    state.navHistory.push(navSnapshot());
-    applyNavSnapshot(target);
-    persistPrefs();syncUrl({replace:true});shell();renderView();return;
-  }
-}
 
 
 
@@ -2006,51 +1325,7 @@ function goForward(){
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
 
-async function warmupProviderProfile(profileId=null){
-  const profile=providerProfile(profileId||state.appConfig.default_provider_profile);
-  if(!profile)return;
-  const current=state.providerWarmups?.[profile.id]||{};
-  if(current.status==="running")return;
-  const cfg=providerRequestConfig(profile,{textReview:false});
-  const started=performance.now();
-  const startedAt=new Date().toISOString();
-  const running={
-    status:"running",message:`Warming ${cfg.model}…`,profile_id:profile.id,
-    provider:profile.type,model:cfg.model,base_url:cfg.base_url,
-    started_at:startedAt,completed_at:null,elapsed_seconds:null,error:null,
-  };
-  state.providerWarmups[profile.id]=running;
-  if(profile.id===state.appConfig.default_provider_profile)state.warmup=running;
-  if(state.view==="home")renderDashboard(document.querySelector("#main"));
-  try{
-    const result=await api("/api/llm/warmup",{method:"POST",body:JSON.stringify({
-      provider:profile.type,model:cfg.model,base_url:cfg.base_url,api_key:cfg.api_key,
-      // Load with the context real calls use, so the model is not loaded twice.
-      num_ctx:Number(cfg.ollama?.num_ctx)>0?Number(cfg.ollama.num_ctx):undefined,
-    })});
-    const ready={
-      status:"ready",message:`${providerDisplayName(profile)} · ${result.model||cfg.model} warmed`,
-      profile_id:profile.id,provider:profile.type,model:result.model||cfg.model,
-      base_url:result.base_url||cfg.base_url,started_at:startedAt,completed_at:new Date().toISOString(),
-      elapsed_seconds:(performance.now()-started)/1000,error:null,
-    };
-    state.providerWarmups[profile.id]=ready;
-    if(profile.id===state.appConfig.default_provider_profile)state.warmup=ready;
-  }catch(error){
-    const failed={
-      status:"failed",message:error.message,profile_id:profile.id,provider:profile.type,model:cfg.model,
-      base_url:cfg.base_url,started_at:startedAt,completed_at:new Date().toISOString(),
-      elapsed_seconds:(performance.now()-started)/1000,error:error.message,
-    };
-    state.providerWarmups[profile.id]=failed;
-    if(profile.id===state.appConfig.default_provider_profile)state.warmup=failed;
-  }
-  if(state.view==="home")renderDashboard(document.querySelector("#main"));
-}
 
-async function warmupConfiguredLlm(){
-  return warmupProviderProfile(state.appConfig.default_provider_profile);
-}
 
 
 
@@ -2063,228 +1338,20 @@ async function warmupConfiguredLlm(){
 // The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
 // job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
 // model from here and calls back into the existing functions.
-function notifyOperationsChanged(){
-  touchJobs();
-}
-function operationsBridge(){
-  return {
-    snapshot:()=>(state.jobs||[]).map(operationViewModel),
-    subscribe:listener=>subscribeToJobChanges(listener),
-    refresh:async()=>{await refreshJobs({rerender:true})},
-    openDetails:id=>{void openJobDetails(id)},
-    openResult:id=>{void openJobResults(id)},
-    cancel:async id=>{await cancelBackgroundJob(id)},
-    remove:async id=>{
-      await api(`/api/jobs/${encodeURIComponent(id)}`,{method:"DELETE"});
-      pruneClientJobState(id);
-      persistPrefs();
-      await refreshJobs({rerender:true});
-    },
-    clearFinished:async()=>{
-      await api("/api/jobs",{method:"DELETE"});
-      await refreshJobs({rerender:true});
-    },
-  };
-}
-function renderOperationsPanel(){
-  // A placeholder only: the Vue panel is mounted into it by mountOperationsPanelHost().
-  return `<div id="operationsPanelHost"></div>`;
-}
-function mountOperationsPanelHost(){
-  mountOperationsPanel(document.querySelector("#operationsPanelHost"),operationsBridge());
-}
-function refreshOperationsPanelOnly(){
-  notifyOperationsChanged();
-  if(state.view==="rag")refreshRagProgressPanel();
-}
-function wireCorpusBuildsHomeCard(root=document){
-  root.querySelector("#dashCorpusBuilder")?.addEventListener("click",()=>window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/pdf?mode=builder",runtimeView:"pdf"}})));
-  root.querySelectorAll("[data-dashboard-corpus-build]").forEach(button=>button.addEventListener("click",()=>openJobResults(button.dataset.dashboardCorpusBuild)));
-}
-function refreshCorpusBuildsHomeCardOnly(){
-  const current=document.querySelector(".dashboard-corpus-builds");
-  if(!current)return;
-  const holder=document.createElement("div");
-  holder.innerHTML=renderCorpusBuildsHomeCard();
-  const replacement=holder.firstElementChild;
-  if(replacement)current.replaceWith(replacement);
-  wireCorpusBuildsHomeCard();
-}
 
 
 
 
-async function gradeRagResponse({
-  question,
-  answer,
-  evidence=[],
-  responseRecordId=null,
-  generationProvider=null,
-  generationModel=null,
-}){
-  openLlmTaskLauncher({
-    task:"rag_grade",
-    title:"Analyze & grade RAG response",
-    description:"Grade relevance, source binding, attribution, fidelity, precision, coverage, and interpretive usefulness.",
-    contextText:question,
-    generationProvider,
-    generationModel,
-    payload:{
-      question,answer,evidence:ragGradeEvidencePayload(evidence),response_record_id:responseRecordId,
-      generation_provider:generationProvider,
-      generation_model:generationModel,
-    },
-    onForegroundResult:async result=>{
-      const dialog=document.createElement("dialog");dialog.className="rag-grade-dialog";
-      dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">RAG response grade</h2><div class="dialog-subtitle">Saved with the cached RAG query when a response-cache record is available.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${ragGradeHtml(result.grade||{})}</div><div class="da"><button class="btn" data-close>Close</button></div>`;
-      document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    },
-  });
-}
 
 
-async function removeRagJob(jobId){
-  const job=state.jobs.find(item=>item.id===jobId);
-  if(!job)return pruneClientJobState(jobId);
-  if(["queued","running","cancelling"].includes(job.status))return toast("Cancel the RAG pipeline before removing it");
-  const approved=await openMessageModal({
-    title:"Remove RAG pipeline result?",
-    message:`Remove this ${job.status} RAG pipeline and its retained result from activity history?`,
-    tone:"danger",confirmLabel:"Remove pipeline",cancelLabel:"Cancel",
-  });
-  if(!approved)return;
-  try{
-    await api(`/api/jobs/${encodeURIComponent(jobId)}`,{method:"DELETE"});
-    pruneClientJobState(jobId);persistPrefs();
-    refreshRagProgressPanel();
-    if(state.view==="home")refreshOperationsPanelOnly();
-    toast("RAG pipeline removed");
-  }catch(error){
-    if(String(error?.message||"").includes("404")){pruneClientJobState(jobId);persistPrefs();refreshRagProgressPanel();return toast("RAG pipeline was already removed")}
-    openMessageModal({title:"Could not remove RAG pipeline",message:error.message,tone:"danger"});
-  }
-}
 
-async function clearFinishedRagJobs(){
-  const finished=state.jobs.filter(job=>job.type==="rag"&&!["queued","running","cancelling"].includes(job.status));
-  if(!finished.length)return toast("There are no past RAG results to clear");
-  if(!await openMessageModal({title:"Clear past RAG results?",message:`Clear ${finished.length} finished RAG operation${finished.length===1?"":"s"} and their retained results?`,tone:"danger",confirmLabel:"Clear results",cancelLabel:"Cancel"}))return;
-  let removed=0,failed=0;
-  for(const job of finished){
-    try{
-      await api(`/api/jobs/${encodeURIComponent(job.id)}`,{method:"DELETE"});
-      pruneClientJobState(job.id);
-      removed++;
-    }catch(error){
-      failed++;
-      console.warn("Could not remove RAG job",job.id,error);
-    }
-  }
-  await refreshJobs();
-  refreshRagProgressPanel();
-  toast(`Cleared ${removed} past RAG result${removed===1?"":"s"}${failed?` · ${failed} could not be removed`:""}`);
-}
 
-const RAG_STAGE_ORDER=[
-  ["query_metadata","Query decomposition"],
-  ["retrieval","Vector retrieval"],
-  ["deduplicate","Deduplication / rank fusion"],
-  ["rerank","Reranking"],
-  ["context","Evidence packaging"],
-  ["generation","Answer generation"],
-  ["bind_sources","Citation/source binding"],
-  ["response_cache","Response cache"],
-  ["auto_grade","Automatic grade"],
-];
-function ragProgressPanelHtml(){
-  const allRagJobs=state.jobs.filter(job=>job.type==="rag");
-  const jobs=allRagJobs.slice(0,12);
-  const activeCount=allRagJobs.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
-  const finishedCount=allRagJobs.length-activeCount;
-  return `<section class="card rag-live-panel" id="ragProgressPanel">
-    <div class="cardhead"><div><b>RAG pipeline activity</b><div class="note">${activeCount} active · ${finishedCount} past result${finishedCount===1?"":"s"} · stage, model, parameters, and timing refresh automatically</div></div><div class="tools"><button class="btn small" id="ragRefreshJobs">${icon("refresh")}Refresh</button>${finishedCount?'<button class="btn small danger" id="ragClearFinished">Clear past results</button>':""}</div></div>
-    <div class="rag-live-jobs">${jobs.map(job=>{
-      const active=["queued","running","cancelling"].includes(job.status);
-      const request=job.request||{};
-      const stageOrder=RAG_STAGE_ORDER.filter(([stage])=>stage!=="auto_grade"||request.auto_grade);
-      const stageIndex=stageOrder.findIndex(([stage])=>stage===job.stage);
-      const generation=request.generation||{};
-      const elapsed=humanDuration(jobElapsedSeconds(job));
-      const totalLabel=job.finished_at?`Total ${elapsed}`:`Elapsed ${elapsed}`;
-      const sourceStore=state.stores.find(store=>store.name===job.source_collection);
-      const stageEvents=(job.events||[]).filter(event=>event.stage===job.stage&&event.timestamp);
-      const stageStart=stageEvents.length?new Date(stageEvents[0].timestamp).getTime():null;
-      const stageElapsed=Number.isFinite(stageStart)?humanDuration(Math.max(0,(Date.now()-stageStart)/1000)):"—";
-      const params=[
-        `started by ${job.owner||"—"}`,
-        `provider ${job.provider||"—"}`,
-        `generation ${job.model||"—"}`,
-        `embedding ${sourceStore?.embedding_model||sourceStore?.embedding_provider||"—"}`,
-        `reranker model ${request.cross_encoder_model||request.reranker||"—"}`,
-        `languages ${(request.locales||[]).join("+")||"—"}`,
-        `retrieval ${(request.search_types||[]).join("+")||"—"}`,
-        `k ${request.k??"—"}`,
-        `fetch ${request.fetch_k??"—"}`,
-        `λ ${request.lambda_mult??"—"}`,
-        `RRF ${request.rrf_k??"—"}`,
-        `topN ${request.rerank_top_n??"—"}`,
-        `auto-grade ${request.auto_grade?"on":"off"}`,
-        `num_ctx ${generation.num_ctx??"—"}`,
-        `num_predict ${generation.num_predict??"—"}`,
-        job.provider==="openai"
-          ?"scheduler uncapped"
-          :`scheduler ${job.scheduling?.active_when_started??state.health?.rag_concurrency?.ollama_active??"—"}/${job.scheduling?.limit??state.appConfig.ollama_rag_concurrency??1}`,
-        `stage time ${stageElapsed}`,
-      ];
-      return `<article class="rag-live-job">
-        <div class="rag-live-job-head"><div><b>${esc(job.prompt||"RAG query")}</b><span>${esc(job.source_collection||"")} · ${esc(job.model||job.provider||"")} · ${esc(totalLabel)}</span></div><span class="job-status ${esc(job.status)}">${esc(job.status)}</span></div>
-        <div class="rag-live-params">${params.map(value=>`<span>${esc(value)}</span>`).join("")}</div>
-        <div class="rag-stage-rail">${stageOrder.map(([stage,name],index)=>{
-          const done=job.status==="completed"||index<stageIndex;
-          const current=active&&index===stageIndex;
-          return `<div class="rag-stage-node ${done?"done":""} ${current?"current":""}"><i>${done?"✓":index+1}</i><div><b>${esc(name)}</b><span>${current?esc(job.stage_detail||"Running…"):done?"Complete":"Pending"}</span></div></div>`;
-        }).join("")}</div>
-        <div class="rag-live-detail">${job.status==="cancelling"||job.cancel_requested?"Cancellation requested · waiting for the current pipeline call to reach a safe checkpoint.":esc(job.stage_detail||job.fatal_error||"Queued")}</div>
-        <div class="rag-live-footer"><div class="rag-live-timing"><span>${esc(totalLabel)}</span><span>${job.started_at?`Started ${esc(formatTimestamp(job.started_at))}`:"Not started"}</span>${job.finished_at?`<span>Finished ${esc(formatTimestamp(job.finished_at))}</span>`:""}</div><div class="tools"><button class="btn small" data-rag-job-details="${job.id}">Details / timeline</button>${job.status==="completed"?`<button class="btn small primary" data-rag-job-result="${job.id}">Open result</button>`:""}${active?(job.cancel_requested||job.status==="cancelling"?'<button class="btn small" disabled>Cancelling…</button>':`<button class="btn small danger" data-rag-job-cancel="${job.id}">Cancel</button>`):`<button class="btn small danger" data-rag-job-remove="${job.id}">Remove</button>`}</div></div>
-      </article>`;
-    }).join("")||'<div class="llm-empty">No RAG jobs yet. Start one below.</div>'}</div>
-  </section>`;
-}
 
-function wireRagProgressPanel(){
-  const panel=document.querySelector("#ragProgressPanel");
-  if(!panel)return;
-  panel.querySelector("#ragRefreshJobs")?.addEventListener("click",()=>refreshJobs());
-  panel.querySelector("#ragClearFinished")?.addEventListener("click",clearFinishedRagJobs);
-  panel.querySelectorAll("[data-rag-job-details]").forEach(button=>button.onclick=()=>openJobDetails(button.dataset.ragJobDetails));
-  panel.querySelectorAll("[data-rag-job-result]").forEach(button=>button.onclick=()=>openJobResults(button.dataset.ragJobResult));
-  panel.querySelectorAll("[data-rag-job-cancel]").forEach(button=>button.onclick=()=>cancelBackgroundJob(button.dataset.ragJobCancel));
-  panel.querySelectorAll("[data-rag-job-remove]").forEach(button=>button.onclick=()=>removeRagJob(button.dataset.ragJobRemove));
-}
-function refreshRagProgressPanel(){
-  const current=document.querySelector("#ragProgressPanel");
-  if(!current)return;
-  const holder=document.createElement("div");
-  holder.innerHTML=ragProgressPanelHtml();
-  const replacement=holder.firstElementChild;
-  if(replacement)current.replaceWith(replacement);
-  wireRagProgressPanel();
-}
 
 function compactNumber(value){const n=Number(value)||0;if(n>=1000000)return `${(n/1000000).toFixed(n>=10000000?0:1)}M`;if(n>=1000)return `${(n/1000).toFixed(n>=100000?0:1)}K`;return n.toLocaleString()}
 function relativeTime(value){const date=new Date(value||0);if(!Number.isFinite(date.getTime()))return tr("time.recently","Recently");const seconds=Math.max(0,Math.round((Date.now()-date.getTime())/1000));if(seconds<60)return tr("time.just_now","just now");const minutes=Math.round(seconds/60);if(minutes<60)return trf("time.minutes_ago","{count} min ago",{count:minutes});const hours=Math.round(minutes/60);if(hours<24)return trf("time.hours_ago","{count} hr ago",{count:hours});return trf("time.days_ago","{count} d ago",{count:Math.round(hours/24)})}
 
 
-function renderCorpusBuildsHomeCard(){
-  if(isResearcher())return "";
-  const builds=(state.jobs||[]).filter(job=>job.type==="pdf_corpus").slice(0,4);
-  const active=builds.filter(job=>["queued","running","cancelling"].includes(job.status)).length;
-  return `<section class="card dashboard-corpus-builds" aria-label="${esc(tr("pdf_corpus.home_title","Corpus builds"))}">
-    <div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("pdf")}</span><b>${esc(tr("pdf_corpus.home_title","Corpus builds"))}</b>${active?`<span class="dashboard-corpus-active">${active} ${esc(tr("operations.active","active"))}</span>`:""}</div><button class="dashboard-text-link" id="dashCorpusBuilder">${esc(tr("pdf_corpus.open_builder","Open Corpus Builder"))} →</button></div>
-    <p class="dashboard-corpus-help">${esc(tr("pdf_corpus.home_help","Recent PDF-to-corpus pipelines stay visible here even after you leave Corpus Builder."))}</p>
-    <div class="dashboard-corpus-list">${builds.length?builds.map(job=>{const pct=Math.max(0,Math.min(100,Math.round(Number(job.progress||0)*100)));const status=job.raw_status||job.status||"unknown";return `<button type="button" class="dashboard-corpus-row" data-dashboard-corpus-build="${esc(job.id)}"><span class="dashboard-corpus-state ${esc(job.status||"")}" aria-hidden="true"></span><span class="dashboard-corpus-copy"><b>${esc(job.source_filename||tr("pdf_corpus.source_pdf","Source PDF"))}</b><small>${esc(String(status).replaceAll("_"," "))} · ${esc(String(job.stage_detail||job.stage||""))}</small></span><span class="dashboard-corpus-progress"><b>${pct}%</b><i><span style="width:${pct}%"></span></i></span></button>`}).join(""):`<div class="dashboard-corpus-empty">${esc(tr("pdf_corpus.home_empty","No corpus builds yet. Start with a source PDF in Corpus Builder."))}</div>`}</div>
-  </section>`;
-}
 
 
 
@@ -2363,43 +1430,6 @@ function renderView(){
 }
 
 
-async function importFiles(fileList){
-  if(isResearcher())return toast("Researcher accounts cannot load or edit corpus files.");
-  const shareParams=new URLSearchParams(location.search);
-  const requestedFileId=shareParams.get("file");
-  const requestedUrlState=shareParams.get("ts");
-  let first=null, total=0, errors=0;
-  for(const file of [...fileList]){
-    const text=await file.text();
-    const parsed=parseJsonl(text);
-    if(!parsed.records.length){errors+=parsed.errors.length||1;continue}
-    const identity=await stableJsonlFileIdentity(text);
-    const existing=state.files.find(item=>item.id===identity.id);
-    if(existing){
-      first ||= existing.id;
-      total+=existing.records.length;
-      errors+=existing.errors?.length||0;
-      continue;
-    }
-    const item={...identity,name:file.name,records:parsed.records,errors:parsed.errors,dirty:new Set(),imported_at:new Date().toISOString()};
-    state.files.push(item);persistFileNow(item);first ||= item.id;total+=item.records.length;errors+=item.errors.length;
-  }
-  if(requestedFileId&&state.files.some(item=>item.id===requestedFileId)){
-    state.activeFileId=requestedFileId;
-    if(requestedUrlState)applyCompressedTableUrlState(decompressUrlState(requestedUrlState),state.view);
-  }else if(first)state.activeFileId=first;
-  persistPrefs();shell();renderView();syncUrl({replace:true});toast(`Loaded ${total} records${errors?` · ${errors} parse issues`:""}`);
-}
-async function closeFile(id){
-  const f=state.files.find(x=>x.id===id);if(!f)return;
-  if(f.dirty.size && !await openMessageModal({title:"Close modified JSONL?",message:`${f.name} has modified records. Close anyway?`,tone:"danger",confirmLabel:"Close file",cancelLabel:"Keep open"}))return;
-  const i=state.files.indexOf(f);state.files.splice(i,1);delete state.searches[id];delete state.listFilters[id];delete state.pages[id];delete state.sorts[id];
-  clearFileDerivedState(id);
-  invalidateCorpusCache();
-  idbDelete("files",id).catch(error=>console.error("Could not remove saved file",error));
-  if(state.activeFileId===id)state.activeFileId=state.files[Math.min(i,state.files.length-1)]?.id||null;
-  persistPrefs();shell();renderView();
-}
 
 
 
@@ -2623,54 +1653,6 @@ function recordOptionForKey(key){
   const item=lookupRecord(key);
   if(!item)return null;
   return {value:key,label:recordOptionLabel(item.file,item.record,item.index)};
-}
-function compareSearchIndex(){
-  return memoCorpus("compare-search-index",()=>allRows().map(({file,record,index})=>{
-    const labelText=recordOptionLabel(file,record,index);
-    return {
-      value:`${file.id}::${index}`,
-      label:labelText,
-      search:`${labelText} ${record.document_author||""}`.toLocaleLowerCase(),
-    };
-  }));
-}
-function lookupRecord(key){
-  if(!key)return null;const [fid,i]=key.split("::");const f=state.files.find(x=>x.id===fid);return f?{file:f,index:+i,record:f.records[+i]}:null;
-}
-function getCompareLibrary(){
-  if(isResearcher()){
-    return researcherDbRecords().map(record=>{
-      const id=String(record._chroma_id||record.record_id||"");
-      const label=`${record.record_id||id} · ${record.work||""}`;
-      return {value:id,label,search:`${label} ${record.document_author||""}`.toLocaleLowerCase()};
-    });
-  }
-  return compareSearchIndex();
-}
-function getCompareRecord(key){
-  if(!key)return null;
-  if(isResearcher()){
-    const record=researcherDbRecords().find(item=>String(item._chroma_id||item.record_id||"")===String(key));
-    if(!record)return null;
-    const copy={...record};
-    delete copy._chroma_id;
-    delete copy._researcher_text_policy;
-    return {record:copy,label:`${record.record_id||key} · ${record.work||""}`};
-  }
-  const item=lookupRecord(key);
-  if(!item?.record)return null;
-  return {record:item.record,label:recordOptionLabel(item.file,item.record,item.index)};
-}
-async function ensureCompareLibrary(){
-  if(!isResearcher())return getCompareLibrary();
-  if(!state.activeStore){
-    try{await refreshStores()}catch{ /* stores may be unavailable */ }
-  }
-  if(!state.storeRecords.length&&state.activeStore){
-    state.storePageSize=Math.max(Number(state.storePageSize||50),100);
-    try{await loadStorePage()}catch{ /* page load is best-effort for Compare */ }
-  }
-  return getCompareLibrary();
 }
 
 const HTTP_ERROR_STORAGE_KEY="derridai.httpErrors.v1";
@@ -2905,33 +1887,6 @@ async function syncResearcherProviderProfiles(){
   state.researcherProviderProfiles=result.profiles||[];
 }
 
-async function checkHealth(){
-  try{
-    state.health=await api("/api/health");
-    ensureProviderProfiles();
-    await refreshProviderStatuses();
-  }catch(error){
-    state.health={ok:false,error:error.message};
-    state.providerStatuses={};
-    state.llmStatus={
-      provider:defaultProviderProfile()?.type||"ollama",
-      available:false,
-      models:[],
-      error:error.message,
-    };
-  }
-  updateSystemCard();
-  if(state.health?.chroma?.available){
-    try{
-      await refreshStores();
-      if(isResearcher()&&state.activeStore)await refreshStoreWorks(true);
-      persistPrefs();
-      const active=document.activeElement;
-      const userIsEditing=active&&active!==document.body&&["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
-      if(!userIsEditing){shell();renderView()}
-    }catch(error){console.warn("Initial Chroma collection refresh failed",error)}
-  }
-}
 
 
 
