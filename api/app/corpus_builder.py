@@ -914,7 +914,11 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                 "height": round(float(page.rect.height), 2),
                 "block_ids": [block["block_id"] for block in page_blocks],
                 "extraction_method": source,
-                "image_count": sum(1 for item in (data.get("blocks") or []) if item.get("type") == 1),
+                "image_count": sum(
+                    1
+                    for item in raw_blocks
+                    if isinstance(item, dict) and int(item.get("type") or -1) == 1
+                ),
             })
             blocks.extend(page_blocks)
 
@@ -1360,7 +1364,7 @@ class PdfCorpusRepository:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
         if not path.exists():
-            return {"items": [], "total": 0, "offset": offset, "limit": limit, "queue_counts": self._queue_counts([])}
+            return {"items": [], "total": 0, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts([])}
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
         queue_records: list[dict[str, Any]] = []
@@ -1395,7 +1399,7 @@ class PdfCorpusRepository:
                 total += 1
         for record in items:
             record["topology_count"] = topology_count
-        return {"items": items, "total": total, "offset": offset, "limit": limit, "queue_counts": self._queue_counts(queue_records)}
+        return {"items": items, "total": total, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records)}
 
     def publication_path(self, publication_id: str) -> Path:
         return self.root / "publications" / f"{publication_id}.jsonl"
@@ -7220,7 +7224,7 @@ CURRENT REVIEWED RECORD TEXT:
             raise ValueError("Slice point must be inside the selected record text.")
         self._push_review_history(build_id, records, action=f"slice_{direction}", selected_record_id=record_id)
         if direction == "keep":
-            previous, following = neighbors
+            previous, following = records[index - 1], records[index + 1]
             previous["text"] = (str(previous.get("text") or "").rstrip() + "\n\n" + prefix).strip()
             target["text"] = retained
             following["text"] = (suffix + "\n\n" + str(following.get("text") or "").lstrip()).strip()
@@ -7287,7 +7291,7 @@ CURRENT REVIEWED RECORD TEXT:
         result = {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
         if direction == "keep":
             result["left_neighbor"] = neighbors[0]
-            result["right_neighbor"] = neighbors[1]
+            result["right_neighbor"] = records[index + 1]
         return result
 
     @_serialize_record_mutation
