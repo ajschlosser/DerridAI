@@ -64,6 +64,7 @@ import { createOperationDock } from "../domain/operationDock";
 import { createModalDialogs } from "../domain/modalDialogs";
 import { createNavigation } from "../domain/navigation";
 import { pathViewMap, viewPathMap } from "../domain/navigation";
+import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -159,7 +160,8 @@ const {
     getProviderStatusesForUi,
     getProviderWarmupsForUi,
   }=createProviderProfiles({
-  state,api,persistPrefs,isResearcher,
+  state,api,isResearcher,
+  persistPrefs:(...args)=>persistPrefs(...args),
   uid:()=>uid(),
   warmupProviderProfile:(...args)=>warmupProviderProfile(...args),
 });
@@ -861,6 +863,20 @@ function workspaceDbName(){
 }
 let prefsTimer=null;
 const fileTimers=new Map();
+const {persistFileNow,persistFile,workspacePrefs,persistPrefs,flushWorkspacePrefs,restoreWorkspace}=createWorkspacePersistence({
+  state,
+  fileTimers,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  applyUiTheme:(...args)=>applyUiTheme(...args),
+  ensureProviderProfiles:(...args)=>ensureProviderProfiles(...args),
+  idbGet:(...args)=>idbGet(...args),
+  idbGetAll:(...args)=>idbGetAll(...args),
+  idbPut:(...args)=>idbPut(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  restoreCurrentPdfAsset:(...args)=>restoreCurrentPdfAsset(...args),
+  serializableFile:(...args)=>serializableFile(...args),
+  toast:(...args)=>toast(...args),
+});
 const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openStoreRecordEditor,openRecordHistoryBrowser,openUpsertQueue}=createRecordDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -991,154 +1007,6 @@ async function restoreCurrentPdfAsset(){
 
 function serializableFile(file){
   return serializableRecordsFile(file);
-}
-async function persistFileNow(file){
-  invalidateCorpusCache();
-  try{
-    await idbPut("files",serializableFile(file));
-  }catch(error){
-    console.error("IndexedDB file persistence failed",error);
-    toast(`Local persistence failed: ${error.message}`);
-  }
-}
-function persistFile(file){
-  invalidateCorpusCache();
-  clearTimeout(fileTimers.get(file.id));
-  const timer=setTimeout(()=>{fileTimers.delete(file.id);persistFileNow(file)},250);
-  fileTimers.set(file.id,timer);
-}
-function workspacePrefs(){
-  return {
-    key:"workspace",
-    activeFileId:state.activeFileId,
-    view:state.view,
-    selected:state.selected,
-    searches:state.searches,
-    listFilters:state.listFilters,
-    pages:state.pages,
-    pageSize:state.pageSize,
-    sorts:state.sorts,
-    globalSearch:state.globalSearch,
-    globalFilters:state.globalFilters,
-    globalSort:state.globalSort,
-    globalPage:state.globalPage,
-    globalSearchMode:state.globalSearchMode,
-    dbSearchMethod:state.dbSearchMethod,
-    dbSearchWhere:state.dbSearchWhere,
-    dbSearchFetchK:state.dbSearchFetchK,
-    dbSearchLambda:state.dbSearchLambda,
-    globalAdvancedOpen:state.globalAdvancedOpen,
-    searchFacetFilters:state.searchFacetFilters,
-    worksSearch:state.worksSearch,
-    workOverview:state.workOverview,
-    researcherRecordId:state.researcherRecordId,
-    researcherCompareA:state.researcherCompareA,
-    researcherCompareB:state.researcherCompareB,
-    dashboardMetricIndex:state.dashboardMetricIndex,
-    lastViewedRecord:state.lastViewedRecord,
-    compareA:state.compareA,
-    compareB:state.compareB,
-    compareMode:state.compareMode,
-    comparePasteA:state.comparePasteA,
-    comparePasteB:state.comparePasteB,
-    compareSourceA:state.compareSourceA,
-    compareSourceB:state.compareSourceB,
-    compareFilter:state.compareFilter,
-    activeStore:state.activeStore,
-    storePage:state.storePage,
-    storePageSize:state.storePageSize,
-    storeQuery:state.storeQuery,
-    storeSearchMode:state.storeSearchMode,
-    storeWork:state.storeWork,
-    storeSort:state.storeSort,
-    storeFilters:state.storeFilters,
-    storeBrowseMode:state.storeBrowseMode,
-    vectorTab:state.vectorTab,
-    vectorCollectionFilter:state.vectorCollectionFilter,
-    llmConfig:state.llmConfig,
-    appConfig:state.appConfig,
-    ragConfig:state.ragConfig,
-    faqSearch:state.faqSearch,
-    faqPage:state.faqPage,
-    faqExpanded:state.faqExpanded,
-    navHistory:state.navHistory,
-    navForward:state.navForward,
-    sidebarCollapsed:state.sidebarCollapsed,
-    collectionsCollapsed:state.collectionsCollapsed,
-    operationToastsMinimized:state.operationToastsMinimized,
-    operationStackPosition:state.operationStackPosition,
-    collapsedPanels:state.collapsedPanels,
-    tableColumns:state.tableColumns,
-    upsertState:state.upsertState,
-    upsertIgnored:state.upsertIgnored,
-    jobApplied:state.jobApplied,
-    upsertJobApplied:state.upsertJobApplied,
-    reviewSelection:[...state.reviewSelection],
-    selectedEvidence:state.selectedEvidence,
-    storeSearchSort:state.storeSearchSort,
-  };
-}
-function persistPrefs(){
-  if(!state.storageReady)return;
-  clearTimeout(prefsTimer);
-  prefsTimer=setTimeout(()=>idbPut("prefs",workspacePrefs()).catch(error=>console.error("IndexedDB preference persistence failed",error)),400);
-}
-async function flushWorkspacePrefs(){
-  if(!state.storageReady)throw new Error("Workspace storage is not ready yet.");
-  clearTimeout(prefsTimer);
-  await idbPut("prefs",workspacePrefs());
-}
-async function restoreWorkspace(){
-  try{
-    const [savedFiles,prefs]=await Promise.all([idbGetAll("files"),idbGet("prefs","workspace")]);
-    state.files=(savedFiles||[]).map(file=>({
-      ...file,
-      dirty:new Set(file.dirty||[]),
-      errors:file.errors||[],
-    }));
-    // getShellSnapshot/workIndex can be queried before IndexedDB restore finishes.
-    // Always drop derived corpus indexes after reattaching persisted files so the
-    // Works page and corpus metrics cannot remain stuck on a cached empty corpus.
-    invalidateCorpusCache();
-    if(prefs){
-      const preservedAppDefaults={...state.appConfig};
-      const preservedLlmDefaults={...state.llmConfig};
-      for(const key of ["selected","searches","listFilters","pages","sorts","globalSearch","globalFilters","globalSort","globalPage","globalSearchMode","globalSearchAutoRun","searchResultLayouts","dbSearchMethod","dbSearchWhere","dbSearchFetchK","dbSearchLambda","globalAdvancedOpen","searchFacetFilters","worksSearch","workOverview","researcherRecordId","researcherCompareA","researcherCompareB","dashboardMetricIndex","lastViewedRecord","compareA","compareB","compareMode","comparePasteA","comparePasteB","compareSourceA","compareSourceB","compareFilter","faqSearch","faqPage","faqExpanded","activeStore","storePage","storePageSize","storeQuery","storeSearchMode","storeWork","storeSort","storeFilters","storeBrowseMode","vectorTab","vectorCollectionFilter","storeSearchSort","selectedEvidence","navHistory","navForward","sidebarCollapsed","collectionsCollapsed","operationToastsMinimized","operationStackPosition","collapsedPanels","tableColumns","upsertState","upsertIgnored","jobApplied","upsertJobApplied"]){
-        if(prefs[key]!==undefined)state[key]=prefs[key];
-      }
-      state.appConfig={...preservedAppDefaults,...(prefs.appConfig||{})};
-      applyUiTheme(state.appConfig.ui_color_theme);
-      state.llmConfig={...preservedLlmDefaults,...(prefs.llmConfig||{})};
-      state.ragConfig={...state.ragConfig,...(prefs.ragConfig||{})};
-      if(!state.faqExpanded||typeof state.faqExpanded!=="object"||Array.isArray(state.faqExpanded))state.faqExpanded={};
-      state.ragConfig.locales=Array.isArray(state.ragConfig.locales)?state.ragConfig.locales.filter(value=>value==="en"||value==="fr"):["en","fr"];
-      if(!state.ragConfig.locales.length)state.ragConfig.locales=["en","fr"];
-      state.ragConfig.prompt=String(state.ragConfig.prompt||"");
-      state.ragConfig.instructions=String(state.ragConfig.instructions||"");
-      if(!Array.isArray(state.ragConfig.history))state.ragConfig.history=[];
-      state.ragConfig.history=state.ragConfig.history.slice(0,100);
-      if(!Array.isArray(state.ragConfig.run_history))state.ragConfig.run_history=[];
-      state.ragConfig.run_history=state.ragConfig.run_history.slice(0,250);
-      if(!state.appConfig.default_review_preset)state.appConfig.default_review_preset="text";
-      if(!state.appConfig.default_llm_run_mode)state.appConfig.default_llm_run_mode="foreground";
-      ensureProviderProfiles();
-      if(Number.isFinite(+prefs.pageSize))state.pageSize=+prefs.pageSize;
-      if(typeof prefs.view==="string")state.view=prefs.view;
-      state.reviewSelection=new Set(prefs.reviewSelection||[]);
-      state.activeFileId=state.files.some(f=>f.id===prefs.activeFileId)?prefs.activeFileId:(state.files[0]?.id||null);
-    }else{
-      // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-      state.activeFileId=state.files[0]?.id||null;ensureProviderProfiles();try{state.appConfig.ui_color_theme=localStorage.getItem("derridai.ui.theme")||state.appConfig.ui_color_theme||"green"}catch{}applyUiTheme(state.appConfig.ui_color_theme);
-    }
-    const validPrefixes=new Set(state.files.map(f=>f.id));
-    state.reviewSelection=new Set([...state.reviewSelection].filter(key=>validPrefixes.has(String(key).split("::")[0])));
-    await restoreCurrentPdfAsset();
-  }catch(error){
-    console.error("Could not restore IndexedDB workspace",error);
-    toast(`Could not restore saved workspace: ${error.message}`);
-  }finally{
-    state.storageReady=true;
-  }
 }
 function reviewKey(file,index){return `${file.id}::${index}`}
 function reviewItemFromKey(key){
