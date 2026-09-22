@@ -790,7 +790,7 @@ def _block_text(block: dict[str, Any]) -> str:
     return unicodedata.normalize("NFC", str(block.get("text") or "").strip())
 
 
-def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None]:
+def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None, int]:
     source = "native"
     warning: str | None = None
     data = page.get_text("dict", sort=True)
@@ -861,7 +861,12 @@ def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str 
             "extraction_method": source,
             "confidence": 1.0 if source == "native" else 0.88 if source == "ocr" else 0.35,
         })
-    return blocks, source, warning
+    image_count = sum(
+        1
+        for item in raw_blocks
+        if isinstance(item, dict) and int(item.get("type") or -1) == 1
+    )
+    return blocks, source, warning, image_count
 
 
 def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
@@ -887,7 +892,9 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                     f"PDF page-label lookup failed for physical page {page_index + 1}; "
                     f"continuing with visible-folio detection ({exc})."
                 )
-            page_blocks, source, warning = _page_blocks(page, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
+            page_blocks, source, warning, image_count = _page_blocks(
+                page, ocr_mode=ocr_mode, ocr_languages=ocr_languages
+            )
             visible_page_labels = []
             for candidate in page_blocks:
                 if candidate.get("type") != "header_footer":
@@ -914,11 +921,7 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                 "height": round(float(page.rect.height), 2),
                 "block_ids": [block["block_id"] for block in page_blocks],
                 "extraction_method": source,
-                "image_count": sum(
-                    1
-                    for item in raw_blocks
-                    if isinstance(item, dict) and int(item.get("type") or -1) == 1
-                ),
+                "image_count": image_count,
             })
             blocks.extend(page_blocks)
 
