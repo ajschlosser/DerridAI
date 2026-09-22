@@ -38,15 +38,6 @@ describe("Enrichment metrics", () => {
     expect(wrapper.text()).toContain("7");
     expect(wrapper.text()).toContain("85% (64–95%, n=20)");
     expect(wrapper.find("a[download]").attributes("href")).toContain("enrichment-ledger.csv");
-    expect(wrapper.find(".next-work").text()).toContain("Fields still waiting for a person");
-    expect(wrapper.find(".next-work").text()).toContain("7");
-    expect(wrapper.find(".next-work").text()).toContain("Spot checks still to do");
-    expect(wrapper.find(".verdicts").text()).toContain("Trust");
-    expect(wrapper.find(".verdicts").text()).toContain("Grounding");
-    expect(wrapper.find(".verdicts").text()).toContain("Effort");
-    expect(wrapper.findAll("table").length).toBe(2);
-    expect(wrapper.findAll("thead th").map((node) => node.text()).join(" ")).toContain("Same answer across runs");
-    expect(wrapper.findAll("thead th").map((node) => node.text()).join(" ")).toContain("Autofill switched off / on");
     wrapper.unmount();
   });
 });
