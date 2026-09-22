@@ -69,6 +69,7 @@ import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
 import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
+import { createPdfLinking } from "../domain/pdfLinking";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -432,6 +433,19 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdfMetadata,openPdfExplorerWorkspace,openLoadedPdfPage,linkedPdfRows,linkPdfPage,unlinkPdfLink,unlinkAllPdfLinks}=createPdfLinking({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  normalizePdfLinkChanges:(...args)=>normalizePdfLinkChanges(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  pdfLinks:(...args)=>pdfLinks(...args),
+  renderPdf:(...args)=>renderPdf(...args),
+  renderView:(...args)=>renderView(...args),
+  shell:(...args)=>shell(...args),
+  toast:(...args)=>toast(...args),
 });
 const {notifyOperationsChanged,operationsBridge,renderOperationsPanel,mountOperationsPanelHost,refreshOperationsPanelOnly,wireCorpusBuildsHomeCard,refreshCorpusBuildsHomeCardOnly,gradeRagResponse,removeRagJob,clearFinishedRagJobs,ragProgressPanelHtml,wireRagProgressPanel,refreshRagProgressPanel,renderCorpusBuildsHomeCard}=createOperationsPanelBridge({
   state,
@@ -1229,68 +1243,6 @@ function setListFilterValue(fileId,key,value){
 }
 
 
-function pdfDisplayTitle(){
-  return state.pdf.title||state.pdf.name||"PDF";
-}
-function loadedPdfPagesForRecord(record){
-  if(!state.pdf.name)return [];
-  return pdfLinks(record)
-    .filter(link=>link.pdf_file===state.pdf.name)
-    .map(link=>Number(link.pdf_page))
-    .filter(page=>Number.isFinite(page)&&page>0)
-    .sort((a,b)=>a-b);
-}
-function allLinkedRowsForLoadedPdf(){
-  if(!state.pdf.name)return [];
-  const rows=[];
-  for(const {file,record,index} of allRows()){
-    const pages=loadedPdfPagesForRecord(record);
-    if(pages.length)rows.push({file,record,index,pages});
-  }
-  return rows.sort((a,b)=>
-    (a.pages[0]||0)-(b.pages[0]||0)
-    ||String(a.record.work||"").localeCompare(String(b.record.work||""))
-    ||String(a.record.record_id||"").localeCompare(String(b.record.record_id||""))
-  );
-}
-async function loadPdfMetadata(doc,fileName){
-  const fallback=String(fileName||"").replace(/\.pdf$/i,"");
-  if(!doc)return {title:fallback,author:""};
-  try{
-    const metadata=await doc.getMetadata();
-    const info=metadata?.info||{};
-    const xmp=metadata?.metadata;
-    const title=String(
-      info.Title
-      ||xmp?.get?.("dc:title")
-      ||xmp?.get?.("pdf:title")
-      ||fallback
-      ||""
-    ).trim();
-    const author=String(
-      info.Author
-      ||xmp?.get?.("dc:creator")
-      ||xmp?.get?.("pdf:author")
-      ||""
-    ).trim();
-    return {title:title||fallback,author};
-  }catch(error){
-    console.warn("Could not read PDF metadata",error);
-    return {title:fallback,author:""};
-  }
-}
-function openPdfExplorerWorkspace(){
-  window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/pdf?mode=explorer",runtimeView:"pdf"}}));
-}
-function openLoadedPdfPage(page){
-  if(!state.pdf.doc&& !state.pdf.file)return toast("Open the linked PDF in PDF Explorer first");
-  const max=state.pdf.doc?.numPages||Number(page)||1;
-  state.pdf.page=Math.max(1,Math.min(max,Number(page)||1));
-  state.pdf.text="";
-  state.pdf.extractError="";
-  state.pdf.extractionSource="";
-  openPdfExplorerWorkspace();
-}
 
 function needsReviewItems(rows=null){
   if(rows===null){
@@ -1315,45 +1267,6 @@ function setActiveStore(name){
 }
 
 
-function linkedPdfRows(page=state.pdf.page){
-  return allRows().filter(({record})=>pdfLinks(record).some(link=>{
-    if(Number(link.pdf_page)!==Number(page))return false;
-    return !state.pdf.name||link.pdf_file===state.pdf.name;
-  }));
-}
-async function linkPdfPage(file,index,page){
-  if(!state.pdf.name)return toast("Open a PDF first");
-  const record=file.records[index];
-  let links=pdfLinks(record);
-  const target={pdf_file:state.pdf.name,pdf_page:Number(page)};
-  if(links.some(link=>link.pdf_file===target.pdf_file&&Number(link.pdf_page)===target.pdf_page))return toast(`Record is already linked to page ${page}`);
-  if(links.length&&links.some(link=>link.pdf_file!==target.pdf_file)){
-    if(!await openMessageModal({title:"Replace PDF links?",message:`This record is linked to ${links[0].pdf_file}. Replace those PDF links with ${target.pdf_file}?`,tone:"danger",confirmLabel:"Replace links",cancelLabel:"Cancel"}))return;
-    links=[];
-  }
-  const next=[...links,target].sort((a,b)=>a.pdf_page-b.pdf_page);
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,next),{source:"pdf_link"});
-  shell();renderView();
-  toast(count?`Linked record to PDF page ${page}`:"PDF link unchanged");
-}
-function unlinkPdfLink(file,index,link,{stayInPdf=false}={}){
-  const record=file?.records?.[index];
-  if(!record)return;
-  const links=pdfLinks(record);
-  const next=links.filter(item=>!(item.pdf_file===link.pdf_file&&Number(item.pdf_page)===Number(link.pdf_page)));
-  if(next.length===links.length)return toast("That PDF link was not found");
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,next),{source:"pdf_unlink"});
-  if(stayInPdf)renderPdf(document.querySelector("#main"));
-  else{shell();renderView()}
-  toast(count?`Unlinked ${link.pdf_file} page ${link.pdf_page}`:"PDF link unchanged");
-}
-function unlinkAllPdfLinks(file,index){
-  const record=file?.records?.[index];
-  if(!record||!pdfLinks(record).length)return toast("This record has no PDF links");
-  const count=applyRecordChanges(file,index,normalizePdfLinkChanges(record,[]),{source:"pdf_unlink"});
-  shell();renderView();
-  toast(count?"All PDF links removed":"No PDF links changed");
-}
 
 
 
