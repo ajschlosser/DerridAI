@@ -111,7 +111,7 @@ class SchemaStore:
         if old_fields - new_fields:
             return f"{major + 1}.0.0"
         if new_fields - old_fields:
-            return f"{major}.{minor + 1}.0.0"
+            return f"{major}.{minor + 1}.0"
         return f"{major}.{minor}.{patch + 1}"
 
     def delete(self, schema_id: str) -> None:
