@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "api"))
 from app import corpus_builder as cb
 from app import enrichment_cycles as ec
 from app.config import APP_VERSION
+from app.corpus_review_mutations import requeue_record_metadata
 
 
 def test_enrichment_scope_can_target_explicit_records() -> None:
@@ -224,6 +225,22 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
     assert not current.get("needs_review")
     assert {event["kind"] for event in events} == {"protected_suggestion", "agreement"}
     assert repo.get_build(build_id)["metadata_operation"]["records_reopened"] == 0
+
+
+def test_boundary_mutation_only_requeues_records_that_have_started_enrichment():
+    queued = {
+        "metadata_enrichment_state": "queued",
+        "metadata_stage_status": {"discourse": "queued", "quotation": "queued", "indexing": "queued"},
+    }
+    completed = {
+        "metadata_enrichment_state": "complete",
+        "metadata_enrichment_finished": True,
+        "metadata_stage_status": {"discourse": "complete", "quotation": "skipped", "indexing": "skipped"},
+    }
+    assert requeue_record_metadata(queued, "changed") is False
+    assert "metadata_requeue_requested" not in queued
+    assert requeue_record_metadata(completed, "changed") is True
+    assert completed["metadata_requeue_requested"] is True
 
 
 def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_converged(tmp_path: Path):

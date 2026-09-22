@@ -31,6 +31,10 @@ from .autofill import in_audit_sample
 from .autonomous import Policy as AutonomousPolicy
 from .autonomous import may_accept, settle_record
 from .config import APP_VERSION, settings
+from .corpus_enrichment_feedback import enrichment_informational_event
+from .corpus_extraction import (
+    extract_source_document as _extract_source_document,
+)
 
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -92,6 +96,7 @@ from .corpus_metadata import (
 )
 from .corpus_pipeline import BuildScope
 from .corpus_publication import serialize_public_record, validate_publication_record
+from .corpus_review_mutations import requeue_record_metadata
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     HUMAN_OWNED_STATUSES,
@@ -724,11 +729,6 @@ def iso_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _safe_filename(value: str) -> str:
-    name = Path(str(value or "source.pdf")).name
-    return re.sub(r"[^A-Za-z0-9._ -]+", "_", name)[:240] or "source.pdf"
-
-
 def corpus_root() -> Path:
     root = Path(settings.chroma_data_root).expanduser().resolve() / ".home" / "pdf-corpus"
     for part in ("assets", "builds", "publications"):
@@ -778,230 +778,9 @@ def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _block_text(block: dict[str, Any]) -> str:
-    if "lines" in block:
-        chunks: list[str] = []
-        for line in block.get("lines") or []:
-            spans = line.get("spans") or []
-            text = unicodedata.normalize("NFC", "".join(str(span.get("text") or "") for span in spans))
-            if text.strip():
-                chunks.append(text.rstrip())
-        return unicodedata.normalize("NFC", "\n".join(chunks).strip())
-    return unicodedata.normalize("NFC", str(block.get("text") or "").strip())
-
-
-def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None, int]:
-    source = "native"
-    warning: str | None = None
-    data = page.get_text("dict", sort=True)
-    raw_blocks = data.get("blocks") or []
-    native_chars = sum(len(_block_text(block)) for block in raw_blocks if block.get("type") == 0)
-    should_ocr = ocr_mode == "always" or (ocr_mode == "auto" and native_chars < 24)
-    if should_ocr:
-        try:
-            textpage = page.get_textpage_ocr(language=ocr_languages, dpi=200, full=True)
-            data = page.get_text("dict", textpage=textpage, sort=True)
-            raw_blocks = data.get("blocks") or []
-            source = "ocr"
-        except Exception as exc:
-            warning = f"OCR unavailable for page {page.number + 1}: {exc}"
-            if ocr_mode == "always" and native_chars < 1:
-                source = "ocr_failed"
-
-    sizes: list[float] = []
-    for block in raw_blocks:
-        for line in block.get("lines") or []:
-            for span in line.get("spans") or []:
-                if str(span.get("text") or "").strip():
-                    try:
-                        sizes.append(float(span.get("size") or 0))
-                    except (TypeError, ValueError):
-                        pass
-    median_size = sorted(sizes)[len(sizes) // 2] if sizes else 0.0
-    height = float(page.rect.height or 1)
-    width = float(page.rect.width or 1)
-    blocks: list[dict[str, Any]] = []
-    text_index = 0
-    for raw in raw_blocks:
-        if raw.get("type") != 0:
-            continue
-        value = _block_text(raw)
-        if not value.strip():
-            continue
-        text_index += 1
-        bbox = [round(float(x), 2) for x in (raw.get("bbox") or [0, 0, 0, 0])]
-        span_sizes: list[float] = []
-        for line in raw.get("lines") or []:
-            for span in line.get("spans") or []:
-                if str(span.get("text") or "").strip():
-                    try:
-                        span_sizes.append(float(span.get("size") or 0))
-                    except (TypeError, ValueError):
-                        pass
-        max_size = max(span_sizes) if span_sizes else median_size
-        top, bottom = (bbox[1] if len(bbox) > 1 else 0), (bbox[3] if len(bbox) > 3 else 0)
-        kind = "paragraph"
-        stripped = value.lstrip()
-        if median_size and max_size >= median_size * 1.35 and len(value) < 240:
-            kind = "heading"
-        elif top < height * 0.055 or bottom > height * 0.955:
-            kind = "header_footer"
-        elif median_size and bottom > height * 0.72 and max_size <= median_size * 0.82:
-            kind = "footnote"
-        elif re.match(r"^(?:[•▪◦‣–—-]|\d+[.)])\s+", stripped):
-            kind = "list_item"
-        elif len(bbox) >= 4 and bbox[0] > width * 0.13 and bbox[2] < width * 0.87 and len(value) > 80:
-            kind = "block_quote"
-        blocks.append({
-            "block_id": f"p{page.number + 1:05d}-b{text_index:04d}",
-            "page": page.number + 1,
-            "bbox": bbox,
-            "type": kind,
-            "text": value,
-            "extraction_method": source,
-            "confidence": 1.0 if source == "native" else 0.88 if source == "ocr" else 0.35,
-        })
-    image_count = sum(
-        1
-        for item in raw_blocks
-        if isinstance(item, dict) and int(item.get("type") or -1) == 1
-    )
-    return blocks, source, warning, image_count
-
-
-def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
-    if not data:
-        raise ValueError("The uploaded PDF was empty.")
-    try:
-        doc = fitz.open(stream=data, filetype="pdf")
-    except Exception as exc:
-        raise ValueError(f"Could not open PDF: {exc}") from exc
-    try:
-        metadata = {k: v for k, v in (doc.metadata or {}).items() if v}
-        pages: list[dict[str, Any]] = []
-        blocks: list[dict[str, Any]] = []
-        warnings: list[str] = []
-        ocr_pages = 0
-        for page_index in range(doc.page_count):
-            page = doc.load_page(page_index)
-            try:
-                pdf_label = page.get_label() or None
-            except Exception as exc:
-                pdf_label = None
-                warnings.append(
-                    f"PDF page-label lookup failed for physical page {page_index + 1}; "
-                    f"continuing with visible-folio detection ({exc})."
-                )
-            page_blocks, source, warning, image_count = _page_blocks(
-                page, ocr_mode=ocr_mode, ocr_languages=ocr_languages
-            )
-            visible_page_labels = []
-            for candidate in page_blocks:
-                if candidate.get("type") != "header_footer":
-                    continue
-                candidate_text = _normalize_text(candidate.get("text") or "")
-                if re.fullmatch(r"(?:[ivxlcdm]+|\d+)", candidate_text, re.I):
-                    visible_page_labels.append(candidate_text)
-            # Visible printed folios are stronger evidence than the PDF page-label
-            # dictionary, which is frequently absent or merely mirrors physical pages.
-            printed_label = visible_page_labels[-1] if visible_page_labels else pdf_label
-            label_source = "visible_folio" if visible_page_labels else "pdf_label" if pdf_label else None
-            for block in page_blocks:
-                block["printed_page_label"] = printed_label
-                block["printed_page_label_source"] = label_source
-            if source == "ocr":
-                ocr_pages += 1
-            if warning:
-                warnings.append(warning)
-            pages.append({
-                "pdf_page": page_index + 1,
-                "printed_page_label": printed_label,
-                "printed_page_label_source": label_source,
-                "width": round(float(page.rect.width), 2),
-                "height": round(float(page.rect.height), 2),
-                "block_ids": [block["block_id"] for block in page_blocks],
-                "extraction_method": source,
-                "image_count": image_count,
-            })
-            blocks.extend(page_blocks)
-
-        # Infer missing Arabic printed labels only when at least two visible folios
-        # corroborate the same physical-to-printed offset. Every inferred value is
-        # marked as such and remains editable in the source manifest.
-        offsets: Counter[int] = Counter()
-        for page_info in pages:
-            if page_info.get("printed_page_label_source") != "visible_folio":
-                continue
-            label = str(page_info.get("printed_page_label") or "").strip()
-            if label.isdigit():
-                offsets[int(label) - int(page_info["pdf_page"])] += 1
-        inferred_offset = None
-        if offsets:
-            candidate_offset, count = offsets.most_common(1)[0]
-            if count >= 2:
-                inferred_offset = int(candidate_offset)
-        if inferred_offset is not None:
-            page_lookup = {int(page_info["pdf_page"]): page_info for page_info in pages}
-            for page_number, page_info in page_lookup.items():
-                if page_info.get("printed_page_label_source") == "visible_folio":
-                    continue
-                inferred = page_number + inferred_offset
-                if inferred < 1:
-                    continue
-                # Only infer within the span covered by visible Arabic folios; this
-                # avoids turning Roman/front matter into fabricated Arabic pages.
-                anchor_pages = [int(item["pdf_page"]) for item in pages if item.get("printed_page_label_source") == "visible_folio" and str(item.get("printed_page_label") or "").isdigit()]
-                if not anchor_pages or page_number < min(anchor_pages):
-                    continue
-                page_info["printed_page_label"] = str(inferred)
-                page_info["printed_page_label_source"] = "inferred_from_folios"
-                for block in blocks:
-                    if int(block.get("page") or 0) == page_number:
-                        block["printed_page_label"] = str(inferred)
-                        block["printed_page_label_source"] = "inferred_from_folios"
-
-        # Repeated running headers/footers and bare page numbers are layout noise,
-        # not record text. Mark them rather than deleting them so the source asset
-        # remains fully auditable and excluded material can be inspected later.
-        header_pages: dict[str, set[int]] = {}
-        for block in blocks:
-            if block.get("type") != "header_footer":
-                continue
-            normalized = _normalize_text(block.get("text") or "").casefold()
-            if normalized:
-                header_pages.setdefault(normalized, set()).add(int(block.get("page") or 0))
-        repeat_threshold = max(3, int(max(1, doc.page_count) * 0.20))
-        excluded_count = 0
-        for block in blocks:
-            if block.get("type") != "header_footer":
-                continue
-            normalized = _normalize_text(block.get("text") or "").casefold()
-            is_page_number = bool(re.fullmatch(r"(?:[ivxlcdm]+|\d+)", normalized, re.I))
-            if is_page_number or len(header_pages.get(normalized, set())) >= repeat_threshold:
-                block["excluded_reason"] = "page_number" if is_page_number else "repeated_header_footer"
-                excluded_count += 1
-        try:
-            outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
-        except Exception:  # noqa: BLE001 - a broken outline only removes one clue
-            outline = []
-        return {
-            "main_text_start_inference": infer_main_text_start(blocks, pages, outline),
-            "outline": [{"page": page, "title": title} for page, title in outline[:400]],
-            "filename": _safe_filename(filename),
-            "page_count": doc.page_count,
-            "metadata": metadata,
-            "pages": pages,
-            "blocks": blocks,
-            "block_count": len(blocks),
-            "included_block_count": len(blocks) - excluded_count,
-            "excluded_block_count": excluded_count,
-            "ocr_pages": ocr_pages,
-            "warnings": warnings,
-            "extractor": "pymupdf-layout-v2",
-        }
-    finally:
-        doc.close()
-
+def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = 'auto', ocr_languages: str = 'eng+fra+deu') -> dict[str, Any]:
+    """Compatibility facade for the dedicated PDF SourceDocument extractor."""
+    return _extract_source_document(data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
 
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
@@ -5048,7 +4827,7 @@ CURRENT REVIEWED RECORD TEXT:
                 auto["verification_status"] = "auto_resolved"
                 field_status[field] = auto
             elif field in required_metadata_fields and value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "value_source": "llm", "verification_status": "pending_review", "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # The proposal is already populated. Missing/low confidence blocks
                 # automatic resolution, not visibility of the value.
@@ -6599,9 +6378,9 @@ CURRENT REVIEWED RECORD TEXT:
             # non-structural review operations are available immediately. Bulk
             # review actions do not target one record object, so record=None must
             # not accidentally turn them into structural operations.
-            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "review"} and not structural:
+            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "review"}:
                 return build
-            raise ValueError("Records are not editable until segmentation is complete. Structural merge/split operations wait until background enrichment stops.")
+            raise ValueError("Records are not editable until segmentation is complete.")
         return build
 
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
@@ -7258,18 +7037,10 @@ CURRENT REVIEWED RECORD TEXT:
             row["rejected"] = False
             row["needs_review"] = True
             row["review_reason"] = "Record boundary adjusted during human review; verify neighboring text and affected metadata."
-            row["metadata_needs_attention"] = True
-            reasons = list(row.get("metadata_attention_reasons") or [])
-            reasons.append("Record boundary changed; metadata whose interpretation depends on moved text may need review.")
-            row["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
-            row["metadata_enrichment_state"] = "stale"
-            row["metadata_complete"] = False
-            row["metadata_enrichment_finished"] = False
-            row["metadata_stage_status"] = {
-                family: "queued" for family in ("discourse", "quotation", "indexing")
-            }
-            row["metadata_execution_ledger"] = {}
-            row["metadata_requeue_requested"] = True
+            requeue_record_metadata(
+                row,
+                "Record boundary changed; metadata whose interpretation depends on moved text may need review.",
+            )
             lineage = dict(row.get("slice_lineage") or {})
             lineage.update({
                 "transaction_id": transaction_id,
@@ -7353,6 +7124,10 @@ CURRENT REVIEWED RECORD TEXT:
         merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
         # Keep the first record's immutable identity. Unrelated downstream IDs never change.
         merged["record_id"] = first.get("record_id")
+        requeue_record_metadata(
+            merged,
+            "Record boundaries were merged during human review; metadata enrichment must rerun against the merged text.",
+        )
         records[first_index:second_index + 1] = [merged]
         self._rewrite_and_validate(build_id, records)
         return merged
@@ -7628,28 +7403,6 @@ CURRENT REVIEWED RECORD TEXT:
         known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
         model_name = str(request.get("model") or "")
 
-        def add_informational(
-            kind: str, field: str, *, authoritative: Any = None, proposed: Any = None,
-            confidence: Any = None, reason: str | None = None,
-        ) -> None:
-            event: dict[str, Any] = {
-                "kind": kind,
-                "field": field,
-                "run_id": run_id,
-                "pass": pass_number,
-                "model": model_name or None,
-                "at": iso_now(),
-            }
-            if authoritative is not None:
-                event["authoritative_value"] = authoritative
-            if proposed is not None:
-                event["proposed_value"] = proposed
-            if isinstance(confidence, (int, float)):
-                event["confidence"] = confidence
-            if reason:
-                event["reason"] = reason
-            informational.append(event)
-
         for family in families:
             for field in groups[family]:
                 new, old = candidate.get(field), live.get(field)
@@ -7658,9 +7411,12 @@ CURRENT REVIEWED RECORD TEXT:
                 if new in (None, "", []):
                     continue
                 if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "agreement" if same_value(old, new) else "protected_suggestion",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
@@ -7669,7 +7425,7 @@ CURRENT REVIEWED RECORD TEXT:
                             if same_value(old, new)
                             else "The model proposed a different value, but the human-owned value remains authoritative."
                         ),
-                    )
+                    ))
                     continue
                 if old in (None, "", []):
                     live[field] = new
@@ -7681,26 +7437,32 @@ CURRENT REVIEWED RECORD TEXT:
                 if field in CONFIDENCE_FIELDS:
                     continue
                 if same_value(old, new):
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "agreement",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
                         reason="The model found no new supported value.",
-                    )
+                    ))
                     if field in cand_evidence:
                         live_evidence[field] = cand_evidence[field]
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
-                    add_informational(
+                    informational.append(enrichment_informational_event(
                         "duplicate",
                         field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
                         authoritative=old,
                         proposed=new,
                         confidence=new_info.get("confidence"),
                         reason="The model repeated an existing unresolved candidate.",
-                    )
+                    ))
                     continue
                 # PR #83 permits a valid LLM proposal to occupy the record while
                 # remaining pending human review. PR #81's generic resolver treats

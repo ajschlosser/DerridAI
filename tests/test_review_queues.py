@@ -153,12 +153,12 @@ def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Pat
     assert result["queue_counts"]["pending"] == 1
 
 def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_path: Path):
-    """Records can be reviewed while enrichment runs; topology edits stay locked.
+    """Records can be reviewed and boundaries edited while enrichment runs.
 
     Both a finished (r1) and a still-queued (r2) record can be accepted mid-build, and a
     review marks the record "__review__" human-touched so background work will not alter
-    it. Merging records is refused ("not editable until segmentation is complete")
-    because neighbors' metadata is still in flight.
+    it. Merging is allowed once topology exists and the merged Record is requeued
+    because one of its inputs had already been enriched.
     """
     complete=ready_record("r1","b1")
     complete["metadata_enrichment_state"]="complete"
@@ -179,11 +179,9 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
     assert result2["applied"] is True
     assert "__review__" in repo.load_records(build["build_id"])[1].get("human_touched_fields", [])
 
-    try:
-        manager.merge(build["build_id"], "r1", "next", expected_revision=2)
-        assert False, "topology edits must remain locked while neighboring metadata is in flight"
-    except ValueError as exc:
-        assert "not editable until segmentation is complete" in str(exc).lower()
+    merged = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+    assert merged["metadata_requeue_requested"] is True
+    assert merged["metadata_enrichment_state"] == "stale"
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):
@@ -238,7 +236,6 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
     result=manager.bulk_disposition(build["build_id"],"accepted",review_queue="ready")
     assert result["changed"] == 1
     assert result["queue_counts"]["issues"] == 3
-
 
 
 
