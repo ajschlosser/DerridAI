@@ -7,7 +7,8 @@ import SearchView from "../views/SearchView.vue";
 import RecordView from "../views/RecordView.vue";
 import ResponseFaqView from "../views/ResponseFaqView.vue";
 import ResponseCacheView from "../views/ResponseCacheView.vue";
-import ToolsView from "../views/ToolsView.vue";
+import PdfWorkspaceView from "../views/PdfWorkspaceView.vue";
+import VectorStoresView from "../views/VectorStoresView.vue";
 import CompareView from "../views/CompareView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import UsersView from "../views/UsersView.vue";
@@ -57,7 +58,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/pdf",
     name: "pdf",
-    component: ToolsView,
+    component: PdfWorkspaceView,
     meta: { view: "pdf", capability: "page.pdf", adminOnly: true },
   },
   {
@@ -69,7 +70,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/databases",
     name: "vector",
-    component: ToolsView,
+    component: VectorStoresView,
     meta: { view: "vector", capability: "page.vector", vueNative: true },
   },
   {
