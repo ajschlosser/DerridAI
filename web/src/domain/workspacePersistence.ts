@@ -73,7 +73,7 @@ export function createWorkspacePersistence(deps: Deps) {
       }
       return undefined;
     };
-    return {
+    const prefs = {
       key: "workspace",
       activeFileId: state.activeFileId,
       view: state.view,
@@ -142,6 +142,10 @@ export function createWorkspacePersistence(deps: Deps) {
       selectedEvidence: state.selectedEvidence,
       storeSearchSort: state.storeSearchSort,
     };
+    // Settings saves use IndexedDB's structured-clone algorithm. Sanitize the
+    // complete payload, not just provider config, because shared Vue/runtime
+    // state can contain reactive objects or callbacks added by a workspace.
+    return cloneable(prefs);
   }
   function persistPrefs() {
     if (!state.storageReady) return;
