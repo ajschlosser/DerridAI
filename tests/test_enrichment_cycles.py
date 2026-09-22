@@ -226,6 +226,22 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
     assert repo.get_build(build_id)["metadata_operation"]["records_reopened"] == 0
 
 
+def test_boundary_mutation_only_requeues_records_that_have_started_enrichment():
+    queued = {
+        "metadata_enrichment_state": "queued",
+        "metadata_stage_status": {"discourse": "queued", "quotation": "queued", "indexing": "queued"},
+    }
+    completed = {
+        "metadata_enrichment_state": "complete",
+        "metadata_enrichment_finished": True,
+        "metadata_stage_status": {"discourse": "complete", "quotation": "skipped", "indexing": "skipped"},
+    }
+    assert cb.PdfCorpusBuildManager._requeue_record_metadata(queued, "changed") is False
+    assert "metadata_requeue_requested" not in queued
+    assert cb.PdfCorpusBuildManager._requeue_record_metadata(completed, "changed") is True
+    assert completed["metadata_requeue_requested"] is True
+
+
 def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_converged(tmp_path: Path):
     """Pass 1 decides confident conflicts; pass 2 sees nothing new and ends the chain."""
     rows = [

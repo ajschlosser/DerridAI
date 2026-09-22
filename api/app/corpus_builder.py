@@ -1558,11 +1558,19 @@ class PdfCorpusBuildManager:
         return merged
 
     @staticmethod
-    def _requeue_record_metadata(record: dict[str, Any], reason: str) -> None:
+    def _requeue_record_metadata(record: dict[str, Any], reason: str) -> bool:
+        stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
+        has_prior_adjudication = bool(
+            record.get("metadata_enrichment_finished")
+            or str(record.get("metadata_enrichment_state") or "") in {"running", "complete", "failed"}
+            or any(str(value) in {"running", "complete", "failed", "needs_review"} for value in stage_status.values())
+        )
         record["metadata_needs_attention"] = True
         record["metadata_attention_reasons"] = list(dict.fromkeys(
             [*(record.get("metadata_attention_reasons") or []), reason]
         ))[-50:]
+        if not has_prior_adjudication:
+            return False
         record["metadata_enrichment_state"] = "stale"
         record["metadata_complete"] = False
         record["metadata_enrichment_finished"] = False
@@ -1571,6 +1579,7 @@ class PdfCorpusBuildManager:
         }
         record["metadata_execution_ledger"] = {}
         record["metadata_requeue_requested"] = True
+        return True
 
     def switch_provider_profile(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Change the provider used by metadata tasks scheduled after this point.
