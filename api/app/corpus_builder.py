@@ -1557,6 +1557,21 @@ class PdfCorpusBuildManager:
         merged.update(chosen)
         return merged
 
+    @staticmethod
+    def _requeue_record_metadata(record: dict[str, Any], reason: str) -> None:
+        record["metadata_needs_attention"] = True
+        record["metadata_attention_reasons"] = list(dict.fromkeys(
+            [*(record.get("metadata_attention_reasons") or []), reason]
+        ))[-50:]
+        record["metadata_enrichment_state"] = "stale"
+        record["metadata_complete"] = False
+        record["metadata_enrichment_finished"] = False
+        record["metadata_stage_status"] = {
+            family: "queued" for family in ("discourse", "quotation", "indexing")
+        }
+        record["metadata_execution_ledger"] = {}
+        record["metadata_requeue_requested"] = True
+
     def switch_provider_profile(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Change the provider used by metadata tasks scheduled after this point.
 
@@ -6599,9 +6614,9 @@ CURRENT REVIEWED RECORD TEXT:
             # non-structural review operations are available immediately. Bulk
             # review actions do not target one record object, so record=None must
             # not accidentally turn them into structural operations.
-            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "review"} and not structural:
+            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "review"}:
                 return build
-            raise ValueError("Records are not editable until segmentation is complete. Structural merge/split operations wait until background enrichment stops.")
+            raise ValueError("Records are not editable until segmentation is complete.")
         return build
 
     def _assert_record_revision(self, record: dict[str, Any], expected_revision: int | None) -> int:
@@ -7258,18 +7273,10 @@ CURRENT REVIEWED RECORD TEXT:
             row["rejected"] = False
             row["needs_review"] = True
             row["review_reason"] = "Record boundary adjusted during human review; verify neighboring text and affected metadata."
-            row["metadata_needs_attention"] = True
-            reasons = list(row.get("metadata_attention_reasons") or [])
-            reasons.append("Record boundary changed; metadata whose interpretation depends on moved text may need review.")
-            row["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
-            row["metadata_enrichment_state"] = "stale"
-            row["metadata_complete"] = False
-            row["metadata_enrichment_finished"] = False
-            row["metadata_stage_status"] = {
-                family: "queued" for family in ("discourse", "quotation", "indexing")
-            }
-            row["metadata_execution_ledger"] = {}
-            row["metadata_requeue_requested"] = True
+            self._requeue_record_metadata(
+                row,
+                "Record boundary changed; metadata whose interpretation depends on moved text may need review.",
+            )
             lineage = dict(row.get("slice_lineage") or {})
             lineage.update({
                 "transaction_id": transaction_id,
@@ -7353,6 +7360,10 @@ CURRENT REVIEWED RECORD TEXT:
         merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
         # Keep the first record's immutable identity. Unrelated downstream IDs never change.
         merged["record_id"] = first.get("record_id")
+        self._requeue_record_metadata(
+            merged,
+            "Record boundaries were merged during human review; metadata enrichment must rerun against the merged text.",
+        )
         records[first_index:second_index + 1] = [merged]
         self._rewrite_and_validate(build_id, records)
         return merged

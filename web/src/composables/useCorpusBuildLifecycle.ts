@@ -15,7 +15,7 @@ export function useCorpusBuildLifecycle(
   const buildRunning=computed(()=>Boolean(currentBuild.value && ["queued","running"].includes(currentBuild.value.status)));
   const reviewCompatibleStages=new Set(["enriching","metadata_retry","metadata_enrichment_rerun"]);
   const reviewLocked=computed(()=>Boolean(buildRunning.value&&!reviewCompatibleStages.has(String(currentBuild.value?.stage||""))));
-  const structuralReviewLocked=computed(()=>buildRunning.value);
+  const structuralReviewLocked=computed(()=>buildRunning.value&&!["enriching","metadata_retry","metadata_enrichment_rerun","review"].includes(String(currentBuild.value?.stage||"")));
   const canResume=computed(()=>Boolean(currentBuild.value?.resumable && !buildRunning.value && ["failed","interrupted","cancelled","blocked"].includes(String(currentBuild.value.status))));
   const segmentationNeedsReview=computed(()=>Boolean(currentBuild.value?.segmentation_degraded && !buildRunning.value && (currentBuild.value?.segmentation_unresolved_regions?.length||0)>0));
   const retryingSegmentation=computed(()=>Boolean(buildRunning.value && currentBuild.value?.retrying_segmentation));
