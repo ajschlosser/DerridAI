@@ -1,310 +1,177 @@
-# runtime.js decomposition: progress and hand-off
+# runtime.js decomposition: hand-off
 
-Temporary file for this branch (`claude/derridai-runtime-refactor-24e3c0`). Delete it before merging.
+Temporary file. **Delete it before the effort ends** (last commit of the last PR). It exists so another agent (Codex, Copilot,
+another Claude) can continue if the current one stops.
 
-## Goal and hard requirements
+## Goal and hard requirements (from the owner)
 
-Decompose `web/src/runtime/runtime.js` (10,472 lines at the start, ~600 functions, one mutable `state`
-object, imperative DOM rendering) toward modern Vue patterns.
+Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
+Vue-facing API; 10,472 lines at the start, **3,421 now**) toward modern Vue patterns.
 
-- **No functionality changes or loss.**
-- **No layout, UI or UX changes.** Rendered markup must stay identical.
-- Commit often and push. Run Prettier on new/changed TS files before the PR (it is fine to leave
-  machine-dense code in `runtime.js` itself; do not reformat the whole file, it would bury the moves).
+- **No functionality changes or loss. No layout, UI or UX changes.** Rendered markup and computed styles stay identical.
+- A behavior change is allowed only to fix an obvious bug, and only after checking: probe the current behavior, add a test that
+  fails without the fix, keep the fix in its own commit.
+- Human-readable code: run Prettier on every new or edited TS/Vue file (`runtime.js` itself is dense on purpose; do not reformat
+  it, that would bury the moves).
+- Commit and push often; pull master periodically; one tranche per branch (`claude/runtime-refactor-N`), cut from master after the
+  previous PR merged (if it did not, merge it in). The owner merges PRs. Keep chat and token use small.
+- Before calling anything done: typecheck, lint, unit, the DOM baseline, the full e2e suite and the Storybook build pass.
 
-## Method
+## State of the code
 
-Every step is a **move**: function bodies are copied verbatim into a typed module and the runtime imports
-them. Nothing is rewritten. Each move is proven with one of:
+`web/src/runtime/runtime.js` is now thin: it owns `const state = createRuntimeState()`, a set of
+`const {a,b}=createX({state, ...helper lambdas})` calls, small shared helpers, and one big `export {...}` block that Vue code
+imports (do not change export names). Everything else lives in `web/src/domain/*.ts` as verbatim moves:
 
-1. a throwaway differential test comparing the extracted function to the original source from git
-   `28a6e77` (the pre-refactor master) across a wide input matrix (then deleted, not committed), and
-2. a committed test with golden values or snapshots taken from that verified output.
+- **Pure helpers:** citations, recordValues, urlState, recordQuery, researchPayloads, html (`esc`, `icon`), runtimeConstants,
+  dashboardCharts, recordHistory, providerRequest, pastedRecord, httpErrors, recordFormatting, recordPayloads, workMetadata,
+  touchupFields, reviewPresentation, operationsDock.
+- **Factories** (`createX(deps)`; `deps.state` is the runtime state object, other deps are helper lambdas): operationPresenters,
+  fieldFormatting, corpusAnalytics, searchFacets, recordPresenters, providerProfilesService, searchWorkspace, recordsWorkspace,
+  recordWorkspace, worksWorkspace, annotationsWorkspace, researchWorkspace, jobsWorkspace, backupWorkspace, operationDock (toasts
+  and the floating operation dock), and the renderers and dialogs: **dashboardRenderer, responseCacheRenderer,
+  pdfExplorerRenderer, jobDialogs, workDialogs, recordDialogs**.
+- **State:** `state/jobsState.ts`, `state/workspaceState.ts` (shallow-reactive groups bound onto `runtime.state` with
+  `bindJobsState`/`bindSharedState`; Pinia stores in `stores/jobs.ts`, `stores/workspace.ts`; the runtime bumps a `version`
+  counter where it already notifies, e.g. `invalidateCorpusCache()` calls `touchCorpus()`). Vue views refresh by watching
+  `corpusState.version` and `activeFileId`. Gotcha: a `computed` that returns the same array does not notify; return a count.
+- **Deleted:** the legacy Record, Annotations, List, Global, Compare, Faq, Rag and Works renderers (no route reaches them).
+  `renderView()` dispatches only `home` (dashboard), `pdf` (PDF Explorer) and `responsecache`. `RuntimeSurface.vue` mounts `#main`
+  for exactly those three (see `views/DashboardView.vue`, `PdfWorkspaceView.vue`, `ResearchView.vue`).
 
-## Done so far (runtime.js: 10,472 -> 8,803 lines; master 0.62.19 build 4675429 is the base of session 3)
+## What is left, in order
 
-| Module | Contents |
-|---|---|
-| `web/src/domain/citations.ts` | MLA/inline/full citations |
-| `web/src/domain/recordValues.ts` | clone/equality, stable value and FNV fingerprint, compare/sort |
-| `web/src/domain/urlState.ts` | shareable-link compression (LZW + base64url); golden tokens from the old code |
-| `web/src/domain/recordQuery.ts` | `parseJsonl`, `flattenValueList`, `countOccurrences`, filter/subset matchers |
-| `web/src/domain/researchPayloads.ts` | Research config/generation/job/evidence/profile shaping |
-| `web/src/domain/html.ts` | `esc`, `icon` |
-| `web/src/domain/runtimeConstants.ts` | `FIELD_LABELS`, `viewConfig`, `TABLE_DEFAULTS`, `SEARCH_LOADED_COLUMNS` |
-| `web/src/domain/dashboardCharts.ts` | line/multi-line/bar/pie charts and `statList` (SVG/HTML strings) |
-| `web/src/domain/recordHistory.ts`, `providerRequest.ts`, `pastedRecord.ts`, `httpErrors.ts` | audit history + upsert delta, provider request config, Compare paste parsing, API error text |
-| `web/src/domain/recordFormatting.ts`, `recordPayloads.ts` | highlight/snippet/model labels; record payloads, history summary, PDF links |
-| `web/src/domain/operationPresenters.ts` | `createOperationPresenters(deps)` factory: job labels, facts, subtitles, progress (Operations panel view model) |
-| `web/src/domain/fieldFormatting.ts` | `createFieldFormatting({tr})` factory: `label`, `display`, `normalizeRagGrade`, bulk/work-metadata value parsers |
-| `web/src/domain/corpusAnalytics.ts` | `createCorpusAnalytics({allRows, memoCorpus})` factory: work index, top values, year series, needs-review series, audit feed |
-| `web/src/domain/searchFacets.ts` | `createSearchFacets(deps)` factory: facets, filter descriptors, match reasons, list-filter matching |
-| `web/src/domain/workMetadata.ts`, `touchupFields.ts`, `reviewPresentation.ts` | work metadata summary, touch-up field list, review diff sides / pretty JSON / RAG answer HTML / annotation matching |
-| `web/src/domain/providerProfilesService.ts` | `createProviderProfiles({state, api, persistPrefs, uid, isResearcher, warmupProviderProfile})`: provider profile list, defaults, statuses, `*ForUi` helpers |
-| `web/src/services/workspaceDb.ts` | IndexedDB persistence and "delete all browser state" |
-| `web/src/runtime/runtimeState.ts` | initial shape of the runtime `state` (`createRuntimeState()`) |
+### A. Move the remaining runtime.js clusters (mechanical, low risk each)
 
-The runtime still owns the one `state` instance (`const state = createRuntimeState()`).
+Still in `runtime.js`: workspace persistence (`persistPrefs`, `flushWorkspacePrefs`, `restoreWorkspace`, `workspacePrefs`,
+`persistFileNow`, IndexedDB helpers); evidence and review selection (`reviewKey`, `selectedEvidenceEntries`, `setEvidence`,
+`toggleWorkspaceEvidence`, `toggleDbEvidence`, ...); record editing and audit (`applyRecordChanges`, `clearRecordUpdates`,
+`historyVersionChanges`, `restoreRecordHistoryVersion`); DB presence and upsert (`recordDbStatus`, `refreshPresenceForRows`,
+`buildUpsertItems`, `upsertRows`, the pending upsert queue); navigation and URL sync (`navSnapshot`, `applyNavSnapshot`,
+`urlFromState`, `syncUrl`, `applyUrlState`, `navigateTo`, `goBack`, `goForward`, `currentTableUrlState`); the operations panel host
+and RAG progress panel (`renderOperationsPanel`, `ragProgressPanelHtml`, `renderCorpusBuildsHomeCard`,
+`wireCorpusBuildsHomeCard`); modal helpers (`openMessageModal`, `showAppModal`, `copyJsonToClipboard`); the compare library; PDF
+linking (`linkPdfPage`, `unlinkPdfLink`, `loadPdfMetadata`, ...); `checkHealth`, `warmupProviderProfile`, `importFiles`,
+`closeFile`, export helpers. `translateLegacyDom` and the collapsible MutationObserver stay until the last legacy view is gone.
 
-## Verification recipe (run all before each push)
+Procedure per cluster (about 10 minutes each), from `web/`:
 
-From `web/`:
+1. `bash ../scripts/runtime-refactor/extract_factory.sh <module> <createFactory> "fn1,fn2,..." "header line 1|header line 2" [importsJSON]`
+   copies the functions verbatim (`mk_factory.py`), lists the missing names from `tsc` (TS2304), builds the `Deps` type, wires a
+   `const {fn1,fn2}=createX({state, helper lambdas})` call into `runtime.js`, adds `Any` annotations (`fix_any.py`) and prints
+   `LET` / `MISSING` warnings. `importsJSON` maps pure helpers to the module that exports them, for example
+   `{"esc":"./html","icon":"./html"}` (the default); add e.g. `dockCollapsedSummary` from `./operationsDock`. Read
+   `wire_factory.py` first: it inserts the new call right after the `createDashboardRenderer(` call; if a value dependency is
+   declared later in `runtime.js`, move the call to after that declaration.
+2. A helper that is a value (array, Map, object) rather than a function needs care. If only the cluster uses it, move the const
+   into the new module (`WORK_METADATA_FIELDS`, `EDITOR_GROUPS`). If others use it, move the factory call after the const and pass
+   it by value (`fileTimers`, `corpusCache`). A reassigned `let` (`urlSyncHook`, `shellRefreshHook`) must be passed as a getter
+   (`getUrlSyncHook:()=>urlSyncHook`) when the code reads it as a value; a lambda wrapper is only right when it is called.
+3. Fix leftovers by hand: `catch (error: Any)`, `let x: Any`, `new Set<Any>()`, `const changes: Any = {}`, unused-variable lint
+   (prefix `_` or a one-line `eslint-disable-next-line` with a reason), then `npx prettier --write` the new file.
+4. Verify (see Verification), commit, push. One cluster per commit. If the baseline does not cover the cluster, add scenarios
+   first, in their own commit, recorded from the pre-move build.
+5. Afterwards `python3 ../scripts/runtime-refactor/dead_functions.py` removes top-level functions nothing references (run it only
+   after deleting a caller; it deliberately ignores the `export {}` block).
+
+### B. Replace the three legacy views with Vue (risky; one view per commit)
+
+Order: response cache (smallest), then the dashboard, then the PDF Explorer.
+
+- Build a Vue component that produces the same DOM as the current renderer (class names, element order, ids used by tests), route
+  it in `router/index.ts` instead of `RuntimeSurface`, and delete the renderer factory. Move that view's runtime-only CSS from
+  `style.css` into the component's `<style scoped>` in the same commit (see `docs/STYLE_AUDIT.md` and `style_move.py`).
+- The baseline must stay **unchanged**: the `home-*`, `styles-home-*`, `response-cache-*` and `pdf-explorer-*` scenarios. The harness
+  already strips `data-v-*` and normalizes whitespace and comments; do not re-record snapshots to make a change pass.
+- Dashboard: it fetches through the runtime (`refreshStores`, `refreshServerAnnotations`, `dashboardRecordPreview`), shows jobs via
+  `renderOperationsPanel` and `mountOperationsPanelHost`, and a corpus builds card. Read from the existing Pinia stores
+  (`useJobsStore`, `useCorpusStore`) and the runtime exports; the operations panel is already a Vue component mounted by
+  `runtime/operationsPanelHost.ts`.
+- PDF Explorer: uses PDF.js (`state.pdf.doc`), a canvas render token, text extraction (`extractPdfPageSmart` with an API fallback),
+  record linking and LLM helpers. Keep the DOM ids (`pdfInput`, `openPdf`, `pdfPrev`, `pdfNext`, `pdfPageInput`, `extractPage`,
+  `linkCurrentPdf`, ...): the baseline scenarios drive them.
+- When the last legacy view is gone: delete `RuntimeSurface.vue`, `translateLegacyDom`, the MutationObserver, the collapsible
+  enhancer, `legacyCompat.js`, unused `runtimeBridge.ts` exports, and shrink the `export {}` block.
+
+### C. State and services to Vue idioms
+
+Turn the `*Workspace` factories into composables that read Pinia stores instead of polling `runtime.get*Snapshot()`, and make
+`annotationsService` call its factory directly. Do this per view, and only where a probe shows stale or wrong behavior (import a
+file with distinct content while the view is open; see whether it updates). Do not bind view-local refs to store fields without a
+test pinning the intended behavior first (`VectorStoresView.load()` has a branch that is dead today and would wake up).
+
+### D. Styles (`web/src/style.css`, see `docs/STYLE_AUDIT.md`)
+
+After each renderer is replaced its classes move into the component. Then: hand-resolve classes styled in several places (merge
+duplicate selectors, then move the group), extract a small shared base layer (`btn`, `badge`, `chip`, `card`, forms) next to
+`styles/tokens.css`, then normalize breakpoints, replace hard-coded colors with tokens, and only then reduce `!important`.
+`CommandSearch.vue` is excluded from automatic moves (moving its rules changed its look).
+
+### E. End of effort
+
+Delete `PROGRESS.md`. Keep `docs/STYLE_AUDIT.md` only if CSS work continues.
+
+## Verification (run all before each push; from `web/`)
 
 ```bash
-npx vue-tsc --noEmit && npx eslint src --max-warnings 0 && npx vitest run   # 454 unit tests at last count
-npm run build
-npx playwright test -c playwright.legacy.config.ts                          # DOM baseline, 6 tests
+npx vue-tsc --noEmit && npx eslint src && npx vitest run                     # 459 unit tests at last count
+npx vite build
+APP_PORT=5299 npx playwright test -c playwright.legacy.config.ts --workers=3  # DOM baseline, 131 scenarios, about 3 min
+APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-desktop --workers=2   # full e2e, 270 tests, about 13 min
 ```
 
-Full end-to-end suite (137 tests, about 8.5 minutes; use ports that are free, Storybook is started for it):
+Also run the Storybook build once per PR. `npx eslint .` reports errors in other people's `tests/frontend/corpus-builder-*.test.ts`
+(pre-existing); lint what you touch. `npx prettier --check` flags `src/views/PdfWorkspaceView.vue` (existing compact style; leave it).
 
-```bash
-APP_PORT=15199 STORYBOOK_PORT=16006 npx playwright test --project=chromium-desktop --workers=2
-```
+### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, snapshots next to it)
 
-Full e2e: 144 passed at the last commit of session 2 (branch `claude/runtime-refactor-2`, merged with `development`). Unit: 403. Typecheck and lint clean.
-the final build at the last commit of this session (corpusAnalytics). Unit: 382 passed. Typecheck and lint clean.
+131 scenarios: normalized markup (`*.html`) and computed styles (`styles-*.txt`; light, dark, tablet, phone) for the dashboard, PDF
+Explorer, response cache, every Vue view that talks to the runtime, the runtime-built dialogs, the operation dock and the backup
+and restore flows. Scenario options: `nav` (click a sidebar item), `path` (open a Vue-native route directly), `load` (import the
+sample JSONL), `records`, `role`, `scheme`, `viewport`, `fixtures` (API mocks; `liveJobs()` is a stateful jobs endpoint), `steps`,
+`target` (`main`, `runtime` = `#main`, `dialog`, `app`, `dock`), `styles: true`.
 
-### The DOM baseline (`tests/e2e/legacy-dom-baseline.spec.ts`, 115 scenarios)
+- UTC and en-US pinned, `Math.random=0`, fixed clock, reduced motion; `data-v-*`, UUIDs, dates and the `Build <hash>` text masked.
+- **Never regenerate snapshots to make a change pass.** New scenarios are recorded from the pre-change build in their own commit
+  (`--update-snapshots=missing`; Playwright reports the first write as a failure, so rerun). The only snapshot changed for a bug fix
+  so far is `jobs-dock-running`.
+- Not covered (add before touching): hover and focus states, the bulk-edit and upsert-queue dialogs, the works-metadata editor and
+  remove-work, confirm modals other than backup, restore and response cache, job types outside `RAG_JOBS`/`JOBS`, Research streaming.
+- The PDF Explorer scenarios click the sidebar's "Corpus Builder", then the "PDF Explorer" tab (`inPdfExplorer`); the PDF is
+  generated by `samplePdf()` in the spec.
 
-Snapshots in `tests/e2e/legacy-dom-baseline.spec.ts-snapshots/` were recorded from the pre-risky-phase build
-(master 0.62.19 + provider-profiles); they must not be regenerated to make a refactor pass. Run with
-`npm run build && npx playwright test -c playwright.legacy.config.ts` (starts `vite preview` on 5199; start one
-yourself for fast repeat runs). 15 consecutive runs of all 27 passed with no flakes.
+## Gotchas learned (things that cost time)
 
-- **Dashboard (the only view still drawn through `RuntimeSurface`):** empty, loaded, researcher role, with jobs,
-  metric carousel next / next-twice.
-- **Other runtime-drawn surfaces:** PDF Explorer (empty); `research-empty` is a Vue page kept from the first baseline.
-- **Runtime-built `<dialog>`s:** merge files (needs a second file), create subset, clean OCR artifacts, export JSONL,
-  collection wizard (source step, retrieval step), Works: populate-all-metadata and separate-works, job details for an LLM
-  review / PDF build / RAG job, and LLM review results (records resolved through the file's content-hash id, see
-  `SAMPLE_FILE_ID`). Job dialogs read `/api/jobs/{id}`, hence `jobFixtures()`.
-- **Computed styles** (`styles-*.txt`; per element: color, background, border, font, padding, margin ... no
-  layout-dependent values): dashboard light/dark, researcher dashboard dark, PDF Explorer, and the subset, job-results
-  and wizard dialogs in dark. DOM alone cannot see CSS/theme regressions. Dark uses `page.emulateMedia({colorScheme})`
-  (the localStorage pref is not honored by the legacy runtime).
-- Normalization: tooltip wrappers on disabled controls removed (markup) or looked through (styles), UUIDs and dates
-  masked, `Math.random` pinned to 0, fixed clock, reduced motion, markup must be stable for 800 ms before capture.
-  Add scenarios by appending to `scenarios` (`steps`, `fixtures`, `role`, `scheme`, `target: "dialog"`, `styles: true`)
-  and record with `--update-snapshots=missing` (Playwright reports the first write as a failure; rerun).
-
-Findings while building it: the stale `wireOperationsPanel()` call that threw on every dashboard render was FIXED in
-c172814 (a test now guards it). Still open, same class (`// eslint-disable-next-line no-undef -- SA-11` backlog in
-`runtime.js`, five sites): e.g. `openSharedAnnotationRecord` (dashboard latest server annotation click) is not defined.
-Also: Review / Auto-improve needs-review open a
-Vue dialog (`.ui-dialog`), the Records Columns dialog and record edit sheet are Vue; "Open result" on a RAG job navigates
-to the Vue Research page rather than opening a dialog.
-
-Not covered (add before touching them): bulk-edit and upsert-queue dialogs, works-metadata editor / review-flagged /
-auto-improve / remove-work (need a selected work), Delete-collection and other confirm modals, other job types
-(upsert, llm_tool), the legacy Record/Search/Compare/Annotations renderers (unreachable from the UI, but `renderView`
-still dispatches to them).
-
-## The factory pattern (for functions that need `tr`, `state` or other runtime helpers)
-
-`scripts/runtime-refactor/mk_factory.py` copies functions verbatim into `export function createX(deps)`; the only
-edits are explicit string replacements turning `state.foo` / hoisted helper calls into `deps.*` (see the call in
-git history for `operationPresenters`). The runtime then does `const {a,b}=createX({tr, getStores:()=>state.stores, ...})`
-right after `translateLegacyDom`. Verify with a differential test that builds the legacy functions from git
-`28a6e77` with the same mocks and compares outputs over many fixtures.
+- **Port 5199 may already be served by another session's build.** With `reuseExistingServer` the baseline then tests the wrong code
+  (unrelated snapshot diffs everywhere). Use `APP_PORT=5299` (or any free port) and stop your own server afterwards with
+  `scripts/runtime-refactor/kill_port.sh <port>`. Never `pkill -f` a word that appears in your own command line.
+- Machine load (orphan Chromium, another Storybook) causes 30 s timeouts in random scenarios: check `uptime`, kill orphans, use
+  `--workers=3`.
+- Factory call sites must come after the `const`s they receive by value; hoisted `function`s are safe, later `const`s need a lambda.
+  TDZ errors break dozens of unit test files at import.
+- `mk_factory.py` never indents bodies (template literals must stay byte-identical).
+- After Prettier expands a dense `try{}catch{}`, an `eslint-disable no-empty` comment no longer lines up: use a commented empty catch.
+  Prettier also breaks Python `str.replace` patterns aimed at formatted code: use regex or line-based edits.
+- Some tools turn a ` ` escape into a literal NUL byte; check new files for it.
+- Import de-duplicates by content hash: identical JSONL content does not import twice.
+- The runtime restores the saved workspace at start-up; loading a JSONL too early races with it (the baseline waits for network idle).
+- The direct URL `/pdf?mode=explorer` renders the dashboard (the runtime's view comes from in-app navigation); reach the Explorer
+  through the sidebar, then the tab.
+- Do not `git stash` (the stack is shared across worktrees) and do not `git checkout origin/master --`; use a WIP commit.
+- Copilot works in parallel on `ajschlosser-unified-web-theme` (UiPageHeader, tokens, `style.css`). It touches no runtime file, but
+  when it merges the Vue-view baseline snapshots (page headers) will change: re-record those from the pre-change build in a separate
+  commit, and expect `style.css` conflicts with any CSS move.
+- Dashboard date keys use local midnight then `toISOString()`, so tests pin `TZ=UTC`.
+- `countOccurrences(text, [])` loops forever (legacy bug, unreachable with real input; left on purpose).
 
 ## Helper scripts (`scripts/runtime-refactor/`)
 
-Run from `web/`. `splice.py <module> <fn1,fn2,...>` removes verbatim functions from `runtime.js` and adds the
-import (you write the TS module by hand or with `mv_fn.py`). `mv_fn.py` copies functions verbatim into a new
-`src/domain/<module>.ts` with typed signatures. `purity.py` lists functions that use no state/DOM/API (the
-extraction candidates), largest first, with the helpers they call.
+`extract_factory.sh` (one-command cluster move), `mk_factory.py`, `wire_factory.py`, `fix_any.py`, `dead_functions.py`,
+`kill_port.sh`, `deps.py` (names and state fields a group uses), `purity.py`, `mv_fn.py`, `splice.py` (older pure-helper moves),
+`style_audit.py`, `style_prune.py`, `style_move.py` (CSS; see `docs/STYLE_AUDIT.md`).
 
-## Session 3 (branch `claude/runtime-refactor-3`, from master 0.62.19)
+## Open PRs and branches
 
-Low-risk pure/near-pure extraction is essentially exhausted. Technique used for state-reading services: pass the
-runtime `state` object itself as a dependency (`createX({state, api, ...})`) so bodies stay verbatim; wrap later-declared
-consts as lambdas (`uid:()=>uid()`). What is left in `runtime.js` is DOM-, timer- or render-coupled:
-
-- Job polling/notifications (`refreshJobs`, `startJobPolling`, `syncJobProgressToasts`, `cancelBackgroundJob`,
-  `removeFinishedJob`, `syncUpsertJobReceipts`): touch the operations dock, RAG panel and home card renderers.
-- `checkHealth`, `warmupProviderProfile`: DOM buttons, toasts, modals. (Backup/restore moved to `domain/backupWorkspace.ts`.)
-- Legacy annotations renderers (`renderAnnotations`, `annotationItemHtml`, ...): `renderView` still dispatches to them
-  although `/annotations` is Vue-native now. Do not delete without proving they are unreachable (e2e + DOM baseline).
-- Modals (`openMergeDialog`, `openSubsetBuilder`, `openLlmTaskLauncher`, `legacyOpenTouchup`, ...), `renderDashboard`, `renderPdf`,
-  `renderRag`/`renderFaq`, `renderCompare`, `renderList`/`renderRecord` legacy paths.
-
-## style.css audit (branch `claude/runtime-refactor-12`)
-
-`docs/STYLE_AUDIT.md` has the findings and the recommended order; `scripts/runtime-refactor/style_audit.py` (numbers, writes
-`/tmp/style_lists.json`) and `style_prune.py` (removes rules that can never match) reproduce them. Done: 613 dead rules removed
-(5,176 -> 4,514 lines) with 60/60 baseline scenarios (computed styles unchanged) and 199/199 e2e. Next for CSS: move the 306
-Vue-only classes into scoped component styles, one view at a time, then extract a base layer for the ~200 shared classes; runtime-only
-classes move with their renderer when it is replaced.
-
-### Job polling extracted (branch `claude/runtime-refactor-16`, includes -15 which was not yet merged)
-
-`domain/jobsWorkspace.ts` (`createJobsWorkspace({state, ...21 helper lambdas})`, 12 functions: `refreshJobs`, `startJobPolling`,
-`pauseRuntime`, `pruneClientJobState`, `removeFinishedJob`, `clearFinishedOperations`, `syncUpsertJobReceipts`,
-`cancelBackgroundJob`, `submitBackgroundLlmJob`, `registerExternalJob`, `maybeDesktopNotify`, `syncJobProgressToasts`). The two module
-objects those functions share (`jobCompletionNotified`, `completedJobToastTimers`) now live inside the factory. The operation dock and
-toast DOM code (`ensureJobProgressCard`, `showOperationProgress`, `progressStack`, `updateOperationStackCount`, ...) stays in the
-runtime and is passed in. Six new baseline scenarios (`jobs-*`; 115 total) use `liveJobs()`, a stateful jobs endpoint fixture (listing,
-deleting, clearing, cancelling change later listings; a running job finishes after N listings) and a `dock` target
-(`#operationProgressStack`); recorded before the move. `tests/frontend/jobs-workspace.test.ts`. `runtime.js` is 7,571 lines.
-Remaining runtime chunks: backup/restore (`downloadFullBackup`/`restoreFullBackup`, DOM buttons + modals + toasts), `checkHealth`,
-the operation dock/toast DOM code, the modals, and the legacy renderers (dashboard, PDF Explorer, dead Record/Compare/FAQ/RAG
-pages).
-
-### Research workspace + Response Library extracted (branch `claude/runtime-refactor-15`, includes -14 which was not yet merged)
-
-`domain/researchWorkspace.ts` (`createResearchWorkspace({state, ...26 helper lambdas})`, 20 functions: the Research snapshot,
-config, evidence, running/grading/re-running, job commands, `getResponseFaqPage`, `gradeResponseFaqRecord`,
-`rerunResponseFaqRecord`, `rememberRagPrompt`/`rememberRagRun`, `prepareRagRerun`). 11 new baseline scenarios (`research-*`,
-`faq-*`, `styles-research-evidence-light`; 109 total) recorded from the pre-move build in their own commit; the spec gained a
-`path` option to open a Vue-native route directly (needs `main`, not `#main`). `tests/frontend/research-workspace.test.ts`.
-`runtime.js` is 7,794 lines. `shellRefreshHook` is a reassigned `let`, so it is passed as a lambda like the other helpers.
-Machine load matters: when other processes (a Storybook from another checkout, orphaned Playwright browsers) push the load
-average up, baseline scenarios time out at 30 s in random places; check `uptime`, kill orphans (`/tmp/killall_pw.sh` pattern:
-`chrome-headless-shell`, `playwright test`), and run with `--workers=3`. Never `pkill -f` a word that appears in your own command.
-
-### Annotations workspace extracted (branch `claude/runtime-refactor-14`)
-
-`domain/annotationsWorkspace.ts` (`createAnnotationsWorkspace({state, ...19 helper lambdas})`, 13 functions: gathering local and
-shared annotations, describing them for the view, and every command `annotationsService` sends). Eight Annotations baseline
-scenarios (`annotations-*`, `styles-annotations-light`; 98 total) recorded from the pre-move build in their own commit; the
-scenario `records` option loads custom records (annotated ones) instead of the default sample. `tests/frontend/annotations-workspace.test.ts`.
-`runtime.js` is 8,120 lines. `annotationsService` is still a thin delegate to the runtime (its functions now come from the factory);
-converting it to call the factory directly comes with the composable conversion. Merged master (Copilot PR #81) into this branch.
-Known flakes seen once each and not reproducible on rerun: a Corpus Builder dark-mode axe sweep (`corpus-builder-theme-sweep`,
-slow, 7+ minutes) and one `styles-app-shell-*` computed-style snapshot in 1 of ~6 runs (investigate if it recurs: likely timing of
-the shell's activity badges).
-
-### CSS move (branch `claude/runtime-refactor-13`)
-
-`style_move.py` (see `docs/STYLE_AUDIT.md`, "Progress") moved 207 rules from `style.css` into 15 components' scoped styles; 90
-computed-style/DOM baseline scenarios (desktop, tablet, phone, light/dark) unchanged, full e2e and Storybook build green.
-Excluded on purpose: `CommandSearch.vue` (moving its rules changed the search box's look). Copilot's PR #81 (Corpus Builder,
-no `style.css`/runtime/e2e changes) uses none of the classes whose rules were pruned earlier. Next for CSS: hand-resolve the
-classes whose rules span several components (merge duplicates, then move the group), then extract the shared base layer.
-
-### Stale-view fixes found by probing (branch `claude/runtime-refactor-12`)
-
-Probe method: open the view, import a file (distinct content: identical content is de-duplicated by content hash), see whether
-the view notices. Found and fixed (each with an e2e test verified to fail without the fix, in `legacy-dom-baseline.spec.ts`,
-"views follow the loaded corpus"): Records (rail file count; earlier commit), Compare (picker kept "No matching records" /
-"Load JSONL files first"), Vector Stores (sync buttons stayed disabled). Works and Search already updated; Annotations and
-Record View showed nothing to update in the same probe. Pattern: watch `corpusState.version` + `activeFileId`. Gotcha: do not
-return the same array from a `computed` and expect re-renders (an unchanged array notifies nobody); return a count/boolean.
-
-## Pinia migration (session 5, branch `claude/runtime-refactor-5`)
-
-Pattern (behavior-preserving): move a group of `state.*` fields into a shallow-reactive object in `web/src/state/`, bind
-accessors for those fields onto the runtime `state` (`bindJobsState`), so runtime code is unchanged and still gets the very
-same plain arrays/objects back, and expose the object through a Pinia store in `web/src/stores/`. The state is shallow on
-purpose: the runtime mutates in place, so Vue learns about changes through a `version` counter that the runtime bumps where
-it already notifies (`notifyOperationsChanged` -> `touchJobs()`).
-
-- DONE: jobs (`jobs`, `jobsLastFetched`, `jobApplied`, `upsertJobApplied`) -> `state/jobsState.ts`, `stores/jobs.ts`
-  (`useJobsStore`: `jobs`, `lastFetched`, `version`, `activeJobs`). Nothing in Vue reads it yet; `OperationsPanel` still
-  uses the bridge. Unit tests: `tests/frontend/jobs-state.test.ts`.
-- DONE: the Operations panel bridge now subscribes through the store's `version` (synchronous watcher) instead of a
-  private listener set.
-- DONE: per-view groups -> `state/workspaceState.ts` (`vectorState` 26 fields, `compareState` 8, `searchState` 14, each
-  with a `version` for in-place edits) bound onto the runtime `state` with `bindSharedState`; Pinia views in
-  `stores/workspace.ts` (`useVectorStore`, `useCompareStore`, `useSearchStore`). Unit tests pin every original initial value
-  (`tests/frontend/workspace-state.test.ts`). `VectorStoresView` needed `as unknown as` on its `runtime.state` cast (types only).
-- DONE (branch `claude/runtime-refactor-6`): `VectorStoresView` and `CompareView` read and write the shared fields through
-  `useVectorStore` / `useCompareStore` instead of casting `runtime.state`; non-shared fields go through a separate
-  `runtimeState` cast. Their unit tests reset the shared state (`createVectorState()` / `createCompareState()`).
-  Deliberately NOT done: replacing the views' local refs (`filter`, `tab`, `storePage`, `searchMode`, `activeName`, ...)
-  with store-bound refs. Those refs are copied into the runtime only in `persistWorkspace()`, and some logic depends on that
-  timing: e.g. `VectorStoresView` `load()` tests `!workspace.storeSearchMode` AFTER `persistWorkspace()` has already written
-  "hybrid", so that branch is dead today; binding `searchMode` directly would wake it and change behavior. Do that only with
-  a test pinning the intended behavior first.
-- DONE (branch `claude/runtime-refactor-7`): the Search workspace logic left `runtime.js`: `domain/searchWorkspace.ts`
-  (`createSearchWorkspace({state, ...50 helper lambdas})`, 34 functions: snapshot/results/facets/columns building and every
-  command `SearchView` sends). Verbatim move; runtime keeps thin destructured consts, exports unchanged. Params of these
-  legacy functions are typed `Any` on purpose (never typed before). Guarded by 7 new baseline scenarios for the Search view
-  (`search-*`, recorded from the PRE-move build: stash src, build, record, pop, rebuild, compare) plus
-  `tests/frontend/search-workspace.test.ts`. The baseline nav click is now scoped to `nav, aside` (the top bar has its own
-  "Search" button). `SearchView` itself still polls `runtime.getSearchWorkspaceSnapshot()`; next is turning that into store
-  fields + computed inside a composable now that the logic is isolated.
-- DONE (branch `claude/runtime-refactor-8`, from master after PR #77): the Records workspace logic left `runtime.js`:
-  `domain/recordsWorkspace.ts` (`createRecordsWorkspace({state, ...43 helper lambdas})`, 20 functions: the list snapshot and
-  every command `useRecordsWorkspace` sends). Seven Records-view baseline scenarios (`records-*`, 115 scenarios total) were
-  recorded from the PRE-move build in a separate commit, then compared against the moved code; `tests/frontend/records-workspace.test.ts`
-  pins the commands. `runtime.js` is 8,565 lines. The baseline spec pins `timezoneId: "UTC"`, `locale: "en-US"` (CI runs in UTC).
-- DONE (branch `claude/runtime-refactor-9`): the Record workspace logic left `runtime.js`: `domain/recordWorkspace.ts`
-  (`createRecordWorkspace({state, ...helper lambdas})`, 15 functions: the record snapshot, navigation, and every
-  `*CurrentRecord*` / `*RecordWorkspace*` command). Nine Record-view baseline scenarios (`record-*`, 52 total) recorded from the
-  PRE-move build in their own commit, then compared against the moved code (52/52, 3 runs); `tests/frontend/record-workspace.test.ts`.
-  Note for extractions: after Prettier expands a dense `try{...}catch{}` the `eslint-disable no-empty` directive no longer
-  lines up; replace the empty catch with a commented one. `runtime.js` is 8,424 lines.
-- DONE (branch `claude/runtime-refactor-10`, from master after PR #78): the Works workspace logic left `runtime.js`:
-  `domain/worksWorkspace.ts` (`createWorksWorkspace({state, ...37 helper lambdas})`, 22 functions: work descriptions, the
-  workspace snapshot/preparation, and every command `useWorksWorkspace` sends). Seven more Works baseline scenarios
-  (`works-*`, `dialog-works-*`; 59 total) were recorded from the PRE-move build in their own commit and compared (59/59, 3 runs);
-  `tests/frontend/works-workspace.test.ts`. Baseline gotchas: the per-work "Open N records" buttons are stat links whose
-  accessible name starts "Open N records for ..."; each work card has its own Actions menu. `runtime.js` is 8,274 lines.
-- DONE (branch `claude/runtime-refactor-11`, includes runtime-refactor-10 which was NOT yet merged to master when this branch
-  was cut, so merge order is 10 then 11): `files` and `activeFileId` moved into `state/workspaceState.ts` `corpusState`, and
-  `worksSearch` / `workOverview` into `worksState`; `useCorpusStore` and `useWorksStore` added. `invalidateCorpusCache()` (called
-  after every corpus edit) now also calls `touchCorpus()`, so `corpusState.version` changes whenever the loaded corpus does.
-  Nothing in Vue reads these yet (198/198 e2e, 59/59 baseline, 438 unit).
-- DECIDED (owner: behavior changes are fine if they fix obvious bugs, but check first): I checked before changing anything by
-  importing a file while each view was open (probe, then a permanent e2e test). Works and Search already update; **Records did
-  not** (toast "Loaded 1 records" but the rail kept saying "Local JSONL 1 files" until you left and came back), which is an
-  obvious bug. Fixed in `useRecordsWorkspace`: it now re-reads its snapshot when `corpusState.version` or `activeFileId`
-  changes (only once a snapshot has been loaded). Guarded by `tests/frontend/records-workspace-refresh.test.ts` and the e2e test
-  "Records lists a file imported while it is open" (verified to fail without the fix). RecordView showed no visible staleness
-  in the same probe, so it is unchanged. Check any further conversion the same way: probe the current behavior first, convert
-  only where it is stale or wrong.
-
-## Next steps: the risky phase (needs owner go-ahead)
-
-1. DONE (session 4): the DOM + computed-style baseline above (115 scenarios). Extend it for anything not covered before touching it.
-2. State to Pinia behind getter/setter proxies on `runtime.state` (jobs first). Keep re-render triggers unchanged.
-3. Routing: pure URL-state functions (`urlFromState`, `applyUrlState`, `currentTableUrlState`) with round-trip tests, then
-   move `popstate` to `vue-router`.
-4. Replace renderers one view/dialog per commit, only against a clean DOM-baseline diff.
-5. Remove `runtimeBridge.ts`, `RuntimeSurface.vue`, and dead exports only when nothing consumes them
-   (21 exports had no consumer outside the runtime at last count).
-
-Time zone note: dashboard date keys use local midnight then `toISOString()`, so they depend on the browser's
-time zone (unchanged legacy behavior). Tests that touch them pin `TZ=UTC`.
-
-## Working rules added in session 2
-
-- Branch from `origin/development` (work branch `claude/runtime-refactor-2`); `git fetch` and merge `development`
-  regularly, other work touches `runtime.js` (e.g. Works became Vue-native and dropped out of the DOM baseline).
-- Write human-readable code: run Prettier on every new file (it expands the dense legacy one-liners) and give
-  extracted params real types instead of `any` where cheap.
-- `scripts/runtime-refactor/deps.py fn1,fn2` lists the runtime names and state fields a group uses; use it to
-  choose groups before extracting.
-
-## Upstream breakage found and repaired (commit fe3322e)
-
-`origin/development` (e9f42f3) did not build: a botched conflict resolution left 111 duplicate names in `runtime.js`'s
-`export {}` block, interleaved two versions of `WorksView.vue` (with corrupted characters and a BOM), dropped seven Works
-functions that `useWorksWorkspace.ts` calls, and routed `/works` back to the legacy view. Repaired here by keeping the
-union of exports, restoring the Vue-native WorksView from 5319bc9 and the seven functions verbatim from it, routing
-`/works` to `WorksView`, and dropping Annotations (now Vue-native) from the legacy DOM baseline. After the repair:
-typecheck 0 errors, lint clean, 410 unit tests, build ok, 142 e2e (incl. 3 baseline views) passing.
-Watch for BOMs / mojibake after Windows-side merges.
-
-## Gotchas learned
-
-- `mk_factory.py` must not indent function bodies: lines inside multi-line template literals must stay
-  byte-identical (an earlier version added 2 spaces and a differential test caught it).
-
-- Factory call sites in `runtime.js` must come after the `const` helpers they receive (`label`, `display`, ...):
-  passing a `const` declared later throws "Cannot access X before initialization" and breaks ~26 test files at
-  import. Hoisted `function` declarations are safe; wrap later consts as `uid:()=>uid()`.
-
-- `pkill -f <word>` kills your own shell if the word is in the command line. Kill by PID from `ss -ltnp`.
-- Some editors/tools convert the `\u0000` escape into a literal NUL byte in source. Check new TS files with
-  `python3 -c "print(open(p,'rb').read().count(b'\x00'))"`.
-- `countOccurrences(text, [])` loops forever (legacy bug, unreachable with real input; left as is on purpose).
-- Playwright: the legacy runtime restores the saved workspace on start-up; loading a JSONL too early races
-  with the restore. The baseline waits for network idle and 1s first. The runtime also wraps disabled controls
-  in a tooltip span at a timing-dependent moment; the baseline normalizes that away.
-- `Math.random` is used by the dashboard's random record; the baseline pins it to 0.
-- `npm ci` is needed in a fresh worktree. The default Playwright config expects free ports 6006 and 5199, or
-  set `APP_PORT`/`STORYBOOK_PORT` (which also disables reuse of running servers).
-- The repo's `.prettierrc` sets printWidth 100. `runtime.js` and most existing files are not Prettier-clean.
+PR #86 (`claude/runtime-refactor-18`) holds everything since #84: the dashboard, PDF Explorer and response cache renderers, three
+dialog factories, the operation dock, the backup/restore and response cache baseline, and three bug fixes (PDF Explorer tab,
+collapsed dock label, dashboard annotation click). Next branch: cut `claude/runtime-refactor-19` from master after #86 merges.

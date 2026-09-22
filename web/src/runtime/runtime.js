@@ -54,6 +54,13 @@ import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
+import { createDashboardRenderer } from "../domain/dashboardRenderer";
+import { createResponseCacheRenderer } from "../domain/responseCacheRenderer";
+import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
+import { createJobDialogs } from "../domain/jobDialogs";
+import { createWorkDialogs } from "../domain/workDialogs";
+import { createRecordDialogs } from "../domain/recordDialogs";
+import { createOperationDock } from "../domain/operationDock";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -370,6 +377,168 @@ const {backupContainsCredentials,downloadFullBackup,restoreFullBackup}=createBac
   toast:(...args)=>toast(...args),
   workspacePrefs:(...args)=>workspacePrefs(...args),
 });
+const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview,renderDashboard}=createDashboardRenderer({
+  state,
+  openAnnotationsWorkspaceRecord:(...args)=>openAnnotationsWorkspaceRecord(...args),
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  api:(...args)=>api(...args),
+  applyUiTheme:(...args)=>applyUiTheme(...args),
+  canAccessPage:(...args)=>canAccessPage(...args),
+  compactNumber:(...args)=>compactNumber(...args),
+  dashboardMetricBody:(...args)=>dashboardMetricBody(...args),
+  dbSearchWhere:(...args)=>dbSearchWhere(...args),
+  decorateDisabledControls:(...args)=>decorateDisabledControls(...args),
+  defaultProviderProfile:(...args)=>defaultProviderProfile(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  hasCapability:(...args)=>hasCapability(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  label:(...args)=>label(...args),
+  memoCorpus:(...args)=>memoCorpus(...args),
+  mountOperationsPanelHost:(...args)=>mountOperationsPanelHost(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  openDatabaseCreationFromResearch:(...args)=>openDatabaseCreationFromResearch(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  pieShareSeries:(...args)=>pieShareSeries(...args),
+  providerDisplayName:(...args)=>providerDisplayName(...args),
+  recentAnnotations:(...args)=>recentAnnotations(...args),
+  recentAuditChanges:(...args)=>recentAuditChanges(...args),
+  recordStores:(...args)=>recordStores(...args),
+  refreshServerAnnotations:(...args)=>refreshServerAnnotations(...args),
+  refreshStoreWorks:(...args)=>refreshStoreWorks(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  relativeTime:(...args)=>relativeTime(...args),
+  renderCorpusBuildsHomeCard:(...args)=>renderCorpusBuildsHomeCard(...args),
+  renderOperationsPanel:(...args)=>renderOperationsPanel(...args),
+  researcherDbRecords:(...args)=>researcherDbRecords(...args),
+  responseCacheStore:(...args)=>responseCacheStore(...args),
+  searchByMetadata:(...args)=>searchByMetadata(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
+  uid:(...args)=>uid(...args),
+  wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
+  workIndex:(...args)=>workIndex(...args),
+  workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {toast,applyOperationStackPosition,setOperationDockMinimized,announceOperationDock,operationDockCardStats,wireOperationStackDrag,progressStack,updateOperationStackCount,showOperationProgress,updateOperationProgress,hideOperationProgress,ensureJobProgressCard}=createOperationDock({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  cancelBackgroundJob:(...args)=>cancelBackgroundJob(...args),
+  clearFinishedOperations:(...args)=>clearFinishedOperations(...args),
+  jobLabel:(...args)=>jobLabel(...args),
+  jobProgressText:(...args)=>jobProgressText(...args),
+  jobProviderSummary:(...args)=>jobProviderSummary(...args),
+  openJobDetails:(...args)=>openJobDetails(...args),
+  openJobResults:(...args)=>openJobResults(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  removeFinishedJob:(...args)=>removeFinishedJob(...args),
+  tr:(...args)=>tr(...args),
+  translateDynamicUiValue:(...args)=>translateDynamicUiValue(...args),
+  trf:(...args)=>trf(...args),
+  uid:(...args)=>uid(...args),
+});
+const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openLlmToolResult,openLlmTaskLauncher,openPdfDraftRecord,openTouchup}=createJobDialogs({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  applyPdfLinkMatch:(...args)=>applyPdfLinkMatch(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  canAccessPage:(...args)=>canAccessPage(...args),
+  cancelBackgroundJob:(...args)=>cancelBackgroundJob(...args),
+  cloneAuditValue:(...args)=>cloneAuditValue(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  fullCitation:(...args)=>fullCitation(...args),
+  isResearcher:(...args)=>isResearcher(...args),
+  jobLabel:(...args)=>jobLabel(...args),
+  jsonPretty:(...args)=>jsonPretty(...args),
+  label:(...args)=>label(...args),
+  navSnapshot:(...args)=>navSnapshot(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  normalizeTouchupItems:(...args)=>normalizeTouchupItems(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  openWorkMetadataProposalResult:(...args)=>openWorkMetadataProposalResult(...args),
+  pages:(...args)=>pages(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  providerDisplayName:(...args)=>providerDisplayName(...args),
+  providerProfile:(...args)=>providerProfile(...args),
+  providerProfiles:(...args)=>providerProfiles(...args),
+  providerRequestConfig:(...args)=>providerRequestConfig(...args),
+  pruneClientJobState:(...args)=>pruneClientJobState(...args),
+  ragGradeHtml:(...args)=>ragGradeHtml(...args),
+  recordFingerprint:(...args)=>recordFingerprint(...args),
+  recordStores:(...args)=>recordStores(...args),
+  refreshJobs:(...args)=>refreshJobs(...args),
+  refreshRagProgressPanel:(...args)=>refreshRagProgressPanel(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  renderPdf:(...args)=>renderPdf(...args),
+  renderView:(...args)=>renderView(...args),
+  reviewDiffSides:(...args)=>reviewDiffSides(...args),
+  reviewItemFromKey:(...args)=>reviewItemFromKey(...args),
+  reviewKey:(...args)=>reviewKey(...args),
+  sanitizeResearchGeneration:(...args)=>sanitizeResearchGeneration(...args),
+  shell:(...args)=>shell(...args),
+  shellRefreshHook:(...args)=>shellRefreshHook(...args),
+  showAppModal:(...args)=>showAppModal(...args),
+  startJobPolling:(...args)=>startJobPolling(...args),
+  syncJobProgressToasts:(...args)=>syncJobProgressToasts(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  uid:(...args)=>uid(...args),
+  upsertRecordPayload:(...args)=>upsertRecordPayload(...args),
+  getUrlSyncHook:()=>urlSyncHook,
+  warmupProviderProfile:(...args)=>warmupProviderProfile(...args),
+});
+const {renderPdf,renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfPageSmart,extractPdfAllSmart}=createPdfExplorerRenderer({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  activeFile:(...args)=>activeFile(...args),
+  allLinkedRowsForLoadedPdf:(...args)=>allLinkedRowsForLoadedPdf(...args),
+  cleanPdfPageWithLlm:(...args)=>cleanPdfPageWithLlm(...args),
+  defaultProviderProfile:(...args)=>defaultProviderProfile(...args),
+  draftPdfPageWithLlm:(...args)=>draftPdfPageWithLlm(...args),
+  evidenceIsSelected:(...args)=>evidenceIsSelected(...args),
+  linkPdfPage:(...args)=>linkPdfPage(...args),
+  linkPdfPageWithLlm:(...args)=>linkPdfPageWithLlm(...args),
+  linkedPdfRows:(...args)=>linkedPdfRows(...args),
+  loadPdfMetadata:(...args)=>loadPdfMetadata(...args),
+  loadedPdfPagesForRecord:(...args)=>loadedPdfPagesForRecord(...args),
+  lookupRecord:(...args)=>lookupRecord(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  pages:(...args)=>pages(...args),
+  pdfDisplayTitle:(...args)=>pdfDisplayTitle(...args),
+  persistCurrentPdfAsset:(...args)=>persistCurrentPdfAsset(...args),
+  providerDisplayName:(...args)=>providerDisplayName(...args),
+  recordOptionForKey:(...args)=>recordOptionForKey(...args),
+  recordOptionLabel:(...args)=>recordOptionLabel(...args),
+  renderView:(...args)=>renderView(...args),
+  reviewKey:(...args)=>reviewKey(...args),
+  searchRecordOptions:(...args)=>searchRecordOptions(...args),
+  selectedIndex:(...args)=>selectedIndex(...args),
+  selectedRecord:(...args)=>selectedRecord(...args),
+  shell:(...args)=>shell(...args),
+  syncUrl:(...args)=>syncUrl(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  unlinkPdfLink:(...args)=>unlinkPdfLink(...args),
+  workspaceEvidenceSelectionKey:(...args)=>workspaceEvidenceSelectionKey(...args),
+});
+const {renderResponseCache}=createResponseCacheRenderer({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  responseCacheStore:(...args)=>responseCacheStore(...args),
+  showViewLoading:(...args)=>showViewLoading(...args),
+  toast:(...args)=>toast(...args),
+});
 const {researchConfigForUi,getResearchWorkspaceSnapshot,updateResearchConfig,removeResearchEvidence,clearResearchEvidence,discoverResearchModels,refreshResearchJobs,getResearchJob,cancelResearchJob,deleteResearchJob,generationFromProfile,startResearchRun,gradeResearchJob,prepareResearchRerun,getResponseFaqPage,gradeResponseFaqRecord,rerunResponseFaqRecord,rememberRagPrompt,rememberRagRun,prepareRagRerun}=createResearchWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -509,6 +678,46 @@ const selectedRecord = () => {
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
 const corpusCache={rows:null,fields:null,memo:new Map(),version:0};
+const {openMixedWorkValuesDialog,openWorkMetadataEditor,openWorkMetadataLlmDialog,openWorkMetadataProposalResult,openRemoveWorkModal,openSeparateWorksModal}=createWorkDialogs({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api:(...args)=>api(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  clearFileDerivedState:(...args)=>clearFileDerivedState(...args),
+  cloneAuditValue:(...args)=>cloneAuditValue(...args),
+  corpusCache,
+  decorateDisabledControls:(...args)=>decorateDisabledControls(...args),
+  display:(...args)=>display(...args),
+  jobLabel:(...args)=>jobLabel(...args),
+  label:(...args)=>label(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  parseProposedMetadataValue:(...args)=>parseProposedMetadataValue(...args),
+  parseWorkMetadataValue:(...args)=>parseWorkMetadataValue(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  providerProfile:(...args)=>providerProfile(...args),
+  providerProfiles:(...args)=>providerProfiles(...args),
+  providerRequestConfig:(...args)=>providerRequestConfig(...args),
+  recordStores:(...args)=>recordStores(...args),
+  refreshStores:(...args)=>refreshStores(...args),
+  renderDashboard:(...args)=>renderDashboard(...args),
+  renderView:(...args)=>renderView(...args),
+  representativeWorkMetadata:(...args)=>representativeWorkMetadata(...args),
+  shell:(...args)=>shell(...args),
+  showAppModal:(...args)=>showAppModal(...args),
+  startJobPolling:(...args)=>startJobPolling(...args),
+  syncJobProgressToasts:(...args)=>syncJobProgressToasts(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
+  uid:(...args)=>uid(...args),
+  uniqueWorkValues:(...args)=>uniqueWorkValues(...args),
+  workIndex:(...args)=>workIndex(...args),
+  workMetadataControl:(...args)=>workMetadataControl(...args),
+  workflowProviderSelectHtml:(...args)=>workflowProviderSelectHtml(...args),
+  workflowProviderSummaryHtml:(...args)=>workflowProviderSummaryHtml(...args),
+});
 let recordFingerprintCache=new WeakMap();
 function invalidateCorpusCache(){
   touchCorpus();
@@ -632,6 +841,62 @@ function workspaceDbName(){
 }
 let prefsTimer=null;
 const fileTimers=new Map();
+const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openStoreRecordEditor,openRecordHistoryBrowser,openUpsertQueue}=createRecordDialogs({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  activeFile:(...args)=>activeFile(...args),
+  allRows:(...args)=>allRows(...args),
+  api:(...args)=>api(...args),
+  applyRecordChanges:(...args)=>applyRecordChanges(...args),
+  bulkEditRowsForScope:(...args)=>bulkEditRowsForScope(...args),
+  cleanRows:(...args)=>cleanRows(...args),
+  clearRecordUpdates:(...args)=>clearRecordUpdates(...args),
+  cloneAuditValue:(...args)=>cloneAuditValue(...args),
+  dbUnavailableReason:(...args)=>dbUnavailableReason(...args),
+  decorateDisabledControls:(...args)=>decorateDisabledControls(...args),
+  download:(...args)=>download(...args),
+  downloadBlob:(...args)=>downloadBlob(...args),
+  fieldEditor:(...args)=>fieldEditor(...args),
+  fileJsonl:(...args)=>fileJsonl(...args),
+  fileTimers,
+  formatTimestamp:(...args)=>formatTimestamp(...args),
+  hasCorpusDb:(...args)=>hasCorpusDb(...args),
+  historyVersionChanges:(...args)=>historyVersionChanges(...args),
+  idbDelete:(...args)=>idbDelete(...args),
+  jsonPretty:(...args)=>jsonPretty(...args),
+  label:(...args)=>label(...args),
+  loadSubsetProfiles:(...args)=>loadSubsetProfiles(...args),
+  localRecordKey:(...args)=>localRecordKey(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  needsReviewItems:(...args)=>needsReviewItems(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  parseBulkFieldValue:(...args)=>parseBulkFieldValue(...args),
+  parseEditor:(...args)=>parseEditor(...args),
+  pendingChangesForRow:(...args)=>pendingChangesForRow(...args),
+  pendingUpsertRows:(...args)=>pendingUpsertRows(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  persistPrefs:(...args)=>persistPrefs(...args),
+  recordDbStatus:(...args)=>recordDbStatus(...args),
+  recordFields:(...args)=>recordFields(...args),
+  recordHistoryVersions:(...args)=>recordHistoryVersions(...args),
+  refreshPresenceForRows:(...args)=>refreshPresenceForRows(...args),
+  removeFromUpsertQueue:(...args)=>removeFromUpsertQueue(...args),
+  renderView:(...args)=>renderView(...args),
+  restoreRecordHistoryVersion:(...args)=>restoreRecordHistoryVersion(...args),
+  sameValue:(...args)=>sameValue(...args),
+  saveSubsetProfiles:(...args)=>saveSubsetProfiles(...args),
+  selectedIndex:(...args)=>selectedIndex(...args),
+  selectedRecord:(...args)=>selectedRecord(...args),
+  selectedReviewItems:(...args)=>selectedReviewItems(...args),
+  shell:(...args)=>shell(...args),
+  showAppModal:(...args)=>showAppModal(...args),
+  subsetRuleMatches:(...args)=>subsetRuleMatches(...args),
+  toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
+  uid:(...args)=>uid(...args),
+  upsertRows:(...args)=>upsertRows(...args),
+});
 
 const workspaceDb=createWorkspaceDb(workspaceDbName);
 const idbGetAll=workspaceDb.getAll;
@@ -1073,64 +1338,6 @@ function restoreRecordHistoryVersion(file,index,version){
   }
   return applyRecordChanges(file,index,changes,{source:"history_restore",batchId:uid(),rationale:Object.fromEntries(Object.keys(changes).map(field=>[field,`Restored from ${version.label}`]))});
 }
-function openRecordHistoryBrowser(file,index){
-  const record=file?.records?.[index];
-  if(!record)return;
-  let versions=recordHistoryVersions(record);
-  if(versions.length<=1)return toast("This record has no update history");
-  let cursor=versions.length-1;
-  const dialog=document.createElement("dialog");
-  dialog.className="record-history-dialog";
-  const close=()=>{dialog.close();dialog.remove()};
-  const render=()=>{
-    versions=recordHistoryVersions(file.records[index]);
-    cursor=Math.max(0,Math.min(cursor,versions.length-1));
-    const version=versions[cursor];
-    const previous=cursor>0?versions[cursor-1]:null;
-    const changed=previous?historyVersionChanges(previous.record,version.record):[];
-    const currentIndex=versions.length-1;
-    const isCurrent=cursor===currentIndex;
-    const text=String(version.record.text||"");
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Record history</h2><div class="dialog-subtitle">${esc(file.records[index]?.record_id||`Record ${index+1}`)} · ${versions.length-1} saved change set${versions.length-1===1?"":"s"}</div></div><button class="btn icon-only" data-close title="${esc(tr("ui.close","Close"))}" aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div>
-      <div class="db record-history-body">
-        <div class="history-version-nav">
-          <button class="btn" id="historyOlder" ${cursor<=0?`disabled data-disabled-reason="Already at the original record."`:""}>← Older</button>
-          <div class="history-version-position"><b>${esc(version.label)}${isCurrent?" · Current":""}</b><span>${version.timestamp?esc(formatTimestamp(version.timestamp)):"Before tracked edits"}${version.source?` · ${esc(version.source)}`:""}${version.model?` · ${esc(version.model)}`:""}</span></div>
-          <button class="btn" id="historyNewer" ${cursor>=currentIndex?`disabled data-disabled-reason="Already at the newest version."`:""}>Newer →</button>
-        </div>
-        <div class="history-version-summary"><span><b>${changed.length}</b> field${changed.length===1?"":"s"} changed in this version</span><span><b>${text.trim()?text.trim().split(/\s+/).length:0}</b> words</span><span><b>${text.length.toLocaleString()}</b> characters</span></div>
-        ${changed.length?`<div class="history-version-diffs">${changed.map(field=>`<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>changed</span></summary><div class="history-diff-values"><div><small>Previous</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>This version</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`).join("")}</div>`:`<div class="info">This is the reconstructed original state before tracked updates.</div>`}
-        <details class="history-record-preview"><summary>Preview this version</summary><div class="history-preview-meta"><b>${esc(version.record.work||"Untitled work")}</b><span>${esc(version.record.document_author||"")} · ${esc(version.record.year||"")}</span></div><div class="history-preview-text">${esc(text.slice(0,5000))}${text.length>5000?"…":""}</div></details>
-      </div>
-      <div class="da record-history-actions"><button class="btn danger secondary-danger" id="historyClear">Delete audit history…</button><span class="dialog-action-spacer"></span><button class="btn" data-close>Close</button><button class="btn" id="historyUndoAll" ${cursor===0&&isCurrent?"disabled":""}>Restore original</button><button class="btn primary" id="historyRestore" ${isCurrent?`disabled data-disabled-reason="This is already the current version."`:""}>Restore this version</button></div>`;
-    dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    dialog.querySelector("#historyOlder").onclick=()=>{cursor--;render()};
-    dialog.querySelector("#historyNewer").onclick=()=>{cursor++;render()};
-    dialog.querySelector("#historyRestore").onclick=async()=>{
-      if(isCurrent)return;
-      const count=restoreRecordHistoryVersion(file,index,version);
-      if(!count)return toast("No record fields needed restoring");
-      versions=recordHistoryVersions(file.records[index]);cursor=versions.length-1;
-      shell();renderView();render();
-      toast(`Restored ${count} field${count===1?"":"s"} from ${version.label}`);
-    };
-    dialog.querySelector("#historyUndoAll").onclick=async()=>{
-      const original=versions[0];
-      if(!await openMessageModal({title:"Restore original record?",message:"Restore every field to its state before the tracked update history? The restoration itself will be recorded, so you can move forward again later.",confirmLabel:"Restore original",cancelLabel:"Cancel"}))return;
-      const count=restoreRecordHistoryVersion(file,index,original);
-      if(!count)return toast("The record already matches its original tracked state");
-      versions=recordHistoryVersions(file.records[index]);cursor=versions.length-1;
-      shell();renderView();render();
-      toast(`Restored original record state · ${count} fields changed`);
-    };
-    dialog.querySelector("#historyClear").onclick=async()=>{
-      if(!await clearRecordUpdates(file,index))return;
-      close();shell();renderView();toast("Record update history cleared");
-    };
-    decorateDisabledControls(dialog);
-  };
-  document.body.appendChild(dialog);showAppModal(dialog);render();
-}
 
 
 function openMessageModal({
@@ -1183,35 +1390,6 @@ function corpusStoreExists(name){
   return Boolean(name&&recordStores().some(store=>store.name===name));
 }
 
-function toast(message,{tone="auto",duration=null}={}){
-  let el=document.querySelector("#toast");
-  if(!el){el=document.createElement("div");el.id="toast";el.className="toast";document.body.appendChild(el)}
-  // Toast text is operational information: keep it selectable/copyable and
-  // pause dismissal while the user is interacting with it.
-  el.setAttribute("role","status");
-  el.setAttribute("aria-live","polite");
-  el.setAttribute("aria-atomic","true");
-  el.tabIndex=0;
-  const text=translateDynamicUiValue(String(message??""));
-  const failed=tone==="danger"||/\bHTTP\s+\d{3}\b/i.test(text)||/\b(failed|could not|error)\b/i.test(text);
-  el.classList.toggle("failed",failed);
-  el.classList.toggle("success",tone==="success");
-  const httpIndex=text.search(/\bHTTP\s+\d{3}\b/i);
-  if(failed&&httpIndex>=0){
-    el.innerHTML=`${esc(text.slice(0,httpIndex))}<strong>${esc(text.slice(httpIndex))}</strong>`;
-  }else{
-    el.textContent=text;
-  }
-  el.classList.add("show");
-  const dismissDelay=duration??(failed?8000:4200);
-  const pause=()=>clearTimeout(el._timer);
-  const resume=()=>{clearTimeout(el._timer);el._timer=setTimeout(()=>el.classList.remove("show"),dismissDelay)};
-  el.onpointerenter=pause;
-  el.onpointerleave=resume;
-  el.onfocusin=pause;
-  el.onfocusout=resume;
-  resume();
-}
 
 
 
@@ -1390,60 +1568,6 @@ function removeFromUpsertQueue(row){
   state.upsertIgnored[store][localRecordKey(row.file,row.index)]=recordFingerprint(row.record);
   persistPrefs();
 }
-async function openUpsertQueue(){
-  if(!hasCorpusDb())return openMessageModal({title:"Vector database required",message:dbUnavailableReason(),confirmLabel:"OK"});
-  if(!state.activeStore)return toast("Select a Chroma collection first");
-  if(allRows().length)await refreshPresenceForRows(allRows());
-  const rows=pendingUpsertRows();
-  const dialog=document.createElement("dialog");
-  dialog.className="queue-dialog wide-queue-dialog";
-
-  const render=()=>{
-    const currentRows=pendingUpsertRows();
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes","Unsynced local changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records","records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db">
-      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what","What is this list?"))}</b><p>${esc(tr("vector.unsynced_changes_help","These are browser-workspace records that changed since their last confirmed sync, plus records DerridAI has confirmed are missing from the selected collection. Removing an item suppresses only its current version; a later change queues it again."))}</p></div><div class="queue-bulk-actions">${currentRows.length?`<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all","Select all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection","Clear selection"))}</button>`:""}</div>
-      <div class="upsert-queue-list">${currentRows.map(row=>{
-        const info=recordDbStatus(row.file,row.index,row.record);
-        const key=localRecordKey(row.file,row.index);
-        const changes=pendingChangesForRow(row);
-        return `<section class="upsert-queue-card">
-          <div class="upsert-queue-head">
-            <label class="upsert-queue-item"><input type="checkbox" data-upsert-key="${esc(key)}" checked><span><b>${esc(row.record.record_id||`Record ${row.index+1}`)}</b><small>${esc(row.record.work||row.file.name)} · ${esc(row.file.name)}</small></span><span class="db-status ${info.kind}"><i></i>${esc(info.label)}</span></label>
-            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">Review ${changes.length} change${changes.length===1?"":"s"}</button><button class="btn small danger" data-remove-queue="${esc(key)}">Remove from queue</button></div>
-          </div>
-          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map(change=>`<div class="queue-change-row"><b>${esc(label(change.field_name||"field"))}</b><span>${esc(change.source||"manual")}${change.timestamp?` · ${esc(formatTimestamp(change.timestamp))}`:""}</span><details><summary>Values</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
-        </section>`;
-      }).join("")||`<div class="llm-empty">${esc(tr("vector.no_unsynced_changes","No confirmed unsynced local changes."))}</div>`}</div>
-    </div>
-    <div class="da"><button class="btn" data-close>Close</button>${currentRows.length?`<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected","Sync selected"))}</button>`:""}</div>`;
-
-    const close=()=>{dialog.close();dialog.remove()};
-    dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    dialog.querySelector("#queueSelectAll")?.addEventListener("click",()=>dialog.querySelectorAll("[data-upsert-key]").forEach(box=>box.checked=true));
-    dialog.querySelector("#queueSelectNone")?.addEventListener("click",()=>dialog.querySelectorAll("[data-upsert-key]").forEach(box=>box.checked=false));
-    dialog.querySelectorAll("[data-review-queue]").forEach(button=>button.onclick=()=>{
-      const panel=dialog.querySelector(`[data-queue-changes="${CSS.escape(button.dataset.reviewQueue)}"]`);
-      panel?.classList.toggle("hidden");
-    });
-    dialog.querySelectorAll("[data-remove-queue]").forEach(button=>button.onclick=()=>{
-      const row=currentRows.find(item=>localRecordKey(item.file,item.index)===button.dataset.removeQueue);
-      if(row){removeFromUpsertQueue(row);render();shell()}
-    });
-    dialog.querySelector("#upsertQueued")?.addEventListener("click",async()=>{
-      const selected=new Set([...dialog.querySelectorAll("[data-upsert-key]:checked")].map(x=>x.dataset.upsertKey));
-      const chosen=currentRows.filter(row=>selected.has(localRecordKey(row.file,row.index)));
-      if(!chosen.length)return toast("Select at least one queued record");
-      close();
-      await upsertRows(chosen,"queued records");
-      shell();renderView();
-    });
-  };
-
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  render();
-}
 function recordFields(){
   if(corpusCache.fields)return corpusCache.fields;
   const set=new Set();
@@ -1546,76 +1670,6 @@ function needsReviewItems(rows=null){
     return memoCorpus("needs-review-items",()=>allRows().filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)})));
   }
   return rows.filter(row=>row.record.needs_review===true).map(row=>({...row,key:reviewKey(row.file,row.index)}));
-}
-function openMergeDialog(){
-  if(state.files.length<2)return toast("Open at least two JSONL files to merge");
-  const dialog=document.createElement("dialog");
-  dialog.className="merge-dialog";
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Merge JSONL tabs</h2><div class="dialog-subtitle">Choose any subset. The selected source tabs will be replaced in the workspace by the merged tab.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db"><div class="merge-actions"><button class="btn small" id="mergeSelectAll">Select all</button><button class="btn small" id="mergeSelectNone">Clear</button></div><div class="merge-file-list">${state.files.map(file=>`<label class="merge-file-item"><input type="checkbox" data-merge-file="${file.id}" checked><span><b>${esc(file.name)}</b><small>${file.records.length.toLocaleString()} records</small></span></label>`).join("")}</div><div class="field"><label>Merged file name</label><input class="control" id="mergeName" value="derridai-merged.jsonl"></div><label class="check-item"><input type="checkbox" id="mergeDownload"><span>Download merged JSONL immediately</span></label><div class="info">Unselected tabs remain unchanged. Selected tabs are removed from the workspace after the merge is created; their underlying source files on disk are not deleted.</div></div><div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="mergeCreate">Merge and replace selected tabs</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(x=>x.onclick=close);
-  dialog.querySelector("#mergeSelectAll").onclick=()=>dialog.querySelectorAll("[data-merge-file]").forEach(x=>x.checked=true);
-  dialog.querySelector("#mergeSelectNone").onclick=()=>dialog.querySelectorAll("[data-merge-file]").forEach(x=>x.checked=false);
-  dialog.querySelector("#mergeCreate").onclick=async()=>{
-    const ids=[...dialog.querySelectorAll("[data-merge-file]:checked")].map(x=>x.dataset.mergeFile);
-    const files=state.files.filter(file=>ids.includes(file.id));
-    if(!files.length)return toast("Select at least one file");
-    const firstIndex=Math.min(...files.map(file=>state.files.indexOf(file)));
-    const name=(dialog.querySelector("#mergeName").value.trim()||"derridai-merged.jsonl").replace(/\s+/g,"-");
-    const records=files.flatMap(file=>file.records.map(record=>cloneAuditValue(record)));
-    const merged={
-      id:uid(),
-      name:name.endsWith(".jsonl")?name:`${name}.jsonl`,
-      records,
-      errors:files.flatMap(file=>file.errors||[]),
-      dirty:new Set(records.map((_,index)=>index)),
-      imported_at:new Date().toISOString(),
-      merged_from:files.map(file=>file.name),
-    };
-
-    const removedIds=new Set(files.map(file=>file.id));
-    state.files=state.files.filter(file=>!removedIds.has(file.id));
-    state.files.splice(firstIndex,0,merged);
-
-    for(const id of removedIds){
-      delete state.selected[id];
-      delete state.searches[id];
-      delete state.pages[id];
-      delete state.sorts[id];
-      if(fileTimers.has(id)){
-        clearTimeout(fileTimers.get(id));
-        fileTimers.delete(id);
-      }
-      await idbDelete("files",id).catch(error=>console.error("Could not remove merged source tab from IndexedDB",error));
-    }
-    state.reviewSelection=new Set([...state.reviewSelection].filter(key=>!removedIds.has(String(key).split("::")[0])));
-    for(const store of Object.keys(state.upsertState||{})){
-      for(const key of Object.keys(state.upsertState[store]||{})){
-        if(removedIds.has(String(key).split("::")[0]))delete state.upsertState[store][key];
-      }
-    }
-    for(const store of Object.keys(state.upsertIgnored||{})){
-      for(const key of Object.keys(state.upsertIgnored[store]||{})){
-        if(removedIds.has(String(key).split("::")[0]))delete state.upsertIgnored[store][key];
-      }
-    }
-    for(const bucket of [state.storePresence,state.storePresenceIds]){
-      for(const store of Object.keys(bucket||{})){
-        for(const key of Object.keys(bucket[store]||{})){
-          if(removedIds.has(String(key).split("::")[0]))delete bucket[store][key];
-        }
-      }
-    }
-
-    await persistFileNow(merged);
-    state.activeFileId=merged.id;
-    if(dialog.querySelector("#mergeDownload").checked)download(merged.name,fileJsonl(merged));
-    persistPrefs();
-    close();
-    navigateTo("list",{fileId:merged.id});
-    toast(`Merged and replaced ${files.length} tabs · ${records.length.toLocaleString()} records`);
-  };
 }
 
 function setActiveStore(name){
@@ -1940,265 +1994,8 @@ function goForward(){
   }
 }
 
-let operationDockResizeWired=false;
 
-function applyOperationStackPosition(stack){
-  if(!stack)return;
-  const position=state.operationStackPosition;
-  if(!position){
-    stack.style.left="";
-    stack.style.top="";
-    stack.style.right="";
-    stack.style.bottom="";
-    stack.style.transform="";
-    stack.style.translate="";
-    stack.style.removeProperty("--operation-stack-max-height");
-    stack.classList.remove("user-positioned");
-    return;
-  }
-  const rect=stack.getBoundingClientRect();
-  const maxLeft=Math.max(8,window.innerWidth-Math.max(rect.width,280)-8);
-  const maxTop=Math.max(8,window.innerHeight-52);
-  const left=Math.min(maxLeft,Math.max(8,Number(position.left)||8));
-  const top=Math.min(maxTop,Math.max(8,Number(position.top)||8));
-  state.operationStackPosition={left,top};
-  stack.style.left=`${left}px`;
-  stack.style.top=`${top}px`;
-  stack.style.right="auto";
-  stack.style.bottom="auto";
-  stack.style.translate="none";
-  stack.style.setProperty("--operation-stack-max-height",`${Math.max(120,window.innerHeight-top-8)}px`);
-  stack.classList.add("user-positioned");
-}
-function setOperationDockMinimized(minimized){
-  state.operationToastsMinimized=Boolean(minimized);
-  persistPrefs();
-  const stack=document.querySelector("#operationProgressStack");
-  if(!stack)return;
-  stack.classList.toggle("minimized",state.operationToastsMinimized);
-  stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
-  const toggle=stack.querySelector("#operationStackToggle");
-  if(toggle){
-    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
-    toggle.setAttribute("aria-label",state.operationToastsMinimized
-      ?tr("operations.expand","Show operations")
-      :tr("operations.collapse","Hide operations"));
-  }
-  applyOperationStackPosition(stack);
-  updateOperationStackCount();
-}
-function announceOperationDock(message){
-  const live=document.querySelector("#operationStackLive");
-  if(!live||!message)return;
-  live.textContent="";
-  live.textContent=message;
-}
-function operationDockCardStats(stack){
-  let active=0,failed=0,finished=0,primaryLabel="",primaryPercent=null;
-  stack.querySelectorAll(".operation-progress").forEach(panel=>{
-    const job=panel.dataset.jobOperation?state.jobs.find(item=>item.id===panel.dataset.jobOperation):null;
-    if(job){
-      if(isActiveJobStatus(job.status)){
-        active+=1;
-        if(!primaryLabel){
-          primaryLabel=jobLabel(job);
-          primaryPercent=jobProgressPercent(job);
-        }
-      }else if(job.status==="failed")failed+=1;
-      else finished+=1;
-      return;
-    }
-    if(panel.classList.contains("failed")){failed+=1;return;}
-    if(panel.classList.contains("operation-complete")){finished+=1;return;}
-    active+=1;
-    if(!primaryLabel){
-      primaryLabel=panel.querySelector("b")?.textContent||"";
-      const width=panel.querySelector("[data-progress-bar], .operation-progress-track i")?.style?.width||"";
-      const parsed=Number.parseInt(width,10);
-      primaryPercent=Number.isNaN(parsed)?null:parsed;
-    }
-  });
-  return {active,failed,finished,primaryLabel,primaryPercent};
-}
-function wireOperationStackDrag(stack){
-  const handle=stack?.querySelector("[data-operation-drag]");
-  if(!handle||handle.dataset.dragWired)return;
-  handle.dataset.dragWired="1";
-  handle.addEventListener("pointerdown",event=>{
-    if(event.button!==0||event.target.closest("button"))return;
-    event.preventDefault();
-    const rect=stack.getBoundingClientRect();
-    const startX=event.clientX,startY=event.clientY,startLeft=rect.left,startTop=rect.top,width=rect.width;
-    const maxLeft=Math.max(8,window.innerWidth-width-8);
-    const maxTop=Math.max(8,window.innerHeight-52);
-    let nextLeft=startLeft,nextTop=startTop,frame=0;
-    handle.classList.add("dragging");
-    stack.classList.add("is-dragging");
-    stack.style.translate="none";
-    stack.style.left=`${startLeft}px`;
-    stack.style.top=`${startTop}px`;
-    stack.style.right="auto";
-    stack.style.bottom="auto";
-    try{handle.setPointerCapture(event.pointerId)}catch{/* pointer capture is optional on this surface */}
-    const paint=()=>{
-      frame=0;
-      stack.style.transform=`translate3d(${Math.round(nextLeft-startLeft)}px,${Math.round(nextTop-startTop)}px,0)`;
-    };
-    const move=e=>{
-      nextLeft=Math.min(maxLeft,Math.max(8,startLeft+(e.clientX-startX)));
-      nextTop=Math.min(maxTop,Math.max(8,startTop+(e.clientY-startY)));
-      if(!frame)frame=requestAnimationFrame(paint);
-    };
-    const done=e=>{
-      if(frame)cancelAnimationFrame(frame);
-      stack.style.transform="";
-      state.operationStackPosition={left:Math.round(nextLeft),top:Math.round(nextTop)};
-      applyOperationStackPosition(stack);
-      handle.classList.remove("dragging");
-      stack.classList.remove("is-dragging");
-      window.removeEventListener("pointermove",move);
-      window.removeEventListener("pointerup",done);
-      window.removeEventListener("pointercancel",done);
-      try{handle.releasePointerCapture(e?.pointerId)}catch{/* pointer capture is optional on this surface */}
-      persistPrefs();
-    };
-    window.addEventListener("pointermove",move,{passive:true});
-    window.addEventListener("pointerup",done,{once:true});
-    window.addEventListener("pointercancel",done,{once:true});
-  });
-  handle.addEventListener("dblclick",event=>{
-    if(event.target.closest("button"))return;
-    state.operationStackPosition=null;
-    persistPrefs();
-    applyOperationStackPosition(stack);
-  });
-  handle.addEventListener("keydown",event=>{
-    if(event.key==="Escape"){
-      if(!state.operationToastsMinimized){
-        event.preventDefault();
-        setOperationDockMinimized(true);
-      }
-      return;
-    }
-    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)||event.target.closest("button"))return;
-    event.preventDefault();
-    const rect=stack.getBoundingClientRect();
-    const step=event.shiftKey?40:12;
-    let left=rect.left,top=rect.top;
-    if(event.key==="ArrowLeft")left-=step;
-    if(event.key==="ArrowRight")left+=step;
-    if(event.key==="ArrowUp")top-=step;
-    if(event.key==="ArrowDown")top+=step;
-    state.operationStackPosition={left:Math.round(Math.max(8,Math.min(window.innerWidth-220,left))),top:Math.round(Math.max(8,Math.min(window.innerHeight-52,top)))};
-    persistPrefs();
-    applyOperationStackPosition(stack);
-  });
-  if(!operationDockResizeWired){
-    operationDockResizeWired=true;
-    window.addEventListener("resize",()=>applyOperationStackPosition(document.querySelector("#operationProgressStack")),{passive:true});
-  }
-}
 
-function progressStack(){
-  let stack=document.querySelector("#operationProgressStack");
-  if(!stack){
-    const dragHelp=tr("operations.drag_help","Drag anywhere · double-click to recenter");
-    const title=tr("operations.title","Operations");
-    stack=document.createElement("aside");
-    stack.id="operationProgressStack";
-    stack.className=`operation-progress-stack${state.operationToastsMinimized?" minimized":""}`;
-    stack.dataset.surface=state.operationToastsMinimized?"glass":"overlay";
-    stack.setAttribute("role","complementary");
-    stack.setAttribute("aria-label",title);
-    stack.innerHTML=`<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized?"false":"true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized?tr("operations.expand","Show operations"):tr("operations.collapse","Hide operations"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished","Clear finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
-    document.body.appendChild(stack);
-    wireOperationStackDrag(stack);
-    applyOperationStackPosition(stack);
-    stack.querySelector("#operationStackToggle").addEventListener("click",()=>setOperationDockMinimized(!state.operationToastsMinimized));
-    stack.querySelector("#operationStackClearFinished").addEventListener("click",()=>clearFinishedOperations());
-    stack.addEventListener("keydown",event=>{
-      if(event.key==="Escape"&&!state.operationToastsMinimized&&!event.target.closest("input,textarea,select")){
-        event.preventDefault();
-        setOperationDockMinimized(true);
-      }
-    });
-  }
-  return stack.querySelector(".operation-stack-items")||stack;
-}
-function updateOperationStackCount(){
-  const stack=document.querySelector("#operationProgressStack");
-  if(!stack)return;
-  const count=stack.querySelectorAll(".operation-progress").length;
-  if(!shouldMountOperationDock(count)){
-    stack.remove();
-    return;
-  }
-  const stats=operationDockCardStats(stack);
-  const summary=dockCollapsedSummary(stats);
-  const label=stack.querySelector("#operationStackCount");
-  if(label){
-    label.textContent=trf(summary.key,summary.fallback,summary.values);
-    // When there is nothing more specific to say, the summary falls back to the dock's own title; do not say it twice.
-    label.hidden=label.textContent===tr("operations.title","Operations");
-  }
-  stack.dataset.tone=summary.tone;
-  if(summary.percent==null)stack.style.removeProperty("--operation-dock-progress");
-  else stack.style.setProperty("--operation-dock-progress",`${summary.percent}%`);
-  const clear=stack.querySelector("#operationStackClearFinished");
-  if(clear){
-    const canClear=stats.failed+stats.finished>0;
-    clear.hidden=!canClear||state.operationToastsMinimized;
-    clear.disabled=!canClear;
-  }
-  const toggle=stack.querySelector("#operationStackToggle");
-  if(toggle){
-    toggle.setAttribute("aria-expanded",state.operationToastsMinimized?"false":"true");
-    toggle.setAttribute("aria-label",state.operationToastsMinimized
-      ?tr("operations.expand","Show operations")
-      :tr("operations.collapse","Hide operations"));
-  }
-}
-function showOperationProgress(title,total){
-  const id=uid();
-  const stack=progressStack();
-  const panel=document.createElement("div");
-  panel.className="operation-progress show";
-  panel.dataset.operationId=id;
-  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(title)}</b><span data-progress-text>0 of ${total.toLocaleString()}</span></div><div class="spinner small-spinner"></div></div><div class="operation-progress-track"><i data-progress-bar style="width:0%"></i></div><div class="operation-progress-detail" data-progress-detail></div>`;
-  stack.appendChild(panel);
-  updateOperationStackCount();
-  state.operationProgress[id]={title,total,done:0};
-  return id;
-}
-function updateOperationProgress(id,done,total,detail=""){
-  const panel=document.querySelector(`[data-operation-id="${CSS.escape(id)}"]`);
-  if(!panel)return;
-  const pct=Math.round(total?done/total*100:100);
-  const text=panel.querySelector("[data-progress-text]");
-  const bar=panel.querySelector("[data-progress-bar]");
-  const detailEl=panel.querySelector("[data-progress-detail]");
-  if(text)text.textContent=`${done.toLocaleString()} of ${total.toLocaleString()} (${pct}%)`;
-  if(bar)bar.style.width=`${pct}%`;
-  if(detailEl)detailEl.textContent=detail;
-  state.operationProgress[id]={...(state.operationProgress[id]||{}),done,total,detail};
-}
-function hideOperationProgress(id,delay=200){
-  // Completed foreground operations remain visible until the user dismisses
-  // them. ``delay`` is retained for call-site compatibility but is no longer
-  // used to auto-remove operation history.
-  const panel=document.querySelector(`[data-operation-id="${CSS.escape(id)}"]`);
-  if(!panel)return;
-  panel.classList.add("show","operation-complete");
-  panel.querySelector(".spinner")?.remove();
-  const head=panel.querySelector(".operation-progress-head");
-  if(head&&!head.querySelector("[data-dismiss-operation]")){
-    const button=document.createElement("button");
-    button.className="btn tiny";button.dataset.dismissOperation=id;button.textContent=tr("ui.dismiss","Dismiss");
-    button.onclick=()=>{panel.remove();delete state.operationProgress[id];updateOperationStackCount()};
-    head.appendChild(button);
-  }
-  state.operationProgress[id]={...(state.operationProgress[id]||{}),finished:true};
-}
 
 
 
@@ -2208,74 +2005,6 @@ function hideOperationProgress(id,delay=200){
 
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
-function ensureJobProgressCard(job){
-  const stack=progressStack();
-  let panel=stack.querySelector(`[data-job-operation="${CSS.escape(job.id)}"]`);
-  if(!panel){
-    panel=document.createElement("article");
-    panel.className="operation-progress show";
-    panel.dataset.jobOperation=job.id;
-    stack.appendChild(panel);
-  }
-  const pct=jobProgressPercent(job);
-  const active=isActiveJobStatus(job.status);
-  const tone=statusBadgeTone(job.status);
-  panel.classList.toggle("failed",job.status==="failed");
-  panel.classList.toggle("operation-complete",isTerminalJobStatus(job.status));
-  panel.dataset.tone=tone;
-  const cancellationDetail=job.type==="llm"||job.type==="llm_tool"
-    ?"Cancellation requested · interrupting the active model stream."
-    : job.type==="rag"
-      ?"Cancellation requested · interrupting model streaming or waiting for the current vector/rerank checkpoint."
-      : job.type==="upsert"
-        ?"Cancellation requested · the current Chroma batch will finish, then the job stops."
-        : "Cancellation requested.";
-  const detail=job.status==="cancelling"||job.cancel_requested
-    ?cancellationDetail
-    : job.status==="failed"
-      ? trf("operations.failed_help","Failed · {detail}",{detail:String(job.fatal_error||job.stage_detail||"Operation failed")})
-    : job.status==="completed"
-      ? tr("operations.completed_help","Completed · open the result or dismiss")
-    : job.status==="cancelled"
-      ? tr("operations.cancelled_help","Cancelled · partial results may still be available")
-    : job.type==="rag"
-      ? `${job.stage_detail||job.stage||"Running RAG pipeline"}`
-      : job.type==="upsert"
-        ? `${job.store_name||"collection"} · ${job.completed}/${job.total} records committed`
-        : job.type==="llm_tool"
-          ? `${job.stage_detail||jobLabel(job)}`
-          : `${job.failed?`${job.failed} failed · `:""}${job.current_record_id?`Reviewing ${job.current_record_id}`:"Background operation"}`;
-  const httpIndex=String(detail).search(/\bHTTP\s+\d{3}\b/i);
-  const detailHtml=httpIndex>=0
-    ? `${esc(String(detail).slice(0,httpIndex))}<strong>${esc(String(detail).slice(httpIndex))}</strong>`
-    : esc(detail);
-  const canOpenResult=(job.type==="llm"&&Number(job.pending_result_count||0)>0)||(["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status));
-  const resultActionLabel=job.type==="pdf_corpus"
-    ?tr("pdf_corpus.open_build","Open corpus build")
-    :job.type==="llm_tool"&&(job.tool==="rag_grade"||job.mode==="rag_grade")
-      ?tr("operations.view_grade","View grade")
-      :tr("operations.open_result","Open result");
-  const statusLabel=tr(`operations.status.${job.status}`,job.status);
-  const provider=jobProviderSummary(job);
-  const pending=Number(job.pending_result_count||0);
-  const actions=[];
-  if(active){
-    if(job.cancel_requested||job.status==="cancelling")actions.push(`<span class="cancel-pending">${esc(tr("operations.cancelling","Cancelling…"))}</span>`);
-    else actions.push(`<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel","Cancel"))}</button>`);
-  }else{
-    if(canOpenResult)actions.push(`<button type="button" class="btn tiny primary" data-toast-open-result="${job.id}">${esc(resultActionLabel)}</button>`);
-    if(job.type==="llm"&&pending>0)actions.push(`<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available","Review {count} available",{count:pending}))}</button>`);
-    actions.push(`<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss","Dismiss"))}</button>`);
-  }
-  actions.push(`<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details","Full details"))}</button>`);
-  panel.innerHTML=`<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}</b>${provider?`<small class="operation-progress-provider">${esc(provider)}</small>`:""}</div><span class="operation-status-badge" data-tone="${esc(tone)}"><span class="operation-status-dot" aria-hidden="true"></span>${esc(statusLabel)}</span></div><div class="operation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(jobProgressText(job,"of"))}"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><div class="operation-toast-actions">${actions.join("")}${active?'<div class="spinner small-spinner"></div>':""}</div>`;
-  panel.querySelector("[data-toast-cancel-job]")?.addEventListener("click",()=>cancelBackgroundJob(job.id));
-  panel.querySelector("[data-toast-review-results]")?.addEventListener("click",()=>openJobResults(job.id));
-  panel.querySelectorAll("[data-toast-open-result]").forEach(button=>button.addEventListener("click",()=>openJobResults(job.id)));
-  panel.querySelector("[data-toast-open-details]")?.addEventListener("click",()=>openJobDetails(job.id));
-  panel.querySelector("[data-toast-dismiss-job]")?.addEventListener("click",()=>removeFinishedJob(job.id));
-  updateOperationStackCount();
-}
 
 async function warmupProviderProfile(profileId=null){
   const profile=providerProfile(profileId||state.appConfig.default_provider_profile);
@@ -2382,515 +2111,9 @@ function refreshCorpusBuildsHomeCardOnly(){
   wireCorpusBuildsHomeCard();
 }
 
-async function openJobDetails(jobId){
-  let job;
-  try{
-    job=await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-  }catch(error){
-    if(String(error?.message||"").includes("404")){
-      pruneClientJobState(jobId);
-      persistPrefs();
-      if(state.view==="rag")refreshRagProgressPanel();
-      return toast("This operation was removed and has been cleared from the activity view");
-    }
-    return toast(`Could not load operation details: ${error.message}`);
-  }
-  const dialog=document.createElement("dialog");
-  dialog.className="job-details-dialog";
-  const events=job.events||[];
-  const request=job.request||{};
-  const safeRequest=cloneAuditValue(request);
-  if(safeRequest&&typeof safeRequest==="object")delete safeRequest.api_key;
-
-  const resultSummary=job.type==="llm"
-    ? {
-        pending_result_count:job.pending_result_count??(job.results||[]).length,
-        pending_proposed_changes:job.pending_change_count??(job.results||[]).reduce((sum,result)=>sum+Object.keys(result.proposal?.changes||{}).length,0),
-        accepted_results:job.accepted_results||0,
-        accepted_fields:job.accepted_fields||0,
-        rejected_results:job.rejected_results||0,
-        rejected_fields:job.rejected_fields||0,
-        resolution_state:job.resolution_state||"pending",
-        unprocessed_records:job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0)),
-        failures:(job.results||[]).filter(result=>result.error).length,
-      }
-    : job.type==="upsert"
-      ? {
-          committed:job.completed||0,
-          requested:job.total||0,
-          target_collection:job.store_name,
-          language_mirrors:job.mirrored||{},
-          receipt_count:(job.results||[]).length,
-        }
-      : job.type==="pdf_corpus"
-        ? {
-            source_pdf:job.source_filename||null,
-            build_id:job.build_id||job.id,
-            raw_status:job.raw_status||job.status,
-            stage:job.stage||null,
-            record_count:job.record_count||0,
-            review_count:job.review_count||0,
-            unresolved_regions:job.unresolved_regions||0,
-          }
-      : job.type==="llm_tool"
-        ? {
-            operation:job.label||job.tool||job.mode,
-            provider_profile_id:job.provider_profile_id||null,
-            max_concurrent_requests:job.max_concurrent_requests||null,
-            has_result:Boolean(job.result),
-            result_keys:job.result&&typeof job.result==="object"?Object.keys(job.result):[],
-          }
-        : {
-            has_result:Boolean(job.result),
-            evidence_count:job.result?.evidence?.length||0,
-            elapsed_seconds:job.result?.elapsed_seconds??null,
-            collections:job.result?.collections||[],
-            response_cache:job.result?.response_cache||job.response_cache||null,
-          };
-
-  dialog.innerHTML=`<div class="dh">
-    <div><h2 class="dialog-title">${esc(jobLabel(job))} details</h2><div class="dialog-subtitle">${esc(job.id)} · ${esc(job.status)} · created ${esc(formatTimestamp(job.created_at))}</div></div>
-    <button class="btn icon-only" data-close>${icon("close")}</button>
-  </div>
-  <div class="db job-details-body">
-    <section class="job-detail-summary">
-      ${[
-        ["Type",job.type],
-        ["Started by",job.owner||"—"],
-        ["Status",job.status],
-        ["Provider",job.provider],
-        ["Model",job.model],
-        ["Progress",`${job.completed}/${job.total}`],
-        ["Failed",job.failed||0],
-        ["Started",job.started_at?formatTimestamp(job.started_at):"—"],
-        ["Finished",job.finished_at?formatTimestamp(job.finished_at):"—"],
-        ["Cancel requested",job.cancel_requested_at?formatTimestamp(job.cancel_requested_at):"—"],
-      ].map(([name,value])=>`<div><span>${esc(name)}</span><b>${esc(value??"—")}</b></div>`).join("")}
-    </section>
-    ${job.fatal_error?`<div class="info error">${esc(job.fatal_error)}</div>`:""}
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>Request configuration</b><div class="note">API keys are intentionally omitted.</div></div></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(safeRequest,null,2))}</pre>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>Operation timeline</b><div class="note">${events.length} recorded events</div></div></div>
-      <div class="job-event-list">${events.map((event,index)=>`<div class="job-event ${index===events.length-1?"latest":""}"><time>${esc(formatTimestamp(event.timestamp))}</time><b>${esc(label(event.stage||"event"))}</b><span>${event.current!=null&&event.total!=null?`${event.current}/${event.total} · `:""}${esc(event.detail||"")}</span></div>`).join("")||'<div class="note">No events recorded.</div>'}</div>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><b>Result summary</b></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(resultSummary,null,2))}</pre>
-    </section>
-  </div>
-  <div class="da">
-    <button class="btn" data-close>Close</button>
-    ${["queued","running","cancelling"].includes(job.status)?(job.cancel_requested||job.status==="cancelling"?'<button class="btn" disabled>Cancelling…</button>':`<button class="btn danger" id="detailsCancelJob">Cancel operation</button>`):""}
-    ${job.type==="llm"&&(job.pending_result_count??(job.results||[]).length)>0?`<button class="btn primary" id="detailsOpenResult">${["queued","running","cancelling"].includes(job.status)?"Review available results":"Review results"}</button>`:""}
-    ${((["rag","llm_tool"].includes(job.type)&&job.status==="completed")||(job.type==="pdf_corpus"&&["completed","blocked"].includes(job.status)))?`<button class="btn primary" id="detailsOpenResult">${job.type==="pdf_corpus"?esc(tr("pdf_corpus.open_build","Open corpus build")):"Open result"}</button>`:""}
-  </div>`;
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#detailsCancelJob")?.addEventListener("click",async()=>{
-    const updated=await cancelBackgroundJob(job.id);
-    if(updated){close();openJobDetails(job.id)}
-  });
-  dialog.querySelector("#detailsOpenResult")?.addEventListener("click",()=>{close();openJobResults(job.id)});
-}
-
-function openReviewRecordPreview(local,result){
-  const record=local?.file?.records?.[local.index];
-  if(!record)return toast("The source record is no longer loaded in this workspace");
-
-  const proposal=result?.proposal||{};
-  const proposedFields=Object.keys(proposal.changes||{});
-  const important=[
-    "work","document_author","edition","year","page_start","page_end",
-    "region_type","region_author","speaker","position_holder","target",
-    "discourse_role","proposition_status","semantic_function","stance",
-    "claim_scope","is_direct_quote","quoted_speaker","quoted_author",
-    "quoted_work","quoted_position_holder","quoted_addressee",
-    "quoted_referent","quotation_chain","topics","concepts","persons",
-    "works_referenced","document_language","original_language",
-    "inline_citation","full_citation","needs_review","review_reason"
-  ].filter(field=>record[field]!==undefined);
-
-  const dialog=document.createElement("dialog");
-  dialog.className="record-preview-dialog";
-  const stale=Boolean(result?.fingerprint&&recordFingerprint(record)!==result.fingerprint);
-  const updates=Array.isArray(record.updates)?record.updates.slice(-8).reverse():[];
-
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Record preview</h2><div class="dialog-subtitle">${esc(record.record_id||`Record ${local.index+1}`)} · ${esc(record.work||local.file.name)} · ${esc(local.file.name)}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db record-preview-body">
-    ${stale?'<div class="info warn">This local record changed after the LLM job started. Current values below may differ from the values originally reviewed.</div>':""}
-    <section class="record-preview-summary">
-      <div><span>Record ID</span><b>${esc(record.record_id||"—")}</b></div>
-      <div><span>Work</span><b>${esc(record.work||"—")}</b></div>
-      <div><span>Pages</span><b>${esc(pages(record))}</b></div>
-      <div><span>Citation</span><b>${esc(fullCitation(record)||"—")}</b></div>
-      <div><span>LLM proposals</span><b>${proposedFields.length}</b></div>
-      <div><span>Needs review</span><b>${record.needs_review?"Yes":"No"}</b></div>
-    </section>
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Metadata</b><span>${important.length} populated fields</span></div>
-      <div class="record-preview-metadata">${important.map(field=>`<div class="record-preview-field ${proposedFields.includes(field)?"proposed-field":""}"><span>${esc(label(field))}${proposedFields.includes(field)?'<i>proposed change</i>':""}</span><pre>${esc(jsonPretty(record[field]))}</pre></div>`).join("")}</div>
-    </section>
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Text</b><span>${String(record.text||"").length.toLocaleString()} characters</span></div>
-      <pre class="record-preview-text">${esc(record.text||"")}</pre>
-    </section>
-
-    ${proposedFields.length?`<section class="record-preview-section"><div class="record-preview-heading"><b>Proposed changes for this record</b><span>${proposedFields.length}</span></div><div class="record-preview-proposals">${proposedFields.map(field=>`<div><b>${esc(label(field))}</b><div class="record-preview-proposal-grid"><pre>${esc(jsonPretty(record[field]))}</pre><span>→</span><pre>${esc(jsonPretty(proposal.changes[field]))}</pre></div>${proposal.rationale?.[field]?`<small>${esc(proposal.rationale[field])}</small>`:""}</div>`).join("")}</div></section>`:""}
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Recent audit history</b><span>${updates.length} shown</span></div>
-      <div class="record-preview-history">${updates.map(update=>`<div><time>${esc(formatTimestamp(update.timestamp))}</time><b>${esc(label(update.field_name||"field"))}</b><span>${esc(update.source||"manual")}${update.initiated_by?` · ${esc(update.initiated_by)}`:""}</span></div>`).join("")||'<div class="note">No audit history recorded.</div>'}</div>
-    </section>
-  </div>
-  <div class="da"><button class="btn" data-close>Close preview</button><button class="btn" data-copy-row-key="${esc(reviewKey(local.file,local.index))}">${icon("copy")}Copy entire record</button><button class="btn primary" id="previewOpenRecord">${icon("arrow")}Open full Record view</button></div>`;
-
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#previewOpenRecord").onclick=()=>{
-    close();
-    navigateTo("record",{fileId:local.file.id,index:local.index});
-  };
-}
 
 
-async function openJobResults(jobId){
-  let job;
-  try{job=await api(`/api/jobs/${encodeURIComponent(jobId)}`)}catch(error){
-    if(String(error?.message||"").includes("404")){pruneClientJobState(jobId);persistPrefs();if(state.view==="rag")refreshRagProgressPanel();return toast("This operation was removed and has been cleared from the activity view")}
-    await openMessageModal({title:"Could not open operation result",message:error.message||String(error),tone:"danger"});
-    return;
-  }
-  try{
-    if(job.type==="rag")return openRagResult(job);
-    if(job.type==="llm_tool")return openLlmToolResult(job);
-    if(job.type==="upsert")return openJobDetails(job.id);
-    if(job.type==="pdf_corpus"){
-      window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:`/pdf?mode=builder&build=${encodeURIComponent(job.build_id||job.id)}`,runtimeView:"pdf"}}));
-      return;
-    }
-  }catch(error){
-    console.error("Could not render operation result",error,job);
-    await openMessageModal({title:"Could not render operation result",message:error.message||String(error),detail:jobLabel(job),tone:"danger"});
-    return;
-  }
 
-  const dialog=document.createElement("dialog");
-  dialog.className="job-results-dialog";
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  let liveTimer=null;
-
-  async function refreshJob(){
-    try{
-      job=await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-      const idx=state.jobs.findIndex(item=>item.id===job.id);
-      if(idx>=0)state.jobs[idx]={...state.jobs[idx],...job};
-      return true;
-    }catch(error){
-      toast(`Could not refresh review results: ${error.message}`);
-      return false;
-    }
-  }
-
-  function buildData(){
-    const successful=(job.results||[]).filter(result=>!result.error&&result.proposal);
-    const failures=(job.results||[]).filter(result=>result.error);
-    const unchanged=[];
-    const flattened=[];
-    for(const result of successful){
-      const local=reviewItemFromKey(result.key);
-      const currentRecord=local?.file.records[local.index];
-      const stale=Boolean(local&&result.fingerprint&&recordFingerprint(currentRecord)!==result.fingerprint);
-      const changes=Object.entries(result.proposal?.changes||{});
-      if(!changes.length){
-        unchanged.push({result,local,stale});
-        continue;
-      }
-      for(const [field,proposed] of changes){
-        flattened.push({
-          result,local,field,
-          current:currentRecord?.[field],
-          proposed,
-          rationale:result.proposal?.rationale?.[field]||"",
-          stale,
-        });
-      }
-    }
-    return {successful,failures,unchanged,flattened};
-  }
-
-  let selections=new Set();
-
-  function initializeSelections(flattened){
-    const valid=[...selections].filter(index=>index<flattened.length);
-    selections=new Set(valid);
-    if(!selections.size){
-      flattened.forEach((item,index)=>{if(item.field!=="text")selections.add(index)});
-    }
-  }
-
-  async function resolveOnServer(action,items,{dismissJob=false}={}){
-    return api(`/api/jobs/${encodeURIComponent(job.id)}/llm-results/resolve`,{
-      method:"POST",
-      body:JSON.stringify({action,items,dismiss_job:dismissJob}),
-    });
-  }
-
-  async function rejectAndDismiss(){
-    if(!await openMessageModal({title:"Discard pending LLM review?",message:"Discard all currently pending proposed changes, stop the review if it is still running, and remove this operation from the queue?",tone:"danger",confirmLabel:"Discard pending & remove",cancelLabel:"Keep review"}))return;
-    try{
-      await api(`/api/jobs/${encodeURIComponent(job.id)}/llm-results/reject`,{
-        method:"POST",
-        body:JSON.stringify({dismiss:true}),
-      });
-      dialog.close();dialog.remove();
-      await refreshJobs({rerender:state.view==="home"});
-      toast("LLM review rejected and removed from the operations queue");
-    }catch(error){
-      toast(`Could not reject LLM review: ${error.message}`);
-    }
-  }
-
-  async function apply(mode){
-    const {successful,unchanged,flattened}=buildData();
-    const batchId=uid();
-    let fieldsApplied=0;
-    let fullyReviewed=0;
-    const resolveItems=[];
-    const byKey=new Map();
-
-    for(const result of successful){
-      const local=reviewItemFromKey(result.key);
-      if(local){
-        byKey.set(result.key,{
-          item:local,
-          result,
-          fields:[],
-          allFields:Object.keys(result.proposal?.changes||{}),
-          rationale:result.proposal?.rationale||{},
-          resolveRecord:false,
-        });
-      }
-    }
-
-    if(mode==="review"){
-      for(const entry of byKey.values())entry.resolveRecord=true;
-    }else if(mode==="all"){
-      for(const entry of byKey.values()){
-        entry.fields=[...entry.allFields];
-        entry.resolveRecord=true;
-      }
-    }else{
-      flattened.forEach((entry,index)=>{
-        if(!selections.has(index)||!entry.local)return;
-        const target=byKey.get(entry.result.key);
-        if(target)target.fields.push(entry.field);
-      });
-      for(const target of byKey.values()){
-        if(target.fields.length&&target.fields.length===target.allFields.length){
-          target.resolveRecord=true;
-        }
-      }
-    }
-
-    for(const [key,target] of byKey.entries()){
-      if(mode==="selected"&&!target.fields.length)continue;
-      const record=target.item.file.records[target.item.index];
-      const changes={};
-      if(mode!=="review"){
-        const sourceChanges=target.result.proposal?.changes||{};
-        for(const field of target.fields){
-          if(field in sourceChanges)changes[field]=sourceChanges[field];
-        }
-      }
-
-      // Clear needs_review only when the full pending proposal for this record
-      // is being resolved, or the user explicitly chose "mark reviewed only".
-      if(target.resolveRecord){
-        if(record.needs_review!==false)changes.needs_review=false;
-        if(record.review_reason!=null&&record.review_reason!=="")changes.review_reason=null;
-      }
-      fieldsApplied+=applyRecordChanges(
-        target.item.file,
-        target.item.index,
-        changes,
-        {
-          source:"llm_review",
-          model:job.model,
-          batchId,
-          rationale:target.rationale,
-        }
-      );
-      if(target.resolveRecord)fullyReviewed++;
-
-      resolveItems.push({
-        key,
-        fields:target.resolveRecord?null:target.fields,
-        resolve_record:target.resolveRecord,
-      });
-    }
-
-    if(mode==="review"){
-      for(const entry of unchanged){
-        if(!entry.local)continue;
-        const record=entry.local.file.records[entry.local.index];
-        const changes={};
-        if(record.needs_review!==false)changes.needs_review=false;
-        if(record.review_reason!=null&&record.review_reason!=="")changes.review_reason=null;
-        fieldsApplied+=applyRecordChanges(
-          entry.local.file,
-          entry.local.index,
-          changes,
-          {source:"llm_review",model:job.model,batchId,rationale:{}}
-        );
-        fullyReviewed++;
-        resolveItems.push({key:entry.result.key,fields:null,resolve_record:true});
-      }
-    }else if(mode==="all"){
-      for(const entry of unchanged){
-        if(!entry.local)continue;
-        const record=entry.local.file.records[entry.local.index];
-        const changes={};
-        if(record.needs_review!==false)changes.needs_review=false;
-        if(record.review_reason!=null&&record.review_reason!=="")changes.review_reason=null;
-        fieldsApplied+=applyRecordChanges(
-          entry.local.file,
-          entry.local.index,
-          changes,
-          {source:"llm_review",model:job.model,batchId,rationale:{}}
-        );
-        fullyReviewed++;
-        resolveItems.push({key:entry.result.key,fields:null,resolve_record:true});
-      }
-    }
-
-    if(!resolveItems.length)return toast("No LLM results selected");
-
-    try{
-      job=await resolveOnServer("accept",resolveItems);
-      state.jobApplied[job.id]=new Date().toISOString();
-      persistPrefs();
-      shell();renderView();
-      await refreshJobs({rerender:state.view==="home"});
-      selections.clear();
-      render({preserveScroll:true});
-      toast(`Accepted ${resolveItems.length} pending result${resolveItems.length===1?"":"s"} · ${fieldsApplied} tracked field changes · ${job.pending_result_count||0} pending`);
-    }catch(error){
-      toast(`Local changes were applied, but the operation queue could not be updated: ${error.message}`);
-    }
-  }
-
-  async function rejectSelected(){
-    const {flattened}=buildData();
-    const grouped=new Map();
-    flattened.forEach((entry,index)=>{
-      if(!selections.has(index))return;
-      if(!grouped.has(entry.result.key))grouped.set(entry.result.key,[]);
-      grouped.get(entry.result.key).push(entry.field);
-    });
-    const items=[...grouped.entries()].map(([key,fields])=>({key,fields,resolve_record:false}));
-    if(!items.length)return toast("Select proposed changes to reject");
-    try{
-      job=await resolveOnServer("reject",items);
-      selections.clear();
-      await refreshJobs({rerender:state.view==="home"});
-      render({preserveScroll:true});
-      toast(`Rejected selected proposed changes · ${job.pending_change_count||0} pending changes remain`);
-    }catch(error){
-      toast(`Could not reject selected changes: ${error.message}`);
-    }
-  }
-
-  function render({preserveScroll=false}={}){
-    const tableBefore=dialog.querySelector(".job-change-table-wrap");
-    const scrollState=preserveScroll?{dialog:dialog.scrollTop,tableTop:tableBefore?.scrollTop||0,tableLeft:tableBefore?.scrollLeft||0}:null;
-    const {successful,failures,unchanged,flattened}=buildData();
-    initializeSelections(flattened);
-    const selected=selections.size;
-    const changedRecords=new Set(flattened.map(item=>item.result.key)).size;
-    const noChangeCount=unchanged.length;
-    const active=["queued","running","cancelling"].includes(job.status);
-    const statusText=job.status==="cancelled"?"cancelled with partial results":job.status;
-    const pendingResults=job.pending_result_count??successful.length;
-    const pendingChanges=job.pending_change_count??flattened.length;
-    const remaining=job.remaining_record_count??Math.max(0,(job.total||0)-(job.completed||0));
-
-    const changeTable=flattened.length?`<div class="job-change-table-wrap"><table class="job-change-table"><thead><tr><th></th><th>Record</th><th>Field</th><th>Current</th><th>Proposed</th><th>Rationale</th></tr></thead><tbody>${flattened.map((item,index)=>{
-      const rid=item.local?.record?.record_id||item.result.record_id||item.result.key;
-      const diff=reviewDiffSides(item.current,item.proposed);
-      return `<tr class="${item.stale?"stale-change":""}"><td><input type="checkbox" data-job-change="${index}" ${selections.has(index)?"checked":""}></td><td><div class="job-record-cell"><b>${esc(rid)}</b>${item.local?`<button class="btn tiny" data-copy-row-key="${esc(reviewKey(item.local.file,item.local.index))}">${icon("copy")}Copy</button>`:""}<button class="btn tiny" data-preview-result="${index}">Preview record</button>${item.stale?'<span class="stale-badge">local record changed since job started</span>':""}</div></td><td><b>${esc(label(item.field))}</b></td><td><pre class="change-diff current-diff">${diff.left}</pre></td><td><pre class="change-diff proposed-diff">${diff.right}</pre></td><td>${esc(item.rationale||"No rationale supplied.")}</td></tr>`;
-    }).join("")}</tbody></table></div>`:`<section class="review-no-changes-empty"><div class="review-no-changes-icon">✓</div><div><h3>${active?"No pending changes yet":"No changes proposed"}</h3><p>${active?`The review is still running. ${job.completed.toLocaleString()} records have completed and ${remaining.toLocaleString()} remain unprocessed.`:`The model reviewed ${noChangeCount.toLocaleString()} record${noChangeCount===1?"":"s"} and did not propose metadata/text edits.`}</p></div></section>`;
-
-    const unchangedSection=noChangeCount?`<details class="unchanged-review-list" ${flattened.length?"":"open"}><summary><span><b>${noChangeCount.toLocaleString()} record${noChangeCount===1?"":"s"} with no proposed changes</b><small>Expand to inspect or preview these records</small></span></summary><div class="unchanged-review-grid">${unchanged.map((item,index)=>{const rid=item.local?.record?.record_id||item.result.record_id||item.result.key;return `<div class="unchanged-review-row"><div><b>${esc(rid)}</b><span>${esc(item.local?.record?.work||"")}${item.stale?" · local record changed since review":""}</span></div><button class="btn tiny" data-preview-unchanged="${index}">Preview record</button></div>`}).join("")}</div></details>`:"";
-
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${job.mode==="auto"?"Auto-improve changes":"LLM review changes"}</h2><div class="dialog-subtitle">${job.completed}/${job.total} processed · ${pendingResults} pending result${pendingResults===1?"":"s"} · ${pendingChanges} pending change${pendingChanges===1?"":"s"} · ${remaining} unprocessed · ${failures.length} failures · ${esc(statusText)}</div></div><div class="tools">${active?'<span class="job-status running">live</span>':""}<button class="btn icon-only" data-close>${icon("close")}</button></div></div>
-    <div class="db job-change-review">
-      <div class="job-resolution-summary">
-        <span><b>${job.accepted_results||0}</b> accepted results</span>
-        <span><b>${job.accepted_fields||0}</b> accepted fields</span>
-        <span><b>${job.rejected_results||0}</b> rejected results</span>
-        <span><b>${job.rejected_fields||0}</b> rejected fields</span>
-        <span><b>${esc((job.resolution_state||"pending").replaceAll("_"," "))}</b> decision state</span>
-      </div>
-      ${flattened.length?`<div class="job-change-toolbar"><button class="btn small" id="jobSelectAll">Select all changes</button><button class="btn small" id="jobSelectNone">Select none</button><button class="btn small danger" id="jobRejectSelected">Reject selected</button><span class="note"><b id="jobSelectedCount">${selected}</b> selected · accepted changes are removed from this pending queue immediately</span></div>`:""}
-      ${failures.length?`<div class="info warn">${failures.map(result=>`${esc(result.record_id||result.key)}: ${esc(result.error?.message||"failed")}`).join("<br>")}</div>`:""}
-      ${changeTable}
-      ${unchangedSection}
-    </div>
-    <div class="da">
-      <button class="btn" data-close>Close</button>
-      ${active&&remaining>0?`<button class="btn danger subtle-danger" id="rejectJob">${icon("close")}Stop review & discard pending</button>`:pendingResults>0?`<button class="btn danger subtle-danger" id="rejectJob">${icon("close")}Discard pending & remove operation</button>`:""}
-      ${active?`<button class="btn" id="refreshLiveResults">${icon("refresh")}Refresh available results</button>`:""}
-      ${successful.length?`<button class="btn" id="markJobReviewed">${icon("check")}Mark all available reviewed</button>${flattened.length?`<button class="btn primary" id="applyJobSelected" ${selected?"":"disabled"}>${icon("check")}Apply selected</button><button class="btn soft" id="applyJobAll">${icon("check")}Accept all available</button>`:""}`:""}
-    </div>`;
-
-    const close=()=>{if(liveTimer)clearInterval(liveTimer);dialog.close();dialog.remove()};
-    dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    const syncSelectionUi=()=>{
-      dialog.querySelectorAll("[data-job-change]").forEach(box=>{box.checked=selections.has(+box.dataset.jobChange)});
-      const count=dialog.querySelector("#jobSelectedCount");if(count)count.textContent=String(selections.size);
-      const applyButton=dialog.querySelector("#applyJobSelected");if(applyButton)applyButton.disabled=!selections.size;
-    };
-    dialog.querySelector("#jobSelectAll")?.addEventListener("click",()=>{flattened.forEach((_,index)=>selections.add(index));syncSelectionUi()});
-    dialog.querySelector("#jobSelectNone")?.addEventListener("click",()=>{selections.clear();syncSelectionUi()});
-    dialog.querySelector("#jobRejectSelected")?.addEventListener("click",rejectSelected);
-    dialog.querySelector("#rejectJob")?.addEventListener("click",rejectAndDismiss);
-    dialog.querySelector("#refreshLiveResults")?.addEventListener("click",async()=>{if(await refreshJob())render({preserveScroll:true})});
-    dialog.querySelectorAll("[data-job-change]").forEach(box=>box.onchange=()=>{const index=+box.dataset.jobChange;box.checked?selections.add(index):selections.delete(index);syncSelectionUi()});
-    dialog.querySelectorAll("[data-preview-result]").forEach(button=>button.onclick=()=>{const entry=flattened[+button.dataset.previewResult];if(entry?.local)openReviewRecordPreview(entry.local,entry.result);else toast("The source record is no longer loaded")});
-    dialog.querySelectorAll("[data-preview-unchanged]").forEach(button=>button.onclick=()=>{const entry=unchanged[+button.dataset.previewUnchanged];if(entry?.local)openReviewRecordPreview(entry.local,entry.result);else toast("The source record is no longer loaded")});
-    dialog.querySelector("#markJobReviewed")?.addEventListener("click",()=>apply("review"));
-    dialog.querySelector("#applyJobSelected")?.addEventListener("click",()=>apply("selected"));
-    dialog.querySelector("#applyJobAll")?.addEventListener("click",()=>apply("all"));
-    if(scrollState)requestAnimationFrame(()=>{dialog.scrollTop=scrollState.dialog;const table=dialog.querySelector(".job-change-table-wrap");if(table){table.scrollTop=scrollState.tableTop;table.scrollLeft=scrollState.tableLeft}});
-  }
-
-  render();
-  if(["queued","running","cancelling"].includes(job.status)){
-    liveTimer=setInterval(async()=>{
-      if(!dialog.isConnected){clearInterval(liveTimer);return}
-      const before=job.completed;
-      const pendingBefore=job.pending_result_count;
-      if(await refreshJob()){
-        if(job.completed!==before||job.pending_result_count!==pendingBefore||!["queued","running","cancelling"].includes(job.status)){
-          render({preserveScroll:true});
-        }
-        if(!["queued","running","cancelling"].includes(job.status)){
-          clearInterval(liveTimer);liveTimer=null;
-        }
-      }
-    },4000);
-  }
-}
 async function gradeRagResponse({
   question,
   answer,
@@ -2919,20 +2142,6 @@ async function gradeRagResponse({
   });
 }
 
-async function openRagResult(job){
-  if(!job?.id)return toast(tr("research.result_unavailable","This Research run has no result identifier."),{tone:"warn"});
-  if(!canAccessPage("rag"))return toast(tr("permissions.research_result_denied","Your role cannot open Research results."),{tone:"warn"});
-  // v0.35.5: a RAG result is a research object, not a legacy modal. Open it in
-  // the same native result workspace used by Research so typography, source
-  // binding, evidence inspection, accessibility, and i18n stay identical no
-  // matter where the result was launched (Operations, job history, etc.).
-  state.view="rag";
-  persistPrefs();
-  shellRefreshHook?.();
-  const href=`/rag?job=${encodeURIComponent(job.id)}`;
-  if(urlSyncHook){urlSyncHook(href,{replace:false,snapshot:navSnapshot()});return}
-  location.assign(href);
-}
 
 async function removeRagJob(jobId){
   const job=state.jobs.find(item=>item.id===jobId);
@@ -3062,60 +2271,9 @@ function refreshRagProgressPanel(){
   wireRagProgressPanel();
 }
 
-function dashboardTotals(){
-  if(isResearcher()){const stores=recordStores();const active=stores.find(store=>store.name===state.activeStore)||stores[0];return {records:Number(active?.count||0),works:state.storeWorkStats.length,flagged:0,files:0,changes:0,dbs:stores.length,dbRecords:stores.reduce((sum,store)=>sum+(Number(store.count)||0),0),cacheResponses:0}}
-  const corpus=memoCorpus("dashboard-totals",()=>{
-    let flagged=0,changes=0;
-    const works=new Set();
-    for(const {record} of allRows()){
-      const work=String(record.work||"").trim();
-      if(work)works.add(work);
-      if(record.needs_review)flagged++;
-      changes+=Array.isArray(record.updates)?record.updates.length:0;
-    }
-    return {records:allRows().length,works:works.size,flagged,files:state.files.length,changes};
-  });
-  const stores=recordStores();
-  return {
-    ...corpus,
-    dbs:stores.length,
-    dbRecords:stores.reduce((sum,store)=>sum+(Number(store.count)||0),0),
-    cacheResponses:Number(responseCacheStore()?.count||0),
-  };
-}
 function compactNumber(value){const n=Number(value)||0;if(n>=1000000)return `${(n/1000000).toFixed(n>=10000000?0:1)}M`;if(n>=1000)return `${(n/1000).toFixed(n>=100000?0:1)}K`;return n.toLocaleString()}
 function relativeTime(value){const date=new Date(value||0);if(!Number.isFinite(date.getTime()))return tr("time.recently","Recently");const seconds=Math.max(0,Math.round((Date.now()-date.getTime())/1000));if(seconds<60)return tr("time.just_now","just now");const minutes=Math.round(seconds/60);if(minutes<60)return trf("time.minutes_ago","{count} min ago",{count:minutes});const hours=Math.round(minutes/60);if(hours<24)return trf("time.hours_ago","{count} hr ago",{count:hours});return trf("time.days_ago","{count} d ago",{count:Math.round(hours/24)})}
 
-function dashboardWorkspaceRecordTarget(pointer){
-  if(!pointer||pointer.kind!=="workspace")return null;
-  const file=state.files.find(item=>item.id===pointer.fileId);
-  const index=Number(pointer.index);
-  if(!file||!Number.isInteger(index)||index<0||index>=file.records.length)return null;
-  return {record:file.records[index],target:{kind:"workspace",fileId:file.id,index}};
-}
-async function dashboardRecordPreview(){
-  const pointer=state.lastViewedRecord;
-  if(pointer?.kind==="workspace"){const found=dashboardWorkspaceRecordTarget(pointer);if(found)return {...found,lastViewed:true}}
-  if(pointer?.kind==="database"&&pointer.store&&pointer.id){
-    let record=(state.activeStore===pointer.store?researcherDbRecords():[]).find(item=>String(item._chroma_id||item.record_id||"")===String(pointer.id));
-    if(!record){try{record=await api(`/api/stores/${encodeURIComponent(pointer.store)}/records/${encodeURIComponent(pointer.id)}`)}catch{record=null}}
-    if(record)return {record,target:{kind:"database",store:pointer.store,id:String(pointer.id)},lastViewed:true};
-  }
-  if(isResearcher()){
-    const current=recordStores().find(store=>store.name===state.activeStore)||recordStores()[0];
-    if(!current?.name||!Number(current.count||0))return {record:null,target:null,lastViewed:false};
-    try{
-      const offset=Math.floor(Math.random()*Math.max(1,Number(current.count||0)));
-      const data=await api(`/api/stores/${encodeURIComponent(current.name)}/records?limit=1&offset=${offset}`);
-      const record=(data.records||[])[0]||null;
-      if(record){const id=String(record._chroma_id||record.record_id||"");return {record,target:{kind:"database",store:current.name,id},lastViewed:false}}
-    }catch(error){console.warn("Could not choose a random dashboard record",error)}
-    return {record:null,target:null,lastViewed:false};
-  }
-  const choices=allRows();if(!choices.length)return {record:null,target:null,lastViewed:false};
-  const item=choices[Math.floor(Math.random()*choices.length)];
-  return {record:item.record,target:{kind:"workspace",fileId:item.file.id,index:item.index},lastViewed:false};
-}
 
 function renderCorpusBuildsHomeCard(){
   if(isResearcher())return "";
@@ -3128,51 +2286,6 @@ function renderCorpusBuildsHomeCard(){
   </section>`;
 }
 
-async function renderDashboard(main){
-  if(isResearcher()){
-    try{await refreshStores();if(!state.activeStore)state.activeStore=recordStores()[0]?.name||"";if(state.activeStore)await refreshStoreWorks(true)}catch(error){console.warn("Could not refresh researcher dashboard data",error)}
-  }
-  try{await refreshServerAnnotations(isResearcher()&&state.serverAnnotationsStore!==String(state.activeStore||""))}catch(error){console.warn("Could not refresh annotations for dashboard",error)}
-  const rows=allRows(),totals=dashboardTotals(),workMap=isResearcher()?null:workIndex();
-  const workItems=isResearcher()?(state.storeWorkStats||[]).map(item=>({work:item.work,count:Number(item.count||0),totalWords:Number(item.total_words||0),averageRecordLength:Number(item.average_record_length||0),year:item.publication_year||item.year||"",cover:item.cover_url||"",author:item.document_author||"",publisher:item.publisher||""})): [...workMap.values()].map(item=>{const year=commonWorkValue(item.rows,"publication_year"),totalWords=item.rows.reduce((sum,row)=>sum+String(row.record?.text||"").trim().split(/\s+/).filter(Boolean).length,0);return {work:item.work,count:item.count,totalWords,averageRecordLength:item.count?Math.round(totalWords/item.count):0,year:year.value||[...item.years].sort()[0]||"",cover:workCoverUrl(item.rows),author:[...item.authors].join(", "),publisher:commonWorkValue(item.rows,"publisher").value||""}}).sort((a,b)=>a.work.localeCompare(b.work));
-  const words=workItems.reduce((sum,item)=>sum+Number(item.totalWords||0),0);
-  const singleLoadedWork=!isResearcher()&&workItems.length===1&&workMap?.has(workItems[0].work)?workMap.get(workItems[0].work):null;
-  const metricSets=singleLoadedWork?workInsightMetrics(singleLoadedWork.rows,singleLoadedWork.work):[
-    {id:"average",type:"bars",title:tr("dashboard.top_avg_record_length","Top 5 Works by Average Record Length"),values:[...workItems].sort((a,b)=>b.averageRecordLength-a.averageRecordLength).slice(0,5).map(item=>({key:item.work,value:item.averageRecordLength})),format:value=>Number(value).toLocaleString()},
-    {id:"words",type:"bars",title:tr("dashboard.top_total_words","Top 5 Works by Total Words"),values:[...workItems].sort((a,b)=>b.totalWords-a.totalWords).slice(0,5).map(item=>({key:item.work,value:item.totalWords})),format:value=>compactNumber(value)},
-    {id:"records",type:"bars",title:tr("dashboard.top_works_records","Top 5 Works by Number of Records"),values:[...workItems].sort((a,b)=>b.count-a.count).slice(0,5).map(item=>({key:item.work,value:item.count})),format:value=>Number(value).toLocaleString()},
-    {id:"record-share",type:"pie",title:tr("dashboard.work_record_share","Works as percentage of total records"),values:pieShareSeries(workItems,"count"),valueLabel:tr("dynamic.records","records")},
-    {id:"word-share",type:"pie",title:tr("dashboard.work_word_share","Works as percentage of total words"),values:pieShareSeries(workItems,"totalWords"),valueLabel:tr("dashboard.words","words")},
-  ];
-  state.dashboardMetricIndex=Math.max(0,Math.min(metricSets.length-1,Number(state.dashboardMetricIndex)||0));
-  const activeMetric=metricSets[state.dashboardMetricIndex];
-  const recent=isResearcher()
-    ? (hasCapability("activity.read")?[...(hasCapability("annotations.read")?(state.serverAnnotations||[]).map(annotation=>({kind:"annotation",timestamp:annotation.created_at||"",annotation})):[]),...(hasCapability("rag.jobs.own")?(state.jobs||[]).filter(job=>job.type==="rag").map(job=>({kind:"rag",timestamp:job.updated_at||job.finished_at||job.created_at||"",job})):[])].sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0)).slice(0,4):[])
-    : recentAuditChanges(4).map(({file,record,index,update})=>({kind:"record",timestamp:update.timestamp||"",file,record,index,update}));
-  const works=workItems.sort((a,b)=>a.work.localeCompare(b.work));
-  const currentProvider=defaultProviderProfile();
-  const currentLanguage=state.translations?.info?.name||state.translations?.locale||"";
-  const currentLanguageFlag=state.translations?.info?.flag||"🌐";
-  const latestAnnotation=(!isResearcher()||hasCapability("annotations.read"))?(recentAnnotations(1)[0]||null):null;
-  const preview=await dashboardRecordPreview(),previewRecord=preview.record,previewTarget=preview.target;
-  main.innerHTML=`<div class="dashboard-page">
-    <section class="dashboard-page-top"><article class="card dashboard-hero"><img src="/brand/derridai-mark.png" alt="" class="dashboard-hero-mark"><div class="dashboard-hero-copy"><h1>${esc(tr("dashboard.welcome","Welcome to DerridAI"))}</h1><p class="dashboard-hero-tagline">${esc(tr("dashboard.tagline","Search. Compare. Annotate. Always already."))}</p><blockquote>${esc(tr("dashboard.quote","“Il n’y a pas de hors-texte.”"))}</blockquote><small>— Jacques Derrida</small><div class="dashboard-hero-actions"><button class="btn dark" id="dashStartSearch">${icon("search")}${esc(tr("dashboard.start_searching","Start searching"))}</button><button class="btn" id="dashBrowseWorks">${icon("books")}${esc(tr("dashboard.browse_works","Browse works"))}</button></div></div></article>
-    <article class="card dashboard-search-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("search")}</span><b>${esc(tr("dashboard.global_search","Global Search"))}</b></div><div class="dashboard-search-tabs"><button class="${state.globalSearchMode==="traditional"?"active":""}" data-dash-search-mode="traditional">${esc(tr("research.traditional_search",isResearcher()?"Record search":"Traditional search"))}</button><button class="${state.globalSearchMode!=="traditional"?"active":""}" data-dash-search-mode="database">${esc(tr("research.semantic_db_search","Semantic DB Search"))}</button></div><div class="dashboard-search-line"><div class="dashboard-search-input">${icon("search")}<input id="dashSearchQuery" value="${esc(state.globalSearch||"")}" placeholder="${esc(tr("dashboard.search_corpus_placeholder","Search the corpus…"))}"></div><select id="dashSearchWork" class="control" aria-label="${esc(tr("field.work","Work"))}"><option value="">${esc(tr("dashboard.all_works","All works"))}</option>${works.map(item=>`<option value="${esc(item.work)}">${esc(item.work)}</option>`).join("")}</select><button class="btn dark" id="dashRunSearch">${icon("search")}${esc(tr("ui.search","Search"))}</button></div><div class="dashboard-search-footer"><button class="dashboard-advanced-link" id="dashAdvancedSearch">${esc(tr("dashboard.advanced_filters","Advanced filters"))} →</button><p class="dashboard-search-help">${esc(tr("dashboard.search_help","Search across works, metadata, annotations, and—when available—the semantic database."))}</p></div></article></section>
-    <section class="dashboard-page-middle"><article class="card dashboard-overview-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("books")}</span><b>${esc(tr("dashboard.corpus_overview","Corpus Overview"))}</b></div><div class="dashboard-overview-grid"><button data-dashboard-nav="works"><span class="dashboard-overview-icon">${icon("books")}</span><strong>${works.length.toLocaleString()}</strong><small>${esc(tr("dashboard.works","Works"))}</small></button><button data-dashboard-nav="${isResearcher()?"vector":"list"}"><span class="dashboard-overview-icon">${icon("record")}</span><strong>${totals.records.toLocaleString()}</strong><small>${esc(tr("dashboard.records","Records"))}</small></button><button ${isResearcher()?"disabled data-disabled-reason=\"Word totals are not exposed to researcher accounts.\"":""}><span class="dashboard-overview-icon">${icon("list")}</span><strong>${isResearcher()?"—":compactNumber(words)}</strong><small>${esc(tr("dashboard.total_words","Total words"))}</small></button><button data-dashboard-nav="vector"><span class="dashboard-overview-icon">${icon("database")}</span><strong>${totals.dbs.toLocaleString()}</strong><small>${esc(tr("dashboard.databases","Databases"))}</small></button></div></article>
-    <article class="card dashboard-average-card dashboard-metric-carousel" aria-roledescription="carousel"><div class="dashboard-metric-head"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("chart")}</span><b>${esc(activeMetric.title)}</b></div><div class="dashboard-metric-controls"><button class="dashboard-metric-arrow" id="dashMetricPrev" type="button" aria-label="${esc(tr("dashboard.previous_chart","Previous chart"))}">←</button><span>${state.dashboardMetricIndex+1} / ${metricSets.length}</span><button class="dashboard-metric-arrow" id="dashMetricNext" type="button" aria-label="${esc(tr("dashboard.next_chart","Next chart"))}">→</button></div></div><div class="dashboard-metric-body">${dashboardMetricBody(activeMetric)}</div><div class="dashboard-metric-dots" role="tablist" aria-label="${esc(tr("dashboard.work_charts","Work charts"))}">${metricSets.map((metric,index)=>`<button type="button" role="tab" data-dashboard-metric="${index}" class="${index===state.dashboardMetricIndex?"active":""}" aria-label="${esc(metric.title)}" aria-selected="${index===state.dashboardMetricIndex}" tabindex="${index===state.dashboardMetricIndex?0:-1}"></button>`).join("")}</div></article>
-    <article class="card dashboard-activity-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("history")}</span><b>${esc(tr("dashboard.recent_activity","Recent Activity"))}</b></div><div class="dashboard-activity-list">${recent.map(item=>item.kind==="annotation"?`<button class="dashboard-activity-row" data-recent-server-annotation-record="${esc(item.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(item.annotation.store||"")}"><span class="dashboard-activity-clock">${icon("record")}</span><time>${esc(relativeTime(item.timestamp))}</time><span>${esc(tr("annotations.record_note","Annotation"))} · ${esc(item.annotation.work||item.annotation.record_id||tr("nav.record","Record"))}</span></button>`:item.kind==="rag"?`<button class="dashboard-activity-row" ${item.job.status==="completed"?`data-recent-rag-result="${esc(item.job.id)}"`:""}><span class="dashboard-activity-clock">${icon("spark")}</span><time>${esc(relativeTime(item.timestamp))}</time><span>${esc(tr("nav.rag","Research"))} · ${esc(String(item.job.prompt||item.job.label||"RAG").slice(0,90))}</span></button>`:`<button class="dashboard-activity-row" data-recent-file="${item.file.id}" data-recent-index="${item.index}"><span class="dashboard-activity-clock">${icon("history")}</span><time>${esc(relativeTime(item.update.timestamp))}</time><span>${esc(label(item.update.field_name||tr("dashboard.updated_record","Updated record")))} · ${esc(item.record.work||item.record.record_id||item.file.name)}</span></button>`).join("")||`<div class="dashboard-activity-empty">${esc(tr("dashboard.no_recent_activity","No recent activity in areas available to this account."))}</div>`}</div></article></section>
-    <section class="card dashboard-works-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("books")}</span><b>${esc(tr("dashboard.works","Works"))}</b></div><button class="dashboard-text-link" id="dashViewAllWorks">${esc(tr("dashboard.view_all_works","View all works"))} →</button></div><div class="dashboard-work-carousel-shell"><button class="carousel-arrow" id="dashWorksPrev" type="button" title="${esc(tr("ui.previous","Previous"))}" aria-label="${esc(tr("ui.previous","Previous"))}">‹</button><div class="dashboard-work-strip" id="dashWorksCarousel">${works.map((item,index)=>`<button class="dashboard-work-card" data-dashboard-work="${esc(item.work)}">${item.cover?`<img class="dashboard-book-cover image" src="${esc(item.cover)}" alt="${esc(trf("works.cover_alt","Cover of {work}",{work:item.work}))}" loading="lazy">`:`<span class="dashboard-book-cover placeholder">${String(index+1).padStart(2,"0")}</span>`}<span><b>${esc(item.work)}</b><small>${esc(item.year||tr("dashboard.year_not_recorded","Year not recorded"))}</small><small>${item.count.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></span></button>`).join("")||`<div class="note">${esc(tr("research.no_works","No works loaded yet."))}</div>`}</div><button class="carousel-arrow" id="dashWorksNext" type="button" title="${esc(tr("ui.next","Next"))}" aria-label="${esc(tr("ui.next","Next"))}">›</button></div></section>
-    <section class="dashboard-page-lower">${isResearcher()?(hasCapability("appearance.manage")?`<article class="card dashboard-quick-card dashboard-appearance-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("gear")}</span><b>${esc(tr("dashboard.appearance","Appearance"))}</b></div><p>${esc(tr("dashboard.appearance_help","Choose the interface accent that is easiest for you to read."))}</p><fieldset class="dashboard-theme-options"><legend>${esc(tr("dashboard.interface_theme","Interface theme"))}</legend>${[["green",tr("theme.green","Green")],["blue",tr("theme.blue","Blue")],["slate",tr("theme.slate","Slate")]].map(([value,name])=>`<label><input type="radio" name="dashboard-theme" data-dashboard-theme="${value}" ${state.appConfig.ui_color_theme===value?"checked":""}><span class="theme-swatch ${value}" aria-hidden="true"></span><b>${esc(name)}</b></label>`).join("")}</fieldset><button class="btn" id="dashAppearanceSettings">${esc(tr("dashboard.more_appearance_settings","More appearance settings"))}</button></article>`:`<article class="card dashboard-quick-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("gear")}</span><b>${esc(tr("dashboard.appearance","Appearance"))}</b></div><p>${esc(tr("permissions.appearance_denied","Appearance controls are disabled for this role."))}</p></article>`):`<article class="card dashboard-quick-card dashboard-language-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("gear")}</span><b>${esc(tr("dashboard.language_settings","Language Settings"))}</b></div><p>${esc(tr("dashboard.language_settings_help","Choose the interface language and manage translation dictionaries."))}</p><div class="dashboard-quick-field dashboard-locale-field"><span>${esc(tr("dashboard.interface_language","Interface language"))}</span><b><i class="dashboard-locale-symbol">${currentLanguageFlag}</i>${esc(currentLanguage)}</b></div><button class="btn primary" id="dashLanguages">${esc(tr("dashboard.manage_languages","Manage languages"))}</button></article>`}
-    <article class="card dashboard-quick-card dashboard-provider-card"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("spark")}</span><b>${esc(tr("dashboard.llm_provider_settings","LLM Provider Settings"))}</b></div><p>${esc(tr("dashboard.llm_provider_help","Configure the provider used for LLM-assisted workflows."))}</p><div class="dashboard-provider-fields"><div class="dashboard-quick-field"><span>${esc(tr("dashboard.default_provider","Default provider"))}</span><b>${currentProvider?esc(providerDisplayName(currentProvider)):esc(tr("dashboard.not_configured","Not configured"))}</b></div><div class="dashboard-quick-field"><span>${esc(tr("dashboard.model","Model"))}</span><b>${currentProvider?esc(currentProvider.model||"auto"):"—"}</b></div></div><button class="btn" id="dashProviders">${esc(isResearcher()?tr("nav.rag","Research"):tr("dashboard.manage_provider","Manage provider"))}</button></article>
-    <article class="card dashboard-quick-card dashboard-record-preview"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.record_view","Record View"))}</b></div><button class="dashboard-text-link" id="dashRecordView" ${previewTarget?"":`disabled data-disabled-reason="${esc(tr("dashboard.no_record_available","No record is available to open."))}"`}>${esc(tr("research.open","Open"))} →</button></div>${previewRecord?`<div class="dashboard-record-state">${esc(preview.lastViewed?tr("dashboard.last_viewed_record","Last viewed record"):tr("dashboard.random_record","A record from the corpus"))}</div><div class="dashboard-record-meta"><b>${esc(previewRecord.work||previewRecord.record_id||tr("dashboard.record","Record"))}</b><span class="dashboard-record-pages">${esc(mlaPageSpan(previewRecord)||"")}</span></div><div class="dashboard-record-text">${esc(String(previewRecord.text||"").replace(/\s+/g," ").slice(0,220))}${String(previewRecord.text||"").length>220?"…":""}</div>`:`<div class="dashboard-record-empty">${esc(tr("dashboard.no_record_selected","No corpus record is currently available."))}</div>`}</article>
-    ${latestAnnotation?`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.latest_annotation","Latest annotation"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("annotations.view_all","View all"))} →</button></div><button class="dashboard-annotation-preview" ${latestAnnotation.server?`data-recent-server-annotation-record="${esc(latestAnnotation.annotation.record_id||"")}" data-recent-server-annotation-store="${esc(latestAnnotation.annotation.store||"")}"`:`data-recent-annotation-file="${esc(latestAnnotation.file.id)}" data-recent-annotation-index="${latestAnnotation.index}"`}><div class="dashboard-annotation-meta"><span class="dashboard-annotation-work">${esc(latestAnnotation.work)}</span><span class="dashboard-annotation-pages">${esc(mlaPageSpan(latestAnnotation.record)||tr("record.page_not_recorded","Page not recorded"))}</span><span class="dashboard-annotation-author">${esc(latestAnnotation.annotation.initiated_by||latestAnnotation.annotation.author||tr("annotations.unknown_author","Unknown author"))}</span><time>${esc(formatTimestamp(latestAnnotation.annotation.created_at))}</time><small>${esc(latestAnnotation.record.record_id||tr("nav.record","Record"))}</small></div>${latestAnnotation.annotation.note?`<p>${esc(latestAnnotation.annotation.note)}</p>`:latestAnnotation.annotation.quote?`<blockquote>${esc(latestAnnotation.annotation.quote)}</blockquote>`:`<p>${esc(tr("annotations.record_note","Record annotation"))}</p>`}</button></article>`:`<article class="card dashboard-quick-card dashboard-annotations-card"><div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("record")}</span><b>${esc(tr("dashboard.annotations","Annotations"))}</b></div><button class="dashboard-text-link" id="dashAnnotations">${esc(tr("research.open","Open"))} →</button></div><p>${esc(isResearcher()?tr("annotations.researcher_help","Annotations are organized by work when available in the current workspace."):tr("dashboard.annotations_help","Collect notes, tags, and discussion threads attached to corpus evidence."))}</p></article>`}
-    </section>${renderCorpusBuildsHomeCard()}${renderOperationsPanel()}</div>`;
-  mountOperationsPanelHost();
-  // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  const goSearch=async()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"",semantic=state.globalSearchMode==="database";state.globalPage=1;state.storeSearchResults=[];if(semantic){if(!state.activeStore){try{await refreshStores()}catch{};state.activeStore=recordStores()[0]?.name||""}state.globalSearchMode="database";if(!state.activeStore){persistPrefs();if(canAccessPage("vector")){toast(tr("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});openDatabaseCreationFromResearch()}else{navigateTo("global");toast(tr("research.no_database","No corpus database available"),{tone:"warn"})}return;}state.dbSearchWhere=work?{work}:{};state.storeQuery=state.globalSearch;if(state.globalSearch&&state.dbSearchMethod==="filter")state.dbSearchMethod="similarity";if(!state.globalSearch&&work)state.dbSearchMethod="filter";state.globalSearchAutoRun=false;state.storeSearchLoading=true;persistPrefs();navigateTo("global");try{const mode=state.dbSearchMethod||"similarity";const data=await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`,{method:"POST",body:JSON.stringify({query:state.globalSearch,mode,n_results:100,where:Object.keys(dbSearchWhere()).length?dbSearchWhere():null,fetch_k:Number(state.dbSearchFetchK||100),lambda_mult:Number(state.dbSearchLambda??0.7)})});state.storeSearchResults=data.results||[]}catch(error){toast(`${tr("research.search_failed","Search failed")}: ${error.message}`,{tone:"danger"})}finally{state.storeSearchLoading=false;persistPrefs();}}else{state.globalSearchMode="traditional";state.globalSearchAutoRun=false;if(isResearcher())state.dbSearchWhere=work?{work}:{};else state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")}};
-  // eslint-disable-next-line no-undef -- SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage.
-  main.querySelector("#dashStartSearch")?.addEventListener("click",()=>navigateTo("global"));main.querySelector("#dashBrowseWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashViewAllWorks")?.addEventListener("click",()=>navigateTo("works"));main.querySelector("#dashRunSearch")?.addEventListener("click",goSearch);main.querySelector("#dashSearchQuery")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();goSearch()}});main.querySelector("#dashAdvancedSearch")?.addEventListener("click",()=>{state.globalSearch=main.querySelector("#dashSearchQuery")?.value?.trim()||"";const work=main.querySelector("#dashSearchWork")?.value||"";state.globalAdvancedOpen=true;if(state.globalSearchMode==="database")state.dbSearchWhere=work?{work}:{};else if(!isResearcher())state.globalFilters=work?[{id:uid(),field:"work",op:"eq",value:work}]:[];persistPrefs();navigateTo("global")});main.querySelectorAll("[data-dash-search-mode]").forEach(button=>button.addEventListener("click",()=>{state.globalSearchMode=button.dataset.dashSearchMode;persistPrefs();syncUrl({replace:true});renderDashboard(main)}));main.querySelectorAll("[data-dashboard-nav]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.dashboardNav)));main.querySelectorAll("[data-dashboard-work]").forEach(button=>button.addEventListener("click",()=>{state.workOverview=button.dataset.dashboardWork||"";persistPrefs();navigateTo("works")}));main.querySelectorAll("[data-dashboard-search-field]").forEach(button=>button.addEventListener("click",()=>searchByMetadata(button.dataset.dashboardSearchField,button.dataset.dashboardSearchValue,{contains:["persons","concepts","topics"].includes(button.dataset.dashboardSearchField)})));const carousel=main.querySelector("#dashWorksCarousel");const scrollWorks=direction=>carousel?.scrollBy({left:direction*Math.max(280,carousel.clientWidth*.78),behavior:"smooth"});main.querySelector("#dashWorksPrev")?.addEventListener("click",()=>scrollWorks(-1));main.querySelector("#dashWorksNext")?.addEventListener("click",()=>scrollWorks(1));main.querySelectorAll("[data-recent-file]").forEach(button=>button.addEventListener("click",()=>navigateTo("record",{fileId:button.dataset.recentFile,index:+button.dataset.recentIndex})));main.querySelectorAll("[data-dashboard-theme]").forEach(input=>input.addEventListener("change",()=>{applyUiTheme(input.dataset.dashboardTheme);persistPrefs();toast(tr("dashboard.appearance_saved","Appearance updated"),{tone:"success"})}));main.querySelector("#dashAppearanceSettings")?.addEventListener("click",()=>navigateTo("config"));main.querySelector("#dashLanguages")?.addEventListener("click",()=>{if(isResearcher())navigateTo("config");else window.dispatchEvent(new CustomEvent("derridai:navigate-native",{detail:{path:"/languages"}}))});main.querySelector("#dashProviders")?.addEventListener("click",()=>navigateTo(isResearcher()?"rag":"providers"));main.querySelector("#dashRecordView")?.addEventListener("click",()=>{if(!previewTarget)return;if(previewTarget.kind==="workspace")navigateTo("record",{fileId:previewTarget.fileId,index:previewTarget.index});else{state.activeStore=previewTarget.store;state.researcherRecordId=previewTarget.id;persistPrefs();navigateTo("record")}});main.querySelector("#dashMetricPrev")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+metricSets.length-1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelector("#dashMetricNext")?.addEventListener("click",()=>{state.dashboardMetricIndex=(state.dashboardMetricIndex+1)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main)});main.querySelectorAll("[data-dashboard-metric]").forEach(button=>{button.addEventListener("click",()=>{state.dashboardMetricIndex=Number(button.dataset.dashboardMetric)||0;persistPrefs();syncUrl({replace:true});renderDashboard(main)});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();if(event.key==="Home")state.dashboardMetricIndex=0;else if(event.key==="End")state.dashboardMetricIndex=metricSets.length-1;else state.dashboardMetricIndex=(state.dashboardMetricIndex+(event.key==="ArrowRight"?1:-1)+metricSets.length)%metricSets.length;persistPrefs();syncUrl({replace:true});renderDashboard(main);queueMicrotask(()=>main.querySelector(`[data-dashboard-metric="${state.dashboardMetricIndex}"]`)?.focus())})});main.querySelector("#dashAnnotations")?.addEventListener("click",()=>navigateTo("annotations"));main.querySelector("[data-recent-annotation-file]")?.addEventListener("click",event=>navigateTo("record",{fileId:event.currentTarget.dataset.recentAnnotationFile,index:+event.currentTarget.dataset.recentAnnotationIndex}));main.querySelector("[data-recent-server-annotation-record]")?.addEventListener("click",event=>openSharedAnnotationRecord(event.currentTarget.dataset.recentServerAnnotationStore,event.currentTarget.dataset.recentServerAnnotationRecord));wireCorpusBuildsHomeCard(main);decorateDisabledControls(main);
-}
 
 
 let shellRefreshHook=()=>{};
@@ -3296,55 +2409,6 @@ function searchByMetadata(field,value,{contains=false}={}){
   persistPrefs();navigateTo("global");
 }
 
-const WORK_METADATA_FIELDS=[
-  "work","source_type","document_type","document_title","short_title","original_title","document_author",
-  "container_title","journal_title","editor","edition","volume","issue","pages","year","publication_year",
-  "publisher","publication_place","translator","document_language","original_language","document_is_translation",
-  "canonical_work_id","isbn","doi","url","full_citation","cover_url"
-];
-function openMixedWorkValuesDialog(work,field,rows){
-  const values=uniqueWorkValues(rows,field);
-  const dialog=document.createElement("dialog");
-  dialog.className="mixed-values-dialog";
-  dialog.setAttribute("aria-labelledby","mixedValuesTitle");
-  dialog.innerHTML=`<div class="dh"><div><span class="section-label">${esc(tr("works.metadata_variants","Metadata variants"))}</span><h2 class="dialog-title" id="mixedValuesTitle">${esc(label(field))}</h2><div class="dialog-subtitle">${esc(work)} · ${values.length.toLocaleString()} ${esc(tr("works.unique_values","unique values"))} · ${rows.length.toLocaleString()} ${esc(tr("dynamic.records","records"))}</div></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close","Close"))}">${icon("close")}</button></div><div class="db mixed-values-body"><p class="note">${esc(tr("works.mixed_values_help","These are the distinct values currently present across records for this work. Counts help distinguish a dominant value from an isolated inconsistency before you bulk-edit metadata."))}</p><div class="mixed-values-list">${values.map((entry,index)=>`<article class="mixed-value-row"><span class="mixed-value-rank">${index+1}</span><div class="mixed-value-copy"><b>${esc(entry.value==null||entry.value===""?tr("ui.unset","Unset"):display(entry.value))}</b><small>${esc([...entry.files].slice(0,3).join(" · "))}${entry.files.size>3?` · +${entry.files.size-3}`:""}</small></div><span class="mixed-value-count">${entry.count.toLocaleString()} <small>${esc(entry.count===1?tr("dynamic.record_one","record"):tr("dynamic.records","records"))}</small></span></article>`).join("")}</div></div><div class="da"><button class="btn primary" type="button" data-close>${esc(tr("ui.done","Done"))}</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-}
-function openWorkMetadataEditor(work,rows){
-  if(!rows?.length)return toast("No records found for this work");
-  const available=[...new Set([...WORK_METADATA_FIELDS,...rows.flatMap(row=>Object.keys(row.record).filter(field=>/^(document_|publication_|canonical_|publisher$|translator$|isbn$|full_citation$)/.test(field)))])].filter(field=>field!=="updates");
-  const dialog=document.createElement("dialog");
-  dialog.className="work-metadata-dialog";
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Edit work metadata</h2><div class="dialog-subtitle">${esc(work)} · ${rows.length.toLocaleString()} associated records across ${new Set(rows.map(row=>row.file.name)).size} files</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db work-metadata-body"><div class="info">Check <b>Apply</b> only for fields that should be changed across every associated record. Changing <code>work</code> renames the work for all loaded records. Every modified field is written to each record's <code>updates</code> history.</div><div class="work-meta-table">${available.map(field=>workMetadataControl(field,rows)).join("")}</div></div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="applyWorkMetadata">Apply selected metadata to ${rows.length.toLocaleString()} records</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelectorAll("[data-inspect-mixed-field]").forEach(button=>button.onclick=()=>openMixedWorkValuesDialog(work,button.dataset.inspectMixedField,rows));
-  dialog.querySelector("#applyWorkMetadata").onclick=async()=>{
-    const selected=[...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(box=>box.dataset.workMetaApply);
-    if(!selected.length)return toast("Select at least one work metadata field to apply");
-    const changes={};
-    try{
-      for(const field of selected){
-        const control=dialog.querySelector(`[data-work-meta-value="${CSS.escape(field)}"]`);
-        changes[field]=parseWorkMetadataValue(field,control,rows);
-      }
-    }catch(error){return toast(error.message)}
-    if(!await openMessageModal({title:"Apply work metadata?",message:`Apply ${selected.length} metadata field${selected.length===1?"":"s"} to all ${rows.length} records associated with ${work}?`,confirmLabel:"Apply metadata",cancelLabel:"Cancel"}))return;
-    const applyButton=dialog.querySelector("#applyWorkMetadata");if(applyButton){applyButton.disabled=true;applyButton.textContent=tr("works.applying_metadata","Applying metadata…")}
-    const batchId=uid();let changedRecords=0,fieldChanges=0;const touchedFiles=new Set();
-    for(const row of rows){
-      const count=applyRecordChanges(row.file,row.index,changes,{source:"work_metadata",batchId,reason:`Bulk work metadata update for ${work}`});
-      if(count){changedRecords++;fieldChanges+=count;touchedFiles.add(row.file)}
-    }
-    for(const file of touchedFiles)await persistFileNow(file);
-    close();shell();renderView();
-    toast(trf("works.metadata_applied","Updated {records} records · {fields} tracked field changes",{records:changedRecords.toLocaleString(),fields:fieldChanges.toLocaleString()}),{tone:"success"});
-  };
-}
 
 
 function workflowProviderSelectHtml(selectedId){
@@ -3358,76 +2422,10 @@ function workflowProviderSummaryHtml(profile){
   return `<span class="workflow-provider-mark">${profile.type==="ollama"?"O":"AI"}</span><span><b>${esc(providerDisplayName(profile))}</b><small>${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set","model not set"))}</small><small>${Number(profile.max_concurrent_requests??1)} ${esc(tr("works.concurrent_requests","max concurrent request(s)"))}</small></span>${profile.id===state.appConfig.default_provider_profile?`<span class="provider-default-chip">${esc(tr("ui.default","Default"))}</span>`:""}`;
 }
 
-function openWorkMetadataLlmDialog(items){
-  const works=(items||[]).filter(item=>item?.work&&item?.rows?.length);
-  if(!works.length)return toast(tr("works.no_work_metadata_rows","No work records are available for metadata lookup."));
-  const profiles=providerProfiles();
-  const selectedId=state.appConfig.default_provider_profile||profiles[0]?.id||"";
-  const dialog=document.createElement("dialog");
-  dialog.className="workflow-dialog work-metadata-llm-dialog";
-  const sample=works.slice(0,6).map(item=>`<span>${esc(item.work)}</span>`).join("");
-  dialog.innerHTML=`<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker","Bibliographic enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm","Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help","DerridAI searches format-appropriate public bibliographic sources (Open Library, Google Books, and Crossref), asks the selected LLM to identify the best match, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close","Close"))}">×</button></div>
-    <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope","Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider","Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review","Review proposals"))}</b></li></ol>
-    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope","Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help","Retrieve bibliographic metadata for {count} work(s).",{count:works.length.toLocaleString()}))}</span></div><div class="work-metadata-scope"><strong>${works.length.toLocaleString()} ${esc(tr("dynamic.works","works"))}</strong><div class="work-metadata-sample">${sample}${works.length>6?`<span>+${works.length-6}</span>`:""}</div><small>${esc(tr("works.metadata_fields_help","Proposals can include source type, container/journal, volume/issue/pages, publisher, year, edition, translator/editor, ISBN/DOI, language, MLA citation, and cover image."))}</small></div></section>
-    <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile","Provider profile"))}</b><span>${esc(tr("works.provider_profile_help","Uses the same configured provider profiles as RAG, PDF tools, and LLM review."))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers","Manage provider profiles"))}</button></div></section>
-    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation","Background operation"))}</b><small>${esc(tr("works.background_operation_help","You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source","Catalogue source"))}</b><small>Open Library · Google Books · Crossref</small></span></section></div>
-    <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel","Cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length?"":`disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help","Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup","Start background lookup"))}</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);decorateDisabledControls(dialog);
-  const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#workMetadataProvider")?.addEventListener("change",event=>{const profile=providerProfile(event.target.value);const summary=dialog.querySelector("#workMetadataProviderSummary");if(summary)summary.innerHTML=workflowProviderSummaryHtml(profile)});
-  dialog.querySelector("#manageWorkProviders")?.addEventListener("click",async()=>{const ok=await openMessageModal({title:tr("works.leave_metadata_title","Open provider profiles?"),message:tr("works.leave_metadata_help","This will close the metadata workflow and navigate to LLM Providers. Your lookup has not started yet."),confirmLabel:tr("works.open_providers","Open providers"),cancelLabel:tr("ui.cancel","Cancel")});if(!ok)return;close();navigateTo("providers")});
-  dialog.querySelector("#startWorkMetadata")?.addEventListener("click",async()=>{
-    const profileId=dialog.querySelector("#workMetadataProvider")?.value||selectedId;
-    const profile=providerProfile(profileId);
-    if(!profile)return toast(tr("works.provider_required","Select an LLM provider profile."));
-    const config=providerRequestConfig(profile,{textReview:false});
-    if(!config?.model)return toast(tr("works.provider_model_required","The selected provider profile does not have a model configured."));
-    const payload=works.map(item=>({work:item.work,current_metadata:representativeWorkMetadata(item.rows)}));
-    const button=dialog.querySelector("#startWorkMetadata");button.disabled=true;button.textContent=tr("works.starting_metadata_lookup","Starting…");
-    try{
-      const job=await api("/api/jobs/llm-tool",{method:"POST",body:JSON.stringify({task:"work_metadata",label:works.length===1?`${tr("works.populate_metadata_llm","Populate metadata with LLM")} · ${works[0].work}`:trf("works.populate_all_metadata_label","Populate metadata · {count} works",{count:works.length}),provider_profile_id:profile.id,max_concurrent_requests:config.max_concurrent_requests,work_metadata:{works:payload,provider:config.provider,model:config.model,base_url:config.base_url,api_key:config.api_key,generation:config.ollama,provider_profile_id:profile.id}})});
-      state.jobs=[job,...state.jobs.filter(existing=>existing.id!==job.id)];syncJobProgressToasts();startJobPolling();close();toast(trf("works.metadata_lookup_started","Metadata lookup started for {count} work(s).",{count:works.length}));if(state.view==="home")renderDashboard(document.querySelector("#main"));
-    }catch(error){button.disabled=false;button.innerHTML=`${icon("spark")}${esc(tr("works.start_metadata_lookup","Start background lookup"))}`;openMessageModal({title:tr("works.metadata_lookup_failed","Could not start metadata lookup"),message:error.message||String(error),tone:"danger"})}
-  });
-}
 function parseProposedMetadataValue(raw,original){
   if(typeof original==="number"){const value=Number(raw);if(!Number.isFinite(value))throw new Error("Expected a number.");return value}
   if(typeof original==="boolean")return String(raw).toLowerCase()==="true";
   return raw;
-}
-function openWorkMetadataProposalResult(job){
-  const proposals=Array.isArray(job.result?.proposals)?job.result.proposals:[];
-  const map=workIndex();
-  const flattened=[];
-  for(const proposal of proposals){
-    const item=map.get(String(proposal.work||""));
-    if(!item)continue;
-    const current=representativeWorkMetadata(item.rows);
-    for(const [field,proposed] of Object.entries(proposal.changes||{}))flattened.push({proposal,item,field,current:current[field],proposed,rationale:proposal.rationale?.[field]||proposal.match_reason||""});
-  }
-  const dialog=document.createElement("dialog");dialog.className="work-metadata-proposal-dialog";
-  const errors=proposals.filter(item=>item.error||item.message&&!Object.keys(item.changes||{}).length);
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.review_metadata_proposals","Review work metadata proposals"))}</h2><div class="dialog-subtitle">${esc(jobLabel(job))} · ${flattened.length.toLocaleString()} ${esc(tr("works.proposed_field_changes","proposed field changes"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db work-proposal-body">${errors.length?`<div class="info warn">${esc(trf("works.metadata_no_match_count","{count} work(s) had no usable catalogue match or returned an error.",{count:errors.length}))}</div>`:""}<div class="work-proposal-toolbar"><button class="btn small" id="selectAllWorkProposals">${esc(tr("ui.select_all","Select all"))}</button><button class="btn small" id="clearWorkProposals">${esc(tr("ui.clear","Clear"))}</button><span class="note">${esc(tr("works.proposal_edit_help","Edit proposed values if needed, then apply selected fields across every loaded record belonging to that work."))}</span></div>${flattened.length?`<div class="work-proposal-table-wrap"><table class="work-proposal-table"><thead><tr><th></th><th>${esc(tr("nav.works","Work"))}</th><th>${esc(tr("works.field","Field"))}</th><th>${esc(tr("works.current_value","Current"))}</th><th>${esc(tr("works.proposed_value","Proposed"))}</th><th>${esc(tr("works.source_reason","Source / reason"))}</th></tr></thead><tbody>${flattened.map((entry,index)=>`<tr><td><input type="checkbox" data-work-proposal-select="${index}" checked></td><td><b>${esc(entry.item.work)}</b><small>${entry.item.count.toLocaleString()} ${esc(tr("dynamic.records","records"))}</small></td><td>${esc(label(entry.field))}</td><td><div class="proposal-current">${esc(display(entry.current))}</div></td><td><textarea class="control proposal-value" data-work-proposal-value="${index}" rows="2">${esc(entry.proposed==null?"":typeof entry.proposed==="object"?JSON.stringify(entry.proposed):String(entry.proposed))}</textarea></td><td><small>${esc(entry.rationale||tr("works.catalogue_selected","Public bibliographic catalogue match selected by the LLM."))}</small>${entry.proposal.confidence!=null?`<span class="proposal-confidence">${Math.round(Number(entry.proposal.confidence||0)*100)}%</span>`:""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="llm-empty">${esc(tr("works.no_metadata_changes","No metadata changes were proposed."))}</div>`}${errors.length?`<details class="work-proposal-errors"><summary>${esc(tr("works.unmatched_works","Unmatched / failed works"))}</summary>${errors.map(item=>`<div><b>${esc(item.work)}</b><span>${esc(item.error||item.message||tr("works.no_catalogue_match","No catalogue match"))}</span></div>`).join("")}</details>`:""}</div><div class="da"><button class="btn" data-close>${esc(tr("ui.close","Close"))}</button><button class="btn primary" id="applyWorkProposals" ${flattened.length?"":"disabled"}>${icon("check")}${esc(tr("works.apply_selected_metadata","Apply selected metadata"))}</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);decorateDisabledControls(dialog);
-  const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#selectAllWorkProposals")?.addEventListener("click",()=>dialog.querySelectorAll("[data-work-proposal-select]").forEach(box=>box.checked=true));
-  dialog.querySelector("#clearWorkProposals")?.addEventListener("click",()=>dialog.querySelectorAll("[data-work-proposal-select]").forEach(box=>box.checked=false));
-  dialog.querySelector("#applyWorkProposals")?.addEventListener("click",async()=>{
-    const selected=[...dialog.querySelectorAll("[data-work-proposal-select]:checked")].map(box=>Number(box.dataset.workProposalSelect)).filter(index=>flattened[index]);
-    if(!selected.length)return toast(tr("works.select_metadata_changes","Select at least one proposed metadata change."));
-    const grouped=new Map();
-    try{
-      for(const index of selected){const entry=flattened[index];const control=dialog.querySelector(`[data-work-proposal-value="${index}"]`);const value=parseProposedMetadataValue(control.value,entry.proposed);if(!grouped.has(entry.item.work))grouped.set(entry.item.work,{item:entry.item,changes:{},rationale:{}});const group=grouped.get(entry.item.work);group.changes[entry.field]=value;group.rationale[entry.field]=entry.rationale}
-    }catch(error){return toast(error.message)}
-    const recordCount=[...grouped.values()].reduce((sum,group)=>sum+group.item.rows.length,0);
-    const applyButton=dialog.querySelector("#applyWorkProposals");if(applyButton){applyButton.disabled=true;applyButton.textContent=tr("works.applying_metadata","Applying metadata…")}
-    const batchId=uid();let changedRecords=0,fieldChanges=0;const touchedFiles=new Set();
-    try{
-      for(const group of grouped.values())for(const row of group.item.rows){const count=applyRecordChanges(row.file,row.index,group.changes,{source:"work_metadata_llm",model:job.model,batchId,reason:`LLM-assisted bibliographic metadata update for ${group.item.work}`,rationale:group.rationale});if(count){changedRecords++;fieldChanges+=count;touchedFiles.add(row.file)}}
-      for(const file of touchedFiles)await persistFileNow(file);
-      state.jobApplied[job.id]=new Date().toISOString();persistPrefs();close();shell();renderView();toast(trf("works.metadata_applied","Updated {records} records · {fields} tracked field changes",{records:changedRecords.toLocaleString(),fields:fieldChanges.toLocaleString()}),{tone:"success"});
-    }catch(error){if(applyButton){applyButton.disabled=false;applyButton.textContent=tr("works.apply_selected_metadata","Apply selected metadata")}toast(error.message||String(error),{tone:"danger"})}
-  });
 }
 
 function bulkEditRowsForScope(scope){
@@ -3451,258 +2449,7 @@ function saveSubsetProfiles(profiles){
   localStorage.setItem(SUBSET_PROFILE_STORAGE_KEY,JSON.stringify((profiles||[]).slice(0,50)));
 }
 
-function openSubsetBuilder(){
-  if(!state.files.length)return toast("Load one or more JSONL files first");
-  const dialog=document.createElement("dialog");
-  dialog.className="subset-dialog";
-  const fields=recordFields().filter(field=>!field.startsWith("_"));
-  const sourceOptions=[
-    `<option value="active">Active JSONL · ${esc(activeFile()?.name||"")}</option>`,
-    `<option value="all">All loaded JSONL files</option>`,
-    ...state.files.map(file=>`<option value="${esc(file.id)}">Only ${esc(file.name)} · ${file.records.length.toLocaleString()} records</option>`),
-  ].join("");
-  const fieldOptions=fields.map(field=>`<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`).join("");
-  const operatorOptions=[["equals","Equals"],["not_equals","Does not equal"],["contains","Contains"],["not_contains","Does not contain"],["array_contains","Array contains exact value"],["exists","Exists / non-empty"],["missing","Missing / empty"],["truthy","Truthy"],["falsy","Falsy"],["regex","Regular expression"]].map(([value,name])=>`<option value="${value}">${name}</option>`).join("");
-  const profiles=loadSubsetProfiles();
-  dialog.innerHTML=`<div class="dh subset-dialog-head"><div><span class="section-label">Corpus utility</span><h2 class="dialog-title">Create JSONL subset</h2><div class="dialog-subtitle">Build reusable record filters without editing the source JSONL.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db subset-body subset-body-v3">
-    <section class="subset-config-card"><div class="subset-config-copy"><b>Source & output</b><span>Choose the loaded records to filter and the name of the derived JSONL tab.</span></div><div class="subset-head-grid"><div class="field"><label>Source</label><select class="control" id="subsetSource">${sourceOptions}</select></div><div class="field"><label>New JSONL tab name</label><input class="control" id="subsetName" value="${esc((activeFile()?.name||"subset.jsonl").replace(/\.jsonl$/i,""))}-subset.jsonl"></div><label class="check-item subset-case"><input type="checkbox" id="subsetCase"><span>Case-sensitive matching</span></label></div></section>
-    <section class="subset-config-card"><div class="subset-config-copy"><b>Saved filter profile</b><span>Reuse common corpus slices such as primary Derrida text, one language, or records needing review.</span></div><div class="subset-profile-row"><select class="control" id="subsetProfile"><option value="">No saved profile</option>${profiles.map(profile=>`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join("")}</select><button class="btn small" id="saveSubsetProfile">${icon("plus")}Save current</button><button class="btn small danger" id="deleteSubsetProfile" disabled>Delete</button></div></section>
-    <section class="subset-config-card subset-filter-card"><div class="subset-config-copy"><b>Filter expression</b><span>Conditions are readable, grouped explicitly, and previewed against the selected source as you edit.</span></div><div class="subset-expression" id="subsetExpression"></div><div class="subset-builder-actions"><button class="btn small" id="addSubsetRule">${icon("plus")}Condition</button><button class="btn small" id="addSubsetGroup">${icon("plus")}Group</button><span class="subset-match-count" id="subsetPreview">Add at least one condition.</span></div><div class="subset-expression-preview" id="subsetExpressionPreview"></div></section>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn" id="createSubsetDownload">Create & download</button><button class="btn primary" id="createSubset">Create subset tab</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  const expression=dialog.querySelector("#subsetExpression");
-  let previewTimer=null;
-  const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(updatePreview,120)};
 
-  const subsetAutocompleteExcluded=new Set(["text","extracted_text","extractedText","raw_text","ocr_text"]);
-  function ruleHtml({field="work",operator="equals",value=""}={}){
-    return `<div class="subset-rule-core"><select class="control subset-field">${fieldOptions}</select><select class="control subset-operator">${operatorOptions}</select><input class="control subset-value" placeholder="${esc(tr("subset.value","Value"))}" autocomplete="off"><datalist class="subset-value-options"></datalist><button class="btn icon-only danger subset-remove" type="button" title="${esc(tr("subset.remove_condition","Remove condition"))}" aria-label="${esc(tr("subset.remove_condition","Remove condition"))}">${icon("close")}</button></div>`;
-  }
-  function initializeRule(row,{field="work",operator="equals",value=""}={}){
-    row.querySelector(".subset-field").value=fields.includes(field)?field:fields[0]||"";
-    row.querySelector(".subset-operator").value=operator;
-    row.querySelector(".subset-value").value=value;
-    const input=row.querySelector(".subset-value"),datalist=row.querySelector(".subset-value-options");
-    const listId=`subset-values-${uid()}`;datalist.id=listId;
-    const syncSuggestions=()=>{
-      const fieldName=row.querySelector(".subset-field").value;
-      if(subsetAutocompleteExcluded.has(fieldName)){input.removeAttribute("list");datalist.innerHTML="";input.title=tr("subset.autocomplete_large_field","Autocomplete is disabled for large text fields.");return}
-      const values=new Set();
-      for(const {record} of selectedRows()){
-        const raw=record?.[fieldName];
-        const items=Array.isArray(raw)?raw:[raw];
-        for(const item of items){if(item===null||item===undefined||typeof item==="object")continue;const text=String(item).trim();if(text)values.add(text)}
-      }
-      const ordered=[...values].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}));
-      datalist.innerHTML=ordered.map(option=>`<option value="${esc(option)}"></option>`).join("");
-      if(ordered.length){input.setAttribute("list",listId);input.title=trf("subset.autocomplete_count","{count} unique values from the selected JSONL source.",{count:ordered.length.toLocaleString()})}
-      else{input.removeAttribute("list");input.title=""}
-    };
-    const syncValue=()=>{
-      const noValue=["exists","missing","truthy","falsy"].includes(row.querySelector(".subset-operator").value);
-      input.disabled=noValue;
-      input.placeholder=noValue?tr("subset.no_value","No value required"):tr("subset.value","Value");
-      if(noValue)input.value="";
-      if(noValue)input.removeAttribute("list");else syncSuggestions();
-    };
-    row.querySelectorAll("select,input").forEach(control=>control.addEventListener("input",()=>{syncValue();schedulePreview()}));
-    row.querySelector(".subset-remove").onclick=()=>{
-      const group=row.closest(".subset-group");
-      row.remove();
-      if(group&&!group.querySelector(".subset-group-rules .subset-rule-row"))group.remove();
-      normalizeTopJoins();updatePreview();
-    };
-    syncValue();
-  }
-  function topJoinHtml(){return `<select class="control subset-join"><option value="AND">AND</option><option value="OR">OR</option></select>`}
-  function addTopRule(config={}){
-    const item=document.createElement("div");
-    item.className="subset-expression-item subset-top-rule";
-    item.dataset.kind="rule";
-    item.innerHTML=`${topJoinHtml()}<div class="subset-rule-row">${ruleHtml(config)}</div>`;
-    expression.appendChild(item);
-    initializeRule(item.querySelector(".subset-rule-row"),config);
-    item.querySelector(".subset-join").addEventListener("change",schedulePreview);
-    normalizeTopJoins();updatePreview();
-  }
-  function addGroup({mode="OR",rules=null}={}){
-    const item=document.createElement("div");
-    item.className="subset-expression-item subset-group";
-    item.dataset.kind="group";
-    item.innerHTML=`${topJoinHtml()}<div class="subset-group-box"><div class="subset-group-head"><div><b>Grouped conditions</b><span>Parentheses: evaluate this block as one boolean value</span></div><div class="tools"><select class="control subset-group-mode"><option value="OR">Match ANY (OR)</option><option value="AND">Match ALL (AND)</option></select><button class="btn tiny" type="button" data-add-group-rule>${icon("plus")}Condition</button><button class="btn tiny danger" type="button" data-remove-group>Remove group</button></div></div><div class="subset-group-rules"></div></div>`;
-    expression.appendChild(item);
-    item.querySelector(".subset-group-mode").value=mode;
-    const list=item.querySelector(".subset-group-rules");
-    const addInner=(config={})=>{
-      const row=document.createElement("div");row.className="subset-rule-row";row.innerHTML=ruleHtml(config);list.appendChild(row);initializeRule(row,config);updatePreview();
-    };
-    (rules?.length?rules:[{field:"topics",operator:"array_contains",value:""},{field:"concepts",operator:"array_contains",value:""}]).forEach(addInner);
-    item.querySelector("[data-add-group-rule]").onclick=()=>addInner({field:fields.includes("topics")?"topics":fields[0],operator:"contains",value:""});
-    item.querySelector("[data-remove-group]").onclick=()=>{item.remove();normalizeTopJoins();updatePreview()};
-    item.querySelector(".subset-group-mode").addEventListener("change",schedulePreview);
-    item.querySelector(".subset-join").addEventListener("change",schedulePreview);
-    normalizeTopJoins();updatePreview();
-  }
-  function normalizeTopJoins(){
-    [...expression.querySelectorAll(":scope > .subset-expression-item")].forEach((item,index)=>{
-      const join=item.querySelector(":scope > .subset-join");
-      join.disabled=index===0;
-      if(index===0)join.value="AND";
-    });
-  }
-  function selectedRows(){
-    const source=dialog.querySelector("#subsetSource").value;
-    if(source==="all")return allRows();
-    if(source==="active"){const file=activeFile();return file?file.records.map((record,index)=>({file,record,index})):[]}
-    const file=state.files.find(item=>item.id===source);return file?file.records.map((record,index)=>({file,record,index})):[];
-  }
-  function readRule(row){return {field:row.querySelector(".subset-field").value,operator:row.querySelector(".subset-operator").value,value:row.querySelector(".subset-value").value}}
-  function readExpression(){
-    return [...expression.querySelectorAll(":scope > .subset-expression-item")].map((item,index)=>{
-      const base={join:index===0?"AND":item.querySelector(":scope > .subset-join").value,type:item.dataset.kind};
-      if(item.dataset.kind==="group")return {...base,mode:item.querySelector(".subset-group-mode").value,rules:[...item.querySelectorAll(".subset-group-rules .subset-rule-row")].map(readRule)};
-      return {...base,rule:readRule(item.querySelector(".subset-rule-row"))};
-    });
-  }
-  function itemMatches(record,item,caseSensitive){
-    if(item.type==="group"){
-      const values=item.rules.map(rule=>subsetRuleMatches(record,rule,caseSensitive));
-      return item.mode==="AND"?values.every(Boolean):values.some(Boolean);
-    }
-    return subsetRuleMatches(record,item.rule,caseSensitive);
-  }
-  function recordMatchesExpression(record,items,caseSensitive){
-    if(!items.length)return false;
-    const groups=[];let group=[];
-    for(const item of items){if(item.join==="OR"&&group.length){groups.push(group);group=[]}group.push(item)}
-    if(group.length)groups.push(group);
-    return groups.some(itemsInAndGroup=>itemsInAndGroup.every(item=>itemMatches(record,item,caseSensitive)));
-  }
-  function expressionText(items){
-    const oneRule=rule=>`${label(rule.field)} ${dialog.querySelector(`.subset-operator option[value="${CSS.escape(rule.operator)}"]`)?.textContent||rule.operator}${["exists","missing","truthy","falsy"].includes(rule.operator)?"":` “${rule.value}”`}`;
-    return items.map((item,index)=>{
-      const prefix=index?` ${item.join} `:"";
-      if(item.type==="group")return `${prefix}(${item.rules.map(oneRule).join(` ${item.mode} `)})`;
-      return `${prefix}${oneRule(item.rule)}`;
-    }).join("");
-  }
-  function matchedRows(){const items=readExpression();if(!items.length)return [];const caseSensitive=dialog.querySelector("#subsetCase").checked;return selectedRows().filter(({record})=>recordMatchesExpression(record,items,caseSensitive))}
-  function updatePreview(){
-    const items=readExpression(),sourceCount=selectedRows().length,matched=items.length?matchedRows().length:0;
-    dialog.querySelector("#subsetPreview").textContent=items.length?`${matched.toLocaleString()} of ${sourceCount.toLocaleString()} source records match`:"Add at least one condition.";
-    dialog.querySelector("#subsetExpressionPreview").innerHTML=items.length?`<b>Expression</b><code>${esc(expressionText(items))}</code>`:"";
-    decorateDisabledControls(dialog);
-  }
-  const refreshSubsetSuggestions=()=>expression.querySelectorAll(".subset-rule-row").forEach(row=>row.querySelector(".subset-field")?.dispatchEvent(new Event("input",{bubbles:false})));
-  const applyProfile=profile=>{
-    expression.innerHTML="";
-    for(const item of profile?.expression||[]){
-      if(item?.type==="group"){addGroup({mode:item.mode||"OR",rules:item.rules||[]});const added=expression.lastElementChild;if(added&&item.join)added.querySelector(":scope > .subset-join").value=item.join}
-      else if(item?.rule){addTopRule(item.rule);const added=expression.lastElementChild;if(added&&item.join)added.querySelector(":scope > .subset-join").value=item.join}
-    }
-    dialog.querySelector("#subsetCase").checked=Boolean(profile?.caseSensitive);
-    normalizeTopJoins();refreshSubsetSuggestions();updatePreview();
-  };
-  const profileSelect=dialog.querySelector("#subsetProfile");
-  profileSelect?.addEventListener("change",()=>{
-    const profile=loadSubsetProfiles().find(item=>item.id===profileSelect.value);
-    dialog.querySelector("#deleteSubsetProfile").disabled=!profile;
-    if(profile)applyProfile(profile);
-  });
-  dialog.querySelector("#saveSubsetProfile")?.addEventListener("click",async()=>{
-    const items=readExpression();if(!items.length)return toast("Add at least one condition before saving a profile");
-    const name=prompt("Filter profile name");if(!name?.trim())return;
-    const profiles=loadSubsetProfiles();const profile={id:uid(),name:name.trim(),expression:items,caseSensitive:dialog.querySelector("#subsetCase").checked,created_at:new Date().toISOString()};
-    profiles.push(profile);saveSubsetProfiles(profiles);
-    profileSelect.insertAdjacentHTML("beforeend",`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`);profileSelect.value=profile.id;dialog.querySelector("#deleteSubsetProfile").disabled=false;toast(`Saved filter profile “${profile.name}”`,{tone:"success"});
-  });
-  dialog.querySelector("#deleteSubsetProfile")?.addEventListener("click",()=>{
-    const id=profileSelect.value;if(!id)return;const profiles=loadSubsetProfiles();const profile=profiles.find(item=>item.id===id);saveSubsetProfiles(profiles.filter(item=>item.id!==id));profileSelect.querySelector(`option[value="${CSS.escape(id)}"]`)?.remove();profileSelect.value="";dialog.querySelector("#deleteSubsetProfile").disabled=true;if(profile)toast(`Deleted filter profile “${profile.name}”`);
-  });
-  dialog.querySelector("#addSubsetRule").onclick=()=>addTopRule({field:fields.includes("work")?"work":fields[0],operator:"equals",value:""});
-  dialog.querySelector("#addSubsetGroup").onclick=()=>addGroup();
-  dialog.querySelector("#subsetSource")?.addEventListener("change",()=>{refreshSubsetSuggestions();schedulePreview()});
-  dialog.querySelector("#subsetCase")?.addEventListener("change",schedulePreview);
-  const createSubset=async downloadFile=>{
-    const items=readExpression();const rows=matchedRows();if(!items.length)return toast("Add at least one subset condition");if(!rows.length)return toast("No records match the subset expression");
-    let name=dialog.querySelector("#subsetName").value.trim()||"subset.jsonl";if(!name.toLowerCase().endsWith(".jsonl"))name+=".jsonl";
-    const file={id:uid(),name,records:rows.map(({record})=>cloneAuditValue(record)),errors:[],dirty:new Set(),imported_at:new Date().toISOString(),subset:{created_at:new Date().toISOString(),source:dialog.querySelector("#subsetSource").value,logic:"grouped_boolean_v2",expression:items}};
-    state.files.push(file);state.activeFileId=file.id;await persistFileNow(file);
-    if(downloadFile){const blob=new Blob([file.records.map(record=>JSON.stringify(record)).join("\n")+"\n"],{type:"application/x-ndjson"});downloadBlob(blob,name)}
-    close();navigateTo("list",{fileId:file.id});toast(`Created ${name} with ${file.records.length.toLocaleString()} records`);
-  };
-  dialog.querySelector("#createSubset").onclick=()=>createSubset(false);
-  dialog.querySelector("#createSubsetDownload").onclick=()=>createSubset(true);
-  addTopRule({field:fields.includes("document_author")?"document_author":fields[0],operator:"equals",value:"Jacques Derrida"});
-}
-
-function openBulkFieldEditor({rows=null,title="Bulk edit one field"}={}){
-  if(!state.files.length)return toast("Load JSONL records first");
-  const dialog=document.createElement("dialog");
-  dialog.className="bulk-field-dialog";
-  const fields=recordFields().filter(field=>field!=="updates"&&!field.startsWith("_"));
-  const selectedCount=selectedReviewItems().length;
-  const activeCount=activeFile()?.records.length||0;
-  const currentWork=selectedRecord()?.work||"";
-  const fixedRows=Array.isArray(rows)?rows:null;
-  const defaultScope=fixedRows?"fixed":selectedCount?"selected":"active";
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">Apply one field value consistently across a selected record set. Every actual change is audited.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db bulk-field-body">
-    ${fixedRows?`<div class="info">${fixedRows.length.toLocaleString()} records are in this operation.</div>`:`<div class="field"><label>Target records</label><select class="control" id="bulkFieldScope"><option value="selected" ${defaultScope==="selected"?"selected":""} ${selectedCount?"":"disabled"}>Selected records (${selectedCount.toLocaleString()})</option><option value="active" ${defaultScope==="active"?"selected":""}>Active JSONL (${activeCount.toLocaleString()})</option>${currentWork?`<option value="work">Current work: ${esc(currentWork)}</option>`:""}<option value="all">All loaded records (${allRows().length.toLocaleString()})</option></select></div>`}
-    <div class="field"><label>Field</label><select class="control" id="bulkFieldName">${fields.map(field=>`<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`).join("")}</select></div>
-    <div class="field"><label>New value</label><textarea id="bulkFieldValue" spellcheck="false" placeholder="Enter the new value. Arrays/objects use JSON. Enter __NULL__ for null."></textarea><div class="note" id="bulkFieldHint"></div></div>
-    <label class="check-item"><input type="checkbox" id="bulkFieldOnlyDifferent" checked><span>Only modify records whose value actually differs</span></label>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="applyBulkField">${icon("check")}Apply field update</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-
-  const currentRows=()=>fixedRows||bulkEditRowsForScope(dialog.querySelector("#bulkFieldScope")?.value||"active");
-  let lastHintField="";
-  const updateHint=()=>{
-    const field=dialog.querySelector("#bulkFieldName").value;
-    const target=currentRows();
-    const rawValues=target.slice(0,300).map(row=>row.record?.[field]);
-    const values=[...new Set(rawValues.map(value=>JSON.stringify(value)))];
-    dialog.querySelector("#bulkFieldHint").textContent=`${target.length.toLocaleString()} target records · ${values.length} distinct current value${values.length===1?"":"s"}${values.length>8?" (sampled)":""}`;
-    const input=dialog.querySelector("#bulkFieldValue");
-    if(values.length===1&&(lastHintField!==field||!input.value.trim())){
-      const only=rawValues[0];
-      input.value=only===null?"__NULL__":Array.isArray(only)||only&&typeof only==="object"?JSON.stringify(only,null,2):String(only??"");
-    }else if(lastHintField!==field&&values.length!==1)input.value="";
-    lastHintField=field;
-  };
-  dialog.querySelector("#bulkFieldScope")?.addEventListener("change",updateHint);
-  dialog.querySelector("#bulkFieldName").addEventListener("change",updateHint);
-  updateHint();
-
-  dialog.querySelector("#applyBulkField").onclick=async()=>{
-    const target=currentRows();
-    if(!target.length)return toast("No records are in the selected scope");
-    const field=dialog.querySelector("#bulkFieldName").value;
-    let value;
-    try{value=parseBulkFieldValue(field,dialog.querySelector("#bulkFieldValue").value,target)}
-    catch(error){return toast(error.message)}
-    const changing=target.filter(row=>!sameValue(row.record?.[field],value));
-    if(!changing.length)return toast("Every target record already has that value");
-    if(!await openMessageModal({title:"Apply bulk field update?",message:`Set ${field} on ${changing.length.toLocaleString()} record${changing.length===1?"":"s"}?`,confirmLabel:"Apply update",cancelLabel:"Cancel"}))return;
-    const batchId=uid();let fieldChanges=0;
-    for(const row of changing){
-      fieldChanges+=applyRecordChanges(row.file,row.index,{[field]:cloneAuditValue(value)},{
-        source:"bulk_field_edit",
-        batchId,
-        reason:`Bulk edit ${field}`,
-      });
-    }
-    close();shell();renderView();
-    toast(`Updated ${field} on ${changing.length.toLocaleString()} records · ${fieldChanges.toLocaleString()} audited changes`);
-  };
-}
 
 function clearFileDerivedState(fileId){
   state.reviewSelection=new Set([...state.reviewSelection].filter(key=>!String(key).startsWith(fileId+"::")));
@@ -3714,66 +2461,7 @@ function clearFileDerivedState(fileId){
   }
 }
 
-async function openRemoveWorkModal(work,rows){
-  const fileCounts=new Map();
-  for(const row of rows)fileCounts.set(row.file,(fileCounts.get(row.file)||0)+1);
-  const dialog=document.createElement("dialog");
-  dialog.className="message-dialog danger remove-work-dialog";
-  const dbStore=state.activeStore&&recordStores().some(store=>store.name===state.activeStore)?state.activeStore:"";
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Remove entire work</h2><div class="dialog-subtitle">${esc(work)} · destructive operation</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db remove-work-body"><div class="info warn">Remove every record for this work from selected loaded JSONL files and, optionally, from the selected Chroma collection. Primary collection deletion also removes matching records from its language collections.</div>
-    <div class="remove-work-files">${[...fileCounts].map(([file,count])=>`<label class="check-item"><input type="checkbox" data-remove-work-file="${esc(file.id)}" checked><span><b>${esc(file.name)}</b><small>${count.toLocaleString()} matching record${count===1?"":"s"}</small></span></label>`).join("")}</div>
-    <label class="check-item"><input type="checkbox" id="removeWorkDb" ${dbStore?"":`disabled data-disabled-reason="Select or create a corpus vector database first." title="Select or create a corpus vector database first."`}><span><b>Also remove from Chroma</b><small>${dbStore?esc(dbStore):"Select a corpus collection first"}</small></span></label></div>
-    <div class="da"><button class="btn" data-close>Cancel</button><button class="btn danger" id="confirmRemoveWork">Remove work</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#confirmRemoveWork").onclick=async()=>{
-    const fileIds=[...dialog.querySelectorAll("[data-remove-work-file]:checked")].map(input=>input.dataset.removeWorkFile);
-    const removeDb=Boolean(dialog.querySelector("#removeWorkDb")?.checked&&dbStore);
-    if(!fileIds.length&&!removeDb)return toast("Select at least one JSONL file or the Chroma collection");
-    const button=dialog.querySelector("#confirmRemoveWork");button.disabled=true;button.textContent="Removing…";
-    let localDeleted=0,dbDeleted=0,mirrored=0;
-    try{
-      for(const fileId of fileIds){
-        const file=state.files.find(item=>item.id===fileId);if(!file)continue;
-        const before=file.records.length;
-        file.records=file.records.filter(record=>String(record.work||"(Untitled work)")!==work);
-        const removed=before-file.records.length;
-        if(removed){
-          localDeleted+=removed;
-          clearFileDerivedState(file.id);
-          file.dirty=new Set([file.records.length?0:-1]);
-          await persistFileNow(file);
-        }
-      }
-      if(removeDb){
-        const result=await api(`/api/stores/${encodeURIComponent(dbStore)}/works/${encodeURIComponent(work)}`,{method:"DELETE"});
-        dbDeleted=Number(result.deleted||0);
-        mirrored=Object.values(result.mirrored_deletes||{}).reduce((sum,value)=>sum+Number(value||0),0);
-        state.storeWorksStore="";
-        if(state.storePresence[dbStore])state.storePresence[dbStore]={};
-        if(state.storePresenceIds[dbStore])state.storePresenceIds[dbStore]={};
-        await refreshStores();
-      }
-      close();persistPrefs();shell();renderView();
-      toast(`Removed “${work}” · ${localDeleted.toLocaleString()} local record${localDeleted===1?"":"s"}${removeDb?` · ${dbDeleted.toLocaleString()} DB${mirrored?` · ${mirrored.toLocaleString()} language mirror`:""}`:""}`);
-    }catch(error){button.disabled=false;button.textContent="Remove work";openMessageModal({title:"Could not remove work",message:error.message,tone:"danger"})}
-  };
-}
 
-async function openSeparateWorksModal(){
-  const eligible=state.files.filter(file=>{const works=new Set(file.records.map(record=>String(record?.work||record?.document_title||"").trim()).filter(Boolean));return works.size>1});
-  if(!eligible.length)return toast("No loaded JSONL file contains multiple named works");
-  const dialog=document.createElement("dialog");dialog.className="work-separate-dialog";
-  const options=eligible.map(file=>`<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} records</option>`).join("");
-  dialog.innerHTML=`<div class="dh"><div><span class="section-label">JSONL organization</span><h2 class="dialog-title">Separate works from a JSONL file</h2><div class="dialog-subtitle">Create one derived JSONL tab per selected work while preserving record metadata and audit history.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>Source JSONL</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>Remove separated records from the source tab after creating the new tabs</span></label><div class="info">By default this is non-destructive: new tabs are created as copies. Enable removal only when you want to partition the original loaded JSONL.</div></div><div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="separateWorksCreate">Separate selected works</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  const source=()=>state.files.find(file=>file.id===dialog.querySelector("#separateWorksSource").value);
-  const renderList=()=>{const file=source();const groups=new Map();for(const record of file?.records||[]){const work=String(record?.work||record?.document_title||"").trim()||"(Untitled work)";if(!groups.has(work))groups.set(work,[]);groups.get(work).push(record)}dialog.querySelector("#separateWorksList").innerHTML=[...groups.entries()].map(([work,records])=>`<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work==="(Untitled work)"?"":"checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} records</small></span></label>`).join("")};
-  dialog.querySelector("#separateWorksSource").addEventListener("change",renderList);renderList();
-  dialog.querySelector("#separateWorksCreate").onclick=async()=>{const file=source();const selected=[...dialog.querySelectorAll("[data-separate-work]:checked")].map(box=>box.dataset.separateWork);if(!selected.length)return toast("Select at least one work");const selectedSet=new Set(selected);const created=[];for(const work of selected){const records=file.records.filter(record=>(String(record?.work||record?.document_title||"").trim()||"(Untitled work)")===work).map(cloneAuditValue);if(!records.length)continue;const stem=work.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,80)||"untitled-work";const derived={id:uid(),name:`${stem}.jsonl`,records,errors:[],dirty:new Set(),imported_at:new Date().toISOString(),derived_from:{type:"work_separation",source_file:file.name,work}};state.files.push(derived);await persistFileNow(derived);created.push(derived)}if(dialog.querySelector("#separateWorksRemove").checked){file.records=file.records.filter(record=>!selectedSet.has(String(record?.work||record?.document_title||"").trim()||"(Untitled work)"));file.dirty=new Set(file.records.map((_,index)=>index));await persistFileNow(file)}if(created.length)state.activeFileId=created[0].id;close();corpusCache.fields=null;persistPrefs();shell();renderView();toast(`Created ${created.length} work JSONL tab${created.length===1?"":"s"}`,{tone:"success"})};
-}
 
 
 
@@ -3832,70 +2520,9 @@ function cleanRows(rows){
   shell();renderView();
   toast(`${recordsChanged} records cleaned · ${fieldsChanged} tracked changes`);
 }
-function openOcrCleanupDialog(){
-  if(!state.files.length)return toast("Load JSONL records first");
-  const dialog=document.createElement("dialog");
-  const selected=selectedReviewItems();
-  const active=activeFile();
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Clean OCR Artifacts</h2><div class="dialog-subtitle">Conservative ligature, zero-width character, and broken line-hyphen cleanup. No paraphrasing.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db ocr-clean-options"><button class="scope-card" data-scope="active" ${active?"":"disabled"}><b>Active JSONL tab</b><span>${active?`${active.records.length.toLocaleString()} records · ${esc(active.name)}`:"No active tab"}</span></button><button class="scope-card" data-scope="selected" ${selected.length?"":"disabled"}><b>Selected records</b><span>${selected.length.toLocaleString()} currently selected</span></button><button class="scope-card" data-scope="review"><b>Needs-review records</b><span>${needsReviewItems().length.toLocaleString()} flagged records</span></button><button class="scope-card" data-scope="all"><b>All loaded records</b><span>${allRows().length.toLocaleString()} records across ${state.files.length} tabs</span></button></div><div class="da"><button class="btn" data-close>Cancel</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelectorAll("[data-scope]").forEach(button=>button.onclick=async()=>{
-    let rows=[];
-    if(button.dataset.scope==="active"&&active)rows=active.records.map((record,index)=>({file:active,record,index}));
-    else if(button.dataset.scope==="selected")rows=selected.map(item=>({file:item.file,record:item.record,index:item.index}));
-    else if(button.dataset.scope==="review")rows=needsReviewItems().map(item=>({file:item.file,record:item.record,index:item.index}));
-    else rows=allRows();
-    if(!rows.length)return toast("No records in that scope");
-    close();
-    if(await openMessageModal({title:"Run OCR cleanup?",message:`Run conservative OCR cleanup on ${rows.length.toLocaleString()} records?`,confirmLabel:"Run cleanup",cancelLabel:"Cancel"}))cleanRows(rows);
-  });
-}
 
 
-const EDITOR_GROUPS = [
-  {name:"Source", fields:["record_id","work","document_author","edition","year","page_start","page_end","region_type","region_author","primary_text","canonical_work_id","pdf_file","pdf_pages"]},
-  {name:"Discourse", fields:["speaker","position_holder","target","discourse_role","proposition_status","semantic_function","stance","claim_scope"]},
-  {name:"Quotation provenance", fields:["is_direct_quote","quoted_speaker","quoted_author","quoted_work","quoted_position_holder","quoted_addressee","quoted_referent","quotation_chain"]},
-  {name:"Indexing", fields:["topics","concepts","persons","works_referenced"]},
-  {name:"Quality / review", fields:["attribution_confidence","semantic_classification_confidence","extraction_quality","needs_review","review_reason"]},
-  {name:"Language / translation", fields:["document_language","original_language","document_is_translation","translator"]},
-  {name:"Citation", fields:["inline_citation","full_citation"]},
-  {name:"Text", fields:["text","text_length"]},
-];
 
-function openEditor(){
-  const f=activeFile(),i=selectedIndex(f),r=selectedRecord();if(!r)return;
-  const dialog=document.createElement("dialog");
-  const used=new Set();
-  const groups=[];
-  for(const group of EDITOR_GROUPS){
-    const fields=group.fields.filter(k=>k in r);
-    if(!fields.length)continue;
-    fields.forEach(k=>used.add(k));
-    groups.push(`<section class="editor-section"><h3>${esc(group.name)}</h3><div class="editor-grid">${fields.map(k=>fieldEditor(k,r[k])).join("")}</div></section>`);
-  }
-  const other=Object.keys(r).filter(k=>!used.has(k) && k!=="updates");
-  if(other.length)groups.push(`<section class="editor-section"><h3>Other fields</h3><div class="editor-grid">${other.map(k=>fieldEditor(k,r[k])).join("")}</div></section>`);
-  dialog.innerHTML=`<form><div class="dh"><div><h2 class="dialog-title">Edit record</h2><div class="dialog-subtitle">${esc(r.record_id||"")} · ${esc(r.work||f.name)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body">${groups.join("")}</div><div class="da"><div class="llm-footer-note">Changes stay local until you export or upsert them.</div><button class="btn" type="button" data-close>Cancel</button><button class="btn primary">${icon("check")}Save changes</button></div></form>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  dialog.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{dialog.close();dialog.remove()});
-  dialog.querySelector("form").onsubmit=e=>{
-    e.preventDefault();
-    const next={...r};
-    try{
-      dialog.querySelectorAll("[data-key]").forEach(el=>next[el.dataset.key]=parseEditor(el));
-    }catch(error){
-      openMessageModal({title:"Could not save record",message:error.message,tone:"danger"});return;
-    }
-    if("text_length" in next)next.text_length=String(next.text||"").length;
-    const changes={};
-    for(const [field,value] of Object.entries(next))if(field!=="updates"&&!sameValue(r[field],value))changes[field]=value;
-    const count=applyRecordChanges(f,i,changes,{source:"manual"});
-    dialog.close();dialog.remove();shell();renderView();count?toast(`Saved ${count} tracked change${count===1?"":"s"}`,{tone:"success"}):toast("No changes to save");
-  };
-}
 
 
 function fieldEditor(k,v){
@@ -3934,93 +2561,6 @@ async function currentPdfPageText(){
   state.pdf.extractError=result.warning||"";
   return result.text||"";
 }
-function openLlmTaskLauncher({
-  task,
-  title,
-  description="",
-  contextText="",
-  payload={},
-  generationProvider=null,
-  generationModel=null,
-  onForegroundResult=null,
-}={}){
-  const profiles=providerProfiles();
-  if(!profiles.length)return toast("Configure an LLM provider first");
-  let profileId=state.appConfig.default_provider_profile||profiles[0].id;
-  if(task==="rag_grade"&&generationModel){
-    const independent=profiles.find(item=>!(item.type===generationProvider&&String(item.model||"")===String(generationModel)));
-    if(independent)profileId=independent.id;
-  }
-  let runMode=task==="rag_grade_batch"?"background":(isResearcher()?"foreground":"background");
-  const dialog=document.createElement("dialog");
-  dialog.className="llm-tool-launcher";
-
-  const render=()=>{
-    const profile=providerProfile(profileId);
-    const status=state.providerStatuses?.[profile.id]||{};
-    const sameModel=Boolean(
-      generationModel
-      && String(profile.model||"")===String(generationModel)
-      && (!generationProvider||profile.type===generationProvider)
-    );
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">${esc(description)}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db llm-tool-body">
-      ${contextText?`<section class="llm-tool-context"><span>Question / prompt</span><p>${esc(contextText)}</p></section>`:""}
-      ${sameModel?`<div class="info warn"><b>Same-model grading warning.</b> This provider/model was also used to generate the RAG answer. Self-grading can be systematically biased; use a different model for a more independent evaluation.</div>`:""}
-      <div class="llm-tool-grid">
-        <div class="field field-wide"><label>Provider profile</label><select class="control" id="toolProvider">${profiles.map(item=>`<option value="${esc(item.id)}" ${item.id===profile.id?"selected":""}>${esc(providerDisplayName(item))} · ${item.type==="ollama"?"Ollama":"OpenAI-compatible"}</option>`).join("")}</select></div>
-        <div class="field"><label>Run mode</label><select class="control" id="toolRunMode" ${isResearcher()||task==="rag_grade_batch"?"disabled":""}>${task==="rag_grade_batch"?'<option value="background" selected>Background operation</option>':isResearcher()?'<option value="foreground" selected>Interactive foreground</option>':`<option value="background" ${runMode==="background"?"selected":""}>Background operation</option><option value="foreground" ${runMode==="foreground"?"selected":""}>Interactive foreground</option>`}</select></div>
-        <div class="field field-wide"><label>Model</label><input class="control" id="toolModel" value="${esc(profile.type==="openai"&&profile.model_mode==="auto"?"auto":profile.model||"")}" ${profile.type==="openai"&&profile.model_mode==="auto"?"disabled":""}></div>
-        <div class="field"><label>Max concurrent requests</label><input class="control" value="${esc(profile.max_concurrent_requests??1)}" disabled></div>
-        ${profile.type==="ollama"?`<div class="field"><label>Context</label><input class="control" id="toolCtx" type="number" value="${esc(profile.num_ctx??16384)}"></div><div class="field"><label>Think</label><select class="control" id="toolThink">${[["false","Off"],["true","On"],["low","Low"],["medium","Medium"],["high","High"]].map(([v,l])=>`<option value="${v}" ${String(profile.think??"false")===v?"selected":""}>${l}</option>`).join("")}</select></div>`:""}
-        <div class="field"><label>Max output tokens</label><input class="control" id="toolPredict" type="number" value="${esc(profile.num_predict??4096)}"></div>
-        <div class="field"><label>Temperature</label><input class="control" id="toolTemp" type="number" step="0.01" value="${esc(profile.temperature??0)}"></div>
-        <div class="field"><label>top_p</label><input class="control" id="toolTopP" type="number" step="0.01" value="${esc(profile.top_p??1)}"></div>
-        <div class="field"><label>Seed</label><input class="control" id="toolSeed" type="number" value="${esc(profile.seed??"")}"></div>
-        <div class="field field-wide"><label>Advanced options JSON</label><textarea id="toolExtra" spellcheck="false">${esc(profile.extra_options||"{}")}</textarea></div>
-      </div>
-      <div class="tools llm-tool-profile-actions"><button class="btn small" id="toolWarm">${icon("spark")}Warm this provider</button>${isResearcher()?"":`<button class="btn small" id="toolProviders">${icon("gear")}Manage providers</button>`}<span class="note" id="toolStatus">${status.available?"Endpoint ready":status.error||"Not verified"}</span></div>
-    </div>
-    <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="runLlmTask">${icon("spark")}${runMode==="background"?"Start background operation":"Run now"}</button></div>`;
-    const close=()=>{dialog.close();dialog.remove()};
-    dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-    dialog.querySelector("#toolProvider").onchange=e=>{profileId=e.target.value;render()};
-    dialog.querySelector("#toolRunMode").onchange=e=>{runMode=e.target.value;render()};
-    dialog.querySelector("#toolProviders")?.addEventListener("click",()=>{close();navigateTo("providers")});
-    dialog.querySelector("#toolWarm").onclick=async()=>{const el=dialog.querySelector("#toolStatus");el.textContent="Warming…";await warmupProviderProfile(profileId);el.textContent=state.providerWarmups?.[profileId]?.message||"Warmup requested"};
-    dialog.querySelector("#runLlmTask").onclick=async()=>{
-      const active=providerProfile(profileId);
-      if(!active)return toast("Choose an available provider profile before continuing.");
-      if(!["ollama","openai"].includes(String(active.type||"")))return toast("The selected provider profile is not supported by this operation.");
-      const config=providerRequestConfig(active,{textReview:true});
-      let extra={};
-      try{extra=JSON.parse(dialog.querySelector("#toolExtra").value||"{}");if(!extra||Array.isArray(extra)||typeof extra!=="object")throw new Error("Advanced options must be an object")}
-      catch(error){return toast(error.message)}
-      const n=id=>{const raw=dialog.querySelector(`#${id}`)?.value;if(raw===""||raw==null)return null;const value=Number(raw);return Number.isFinite(value)?value:null};
-      let think=false;
-      if(active.type==="ollama"){const raw=dialog.querySelector("#toolThink")?.value||"false";think=raw==="true"?true:["low","medium","high"].includes(raw)?raw:false}
-      const generation=sanitizeResearchGeneration({...config.ollama,num_ctx:active.type==="ollama"?n("toolCtx"):null,num_predict:n("toolPredict")??4096,think,temperature:n("toolTemp")??0,top_p:n("toolTopP")??1,seed:n("toolSeed"),extra_options:extra});
-      const model=active.type==="openai"&&active.model_mode==="auto"?"auto":String(dialog.querySelector("#toolModel")?.value||"").trim();
-      if(!model)return toast("Select a model before continuing.");
-      if(task==="rag_grade"&&(!String(payload.question||"").trim()||!String(payload.answer||"").trim()))return toast("A completed Research question and answer are required before grading.");
-      const direct={...payload,provider:active.type,model,base_url:active.base_url||null,api_key:active.type==="openai"?active.api_key||"":null,generation};
-      const button=dialog.querySelector("#runLlmTask");button.disabled=true;button.textContent=runMode==="background"?"Starting…":"Running…";
-      try{
-        if(runMode==="background"){
-          const body={task,label:title,provider_profile_id:active.id,max_concurrent_requests:Math.max(1,Math.min(64,Number(active.max_concurrent_requests)||1)),pdf:task.startsWith("pdf_")?direct:null,grade:task==="rag_grade"?direct:null,grade_batch:task==="rag_grade_batch"?{provider:direct.provider,model:direct.model,base_url:direct.base_url,api_key:direct.api_key,generation:direct.generation,provider_profile_id:active.id,max_concurrent_requests:Math.max(1,Math.min(64,Number(active.max_concurrent_requests)||1))}:null};
-          const job=await api("/api/jobs/llm-tool",{method:"POST",body:JSON.stringify(body)});
-          state.jobs=[job,...state.jobs.filter(item=>item.id!==job.id)];syncJobProgressToasts();startJobPolling();close();toast(`${title} started in background`);
-        }else{
-          if(task==="rag_grade_batch")throw new Error("Cache-wide grading runs as a background operation.");
-          const endpoint=task==="rag_grade"?"/api/rag/grade":"/api/pdf/llm";
-          const result=await api(endpoint,{method:"POST",body:JSON.stringify(direct)});
-          close();if(onForegroundResult)await onForegroundResult(result);
-        }
-      }catch(error){button.disabled=false;button.innerHTML=`${icon("spark")}${runMode==="background"?"Start background operation":"Run now"}`;toast(`${title} failed: ${error.message}`)}
-    };
-  };
-  document.body.appendChild(dialog);showAppModal(dialog);render();
-}
 async function applyPdfLinkMatch(match){
   if(!match?.key)return openMessageModal({title:"No supported record match",message:match?.reason||"The model did not identify a sufficiently supported record."});
   const item=reviewItemFromKey(match.key);
@@ -4035,31 +2575,6 @@ async function applyPdfLinkMatch(match){
   linkPdfPage(item.file,item.index,state.pdf.page);
   toast(`Linked page ${state.pdf.page} to ${item.record.record_id||"record"}`);
 }
-function openLlmToolResult(job){
-  const result=job.result;
-  if(!result)return openMessageModal({title:"Result unavailable",message:"This completed LLM operation does not contain a retained result. Open full details to inspect the operation.",tone:"danger"});
-  const dialog=document.createElement("dialog");
-  dialog.className="llm-tool-result-dialog";
-  const task=job.tool||job.mode;
-  if(task==="work_metadata"){dialog.remove();return openWorkMetadataProposalResult(job)}
-  let body="",actions="";
-  if(task==="pdf_clean_text"){body=`<section class="card-inset"><div class="cardhead"><b>Cleaned page text</b></div><pre class="llm-tool-text">${esc(result.text||"")}</pre></section>`;actions='<button class="btn primary" id="useToolText">Use as current page text</button>'}
-  else if(task==="pdf_draft_record"){body=`<pre class="rag-json">${esc(JSON.stringify(result.record||{},null,2))}</pre>`;actions='<button class="btn primary" id="openToolDraft">Review / add draft</button>'}
-  else if(task==="pdf_link_record"){body=`<div class="llm-tool-match"><b>${esc(result.match?.record_id||"No supported match")}</b><p>${esc(result.match?.reason||"")}</p></div>`;actions=result.match?.key?'<button class="btn primary" id="applyToolLink">Review & link page</button>':""}
-  else if(task==="rag_grade"){
-    const question=job.request?.question||"";
-    body=`${question?`<section class="llm-tool-context"><span>Question / prompt</span><p>${esc(question)}</p></section>`:""}${result.response_cache_error?`<div class="info warn">The grade completed, but saving it to the response cache failed: ${esc(result.response_cache_error)}</div>`:""}${ragGradeHtml(result.grade||{})}`;
-  }
-  else if(task==="rag_grade_batch"){
-    body=`<section class="bulk-grade-result"><div class="compare-result-summary"><div><strong>${Number(result.graded||0).toLocaleString()}</strong><span>graded</span></div><div><strong>${Number(result.failed||0).toLocaleString()}</strong><span>failed</span></div><div><strong>${Number(result.total||0).toLocaleString()}</strong><span>responses</span></div></div>${Array.isArray(result.errors)&&result.errors.length?`<details><summary>Errors (${result.errors.length})</summary><pre class="rag-json">${esc(JSON.stringify(result.errors,null,2))}</pre></details>`:'<div class="info">All cached responses were processed.</div>'}</section>`;
-  }
-  else body=`<pre class="rag-json">${esc(JSON.stringify(result,null,2))}</pre>`;
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(jobLabel(job))}</h2><div class="dialog-subtitle">${esc(job.provider||"")} · ${esc(job.model||result.model||"")}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${body}</div><div class="da"><button class="btn" data-close>Close</button>${actions}</div>`;
-  document.body.appendChild(dialog);const close=()=>{dialog.close();dialog.remove()};dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);showAppModal(dialog);
-  dialog.querySelector("#useToolText")?.addEventListener("click",()=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${job.model||result.model||"model"}`;close();if(state.view==="pdf")renderPdf(document.querySelector("#main"))});
-  dialog.querySelector("#openToolDraft")?.addEventListener("click",()=>{close();openPdfDraftRecord(result.record||{})});
-  dialog.querySelector("#applyToolLink")?.addEventListener("click",async()=>{await applyPdfLinkMatch(result.match||{});close()});
-}
 function ragGradeHtml(grade={}){
   const normalized=normalizeRagGrade(grade);
   const scoreKeys=[["query_relevance","Query relevance"],["source_binding","Source binding"],["claim_traceability","Claim traceability"],["attribution_source_discrimination","Attribution/source discrimination"],["claim_evidence_fidelity","Claim/evidence fidelity"],["conceptual_precision","Conceptual precision"],["coverage","Coverage"],["interpretive_usefulness","Interpretive usefulness"],["overall","Overall"]];
@@ -4067,63 +2582,6 @@ function ragGradeHtml(grade={}){
   return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key,name])=>`<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>Summary</b><p>${esc(normalized.summary||"No summary returned.")}</p></section>${sections.map(([name,items])=>`<section><b>${esc(name)}</b><ul>${items.map(item=>`<li>${esc(item)}</li>`).join("")||"<li>None reported.</li>"}</ul></section>`).join("")}</div>`;
 }
 
-function openPdfDraftRecord(record){
-  const dialog=document.createElement("dialog");
-  dialog.className="pdf-draft-dialog";
-  const files=state.files;
-  const stores=recordStores();
-  dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">Draft record from PDF page</h2><div class="dialog-subtitle">${esc(state.pdf.title||state.pdf.name)} · page ${state.pdf.page} · unsaved draft</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db pdf-draft-body">
-    <div class="info warn">This is a draft generated by an LLM. Review attribution, page metadata, quotation provenance, and text before saving.</div>
-    <textarea class="pdf-draft-json" id="pdfDraftJson" spellcheck="false">${esc(JSON.stringify(record,null,2))}</textarea>
-    <div class="pdf-draft-targets">
-      <div class="field"><label>JSONL destination</label><select class="control" id="pdfDraftFile"><option value="">Do not add to JSONL</option>${files.map(file=>`<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length} records</option>`).join("")}</select></div>
-      <div class="field"><label>Chroma destination</label><select class="control" id="pdfDraftStore" ${stores.length?"":`disabled data-disabled-reason="Create or restore a corpus vector database before upserting PDF drafts." title="Create or restore a corpus vector database before upserting PDF drafts."`}><option value="">${stores.length?"Do not upsert to Chroma":"No corpus database available"}</option>${stores.map(store=>`<option value="${esc(store.name)}">${esc(store.name)} · ${Number(store.count||0).toLocaleString()} records</option>`).join("")}</select></div>
-    </div>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="savePdfDraft">${icon("check")}Add draft</button></div>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(button=>button.onclick=close);
-  dialog.querySelector("#savePdfDraft").onclick=async()=>{
-    let draft;
-    try{
-      draft=JSON.parse(dialog.querySelector("#pdfDraftJson").value);
-      if(!draft||typeof draft!=="object"||Array.isArray(draft))throw new Error("Draft must be one JSON object.");
-    }catch(error){return toast(`Invalid draft JSON: ${error.message}`)}
-    if(!draft.record_id)draft.record_id=`pdf-draft-${Date.now()}`;
-    draft.needs_review=true;
-    draft.updates=Array.isArray(draft.updates)?draft.updates:[];
-    draft.pdf_file=state.pdf.name||draft.pdf_file||null;
-    draft.pdf_pages=[...new Set([...(Array.isArray(draft.pdf_pages)?draft.pdf_pages:[]),state.pdf.page])].sort((a,b)=>a-b);
-    draft.text_length=String(draft.text||"").length;
-
-    const fileId=dialog.querySelector("#pdfDraftFile").value;
-    const storeName=dialog.querySelector("#pdfDraftStore").value;
-    if(!fileId&&!storeName)return toast("Choose a JSONL file, a Chroma collection, or both.");
-
-    if(fileId){
-      const file=state.files.find(item=>item.id===fileId);
-      if(!file)return toast("Selected JSONL file is no longer loaded");
-      file.records.push(cloneAuditValue(draft));
-      file.dirty.add(file.records.length-1);
-      await persistFileNow(file);
-    }
-    if(storeName){
-      try{
-        await api(`/api/stores/${encodeURIComponent(storeName)}/records`,{
-          method:"POST",
-          body:JSON.stringify({record:upsertRecordPayload(draft)}),
-        });
-        await refreshStores();
-      }catch(error){
-        return toast(`Draft was added to JSONL where selected, but Chroma upsert failed: ${error.message}`);
-      }
-    }
-    close();shell();renderView();
-    toast(`Draft ${draft.record_id} added${fileId&&storeName?" to JSONL and Chroma":fileId?" to JSONL":" to Chroma"}`,{tone:"success"});
-  };
-}
 function rankPdfLinkCandidates(rawText){
   const titleTokens=new Set(String(state.pdf.title||state.pdf.name||"").toLocaleLowerCase().split(/\W+/).filter(token=>token.length>3));
   const page=Number(state.pdf.page);
@@ -4160,323 +2618,7 @@ async function linkPdfPageWithLlm(){
   }catch(error){toast(`Could not prepare LLM record matching: ${error.message}`)}
 }
 
-function renderPdf(main){
-  if(state.view==="pdf")syncUrl({replace:true});
-  const loaded=Boolean(state.pdf.file);
-  const canRender=Boolean(state.pdf.doc);
-  const extractReady=Boolean(state.pdf.doc||state.pdf.file);
-  const linked=loaded?linkedPdfRows(state.pdf.page):[];
-  const allRelated=loaded?allLinkedRowsForLoadedPdf():[];
-  const relatedQuery=String(state.pdf.relatedSearch||"").trim().toLocaleLowerCase();
-  const related=allRelated.filter(({file,record,pages})=>
-    !relatedQuery
-    ||[
-      file.name,
-      record.record_id,
-      record.work,
-      record.document_author,
-      record.inline_citation,
-      record.full_citation,
-      pages.join(" "),
-    ].some(value=>String(value||"").toLocaleLowerCase().includes(relatedQuery))
-  );
-  const selectedFile=activeFile();
-  const selected=selectedRecord();
-  const hasRecordOptions=state.files.some(file=>file.records.length>0);
-  const currentRecordKey=selectedFile&&selected?`${selectedFile.id}::${selectedIndex(selectedFile)}`:"";
-  const currentOption=selectedFile&&selected?{value:currentRecordKey,label:recordOptionLabel(selectedFile,selected,selectedIndex(selectedFile))}:null;
-  const selectedPdfPages=selected?loadedPdfPagesForRecord(selected):[];
-  const selectedRelated=Boolean(selectedFile&&selected&&selectedPdfPages.length);
-  const pdfTitle=pdfDisplayTitle();
-  const relatedWorks=[...new Set(allRelated.map(item=>String(item.record.work||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 
-  const pdfProvider=defaultProviderProfile();
-  main.innerHTML=`<section class="card pdf-document-header">
-    <input id="pdfInput" type="file" accept="application/pdf" hidden>
-    <div class="pdf-document-primary">
-      <button class="btn primary" id="openPdf">${icon("pdf")}${loaded?"Open another":"Open PDF"}</button>
-      <div class="pdf-document-title">${loaded?`<span>PDF document</span><h2>${esc(pdfTitle)}</h2><p>${esc(state.pdf.name)}${state.pdf.author?` · ${esc(state.pdf.author)}`:""}${state.pdf.doc?` · ${state.pdf.doc.numPages} pages`:""}</p>`:`<span>PDF Explorer</span><h2>Open a source PDF</h2><p>Render pages, extract text, connect pages to records, and run LLM-assisted source workflows.</p>`}</div>
-      ${loaded?`<div class="pdf-document-status"><span><b>${relatedWorks.length}</b> linked works</span><span><b>${allRelated.length}</b> linked records</span><span><b>${linked.length}</b> on this page</span></div>`:""}
-    </div>
-    ${loaded?`<div class="pdf-command-row">
-      <div class="pdf-page-nav"><button class="btn small icon-only" id="pdfPrev" ${state.pdf.page<=1?"disabled":""}>←</button><label><span>Page</span><input class="control pdf-page-input" id="pdfPageInput" type="number" min="1" max="${state.pdf.doc?.numPages||999999}" value="${state.pdf.page}"></label><span class="pdf-page-total">/ ${state.pdf.doc?.numPages||"?"}</span><button class="btn small" id="pdfGo">Go</button><button class="btn small icon-only" id="pdfNext" ${state.pdf.doc&&state.pdf.page>=state.pdf.doc.numPages?"disabled":""}>→</button></div>
-      <div class="pdf-command-divider"></div>
-      <div class="pdf-view-actions"><button class="btn small icon-only" id="pdfRotateLeft" title="Rotate left 90°">↶</button><button class="btn small icon-only" id="pdfRotateRight" title="Rotate right 90°">↷</button><span class="note">${state.pdf.rotation?`${state.pdf.rotation}°`:"upright"}</span></div>
-      <div class="pdf-command-divider"></div>
-      <button class="btn small" id="extractPage" ${extractReady?"":"disabled"}>Extract page text</button>
-      <details class="pdf-toolbar-menu"><summary class="btn small">More text tools</summary><div class="pdf-toolbar-menu-popover"><button class="btn small" id="extractAll" ${extractReady?"":"disabled"}>Extract all text</button></div></details>
-      <details class="pdf-toolbar-menu llm-menu"><summary class="btn small soft">${icon("spark")}LLM tools</summary><div class="pdf-toolbar-menu-popover"><div class="pdf-menu-context"><b>${esc(providerDisplayName(pdfProvider))}</b><span>Each action lets you choose provider, model, parameters, and run mode.</span></div><button class="btn small" id="pdfLlmClean" ${extractReady?"":"disabled"}>Clean current page text</button><button class="btn small" id="pdfLlmDraft" ${extractReady?"":"disabled"}>Create draft record</button><button class="btn small" id="pdfLlmLink" ${state.files.length?"":"disabled"}>Match & link page to record</button><button class="btn small" id="pdfProviders">${icon("gear")}Manage LLM providers</button></div></details><button class="btn small primary" id="pdfCorpusBuilder">${icon("spark")}Build record set</button>
-    </div>
-    <div class="pdf-context-row"><div class="pdf-context-pill"><span>Source</span><b>p. ${state.pdf.page}</b></div><div class="pdf-context-pill"><span>Works</span><b>${esc(relatedWorks.slice(0,2).join(" · ")||"None linked")}${relatedWorks.length>2?` +${relatedWorks.length-2}`:""}</b></div><div class="pdf-context-pill"><span>Current-page records</span><b>${linked.length}</b></div>${selectedRelated?`<button class="btn soft" id="returnToSelectedRecord">${icon("record")}Back to ${esc(selected.record_id||"record")}</button>`:""}</div>`:""}
-  </section>
-  ${loaded?`<section class="pdfgrid pdfgrid-v2">
-    <article class="card pdf-viewer-card">
-      <div class="cardhead pdf-viewer-head"><div><b>Page ${state.pdf.page}</b><div class="note">${canRender?"PDF.js renderer":"Browser fallback"} · ${linked.length} linked record${linked.length===1?"":"s"} on this page</div></div><span class="pdf-view-badge">${state.pdf.rotation?`${state.pdf.rotation}° rotation`:"Fit width"}</span></div>
-      ${canRender?`<div class="pdf-canvas-wrap"><canvas id="pdfCanvas"></canvas><div class="pdf-render-status" id="pdfRenderStatus"></div></div>`:`<iframe class="pdf-frame" id="pdfFrame" title="${esc(pdfTitle)}" src="${esc(state.pdf.url)}#page=${state.pdf.page}"></iframe>`}
-    </article>
-
-    <aside class="pdf-side-stack">
-      <article class="card pdf-text-card">
-        <div class="cardhead"><div><b>Page text</b><div class="note">${state.pdf.extractionSource?`Source: ${esc(state.pdf.extractionSource)}`:"Extract the current page, then optionally clean it with an LLM."}</div></div><div class="search"><input id="pdfSearch" value="${esc(state.pdf.search||"")}" placeholder="Search page text"></div></div>
-        ${state.pdf.extractError?`<div class="info warn" style="margin:14px">${esc(state.pdf.extractError)}</div>`:""}
-        <div class="pdftext">${highlight(state.pdf.text||"",state.pdf.search||"")||'<span class="note">Use “Extract current page” or “Extract all text.” If both PDF.js and PyMuPDF find no text, the page likely requires OCR.</span>'}</div>
-      </article>
-
-      <article class="card panel pdf-current-links">
-        <div class="toolbar compact-toolbar"><div><b>Records on page ${state.pdf.page}</b><div class="note">${linked.length} linked record${linked.length===1?"":"s"}</div></div></div>
-        <div class="pdf-link-controls">
-          <div class="autocomplete"><input class="control" id="pdfRecordSearch" autocomplete="off" placeholder="Search record ID, work, or source file" value="${esc(currentOption?.label||"")}"><input type="hidden" id="pdfRecordKey" value="${esc(currentOption?.value||"")}"><div class="autocomplete-list hidden" id="pdfRecordSuggestions"></div></div>
-          <button class="btn" id="linkCurrentPdf" ${hasRecordOptions?"":"disabled"}>${icon("plus")}Link page ${state.pdf.page}</button>
-        </div>
-        <div class="pdf-linked-list">${linked.map(({file,record,index})=>`<div class="linked-record-row">
-          <button class="linked-record" data-linked-file="${file.id}" data-linked-index="${index}"><b>${esc(record.record_id||`Record ${index+1}`)}</b><span>${esc(record.work||file.name)} · ${esc(record.inline_citation||pages(record))}</span></button>
-          <div class="tools"><button class="btn small" data-copy-row-key="${esc(reviewKey(file,index))}">${icon("copy")}Copy</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">Inline</button><button class="btn small" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">Full</button><button class="btn small ${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"soft":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?icon("check"):icon("plus")}Evidence</button><button class="btn small" data-linked-open-file="${file.id}" data-linked-open-index="${index}">${icon("record")}Open record</button><button class="btn small danger unlink-pdf-link" data-unlink-file="${file.id}" data-unlink-index="${index}" title="Unlink record from PDF">${icon("close")}Unlink</button></div>
-        </div>`).join("")||'<div class="note">No records linked to this page yet.</div>'}</div>
-      </article>
-
-      <article class="card panel pdf-related-records">
-        <div class="toolbar compact-toolbar"><div><b>Records linked anywhere in this PDF</b><div class="note">${allRelated.length} record${allRelated.length===1?"":"s"} · jump directly between source pages and records</div></div></div>
-        <div class="search pdf-related-search"><input id="pdfRelatedSearch" value="${esc(state.pdf.relatedSearch||"")}" placeholder="Filter linked records"></div>
-        <div class="pdf-related-list">${related.slice(0,80).map(({file,record,index,pages:recordPages})=>`<div class="pdf-related-row">
-          <button class="pdf-related-record" data-related-record-file="${file.id}" data-related-record-index="${index}"><b>${esc(record.record_id||`Record ${index+1}`)}</b><span>${esc(record.work||file.name)}</span><small>${esc(fullCitation(record)||file.name)}</small></button>
-          <div class="pdf-related-pages"><button class="copy-record-mini" data-copy-row-key="${esc(reviewKey(file,index))}" title="Copy entire record">${icon("copy")}</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="inline" title="${esc(tr("ui.copy_inline","Copy inline citation"))}">I</button><button class="copy-record-mini" data-cite-row-key="${esc(reviewKey(file,index))}" data-cite-kind="full" title="${esc(tr("ui.copy_full","Copy full citation"))}">F</button><button class="copy-record-mini ${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"selected":""}" data-toggle-workspace-evidence="${esc(reviewKey(file,index))}" title="${esc(evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?tr("ui.remove_evidence","Remove from evidence"):tr("ui.add_evidence","Add to evidence"))}">${evidenceIsSelected(workspaceEvidenceSelectionKey(file,index))?"✓":"+"}</button>${recordPages.map(page=>`<button class="pdf-page-chip ${Number(page)===Number(state.pdf.page)?"active":""}" data-related-page="${page}" title="Open PDF page ${page}">p. ${page}</button>`).join("")}</div>
-        </div>`).join("")||'<div class="note">No linked records match this filter.</div>'}</div>
-        ${related.length>80?`<div class="note" style="padding-top:8px">Showing first 80 of ${related.length} matches. Narrow the filter to see a specific record.</div>`:""}
-      </article>
-    </aside>
-  </section>`:`<section class="empty"><div class="drop"><div class="drop-icon">${icon("pdf")}</div><h1>PDF Explorer</h1><p>Open a PDF to render pages, read its embedded title metadata, extract text, and move directly between linked PDF pages and corpus records.</p><button class="btn primary" id="openPdf2">${icon("pdf")}Choose PDF</button></div></section>`}`;
-
-  document.querySelector("#openPdf").onclick=()=>document.querySelector("#pdfInput").click();
-  document.querySelector("#openPdf2")?.addEventListener("click",()=>document.querySelector("#pdfInput").click());
-  document.querySelector("#pdfInput").onchange=async e=>{
-    const file=e.target.files[0];if(!file)return;
-    const openButtons=[document.querySelector("#openPdf"),document.querySelector("#openPdf2")].filter(Boolean);
-    const buttonState=openButtons.map(button=>({button,html:button.innerHTML}));
-    for(const {button} of buttonState){button.disabled=true;button.innerHTML=`<span class="spinner small-spinner"></span>Opening PDF…`}
-    try{
-      if(state.pdf.url)URL.revokeObjectURL(state.pdf.url);
-      const buffer=await file.arrayBuffer();
-      state.pdf.file=file;
-    state.pdf.url=URL.createObjectURL(new Blob([buffer],{type:"application/pdf"}));
-    state.pdf.name=file.name;
-    state.pdf.title=file.name.replace(/\.pdf$/i,"");
-    state.pdf.author="";
-    state.pdf.page=1;
-    state.pdf.rotation=0;
-    state.pdf.text="";
-    state.pdf.search="";
-    state.pdf.relatedSearch="";
-    state.pdf.extractError="";
-    state.pdf.extractionSource="";
-    try{
-      state.pdf.doc=await pdfjsLib.getDocument({data:new Uint8Array(buffer.slice(0))}).promise;
-      const metadata=await loadPdfMetadata(state.pdf.doc,file.name);
-      state.pdf.title=metadata.title||state.pdf.title;
-      state.pdf.author=metadata.author||"";
-    }catch(error){
-      console.error("PDF.js initialization failed",error);
-      state.pdf.doc=null;
-      state.pdf.extractError=`PDF.js could not initialize (${error.message}). Rendering and extraction will use fallbacks where possible.`;
-    }
-      await persistCurrentPdfAsset();
-      shell();
-      renderView();
-    }catch(error){
-      console.error("Could not open PDF",error);
-      await openMessageModal({title:"Could not open PDF",message:error.message||String(error),tone:"danger"});
-      for(const {button,html} of buttonState){if(button.isConnected){button.disabled=false;button.innerHTML=html}}
-    }
-  };
-
-  if(!loaded)return;
-
-  if(canRender)renderPdfCanvas(state.pdf.page);
-
-  const setPage=page=>{
-    const max=state.pdf.doc?.numPages||Math.max(1,page);
-    state.pdf.page=Math.max(1,Math.min(max,Number(page)||1));
-    state.pdf.text="";
-    state.pdf.extractError="";
-    state.pdf.extractionSource="";
-    persistCurrentPdfAsset();
-    syncUrl({replace:true});
-    renderPdf(main);
-  };
-
-  document.querySelector("#pdfRotateLeft")?.addEventListener("click",()=>{state.pdf.rotation=(Number(state.pdf.rotation||0)+270)%360;persistCurrentPdfAsset();renderPdf(main)});
-  document.querySelector("#pdfRotateRight")?.addEventListener("click",()=>{state.pdf.rotation=(Number(state.pdf.rotation||0)+90)%360;persistCurrentPdfAsset();renderPdf(main)});
-  document.querySelector("#pdfLlmClean")?.addEventListener("click",cleanPdfPageWithLlm);
-  document.querySelector("#pdfLlmDraft")?.addEventListener("click",draftPdfPageWithLlm);
-  document.querySelector("#pdfLlmLink")?.addEventListener("click",linkPdfPageWithLlm);
-  document.querySelector("#pdfProviders")?.addEventListener("click",()=>navigateTo("providers"));
-  document.querySelector("#pdfCorpusBuilder")?.addEventListener("click",()=>window.dispatchEvent(new CustomEvent("derridai:pdf-builder")));
-  document.querySelector("#pdfPrev")?.addEventListener("click",()=>setPage(state.pdf.page-1));
-  document.querySelector("#pdfNext")?.addEventListener("click",()=>setPage(state.pdf.page+1));
-  document.querySelector("#pdfGo")?.addEventListener("click",()=>setPage(document.querySelector("#pdfPageInput").value));
-  document.querySelector("#pdfPageInput")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();setPage(e.target.value)}});
-  document.querySelector("#returnToSelectedRecord")?.addEventListener("click",()=>navigateTo("record",{fileId:selectedFile.id,index:selectedIndex(selectedFile)}));
-
-  document.querySelector("#extractPage")?.addEventListener("click",async()=>{
-    const pageToExtract=Number(document.querySelector("#pdfPageInput")?.value||state.pdf.page);
-    state.pdf.page=Math.max(1,Math.min(state.pdf.doc?.numPages||pageToExtract,pageToExtract));
-    const button=document.querySelector("#extractPage");button.disabled=true;button.textContent=`Extracting page ${state.pdf.page}…`;
-    try{
-      const result=await extractPdfPageSmart(state.pdf.page);
-      state.pdf.text=result.text;state.pdf.extractionSource=result.source;state.pdf.extractError=result.warning||"";
-    }catch(error){state.pdf.extractError=error.message}
-    renderPdf(main);
-  });
-  document.querySelector("#extractAll")?.addEventListener("click",async()=>{
-    const button=document.querySelector("#extractAll");button.disabled=true;button.textContent="Extracting…";
-    try{
-      const result=await extractPdfAllSmart();
-      state.pdf.text=result.text;state.pdf.extractionSource=result.source;state.pdf.extractError=result.warning||"";
-    }catch(error){state.pdf.extractError=error.message}
-    renderPdf(main);
-  });
-
-  const s=document.querySelector("#pdfSearch");
-  if(s)s.oninput=e=>{const pos=e.target.selectionStart;state.pdf.search=e.target.value;renderPdf(main);requestAnimationFrame(()=>{const x=document.querySelector("#pdfSearch");if(x){x.focus();x.setSelectionRange(pos,pos)}})};
-
-  const relatedSearch=document.querySelector("#pdfRelatedSearch");
-  if(relatedSearch)relatedSearch.oninput=e=>{
-    const pos=e.target.selectionStart;
-    state.pdf.relatedSearch=e.target.value;
-    renderPdf(main);
-    requestAnimationFrame(()=>{
-      const next=document.querySelector("#pdfRelatedSearch");
-      if(next){next.focus();next.setSelectionRange(pos,pos)}
-    });
-  };
-
-  const search=document.querySelector("#pdfRecordSearch");
-  const hidden=document.querySelector("#pdfRecordKey");
-  const suggestions=document.querySelector("#pdfRecordSuggestions");
-  const renderSuggestions=()=>{
-    const q=search.value.trim();
-    const matches=searchRecordOptions(q,12);
-    suggestions.innerHTML=matches.map(option=>`<button type="button" class="autocomplete-option" data-record-key="${esc(option.value)}"><b>${esc(option.label.split(" · ")[1]||option.label)}</b><span>${esc(option.label)}</span></button>`).join("")||'<div class="autocomplete-empty">No matching records</div>';
-    suggestions.classList.remove("hidden");
-    suggestions.querySelectorAll("[data-record-key]").forEach(button=>button.onclick=()=>{
-      const option=recordOptionForKey(button.dataset.recordKey);
-      if(option){hidden.value=option.value;search.value=option.label}
-      suggestions.classList.add("hidden");
-    });
-  };
-  search?.addEventListener("focus",renderSuggestions);
-  search?.addEventListener("input",()=>{hidden.value="";renderSuggestions()});
-  search?.addEventListener("keydown",e=>{if(e.key==="Escape")suggestions.classList.add("hidden")});
-  document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete"))suggestions?.classList.add("hidden")},{once:true});
-
-  document.querySelector("#linkCurrentPdf")?.addEventListener("click",()=>{
-    let key=hidden.value;
-    if(!key){
-      const exact=searchRecordOptions(search.value,24).find(option=>option.label===search.value);
-      key=exact?.value||"";
-    }
-    const item=lookupRecord(key);
-    if(item)linkPdfPage(item.file,item.index,state.pdf.page);
-    else toast("Choose a record from the autocomplete list");
-  });
-
-  document.querySelectorAll("[data-linked-file],[data-linked-open-file]").forEach(button=>button.onclick=()=>{
-    const fileId=button.dataset.linkedFile||button.dataset.linkedOpenFile;
-    const index=+(button.dataset.linkedIndex??button.dataset.linkedOpenIndex);
-    navigateTo("record",{fileId,index});
-  });
-  document.querySelectorAll("[data-unlink-file]").forEach(button=>button.onclick=()=>{
-    const file=state.files.find(item=>item.id===button.dataset.unlinkFile);
-    if(file)unlinkPdfLink(file,+button.dataset.unlinkIndex,{pdf_file:state.pdf.name,pdf_page:state.pdf.page},{stayInPdf:true});
-  });
-  document.querySelectorAll("[data-related-record-file]").forEach(button=>button.onclick=()=>{
-    navigateTo("record",{fileId:button.dataset.relatedRecordFile,index:+button.dataset.relatedRecordIndex});
-  });
-  document.querySelectorAll("[data-related-page]").forEach(button=>button.onclick=()=>setPage(+button.dataset.relatedPage));
-}
-
-async function renderPdfCanvas(pageNumber){
-  const canvas=document.querySelector("#pdfCanvas");
-  if(!canvas||!state.pdf.doc)return;
-  const status=document.querySelector("#pdfRenderStatus");
-  try{
-    if(status)status.textContent=`Rendering page ${pageNumber}…`;
-    const page=await state.pdf.doc.getPage(pageNumber);
-    const rotation=Number(state.pdf.rotation||0)%360;
-    const base=page.getViewport({scale:1,rotation});
-    const container=canvas.parentElement;
-    const maxWidth=Math.max(420,(container?.clientWidth||900)-32);
-    // PDF tools now live below the viewer, so the document can use its natural
-    // fit-width scale without reserving horizontal room for a side column.
-    const scale=Math.min(2.1,Math.max(.5,maxWidth/base.width));
-    const viewport=page.getViewport({scale,rotation});
-    const dpr=Math.min(window.devicePixelRatio||1,2);
-    canvas.width=Math.floor(viewport.width*dpr);
-    canvas.height=Math.floor(viewport.height*dpr);
-    canvas.style.width=`${viewport.width}px`;
-    canvas.style.height=`${viewport.height}px`;
-    const context=canvas.getContext("2d");
-    context.setTransform(dpr,0,0,dpr,0,0);
-    await page.render({canvasContext:context,viewport}).promise;
-    if(status)status.textContent="";
-  }catch(error){
-    console.error("PDF render failed",error);
-    if(status)status.textContent=`Could not render page ${pageNumber}: ${error.message}`;
-  }
-}
-async function extractPdfPageBrowser(p){
-  if(!state.pdf.doc)throw new Error("PDF.js is unavailable for this document.");
-  const page=await state.pdf.doc.getPage(p);
-  const content=await page.getTextContent({includeMarkedContent:true});
-  let text="";
-  for(const item of content.items){
-    if(!item||typeof item.str!=="string")continue;
-    text+=item.str;
-    text+=item.hasEOL?"\n":" ";
-  }
-  return text.replace(/[ \t]+\n/g,"\n").replace(/ {2,}/g," ").trim();
-}
-async function extractPdfApi(page=null){
-  if(!state.pdf.file)throw new Error("The PDF file is no longer available in this browser session.");
-  const form=new FormData();
-  form.append("file",state.pdf.file,state.pdf.name||"document.pdf");
-  const url=page?`/api/pdf/extract?page=${page}`:"/api/pdf/extract";
-  let response;
-  try{response=await fetch(url,{method:"POST",body:form})}catch(error){throw new Error(`PDF extraction API is unreachable: ${error.message}`)}
-  const payload=await response.json().catch(()=>({detail:`HTTP ${response.status}`}));
-  if(!response.ok)throw new Error(typeof payload.detail==="string"?payload.detail:`PDF extraction failed with HTTP ${response.status}`);
-  return payload;
-}
-async function extractPdfPageSmart(p){
-  let browserError="";
-  if(state.pdf.doc){
-    try{
-      const text=await extractPdfPageBrowser(p);
-      if(text.trim())return {text,source:`PDF.js (browser), page ${p}`,warning:""};
-    }catch(error){browserError=error.message}
-  }
-  const payload=await extractPdfApi(p);
-  const text=payload.pages?.[0]?.text||"";
-  if(text.trim())return {text,source:`PyMuPDF (API fallback), page ${p}`,warning:browserError?`PDF.js failed: ${browserError}`:""};
-  return {text:"",source:"No extractable text layer",warning:`Neither PDF.js nor PyMuPDF found extractable text on page ${p}. It likely requires OCR.`};
-}
-async function extractPdfAllSmart(){
-  let browserError="";
-  if(state.pdf.doc){
-    try{
-      const parts=[];let nonempty=0;
-      for(let p=1;p<=state.pdf.doc.numPages;p++){
-        const text=await extractPdfPageBrowser(p);
-        if(text.trim())nonempty++;
-        parts.push(`--- Page ${p} ---\n${text}`);
-      }
-      if(nonempty)return {text:parts.join("\n\n"),source:"PDF.js (browser), all pages",warning:""};
-    }catch(error){browserError=error.message}
-  }
-  const payload=await extractPdfApi();
-  const parts=(payload.pages||[]).map(item=>`--- Page ${item.page} ---\n${item.text||""}`);
-  if(payload.has_text)return {text:parts.join("\n\n"),source:"PyMuPDF (API fallback), all pages",warning:browserError?`PDF.js failed: ${browserError}`:""};
-  return {text:parts.join("\n\n"),source:"No extractable text layer",warning:"Neither PDF.js nor PyMuPDF found extractable text. Image-only pages require OCR."};
-}
 function recordOptionForKey(key){
   const item=lookupRecord(key);
   if(!item)return null;
@@ -4659,40 +2801,6 @@ async function exportStoreJsonl({store=state.activeStore,work=null,downloadFile=
     return null;
   }
 }
-function openStoreRecordEditor(record){
-  const chromaId=record._chroma_id;
-  if(!chromaId)return toast(tr("record.no_storage_id","This Chroma record has no storage ID"));
-  const dialog=document.createElement("dialog");
-  const editable=Object.keys(record).filter(k=>k!=="_chroma_id"&&k!=="updates"&&k!=="_updates_count"&&!k.startsWith("_researcher_"));
-  dialog.innerHTML=`<form><div class="dh"><div><h2 class="dialog-title">Edit Chroma record</h2><div class="dialog-subtitle">${esc(chromaId)} · ${esc(state.activeStore)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body"><div class="info">Saving updates this record in place under the same Chroma ID and regenerates its embedding when the configured embedding provider allows it.</div><section class="editor-section"><h3>Record</h3><div class="editor-grid">${editable.map(k=>fieldEditor(k,record[k])).join("")}</div></section></div><div class="da"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary">${icon("check")}Save to Chroma</button></div></form>`;
-  document.body.appendChild(dialog);showAppModal(dialog);
-  const close=()=>{dialog.close();dialog.remove()};
-  dialog.querySelectorAll("[data-close]").forEach(b=>b.onclick=close);
-  dialog.querySelector("form").onsubmit=async e=>{
-    e.preventDefault();
-    const raw={...record};delete raw._chroma_id;
-    const changes={};
-    try{
-      dialog.querySelectorAll("[data-key]").forEach(el=>{
-        const value=parseEditor(el);
-        if(!sameValue(raw[el.dataset.key],value))changes[el.dataset.key]=value;
-      });
-    }catch(error){openMessageModal({title:"Could not parse edited record",message:error.message,tone:"danger"});return}
-    if(!Object.keys(changes).length)return close();
-    const timestamp=new Date().toISOString(),batchId=uid();
-    const auditEntries=Object.entries(changes).map(([field,newValue])=>({
-      field_name:field,old_value:cloneAuditValue(raw[field]),new_value:cloneAuditValue(newValue),timestamp,
-      source:"chroma_manual",batch_id:batchId,initiated_by:state.userContext?.username||null,
-    }));
-    try{
-      await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,{
-        method:"PATCH",body:JSON.stringify({changes,audit_entries:auditEntries,document_field:"text",embedding_field:"embedding"}),
-      });
-      state.storeWorksStore="";
-      close();toast("Chroma record updated",{tone:"success"});renderView();
-    }catch(error){toast(`Chroma update failed: ${error.message}`,{tone:"danger"})}
-  };
-}
 const vectorCollectionBridge=createVectorCollectionBridge({
   state,workIndex,recordStores,tr,trf,esc,icon,api,refreshStores,persistPrefs,
   upsertRows,toast,openMessageModal,decorateDisabledControls,showAppModal,
@@ -4723,11 +2831,6 @@ function normalizeTouchupItems(inputItems=null){
     record:item.file.records[item.index],
     key:item.key||reviewKey(item.file,item.index),
   })).filter(item=>item.record);
-}
-function openTouchup(inputItems=null,initialMode="foreground"){
-  const items=normalizeTouchupItems(inputItems);
-  if(!items.length)return;
-  window.dispatchEvent(new CustomEvent("derridai:open-touchup",{detail:{items,initialMode}}));
 }
 function touchupWorkspaceInfo(inputItems=null,initialMode="foreground"){
   const items=normalizeTouchupItems(inputItems);
@@ -4800,44 +2903,6 @@ async function syncResearcherProviderProfiles(){
   const approved=providerProfiles().filter(profile=>profile.researcher_enabled).map(profile=>({...profile}));
   const result=await api("/api/system/researcher-providers",{method:"PUT",body:JSON.stringify({profiles:approved})});
   state.researcherProviderProfiles=result.profiles||[];
-}
-async function renderResponseCache(main){
-  showViewLoading(main,"Loading response cache","Reading cached RAG responses…");
-  try{await refreshStores()}catch(error){console.warn("Could not refresh store metadata",error)}
-  let payload;
-  try{
-    payload=await api("/api/response-cache/records?limit=100&offset=0");
-  }catch(error){
-    main.innerHTML=`<div class="info error"><b>Could not read response cache.</b><span>${esc(error.message||String(error))}</span></div>`;
-    return;
-  }
-  const cache=responseCacheStore();
-  const count=Number(payload.total??payload.count??0);
-  const records=Array.isArray(payload.records)?payload.records:[];
-  const exists=Boolean(payload.exists||cache);
-  main.innerHTML=`<div class="response-cache-page">
-    <section class="card response-cache-overview">
-      <div class="cardhead"><div><b>RAG response cache</b><div class="note">System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.</div></div><div class="tools"><button class="btn" id="cacheFaq">${icon("books")}Open Response Library</button>${exists?'<button class="btn danger" id="clearResponseCache">Clear cache</button>':""}</div></div>
-      <div class="dashboard-kpis response-cache-kpis"><div class="dash-kpi"><span>Cached responses</span><strong>${count.toLocaleString()}</strong></div><div class="dash-kpi"><span>Collection</span><strong>${exists?"_response_cache":"Not created"}</strong></div><div class="dash-kpi"><span>Embedding</span><strong>${esc(cache?.embedding_model||"system-managed")}</strong></div></div>
-      <div class="info">Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs.</div>
-    </section>
-    <section class="card"><div class="cardhead"><div><b>Recent cached responses</b><div class="note">Latest 100 response-cache entries. Use Response Library for full answer/evidence browsing and re-runs.</div></div></div>
-      <div class="tablewrap"><table><thead><tr><th>Created</th><th>Question</th><th>Generation</th><th>Evidence</th><th>Grades</th><th></th></tr></thead><tbody>${records.map((record,index)=>`<tr><td>${esc(formatTimestamp(record.created_at))}</td><td>${esc(record.question||"")}</td><td>${esc(record.provider||"")} · ${esc(record.model||"")}</td><td>${Number(record.evidence_count||0)}</td><td>${Array.isArray(record.grades)?record.grades.length:0}</td><td><button class="btn tiny" data-cache-faq="${index}">Open in Response Library</button></td></tr>`).join("")||'<tr><td colspan="6" class="note">No cached responses yet.</td></tr>'}</tbody></table></div>
-    </section>
-  </div>`;
-  main.querySelector("#cacheFaq")?.addEventListener("click",()=>navigateTo("faq"));
-  main.querySelectorAll("[data-cache-faq]").forEach(button=>button.onclick=()=>{
-    state.faqSearch=records[+button.dataset.cacheFaq]?.question||"";
-    state.faqPage=1;persistPrefs();navigateTo("faq");
-  });
-  main.querySelector("#clearResponseCache")?.addEventListener("click",async()=>{
-    const approved=await openMessageModal({title:"Clear RAG response cache?",message:`Delete all ${count.toLocaleString()} cached RAG responses and saved grades? Corpus vector databases are not affected.`,tone:"danger",confirmLabel:"Clear response cache",cancelLabel:"Cancel"});
-    if(!approved)return;
-    try{
-      await api("/api/stores/_response_cache",{method:"DELETE"});
-      await refreshStores();renderResponseCache(main);toast("Response cache cleared");
-    }catch(error){toast(`Could not clear response cache: ${error.message}`)}
-  });
 }
 
 async function checkHealth(){
