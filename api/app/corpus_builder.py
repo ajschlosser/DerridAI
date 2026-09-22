@@ -1359,9 +1359,10 @@ class PdfCorpusRepository:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
         if not path.exists():
-            return {"items": [], "total": 0, "offset": offset, "limit": limit}
+            return {"items": [], "total": 0, "offset": offset, "limit": limit, "queue_counts": self._queue_counts([])}
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
+        queue_records: list[dict[str, Any]] = []
         total = 0
         topology_count = 0
         with path.open("r", encoding="utf-8") as handle:
@@ -1369,6 +1370,7 @@ class PdfCorpusRepository:
                 if not line.strip():
                     continue
                 record = json.loads(line)
+                queue_records.append(record)
                 topology_index = topology_count
                 topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
@@ -1392,7 +1394,7 @@ class PdfCorpusRepository:
                 total += 1
         for record in items:
             record["topology_count"] = topology_count
-        return {"items": items, "total": total, "offset": offset, "limit": limit}
+        return {"items": items, "total": total, "offset": offset, "limit": limit, "queue_counts": self._queue_counts(queue_records)}
 
     def publication_path(self, publication_id: str) -> Path:
         return self.root / "publications" / f"{publication_id}.jsonl"
@@ -6157,6 +6159,8 @@ CURRENT REVIEWED RECORD TEXT:
                 elif state == "llm_inferred": contribution["llm_fields_usable"] += 1
                 elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
                     contribution["llm_fields_review"] += 1
+                    if info.get("proposed_value") not in (None, "", []):
+                        contribution["llm_fields_proposed"] += 1
                 elif state in {"human_confirmed", "human_override"}: contribution["human_fields"] += 1
             ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
             for family in ("discourse", "quotation", "indexing"):
@@ -6166,7 +6170,7 @@ CURRENT REVIEWED RECORD TEXT:
                 try: llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
                 except (TypeError, ValueError): pass
                 contribution[f"tasks_{state or 'unknown'}"] += 1
-        useful = int(contribution.get("llm_fields_usable") or 0)
+        useful = int(contribution.get("llm_fields_usable") or 0) + int(contribution.get("llm_fields_proposed") or 0)
         build["llm_contribution"] = {
             **dict(contribution),
             "family_calls": llm_family_calls,
@@ -7095,7 +7099,7 @@ CURRENT REVIEWED RECORD TEXT:
 
     @_serialize_record_mutation
     def slice_to_neighbor(
-        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None,
+        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None, keep_end: int | None = None,
     ) -> dict[str, Any]:
         """Move reviewed text across an existing record boundary without creating a record.
 
@@ -7104,7 +7108,7 @@ CURRENT REVIEWED RECORD TEXT:
         immutable extraction is retained on both records; this operation edits the
         reviewed corpus layer and records an atomic two-record revision.
         """
-        if direction not in {"previous", "next"}:
+        if direction not in {"previous", "next", "keep"}:
             raise ValueError("Slice direction must be previous or next.")
         records = self.repo.load_records(build_id)
         index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
@@ -7113,16 +7117,43 @@ CURRENT REVIEWED RECORD TEXT:
         target = records[index]
         self._assert_human_review_available(build_id, target, structural=False)
         self._assert_record_revision(target, expected_revision)
-        neighbor_index = index - 1 if direction == "previous" else index + 1
-        if neighbor_index < 0 or neighbor_index >= len(records):
-            raise ValueError(f"No {direction} record is available for this slice.")
-        neighbor = records[neighbor_index]
         text = str(target.get("text") or "")
-        original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
+        if direction == "keep":
+            if index == 0 or index == len(records) - 1:
+                raise ValueError("Keeping a selected chunk requires both neighboring records.")
+            if keep_end is None or offset >= keep_end or keep_end > len(text):
+                raise ValueError("Keep selection must be inside the selected record text.")
+            previous, following = records[index - 1], records[index + 1]
+            prefix, retained, suffix = text[:offset].strip(), text[offset:keep_end].strip(), text[keep_end:].strip()
+            if not prefix or not retained or not suffix:
+                raise ValueError("Keep selection must leave non-empty text in all three records.")
+            original_texts = {
+                str(target.get("record_id")): text,
+                str(previous.get("record_id")): str(previous.get("text") or ""),
+                str(following.get("record_id")): str(following.get("text") or ""),
+            }
+            neighbors = (previous, following)
+        else:
+            neighbor_index = index - 1 if direction == "previous" else index + 1
+            if neighbor_index < 0 or neighbor_index >= len(records):
+                raise ValueError(f"No {direction} record is available for this slice.")
+            neighbor = records[neighbor_index]
+            neighbors = (neighbor,)
+        neighbor = neighbors[0]
+        if direction != "keep":
+            neighbor_index = index - 1 if direction == "previous" else index + 1
+            neighbor = records[neighbor_index]
+        if direction != "keep":
+            original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
         if offset <= 0 or offset >= len(text):
             raise ValueError("Slice point must be inside the selected record text.")
         self._push_review_history(build_id, records, action=f"slice_{direction}", selected_record_id=record_id)
-        if direction == "previous":
+        if direction == "keep":
+            previous, following = neighbors
+            previous["text"] = (str(previous.get("text") or "").rstrip() + "\n\n" + prefix).strip()
+            target["text"] = retained
+            following["text"] = (suffix + "\n\n" + str(following.get("text") or "").lstrip()).strip()
+        elif direction == "previous":
             moved, retained = text[:offset].strip(), text[offset:].lstrip()
             if not moved or not retained:
                 raise ValueError("Slice must leave non-empty text in both records.")
@@ -7136,7 +7167,8 @@ CURRENT REVIEWED RECORD TEXT:
             target["text"] = retained
         now = iso_now()
         transaction_id = f"slice-{uuid.uuid4().hex[:12]}"
-        for row in (target, neighbor):
+        affected_rows = (target, *neighbors)
+        for row in affected_rows:
             if "source_extracted_text" not in row:
                 row["source_extracted_text"] = original_texts.get(str(row.get("record_id")), str(row.get("text") or ""))
             row["text_length"] = len(str(row.get("text") or ""))
@@ -7160,18 +7192,32 @@ CURRENT REVIEWED RECORD TEXT:
             }
             row["metadata_execution_ledger"] = {}
             row["metadata_requeue_requested"] = True
+            lineage = dict(row.get("slice_lineage") or {})
+            lineage.update({
+                "transaction_id": transaction_id,
+                "source_record_id": record_id,
+                "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows],
+                "direction": direction,
+                "role": "source" if str(row.get("record_id")) == record_id else "neighbor",
+                "at": now,
+            })
+            row["slice_lineage"] = lineage
             row["record_revision"] = int(row.get("record_revision") or 1) + 1
             self._mark_human_touch(row, ["__text__", "__boundary__"])
             events = list(row.get("review_events") or [])
-            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id})
+            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id, "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows]})
             row["review_events"] = events[-100:]
-        left_row, right_row = (neighbor, target) if direction == "previous" else (target, neighbor)
+        left_row, right_row = (neighbors[0], target) if direction in {"previous", "keep"} else (target, neighbor)
         self._record_boundary_editorial_example(
             build_id, left=left_row, right=right_row,
             action=f"human_slice_{direction}", transaction_id=transaction_id,
         )
         self._rewrite_and_validate(build_id, records)
-        return {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
+        result = {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
+        if direction == "keep":
+            result["left_neighbor"] = neighbors[0]
+            result["right_neighbor"] = neighbors[1]
+        return result
 
     @_serialize_record_mutation
     def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str, request_override: dict[str, Any] | None = None) -> dict[str, Any]:
