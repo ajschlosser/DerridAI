@@ -1,5 +1,18 @@
 # runtime.js decomposition: hand-off
 
+## Session 6 status (Tools route boundary)
+
+Corpus Builder is already owned by `PdfWorkspaceView` through the Vue `PdfCorpusBuilder` component. The next safe
+surface was therefore the Tools route boundary: `/pdf` now resolves directly to `PdfWorkspaceView` and `/databases`
+resolves directly to `VectorStoresView`, instead of passing through the compatibility `ToolsView` wrapper with a
+`RuntimeSurface` fallback. The wrapper was unused after both concrete routes were native and has been removed. The PDF
+Explorer branch remains intentionally runtime-backed inside its Vue-owned workspace; its DOM baseline and public runtime
+exports are unchanged.
+
+The focused route-boundary regression test is `web/tests/frontend/tools-route-boundary.test.ts`. Remaining runtime
+compatibility hosts are the dashboard, PDF Explorer branch, response cache, and dead legacy view files that are not
+reachable from the current router; do not remove the shared runtime host until those live branches are migrated.
+
 Temporary file. **Delete it before the effort ends** (last commit of the last PR). It exists so another agent (Codex, Copilot,
 another Claude) can continue if the current one stops.
 
