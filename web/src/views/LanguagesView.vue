@@ -388,7 +388,8 @@ async function importDictionary(event: Event) {
     const parsed = JSON.parse(await file.text()) as { code?: string; dictionary?: unknown };
     if (parsed.code && parsed.code !== current.value.code) throw new Error(i18n.t("language.import_locale_mismatch", "This file belongs to a different locale."));
     if (!parsed.dictionary || typeof parsed.dictionary !== "object" || Array.isArray(parsed.dictionary)) throw new Error(i18n.t("language.import_invalid", "The dictionary file is not valid."));
-    const entries = Object.entries(parsed.dictionary as Record<string, unknown>).filter(([key, value]) => key.trim() && typeof value === "string");
+    const entries = Object.entries(parsed.dictionary as Record<string, unknown>)
+      .filter((entry): entry is [string, string] => Boolean(entry[0].trim()) && typeof entry[1] === "string");
     if (!entries.length) throw new Error(i18n.t("language.import_empty", "The dictionary file contains no valid entries."));
     current.value = { ...current.value, dictionary: { ...current.value.dictionary, ...Object.fromEntries(entries) } };
     runtime.notifyToast?.(i18n.tf("language.imported", "Imported {count} dictionary entries. Review and save to apply them.", { count: entries.length }), { tone: "success" });
