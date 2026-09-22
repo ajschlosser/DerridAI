@@ -1,13 +1,11 @@
 <main class="records-page" aria-labelledby="records-page-title">
-<p class="sr-only" aria-live="polite">
-</p>
 <header class="ui-page-header records-hero" aria-labelledby="records-page-title">
 <div class="ui-page-header-heading">
 <p class="ui-page-header-kicker">Corpus</p>
 <h1 id="records-page-title">Records</h1>
 <p class="ui-page-header-description">Review loaded JSONL records, keep provenance visible, and act on a precise selection without crowding the table.</p>
 </div>
-<div class="ui-page-header-actions" aria-label="Records view actions">
+<div class="ui-page-header-actions" role="group" aria-label="Records view actions">
 <div class="records-hero-actions">
 <button type="button" class="btn">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -23,13 +21,14 @@
 <path d="M3 7h.01M3 12h.01M3 17h.01">
 </path>
 </svg>Columns</button>
-<button type="button" class="btn soft">
+<button type="button" class="btn soft" aria-describedby="records-copy-link-help">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <rect x="8" y="8" width="12" height="12" rx="2">
 </rect>
 <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2">
 </path>
-</svg>Copy link</button>
+</svg>Copy view link</button>
+<span id="records-copy-link-help" class="sr-only">Copies a link that reopens this table exactly as shown: file name, search, column filters, sort, page and columns. Records stay on this device, so whoever opens the link must choose the same JSONL file.</span>
 </div>
 </div>
 <div class="ui-page-header-meta">
@@ -194,8 +193,17 @@
 </details>
 </section>
 <div class="records-table-scroll ui-table-scroll" tabindex="0" role="region" aria-label="Records table. Scroll horizontally to view additional columns.">
-<table class="records-table ui-table comfortable">
+<table class="records-table ui-table comfortable sized" style="width: 861px;">
 <caption class="sr-only">1–3 of 3</caption>
+<colgroup>
+<col style="width: 44px;">
+<col style="width: 72px;">
+<col style="width: 98px;">
+<col style="width: 72px;">
+<col style="width: 72px;">
+<col style="width: 263px;">
+<col style="width: 240px;">
+</colgroup>
 <thead>
 <tr>
 <th class="select-col ui-table-sticky-start" scope="col">
@@ -209,13 +217,16 @@
 </button>
 </th>
 <th scope="col" aria-sort="none" class="">
-<button type="button" class="records-sort" aria-label="Sort by Start page">Start page </button>
+<button type="button" class="records-sort" aria-label="Sort by Start page">Start page 
+</button>
 </th>
 <th scope="col" aria-sort="none" class="">
-<button type="button" class="records-sort" aria-label="Sort by Needs review">Needs review </button>
+<button type="button" class="records-sort" aria-label="Sort by Needs review">Needs review 
+</button>
 </th>
 <th scope="col" aria-sort="none" class="text-col">
-<button type="button" class="records-sort" aria-label="Sort by Text">Text </button>
+<button type="button" class="records-sort" aria-label="Sort by Text">Text 
+</button>
 </th>
 <th class="actions-col" scope="col">Record actions</th>
 </tr>
@@ -271,16 +282,18 @@
 <span class="">—</span>
 </td>
 <td class="text-col">
+<div id="records-text-0" class="records-text" data-row-key="jsonl-6418a92f81564da4d329096e::0">
 <span>The sign and divinity have the same place and time of birth.</span>
+</div>
 </td>
 <td class="actions-col ui-table-sticky-end">
 <div class="records-row-actions">
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-4" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-8" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-8">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-4" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn tiny">Inline</button>
-<button type="button" role="menuitem" class="btn tiny">Full</button>
+<div id="citation-v-8" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
 </span>
 <button type="button" class="btn tiny" aria-pressed="false">
@@ -311,16 +324,18 @@
 <span class="review">Needs review</span>
 </td>
 <td class="text-col">
+<div id="records-text-1" class="records-text" data-row-key="jsonl-6418a92f81564da4d329096e::1">
 <span>There is nothing outside the text.</span>
+</div>
 </td>
 <td class="actions-col ui-table-sticky-end">
 <div class="records-row-actions">
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-9" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-9">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn tiny">Inline</button>
-<button type="button" role="menuitem" class="btn tiny">Full</button>
+<div id="citation-v-9" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
 </span>
 <button type="button" class="btn tiny" aria-pressed="false">
@@ -351,16 +366,18 @@
 <span class="">—</span>
 </td>
 <td class="text-col">
+<div id="records-text-2" class="records-text" data-row-key="jsonl-6418a92f81564da4d329096e::2">
 <span>What then would such a concept be?</span>
+</div>
 </td>
 <td class="actions-col ui-table-sticky-end">
 <div class="records-row-actions">
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-6" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-10" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-10">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-6" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn tiny">Inline</button>
-<button type="button" role="menuitem" class="btn tiny">Full</button>
+<div id="citation-v-10" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
 </span>
 <button type="button" class="btn tiny" aria-pressed="false">
@@ -383,89 +400,4 @@
 </nav>
 </div>
 </div>
-<dialog class="records-columns-dialog" aria-labelledby="records-columns-title">
-<div class="records-columns-head">
-<div>
-<p class="records-columns-kicker">Table view</p>
-<h2 id="records-columns-title">Configure columns</h2>
-</div>
-<button type="button" class="btn icon-only" aria-label="Close">×</button>
-</div>
-<div class="records-columns-body">
-<p>Choose the fields shown in the records table. Order is preserved.</p>
-<div class="records-columns-grid">
-<section aria-label="Visible columns">
-<h3>Visible columns</h3>
-<ol>
-</ol>
-</section>
-<section aria-label="Available fields">
-<h3>Available fields</h3>
-<label class="records-columns-find">
-<span class="sr-only">Find a field</span>
-<input class="control" type="search" placeholder="Find a field" value="">
-</label>
-<ul class="records-columns-available">
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Concepts</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> DB status</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Document author</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Extracted text</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Needs review</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Page end</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Page start</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Record ID</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Review reason</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Speaker</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Topics</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Work</button>
-</li>
-<li>
-<button type="button" class="records-columns-add">
-<span aria-hidden="true">+</span> Year</button>
-</li>
-</ul>
-</section>
-</div>
-</div>
-<div class="records-columns-foot">
-<button type="button" class="btn">Reset defaults</button>
-<button type="button" class="btn">Cancel</button>
-<button type="button" class="btn primary" disabled="">Save columns</button>
-</div>
-</dialog>
 </main>

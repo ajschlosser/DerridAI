@@ -1,105 +1,150 @@
-<dialog class="records-columns-dialog" aria-labelledby="records-columns-title" open="">
-<div class="records-columns-head">
-<div>
-<p class="records-columns-kicker">Table view</p>
-<h2 id="records-columns-title">Configure columns</h2>
+<section class="ui-dialog" data-size="medium" role="dialog" aria-modal="true" aria-labelledby="v-7-title" aria-describedby="v-7-description">
+<header class="ui-dialog-header">
+<div class="ui-dialog-heading">
+<h2 id="v-7-title" tabindex="-1">Configure columns</h2>
+<p id="v-7-description">Choose the fields shown in the table, their order, and how much of the table width each one takes. Widths always add up to 100%: widening one column narrows the others in proportion.</p>
 </div>
-<button type="button" class="btn icon-only" aria-label="Close">×</button>
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-ghost size-small icon-only" type="button" aria-label="Close" title="Close">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+<!---->
+<!---->
+</button>
+</span>
+</header>
+<div class="ui-dialog-body">
+<div class="ui-columns">
+<section class="ui-columns-shown" aria-labelledby="v-6-shown">
+<div class="ui-columns-section-head">
+<h3 id="v-6-shown">Visible columns</h3>
+<button type="button" class="btn tiny">Even widths</button>
 </div>
-<div class="records-columns-body">
-<p>Choose the fields shown in the records table. Order is preserved.</p>
-<div class="records-columns-grid">
-<section aria-label="Visible columns">
-<h3>Visible columns</h3>
+<div class="ui-columns-preview" aria-hidden="true">
+<span title="DB status · 11.8%" style="flex-basis: 11.8%;">DB status</span>
+<span title="Work · 17.6%" style="flex-basis: 17.6%;">Work</span>
+<span title="Page start · 11.8%" style="flex-basis: 11.8%;">Page start</span>
+<span title="Needs review · 11.8%" style="flex-basis: 11.8%;">Needs review</span>
+<span title="Extracted text · 47%" style="flex-basis: 47%;">Extracted text</span>
+</div>
 <ol>
 <li>
-<span>DB status</span>
-<div class="records-columns-order">
-<button type="button" class="btn tiny" disabled="" aria-label="Move DB status up">↑</button>
-<button type="button" class="btn tiny" aria-label="Move DB status down">↓</button>
+<span class="ui-columns-name">DB status</span>
+<label class="ui-columns-width">
+<span class="sr-only">Width of DB status, percent of the table</span>
+<input class="control" type="number" inputmode="decimal" min="5" max="80" step="1" value="11.8">
+<span aria-hidden="true">%</span>
+</label>
+<div class="ui-columns-order">
+<button type="button" class="btn tiny" disabled="" aria-label="Move DB status up"> ↑ </button>
+<button type="button" class="btn tiny" aria-label="Move DB status down"> ↓ </button>
 <button type="button" class="btn tiny" aria-label="Hide DB status">Remove</button>
 </div>
 </li>
 <li>
-<span>Work</span>
-<div class="records-columns-order">
-<button type="button" class="btn tiny" aria-label="Move Work up">↑</button>
-<button type="button" class="btn tiny" aria-label="Move Work down">↓</button>
+<span class="ui-columns-name">Work</span>
+<label class="ui-columns-width">
+<span class="sr-only">Width of Work, percent of the table</span>
+<input class="control" type="number" inputmode="decimal" min="5" max="80" step="1" value="17.6">
+<span aria-hidden="true">%</span>
+</label>
+<div class="ui-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Work up"> ↑ </button>
+<button type="button" class="btn tiny" aria-label="Move Work down"> ↓ </button>
 <button type="button" class="btn tiny" aria-label="Hide Work">Remove</button>
 </div>
 </li>
 <li>
-<span>Page start</span>
-<div class="records-columns-order">
-<button type="button" class="btn tiny" aria-label="Move Page start up">↑</button>
-<button type="button" class="btn tiny" aria-label="Move Page start down">↓</button>
+<span class="ui-columns-name">Page start</span>
+<label class="ui-columns-width">
+<span class="sr-only">Width of Page start, percent of the table</span>
+<input class="control" type="number" inputmode="decimal" min="5" max="80" step="1" value="11.8">
+<span aria-hidden="true">%</span>
+</label>
+<div class="ui-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Page start up"> ↑ </button>
+<button type="button" class="btn tiny" aria-label="Move Page start down"> ↓ </button>
 <button type="button" class="btn tiny" aria-label="Hide Page start">Remove</button>
 </div>
 </li>
 <li>
-<span>Needs review</span>
-<div class="records-columns-order">
-<button type="button" class="btn tiny" aria-label="Move Needs review up">↑</button>
-<button type="button" class="btn tiny" aria-label="Move Needs review down">↓</button>
+<span class="ui-columns-name">Needs review</span>
+<label class="ui-columns-width">
+<span class="sr-only">Width of Needs review, percent of the table</span>
+<input class="control" type="number" inputmode="decimal" min="5" max="80" step="1" value="11.8">
+<span aria-hidden="true">%</span>
+</label>
+<div class="ui-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Needs review up"> ↑ </button>
+<button type="button" class="btn tiny" aria-label="Move Needs review down"> ↓ </button>
 <button type="button" class="btn tiny" aria-label="Hide Needs review">Remove</button>
 </div>
 </li>
 <li>
-<span>Extracted text</span>
-<div class="records-columns-order">
-<button type="button" class="btn tiny" aria-label="Move Extracted text up">↑</button>
-<button type="button" class="btn tiny" disabled="" aria-label="Move Extracted text down">↓</button>
+<span class="ui-columns-name">Extracted text</span>
+<label class="ui-columns-width">
+<span class="sr-only">Width of Extracted text, percent of the table</span>
+<input class="control" type="number" inputmode="decimal" min="5" max="80" step="1" value="47">
+<span aria-hidden="true">%</span>
+</label>
+<div class="ui-columns-order">
+<button type="button" class="btn tiny" aria-label="Move Extracted text up"> ↑ </button>
+<button type="button" class="btn tiny" disabled="" aria-label="Move Extracted text down"> ↓ </button>
 <button type="button" class="btn tiny" aria-label="Hide Extracted text">Remove</button>
 </div>
 </li>
 </ol>
 </section>
-<section aria-label="Available fields">
-<h3>Available fields</h3>
-<label class="records-columns-find">
+<section class="ui-columns-available" aria-labelledby="v-6-available">
+<h3 id="v-6-available">Available fields</h3>
+<label class="ui-columns-find">
 <span class="sr-only">Find a field</span>
 <input class="control" type="search" placeholder="Find a field" value="">
 </label>
-<ul class="records-columns-available">
+<ul>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Concepts</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Document author</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Page end</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Record ID</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Review reason</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Speaker</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Topics</button>
 </li>
 <li>
-<button type="button" class="records-columns-add">
+<button type="button" class="ui-columns-add">
 <span aria-hidden="true">+</span> Year</button>
 </li>
 </ul>
 </section>
 </div>
 </div>
-<div class="records-columns-foot">
+<footer class="ui-dialog-footer">
 <button type="button" class="btn">Reset defaults</button>
+<div class="ui-columns-commit">
 <button type="button" class="btn">Cancel</button>
 <button type="button" class="btn primary">Save columns</button>
 </div>
-</dialog>
+</footer>
+</section>

@@ -12,6 +12,7 @@ import SearchWorkspaceHeader from "../components/search/SearchWorkspaceHeader.vu
 import SearchFacetPanel from "../components/search/SearchFacetPanel.vue";
 import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import HighlightedText from "../components/search/HighlightedText.vue";
+import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
 import type { RecentSearchEntry, SavedSearchView, SearchFilter, SearchLayout, SearchMethod, SearchResult, SearchScope, SearchWorkspaceSnapshot } from "../types/search";
 
 const route=useRoute();
@@ -22,7 +23,7 @@ const loading=ref(true);
 const error=ref("");
 const query=ref("");
 const facetDrawerOpen=ref(false);
-const columnsDialog=ref<HTMLDialogElement|null>(null);
+const columnsDialog=ref<{open:()=>void;close:()=>void}|null>(null);
 const viewsDialog=ref<HTMLDialogElement|null>(null);
 const saveDialog=ref<HTMLDialogElement|null>(null);
 const advancedOpen=ref(false);
@@ -150,12 +151,22 @@ async function togglePageSelected(selected:boolean){runtime.setSearchPageSelecte
 async function selectionAction(action:string){runtime.runSearchSelectionAction(action);if(action==='clear')runtime.clearSearchSelection();await load({refresh:false,autoRun:false})}
 async function clearSelection(){runtime.clearSearchSelection();await load({refresh:false,autoRun:false})}
 
-function openColumns(){if(!snapshot.value)return;draftColumns.value=[...snapshot.value.columns.map(column=>column.key)];columnsDialog.value?.showModal();void nextTick(()=>columnsDialog.value?.querySelector<HTMLElement>("button,input")?.focus())}
-function closeColumns(){columnsDialog.value?.close()}
-function toggleDraftColumn(key:string,checked:boolean){if(checked&&!draftColumns.value.includes(key))draftColumns.value.push(key);else if(!checked)draftColumns.value=draftColumns.value.filter(item=>item!==key)}
-function moveDraftColumn(key:string,direction:number){const at=draftColumns.value.indexOf(key),to=at+direction;if(at<0||to<0||to>=draftColumns.value.length)return;const next=[...draftColumns.value];[next[at],next[to]]=[next[to],next[at]];draftColumns.value=next}
-async function saveColumns(){runtime.setSearchColumns(draftColumns.value);closeColumns();await load({refresh:false,autoRun:false})}
-async function resetColumns(){runtime.setSearchColumns([]);closeColumns();await load({refresh:false,autoRun:false})}
+function openColumns() {
+  if (!snapshot.value) return;
+  draftColumns.value = snapshot.value.columns.map((column) => column.key);
+  columnsDialog.value?.open();
+}
+// The columns dialog closes itself when its choice is applied.
+async function saveColumns() {
+  runtime.setSearchColumns(draftColumns.value);
+  await load({ refresh: false, autoRun: false });
+}
+// Reset restores the default columns (an empty choice) and closes the dialog.
+async function resetColumns() {
+  runtime.setSearchColumns([]);
+  columnsDialog.value?.close();
+  await load({ refresh: false, autoRun: false });
+}
 
 function openSavedViews(){loadSavedState();viewsDialog.value?.showModal();void nextTick(()=>viewsDialog.value?.querySelector<HTMLElement>("button")?.focus())}
 function closeSavedViews(){viewsDialog.value?.close()}
@@ -291,7 +302,20 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
         </section>
       </section>
 
-      <dialog ref="columnsDialog" class="search-config-dialog" aria-labelledby="search-columns-dialog-title" @cancel="onDialogCancel($event,columnsDialog)"><div class="dh"><div><span class="section-label">{{i18n.t('search.table_view','Table view')}}</span><h2 id="search-columns-dialog-title">{{i18n.t('search.configure_columns','Configure columns')}}</h2></div><button type="button" class="btn icon-only" :aria-label="i18n.t('ui.close','Close')" @click="closeColumns">×</button></div><div class="db search-column-dialog-body"><p>{{i18n.t('search.column_help','Choose the fields shown in the table and order them for this search view.')}}</p><div class="search-column-list"><div v-for="column in snapshot.available_columns" :key="column.key" class="search-column-choice" :class="{active:draftColumns.includes(column.key)}"><label><input type="checkbox" :checked="draftColumns.includes(column.key)" @change="toggleDraftColumn(column.key,($event.target as HTMLInputElement).checked)"><span>{{column.label}}</span></label><div v-if="draftColumns.includes(column.key)" class="search-column-order"><button type="button" class="btn tiny" :disabled="draftColumns.indexOf(column.key)<=0" :aria-label="i18n.tf('search.move_column_up','Move {column} up',{column:column.label})" @click="moveDraftColumn(column.key,-1)">↑</button><button type="button" class="btn tiny" :disabled="draftColumns.indexOf(column.key)>=draftColumns.length-1" :aria-label="i18n.tf('search.move_column_down','Move {column} down',{column:column.label})" @click="moveDraftColumn(column.key,1)">↓</button></div></div></div></div><div class="da"><button type="button" class="btn" @click="resetColumns">{{i18n.t('search.reset_defaults','Reset defaults')}}</button><button type="button" class="btn" @click="closeColumns">{{i18n.t('ui.cancel','Cancel')}}</button><button type="button" class="btn primary" :disabled="!draftColumns.length" @click="saveColumns">{{i18n.t('ui.apply','Apply')}}</button></div></dialog>
+      <UiTableColumnsDialog
+        ref="columnsDialog"
+        v-model="draftColumns"
+        :available="snapshot.available_columns"
+        :title="i18n.t('search.configure_columns', 'Configure columns')"
+        :description="
+          i18n.t(
+            'search.column_help',
+            'Choose the fields shown in the table and order them for this search view.',
+          )
+        "
+        @apply="saveColumns"
+        @reset="resetColumns"
+      />
 
       <dialog ref="saveDialog" class="search-config-dialog search-save-dialog" aria-labelledby="search-save-dialog-title" @cancel="onDialogCancel($event,saveDialog)"><form @submit.prevent="saveCurrentView"><div class="dh"><div><span class="section-label">{{i18n.t('search.saved_views','Saved views')}}</span><h2 id="search-save-dialog-title">{{i18n.t('search.save_view','Save view')}}</h2></div><button type="button" class="btn icon-only" :aria-label="i18n.t('ui.close','Close')" @click="closeSaveView">×</button></div><div class="db"><label class="field"><span>{{i18n.t('search.view_name','View name')}}</span><input v-model="saveViewName" class="control" required maxlength="80" :placeholder="i18n.t('search.view_name_placeholder','e.g. Adieu passages needing review')"></label><p class="note">{{i18n.t('search.save_view_help','Saved views preserve the current shareable URL, including scope, query, filters, sort, columns, and layout.')}}</p></div><div class="da"><button type="button" class="btn" @click="closeSaveView">{{i18n.t('ui.cancel','Cancel')}}</button><button type="submit" class="btn primary" :disabled="!saveViewName.trim()">{{i18n.t('search.save_view','Save view')}}</button></div></form></dialog>
 
@@ -432,10 +456,6 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
 .search-why-result>span:first-child {
   font-weight: 780;
   color: var(--text-2);
-}
-.search-column-order {
-  display: flex;
-  gap: 3px;
 }
 @media (max-width:1050px) {
   .search-database-note {

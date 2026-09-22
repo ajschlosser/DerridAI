@@ -137,7 +137,7 @@ async function rawMarkup(
 ): Promise<string> {
   const locator =
     target === "dialog"
-      ? page.locator("dialog[open]").last()
+      ? page.locator("dialog[open], [role=dialog][aria-modal=true]").last()
       : target === "app"
         ? page.locator("#app")
         : target === "dock"
@@ -202,7 +202,7 @@ async function computedStyles(
 ): Promise<string> {
   const locator =
     target === "dialog"
-      ? page.locator("dialog[open]").last()
+      ? page.locator("dialog[open], [role=dialog][aria-modal=true]").last()
       : target === "app"
         ? page.locator("#app")
         : target === "dock"
@@ -494,7 +494,8 @@ const openDialogFromRecords =
         await menus.nth(i).click();
     }
     await target.click();
-    await expect(page.locator("dialog[open]").last()).toBeVisible();
+    // Legacy dialogs are native <dialog>s; migrated ones render UiDialog (role="dialog").
+    await expect(page.locator("dialog[open], [role=dialog][aria-modal=true]").last()).toBeVisible();
   };
 
 const JOBS = {
@@ -994,7 +995,7 @@ const scenarios: Scenario[] = [
     target: "dialog",
     steps: async (page) => {
       await page.getByRole("button", { name: "Columns" }).click();
-      await expect(page.locator("dialog[open]").last()).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Configure columns" })).toBeVisible();
     },
   },
   // The Record view is Vue, but the record it shows, navigation, evidence and edits all come from the runtime.

@@ -135,3 +135,26 @@ export function dockCollapsedSummary(input: {
     percent: null,
   };
 }
+
+export type DockPlacement = { left: number; top: number; maxHeight: number };
+
+/**
+ * Where a user-positioned dock goes so every edge stays on screen. The saved anchor is where the
+ * user left the (often minimized) dock; when it expands past the right or bottom edge it slides
+ * back in rather than hanging off the viewport. The anchor itself is not rewritten, so collapsing
+ * again returns the dock to where the user put it.
+ */
+export function fitDockInViewport(
+  anchor: { left: number; top: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  margin = 8,
+): DockPlacement {
+  const width = Math.min(size.width, viewport.width - margin * 2);
+  const height = Math.min(size.height, viewport.height - margin * 2);
+  const clamp = (value: number, min: number, max: number) =>
+    Math.round(Math.min(Math.max(min, max), Math.max(min, value)));
+  const left = clamp(Number(anchor.left) || margin, margin, viewport.width - width - margin);
+  const top = clamp(Number(anchor.top) || margin, margin, viewport.height - height - margin);
+  return { left, top, maxHeight: Math.max(120, viewport.height - top - margin) };
+}

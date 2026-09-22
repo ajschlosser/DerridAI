@@ -201,11 +201,36 @@ def test_pass_preserves_edits_made_while_it_runs(tmp_path: Path):
     assert repo.get_build(build_id)["status"] == "awaiting_review"
 
 
+def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path: Path):
+    """Human-owned disagreement and model agreement are informational only."""
+    manager, repo, build_id = make_manager(tmp_path, [{
+        "review_disposition": "accepted",
+        "accepted": True,
+        "speaker": "Jacques Derrida",
+        "stance": "critical",
+        "metadata_field_status": {
+            "speaker": {"status": "human_confirmed"},
+            "stance": {"status": "llm_inferred", "method": "llm", "confidence": 0.8},
+        },
+    }])
+    manager._enrich_record = lambda record, manifest, request, **kw: proposal(
+        record, speaker=("Another author", 0.92), stance=("critical", 0.91),
+    )
+    manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all", "model": "test-model"})
+    current = repo.load_records(build_id)[0]
+    events = current["metadata_enrichment_history"][-1]["informational"]
+    assert current["speaker"] == "Jacques Derrida"
+    assert current["review_disposition"] == "accepted"
+    assert not current.get("needs_review")
+    assert {event["kind"] for event in events} == {"protected_suggestion", "agreement"}
+    assert repo.get_build(build_id)["metadata_operation"]["records_reopened"] == 0
+
+
 def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_converged(tmp_path: Path):
     """Pass 1 decides confident conflicts; pass 2 sees nothing new and ends the chain."""
     rows = [
-        {"stance": "neutral", "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.5}}},
-        {"stance": "neutral", "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.8}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.5}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.8}}},
         {"stance": "neutral", "metadata_field_status": {"stance": {"status": "human_confirmed"}}},
     ]
     manager, repo, build_id = make_manager(tmp_path, rows)
@@ -219,6 +244,7 @@ def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_conver
     op = repo.get_build(build_id)["metadata_operation"]
     assert op["passes_completed"] == 2 and op["converged"] is True
     assert op["state"] == "completed", op.get("error")
+    assert op["records_reopened"] == 2
 
 
 def test_review_action_during_a_pass_does_not_end_the_running_state(tmp_path: Path):

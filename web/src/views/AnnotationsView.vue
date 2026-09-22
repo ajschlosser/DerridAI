@@ -4,6 +4,7 @@ import { computed, onMounted, watch } from "vue";
 import AnnotationFeedItem from "../components/annotations/AnnotationFeedItem.vue";
 import { useAnnotationsWorkspace } from "../composables/useAnnotationsWorkspace";
 import { useI18nStore } from "../stores/i18n";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const i18n = useI18nStore();
 const annotations = useAnnotationsWorkspace();
@@ -23,18 +24,17 @@ onMounted(() => void annotations.load());
 
 <template>
   <main class="annotations-page" aria-labelledby="annotations-page-title" :aria-busy="loading">
-    <section class="page-heading">
-      <div>
-        <p>{{ i18n.t("section.corpus", "Corpus") }}</p>
-        <h1 id="annotations-page-title">{{ i18n.t("nav.annotations", "Annotations") }}</h1>
-        <span>{{
-          i18n.t(
-            "annotations.page_help",
-            "Review annotations across the corpus. The default view groups discussion by work; switch to Recent for a chronological stream.",
-          )
-        }}</span>
-      </div>
-    </section>
+    <UiPageHeader
+      :kicker="i18n.t('section.corpus', 'Corpus')"
+      :title="i18n.t('nav.annotations', 'Annotations')"
+      title-id="annotations-page-title"
+      :description="
+        i18n.t(
+          'annotations.page_help',
+          'Review annotations across the corpus. The default view groups discussion by work; switch to Recent for a chronological stream.',
+        )
+      "
+    />
 
     <section v-if="loading" class="card annotations-state" role="status">
       {{ i18n.t("ui.loading", "Loading…") }}
@@ -165,36 +165,7 @@ onMounted(() => void annotations.load());
 <style scoped>
 .annotations-page {
   display: grid;
-  gap: 12px;
-  padding: 16px 18px 28px;
-  max-width: 1600px;
-  margin: 0 auto;
-}
-.page-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.page-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.page-heading h1 {
-  margin: 2px 0 0;
-  font:
-    600 26px/1.2 Georgia,
-    "Times New Roman",
-    serif;
-}
-.page-heading span {
-  display: block;
-  margin-top: 5px;
-  color: var(--muted);
-  line-height: 1.5;
+  gap: var(--page-gap);
 }
 .annotations-toolbar {
   display: flex;
@@ -363,9 +334,6 @@ input:focus-visible {
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
-  .annotations-page {
-    padding: 10px 9px 24px;
-  }
   .annotation-feed-item {
     grid-template-columns: auto minmax(0, 1fr);
   }

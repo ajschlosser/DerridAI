@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -29,6 +30,8 @@ from app.content_filter import (
     term_digest,
 )
 from app.content_policy_generation import generate_content_policy
+from app.jobs import LLMToolJobManager, system_store
+from app.models import LanguageInstallRequest, LLMToolJobCreate
 from app.persistence import SQLiteSystemRepository
 from app.system_store import SystemStore
 
@@ -163,3 +166,79 @@ def test_union_of_locale_policies_is_what_gets_enforced():
     }
     assert contains_disallowed_language("un motinterdit ici", policies=[_READY, french])
     assert not contains_disallowed_language("un mot interdit ici", policies=[_READY, french])
+
+
+def _policy_job_manager() -> LLMToolJobManager:
+    """A job manager that does not open the persistent job database.
+
+    ``LLMToolJobManager()`` loads saved jobs on construction. These tests only
+    need the in-memory lock and the job row the policy runner updates.
+    """
+    manager = LLMToolJobManager.__new__(LLMToolJobManager)
+    manager._jobs = {"job": {"events": []}}
+    manager._lock = threading.RLock()
+    return manager
+
+
+def _capture_policy_generation(monkeypatch, stored_profile):
+    """Run the policy job against a fake model and return the provider arguments it used."""
+    captured: dict[str, object] = {}
+
+    def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return {"blocked_terms": ["aa"], "contextual_terms": []}
+
+    monkeypatch.setattr("app.jobs.generate_policy_for_installed_language", fake_generate)
+    monkeypatch.setattr(system_store, "get_language", lambda code: {"code": code, "name": "English", "flag": "🇺🇸"})
+    monkeypatch.setattr(system_store, "researcher_profile", lambda profile_id: stored_profile)
+    monkeypatch.setattr(
+        system_store,
+        "put_content_policy",
+        lambda code, policy: {"blocked_terms": ["aa"], "contextual_terms": []},
+    )
+    return captured
+
+
+def test_policy_generation_uses_the_browser_profile_api_key(monkeypatch):
+    """An OpenAI key typed into a provider profile must reach the policy call.
+
+    Record text review sends that browser-held key and succeeds. Policy generation used to omit it,
+    so the server called OpenAI with no credential and the endpoint returned HTTP 401.
+    """
+    captured = _capture_policy_generation(monkeypatch, stored_profile=None)
+    body = LLMToolJobCreate(
+        task="language_content_policy",
+        provider_profile_id="openai-1",
+        language=LanguageInstallRequest(
+            code="en-US",
+            provider="openai",
+            model="gpt-4.1",
+            base_url="https://api.openai.com/v1",
+            api_key="sk-browser-secret",
+        ),
+    )
+    result = _policy_job_manager()._run_language_content_policy("job", body)
+    assert result["content_policy_ready"] is True
+    assert captured["api_key"] == "sk-browser-secret"
+    assert captured["base_url"] == "https://api.openai.com/v1"
+    assert captured["provider"] == "openai"
+    assert captured["model"] == "gpt-4.1"
+
+
+def test_policy_generation_uses_the_stored_profile_key_when_the_request_omits_one(monkeypatch):
+    """A profile published to the server still supplies its key when the browser does not resend it."""
+    stored = {
+        "id": "openai-1",
+        "type": "openai",
+        "model": "gpt-4.1",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-stored-secret",
+    }
+    captured = _capture_policy_generation(monkeypatch, stored_profile=stored)
+    body = LLMToolJobCreate(
+        task="language_content_policy",
+        provider_profile_id="openai-1",
+        language=LanguageInstallRequest(code="en-US", provider="openai", model="gpt-4.1"),
+    )
+    _policy_job_manager()._run_language_content_policy("job", body)
+    assert captured["api_key"] == "sk-stored-secret"

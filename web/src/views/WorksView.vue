@@ -9,6 +9,7 @@ import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -270,13 +271,17 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     </template>
 
     <template v-else-if="snapshot?.mode === 'researcher' && snapshot.available">
-      <section class="page-heading legacy-page-heading">
-        <div>
-          <p>{{ i18n.t("section.corpus", "Corpus") }}</p>
-          <h1>{{ i18n.t("nav.works", "Works") }}</h1>
-          <span>{{ i18n.t("research.works_menu_help", "Browse works in the selected corpus database. Select a work for an overview, then browse its summarized records.") }}</span>
-        </div>
-      </section>
+      <UiPageHeader
+        :kicker="i18n.t('section.corpus', 'Corpus')"
+        :title="i18n.t('nav.works', 'Works')"
+        title-id="works-page-title"
+        :description="
+          i18n.t(
+            'research.works_menu_help',
+            'Browse works in the selected corpus database. Select a work for an overview, then browse its summarized records.',
+          )
+        "
+      />
 
       <WorksOverviewCard
         v-if="snapshot.selected"
