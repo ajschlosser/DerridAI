@@ -1490,7 +1490,11 @@ onUnmounted(() => {
               <button type="button" class="btn small" @click="openImport">
                 {{ i18n.t("language.import_dictionary", "Import dictionary") }}
               </button>
+              <label class="sr-only" for="language-dictionary-import">
+                {{ i18n.t("language.import_dictionary", "Import dictionary") }}
+              </label>
               <input
+                id="language-dictionary-import"
                 ref="importInput"
                 class="sr-only"
                 type="file"
