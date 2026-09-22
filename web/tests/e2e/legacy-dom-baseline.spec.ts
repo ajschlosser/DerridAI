@@ -291,7 +291,13 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  await page.getByRole("button", { name: /PDF Explorer/ }).click();
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("derridai:navigate-native", {
+        detail: { path: "/pdf?mode=explorer", runtimeView: "pdf" },
+      }),
+    );
+  });
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(800);
   if (!open) return;

@@ -1,0 +1,241 @@
+<main id="main" class="runtime-surface" aria-live="polite">
+<section class="card pdf-document-header">
+    <input id="pdfInput" type="file" accept="application/pdf" hidden="">
+    <div class="pdf-document-primary">
+      <button class="btn primary" id="openPdf">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 2h9l5 5v15H6z">
+</path>
+<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+</path>
+</svg>Open another</button>
+      <div class="pdf-document-title">
+<span>PDF document</span>
+<h2>trace</h2>
+<p>trace.pdf · 2 pages</p>
+</div>
+      <div class="pdf-document-status">
+<span>
+<b>1</b> linked works</span>
+<span>
+<b>1</b> linked records</span>
+<span>
+<b>1</b> on this page</span>
+</div>
+    </div>
+    <div class="pdf-command-row">
+      <div class="pdf-page-nav">
+<button class="btn small icon-only" id="pdfPrev" disabled="">←</button>
+<label>
+<span>Page</span>
+<input class="control pdf-page-input" id="pdfPageInput" type="number" min="1" max="2" value="1">
+</label>
+<span class="pdf-page-total">/ 2</span>
+<button class="btn small" id="pdfGo">Go</button>
+<button class="btn small icon-only" id="pdfNext">→</button>
+</div>
+      <div class="pdf-command-divider">
+</div>
+      <div class="pdf-view-actions">
+<button class="btn small icon-only" id="pdfRotateLeft" title="Rotate left 90°">↶</button>
+<button class="btn small icon-only" id="pdfRotateRight" title="Rotate right 90°">↷</button>
+<span class="note">upright</span>
+</div>
+      <div class="pdf-command-divider">
+</div>
+      <button class="btn small" id="extractPage">Extract page text</button>
+      <details class="pdf-toolbar-menu">
+<summary class="btn small">More text tools</summary>
+<div class="pdf-toolbar-menu-popover">
+<button class="btn small" id="extractAll">Extract all text</button>
+</div>
+</details>
+      <details class="pdf-toolbar-menu llm-menu">
+<summary class="btn small soft">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>LLM tools</summary>
+<div class="pdf-toolbar-menu-popover">
+<div class="pdf-menu-context">
+<b>Local Ollama</b>
+<span>Each action lets you choose provider, model, parameters, and run mode.</span>
+</div>
+<button class="btn small" id="pdfLlmClean">Clean current page text</button>
+<button class="btn small" id="pdfLlmDraft">Create draft record</button>
+<button class="btn small" id="pdfLlmLink">Match &amp; link page to record</button>
+<button class="btn small" id="pdfProviders">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>Manage LLM providers</button>
+</div>
+</details>
+<button class="btn small primary" id="pdfCorpusBuilder">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>Build record set</button>
+    </div>
+    <div class="pdf-context-row">
+<div class="pdf-context-pill">
+<span>Source</span>
+<b>p. 1</b>
+</div>
+<div class="pdf-context-pill">
+<span>Works</span>
+<b>Of Grammatology</b>
+</div>
+<div class="pdf-context-pill">
+<span>Current-page records</span>
+<b>1</b>
+</div>
+<button class="btn soft" id="returnToSelectedRecord">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>Back to derrida-grammatology-00001</button>
+</div>
+  </section>
+  <section class="pdfgrid pdfgrid-v2">
+    <article class="card pdf-viewer-card" data-collapsible-ready="1" data-collapse-key="pdf::Page 1::1">
+      <div class="cardhead pdf-viewer-head">
+<div>
+<b>Page 1</b>
+<div class="note">PDF.js renderer · 1 linked record on this page</div>
+</div>
+<span class="pdf-view-badge">Fit width</span>
+<span class="ui-collapse-title">Page 1</span>
+<button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
+</div>
+      <div class="pdf-canvas-wrap">
+<canvas id="pdfCanvas" width="1166" height="1508" style="width: 1166px; height: 1508.94px;">
+</canvas>
+<div class="pdf-render-status" id="pdfRenderStatus">
+</div>
+</div>
+    </article>
+
+    <aside class="pdf-side-stack">
+      <article class="card pdf-text-card" data-collapsible-ready="1" data-collapse-key="pdf::Page text::2">
+        <div class="cardhead">
+<div>
+<b>Page text</b>
+<div class="note">Extract the current page, then optionally clean it with an LLM.</div>
+</div>
+<div class="search">
+<input id="pdfSearch" value="" placeholder="Search page text">
+</div>
+<span class="ui-collapse-title">Page text</span>
+<button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
+</div>
+        
+        <div class="pdftext">
+<span class="note">Use “Extract current page” or “Extract all text.” If both PDF.js and PyMuPDF find no text, the page likely requires OCR.</span>
+</div>
+      </article>
+
+      <article class="card panel pdf-current-links">
+        <div class="toolbar compact-toolbar">
+<div>
+<b>Records on page 1</b>
+<div class="note">1 linked record</div>
+</div>
+</div>
+        <div class="pdf-link-controls">
+          <div class="autocomplete">
+<input class="control" id="pdfRecordSearch" autocomplete="off" placeholder="Search record ID, work, or source file" value="baseline.jsonl · derrida-grammatology-00001 · Of Grammatology">
+<input type="hidden" id="pdfRecordKey" value="jsonl-6418a92f81564da4d329096e::0">
+<div class="autocomplete-list hidden" id="pdfRecordSuggestions">
+</div>
+</div>
+          <button class="btn" id="linkCurrentPdf">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Link page 1</button>
+        </div>
+        <div class="pdf-linked-list">
+<div class="linked-record-row">
+          <button class="linked-record" data-linked-file="jsonl-6418a92f81564da4d329096e" data-linked-index="0">
+<b>derrida-grammatology-00001</b>
+<span>Of Grammatology · 3</span>
+</button>
+          <div class="tools">
+<button class="btn small" data-copy-row-key="jsonl-6418a92f81564da4d329096e::0">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="11" height="11" rx="2">
+</rect>
+<path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3">
+</path>
+</svg>Copy</button>
+<button class="btn small" data-cite-row-key="jsonl-6418a92f81564da4d329096e::0" data-cite-kind="inline" title="Copy inline citation">Inline</button>
+<button class="btn small" data-cite-row-key="jsonl-6418a92f81564da4d329096e::0" data-cite-kind="full" title="Copy full citation">Full</button>
+<button class="btn small " data-toggle-workspace-evidence="jsonl-6418a92f81564da4d329096e::0" title="Add to evidence">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>Evidence</button>
+<button class="btn small" data-linked-open-file="jsonl-6418a92f81564da4d329096e" data-linked-open-index="0">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>Open record</button>
+<button class="btn small danger unlink-pdf-link" data-unlink-file="jsonl-6418a92f81564da4d329096e" data-unlink-index="0" title="Unlink record from PDF">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 6 12 12M18 6 6 18">
+</path>
+</svg>Unlink</button>
+</div>
+        </div>
+</div>
+      </article>
+
+      <article class="card panel pdf-related-records">
+        <div class="toolbar compact-toolbar">
+<div>
+<b>Records linked anywhere in this PDF</b>
+<div class="note">1 record · jump directly between source pages and records</div>
+</div>
+</div>
+        <div class="search pdf-related-search">
+<input id="pdfRelatedSearch" value="" placeholder="Filter linked records">
+</div>
+        <div class="pdf-related-list">
+<div class="pdf-related-row">
+          <button class="pdf-related-record" data-related-record-file="jsonl-6418a92f81564da4d329096e" data-related-record-index="0">
+<b>derrida-grammatology-00001</b>
+<span>Of Grammatology</span>
+<small>Derrida, Jacques. Of Grammatology. 1967, p. 3.</small>
+</button>
+          <div class="pdf-related-pages">
+<button class="copy-record-mini" data-copy-row-key="jsonl-6418a92f81564da4d329096e::0" title="Copy entire record">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="8" y="8" width="11" height="11" rx="2">
+</rect>
+<path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3">
+</path>
+</svg>
+</button>
+<button class="copy-record-mini" data-cite-row-key="jsonl-6418a92f81564da4d329096e::0" data-cite-kind="inline" title="Copy inline citation">I</button>
+<button class="copy-record-mini" data-cite-row-key="jsonl-6418a92f81564da4d329096e::0" data-cite-kind="full" title="Copy full citation">F</button>
+<button class="copy-record-mini " data-toggle-workspace-evidence="jsonl-6418a92f81564da4d329096e::0" title="Add to evidence">+</button>
+<button class="pdf-page-chip active" data-related-page="1" title="Open PDF page 1">p. 1</button>
+</div>
+        </div>
+</div>
+        
+      </article>
+    </aside>
+  </section>
+</main>
