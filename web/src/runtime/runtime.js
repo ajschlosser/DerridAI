@@ -66,6 +66,7 @@ import { createNavigation } from "../domain/navigation";
 import { pathViewMap, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
+import { createRecordEditing } from "../domain/recordEditing";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -427,6 +428,21 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {applyRecordChanges,clearRecordUpdates,clearAllUpdates,historyVersionChanges,restoreRecordHistoryVersion}=createRecordEditing({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  allRows:(...args)=>allRows(...args),
+  cloneAuditValue:(...args)=>cloneAuditValue(...args),
+  invalidateCorpusCache:(...args)=>invalidateCorpusCache(...args),
+  label:(...args)=>label(...args),
+  openMessageModal:(...args)=>openMessageModal(...args),
+  persistFile:(...args)=>persistFile(...args),
+  renderView:(...args)=>renderView(...args),
+  sameValue:(...args)=>sameValue(...args),
+  shell:(...args)=>shell(...args),
+  toast:(...args)=>toast(...args),
+  uid:(...args)=>uid(...args),
 });
 const {reviewKey,reviewItemFromKey,selectedReviewItems,copyCitation,workspaceEvidenceKey,dbEvidenceKey,selectedEvidenceEntries,evidenceIsSelected,setEvidence,workspaceDbEvidenceTarget,workspaceEvidenceSelectionKey,toggleWorkspaceEvidence,toggleDbEvidence,clearSelectedEvidence,selectedEvidencePayload,setReviewSelected,clearReviewSelection}=createEvidenceSelection({
   state,
@@ -1056,97 +1072,12 @@ function touchupRecordPayload(record,fields=[]){
 function ragEvidenceRecordPayload(record){
   return recordPayload(record,{fields:RAG_EVIDENCE_TRANSPORT_FIELDS});
 }
-function applyRecordChanges(file,index,changes,{source="manual",model=null,batchId=null,rationale=null}={}){
-  const current=file.records[index];
-  if(!current)return 0;
-  const pending={};
-  for(const [field,newValue] of Object.entries(changes||{})){
-    if(field==="updates")continue;
-    if(!sameValue(current[field],newValue))pending[field]=newValue;
-  }
-  if("text" in pending && "text_length" in current && !("text_length" in pending)){
-    const length=String(pending.text??"").length;
-    if(!sameValue(current.text_length,length))pending.text_length=length;
-  }
-  const entries=Object.entries(pending);
-  if(!entries.length)return 0;
-  const timestamp=new Date().toISOString();
-  const operationId=batchId||uid();
-  const history=Array.isArray(current.updates)?current.updates.map(cloneAuditValue):[];
-  const next={...current};
-  for(const [field,newValue] of entries){
-    const entry={
-      field_name:field,
-      old_value:cloneAuditValue(current[field]),
-      new_value:cloneAuditValue(newValue),
-      timestamp,
-      source,
-      batch_id:operationId,
-      initiated_by:state.userContext?.username||null,
-    };
-    if(model)entry.model=model;
-    if(rationale?.[field])entry.reason=String(rationale[field]);
-    history.push(entry);
-    next[field]=newValue;
-  }
-  next.updates=history;
-  file.records[index]=next;
-  file.dirty.add(index);
-  invalidateCorpusCache();
-  persistFile(file);
-  if(state.view==="record"&&typeof window!=="undefined")window.dispatchEvent(new CustomEvent("derridai:record-updated"));
-  return entries.length;
-}
 
-async function clearRecordUpdates(file,index,{confirmFirst=true}={}){
-  const record=file?.records?.[index];
-  const count=Array.isArray(record?.updates)?record.updates.length:0;
-  if(!record||!count){
-    toast("This record has no updates history");
-    return false;
-  }
-  if(confirmFirst&&!await openMessageModal({title:"Clear record update history?",message:`Clear all ${count} updates entries from ${record.record_id||`record ${index+1}`}? This history cannot be reconstructed automatically.`,tone:"danger",confirmLabel:"Clear history",cancelLabel:"Cancel"}))return false;
-  file.records[index]={...record,updates:[]};
-  file.dirty.add(index);
-  persistFile(file);
-  return true;
-}
-async function clearAllUpdates({confirmed=false}={}){
-  const rows=allRows().filter(row=>Array.isArray(row.record.updates)&&row.record.updates.length);
-  if(!rows.length)return toast("No loaded records have updates history");
-  const entries=rows.reduce((sum,row)=>sum+row.record.updates.length,0);
-  if(!confirmed&&!await openMessageModal({title:"Clear all update histories?",message:`Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,tone:"danger",confirmLabel:"Clear all histories",cancelLabel:"Cancel"}))return;
-  const files=new Set();
-  for(const row of rows){
-    row.file.records[row.index]={...row.record,updates:[]};
-    row.file.dirty.add(row.index);
-    files.add(row.file);
-  }
-  for(const file of files)persistFile(file);
-  shell();renderView();
-  toast(`Cleared updates history from ${rows.length.toLocaleString()} records`);
-}
 
 function formatTimestamp(value){
   if(!value)return "";
   const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
-}
-function historyVersionChanges(previous,current){
-  const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
-  return [...keys].filter(key=>key!=="updates"&&!key.startsWith("_")&&!sameValue(previous?.[key],current?.[key])).sort((a,b)=>label(a).localeCompare(label(b)));
-}
-function restoreRecordHistoryVersion(file,index,version){
-  const current=file?.records?.[index];
-  if(!current||!version?.record)return 0;
-  const keys=new Set([...Object.keys(current),...Object.keys(version.record)]);
-  const changes={};
-  for(const field of keys){
-    if(field==="updates"||field.startsWith("_"))continue;
-    const value=Object.prototype.hasOwnProperty.call(version.record,field)?cloneAuditValue(version.record[field]):null;
-    if(!sameValue(current[field],value))changes[field]=value;
-  }
-  return applyRecordChanges(file,index,changes,{source:"history_restore",batchId:uid(),rationale:Object.fromEntries(Object.keys(changes).map(field=>[field,`Restored from ${version.label}`]))});
 }
 
 
