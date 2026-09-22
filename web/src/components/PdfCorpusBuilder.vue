@@ -1105,7 +1105,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             <summary>{{i18n.t('pdf_corpus.document_manifest','Document manifest')}} · {{i18n.t('pdf_corpus.revision','revision')}} {{currentBuild.manifest_revision||1}}</summary>
             <DocumentManifestEditor :manifest="currentBuild.manifest||{}" :disabled="buildRunning||busy!==''" @save="saveManifest" @reanalyze="reanalyzeDocument" />
           </details>
-          <div v-if="!showReviewWorkspace||finishPhase" class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{currentBuild.schema_version}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
+          <div v-if="!showReviewWorkspace||finishPhase" class="provenance-strip"><span>SHA {{currentBuild.source_sha256?.slice(0,12)}}…</span><span>{{currentBuild.model||selectedProfileModel||i18n.t('pdf_corpus.provider_default','Provider default')}}</span><span>{{i18n.t('schemas.version','Schema version')}} v{{currentBuild.metadata_schema_version||'—'}}</span><span>{{currentBuild.segmentation_prompt_version}}</span></div>
         </section>
 
         <template v-if="showReviewWorkspace">

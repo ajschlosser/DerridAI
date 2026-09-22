@@ -1616,6 +1616,7 @@ class PdfCorpusBuildManager:
             "source_page_count": asset["page_count"],
             "source_block_count": asset["block_count"],
             "schema_version": SCHEMA_VERSION,
+            "metadata_schema_version": schema.schema_version,
             "profile_id": profile_id,
             "profile_version": CORPUS_PROFILES[profile_id]["version"],
             "app_version": APP_VERSION,
@@ -2852,6 +2853,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             result["document_author"] = str(metadata["author"]).strip()
             result["document_author_source"] = "pdf_metadata"
             result["document_author_confidence"] = 1.0
+            result["document_author_assertion"] = {
+                "field": "document_author",
+                "value": result["document_author"],
+                "status": "deterministic",
+                "method": "pdf_metadata",
+                "checked": True,
+                "confidence": 1.0,
+                "reason": "Author value was read from embedded PDF metadata.",
+            }
         # A deterministic start-page inference (only present when it is more than 90% sure) outranks
         # the model's guess; the clues travel with the value so the reviewer can check them.
         inferred = asset.get("main_text_start_inference")
@@ -4139,9 +4149,11 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 "page_end": page_end,
                 "pdf_file": asset["filename"],
                 "pdf_pages": pages,
+                "source_document_id": asset["asset_id"],
                 "source_asset_id": asset["asset_id"],
+                "source_unit_ids": [block["block_id"] for block in group],
                 "source_block_ids": [block["block_id"] for block in group],
-                "source_spans": [{"block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
+                "source_spans": [{"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
                 "boundary_evidence": boundary,
                 "metadata_evidence": {},
                 **({"region_type": layout_region, "primary_text": layout_region == "main_text", "metadata_field_status": {
@@ -5223,12 +5235,17 @@ CURRENT REVIEWED RECORD TEXT:
                 }
                 issues.append(issue)
                 (blocking_pages if severity == "blocking" else warning_pages).append(page)
+        image_only_pages = {
+            int(issue["page"])
+            for issue in issues
+            if "image_only_page" in (issue.get("codes") or [])
+        }
         return {
             "valid_for_enrichment": not blocking_pages,
             "page_count": len(all_pages),
             "blocking_page_count": len(blocking_pages),
             "warning_page_count": len(warning_pages),
-            "image_only_page_count": sum(1 for page in all_pages if "image_only_page" in next((item.get("codes") or [] for item in issues if item.get("page") == page), [])),
+            "image_only_page_count": len(image_only_pages),
             "blocking_pages": blocking_pages,
             "warning_pages": warning_pages,
             "issues": issues,
@@ -7326,7 +7343,7 @@ CURRENT REVIEWED RECORD TEXT:
                 existing = merged_evidence.setdefault(field, {"block_ids": [], "confidence": 1.0, "reason": "Preserved across human merge.", "reviewed_by": "human", "reviewed_at": iso_now()})
                 existing["block_ids"] = list(dict.fromkeys(list(existing.get("block_ids") or []) + list(info.get("block_ids") or [])))
                 existing["confidence"] = min(float(existing.get("confidence") or 1.0), float(info.get("confidence") or 1.0))
-        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
+        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
         # Keep the first record's immutable identity. Unrelated downstream IDs never change.
         merged["record_id"] = first.get("record_id")
         records[first_index:second_index + 1] = [merged]
@@ -7359,7 +7376,7 @@ CURRENT REVIEWED RECORD TEXT:
                 kept = [block_id for block_id in (info.get("block_ids") or []) if block_id in piece_ids]
                 if kept:
                     piece_evidence[field] = {**info, "block_ids": kept, "reason": str(info.get("reason") or "") + " Preserved across human split."}
-            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
+            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": piece_ids, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
         pieces[0]["record_id"] = target.get("record_id")
         pieces[1]["record_id"] = f"{re.sub(r'-[0-9a-f]{8}$', '', str(target.get('record_id') or 'pdf'))}-s{uuid.uuid4().hex[:8]}"
         records[index:index + 1] = pieces

@@ -63,7 +63,7 @@ class SchemaStore:
             except SchemaNotFound:
                 continue  # a damaged file must not hide the others
         return [
-            {"id": s.id, "name": s.name, "description": s.description, "builtin": s.id == DEFAULT_SCHEMA_ID,
+            {"id": s.id, "name": s.name, "description": s.description, "schema_version": s.schema_version, "builtin": s.id == DEFAULT_SCHEMA_ID,
              "field_count": len(s.field_names()), "groups": [g.label for g in s.groups], "hash": s.content_hash()}
             for s in schemas
         ]

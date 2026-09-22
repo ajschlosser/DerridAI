@@ -73,6 +73,7 @@ export interface CorpusBuild {
   provider?: string | null;
   profile_id: string;
   schema_version?: string;
+  metadata_schema_version?: string;
   segmentation_prompt_version?: string;
   metadata_prompt_version?: string;
   document_prompt_version?: string;
@@ -159,10 +160,12 @@ export interface CorpusRecord {
   record_id: string;
   text: string;
   text_length: number;
+  source_document_id?: string;
+  source_unit_ids?: string[];
   page_start?: number | string | null;
   page_end?: number | string | null;
   source_block_ids: string[];
-  source_spans: Array<{block_id:string;page:number;bbox?:number[];extraction_method?:string}>;
+  source_spans: Array<{source_unit_id?:string;block_id?:string;page:number;bbox?:number[];extraction_method?:string}>;
   metadata_evidence?: Record<string,{block_ids?:string[];confidence?:number;reason?:string;reviewed_by?:string;reviewed_at?:string}>;
   metadata_field_status?: Record<string,{status?:"deterministic"|"llm_inferred"|"human_confirmed"|"unresolved"|"invalid"|string;method?:string;confidence?:number|null;reason?:string;reason_code?:string;proposed_value?:unknown;auto_populated?:boolean;autofilled?:boolean;verification_status?:"pending_review"|"auto_resolved"|"human_confirmed"|string;value_source?:"llm"|"deterministic"|"human"|string;llm_requested?:boolean;llm_value_returned?:boolean;llm_assessed?:boolean;llm_checked?:boolean;audit_sample?:boolean;self_reported_confidence?:number;model?:string}>;
   metadata_incomplete_fields?: string[];
