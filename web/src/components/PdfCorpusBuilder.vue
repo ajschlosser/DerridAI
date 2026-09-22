@@ -322,7 +322,8 @@ const selectedProfile=computed(()=>providerProfiles.value.find(profile=>profile.
 const activeCorpusProfile=computed(()=>corpusProfiles.value.find(profile=>String(profile.id||"")===String(currentBuild.value?.profile_id||""))||corpusProfiles.value.find(profile=>String(profile.id||"")==="derrida-scholarly-v12")||null);
 const regionTypes=computed(()=>Array.isArray(activeCorpusProfile.value?.region_types)?(activeCorpusProfile.value?.region_types as unknown[]).map(String):[]);
 const discourseRoles=computed(()=>Array.isArray(activeCorpusProfile.value?.discourse_roles)?(activeCorpusProfile.value?.discourse_roles as unknown[]).map(String):[]);
-const metadataKnownValues=computed<Record<string,string[]>>(()=>{const out:Record<string,Set<string>>={};for(const row of records.value){for(const [field,value] of Object.entries(row as Record<string,unknown>)){const values=Array.isArray(value)?value:[value];for(const item of values){if(typeof item!=='string'||!item.trim())continue;(out[field]??=new Set()).add(item.trim())}}}return Object.fromEntries(Object.entries(out).map(([field,values])=>[field,[...values].sort((a,b)=>a.localeCompare(b))]))});
+const metadataHumanValues=ref<Record<string,Set<string>>>({});
+const metadataKnownValues=computed<Record<string,string[]>>(()=>{const out:Record<string,Set<string>>={};for(const row of records.value){for(const [field,value] of Object.entries(row as Record<string,unknown>)){const values=Array.isArray(value)?value:[value];for(const item of values){if(typeof item!=='string'||!item.trim())continue;(out[field]??=new Set()).add(item.trim())}}}for(const [field,values] of Object.entries(metadataHumanValues.value)){for(const value of values)(out[field]??=new Set()).add(value)}return Object.fromEntries(Object.entries(out).map(([field,values])=>[field,[...values].sort((a,b)=>a.localeCompare(b))]))});
 const selectedMetadataBlocked=computed(()=>Boolean((selectedRecord.value?.metadata_review_fields||[]).length||(selectedRecord.value?.metadata_incomplete_fields||[]).length));
 const selectedMetadataBlockingFields=computed(()=>Array.from(new Set([...(selectedRecord.value?.metadata_incomplete_fields||[]),...(selectedRecord.value?.metadata_review_fields||[])])));
 const selectedMetadataBlockingLabel=computed(()=>selectedMetadataBlockingFields.value.map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", "));
@@ -377,7 +378,7 @@ function directProfilePayload(profileId:string): Record<string,unknown>|null{
     base_url:config.base_url,
     api_key:config.api_key,
     max_concurrent_requests:Math.max(1,Math.min(16,Number(config.max_concurrent_requests||1))),
-    generation:ollama&&typeof ollama==="object"?ollama:undefined,
+    generation:config.provider==="ollama"&&ollama&&typeof ollama==="object"?ollama:undefined,
   };
 }
 
@@ -831,6 +832,7 @@ async function sliceRecord(direction:"previous"|"next",offset:number){if(!curren
 async function adjudicateBoundary(direction:"previous"|"next",profileId=llmActionProviderId.value||selectedProviderId.value,model=llmActionModel.value){if(!currentBuild.value||!selectedRecord.value)return;const id=selectedRecord.value.record_id;const viewport=captureReviewViewport();busy.value="boundary";try{const actionPayload=directProfilePayloadWithModel(profileId,model)||{provider_profile_id:profileId,model:model||undefined};const result=await pdfCorpusApi.adjudicateBoundary(currentBuild.value.build_id,id,direction,actionPayload);await refreshBuild();await refreshRecords(false,id);await restoreReviewViewport(viewport,{record:true});const decision=String(result.decision?.decision||"uncertain");setMessage(i18n.tf("pdf_corpus.boundary_check_done","Boundary second-reader result: {decision}.",{decision:i18n.t(`pdf_corpus.boundary_llm.${decision}`,decision)}))}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function resolveMetadataField(field:string,value:unknown){
   if(!currentBuild.value||!selectedRecord.value)return;
+  rememberMetadataValues(field,value);
   const viewport=captureReviewViewport();
   metadataSavingField.value=field;metadataSavedField.value="";busy.value="metadata-field";const recordId=selectedRecord.value.record_id;
   try{
@@ -857,6 +859,7 @@ async function resolveMetadataField(field:string,value:unknown){
 
 async function resolveMetadataSuggestions(changes:Record<string,unknown>){
   if(!currentBuild.value||!selectedRecord.value||!Object.keys(changes).length)return;
+  for(const [field,value] of Object.entries(changes))rememberMetadataValues(field,value);
   const viewport=captureReviewViewport();busy.value="metadata-suggestions";
   try{
     const row=await pdfCorpusApi.patchMetadata(currentBuild.value.build_id,selectedRecord.value.record_id,changes,Number(selectedRecord.value.record_revision||1));
@@ -864,6 +867,14 @@ async function resolveMetadataSuggestions(changes:Record<string,unknown>){
     metadataDraft.value=JSON.stringify(recordMetadata(row),null,2);metadataEditorDirty.value=false;await refreshBuild();await restoreReviewViewport(viewport,{inspector:true});
     setMessage(i18n.tf("pdf_corpus.llm_suggestions_saved","Saved {count} LLM suggestion(s) as human-confirmed metadata.",{count:Object.keys(changes).length}));
   }catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
+}
+
+function rememberMetadataValues(field:string,value:unknown){
+  const values=Array.isArray(value)?value:[value];
+  for(const item of values){
+    if(typeof item!=="string"||!item.trim())continue;
+    (metadataHumanValues.value[field]??=new Set()).add(item.trim());
+  }
 }
 
 async function resolveMetadataNoValue(field:string){if(!currentBuild.value||!selectedRecord.value)return;const viewport=captureReviewViewport();metadataSavingField.value=field;busy.value="metadata-field";try{const result=await pdfCorpusApi.metadataDecision(currentBuild.value.build_id,selectedRecord.value.record_id,field,null,Number(selectedRecord.value.record_revision||1),true);selectedRecord.value=result.record;currentBuild.value=result.build;syncBuildInRail(result.build);metadataDraft.value=JSON.stringify(recordMetadata(result.record),null,2);const idx=records.value.findIndex(row=>row.record_id===result.record.record_id);if(idx>=0)records.value.splice(idx,1,result.record);metadataEditorDirty.value=false;setMessage(i18n.t('pdf_corpus.no_supported_value_confirmed','Confirmed that no supported value applies to this field.'));await restoreReviewViewport(viewport,{inspector:true})}catch(exc){await restoreReviewViewport(viewport);setMessage(exc instanceof Error?exc.message:String(exc),'error')}finally{busy.value="";metadataSavingField.value=""}}
@@ -1199,7 +1210,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <CorpusLlmTextTouchupDialog :open="llmTouchupOpen" :source-text="textDraft||selectedRecord?.text||''" :proposed-text="llmTouchupResult.proposed_text" :changes="llmTouchupResult.changes" :warnings="llmTouchupResult.warnings" :model="llmTouchupResult.model" :error="llmTouchupError" :busy="busy==='text-touchup'" :profiles="providerProfiles" :provider-profile-id="llmActionProviderId" :model-override="llmActionModel" :concurrency-risk="Boolean(providerProfiles.find(p=>p.id===llmActionProviderId)?.type==='ollama'&&llmActionConcurrentLoad+1>Number(providerProfiles.find(p=>p.id===llmActionProviderId)?.max_concurrent_requests||1))" :active-requests="llmActionConcurrentLoad" :concurrency-limit="Number(providerProfiles.find(p=>p.id===llmActionProviderId)?.max_concurrent_requests||1)" :record-id="selectedRecord?.record_id" @update:provider-profile-id="value=>llmActionProviderId=value" @update:model-override="value=>llmActionModel=value" @close="llmTouchupOpen=false" @run="runLlmTouchup" @apply="applyLlmTouchup" />
     <SourceTranscriptionDialog v-if="selectedRecord&&selectedAsset" :open="sourceTranscriptionOpen" :pdf-url="sourcePdfUrl" :page="selectedPdfPage" :page-count="selectedAsset.page_count" :printed-page="selectedRecord.page_start" :page-width="selectedPageMeta?.width||0" :page-height="selectedPageMeta?.height||0" :blocks="selectedPageBlocks" :text="String(selectedRecord.text||'')" :busy="busy!==''" @close="sourceTranscriptionOpen=false" @page-change="page=>selectedPdfPage=page" @save-text="saveSourceTranscription" />
     <UiDialog v-if="schemaEditorOpen" size="xlarge" :title="i18n.t('schemas.manage_title','Metadata schemas')" :description="i18n.t('schemas.manage_help','Define the fields on JSONL records, their allowed values and the instructions the model is given. Changing a schema does not change builds already made.')" :close-label="i18n.t('ui.close','Close')" @close="schemaEditorOpen=false">
-      <MetadataSchemaEditor :provider-profiles="providerProfiles" @changed="loadSchemaChoices" @saved="id=>{schemaId=id}" />
+      <MetadataSchemaEditor :provider-profiles="providerProfiles" :default-provider-id="runtime.getDefaultProviderProfileId?.() || ''" @changed="loadSchemaChoices" @saved="id=>{schemaId=id}" />
     </UiDialog>
     <UiDialog v-if="handsFreeOpen" size="medium" :title="i18n.t('pdf_corpus.run_hands_free_title','Run hands-free')" :description="i18n.t('pdf_corpus.run_hands_free_help','Settle this build with the rules below, without reviewing each record.')" :close-label="i18n.t('ui.close','Close')" @close="handsFreeOpen=false">
       <CorpusHandsFreeSettings v-model="handsFree" :disabled="busy!==''" :show-enable="false" />

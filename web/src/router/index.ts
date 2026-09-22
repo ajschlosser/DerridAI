@@ -6,6 +6,7 @@ import ResearchView from "../views/ResearchView.vue";
 import SearchView from "../views/SearchView.vue";
 import RecordView from "../views/RecordView.vue";
 import ResponseFaqView from "../views/ResponseFaqView.vue";
+import ResponseCacheView from "../views/ResponseCacheView.vue";
 import ToolsView from "../views/ToolsView.vue";
 import CompareView from "../views/CompareView.vue";
 import SettingsView from "../views/SettingsView.vue";
@@ -86,7 +87,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/response-cache",
     name: "responsecache",
-    component: ResearchView,
+    component: ResponseCacheView,
     meta: { view: "responsecache", capability: "page.response_cache", adminOnly: true },
   },
   {

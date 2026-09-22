@@ -2121,6 +2121,10 @@ def preview_metadata_schema_group(body: MetadataSchemaPreview):
         payload = body.model_dump(exclude_none=True, by_alias=False)
         for key in ("schema_", "group", "text", "run"):
             payload.pop(key, None)
+        if body.run and not str(payload.get("provider_profile_id") or "").strip():
+            profiles = system_store.researcher_profiles(include_secrets=True)
+            if profiles:
+                payload["provider_profile_id"] = profiles[0].get("id")
         request = _resolve_pdf_corpus_provider(payload) if body.run else {}
         return pdf_corpus_builds.preview_schema_group(body.schema_, body.group, body.text, request, body.run)
     except (ValueError, TouchupFailure) as exc:

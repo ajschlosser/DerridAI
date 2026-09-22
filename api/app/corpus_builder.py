@@ -5793,6 +5793,15 @@ CURRENT REVIEWED RECORD TEXT:
                     )
 
         settled_records = self.repo.load_records(build_id)
+        requeued = [row for row in settled_records if row.get("metadata_requeue_requested")]
+        if requeued:
+            # A boundary edit may arrive while the first worker pass is still
+            # running. Clear the one-shot marker and immediately schedule the
+            # changed records again against their new reviewed text.
+            for row in requeued:
+                row.pop("metadata_requeue_requested", None)
+            self.repo.save_records(build_id, settled_records)
+            return self._schedule_build_enrichment(build_id, request, manifest, settled_records)
         settled_states = self._metadata_family_states(settled_records)
         self._update(
             build_id,
@@ -6460,7 +6469,7 @@ CURRENT REVIEWED RECORD TEXT:
         touched_markers = set(str(v) for v in (live.get("human_touched_fields") or []))
         text_was_touched = "__text__" in touched_markers
         record_frozen_by_review = "__review__" in touched_markers
-        automatic_merge_blocked = text_was_touched or record_frozen_by_review
+        automatic_merge_blocked = (text_was_touched or record_frozen_by_review) and not live.get("metadata_requeue_requested")
         for field in (allowed_fields if allowed_fields is not None else ALLOWED_METADATA_FIELDS):
             if field in MANIFEST_INHERITED_FIELDS:
                 continue
@@ -6490,9 +6499,14 @@ CURRENT REVIEWED RECORD TEXT:
             status = merged.setdefault("metadata_stage_status", {})
             ledger = merged.setdefault("metadata_execution_ledger", {})
             reason = "Human edited reviewed text before automatic enrichment settled." if text_was_touched else "Human completed record review before automatic enrichment settled."
-            for family in ("discourse", "quotation", "indexing"):
-                status[family] = "skipped"
-                ledger[family] = {"state": "skipped", "finished_at": iso_now(), "error": reason}
+            if not live.get("metadata_requeue_requested"):
+                for family in ("discourse", "quotation", "indexing"):
+                    status[family] = "skipped"
+                    ledger[family] = {"state": "skipped", "finished_at": iso_now(), "error": reason}
+            else:
+                merged["metadata_enrichment_state"] = "queued"
+                merged["metadata_complete"] = False
+                merged["metadata_enrichment_finished"] = False
         return merged
 
     def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:
@@ -7139,6 +7153,13 @@ CURRENT REVIEWED RECORD TEXT:
             reasons.append("Record boundary changed; metadata whose interpretation depends on moved text may need review.")
             row["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
             row["metadata_enrichment_state"] = "stale"
+            row["metadata_complete"] = False
+            row["metadata_enrichment_finished"] = False
+            row["metadata_stage_status"] = {
+                family: "queued" for family in ("discourse", "quotation", "indexing")
+            }
+            row["metadata_execution_ledger"] = {}
+            row["metadata_requeue_requested"] = True
             row["record_revision"] = int(row.get("record_revision") or 1) + 1
             self._mark_human_touch(row, ["__text__", "__boundary__"])
             events = list(row.get("review_events") or [])

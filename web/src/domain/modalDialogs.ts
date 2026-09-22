@@ -13,6 +13,14 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 /** The helpers that still live in the legacy runtime. */
 type Helper = "showAppModal" | "toast";
 type Deps = { state: Loose } & Record<Helper, Fn>;
+type MessageModalOptions = {
+  title?: string;
+  message?: string;
+  detail?: string;
+  tone?: string;
+  confirmLabel?: string;
+  cancelLabel?: string | null;
+};
 
 export function createModalDialogs(deps: Deps) {
   const { showAppModal, toast } = deps;
@@ -25,7 +33,7 @@ export function createModalDialogs(deps: Deps) {
     tone = "info",
     confirmLabel = "OK",
     cancelLabel = null,
-  } = {}) {
+  }: MessageModalOptions = {}) {
     return new Promise((resolve) => {
       const dialog = document.createElement("dialog");
       dialog.className = `message-dialog ${tone}`;
