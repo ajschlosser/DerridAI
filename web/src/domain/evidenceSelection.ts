@@ -20,7 +20,8 @@ type Helper =
   | "shellRefreshHook"
   | "storeReceipt"
   | "toast"
-  | "tr";
+  | "tr"
+  | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
 export function createEvidenceSelection(deps: Deps) {
@@ -37,6 +38,7 @@ export function createEvidenceSelection(deps: Deps) {
     storeReceipt,
     toast,
     tr,
+    trf,
   } = deps;
   function reviewKey(file: Any, index: Any) {
     return `${file.id}::${index}`;
@@ -57,9 +59,26 @@ export function createEvidenceSelection(deps: Deps) {
     const text = kind === "full" ? fullCitation(record) : inlineCitation(record);
     try {
       await navigator.clipboard.writeText(text);
-      toast(`Copied ${kind} citation`, { tone: "success" });
+      // Say exactly what reached the clipboard, so the reader can check it before pasting.
+      toast(
+        trf(
+          kind === "full"
+            ? "record.full_citation_copied_value"
+            : "record.inline_citation_copied_value",
+          kind === "full"
+            ? "Copied full citation to the clipboard: {citation}"
+            : "Copied inline citation to the clipboard: {citation}",
+          { citation: text },
+        ),
+        { tone: "success", duration: 7000 },
+      );
     } catch (error: Any) {
-      toast(`Could not copy citation: ${error.message}`, { tone: "danger" });
+      toast(
+        trf("record.copy_failed_reason", "Could not copy citation: {error}", {
+          error: error?.message || String(error),
+        }),
+        { tone: "danger" },
+      );
     }
   }
   function workspaceEvidenceKey(file: Any, index: Any) {

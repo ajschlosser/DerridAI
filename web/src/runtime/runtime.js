@@ -15,7 +15,7 @@ import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelH
 import { formatDuration } from "../domain/operationsPanel";
 import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
 import { compressUrlState, decompressUrlState } from "../domain/urlState";
-import { countOccurrences, flattenValueList, parseJsonl, subsetRuleMatches, subsetValueText, valueMatches } from "../domain/recordQuery";
+import { countOccurrences, flattenValueList, parseJsonl, valueMatches } from "../domain/recordQuery";
 import { DB_NAME, createWorkspaceDb, deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
 import { finiteResearchNumber, normalizedResearchConfig, researchEvidenceForUi, researchJobForUi, researchProfileForUi, sanitizeResearchGeneration } from "../domain/researchPayloads";
 import { fullCitation, inlineCitation, mlaAuthorName, mlaPageSpan, mlaSentence } from "../domain/citations";
@@ -79,6 +79,8 @@ import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
+import { relativeTimeLabel } from "../domain/relativeTimeLabel";
+import { createRecordSubsets } from "../domain/recordSubsets";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -542,6 +544,7 @@ const {reviewKey,reviewItemFromKey,selectedReviewItems,copyCitation,workspaceEvi
   storeReceipt:(...args)=>storeReceipt(...args),
   toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
 });
 const {getUrlSyncHook,viewLabel,navSnapshot,sameSnapshot,applyNavSnapshot,setUrlSyncHook,currentTableUrlState,applyCompressedTableUrlState,urlFromState,syncUrl,applyUrlState,navigateTo,goBack,goForward}=createNavigation({
   state,
@@ -1022,7 +1025,17 @@ const {persistFileNow,persistFile,workspacePrefs,persistPrefs,flushWorkspacePref
   serializableFile:(...args)=>serializableFile(...args),
   toast:(...args)=>toast(...args),
 });
-const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openStoreRecordEditor,openRecordHistoryBrowser,openUpsertQueue}=createRecordDialogs({
+// Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
+const {subsetSources,subsetSourceRecords,subsetFields,defaultSubsetName,createSubsetFile}=createRecordSubsets({
+  state,
+  cloneAuditValue,
+  downloadBlob:(...args)=>downloadBlob(...args),
+  label:(...args)=>label(...args),
+  navigateTo:(...args)=>navigateTo(...args),
+  persistFileNow:(...args)=>persistFileNow(...args),
+  uid,
+});
+const {openMergeDialog,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openStoreRecordEditor,openRecordHistoryBrowser,openUpsertQueue}=createRecordDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   activeFile:(...args)=>activeFile(...args),
@@ -1036,7 +1049,6 @@ const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialo
   dbUnavailableReason:(...args)=>dbUnavailableReason(...args),
   decorateDisabledControls:(...args)=>decorateDisabledControls(...args),
   download:(...args)=>download(...args),
-  downloadBlob:(...args)=>downloadBlob(...args),
   fieldEditor:(...args)=>fieldEditor(...args),
   fileJsonl:(...args)=>fileJsonl(...args),
   fileTimers,
@@ -1046,7 +1058,6 @@ const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialo
   idbDelete:(...args)=>idbDelete(...args),
   jsonPretty:(...args)=>jsonPretty(...args),
   label:(...args)=>label(...args),
-  loadSubsetProfiles:(...args)=>loadSubsetProfiles(...args),
   localRecordKey:(...args)=>localRecordKey(...args),
   navigateTo:(...args)=>navigateTo(...args),
   needsReviewItems:(...args)=>needsReviewItems(...args),
@@ -1065,16 +1076,13 @@ const {openMergeDialog,openSubsetBuilder,openBulkFieldEditor,openOcrCleanupDialo
   renderView:(...args)=>renderView(...args),
   restoreRecordHistoryVersion:(...args)=>restoreRecordHistoryVersion(...args),
   sameValue:(...args)=>sameValue(...args),
-  saveSubsetProfiles:(...args)=>saveSubsetProfiles(...args),
   selectedIndex:(...args)=>selectedIndex(...args),
   selectedRecord:(...args)=>selectedRecord(...args),
   selectedReviewItems:(...args)=>selectedReviewItems(...args),
   shell:(...args)=>shell(...args),
   showAppModal:(...args)=>showAppModal(...args),
-  subsetRuleMatches:(...args)=>subsetRuleMatches(...args),
   toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
-  trf:(...args)=>trf(...args),
   uid:(...args)=>uid(...args),
   upsertRows:(...args)=>upsertRows(...args),
 });
@@ -1349,7 +1357,7 @@ function setActiveStore(name){
 
 
 function compactNumber(value){const n=Number(value)||0;if(n>=1000000)return `${(n/1000000).toFixed(n>=10000000?0:1)}M`;if(n>=1000)return `${(n/1000).toFixed(n>=100000?0:1)}K`;return n.toLocaleString()}
-function relativeTime(value){const date=new Date(value||0);if(!Number.isFinite(date.getTime()))return tr("time.recently","Recently");const seconds=Math.max(0,Math.round((Date.now()-date.getTime())/1000));if(seconds<60)return tr("time.just_now","just now");const minutes=Math.round(seconds/60);if(minutes<60)return trf("time.minutes_ago","{count} minute ago",{count:minutes});const hours=Math.round(minutes/60);if(hours<24)return trf("time.hours_ago","{count} hour ago",{count:hours});return trf("time.days_ago","{count} day ago",{count:Math.round(hours/24)})}
+function relativeTime(value){return relativeTimeLabel(value,Date.now(),{tr,trf,locale:state.translations?.locale})}
 
 
 
@@ -1470,13 +1478,6 @@ function bulkEditRowsForScope(scope){
     return work?allRows().filter(row=>row.record.work===work):[];
   }
   return allRows();
-}
-const SUBSET_PROFILE_STORAGE_KEY="derridai.subset-filter-profiles.v1";
-function loadSubsetProfiles(){
-  try{const value=JSON.parse(localStorage.getItem(SUBSET_PROFILE_STORAGE_KEY)||"[]");return Array.isArray(value)?value:[]}catch{return []}
-}
-function saveSubsetProfiles(profiles){
-  localStorage.setItem(SUBSET_PROFILE_STORAGE_KEY,JSON.stringify((profiles||[]).slice(0,50)));
 }
 
 
@@ -1961,7 +1962,6 @@ function activateFile(fileId){
 }
 function triggerImport(fileList){return canUse("manageCorpus")?importFiles(fileList):toast("Your role does not have permission to load corpus files.")}
 function triggerMerge(){return canUse("manageCorpus")?openMergeDialog():toast("Your role does not have permission to merge corpus files.")}
-function triggerSubset(){return canUse("manageCorpus")?openSubsetBuilder():toast("Your role does not have permission to create subsets.")}
 function triggerBulkEdit(){return canUse("editLocalRecords")?openBulkFieldEditor():toast("Your role does not have permission to edit records.")}
 function triggerOcrClean(){return canUse("editLocalRecords")?openOcrCleanupDialog():toast("Your role does not have permission to edit records.")}
 function triggerReviewFlagged(){return canUse("editLocalRecords")?openTouchup(needsReviewItems()):toast("Your role does not have permission to review records.")}
@@ -2212,7 +2212,11 @@ export {
   closeWorkspaceFile,
   triggerImport,
   triggerMerge,
-  triggerSubset,
+  subsetSources,
+  subsetSourceRecords,
+  subsetFields,
+  defaultSubsetName,
+  createSubsetFile,
   triggerBulkEdit,
   triggerOcrClean,
   triggerReviewFlagged,

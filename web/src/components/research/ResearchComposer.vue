@@ -56,7 +56,7 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
     <header class="research-composer-heading">
       <div>
         <span class="section-label">{{i18n.t('nav.rag','Research')}}</span>
-        <h1 id="research-compose-title">{{i18n.t('research.ask_title','What are you researching?')}}</h1>
+        <h2 id="research-compose-title">{{i18n.t('research.ask_title','What are you researching?')}}</h2>
         <p>{{i18n.t('research.ask_help','Ask a scholarly question. DerridAI will retrieve, rerank, synthesize, and bind the answer to inspectable evidence.')}}</p>
       </div>
       <div class="research-heading-actions">

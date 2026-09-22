@@ -5,6 +5,7 @@ import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
 import ProviderModelPicker from "../components/ProviderModelPicker.vue";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import { MODEL_KINDS, type DiscoveredModel } from "../domain/providerModels";
 
 type ProviderStatus = { available?: boolean; models?: DiscoveredModel[]; error?: string };
@@ -80,11 +81,28 @@ onMounted(() => { refresh(); loading.value = false; });
 </script>
 
 <template>
-  <main class="vue-native-page providers-page">
-    <section class="page-heading providers-heading">
-      <div><p>{{ i18n.t("section.system", "System") }}</p><h1>{{ i18n.t("providers.title", "LLM Providers") }}</h1><span>{{ i18n.t("providers.description", "Configure reusable endpoints, models, credentials, and access for every LLM workflow.") }}</span></div>
-      <div class="provider-heading-actions"><button class="btn" type="button" @click="add('ollama')">+ {{ i18n.t("providers.add_ollama", "Add Ollama") }}</button><button class="btn primary" type="button" @click="add('openai')">+ {{ i18n.t("providers.add_openai", "Add OpenAI-compatible") }}</button></div>
-    </section>
+  <main class="vue-native-page providers-page" aria-labelledby="providers-page-title">
+    <UiPageHeader
+      :kicker="i18n.t('section.system', 'System')"
+      :title="i18n.t('providers.title', 'LLM Providers')"
+      title-id="providers-page-title"
+      :description="
+        i18n.t(
+          'providers.description',
+          'Configure reusable endpoints, models, credentials, and access for every LLM workflow.',
+        )
+      "
+      :actions-label="i18n.t('providers.page_actions', 'Provider actions')"
+    >
+      <template #actions>
+        <button class="btn" type="button" @click="add('ollama')">
+          + {{ i18n.t("providers.add_ollama", "Add Ollama") }}
+        </button>
+        <button class="btn primary" type="button" @click="add('openai')">
+          + {{ i18n.t("providers.add_openai", "Add OpenAI-compatible") }}
+        </button>
+      </template>
+    </UiPageHeader>
     <label class="provider-warm-option"><input type="checkbox" :checked="warmOnStart" @change="setWarmOnStart(($event.target as HTMLInputElement).checked)"><span><b>{{ i18n.t("providers.warm_on_start", "Load the default model when the app opens") }}</b><small>{{ i18n.t("providers.warm_on_start_help", "Off by default. Loading a model takes memory and time and evicts the one in use, so it is loaded when you first use it. Turn this on if you always start with the default model and want it ready.") }}</small></span></label>
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
     <section class="providers-overview" aria-labelledby="providers-overview-title">
@@ -157,7 +175,7 @@ onMounted(() => { refresh(); loading.value = false; });
 </template>
 
 <style scoped>
-.providers-page{display:grid;gap:20px}.providers-heading{align-items:end}.provider-heading-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.providers-page{display:grid;gap:var(--page-gap)}
 .providers-overview{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px;padding:14px 20px;border:1px solid var(--line);background:var(--raised);box-shadow:var(--shadow-sm)}.providers-overview>div:first-child{display:flex;align-items:baseline;gap:10px;min-width:0}.providers-overview h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.providers-overview p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.4;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eyebrow,.provider-type{font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}.eyebrow{flex:none;margin:0}
 .providers-stats{display:flex;gap:18px;margin:0;flex:none}.providers-stats div{display:flex;align-items:baseline;gap:6px;min-width:0}.providers-stats dt{margin:0;font-size:.75rem;color:var(--muted)}.providers-stats dd{margin:0;font-size:1rem;font-weight:800}.providers-stats .default-stat{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
 .provider-list{display:grid;gap:14px}

@@ -215,7 +215,7 @@ describe("WorksView", () => {
       }),
     );
     const wrapper = await mountWorks();
-    expect(wrapper.get(".legacy-page-heading h1").text()).toContain("Works");
+    expect(wrapper.get("#works-page-title").text()).toContain("Works");
     expect(wrapper.get(".researcher-work-menu-card").text()).toContain("Glas");
     await wrapper.get("#browseResearchWork").trigger("click");
     expect(runtime.browseResearcherWork).toHaveBeenCalledWith("Glas");

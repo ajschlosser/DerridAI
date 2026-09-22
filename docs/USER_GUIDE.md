@@ -101,6 +101,8 @@ Each operation exposes:
 
 The expanded dock shows a compact row for each operation: status, progress, the current stage, and the next action. Full request details, event timelines, and result summaries remain on Dashboard and in the operation inspector.
 
+The dock can be dragged anywhere. When it is expanded from a spot near the right or bottom edge, it slides back so the whole panel stays on screen; collapsing it returns it to where you left it.
+
 ### Cancellation semantics
 
 Cancellation is deliberately explicit:
@@ -237,6 +239,19 @@ Multiple JSONL files remain open as a local working set and persist through brow
 Persistence is browser-origin-specific.
 
 **Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Loaded JSONL files appear in a local-file rail on this page, with origin (imported, subset, merge, split by work, or from a collection) and whether the file has been edited since it was loaded. Administrators open, merge, subset, export, and close files from that rail, or from the empty state. Researcher accounts do not use this page.
+
+- **Columns** chooses, orders and sizes the table's columns. Each shown column has a width as a percentage of the table; the widths always total 100%, so widening one column narrows the others in proportion (no column goes below 5%). **Even widths** splits the space equally, and **Reset defaults** restores the default columns and widths. Search uses the same column dialog for choosing and ordering columns.
+- **Comfortable** rows show the full extracted text. **Compact** rows are tighter, narrow the text column, and show the text on one line; where it is cut off, **Expand** shows the rest of that row's text.
+- **Get Citation** copies an inline or full citation. The notification quotes exactly what was copied. The menu closes on a choice, on Escape, or on a click elsewhere.
+- **Copy view link** copies a link that reopens this table as shown: file name, search, column filters, sort, page and columns. JSONL records stay in this browser, so whoever opens the link is asked for the same file. The notification shows the copied link.
+
+### Create a JSONL subset
+
+**Create subset** in the local-file rail makes a new local JSONL file from the records that match a filter. The source file is not changed, and each copied record keeps its record ID and audit history. The source can be the active file, all loaded files, or one file; the match count updates as you edit the filter.
+
+A filter is a list of conditions (field, comparison, value) joined by AND or OR, where AND binds before OR. A group is evaluated as one condition, like parentheses, and matches when any or all of its conditions match. **Case-sensitive** is off by default, so `derrida` also matches `Derrida`; turn it on to require the same capitals. It applies to the equals, contains, list and regular-expression comparisons. The new file records the filter, whether matching was case-sensitive, and which file it came from.
+
+Saved filter profiles are kept in this browser. **Save current…** names the filter (saving under an existing name updates that profile). **Export all profiles** saves them as one JSON file; **Import profiles** reads such a file, replaces profiles with the same name, and adds the rest. A profile with a condition that cannot be read is skipped whole rather than imported with the condition dropped, and the notification says how many were added, replaced or skipped.
 
 ### Merge files
 

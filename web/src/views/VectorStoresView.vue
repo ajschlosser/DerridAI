@@ -612,7 +612,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.vector-native-page{display:grid;gap:16px}
+.vector-native-page{display:grid;gap:var(--page-gap)}
 .vector-page-loading,.vector-page-error{min-height:240px;display:grid;place-content:center;gap:10px;text-align:center}
 .vector-tab-surface{margin-top:12px}
 .vector-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}

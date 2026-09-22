@@ -1,0 +1,53 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * The page frame shared by every routed view: one maximum width, one inset, one vertical rhythm
+ * and one heading style. Views lay out their own content inside the frame but do not set their
+ * own page width, margins, padding or h1 type; these rules are anchored on #appContent so they
+ * win over a view's scoped styles. A tool surface that needs the full width opts out of the
+ * maximum width only, with data-page-width="full".
+ */
+#appContent > * {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: var(--page-pad-top) var(--page-pad-inline) var(--page-pad-bottom);
+}
+#appContent > [data-page-width="full"] {
+  max-width: none;
+}
+#appContent > :is(.vue-native-page, [class$="-page"], [class*="-page "]) {
+  gap: var(--page-gap);
+}
+
+/* Page titles: the same face, size and weight on every page, whichever header markup renders them. */
+#appContent h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--page-title-font);
+  font-size: var(--page-title-size);
+  font-weight: var(--page-title-weight);
+  letter-spacing: -0.02em;
+  line-height: var(--lh-tight);
+}
+
+/* Leave room for the operations dock so it never covers the end of the page. */
+body:has(#operationProgressStack.minimized) #appContent > * {
+  padding-bottom: 72px;
+}
+body:has(#operationProgressStack:not(.minimized)) #appContent > * {
+  padding-bottom: min(36vh, 280px);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-pad-top: 14px;
+    --page-pad-inline: 12px;
+    --page-pad-bottom: 28px;
+  }
+}
+@media (max-width: 650px) {
+  body:has(#operationProgressStack.minimized) #appContent > * {
+    padding-bottom: 120px;
+  }
+}

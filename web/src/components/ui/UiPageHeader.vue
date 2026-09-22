@@ -27,6 +27,7 @@ withDefaults(
     <div
       v-if="$slots.actions"
       class="ui-page-header-actions"
+      :role="actionsLabel ? 'group' : undefined"
       :aria-label="actionsLabel || undefined"
     >
       <slot name="actions" />
@@ -53,7 +54,7 @@ withDefaults(
 .ui-page-header-kicker {
   margin: 0 0 4px;
   color: var(--accent-fg);
-  font-size: var(--fs-sm);
+  font-size: var(--page-kicker-size);
   font-weight: var(--fw-bold);
   letter-spacing: 0.08em;
   line-height: var(--lh-tight);
@@ -63,9 +64,9 @@ withDefaults(
 .ui-page-header h1 {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-reading);
-  font-size: clamp(1.5rem, 2.2vw, 2rem);
-  font-weight: var(--fw-semibold);
+  font-family: var(--page-title-font);
+  font-size: var(--page-title-size);
+  font-weight: var(--page-title-weight);
   letter-spacing: -0.02em;
   line-height: var(--lh-tight);
 }
@@ -74,7 +75,7 @@ withDefaults(
   max-width: var(--measure);
   margin: 8px 0 0;
   color: var(--text-tertiary);
-  font-size: var(--fs-base);
+  font-size: var(--page-lede-size);
   line-height: var(--lh-normal);
 }
 
