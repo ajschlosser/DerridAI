@@ -907,10 +907,11 @@ const providerPayload = computed<Record<string, unknown>>(() => {
       use_profile_defaults: useProfileDefaults.value,
     };
     if (!useProfileDefaults.value) payload.generation = buildGeneration;
-    // Server-owned profiles resolve credentials and their defaults on the API.
-    // Per-build generation overrides survive that resolution and are merged there.
+    // A published profile can fill in a missing key. The browser key still has
+    // to travel with the request, or a profile without one calls OpenAI
+    // unauthenticated.
     if (serverProviderIds.value.has(selectedProviderId.value)) {
-      for (const key of ["provider", "base_url", "api_key"]) delete payload[key];
+      delete payload.provider;
       if (useProfileDefaults.value) delete payload.generation;
     }
     payload.max_concurrent_requests = maxConcurrentRequests.value;
@@ -935,16 +936,17 @@ const providerPayload = computed<Record<string, unknown>>(() => {
       selectedReviewProviderId.value !== selectedProviderId.value
     ) {
       payload.review_provider_profile_id = selectedReviewProviderId.value;
-      if (!serverProviderIds.value.has(selectedReviewProviderId.value)) {
-        const review = directProfilePayload(selectedReviewProviderId.value);
-        if (review) {
-          const {
-            provider_profile_id: _profileId,
-            max_concurrent_requests: _max,
-            ...reviewConfig
-          } = review;
-          payload.review_provider = reviewConfig;
+      const review = directProfilePayload(selectedReviewProviderId.value);
+      if (review) {
+        const reviewConfig: Record<string, unknown> = {};
+        if (review.base_url) reviewConfig.base_url = review.base_url;
+        if (review.api_key) reviewConfig.api_key = review.api_key;
+        if (!serverProviderIds.value.has(selectedReviewProviderId.value)) {
+          for (const key of ["provider", "model", "generation"] as const) {
+            if (review[key] !== undefined) reviewConfig[key] = review[key];
+          }
         }
+        if (Object.keys(reviewConfig).length) payload.review_provider = reviewConfig;
       }
     }
     return payload;
@@ -1169,24 +1171,30 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
     const direct = directProfilePayload(profileId);
     const payload: Record<string, unknown> = { provider_profile_id: profileId };
     if (modelOverride.trim()) payload.model = modelOverride.trim();
-    // Server-owned researcher profiles resolve credentials on the API. Runtime/admin
-    // profiles must carry their explicit provider configuration with the switch.
-    if (!serverProviderIds.value.has(profileId) && direct) {
-      for (const key of ["provider", "model", "base_url", "api_key", "generation"]) {
-        if (direct[key] !== undefined) payload[key] = direct[key];
+    // Always send the browser endpoint and key. The API uses a stored key only
+    // when this request leaves them out.
+    if (direct) {
+      if (direct.base_url) payload.base_url = direct.base_url;
+      if (direct.api_key) payload.api_key = direct.api_key;
+      if (!serverProviderIds.value.has(profileId)) {
+        for (const key of ["provider", "model", "generation"] as const) {
+          if (direct[key] !== undefined) payload[key] = direct[key];
+        }
       }
     }
     if (selectedReviewProviderId.value && selectedReviewProviderId.value !== profileId) {
       payload.review_provider_profile_id = selectedReviewProviderId.value;
-      if (!serverProviderIds.value.has(selectedReviewProviderId.value)) {
-        const review = directProfilePayload(selectedReviewProviderId.value);
-        if (review) {
-          const reviewConfig: Record<string, unknown> = {};
-          for (const key of ["provider", "model", "base_url", "api_key", "generation"]) {
+      const review = directProfilePayload(selectedReviewProviderId.value);
+      if (review) {
+        const reviewConfig: Record<string, unknown> = {};
+        if (review.base_url) reviewConfig.base_url = review.base_url;
+        if (review.api_key) reviewConfig.api_key = review.api_key;
+        if (!serverProviderIds.value.has(selectedReviewProviderId.value)) {
+          for (const key of ["provider", "model", "generation"] as const) {
             if (review[key] !== undefined) reviewConfig[key] = review[key];
           }
-          payload.review_provider = reviewConfig;
         }
+        if (Object.keys(reviewConfig).length) payload.review_provider = reviewConfig;
       }
     }
     currentBuild.value = await pdfCorpusApi.switchProviderProfile(selectedBuildId.value, payload);

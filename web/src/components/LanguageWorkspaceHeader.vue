@@ -1,15 +1,20 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
+import UiPageHeader from "./ui/UiPageHeader.vue";
 import { useI18nStore } from "../stores/i18n";
 
-const props = withDefaults(defineProps<{
-  languageCount?: number;
-  keyCount?: number;
-  policyPendingCount?: number;
-  title?: string;
-  description?: string;
-}>(), { languageCount: 0, keyCount: 0, policyPendingCount: 0, title: "", description: "" });
+const props = withDefaults(
+  defineProps<{
+    languageCount?: number;
+    keyCount?: number;
+    policyPendingCount?: number;
+    title?: string;
+    description?: string;
+  }>(),
+  { languageCount: 0, keyCount: 0, policyPendingCount: 0, title: "", description: "" },
+);
 const emit = defineEmits<{ install: [] }>();
 const i18n = useI18nStore();
 const installButton = ref<HTMLButtonElement | null>(null);
@@ -17,23 +22,75 @@ defineExpose({ focusInstall: () => installButton.value?.focus() });
 </script>
 
 <template>
-  <header class="language-workspace-header">
-    <div class="language-workspace-copy">
-      <p>{{ i18n.t("section.system", "System") }} · {{ i18n.t("language.workspace_kicker", "Localization studio") }}</p>
-      <h1>{{ props.title || i18n.t("language.page_title", "Languages & internationalization") }}</h1>
-      <span>{{ props.description || i18n.t("language.page_description_modern", "Manage interface locales from one bilingual translation workspace. English is the canonical source; installed locales stay editable and auditable.") }}</span>
-    </div>
-    <div class="language-workspace-actions">
-      <div class="language-workspace-stats" :aria-label="i18n.t('language.localization_summary','Localization summary')">
-        <span><b>{{ props.languageCount }}</b>{{ i18n.t("language.locales", "Locales") }}</span>
-        <span><b>{{ props.keyCount.toLocaleString(i18n.locale) }}</b>{{ i18n.t("language.source_strings", "English strings") }}</span>
-        <span v-if="props.policyPendingCount"><b>{{ props.policyPendingCount }}</b>{{ i18n.t("language.content_policy_needed", "Policy needed") }}</span>
+  <UiPageHeader
+    class="language-workspace-header"
+    :kicker="`${i18n.t('section.system', 'System')} · ${i18n.t('language.workspace_kicker', 'Localization studio')}`"
+    :title="props.title || i18n.t('language.page_title', 'Languages & internationalization')"
+    title-id="language-page-title"
+    :description="
+      props.description ||
+      i18n.t(
+        'language.page_description_modern',
+        'Manage interface locales from one bilingual translation workspace. English is the canonical source; installed locales stay editable and auditable.',
+      )
+    "
+    :actions-label="i18n.t('language.page_actions', 'Language actions')"
+  >
+    <template #actions>
+      <div
+        class="language-workspace-stats"
+        :aria-label="i18n.t('language.localization_summary', 'Localization summary')"
+      >
+        <span
+          ><b>{{ props.languageCount }}</b
+          >{{ i18n.t("language.locales", "Locales") }}</span
+        >
+        <span
+          ><b>{{ props.keyCount.toLocaleString(i18n.locale) }}</b
+          >{{ i18n.t("language.source_strings", "English strings") }}</span
+        >
+        <span v-if="props.policyPendingCount"
+          ><b>{{ props.policyPendingCount }}</b
+          >{{ i18n.t("language.content_policy_needed", "Policy needed") }}</span
+        >
       </div>
-      <button ref="installButton" type="button" class="language-install-primary" @click="emit('install')"><AppIcon name="plus" />{{ i18n.t("language.install", "Install language") }}</button>
-    </div>
-  </header>
+      <button ref="installButton" type="button" class="btn primary" @click="emit('install')">
+        <AppIcon name="plus" />{{ i18n.t("language.install", "Install language") }}
+      </button>
+    </template>
+  </UiPageHeader>
 </template>
 
 <style scoped>
-.language-workspace-header{position:sticky;top:0;z-index:18;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center;padding:18px 20px;border:1px solid var(--line,#dfe6ed);border-radius:16px;background:color-mix(in srgb,var(--card) 94%,var(--ui-accent-soft,#eef7f1));box-shadow:0 8px 28px rgba(15,23,42,.07);backdrop-filter:blur(14px)}.language-workspace-copy{min-width:0}.language-workspace-copy p{margin:0 0 3px;color: var(--accent-fg);font-size:.8125rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.language-workspace-copy h1{margin:0;font:600 clamp(24px,2.2vw,33px)/1.08 Georgia,"Times New Roman",serif;letter-spacing:-.018em;color:var(--text)}.language-workspace-copy span{display:block;max-width:780px;margin-top:7px;color:var(--muted);font-size:0.78125rem;line-height:1.5}.language-workspace-actions{display:flex;align-items:center;gap:12px}.language-workspace-stats{display:flex;gap:7px}.language-workspace-stats span{min-width:82px;display:grid;gap:1px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--card) 82%,transparent);color:var(--muted);font-size:.8125rem;text-transform:uppercase;letter-spacing:.04em}.language-workspace-stats b{font-size:1rem;color:var(--text-2);letter-spacing:0}.language-install-primary{min-height:42px;display:inline-flex;align-items:center;gap:7px;border:1px solid color-mix(in srgb,var(--ui-accent,#3c8d62) 76%,var(--tone-ok-border));border-radius:10px;background:var(--ui-accent,#3c8d62);padding:0 14px;color:var(--accent-on);font-weight:750;cursor:pointer}.language-install-primary :deep(svg){width:16px;height:16px}.language-install-primary:focus-visible{outline:3px solid color-mix(in srgb,var(--ui-accent,#3c8d62) 48%,var(--card));outline-offset:2px}@media(max-width:900px){.language-workspace-header{grid-template-columns:1fr}.language-workspace-actions{justify-content:space-between}.language-workspace-copy span{max-width:none}}@media(max-width:560px){.language-workspace-stats{display:none}.language-install-primary{width:100%;justify-content:center}}
+.language-workspace-stats {
+  display: flex;
+  gap: var(--space-2);
+}
+.language-workspace-stats span {
+  min-width: 82px;
+  display: grid;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.language-workspace-stats b {
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+  letter-spacing: 0;
+}
+.language-workspace-header :deep(.btn svg) {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 560px) {
+  .language-workspace-stats {
+    display: none;
+  }
+}
 </style>

@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
@@ -10,11 +10,19 @@ import HighlightedText from "../components/search/HighlightedText.vue";
 import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader.vue";
 import RecordsFileRail from "../components/records/RecordsFileRail.vue";
-import RecordsColumnsDialog from "../components/records/RecordsColumnsDialog.vue";
+import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
+import RecordsSubsetDialog from "../components/records/RecordsSubsetDialog.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import { statusTone } from "../domain/status";
+import {
+  normalizeColumnWidths,
+  scaleColumnWidth,
+  type ColumnWidths,
+} from "../domain/tableColumnWidths";
 import { useRecordsWorkspace } from "../composables/useRecordsWorkspace";
+import { notify } from "../composables/notifications";
 import type { RecordsCell, RecordsRow } from "../types/records";
+import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordSubsets";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
@@ -23,8 +31,18 @@ const { snapshot } = records;
 const query = ref("");
 const columnsDialog = ref<{ open: () => void; close: () => void } | null>(null);
 const draftColumns = ref<string[]>([]);
+const subsetDialog = ref<{ open: () => void; finish: (created: boolean) => void } | null>(null);
+const subsetSources = ref<SubsetSource[]>([]);
+const subsetFields = ref<SubsetField[]>([]);
+const subsetName = ref("");
+const columnWidths = ref<ColumnWidths>(loadColumnWidths());
+const draftWidths = ref<ColumnWidths>({});
+const tableScroll = ref<HTMLElement | null>(null);
+const tableWidth = ref(0);
+const expandedText = reactive(new Set<string>());
+const overflowingText = reactive(new Set<string>());
+let tableObserver: ResizeObserver | undefined;
 const moreOpen = ref(false);
-const liveMessage = ref("");
 const density = ref(loadDensity());
 let queryTimer = 0;
 
@@ -59,6 +77,80 @@ function loadDensity() {
   } catch {
     return "comfortable";
   }
+}
+const WIDTHS_KEY = "derridai.records.columnWidths.v1";
+// Compact rows give the other columns more room by narrowing the text column.
+const COMPACT_TEXT_FACTOR = 0.8;
+// Fixed columns around the configurable ones, in rem, and the narrowest a data column may get.
+const SELECT_COL_REM = 2.75;
+const ACTIONS_COL_REM = 15;
+const MIN_COL_PX = 72;
+const MIN_TEXT_COL_PX = 160;
+
+function loadColumnWidths(): ColumnWidths {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WIDTHS_KEY) || "{}");
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+function persistColumnWidths() {
+  try {
+    localStorage.setItem(WIDTHS_KEY, JSON.stringify(columnWidths.value));
+  } catch {
+    /* optional preference */
+  }
+}
+const columnKeys = computed(() => snapshot.value?.columns.map((column) => column.key) || []);
+/** Each shown column's share of the data area, in percent (total 100). */
+const effectiveWidths = computed(() => {
+  const widths = normalizeColumnWidths(columnKeys.value, columnWidths.value);
+  return density.value === "compact"
+    ? scaleColumnWidth(columnKeys.value, widths, "text", COMPACT_TEXT_FACTOR)
+    : widths;
+});
+/**
+ * Column widths in pixels. Percentages are of the space left after the fixed select and action
+ * columns, so they mean what the Columns dialog says; a column never gets narrower than its
+ * minimum, and the table scrolls sideways when the minimums do not fit.
+ */
+const columnPx = computed(() => {
+  if (!tableWidth.value) return null;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const fixed =
+    (snapshot.value?.capabilities.can_select ? SELECT_COL_REM * rem : 0) + ACTIONS_COL_REM * rem;
+  const area = Math.max(0, tableWidth.value - fixed - 2);
+  const px: Record<string, number> = {};
+  for (const key of columnKeys.value)
+    px[key] = Math.max(
+      key === "text" ? MIN_TEXT_COL_PX : MIN_COL_PX,
+      Math.floor((area * (effectiveWidths.value[key] || 0)) / 100),
+    );
+  return {
+    px,
+    select: SELECT_COL_REM * rem,
+    actions: ACTIONS_COL_REM * rem,
+    total: Object.values(px).reduce((sum, value) => sum + value, fixed),
+  };
+});
+function measureTable() {
+  tableWidth.value = tableScroll.value?.clientWidth || 0;
+}
+/** In compact rows the text is one line; offer Expand only where it is actually cut off. */
+function measureTextOverflow() {
+  overflowingText.clear();
+  if (density.value !== "compact") return;
+  for (const node of tableScroll.value?.querySelectorAll<HTMLElement>(".records-text.clamped") ||
+    [])
+    if (node.scrollWidth > node.clientWidth + 1) overflowingText.add(node.dataset.rowKey || "");
+}
+function toggleText(key: string) {
+  if (expandedText.has(key)) expandedText.delete(key);
+  else expandedText.add(key);
+}
+function textId(row: RecordsRow) {
+  return `records-text-${row.index}`;
 }
 function persistDensity() {
   try {
@@ -120,22 +212,81 @@ async function closeFile(id: string) {
   await records.closeFile(id);
   shell.sync();
 }
+// The link restores this table view (file name, search, filters, sort, page, columns). JSONL contents are browser-local,
+// so the link never carries records; whoever opens it is asked for the same file.
 function share() {
   const href = records.shareHref();
-  void navigator.clipboard.writeText(href).then(() => {
-    liveMessage.value = i18n.t("records.link_copied", "Workspace link copied.");
-  });
+  navigator.clipboard.writeText(href).then(
+    () =>
+      notify(
+        i18n.tf("records.link_copied_value", "Copied a link that reopens this table view (file name, search, filters, sort, page and columns): {url}", {
+          url: href,
+        }),
+        "success",
+      ),
+    (error: unknown) =>
+      notify(
+        i18n.tf("records.link_copy_failed", "Could not copy the view link: {error}", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        "danger",
+      ),
+  );
+}
+async function openSubset() {
+  if (!snapshot.value?.capabilities.can_import) return;
+  subsetSources.value = records.subsetSources();
+  subsetFields.value = records.subsetFields();
+  subsetName.value = records.defaultSubsetName();
+  // The dialog builds its first condition from the fields, so let them reach it first.
+  await nextTick();
+  subsetDialog.value?.open();
+}
+async function createSubset(request: SubsetRequest) {
+  try {
+    const created = await records.createSubset(request);
+    subsetDialog.value?.finish(created.count > 0);
+    if (!created.count) {
+      notify(i18n.t("subset.no_matches", "No records match the filter."), "warning");
+      return;
+    }
+    shell.sync();
+    notify(
+      i18n.tf(
+        created.count === 1 ? "subset.created_one" : "subset.created_other",
+        created.count === 1
+          ? "Created {name} with {count} record."
+          : "Created {name} with {count} records.",
+        { name: created.name, count: created.count.toLocaleString(i18n.locale) },
+      ),
+      "success",
+    );
+  } catch (error) {
+    subsetDialog.value?.finish(false);
+    notify(
+      i18n.tf("subset.create_failed", "Could not create the subset file: {error}", {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      "danger",
+    );
+  }
 }
 function openColumns() {
-  draftColumns.value = snapshot.value?.columns.map((column) => column.key) || [];
+  draftColumns.value = [...columnKeys.value];
+  draftWidths.value = normalizeColumnWidths(draftColumns.value, columnWidths.value);
   columnsDialog.value?.open();
 }
 function saveColumns() {
   records.setColumns(draftColumns.value);
+  columnWidths.value = normalizeColumnWidths(draftColumns.value, draftWidths.value);
+  persistColumnWidths();
 }
 function resetColumns() {
   records.resetColumns();
-  draftColumns.value = snapshot.value?.columns.map((column) => column.key) || [];
+  columnWidths.value = {};
+  persistColumnWidths();
+  draftColumns.value = [...columnKeys.value];
+  draftWidths.value = normalizeColumnWidths(draftColumns.value);
 }
 function openRow(row: RecordsRow, event?: Event) {
   const target = event?.target as HTMLElement | undefined;
@@ -186,15 +337,32 @@ function cellText(cell: RecordsCell) {
 }
 
 watch(fileSig, load);
-watch(density, persistDensity);
+watch(density, () => {
+  persistDensity();
+  expandedText.clear();
+});
+watch([snapshot, density, columnPx], () => void nextTick(measureTextOverflow), { flush: "post" });
+watch(tableScroll, (node, previous) => {
+  if (previous) tableObserver?.unobserve(previous);
+  if (node) tableObserver?.observe(node);
+  measureTable();
+});
 onMounted(() => {
   records.activate();
   if (snapshot.value) query.value = snapshot.value.query;
+  if (typeof ResizeObserver !== "undefined") {
+    tableObserver = new ResizeObserver(() => {
+      measureTable();
+      measureTextOverflow();
+    });
+    if (tableScroll.value) tableObserver.observe(tableScroll.value);
+  }
+  measureTable();
 });
+onBeforeUnmount(() => tableObserver?.disconnect());
 </script>
 <template>
   <main class="records-page" aria-labelledby="records-page-title">
-    <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <RecordsWorkspaceHeader
       :file-name="snapshot?.file?.name || ''"
       :matched="snapshot?.matched || 0"
@@ -237,7 +405,7 @@ onMounted(() => {
         @close="closeFile"
         @open="run('import')"
         @merge="run('merge')"
-        @subset="run('subset')"
+        @subset="openSubset"
         @export="run('export')"
       />
       <div class="records-main">
@@ -411,6 +579,7 @@ onMounted(() => {
           </div>
 
           <div
+            ref="tableScroll"
             class="records-table-scroll ui-table-scroll"
             tabindex="0"
             role="region"
@@ -421,12 +590,31 @@ onMounted(() => {
               )
             "
           >
-            <table class="records-table ui-table" :class="density">
+            <table
+              class="records-table ui-table"
+              :class="[
+                density,
+                { sized: columnPx, 'no-select': !snapshot.capabilities.can_select },
+              ]"
+              :style="columnPx ? { width: `${columnPx.total}px` } : undefined"
+            >
               <caption class="sr-only">
                 {{
                   rangeLabel
                 }}
               </caption>
+              <colgroup v-if="columnPx">
+                <col
+                  v-if="snapshot.capabilities.can_select"
+                  :style="{ width: `${columnPx.select}px` }"
+                />
+                <col
+                  v-for="column in snapshot.columns"
+                  :key="`col-${column.key}`"
+                  :style="{ width: `${columnPx.px[column.key]}px` }"
+                />
+                <col :style="{ width: `${columnPx.actions}px` }" />
+              </colgroup>
               <thead>
                 <tr>
                   <th
@@ -577,11 +765,33 @@ onMounted(() => {
                       :class="{ review: cell.text === 'yes' }"
                       >{{ cellText(cell) }}</span
                     >
-                    <HighlightedText
-                      v-else-if="cell.kind === 'text'"
-                      :text="cell.text"
-                      :query="query"
-                    />
+                    <template v-else-if="cell.kind === 'text'">
+                      <div
+                        :id="textId(row)"
+                        class="records-text"
+                        :class="{ clamped: density === 'compact' && !expandedText.has(row.key) }"
+                        :data-row-key="row.key"
+                      >
+                        <HighlightedText :text="cell.text" :query="query" />
+                      </div>
+                      <button
+                        v-if="
+                          density === 'compact' &&
+                          (overflowingText.has(row.key) || expandedText.has(row.key))
+                        "
+                        type="button"
+                        class="records-text-toggle"
+                        :aria-expanded="expandedText.has(row.key)"
+                        :aria-controls="textId(row)"
+                        @click.stop="toggleText(row.key)"
+                      >
+                        {{
+                          expandedText.has(row.key)
+                            ? i18n.t("records.collapse_text", "Collapse")
+                            : i18n.t("records.expand_text", "Expand")
+                        }}
+                      </button>
+                    </template>
                     <button
                       v-else-if="cell.kind === 'metadata'"
                       type="button"
@@ -663,10 +873,19 @@ onMounted(() => {
       </div>
     </div>
 
-    <RecordsColumnsDialog
+    <RecordsSubsetDialog
+      ref="subsetDialog"
+      :sources="subsetSources"
+      :fields="subsetFields"
+      :default-name="subsetName"
+      :records-for="records.subsetSourceRecords"
+      @create="createSubset"
+    />
+    <UiTableColumnsDialog
       ref="columnsDialog"
-      :available="snapshot?.available_columns || []"
       v-model="draftColumns"
+      v-model:widths="draftWidths"
+      :available="snapshot?.available_columns || []"
       @apply="saveColumns"
       @reset="resetColumns"
     />
@@ -675,9 +894,7 @@ onMounted(() => {
 <style scoped>
 .records-page {
   display: grid;
-  gap: 16px;
-  max-width: 1600px;
-  margin: 0 auto;
+  gap: var(--page-gap);
 }
 .records-layout {
   display: grid;
@@ -802,9 +1019,53 @@ onMounted(() => {
   vertical-align: top;
   text-align: left;
 }
+.records-table.sized {
+  table-layout: fixed;
+  min-width: 100%;
+}
+.records-table.sized td {
+  overflow-wrap: anywhere;
+}
+.records-table.compact {
+  font-size: var(--fs-sm);
+}
 .records-table.compact th,
 .records-table.compact td {
-  padding: 6px 10px;
+  padding: 4px 8px;
+  line-height: var(--lh-tight);
+}
+.records-table.compact tbody td {
+  vertical-align: middle;
+}
+.records-text {
+  line-height: var(--lh-normal);
+}
+.records-text.clamped {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: var(--lh-tight);
+}
+.records-text-toggle {
+  min-height: 24px;
+  margin-top: 2px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent-fg);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.records-text-toggle:hover {
+  background: var(--surface-hover);
+}
+.records-text-toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .records-table tbody tr {
   cursor: pointer;
@@ -840,12 +1101,12 @@ onMounted(() => {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
-.text-col {
+.records-table:not(.sized) .text-col {
   min-width: 18rem;
   max-width: 36rem;
 }
 .actions-col {
-  min-width: 14rem;
+  min-width: 15rem;
   position: sticky;
   right: 0;
   background: var(--surface-card);
@@ -859,7 +1120,13 @@ onMounted(() => {
   z-index: 1;
 }
 .sticky-status {
-  left: 2.5rem;
+  left: 2.75rem;
+}
+.records-table.no-select .sticky-status {
+  left: 0;
+}
+.select-col {
+  width: 2.75rem;
 }
 .records-row-actions {
   display: flex;
