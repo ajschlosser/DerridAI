@@ -1531,7 +1531,6 @@ function selectRecord(record: CorpusRecord) {
   selectedPdfPage.value = Number(record.pdf_pages?.[0] || 1);
   reviewInspectorTab.value = selectedMetadataBlocked.value ? "metadata" : reviewInspectorTab.value;
   if (!preserveActiveDraft) {
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     let saved = "";
     try {
       saved = localStorage.getItem(textDraftKey(selectedBuildId.value, record.record_id)) || "";
@@ -1567,7 +1566,6 @@ function beginTextEdit(useTouchupProposal = false) {
     textDraft.value = selectedRecord.value.text_touchup_proposal.proposed_text;
   else if (!textDraft.value) textDraft.value = String(selectedRecord.value.text || "");
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function cancelTextEdit() {
   if (!selectedRecord.value) return;
   editingText.value = false;
@@ -2329,7 +2327,6 @@ async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
       Number(selectedRecord.value.record_revision || 1),
       resolveIssues,
     );
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
     selectedRecord.value = row;
     textDraft.value = String(row.text || "");
     editingText.value = false;
@@ -2381,7 +2378,6 @@ async function saveSourceTranscription(text: string) {
   sourceTranscriptionOpen.value = false;
 }
 
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 async function saveMetadata() {
   if (!currentBuild.value || !selectedRecord.value) return;
   const viewport = captureReviewViewport();
@@ -3208,7 +3204,6 @@ watch(
 watch([reviewQueue, recordQuery, selectedBuildId], () => {
   selectedReviewIds.value = new Set();
 });
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(
   metadataDraft,
   (value) => {
@@ -3221,7 +3216,6 @@ watch(
   },
   { flush: "post" },
 );
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(
   textDraft,
   (value) => {
