@@ -46,5 +46,7 @@ export const responseCacheStore = (...args: Parameters<typeof runtime.responseCa
   runtime.responseCacheStore(...args);
 export const enhanceCollapsibles = (...args: Parameters<typeof runtime.enhanceCollapsibles>) =>
   runtime.enhanceCollapsibles(...args);
+export const renderDashboard = (...args: Parameters<typeof runtime.renderDashboard>) =>
+  runtime.renderDashboard(...args);
 
 export default runtime;

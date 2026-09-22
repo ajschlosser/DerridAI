@@ -2263,6 +2263,7 @@ export {
   refreshStores,
   responseCacheStore,
   enhanceCollapsibles,
+  renderDashboard,
   flushWorkspacePrefs,
   applyUiTheme,
   applyAppearance,
