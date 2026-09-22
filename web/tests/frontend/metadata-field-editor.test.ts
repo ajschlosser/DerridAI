@@ -102,6 +102,21 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     wrapper.unmount();
   });
 
+  it("identifies a required empty LLM result as LLM provenance rather than unclassified", async () => {
+    const wrapper=mount(CorpusMetadataFieldEditor,{
+      props:{
+        field:"speaker",
+        value:null,
+        control:"text",
+        open:true,
+        status:{status:"unresolved",method:"hybrid",value_source:"llm",verification_status:"pending_review",reason_code:"ambiguous"},
+      },
+    });
+    expect(wrapper.text()).toContain("LLM source");
+    expect(wrapper.text()).toContain("Needs review");
+    wrapper.unmount();
+  });
+
   it("allows adding multiple unique values from the autocomplete list", async () => {
     const wrapper=mount(CorpusMetadataFieldEditor,{
       props:{

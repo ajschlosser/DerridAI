@@ -5048,7 +5048,7 @@ CURRENT REVIEWED RECORD TEXT:
                 auto["verification_status"] = "auto_resolved"
                 field_status[field] = auto
             elif field in required_metadata_fields and value in (None, "", []):
-                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
+                field_status[field] = {"status": "unresolved", "method": "hybrid", "confidence": confidence, "auto_populated": False, "value_source": "llm", "verification_status": "pending_review", "proposed_value": value, "reason_code": "ambiguous", "reason": reason}
             elif (confidence is None or confidence <= minimum) and value not in (None, "", []):
                 # The proposal is already populated. Missing/low confidence blocks
                 # automatic resolution, not visibility of the value.

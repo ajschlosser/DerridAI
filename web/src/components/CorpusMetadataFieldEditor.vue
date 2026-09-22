@@ -61,7 +61,7 @@ const autoResolved=computed(()=>verificationStatus.value==='auto_resolved'||prop
 <template>
 <article class="metadata-field" :data-attention="status?.status==='unresolved'||status?.status==='invalid'?'true':'false'">
   <div class="field-topline">
-    <div class="field-name"><b>{{i18n.t(`record.${field}`,label||field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :verification="String(status?.verification_status||'')" :audit="Boolean(status?.audit_sample)"/></div>
+    <div class="field-name"><b>{{i18n.t(`record.${field}`,label||field.replaceAll('_',' '))}}</b><CorpusFieldOwnershipBadge :status="String(status?.status||'')" :method="String(status?.method||'')" :source="String(status?.value_source||'')" :verification="String(status?.verification_status||'')" :audit="Boolean(status?.audit_sample)"/></div>
     <div class="field-actions"><button type="button" class="link-button" @click="emit('source')">{{i18n.t('pdf_corpus.view_evidence','View evidence')}}</button><button type="button" class="btn small" :disabled="busy" @click="editing=!editing;if(!editing)emit('dirty',false)">{{editing?i18n.t('ui.done','Done'):i18n.t('ui.edit','Edit')}}</button></div>
   </div>
   <p v-if="status?.recheck" class="blind-note" role="status">{{i18n.t('pdf_corpus.recheck_prompt','Quality check: enter your value again without looking back. Your earlier answer is shown after you save.')}}</p>

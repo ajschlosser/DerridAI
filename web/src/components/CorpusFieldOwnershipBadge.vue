@@ -2,9 +2,9 @@
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
-const props=defineProps<{status?:string;method?:string;verification?:string;audit?:boolean}>();
+const props=defineProps<{status?:string;method?:string;verification?:string;source?:string;audit?:boolean}>();
 const i18n=useI18nStore();
-const sourceKind=computed(()=>{const status=String(props.status||""),method=String(props.method||"");if(status==="human_override")return"override";if(status==="human_confirmed"||status==="human_confirmed_absent")return"human";if(status==="inherited")return"inherited";if(method.includes("llm")||status==="llm_inferred")return"llm";if(status==="deterministic")return"deterministic";return"unknown"});
+const sourceKind=computed(()=>{const status=String(props.status||""),method=String(props.method||""),valueSource=String(props.source||"");if(status==="human_override")return"override";if(status==="human_confirmed"||status==="human_confirmed_absent")return"human";if(status==="inherited")return"inherited";if(method.includes("llm")||method==="hybrid"||status==="llm_inferred"||valueSource==="llm")return"llm";if(status==="deterministic")return"deterministic";return"unknown"});
 const sourceLabel=computed(()=>i18n.t(`pdf_corpus.ownership.${sourceKind.value}`,({override:"Override",human:"Human confirmed",inherited:"Inherited",deterministic:"Source derived",llm:"LLM source",unknown:"Unclassified"} as Record<string,string>)[sourceKind.value]));
 const sourceHelp=computed(()=>i18n.t(`pdf_corpus.ownership_help.${sourceKind.value}`,({override:"This record deliberately overrides document-level metadata.",human:"A reviewer confirmed this record-level value.",inherited:"Inherited from the document manifest; it may be overridden for this record.",deterministic:"Derived from source structure or deterministic rules.",llm:"The current value or proposal originated with a language model. Verification is shown separately.",unknown:"No source provenance has been recorded."} as Record<string,string>)[sourceKind.value]));
 const sourceTone=computed(()=>sourceKind.value==="human"||sourceKind.value==="override"?"success":sourceKind.value==="llm"?"info":"neutral");
