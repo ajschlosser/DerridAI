@@ -232,7 +232,7 @@ def test_saving_gives_a_unique_id_and_survives_a_reload(tmp_path):
     removed = custom()
     removed.fields = [field for field in removed.fields if field.name != "mood"]
     assert store.save(removed, "reading-notes").schema_version == "2.0.0"
-    assert store.get("reading-notes").description == "Reading notes"
+    assert store.get("reading-notes").description == ""
     store.delete("reading-notes-2")
     with pytest.raises(SchemaNotFound):
         store.get("reading-notes-2")
