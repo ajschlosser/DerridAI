@@ -118,10 +118,6 @@ const preview = ref<SchemaPreview | null>(null);
 async function tryGroup(run: boolean) {
   const schema = draft.value;
   if (!schema || !previewText.value.trim()) return;
-  if (run && !(previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id)) {
-    error.value = t("preview_no_provider", "Configure an LLM provider profile before running a review.");
-    return;
-  }
   const payload: Record<string, unknown> = { schema, group: previewGroup.value, text: previewText.value, run };
   if (run && (previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id)) {
     payload.provider_profile_id = previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id;
