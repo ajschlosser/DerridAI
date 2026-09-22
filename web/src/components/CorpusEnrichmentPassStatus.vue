@@ -119,12 +119,6 @@ const heading = computed(() => {
       </template>
       <span v-else-if="isEnrichmentOp && state === 'failed'">{{ operation.error }}</span>
       <template v-else-if="isEnrichmentOp">
-        <ul class="pass-changes">
-          <li><b>{{ changes.added }}</b> {{ i18n.t("pdf_corpus.enrichment_pass_added_label", "added") }}</li>
-          <li><b>{{ changes.replaced }}</b> {{ i18n.t("pdf_corpus.enrichment_pass_replaced_label", "replaced") }}</li>
-          <li><b>{{ changes.kept }}</b> {{ i18n.t("pdf_corpus.enrichment_pass_kept_label", "kept") }}</li>
-          <li><b>{{ changes.disputed }}</b> {{ i18n.t("pdf_corpus.enrichment_pass_disputed_label", "disagreements") }}</li>
-        </ul>
         <span>{{
           i18n.tf(
             "pdf_corpus.enrichment_pass_changes",
@@ -177,34 +171,10 @@ const heading = computed(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--card);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
-}
-.pass-changes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 2px 0;
-  padding: 0;
-  list-style: none;
-}
-.pass-changes li {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 999px;
   background: var(--soft);
-  border: 1px solid var(--line);
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.pass-changes b {
-  font-size: 0.875rem;
-  color: var(--text);
 }
 .pass-status[data-state="failed"] {
   border-color: var(--danger);
