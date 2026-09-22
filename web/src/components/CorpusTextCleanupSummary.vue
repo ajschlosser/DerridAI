@@ -21,5 +21,5 @@ const changed=computed(()=>Number(props.summary?.records_changed||0));
 </template>
 
 <style scoped>
-.cleanup-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.cleanup-copy{display:grid;gap:3px;min-width:0}.cleanup-copy b{font-size:.875rem}.cleanup-copy span{font-size:.8125rem;line-height:1.45;color:var(--muted)}@media(max-width:680px){.cleanup-summary{align-items:flex-start;flex-direction:column}}
+.cleanup-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.cleanup-copy{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;min-width:0}.cleanup-copy b{font-size:.8125rem}.cleanup-copy span{font-size:.8125rem;line-height:1.45;color:var(--muted)}@media(max-width:680px){.cleanup-summary{align-items:flex-start;flex-direction:column}}
 </style>

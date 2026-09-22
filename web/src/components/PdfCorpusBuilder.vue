@@ -1104,6 +1104,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         </section>
 
         <template v-if="showReviewWorkspace">
+          <div class="enrichment-ops-stack">
           <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
           <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusEnrichmentPassStatus v-if="currentBuild" :build="currentBuild" :disabled="busy!==''" @stop="cancelBuild" @run-another="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" />
@@ -1111,6 +1112,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
           <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
           <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
+          </div>
 
           <CorpusReviewSessionBar v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="openFocusView" />
 
@@ -1244,6 +1246,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
 /* 0.48.1 Gifted Grungus — editable reviewed text, selective enrichment, explicit ownership, and concurrent-build clarity. */
 .review-readonly-banner{display:flex;align-items:center;padding:10px 14px;border:1px solid var(--tone-warn-edge);border-radius:10px;background:var(--tone-warn-bg);color:var(--tone-warn-fg)}.review-readonly-banner>div{display:grid;gap:3px}.review-readonly-banner b{font-size:0.8125rem}.review-readonly-banner span{font-size:.8125rem;line-height:1.45}
+.enrichment-ops-stack{display:grid;gap:8px;padding:10px 12px 4px}
 .builder-workspace.review-mode{grid-template-columns:minmax(0,1fr)}
 .builder-workspace.review-mode .build-main{max-width:none;width:100%}
 .review-toolbar{position:sticky;top:66px;z-index:11;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
