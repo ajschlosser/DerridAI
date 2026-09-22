@@ -61,6 +61,7 @@ import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
 import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
+import { createModalDialogs } from "../domain/modalDialogs";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -421,6 +422,12 @@ const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget
   wireCorpusBuildsHomeCard:(...args)=>wireCorpusBuildsHomeCard(...args),
   workIndex:(...args)=>workIndex(...args),
   workInsightMetrics:(...args)=>workInsightMetrics(...args),
+});
+const {openMessageModal,copyJsonToClipboard}=createModalDialogs({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  showAppModal:(...args)=>showAppModal(...args),
+  toast:(...args)=>toast(...args),
 });
 const {toast,applyOperationStackPosition,setOperationDockMinimized,announceOperationDock,operationDockCardStats,wireOperationStackDrag,progressStack,updateOperationStackCount,showOperationProgress,updateOperationProgress,hideOperationProgress,ensureJobProgressCard}=createOperationDock({
   state,
@@ -1340,43 +1347,6 @@ function restoreRecordHistoryVersion(file,index,version){
 }
 
 
-function openMessageModal({
-  title="Notice",
-  message="",
-  detail="",
-  tone="info",
-  confirmLabel="OK",
-  cancelLabel=null,
-}={}){
-  return new Promise(resolve=>{
-    const dialog=document.createElement("dialog");
-    dialog.className=`message-dialog ${tone}`;
-    dialog.innerHTML=`<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2>${detail?`<div class="dialog-subtitle">${esc(detail)}</div>`:""}</div><button class="btn icon-only" data-cancel>${icon("close")}</button></div><div class="db"><div class="message-modal-body">${esc(message).replace(/\n/g,"<br>")}</div></div><div class="da">${cancelLabel?`<button class="btn" data-cancel>${esc(cancelLabel)}</button>`:""}<button class="btn ${tone==="danger"?"danger":"primary"}" data-confirm>${esc(confirmLabel)}</button></div>`;
-    document.body.appendChild(dialog);
-    const finish=value=>{dialog.close();dialog.remove();resolve(value)};
-    dialog.querySelectorAll("[data-cancel]").forEach(button=>button.onclick=()=>finish(false));
-    dialog.querySelector("[data-confirm]").onclick=()=>finish(true);
-    dialog.addEventListener("cancel",event=>{event.preventDefault();finish(false)},{once:true});
-    showAppModal(dialog);
-  });
-}
-async function copyJsonToClipboard(value,labelText="record"){
-  const text=JSON.stringify(value,null,2);
-  try{
-    await navigator.clipboard.writeText(text);
-    toast(`Copied ${labelText} JSON`);
-  }catch(error){
-    const area=document.createElement("textarea");
-    area.value=text;
-    area.style.position="fixed";
-    area.style.opacity="0";
-    document.body.appendChild(area);
-    area.select();
-    try{document.execCommand("copy");toast(`Copied ${labelText} JSON`)}
-    catch{openMessageModal({title:"Could not copy",message:error.message,tone:"danger"})}
-    finally{area.remove()}
-  }
-}
 function isResponseCacheStore(store){
   return Boolean(store&&(store.name==="_response_cache"||store.storage_name==="derridai_response_cache"||store.metadata?.derridai_system_collection==="response_cache"));
 }
