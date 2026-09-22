@@ -172,6 +172,12 @@ export interface CorpusRecord {
   metadata_review_fields?: string[];
   metadata_reviewed_at?: string;
   metadata_decisions?: Array<{field?:string;value?:unknown;at?:string;source?:string}>;
+  metadata_enrichment_history?: Array<{
+    run_id?:string;pass?:number;at?:string;state?:string;outcome?:string;model?:string;
+    added_fields?:string[];replaced?:Array<{field?:string;previous?:unknown;value?:unknown}>;
+    disputes?:Array<Record<string,unknown>>;
+    informational?:Array<{kind?:string;field?:string;authoritative_value?:unknown;proposed_value?:unknown;confidence?:number;reason?:string;run_id?:string;pass?:number;model?:string|null;at?:string}>;
+  }>;
   activity?: {human_view_count?:number;human_review_count?:number;llm_review_count?:number;enrichment_pass_count?:number;last_human_viewed_at?:string;last_human_reviewed_at?:string;last_llm_reviewed_at?:string;last_enrichment_provider?:string;last_enrichment_model?:string};
   human_view_count?: number;
   metadata_stage_status?: Record<string,string>;

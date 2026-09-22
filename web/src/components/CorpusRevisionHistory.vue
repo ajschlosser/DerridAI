@@ -13,6 +13,25 @@ const items=computed(()=>{
     const field=String(entry.field||"");
     rows.push({at:entry.at,kind:"metadata",label:i18n.tf("pdf_corpus.history_metadata_change","Metadata: {field}",{field:i18n.t(`record.${field}`,field.replace(/_/g," "))}),detail:entry.source?i18n.t(`pdf_corpus.history_source.${entry.source}`,String(entry.source).replace(/_/g," ")):undefined});
   }
+  for(const entry of props.record.metadata_enrichment_history||[]){
+    for(const event of entry.informational||[]){
+      const field=String(event.field||"");
+      const kind=String(event.kind||"agreement");
+      const label=kind==="protected_suggestion"
+        ? i18n.t("pdf_corpus.history_enrichment_protected","LLM suggestion retained for human-owned metadata")
+        : kind==="duplicate"
+          ? i18n.t("pdf_corpus.history_enrichment_duplicate","LLM repeated an existing candidate")
+          : i18n.t("pdf_corpus.history_enrichment_agreement","LLM found no new supported value");
+      const model=event.model?String(event.model):"";
+      const pass=event.pass?i18n.tf("pdf_corpus.enrichment_pass_number","pass {pass}",{pass:event.pass}):"";
+      rows.push({
+        at:event.at||entry.at,
+        kind:"enrichment",
+        label:field?`${label}: ${i18n.t(`record.${field}`,field.replace(/_/g," "))}`:label,
+        detail:[model,pass].filter(Boolean).join(" · ")||undefined,
+      });
+    }
+  }
   for(const entry of props.record.review_events||[]){
     const event=String(entry.event||'review_change');
     rows.push({at:entry.at,kind:'review',label:i18n.t(`pdf_corpus.history_event.${event}`,event.replace(/_/g,' ')),detail:entry.transaction_id?String(entry.transaction_id):undefined});

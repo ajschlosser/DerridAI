@@ -7624,13 +7624,52 @@ CURRENT REVIEWED RECORD TEXT:
         kept: list[str] = []
         disputes: list[dict[str, Any]] = []
         history_disputes: list[dict[str, Any]] = []
+        informational: list[dict[str, Any]] = []
         known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
+        model_name = str(request.get("model") or "")
+
+        def add_informational(
+            kind: str, field: str, *, authoritative: Any = None, proposed: Any = None,
+            confidence: Any = None, reason: str | None = None,
+        ) -> None:
+            event: dict[str, Any] = {
+                "kind": kind,
+                "field": field,
+                "run_id": run_id,
+                "pass": pass_number,
+                "model": model_name or None,
+                "at": iso_now(),
+            }
+            if authoritative is not None:
+                event["authoritative_value"] = authoritative
+            if proposed is not None:
+                event["proposed_value"] = proposed
+            if isinstance(confidence, (int, float)):
+                event["confidence"] = confidence
+            if reason:
+                event["reason"] = reason
+            informational.append(event)
+
         for family in families:
             for field in groups[family]:
                 new, old = candidate.get(field), live.get(field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
                 new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
-                if new in (None, "", []) or str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                if new in (None, "", []):
+                    continue
+                if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                    add_informational(
+                        "agreement" if same_value(old, new) else "protected_suggestion",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason=(
+                            "The model agreed with the human-owned value."
+                            if same_value(old, new)
+                            else "The model proposed a different value, but the human-owned value remains authoritative."
+                        ),
+                    )
                     continue
                 if old in (None, "", []):
                     live[field] = new
@@ -7642,10 +7681,26 @@ CURRENT REVIEWED RECORD TEXT:
                 if field in CONFIDENCE_FIELDS:
                     continue
                 if same_value(old, new):
+                    add_informational(
+                        "agreement",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model found no new supported value.",
+                    )
                     if field in cand_evidence:
                         live_evidence[field] = cand_evidence[field]
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
+                    add_informational(
+                        "duplicate",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model repeated an existing unresolved candidate.",
+                    )
                     continue
                 # PR #83 permits a valid LLM proposal to occupy the record while
                 # remaining pending human review. PR #81's generic resolver treats
@@ -7734,6 +7789,7 @@ CURRENT REVIEWED RECORD TEXT:
         history.append({
             "run_id": run_id, "pass": pass_number, "at": iso_now(), "state": "complete", "outcome": outcome, "added_fields": added,
             "replaced": replaced, "kept_existing": kept, "disputes": history_disputes,
+            "informational": informational,
             "provider_profile_id": request.get("provider_profile_id"), "model": request.get("model"),
         })
         live["metadata_enrichment_history"] = history[-30:]
