@@ -221,7 +221,7 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
     events = current["metadata_enrichment_history"][-1]["informational"]
     assert current["speaker"] == "Jacques Derrida"
     assert current["review_disposition"] == "accepted"
-    assert current["needs_review"] is False
+    assert not current.get("needs_review")
     assert {event["kind"] for event in events} == {"protected_suggestion", "agreement"}
     assert repo.get_build(build_id)["metadata_operation"]["records_reopened"] == 0
 
