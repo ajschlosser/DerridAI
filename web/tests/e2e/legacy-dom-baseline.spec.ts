@@ -154,6 +154,10 @@ async function rawMarkup(
       });
       wrap.replaceWith(...wrap.childNodes);
     });
+    if (copy.id === "operationProgressStack") {
+      copy.removeAttribute("style");
+      copy.setAttribute("data-tone", "neutral");
+    }
     return copy.outerHTML;
   });
   return (
@@ -1531,6 +1535,7 @@ const scenarios: Scenario[] = [
       });
       await page.getByRole("button", { name: "Yes", exact: true }).click();
       await expect(page.getByText(/Restore complete/)).toBeVisible({ timeout: 10_000 });
+      await page.waitForLoadState("networkidle");
     },
   },
 ];
