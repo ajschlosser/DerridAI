@@ -118,3 +118,35 @@ describe("type scale", () => {
     expect(light.match(/--fs-/g)?.length).toBeGreaterThanOrEqual(7);
   });
 });
+
+describe("unified workbench contract", () => {
+  it("defines semantic surfaces, text, borders, controls, and focus tokens", () => {
+    for (const name of [
+      "surface-page",
+      "surface-card",
+      "surface-raised",
+      "surface-inset",
+      "surface-overlay",
+      "surface-hover",
+      "surface-selected",
+      "text-primary",
+      "text-secondary",
+      "text-tertiary",
+      "border-subtle",
+      "border-strong",
+      "border-interactive",
+      "control-height",
+      "control-height-small",
+      "radius-control",
+      "radius-card",
+      "radius-overlay",
+      "shadow-card",
+      "shadow-overlay",
+      "scrim",
+      "focus-ring-width",
+      "focus-ring-offset",
+    ]) {
+      expect(light).toMatch(new RegExp(`--${name}\\s*:`));
+    }
+  });
+});

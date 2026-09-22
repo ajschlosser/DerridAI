@@ -197,6 +197,12 @@ export const scenarios: Scenario[] = [
       await p.getByRole("button", { name: /^Create role$/ }).click();
     },
   },
+  {
+    id: "users-default",
+    path: "/users",
+    role: "admin",
+    ready: (p) => p.getByRole("heading", { name: "Users" }),
+  },
   // Record (a researcher reads a record from the database)
   {
     id: "record-overview",
@@ -219,7 +225,13 @@ export const scenarios: Scenario[] = [
     role: "researcher",
     ready: (p) => p.locator("mark.search-hit").first(),
     steps: async (p) => {
-      await p.getByRole("textbox", { name: /Find in record text/ }).fill("hospitality");
+      const find = p.getByRole("textbox", { name: /Find in record text/ });
+      await find.fill("hospitality");
+      // The refreshed runtime can restore the record view once after navigation.
+      // Re-apply the query after that render settles so the assertion tests the
+      // find interaction rather than the timing of the view handoff.
+      await p.waitForTimeout(250);
+      await find.fill("hospitality");
     },
   },
   {

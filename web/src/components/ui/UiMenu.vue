@@ -158,16 +158,16 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   display: inline-flex;
 }
 .ui-menu-trigger {
-  min-height: 40px;
+  min-height: var(--control-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   padding: 8px 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--panel, var(--card));
-  color: var(--text);
+  background: var(--surface-card);
+  color: var(--text-primary);
   font: inherit;
   font-size: 0.875rem;
   font-weight: 700;
@@ -175,19 +175,19 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   cursor: pointer;
 }
 .ui-menu-trigger:hover:not(:disabled) {
-  background: var(--panel-2, var(--soft));
-  border-color: var(--tone-ok-edge, var(--line-strong));
+  background: var(--surface-hover);
+  border-color: var(--border-interactive);
 }
 .ui-menu-trigger:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .ui-menu-trigger:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .ui-menu-trigger.icon-only {
-  width: 40px;
+  width: var(--control-height);
   padding: 0;
 }
 .ui-menu-trigger :deep(svg) {
@@ -216,10 +216,10 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   margin: 0;
   padding: 6px;
   list-style: none;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--surface-overlay, var(--card));
-  box-shadow: var(--elev-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
 }
 .ui-menu[data-placement="top"] .ui-menu-list {
   inset-block-start: auto;
@@ -240,7 +240,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   font: inherit;
   font-size: 0.875rem;
   font-weight: 650;
@@ -271,10 +271,10 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 }
 .ui-menu-item:hover,
 .ui-menu-item:focus-visible {
-  background: var(--soft);
+  background: var(--surface-hover);
 }
 .ui-menu-item:focus-visible {
-  outline: 3px solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: -3px;
 }
 .ui-menu-item[aria-disabled="true"] {

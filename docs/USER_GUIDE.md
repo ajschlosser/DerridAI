@@ -409,8 +409,8 @@ Export removes Chroma's internal `_chroma_id` field.
 
 The LLM returns each metadata field (or `null` when unsupported) together with a per-field confidence. The response schema requires every field, so a model cannot return confidence assessments without values.
 
-- A schema-valid value above the profile's confidence threshold (65% by default) is written to the record and marked **auto-populated**.
-- A value at or below the threshold, or with no reported confidence, is kept as a `proposed_value` suggestion and marked unresolved.
+- Every schema-valid non-empty LLM value is populated into the record so the reviewer can see it; population does **not** imply verification.
+- `autofilled=true` is reserved for the calibrated autofill policy (90% blended confidence by default, valid cited evidence, and no suspension from poor reviewer precision). Values that do not pass calibrated autofill remain **pending review**, even when they exceed the ordinary metadata-confidence floor.
 - Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
 - If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
 - Reviewer-confirmed values are never overwritten by later enrichment.

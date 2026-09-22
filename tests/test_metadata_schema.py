@@ -35,6 +35,51 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
     assert "even when the corresponding metadata list is empty" in indexing
 
 
+def test_response_consistency_rejects_assessment_value_contradictions():
+    schema = ms.default_schema()
+    model = ms.response_model_for(schema, "discourse")
+    fields = {
+        "region_type": "main_text",
+        "primary_text": True,
+        "discourse_role": "analysis",
+        **{field.name: ([] if field.type == "list" else None) for field in schema.fields_in("discourse")},
+    }
+    assessed = ["region_type", "primary_text", "discourse_role", *[f.name for f in schema.fields_in("discourse") if f.assess]]
+    assessments = {
+        name: {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "no_supported_value"}
+        for name in assessed
+    }
+    for name in ("region_type", "primary_text", "discourse_role"):
+        assessments[name] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+    evidence = {
+        name: {"block_ids": ["b1"], "confidence": 0.95, "reason": "clear"}
+        for name in ("region_type", "primary_text", "discourse_role")
+    }
+    model.model_validate({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence})
+
+    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "The speaker is clearly Derrida.", "outcome": "supported_value"}
+    with pytest.raises(Exception, match="supported_value requires a non-empty metadata value"):
+        model.model_validate(bad)
+
+    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    bad["metadata"]["speaker"] = "Jacques Derrida"
+    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "No speaker applies.", "outcome": "no_supported_value"}
+    with pytest.raises(Exception, match="no_supported_value requires an empty metadata value"):
+        model.model_validate(bad)
+
+    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    bad["field_assessments"]["speaker"] = {"confidence": 0.5, "needs_review": False, "reason": "uncertain", "outcome": "uncertain"}
+    with pytest.raises(Exception, match="uncertain requires needs_review=true"):
+        model.model_validate(bad)
+
+    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    bad["metadata"]["speaker"] = "Jacques Derrida"
+    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+    with pytest.raises(Exception, match="require at least one field_evidence block_id"):
+        model.model_validate(bad)
+
+
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
     schema = ms.default_schema()
     assert schema.family_fields() == {k: v - {"attribution_confidence", "semantic_classification_confidence"} for k, v in METADATA_FAMILY_FIELDS.items()}
@@ -85,15 +130,16 @@ def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     assert prompt(schema, "ideas").startswith("List the ideas.\n\n<<CONTEXT>>")
     model = ms.response_model_for(schema, "discourse")
     assessments = {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
-    ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": assessments})
+    evidence = {name: {"block_ids": ["b1"], "confidence": 0.9, "reason": "clear"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
+    ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": assessments, "field_evidence": evidence})
     assert ok.metadata.mood == "calm"
     with pytest.raises(Exception):
-        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "furious"}, "field_assessments": assessments})  # strict values
+        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "furious"}, "field_assessments": assessments, "field_evidence": evidence})  # strict values
     with pytest.raises(Exception):
         model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}})
     bad_assessment = {**assessments, "mood": {"needs_review": False, "reason": "clear", "outcome": "supported_value"}}
     with pytest.raises(Exception):
-        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": bad_assessment})
+        model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": bad_assessment, "field_evidence": evidence})
     ideas = ms.response_model_for(schema, "ideas").model_validate({"metadata": {"ideas": ["hospitality"], "year_mentioned": 1795.0}})
     assert ideas.metadata.year_mentioned == 1795.0
 

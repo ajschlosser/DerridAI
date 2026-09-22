@@ -1,0 +1,2 @@
+# Keep legacy DOM baselines byte-stable across developer operating systems.
+/web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/* text eol=lf

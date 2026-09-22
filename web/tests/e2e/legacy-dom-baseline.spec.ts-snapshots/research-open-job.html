@@ -1,0 +1,665 @@
+<main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
+<div class="research-page-intro">
+<div>
+<span class="section-label">Evidence-grounded inquiry</span>
+<h1 id="research-page-title">Research workspace</h1>
+<p>Ask the corpus, inspect the evidence, and keep provenance attached to the answer.</p>
+</div>
+<div class="research-page-state">
+<span>
+<i>
+</i>1 databases</span>
+<span>1 selected evidence</span>
+</div>
+</div>
+<section class="research-composer-v031 card" aria-labelledby="research-compose-title">
+<header class="research-composer-heading">
+<div>
+<span class="section-label">Research</span>
+<h1 id="research-compose-title">What are you researching?</h1>
+<p>Ask a scholarly question. DerridAI will retrieve, rerank, synthesize, and bind the answer to inspectable evidence.</p>
+</div>
+<div class="research-heading-actions">
+<button class="btn" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>Runs</button>
+<button class="btn" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>Expert settings</button>
+</div>
+</header>
+<div class="research-question-shell">
+<label class="sr-only" for="researchQuestion">Research question</label>
+<textarea id="researchQuestion" class="research-question-input" placeholder="Ask about a concept, passage, relation, attribution, or disagreement…" value="">
+</textarea>
+<div class="research-question-tools">
+<div class="research-history-popover">
+<button class="research-text-action" type="button" aria-expanded="false" aria-controls="researchHistoryMenu">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>Recent questions</button>
+<!---->
+</div>
+<span>0 characters</span>
+</div>
+</div>
+<details class="research-instructions-disclosure">
+<summary>Additional instructions<span>Optional</span>
+</summary>
+<label class="sr-only" for="researchInstructions">Additional instructions</label>
+<textarea id="researchInstructions" placeholder="Optional constraints on framing, comparison, citation, or answer form." value="">
+</textarea>
+</details>
+<fieldset class="research-compose-context">
+<legend class="sr-only">Research context</legend>
+<label>
+<span>Corpus</span>
+<select class="control" value="derrida_primary">
+<option value="derrida_primary">derrida_primary · 3</option>
+<!---->
+</select>
+<small>general · bge-m3:latest</small>
+</label>
+<label>
+<span>Research profile</span>
+<select class="control" value="ollama-default">
+<option value="ollama-default">Local Ollama</option>
+<option value="openai-default">FreeLLM / OpenAI-compatible</option>
+</select>
+<small>gemma4:e2b</small>
+</label>
+<label>
+<span>Retrieval</span>
+<select class="control" value="evidence">
+<option value="balanced">Balanced</option>
+<option value="precision">High precision</option>
+<option value="recall">High recall</option>
+<option value="evidence">Selected evidence only</option>
+<option value="custom">Custom</option>
+</select>
+<small>1 selected evidence</small>
+</label>
+<label>
+<span>Answer language</span>
+<select class="control" value="auto">
+<option value="auto">Automatic</option>
+<option value="en">English</option>
+<option value="fr">French</option>
+</select>
+<small>Source-language routing remains independent.</small>
+</label>
+</fieldset>
+<footer class="research-compose-footer">
+<div class="research-run-context-summary">
+<span>
+<i>
+</i>1 selected evidence</span>
+<span>Local Ollama</span>
+</div>
+<span class="action-tooltip-wrap" data-tooltip="Enter a research question.">
+<button class="btn primary research-run-button" type="button" disabled="" aria-disabled="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>Research</button>
+</span>
+</footer>
+</section>
+<section class="research-pipeline-bar" aria-labelledby="research-pipeline-bar-title">
+<div class="research-pipeline-bar-head">
+<div>
+<span class="research-live-dot" aria-hidden="true">
+</span>
+<div>
+<b id="research-pipeline-bar-title">1 pipeline in progress</b>
+<small>Start another question at any time. Each run continues independently and provider concurrency limits determine when queued work executes.</small>
+</div>
+</div>
+<button class="research-text-action" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>View all runs</button>
+</div>
+<div class="research-pipeline-scroll" role="list" aria-label="Active research pipelines">
+<article class="research-pipeline-chip selected" role="listitem">
+<button class="research-pipeline-chip-main" type="button">
+<span class="research-run-status-dot running" aria-hidden="true">
+</span>
+<span>
+<b>What is différance?</b>
+<small>Retrieving candidate evidence</small>
+</span>
+<span class="research-run-status">running</span>
+</button>
+<button class="research-pipeline-chip-cancel" type="button" aria-label="Cancel research run">×</button>
+</article>
+</div>
+</section>
+<div class="research-workspace-grid research-result-presentation">
+<section class="research-answer-workspace card" aria-live="polite">
+<div class="research-run-state running">
+<div class="research-run-orb" aria-hidden="true">
+<span>
+</span>
+</div>
+<div>
+<span class="research-answer-kicker">Running</span>
+<h2>What is différance?</h2>
+<p>Retrieving candidate evidence</p>
+</div>
+</div>
+<!---->
+</section>
+<aside id="researchEvidencePanel" class="research-evidence-panel card" aria-label="Evidence">
+<header class="research-panel-heading">
+<div>
+<b>Selected evidence</b>
+<small>1 records</small>
+</div>
+<button class="research-text-action" type="button">Clear</button>
+</header>
+<div class="research-selected-list" role="list">
+<article role="listitem">
+<details class="research-selected-details">
+<summary>
+<span>
+<b>Of Grammatology</b>
+<small>derrida-grammatology-00001 · pp. 3<!---->
+</small>
+</span>
+<span aria-hidden="true" class="research-selected-chevron">⌄</span>
+</summary>
+<div class="research-selected-preview">
+<dl class="research-relation-grid compact">
+<dt>Speaker</dt>
+<dd>Derrida</dd>
+<!---->
+<!---->
+<!---->
+<!---->
+<!---->
+</dl>
+<p>The sign and divinity have the same place and time of birth.<!---->
+</p>
+</div>
+</details>
+<button type="button" aria-label="Remove from evidence: derrida-grammatology-00001"> × </button>
+</article>
+</div>
+</aside>
+</div>
+<dialog class="research-settings-dialog research-settings-studio-dialog" aria-labelledby="research-settings-title">
+<div class="research-settings-studio-shell">
+<header class="research-settings-studio-head">
+<div>
+<span class="section-label">Expert settings</span>
+<h2 id="research-settings-title">Retrieval, evidence &amp; generation</h2>
+<p>These settings are for reproducibility, evaluation, and unusual research tasks. Normal research should not require them.</p>
+</div>
+<div class="research-settings-studio-head-actions">
+<span class="research-settings-profile-pill">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>
+<small>Research profile</small>
+<b>Local Ollama</b>
+</span>
+</span>
+<button class="btn icon-only" type="button" aria-label="Close">×</button>
+</div>
+</header>
+<div class="research-settings-studio-body">
+<nav class="research-settings-nav" aria-label="Expert settings sections">
+<button data-settings-tab="retrieval" type="button" class="active" aria-current="page">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span>
+<b>Retrieval</b>
+<small>Routing, candidate depth and reranking</small>
+</span>
+</button>
+<button data-settings-tab="evidence" type="button" class="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+<span>
+<b>Evidence &amp; citations</b>
+<small>Context budget, source binding and grading</small>
+</span>
+</button>
+<button data-settings-tab="generation" type="button" class="">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>
+<b>Generation</b>
+<small>Model and per-run inference controls</small>
+</span>
+</button>
+<div class="research-settings-nav-note">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+<p>These values are stored with each run so an analysis can be reproduced later.</p>
+</div>
+</nav>
+<main class="research-settings-panel" aria-label="Retrieval">
+<section class="research-settings-page" aria-labelledby="research-settings-retrieval-title">
+<div class="research-settings-page-head">
+<div>
+<span class="section-label">01</span>
+<h3 id="research-settings-retrieval-title">Retrieval</h3>
+<p>Tune recall, rank fusion, reranking, and multilingual query routing.</p>
+</div>
+<button class="research-text-action" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
+</path>
+<path d="M3 4v6h6">
+</path>
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg>Reset section</button>
+</div>
+<div class="research-settings-card-grid">
+<fieldset class="research-settings-card">
+<legend>Routing</legend>
+<p>Choose which document languages and retrieval strategies participate in candidate discovery.</p>
+<div class="research-settings-choice-row">
+<span>Document languages</span>
+<div class="research-segmented-checks">
+<label>
+<input type="checkbox">
+<span>English</span>
+</label>
+<label>
+<input type="checkbox">
+<span>French</span>
+</label>
+</div>
+</div>
+<div class="research-settings-choice-row">
+<span>Retrieval routes</span>
+<div class="research-segmented-checks">
+<label>
+<input type="checkbox">
+<span>Similarity</span>
+</label>
+<label>
+<input type="checkbox">
+<span>Lexical (BM25)</span>
+</label>
+<label>
+<input type="checkbox">
+<span>MMR</span>
+</label>
+</div>
+</div>
+</fieldset>
+<fieldset class="research-settings-card">
+<legend>Candidate pool</legend>
+<p>Control how broadly DerridAI searches before fusion and reranking.</p>
+<div class="research-settings-grid compact">
+<label>
+<span>
+<code>k</code>Candidates retained</span>
+<input class="control" type="number" min="1" max="500">
+<small>Candidates retained per retrieval route</small>
+</label>
+<label>
+<span>
+<code>fetch_k</code>MMR candidate pool</span>
+<input class="control" type="number" min="1" max="5000">
+<small>MMR candidate pool</small>
+</label>
+<label>
+<span>
+<code>MMR λ</code>Relevance balance</span>
+<input class="control" type="number" step="0.05" min="0" max="1">
+<small>Relevance vs. diversity</small>
+</label>
+<label>
+<span>
+<code>RRF k</code>Fusion smoothing</span>
+<input class="control" type="number" min="1">
+<small>Rank-fusion smoothing constant</small>
+</label>
+</div>
+</fieldset>
+<fieldset class="research-settings-card wide">
+<legend>Reranking &amp; query decomposition</legend>
+<p>Refine the fused candidate set and optionally expand the question into multilingual subqueries.</p>
+<div class="research-settings-grid three">
+<label>
+<span>Rerank top N</span>
+<input class="control" type="number" min="1" max="500">
+</label>
+<label>
+<span>Reranker</span>
+<select class="control">
+<option value="cross_encoder">Cross-encoder</option>
+<option value="lexical">Lexical/vector fallback</option>
+<option value="none">None</option>
+</select>
+</label>
+<label>
+<span>Query-decomposition tokens</span>
+<input class="control" type="number" min="64" max="8192">
+</label>
+<label class="wide">
+<span>Cross-encoder model</span>
+<input class="control">
+</label>
+<label class="research-toggle-setting wide">
+<input type="checkbox">
+<span>
+<b>Query decomposition</b>
+<small>Generate subqueries and French formulations before retrieval.</small>
+</span>
+</label>
+</div>
+</fieldset>
+</div>
+</section>
+<section class="research-settings-page" aria-labelledby="research-settings-evidence-title" style="display: none;">
+<div class="research-settings-page-head">
+<div>
+<span class="section-label">02</span>
+<h3 id="research-settings-evidence-title">Evidence &amp; citations</h3>
+<p>Control evidence packet size and deterministic source binding.</p>
+</div>
+<button class="research-text-action" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
+</path>
+<path d="M3 4v6h6">
+</path>
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg>Reset section</button>
+</div>
+<div class="research-settings-card-grid">
+<fieldset class="research-settings-card wide">
+<legend>Evidence budget</legend>
+<p>Set an upper bound for each passage and for the full evidence packet sent to generation.</p>
+<div class="research-settings-grid two">
+<label>
+<span>Chars / evidence record</span>
+<input class="control" type="number" min="500" max="100000">
+<small>0 characters</small>
+</label>
+<label>
+<span>Total evidence chars</span>
+<input class="control" type="number" min="5000" max="1000000">
+<small>0 characters</small>
+</label>
+</div>
+</fieldset>
+<fieldset class="research-settings-card">
+<legend>Source binding</legend>
+<p>Keep generated claims auditable against deterministic evidence identifiers and citations.</p>
+<div class="research-settings-stack">
+<label class="research-toggle-setting">
+<input type="checkbox">
+<span>
+<b>Bind evidence tags to citations</b>
+<small>Validate evidence identifiers before final source formatting.</small>
+</span>
+</label>
+<label class="research-toggle-setting">
+<input type="checkbox">
+<span>
+<b>Append Works Cited</b>
+<small>Add a deterministic bibliography after the answer.</small>
+</span>
+</label>
+</div>
+</fieldset>
+<fieldset class="research-settings-card">
+<legend>Evaluation</legend>
+<p>Optionally grade the final response after generation without blocking the main Research workspace.</p>
+<div class="research-settings-stack">
+<label class="research-toggle-setting">
+<input type="checkbox">
+<span>
+<b>Auto-grade final response</b>
+<small>Runs as the final background-pipeline step.</small>
+</span>
+</label>
+<!---->
+</div>
+</fieldset>
+</div>
+</section>
+<section class="research-settings-page" aria-labelledby="research-settings-generation-title" style="display: none;">
+<div class="research-settings-page-head">
+<div>
+<span class="section-label">03</span>
+<h3 id="research-settings-generation-title">Generation</h3>
+<p>Optional per-run overrides; the saved provider profile is not changed.</p>
+</div>
+<div class="research-settings-page-actions">
+<button class="research-text-action" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
+</path>
+<path d="M3 4v6h6">
+</path>
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg>Reset section</button>
+<button class="btn" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>Discover models</button>
+</div>
+</div>
+<fieldset class="research-settings-generation-fieldset">
+<div class="research-generation-model-card">
+<div>
+<span class="section-label">Active profile</span>
+<b>Local Ollama</b>
+<small>Ollama · 1 concurrent requests</small>
+</div>
+<label>
+<span>Model</span>
+<input class="control" list="researchSettingsModels" autocomplete="off">
+<datalist id="researchSettingsModels">
+</datalist>
+</label>
+</div>
+<div class="research-settings-card wide generation-parameters">
+<div class="research-settings-section-head">
+<div>
+<b>Inference parameters</b>
+<small>Per-run model controls. Leave profile defaults unchanged unless the research task requires a reproducible override.</small>
+</div>
+</div>
+<div class="research-settings-grid three">
+<label>
+<span>
+<code>num_ctx</code>Context window</span>
+<input class="control" type="number" min="512">
+</label>
+<label>
+<span>
+<code>num_predict</code>Maximum output</span>
+<input class="control" type="number" min="16">
+</label>
+<label>
+<span>Thinking</span>
+<select class="control">
+<option value="false">Off</option>
+<option value="true">On</option>
+<option value="low">Low</option>
+<option value="medium">Medium</option>
+<option value="high">High</option>
+</select>
+</label>
+<label>
+<span>Temperature</span>
+<input class="control" type="number" step="0.01" min="0" max="2">
+</label>
+<label>
+<span>
+<code>top_p</code>Nucleus sampling</span>
+<input class="control" type="number" step="0.01" min="0" max="1">
+</label>
+<label>
+<span>
+<code>top_k</code>Top-k sampling</span>
+<input class="control" type="number" min="0">
+</label>
+<label>
+<span>
+<code>min_p</code>Minimum probability</span>
+<input class="control" type="number" step="0.01" min="0" max="1">
+</label>
+<label>
+<span>
+<code>repeat_penalty</code>Repeat penalty</span>
+<input class="control" type="number" step="0.01">
+</label>
+<label>
+<span>Seed</span>
+<input class="control" type="number">
+</label>
+<label>
+<span>
+<code>keep_alive</code>Keep model loaded</span>
+<input class="control">
+</label>
+<label class="wide">
+<span>Provider options JSON</span>
+<textarea spellcheck="false">
+</textarea>
+<small>Advanced provider-specific options are merged into this run only.</small>
+</label>
+</div>
+</div>
+</fieldset>
+</section>
+</main>
+</div>
+<footer class="research-settings-studio-footer">
+<span>Changes affect the next Research run; saved provider profiles are not modified.</span>
+<button class="btn" type="button">Cancel</button>
+<button class="btn primary" type="button">Apply to Research</button>
+</footer>
+</div>
+</dialog>
+<dialog class="research-drawer research-runs-dialog" aria-labelledby="research-runs-title">
+<div class="research-drawer-shell">
+<header class="research-drawer-head">
+<div>
+<span class="section-label">Runs</span>
+<h2 id="research-runs-title">Research history</h2>
+<p>1 active · 2 retained</p>
+</div>
+<div class="tools">
+<button class="btn" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
+</path>
+<path d="M3 4v6h6">
+</path>
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg>Refresh</button>
+<button class="btn icon-only" type="button" aria-label="Close">×</button>
+</div>
+</header>
+<div class="research-runs-content">
+<section class="research-run-inspector" aria-labelledby="research-run-inspector-title">
+<div class="research-run-inspector-head">
+<div>
+<span class="section-label">Current run</span>
+<h3 id="research-run-inspector-title">What is différance?</h3>
+<p>ollama · qwen3.5:4b · derrida_primary</p>
+</div>
+<span class="research-run-status running">running</span>
+</div>
+<!---->
+<!---->
+</section>
+<div class="research-runs-list">
+<article class="research-run-card">
+<button class="research-run-card-main" type="button">
+<span class="research-run-status-dot completed">
+</span>
+<span class="research-run-card-copy">
+<b>What is the trace?</b>
+<small>derrida_primary · qwen3.5:4b</small>
+<span>done · <date></span>
+</span>
+<span class="research-run-status">completed</span>
+</button>
+<div class="research-run-card-actions">
+<button class="research-text-action danger" type="button">Remove</button>
+</div>
+</article>
+<article class="research-run-card selected">
+<button class="research-run-card-main" type="button">
+<span class="research-run-status-dot running">
+</span>
+<span class="research-run-card-copy">
+<b>What is différance?</b>
+<small>derrida_primary · qwen3.5:4b</small>
+<span>Retrieving candidate evidence · <date></span>
+</span>
+<span class="research-run-status">running</span>
+</button>
+<div class="research-run-card-actions">
+<button class="research-text-action danger" type="button">Cancel</button>
+</div>
+</article>
+<!---->
+</div>
+</div>
+</div>
+</dialog>
+</main>
