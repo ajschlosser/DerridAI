@@ -16,6 +16,41 @@ reachable from the current router; do not remove the shared runtime host until t
 Temporary file. **Delete it before the effort ends** (last commit of the last PR). It exists so another agent (Codex, Copilot,
 another Claude) can continue if the current one stops.
 
+## Session 7 status (branch `claude/runtime-refactor-20`)
+
+Reviewed Copilot's session-6 work (through PR #93, and then #95/#96/#97/#98 which merged during this session) against
+the actual code, not just this file's claims -- verified: typecheck, lint, unit tests, the 131-scenario DOM baseline,
+the full e2e suite, and the backend pytest suite all pass at each point. Confirmed no overclaiming; `DashboardView.vue`
+and the PDF Explorer surface still delegate their markup entirely to the legacy HTML-string renderers (that is accurate
+to what "Vue-owned route/surface boundary" means here -- routing ownership, not a markup rewrite yet). `ResponseCacheView`
+was further along: real `<script setup>` data-fetching, but its markup was still a hand-built HTML string set via
+`v-html`, byte-identical to the old `domain/responseCacheRenderer.ts` output.
+
+**Found and fixed a real gap in the baseline harness**, in its own commit before touching any view: `rawMarkup()` never
+actually normalized insignificant HTML whitespace or Vue's `<!---->` v-if placeholder comments, despite this file's
+own "Section B" note (written by an earlier session) claiming it already did. This meant any move from a hand-indented
+template-literal renderer to a real Vue template would fail the baseline on incidental formatting alone, never on real
+content -- a structural blocker for finishing section B as written. Fixed by collapsing whitespace-only runs between
+tags and stripping empty comments; re-recorded every affected snapshot (117 across two commits, the second catching
+files PR #96/#97/#98 touched independently) and confirmed for **every one** that the tag-stripped visible text is
+byte-identical before and after. See the updated "DOM baseline" section below for the exact rule.
+
+**Then replaced `ResponseCacheView.vue`'s `v-html` string with a real template** (same class names, ids, element order;
+`AppIcon` in place of the `icon()` string helper), verified against the now-fixed baseline (4 scenarios, unchanged) plus
+the full suites. This is response cache **done** for section B -- no more HTML-string renderer, no more `v-html`.
+`domain/responseCacheRenderer.ts` and its `runtime.js` wiring are now dead code (nothing calls `renderResponseCache`);
+left in place deliberately, since `runtime.js` is heavily in flux from PR #98's in-parallel work and removing it now
+would raise conflict risk for no behavioral benefit -- next session should confirm it is still dead and remove it then.
+
+**Conflict avoidance:** before starting, checked all open PRs and recently-pushed branches (`gh pr list`, `git branch -r
+--sort=-committerdate`). PR #96 (Copilot, Corpus Builder / record-review persistence) touched only `api/app/corpus_builder.py`
+and friends plus Corpus Builder Vue components -- no overlap. PR #97 (language policy) touched only `LanguagesView.vue` and
+`jobs.py` -- no overlap. **PR #98** (`claude/records-page-ui-refinements-fc519c`, moved the subset dialog to Vue) touched
+`runtime.js`, `recordDialogs.ts`, `evidenceSelection.ts`, and `operationDock.ts` heavily -- all files this session's
+predecessor had just finished extracting. Deliberately avoided all four for this session's work. All three PRs merged to
+master mid-session; merged master in twice (see commits), resolving DOM-baseline-snapshot conflicts by re-normalizing the
+`theirs` content rather than picking a side, and re-verified the full suite both times.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
@@ -222,7 +257,7 @@ sample JSONL), `records`, `role`, `scheme`, `viewport`, `fixtures` (API mocks; `
 - `mk_factory.py` never indents bodies (template literals must stay byte-identical).
 - After Prettier expands a dense `try{}catch{}`, an `eslint-disable no-empty` comment no longer lines up: use a commented empty catch.
   Prettier also breaks Python `str.replace` patterns aimed at formatted code: use regex or line-based edits.
-- Some tools turn a ` ` escape into a literal NUL byte; check new files for it.
+- Some tools turn a `\u0000` escape into a literal NUL byte; check new files for it.
 - Import de-duplicates by content hash: identical JSONL content does not import twice.
 - The runtime restores the saved workspace at start-up; loading a JSONL too early races with it (the baseline waits for network idle).
 - The direct URL `/pdf?mode=explorer` renders the dashboard (the runtime's view comes from in-app navigation); reach the Explorer

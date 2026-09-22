@@ -162,6 +162,12 @@ async function rawMarkup(
   });
   return (
     html
+      // Insignificant HTML whitespace (a run of only spaces/newlines between two tags) and empty comments are an
+      // accident of how a renderer formats its markup (a hand-indented template literal, or Vue's v-if placeholder),
+      // not something a person or the browser's rendering can see. Strip them before anything else, so a renderer
+      // move (an HTML string to a real Vue template, or back) does not fail the baseline on formatting alone.
+      .replace(/<!---->/g, "")
+      .replace(/>\s+</g, "><")
       .replace(/></g, ">\n<")
       .replace(/\s+(style="[^"]*")/g, " $1")
       // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.

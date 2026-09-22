@@ -1,20 +1,20 @@
 <main id="main" class="runtime-surface" aria-live="polite">
 <section class="card pdf-document-header">
-    <input id="pdfInput" type="file" accept="application/pdf" hidden="">
-    <div class="pdf-document-primary">
-      <button class="btn primary" id="openPdf">
+<input id="pdfInput" type="file" accept="application/pdf" hidden="">
+<div class="pdf-document-primary">
+<button class="btn primary" id="openPdf">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M6 2h9l5 5v15H6z">
 </path>
 <path d="M14 2v6h6M8.5 15h7M8.5 18h5">
 </path>
 </svg>Open another</button>
-      <div class="pdf-document-title">
+<div class="pdf-document-title">
 <span>PDF document</span>
 <h2>trace</h2>
 <p>trace.pdf · 2 pages</p>
 </div>
-      <div class="pdf-document-status">
+<div class="pdf-document-status">
 <span>
 <b>0</b> linked works</span>
 <span>
@@ -22,9 +22,9 @@
 <span>
 <b>0</b> on this page</span>
 </div>
-    </div>
-    <div class="pdf-command-row">
-      <div class="pdf-page-nav">
+</div>
+<div class="pdf-command-row">
+<div class="pdf-page-nav">
 <button class="btn small icon-only" id="pdfPrev" disabled="">←</button>
 <label>
 <span>Page</span>
@@ -34,23 +34,23 @@
 <button class="btn small" id="pdfGo">Go</button>
 <button class="btn small icon-only" id="pdfNext">→</button>
 </div>
-      <div class="pdf-command-divider">
+<div class="pdf-command-divider">
 </div>
-      <div class="pdf-view-actions">
+<div class="pdf-view-actions">
 <button class="btn small icon-only" id="pdfRotateLeft" title="Rotate left 90°">↶</button>
 <button class="btn small icon-only" id="pdfRotateRight" title="Rotate right 90°">↷</button>
 <span class="note">upright</span>
 </div>
-      <div class="pdf-command-divider">
+<div class="pdf-command-divider">
 </div>
-      <button class="btn small" id="extractPage">Extract page text</button>
-      <details class="pdf-toolbar-menu">
+<button class="btn small" id="extractPage">Extract page text</button>
+<details class="pdf-toolbar-menu">
 <summary class="btn small">More text tools</summary>
 <div class="pdf-toolbar-menu-popover">
 <button class="btn small" id="extractAll">Extract all text</button>
 </div>
 </details>
-      <details class="pdf-toolbar-menu llm-menu">
+<details class="pdf-toolbar-menu llm-menu">
 <summary class="btn small soft">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
@@ -82,8 +82,8 @@
 <path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
 </path>
 </svg>Build record set</button>
-    </div>
-    <div class="pdf-context-row">
+</div>
+<div class="pdf-context-row">
 <div class="pdf-context-pill">
 <span>Source</span>
 <b>p. 1</b>
@@ -97,10 +97,10 @@
 <b>0</b>
 </div>
 </div>
-  </section>
-  <section class="pdfgrid pdfgrid-v2">
-    <article class="card pdf-viewer-card" data-collapsible-ready="1" data-collapse-key="pdf::Page 1::1">
-      <div class="cardhead pdf-viewer-head">
+</section>
+<section class="pdfgrid pdfgrid-v2">
+<article class="card pdf-viewer-card" data-collapsible-ready="1" data-collapse-key="pdf::Page 1::1">
+<div class="cardhead pdf-viewer-head">
 <div>
 <b>Page 1</b>
 <div class="note">PDF.js renderer · 0 linked records on this page</div>
@@ -109,17 +109,16 @@
 <span class="ui-collapse-title">Page 1</span>
 <button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
 </div>
-      <div class="pdf-canvas-wrap">
+<div class="pdf-canvas-wrap">
 <canvas id="pdfCanvas" width="1112" height="1439" style="width: 1112px; height: 1439.06px;">
 </canvas>
 <div class="pdf-render-status" id="pdfRenderStatus">
 </div>
 </div>
-    </article>
-
-    <aside class="pdf-side-stack">
-      <article class="card pdf-text-card" data-collapsible-ready="1" data-collapse-key="pdf::Page text::2">
-        <div class="cardhead">
+</article>
+<aside class="pdf-side-stack">
+<article class="card pdf-text-card" data-collapsible-ready="1" data-collapse-key="pdf::Page text::2">
+<div class="cardhead">
 <div>
 <b>Page text</b>
 <div class="note">Extract the current page, then optionally clean it with an LLM.</div>
@@ -130,52 +129,48 @@
 <span class="ui-collapse-title">Page text</span>
 <button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
 </div>
-        
-        <div class="pdftext">
+<div class="pdftext">
 <span class="note">Use “Extract current page” or “Extract all text.” If both PDF.js and PyMuPDF find no text, the page likely requires OCR.</span>
 </div>
-      </article>
-
-      <article class="card panel pdf-current-links">
-        <div class="toolbar compact-toolbar">
+</article>
+<article class="card panel pdf-current-links">
+<div class="toolbar compact-toolbar">
 <div>
 <b>Records on page 1</b>
 <div class="note">0 linked records</div>
 </div>
 </div>
-        <div class="pdf-link-controls">
-          <div class="autocomplete">
+<div class="pdf-link-controls">
+<div class="autocomplete">
 <input class="control" id="pdfRecordSearch" autocomplete="off" placeholder="Search record ID, work, or source file" value="">
 <input type="hidden" id="pdfRecordKey" value="">
 <div class="autocomplete-list hidden" id="pdfRecordSuggestions">
 </div>
 </div>
-          <button class="btn" id="linkCurrentPdf" disabled="">
+<button class="btn" id="linkCurrentPdf" disabled="">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 5v14M5 12h14">
 </path>
 </svg>Link page 1</button>
-        </div>
-        <div class="pdf-linked-list">
+</div>
+<div class="pdf-linked-list">
 <div class="note">No records linked to this page yet.</div>
 </div>
-      </article>
-
-      <article class="card panel pdf-related-records">
-        <div class="toolbar compact-toolbar">
+</article>
+<article class="card panel pdf-related-records">
+<div class="toolbar compact-toolbar">
 <div>
 <b>Records linked anywhere in this PDF</b>
 <div class="note">0 records · jump directly between source pages and records</div>
 </div>
 </div>
-        <div class="search pdf-related-search">
+<div class="search pdf-related-search">
 <input id="pdfRelatedSearch" value="" placeholder="Filter linked records">
 </div>
-        <div class="pdf-related-list">
+<div class="pdf-related-list">
 <div class="note">No linked records match this filter.</div>
 </div>
-        
-      </article>
-    </aside>
-  </section>
+</article>
+</aside>
+</section>
 </main>

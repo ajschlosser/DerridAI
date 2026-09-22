@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { esc, icon } from "../domain/html";
+import AppIcon from "../components/AppIcon.vue";
 import * as runtime from "../runtime/runtimeBridge";
 import { useI18nStore } from "../stores/i18n";
 
@@ -32,29 +32,19 @@ const records = computed(() => (Array.isArray(payload.value.records) ? payload.v
 const count = computed(() => Number(payload.value.total ?? payload.value.count ?? 0));
 const cache = computed(() => runtime.responseCacheStore() as Record<string, unknown> | null);
 const exists = computed(() => Boolean(payload.value.exists || cache.value));
+const embeddingModel = computed(() => String(cache.value?.embedding_model || "system-managed"));
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
 }
 
-const markup = computed(() => {
-  const rows = records.value
-    .map(
-      (record, index) =>
-        `<tr><td>${esc(runtime.formatTimestamp(record.created_at))}</td><td>${esc(record.question || "")}</td><td>${esc(record.provider || "")} · ${esc(record.model || "")}</td><td>${Number(record.evidence_count || 0)}</td><td>${Array.isArray(record.grades) ? record.grades.length : 0}</td><td><button class="btn tiny" data-cache-faq="${index}">${esc(t("runtime.open_in_response_library", "Open in Response Library"))}</button></td></tr>`,
-    )
-    .join("");
-  return `<div class="response-cache-page">
-    <section class="card response-cache-overview">
-      <div class="cardhead"><div><b>${esc(t("runtime.help.rag_response_cache", "RAG response cache"))}</b><div class="note">${esc(t("runtime.help.system_cache_only", "System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection."))}</div></div><div class="tools"><button class="btn" id="cacheFaq">${icon("books")}${esc(t("runtime.help.open_response_library", "Open Response Library"))}</button>${exists.value ? `<button class="btn danger" id="clearResponseCache">${esc(t("common.clear", "Clear cache"))}</button>` : ""}</div></div>
-      <div class="dashboard-kpis response-cache-kpis"><div class="dash-kpi"><span>${esc(t("runtime.cached_responses", "Cached responses"))}</span><strong>${count.value.toLocaleString()}</strong></div><div class="dash-kpi"><span>${esc(t("runtime.collection", "Collection"))}</span><strong>${exists.value ? "_response_cache" : "Not created"}</strong></div><div class="dash-kpi"><span>${esc(t("runtime.embedding", "Embedding"))}</span><strong>${esc(String(cache.value?.embedding_model || "system-managed"))}</strong></div></div>
-      <div class="info">${esc(t("runtime.help.response_cache_record_contents", "Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs."))}</div>
-    </section>
-    <section class="card"><div class="cardhead"><div><b>${esc(t("runtime.help.recent_cached_responses", "Recent cached responses"))}</b><div class="note">${esc(t("runtime.help.latest_100_response_cache_entries_use_response_faq_for_full_answer_evidence_browsing_and_re_run", "Latest 100 response-cache entries. Use Response Library for full answer/evidence browsing and re-runs."))}</div></div></div>
-      <div class="tablewrap"><table><thead><tr><th>${esc(t("runtime.created", "Created"))}</th><th>${esc(t("runtime.question", "Question"))}</th><th>${esc(t("runtime.generation", "Generation"))}</th><th>${esc(t("runtime.evidence", "Evidence"))}</th><th>${esc(t("runtime.grades", "Grades"))}</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="note">${esc(t("runtime.help.no_cached_responses_yet", "No cached responses yet."))}</td></tr>`}</tbody></table></div>
-    </section>
-  </div>`;
-});
+function generationLabel(record: CacheRecord) {
+  return `${record.provider || ""} · ${record.model || ""}`;
+}
+
+function gradeCount(record: CacheRecord) {
+  return Array.isArray(record.grades) ? record.grades.length : 0;
+}
 
 async function load() {
   loading.value = true;
@@ -92,8 +82,6 @@ async function clearCache() {
     const response = await fetch("/api/stores/_response_cache", { method: "DELETE" });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
     await load();
-    await nextTick();
-    bindActions();
     runtime.notifyToast(t("runtime.response_cache_cleared", "Response cache cleared"));
   } catch (cause) {
     runtime.notifyToast(
@@ -107,20 +95,9 @@ async function clearCache() {
   }
 }
 
-function bindActions() {
-  document.querySelector("#cacheFaq")?.addEventListener("click", () => openLibrary());
-  document.querySelectorAll<HTMLElement>("[data-cache-faq]").forEach((button) => {
-    button.addEventListener("click", () =>
-      openLibrary(records.value[Number(button.dataset.cacheFaq)]?.question || ""),
-    );
-  });
-  document.querySelector("#clearResponseCache")?.addEventListener("click", () => void clearCache());
-}
-
 onMounted(async () => {
   await load();
   await nextTick();
-  bindActions();
   requestAnimationFrame(() =>
     runtime.enhanceCollapsibles(document.querySelector("#main") ?? undefined),
   );
@@ -137,5 +114,112 @@ onMounted(async () => {
       <span>{{ error }}</span>
     </div>
   </main>
-  <main v-else id="main" class="runtime-surface" aria-live="polite" v-html="markup"></main>
+  <main v-else id="main" class="runtime-surface" aria-live="polite">
+    <div class="response-cache-page">
+      <section class="card response-cache-overview">
+        <div class="cardhead">
+          <div>
+            <b>{{ t("runtime.help.rag_response_cache", "RAG response cache") }}</b>
+            <div class="note">
+              {{
+                t(
+                  "runtime.help.system_cache_only",
+                  "System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.",
+                )
+              }}
+            </div>
+          </div>
+          <div class="tools">
+            <button class="btn" id="cacheFaq" @click="openLibrary()">
+              <AppIcon name="books" />{{
+                t("runtime.help.open_response_library", "Open Response Library")
+              }}
+            </button>
+            <button
+              v-if="exists"
+              class="btn danger"
+              id="clearResponseCache"
+              @click="clearCache"
+            >
+              {{ t("common.clear", "Clear cache") }}
+            </button>
+          </div>
+        </div>
+        <div class="dashboard-kpis response-cache-kpis">
+          <div class="dash-kpi">
+            <span>{{ t("runtime.cached_responses", "Cached responses") }}</span>
+            <strong>{{ count.toLocaleString() }}</strong>
+          </div>
+          <div class="dash-kpi">
+            <span>{{ t("runtime.collection", "Collection") }}</span>
+            <strong>{{ exists ? "_response_cache" : "Not created" }}</strong>
+          </div>
+          <div class="dash-kpi">
+            <span>{{ t("runtime.embedding", "Embedding") }}</span>
+            <strong>{{ embeddingModel }}</strong>
+          </div>
+        </div>
+        <div class="info">
+          {{
+            t(
+              "runtime.help.response_cache_record_contents",
+              "Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs.",
+            )
+          }}
+        </div>
+      </section>
+      <section class="card">
+        <div class="cardhead">
+          <div>
+            <b>{{ t("runtime.help.recent_cached_responses", "Recent cached responses") }}</b>
+            <div class="note">
+              {{
+                t(
+                  "runtime.help.latest_100_response_cache_entries_use_response_faq_for_full_answer_evidence_browsing_and_re_run",
+                  "Latest 100 response-cache entries. Use Response Library for full answer/evidence browsing and re-runs.",
+                )
+              }}
+            </div>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t("runtime.created", "Created") }}</th>
+                <th>{{ t("runtime.question", "Question") }}</th>
+                <th>{{ t("runtime.generation", "Generation") }}</th>
+                <th>{{ t("runtime.evidence", "Evidence") }}</th>
+                <th>{{ t("runtime.grades", "Grades") }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!records.length">
+                <td colspan="6" class="note">
+                  {{ t("runtime.help.no_cached_responses_yet", "No cached responses yet.") }}
+                </td>
+              </tr>
+              <tr v-for="(record, index) in records" :key="index">
+                <td>{{ runtime.formatTimestamp(record.created_at) }}</td>
+                <td>{{ record.question || "" }}</td>
+                <td>{{ generationLabel(record) }}</td>
+                <td>{{ Number(record.evidence_count || 0) }}</td>
+                <td>{{ gradeCount(record) }}</td>
+                <td>
+                  <button
+                    class="btn tiny"
+                    :data-cache-faq="index"
+                    @click="openLibrary(record.question || '')"
+                  >
+                    {{ t("runtime.open_in_response_library", "Open in Response Library") }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
 </template>
