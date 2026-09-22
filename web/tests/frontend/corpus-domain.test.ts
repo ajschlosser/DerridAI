@@ -37,6 +37,9 @@ describe('corpus lifecycle composable', () => {
     current.value.stage = 'enriching';
     expect(view.reviewLocked.value).toBe(false);
     expect(view.structuralReviewLocked.value).toBe(true);
+    current.value.stage = 'metadata_enrichment_rerun';
+    expect(view.reviewLocked.value).toBe(false);
+    expect(view.structuralReviewLocked.value).toBe(true);
     current.value = build({accepted_count: 2, rejected_count: 1});
     expect(view.finishPhase.value).toBe(true);
     expect(view.showReviewWorkspace.value).toBe(false);

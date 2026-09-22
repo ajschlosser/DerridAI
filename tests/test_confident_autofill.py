@@ -138,6 +138,25 @@ def test_explicit_confident_supported_absence_can_auto_resolve_an_optional_field
     assert status["status"] == "llm_inferred"
     assert status["reason_code"] == "no_supported_value"
     assert status["verification_status"] == "auto_resolved"
+    assert status["autofilled"] is False
+
+
+def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp_path: Path, monkeypatch):
+    reply = _discourse_reply(
+        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jacques Derrida",
+    )
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.80, "needs_review": False, "reason": "plausible", "outcome": "supported_value",
+    }
+    reply["field_evidence"]["speaker"] = {"block_ids": ["b1"], "confidence": 0.80, "reason": "speaker cue"}
+    record = _enrich(tmp_path, monkeypatch, _record(), reply)
+    status = record["metadata_field_status"]["speaker"]
+    assert record["speaker"] == "Jacques Derrida"
+    assert status["auto_populated"] is True
+    assert status["autofilled"] is False
+    assert status["verification_status"] == "pending_review"
+    assert status["status"] == "unresolved"
+    assert status["reason_code"] == "autofill_not_approved"
 
 
 def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, monkeypatch):

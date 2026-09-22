@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import (
     BaseModel,
@@ -287,6 +287,54 @@ class FieldAssessment(BaseModel):
     outcome: AssessmentOutcome
 
 
+class MetadataResponseBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    assessed_fields_for_validation: ClassVar[tuple[str, ...]] = ()
+    evidence_fields_for_validation: ClassVar[tuple[str, ...]] = ()
+
+    @model_validator(mode="after")
+    def validate_metadata_assessment_consistency(self) -> MetadataResponseBase:
+        metadata_obj = getattr(self, "metadata", None)
+        metadata = metadata_obj.model_dump() if isinstance(metadata_obj, BaseModel) else dict(metadata_obj or {})
+        assessments_obj = getattr(self, "field_assessments", None)
+        assessments = assessments_obj.model_dump() if isinstance(assessments_obj, BaseModel) else dict(assessments_obj or {})
+        evidence_obj = getattr(self, "field_evidence", None)
+        if isinstance(evidence_obj, BaseModel):
+            evidence = evidence_obj.model_dump()
+        else:
+            evidence = {
+                str(key): value.model_dump() if isinstance(value, BaseModel) else value
+                for key, value in dict(evidence_obj or {}).items()
+            }
+
+        def missing(value: Any) -> bool:
+            return value is None or value == "" or value == []
+
+        for field in self.assessed_fields_for_validation:
+            assessment = assessments.get(field)
+            if not isinstance(assessment, dict):
+                continue
+            value = metadata.get(field)
+            outcome = str(assessment.get("outcome") or "")
+            needs_review = bool(assessment.get("needs_review"))
+
+            if outcome == "supported_value" and missing(value):
+                raise ValueError(f"{field}: outcome=supported_value requires a non-empty metadata value")
+            if outcome == "no_supported_value" and not missing(value):
+                raise ValueError(f"{field}: outcome=no_supported_value requires an empty metadata value")
+            if outcome == "uncertain" and not needs_review:
+                raise ValueError(f"{field}: outcome=uncertain requires needs_review=true")
+
+            if outcome == "supported_value" and field in self.evidence_fields_for_validation:
+                info = evidence.get(field)
+                block_ids = info.get("block_ids") if isinstance(info, dict) else None
+                if not block_ids:
+                    raise ValueError(
+                        f"{field}: supported evidence-bearing values require at least one field_evidence block_id"
+                    )
+        return self
+
+
 def _annotation(field: SchemaField) -> Any:
     if field.type == "boolean":
         return bool | None
@@ -337,9 +385,19 @@ def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: 
     else:
         # A custom family may intentionally contain no assessed fields.
         fields["field_assessments"] = (dict[str, FieldAssessment], Field(default_factory=dict))
-    if group_key == CORE_GROUP or any(f.evidence for f in group_fields):
+    evidence_names = set(CORE_FIELDS) if group_key == CORE_GROUP else set()
+    evidence_names.update(field.name for field in group_fields if field.evidence)
+    if evidence_names:
         fields["field_evidence"] = (dict[str, FieldEvidence], Field(default_factory=dict))
-    return create_model(f"{group_key.title()}MetadataResponse", __config__=ConfigDict(extra="forbid"), **fields)
+
+    response = create_model(
+        f"{group_key.title()}MetadataResponse",
+        __base__=MetadataResponseBase,
+        **fields,
+    )
+    response.assessed_fields_for_validation = tuple(assessed_names)
+    response.evidence_fields_for_validation = tuple(sorted(evidence_names))
+    return response
 
 
 # ---- the built-in schema ------------------------------------------------------------------------------------------
