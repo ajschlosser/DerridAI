@@ -5338,7 +5338,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.pdf_page': 'Page PDF {page}',
 
  'pdf_corpus.boundary_second_reader': 'Deuxième lecture de la limite',
- 'pdf_corpus.boundary_second_reader_help': 'Utilisez le LLM comme deuxième lecteur pour les limites ambiguës entre notices. Il peut recommander une limite voisine entre blocs sources, mais il ne déplace jamais le texte automatiquement.',
+ 'pdf_corpus.boundary_second_reader_help': 'Utilisez le LLM comme deuxième lecteur pour les limites ambiguës entre notices. Il peut recommander une limite voisine entre SourceUnits, mais il ne déplace jamais le texte automatiquement.',
  'pdf_corpus.previous_boundary': 'Limite précédente',
  'pdf_corpus.next_boundary': 'Limite suivante',
  'pdf_corpus.boundary_not_checked': 'Non vérifiée',
