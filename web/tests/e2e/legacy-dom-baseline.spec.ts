@@ -233,7 +233,11 @@ async function freezeComputedStyleState(page: Page) {
     `,
   });
   await page.mouse.move(2, 2);
-  await page.locator("body").focus();
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.body.focus();
+  });
+  await page.waitForTimeout(50);
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
