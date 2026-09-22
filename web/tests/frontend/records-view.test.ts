@@ -95,7 +95,21 @@ const runtime = vi.hoisted(() => ({
   setRecordsListQuery: vi.fn(),
   recordsListCommand: vi.fn(async () => undefined),
   triggerMerge: vi.fn(),
-  triggerSubset: vi.fn(),
+  subsetSources: vi.fn(() => [
+    { id: "active", name: "tab.jsonl", count: 2 },
+    { id: "all", name: "", count: 2 },
+    { id: "f1", name: "tab.jsonl", count: 2 },
+  ]),
+  subsetFields: vi.fn(() => [
+    { key: "document_author", label: "Document author" },
+    { key: "work", label: "Work" },
+  ]),
+  subsetSourceRecords: vi.fn(() => [
+    { record_id: "r-1", document_author: "Jacques Derrida", work: "Glas" },
+    { record_id: "r-2", document_author: "Paul de Man", work: "Allegories" },
+  ]),
+  defaultSubsetName: vi.fn(() => "tab-subset.jsonl"),
+  createSubsetFile: vi.fn(async () => ({ name: "tab-subset.jsonl", count: 1 })),
   triggerExport: vi.fn(),
   getRecordsListShareHref: vi.fn(() => "http://localhost/records?file=f1"),
   activateFile: vi.fn(),
@@ -304,17 +318,62 @@ describe("RecordsView", () => {
     await wrapper.get("tbody .select-col input").setValue(true);
     expect(runtime.setRecordsListRowSelected).toHaveBeenCalledWith(0, true);
     await wrapper.get(".records-hero-actions button:nth-child(2)").trigger("click");
-    expect(wrapper.get("dialog").attributes("open")).toBeDefined();
-    expect(wrapper.get("#records-columns-title").text()).toContain("Configure columns");
-    await wrapper.get(".records-columns-add").trigger("click");
-    await wrapper.get(".records-columns-foot .btn.primary").trigger("click");
+    await flushPromises();
+    const dialog = document.body.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.textContent).toContain("Configure columns");
+    dialog.querySelector<HTMLButtonElement>(".ui-columns-add")!.click();
+    await flushPromises();
+    dialog.querySelector<HTMLButtonElement>(".ui-dialog-footer .btn.primary")!.click();
+    await flushPromises();
     expect(runtime.setRecordsListColumns).toHaveBeenCalledWith([
       "__db_status",
       "work",
       "text",
       "speaker",
     ]);
+    // The shown columns' widths are saved with them and always total 100%.
+    const widths = JSON.parse(localStorage.getItem("derridai.records.columnWidths.v1") || "{}");
+    expect(Object.keys(widths)).toEqual(["__db_status", "work", "text", "speaker"]);
+    expect(Object.values(widths as Record<string, number>).reduce((a, b) => a + b, 0)).toBeCloseTo(
+      100,
+      5,
+    );
     wrapper.unmount();
+  });
+
+  it("compact rows show the text on one line with an Expand control where it is cut off", async () => {
+    const scrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth");
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get() {
+        return (this as HTMLElement).classList.contains("records-text") ? 500 : 0;
+      },
+    });
+    try {
+      const wrapper = await mountRecords();
+      expect(wrapper.find(".records-text-toggle").exists()).toBe(false);
+      const compact = wrapper.findAll(".records-density button")[1];
+      await compact.trigger("click");
+      await flushPromises();
+      expect(wrapper.get(".records-table").classes()).toContain("compact");
+      expect(wrapper.get(".records-text").classes()).toContain("clamped");
+      const toggle = wrapper.get(".records-text-toggle");
+      expect(toggle.text()).toBe("Expand");
+      expect(toggle.attributes("aria-expanded")).toBe("false");
+      expect(toggle.attributes("aria-controls")).toBe(
+        wrapper.get(".records-text").attributes("id"),
+      );
+      await toggle.trigger("click");
+      expect(wrapper.get(".records-text").classes()).not.toContain("clamped");
+      expect(wrapper.get(".records-text-toggle").text()).toBe("Collapse");
+      // Expanding the text is not a row open.
+      expect(runtime.openRecordsListRecord).not.toHaveBeenCalled();
+      wrapper.unmount();
+    } finally {
+      if (scrollWidth) Object.defineProperty(HTMLElement.prototype, "scrollWidth", scrollWidth);
+      else delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+      localStorage.removeItem("derridai.records.density.v1");
+    }
   });
 
   it("selects a local JSONL file from the Records rail", async () => {
@@ -350,7 +409,33 @@ describe("RecordsView", () => {
     await byLabel("Merge files")?.trigger("click");
     expect(runtime.triggerMerge).toHaveBeenCalled();
     await byLabel("Create subset")?.trigger("click");
-    expect(runtime.triggerSubset).toHaveBeenCalled();
+    await flushPromises();
+    const subset = document.body.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(subset.textContent).toContain("Create JSONL subset");
+    // The default condition (document author equals Jacques Derrida) matches one of two records.
+    expect(subset.querySelector("[role=status]")?.textContent).toContain(
+      "1 of 2 source records match",
+    );
+    [...subset.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Create subset file")!
+      .click();
+    await flushPromises();
+    expect(runtime.createSubsetFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "tab-subset.jsonl",
+        source: "active",
+        caseSensitive: false,
+        download: false,
+        expression: [
+          {
+            type: "rule",
+            join: "AND",
+            rule: { field: "document_author", operator: "equals", value: "Jacques Derrida" },
+          },
+        ],
+      }),
+    );
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
     await byLabel("Export")?.trigger("click");
     expect(runtime.triggerExport).toHaveBeenCalled();
     await wrapper.get(".records-file-close").trigger("click");

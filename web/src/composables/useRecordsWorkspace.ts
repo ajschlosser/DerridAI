@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { corpusState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
+import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordSubsets";
 
 /**
  * Transitional boundary for the Records workspace.
@@ -110,9 +111,25 @@ export function useRecordsWorkspace() {
     await runtime.closeWorkspaceFile?.(id);
     load();
   }
+  function subsetSources(): SubsetSource[] {
+    return runtime.subsetSources?.() || [];
+  }
+  function subsetFields(): SubsetField[] {
+    return runtime.subsetFields?.() || [];
+  }
+  function subsetSourceRecords(source: string): Record<string, unknown>[] {
+    return runtime.subsetSourceRecords?.(source) || [];
+  }
+  function defaultSubsetName(): string {
+    return runtime.defaultSubsetName?.() || "subset.jsonl";
+  }
+  async function createSubset(request: SubsetRequest) {
+    const created = await runtime.createSubsetFile(request);
+    load();
+    return created;
+  }
   async function run(command: string) {
     if (command === "merge") await runtime.triggerMerge?.();
-    else if (command === "subset") await runtime.triggerSubset?.();
     else if (command === "export") await runtime.triggerExport?.();
     else await runtime.recordsListCommand?.(command);
     load();
@@ -143,5 +160,10 @@ export function useRecordsWorkspace() {
     selectFile,
     closeFile,
     run,
+    subsetSources,
+    subsetFields,
+    subsetSourceRecords,
+    defaultSubsetName,
+    createSubset,
   };
 }

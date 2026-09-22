@@ -74,6 +74,18 @@
   --focus-ring-width: 3px;
   --focus-ring-offset: 2px;
 
+  /* Page frame: every routed page shares one width, inset and rhythm (styles/page.css). */
+  --page-max-width: 1600px;
+  --page-pad-top: 20px;
+  --page-pad-inline: 24px;
+  --page-pad-bottom: 40px;
+  --page-gap: 16px;
+  --page-title-font: var(--font-reading);
+  --page-title-size: clamp(1.5rem, 2.2vw, 2rem);
+  --page-title-weight: 650;
+  --page-kicker-size: 0.8125rem;
+  --page-lede-size: 0.875rem;
+
   /* Type scale (rem, so it follows the reader's font-size setting). 12px is the floor. */
   --fs-xs: 0.75rem;
   --fs-sm: 0.8125rem;

@@ -339,21 +339,24 @@
 </div>
 </nav>
 <div id="appContent" class="app-content-region" tabindex="-1">
-<main class="vue-native-page settings-page">
+<main class="vue-native-page settings-page" aria-labelledby="settings-page-title">
 <div class="sr-only" aria-live="polite">
 </div>
-<header class="settings-hero">
-<div>
-<p class="settings-kicker">System</p>
-<h1>Settings</h1>
-<p>Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.</p>
+<header class="ui-page-header" aria-labelledby="settings-page-title">
+<div class="ui-page-header-heading">
+<p class="ui-page-header-kicker">System</p>
+<h1 id="settings-page-title">Settings</h1>
+<p class="ui-page-header-description">Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.</p>
 </div>
+<div class="ui-page-header-actions">
 <p class="settings-save-state" data-status="saved" role="status">
 <span class="settings-save-mark" aria-hidden="true">
 </span>
 <span>Saved</span>
 <!---->
 </p>
+</div>
+<!---->
 </header>
 <!---->
 <div class="settings-toolbar">

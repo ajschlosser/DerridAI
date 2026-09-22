@@ -3,6 +3,7 @@
 import { esc } from "./html";
 import {
   dockCollapsedSummary,
+  fitDockInViewport,
   isActiveJobStatus,
   isTerminalJobStatus,
   jobProgressPercent,
@@ -71,10 +72,11 @@ export function createOperationDock(deps: Deps) {
     el.setAttribute("aria-atomic", "true");
     el.tabIndex = 0;
     const text = translateDynamicUiValue(String(message ?? ""));
+    // An explicit success tone wins: copied record text may itself contain words like "error".
     const failed =
       tone === "danger" ||
-      /\bHTTP\s+\d{3}\b/i.test(text) ||
-      /\b(failed|could not|error)\b/i.test(text);
+      (tone !== "success" &&
+        (/\bHTTP\s+\d{3}\b/i.test(text) || /\b(failed|could not|error)\b/i.test(text)));
     el.classList.toggle("failed", failed);
     el.classList.toggle("success", tone === "success");
     const httpIndex = text.search(/\bHTTP\s+\d{3}\b/i);
@@ -110,22 +112,26 @@ export function createOperationDock(deps: Deps) {
       stack.classList.remove("user-positioned");
       return;
     }
-    const rect = stack.getBoundingClientRect();
-    const maxLeft = Math.max(8, window.innerWidth - Math.max(rect.width, 280) - 8);
-    const maxTop = Math.max(8, window.innerHeight - 52);
-    const left = Math.min(maxLeft, Math.max(8, Number(position.left) || 8));
-    const top = Math.min(maxTop, Math.max(8, Number(position.top) || 8));
-    state.operationStackPosition = { left, top };
-    stack.style.left = `${left}px`;
-    stack.style.top = `${top}px`;
+    // Measure at the size the dock wants (capped to the viewport), then slide it back on screen.
+    stack.style.setProperty(
+      "--operation-stack-max-height",
+      `${Math.max(120, window.innerHeight - 16)}px`,
+    );
+    stack.style.left = `${Number(position.left) || 8}px`;
+    stack.style.top = `${Number(position.top) || 8}px`;
     stack.style.right = "auto";
     stack.style.bottom = "auto";
     stack.style.translate = "none";
-    stack.style.setProperty(
-      "--operation-stack-max-height",
-      `${Math.max(120, window.innerHeight - top - 8)}px`,
-    );
     stack.classList.add("user-positioned");
+    const rect = stack.getBoundingClientRect();
+    const fit = fitDockInViewport(
+      position,
+      { width: rect.width, height: rect.height },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    stack.style.left = `${fit.left}px`;
+    stack.style.top = `${fit.top}px`;
+    stack.style.setProperty("--operation-stack-max-height", `${fit.maxHeight}px`);
   }
   function setOperationDockMinimized(minimized: Any) {
     state.operationToastsMinimized = Boolean(minimized);
@@ -341,6 +347,10 @@ export function createOperationDock(deps: Deps) {
     if (!shouldMountOperationDock(count)) {
       stack.remove();
       return;
+    }
+    if (stack.dataset.fittedCount !== String(count)) {
+      stack.dataset.fittedCount = String(count);
+      applyOperationStackPosition(stack);
     }
     const stats = operationDockCardStats(stack);
     const summary = dockCollapsedSummary({

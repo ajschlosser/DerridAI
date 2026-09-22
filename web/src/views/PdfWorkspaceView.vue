@@ -37,7 +37,7 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
 </script>
 
 <template>
-  <div class="pdf-workspace-native">
+  <div class="pdf-workspace-native" data-page-width="full">
     <nav class="pdf-mode-tabs" :aria-label="i18n.t('pdf_workspace.modes', 'Corpus Builder modes')">
       <button
         type="button"

@@ -5,7 +5,7 @@
 <h1 id="search-page-title">Search</h1>
 <p class="ui-page-header-description">Explore loaded records or search the corpus database without losing the context of your query, filters, and evidence.</p>
 </div>
-<div class="ui-page-header-actions" aria-label="Search view actions">
+<div class="ui-page-header-actions" role="group" aria-label="Search view actions">
 <div class="search-workspace-actions">
 <button type="button" class="btn">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -377,11 +377,11 @@
 </path>
 </svg>Add evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn" popovertarget="citation-v-7" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn" popovertarget="citation-v-9" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-9">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-7" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn">Inline</button>
-<button type="button" role="menuitem" class="btn">Full</button>
+<div id="citation-v-9" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn">Full</button>
 </div>
 </span>
 </div>
@@ -420,11 +420,11 @@
 </path>
 </svg>Add evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn" popovertarget="citation-v-8" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn" popovertarget="citation-v-10" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-10">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-8" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn">Inline</button>
-<button type="button" role="menuitem" class="btn">Full</button>
+<div id="citation-v-10" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn">Full</button>
 </div>
 </span>
 </div>
@@ -463,11 +463,11 @@
 </path>
 </svg>Add evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn" popovertarget="citation-v-9" aria-haspopup="menu">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn" popovertarget="citation-v-11" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-11">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-9" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
-<button type="button" role="menuitem" class="btn">Inline</button>
-<button type="button" role="menuitem" class="btn">Full</button>
+<div id="citation-v-11" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<button type="button" role="menuitem" tabindex="-1" class="btn">Inline</button>
+<button type="button" role="menuitem" tabindex="-1" class="btn">Full</button>
 </div>
 </span>
 </div>
@@ -477,123 +477,6 @@
 <!---->
 </section>
 </section>
-<dialog class="search-config-dialog" aria-labelledby="search-columns-dialog-title">
-<div class="dh">
-<div>
-<span class="section-label">Table view</span>
-<h2 id="search-columns-dialog-title">Configure columns</h2>
-</div>
-<button type="button" class="btn icon-only" aria-label="Close">×</button>
-</div>
-<div class="db search-column-dialog-body">
-<p>Choose the fields shown in the table and order them for this search view.</p>
-<div class="search-column-list">
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Concepts</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>DB status</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Document author</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Extracted text</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>File</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Needs review</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Page end</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Page start</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Record ID</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Review reason</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Speaker</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Topics</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Work</span>
-</label>
-<!---->
-</div>
-<div class="search-column-choice">
-<label>
-<input type="checkbox">
-<span>Year</span>
-</label>
-<!---->
-</div>
-</div>
-</div>
-<div class="da">
-<button type="button" class="btn">Reset defaults</button>
-<button type="button" class="btn">Cancel</button>
-<button type="button" class="btn primary" disabled="">Apply</button>
-</div>
-</dialog>
 <dialog class="search-config-dialog search-save-dialog" aria-labelledby="search-save-dialog-title">
 <form>
 <div class="dh">

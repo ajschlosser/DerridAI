@@ -417,10 +417,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .record-workspace-page {
   display: grid;
-  gap: 12px;
-  padding: 16px 18px 28px;
-  max-width: 1600px;
-  margin: 0 auto;
+  gap: var(--page-gap);
 }
 .record-workspace-loading,
 .record-workspace-empty {
@@ -678,20 +675,12 @@ input:focus-visible {
   }
 }
 @media (max-width: 1180px) {
-  .record-workspace-page {
-    padding: 12px 14px 26px;
-  }
   .record-workspace-grid {
     grid-template-columns: 1fr;
     gap: 14px;
   }
   .record-inspector-resizer {
     display: none;
-  }
-}
-@media (max-width: 640px) {
-  .record-workspace-page {
-    padding: 10px 9px 24px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

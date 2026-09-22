@@ -16,6 +16,7 @@ import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
 import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
@@ -332,20 +333,19 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 <template>
   <main class="vue-native-page roles-page" :aria-busy="loading" aria-labelledby="roles-page-title">
     <div class="sr-only" aria-live="polite">{{ liveMessage }}</div>
-    <header class="roles-hero">
-      <div>
-        <p class="roles-kicker">{{ i18n.t("section.system", "System") }}</p>
-        <h1 id="roles-page-title">{{ i18n.t("roles.title", "Roles & permissions") }}</h1>
-        <p>
-          {{
-            i18n.t(
-              "roles.description",
-              "Create non-admin roles and define exactly which researcher-safe pages and features each role can use.",
-            )
-          }}
-        </p>
-      </div>
-      <div class="roles-hero-actions">
+    <UiPageHeader
+      :kicker="i18n.t('section.system', 'System')"
+      :title="i18n.t('roles.title', 'Roles & permissions')"
+      title-id="roles-page-title"
+      :description="
+        i18n.t(
+          'roles.description',
+          'Create non-admin roles and define exactly which researcher-safe pages and features each role can use.',
+        )
+      "
+      :actions-label="i18n.t('roles.page_actions', 'Role actions')"
+    >
+      <template #actions>
         <SettingsSaveState :status="saveStatus" :label="statusLabel(saveStatus)" />
         <UiButton icon="users" :label="i18n.t('nav.users', 'Users')" @click="openUsers" />
         <UiButton
@@ -354,8 +354,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           :label="i18n.t('roles.create', 'Create role')"
           @click="openCreate"
         />
-      </div>
-    </header>
+      </template>
+    </UiPageHeader>
     <p v-if="error" class="info error" role="alert">{{ error }}</p>
     <section v-if="loading && !roles.length" class="roles-loading" role="status">
       <span class="spinner"></span>{{ i18n.t("roles.loading", "Loading roles…") }}
@@ -615,41 +615,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 <style scoped>
 .roles-page {
   display: grid;
-  gap: 18px;
-  max-width: 1280px;
-}
-.roles-hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-.roles-hero h1 {
-  margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.6rem, 3vw, 2.1rem);
-  line-height: 1.15;
-}
-.roles-hero p {
-  margin: 6px 0 0;
-  max-width: 68ch;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.roles-kicker {
-  margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-fg);
-}
-.roles-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  gap: var(--page-gap);
 }
 .roles-loading {
   min-height: 240px;
@@ -778,9 +744,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 @media (max-width: 560px) {
   .roles-list-items {
     grid-template-columns: 1fr;
-  }
-  .roles-hero-actions {
-    width: 100%;
   }
 }
 @media (prefers-reduced-motion: reduce) {
