@@ -790,7 +790,7 @@ def _block_text(block: dict[str, Any]) -> str:
     return unicodedata.normalize("NFC", str(block.get("text") or "").strip())
 
 
-def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None]:
+def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None, int]:
     source = "native"
     warning: str | None = None
     data = page.get_text("dict", sort=True)
@@ -861,7 +861,12 @@ def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str 
             "extraction_method": source,
             "confidence": 1.0 if source == "native" else 0.88 if source == "ocr" else 0.35,
         })
-    return blocks, source, warning
+    image_count = sum(
+        1
+        for item in raw_blocks
+        if isinstance(item, dict) and int(item.get("type") or -1) == 1
+    )
+    return blocks, source, warning, image_count
 
 
 def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
@@ -887,7 +892,9 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                     f"PDF page-label lookup failed for physical page {page_index + 1}; "
                     f"continuing with visible-folio detection ({exc})."
                 )
-            page_blocks, source, warning = _page_blocks(page, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
+            page_blocks, source, warning, image_count = _page_blocks(
+                page, ocr_mode=ocr_mode, ocr_languages=ocr_languages
+            )
             visible_page_labels = []
             for candidate in page_blocks:
                 if candidate.get("type") != "header_footer":
@@ -914,6 +921,7 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                 "height": round(float(page.rect.height), 2),
                 "block_ids": [block["block_id"] for block in page_blocks],
                 "extraction_method": source,
+                "image_count": image_count,
             })
             blocks.extend(page_blocks)
 
@@ -1359,9 +1367,10 @@ class PdfCorpusRepository:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
         if not path.exists():
-            return {"items": [], "total": 0, "offset": offset, "limit": limit}
+            return {"items": [], "total": 0, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts([])}
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
+        queue_records: list[dict[str, Any]] = []
         total = 0
         topology_count = 0
         with path.open("r", encoding="utf-8") as handle:
@@ -1369,6 +1378,7 @@ class PdfCorpusRepository:
                 if not line.strip():
                     continue
                 record = json.loads(line)
+                queue_records.append(record)
                 topology_index = topology_count
                 topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
@@ -1392,7 +1402,7 @@ class PdfCorpusRepository:
                 total += 1
         for record in items:
             record["topology_count"] = topology_count
-        return {"items": items, "total": total, "offset": offset, "limit": limit}
+        return {"items": items, "total": total, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records)}
 
     def publication_path(self, publication_id: str) -> Path:
         return self.root / "publications" / f"{publication_id}.jsonl"
@@ -1613,6 +1623,7 @@ class PdfCorpusBuildManager:
             "source_page_count": asset["page_count"],
             "source_block_count": asset["block_count"],
             "schema_version": SCHEMA_VERSION,
+            "metadata_schema_version": schema.schema_version,
             "profile_id": profile_id,
             "profile_version": CORPUS_PROFILES[profile_id]["version"],
             "app_version": APP_VERSION,
@@ -2842,6 +2853,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # Embedded PDF metadata is a deterministic source assertion. A model
+        # may enrich missing bibliography, but must not replace an author
+        # explicitly declared by the source file.
+        if metadata.get("author"):
+            result["document_author"] = str(metadata["author"]).strip()
+            result["document_author_source"] = "pdf_metadata"
+            result["document_author_confidence"] = 1.0
+            result["document_author_assertion"] = {
+                "field": "document_author",
+                "value": result["document_author"],
+                "status": "deterministic",
+                "method": "pdf_metadata",
+                "checked": True,
+                "confidence": 1.0,
+                "reason": "Author value was read from embedded PDF metadata.",
+            }
         # A deterministic start-page inference (only present when it is more than 90% sure) outranks
         # the model's guess; the clues travel with the value so the reviewer can check them.
         inferred = asset.get("main_text_start_inference")
@@ -4129,9 +4156,11 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 "page_end": page_end,
                 "pdf_file": asset["filename"],
                 "pdf_pages": pages,
+                "source_document_id": asset["asset_id"],
                 "source_asset_id": asset["asset_id"],
+                "source_unit_ids": [block["block_id"] for block in group],
                 "source_block_ids": [block["block_id"] for block in group],
-                "source_spans": [{"block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
+                "source_spans": [{"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
                 "boundary_evidence": boundary,
                 "metadata_evidence": {},
                 **({"region_type": layout_region, "primary_text": layout_region == "main_text", "metadata_field_status": {
@@ -4347,6 +4376,38 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         schema = self._schema_for(build_id)
         profile = {**CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]), "review_metadata_fields": schema.review_fields()}
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
+        if bool(request.get("llm_touchup_during_enrichment")) and "__text__" not in set(record.get("human_touched_fields") or []):
+            current_text = str(record.get("text") or "")
+            if current_text.strip():
+                try:
+                    proposal = self.touchup_record_text(
+                        build_id, str(record.get("record_id") or ""), request,
+                        text_override=current_text,
+                    )
+                    record["text_touchup_proposal"] = {
+                        "status": "pending_review",
+                        "source_text": proposal["source_text"],
+                        "proposed_text": proposal["proposed_text"],
+                        "changes": proposal["changes"],
+                        "warnings": proposal["warnings"],
+                        "provider": proposal["provider"],
+                        "model": proposal["model"],
+                        "created_at": iso_now(),
+                    }
+                    record["needs_review"] = True
+                    record["metadata_needs_attention"] = True
+                    reasons = list(record.get("metadata_attention_reasons") or [])
+                    reasons.append("An LLM text touch-up proposal is available for review; reviewed text remains unchanged until approved.")
+                    record["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+                except InterruptedError:
+                    raise
+                except Exception as exc:
+                    record["text_touchup_proposal"] = {
+                        "status": "failed",
+                        "warnings": [f"LLM text touch-up failed: {exc}"],
+                        "created_at": iso_now(),
+                    }
+                    self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
         if self._metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
             return record
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
@@ -5129,7 +5190,7 @@ CURRENT REVIEWED RECORD TEXT:
         return []
 
     @staticmethod
-    def _source_quality_report(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    def _source_quality_report(blocks: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Detect extraction problems before asking an LLM to interpret damaged text.
 
         This is intentionally conservative: sparse pages are warnings, while only
@@ -5138,6 +5199,7 @@ CURRENT REVIEWED RECORD TEXT:
         """
         by_page: dict[int, list[str]] = {}
         methods: dict[int, Counter[str]] = {}
+        page_info = {int(item.get("pdf_page") or 0): item for item in (pages or []) if int(item.get("pdf_page") or 0) > 0}
         for block in blocks:
             try:
                 page = int(block.get("page") or 0)
@@ -5151,7 +5213,9 @@ CURRENT REVIEWED RECORD TEXT:
         issues: list[dict[str, Any]] = []
         blocking_pages: list[int] = []
         warning_pages: list[int] = []
-        for page, parts in sorted(by_page.items()):
+        all_pages = sorted(set(by_page) | set(page_info))
+        for page in all_pages:
+            parts = by_page.get(page, [])
             text = "\n".join(parts)
             chars = len(text)
             replacement = text.count("\ufffd")
@@ -5167,6 +5231,9 @@ CURRENT REVIEWED RECORD TEXT:
             if chars < 20:
                 if severity != "blocking": severity = "warning"
                 codes.append("very_low_text_density")
+            if not parts and int((page_info.get(page) or {}).get("image_count") or 0) > 0:
+                if severity != "blocking": severity = "warning"
+                codes.append("image_only_page")
             if codes:
                 issue = {
                     "page": page, "severity": severity, "codes": codes,
@@ -5175,18 +5242,24 @@ CURRENT REVIEWED RECORD TEXT:
                 }
                 issues.append(issue)
                 (blocking_pages if severity == "blocking" else warning_pages).append(page)
+        image_only_pages = {
+            int(issue["page"])
+            for issue in issues
+            if "image_only_page" in (issue.get("codes") or [])
+        }
         return {
             "valid_for_enrichment": not blocking_pages,
-            "page_count": len(by_page),
+            "page_count": len(all_pages),
             "blocking_page_count": len(blocking_pages),
             "warning_page_count": len(warning_pages),
+            "image_only_page_count": len(image_only_pages),
             "blocking_pages": blocking_pages,
             "warning_pages": warning_pages,
             "issues": issues,
         }
 
     @staticmethod
-    def _trash_quality_report(records: list[dict[str, Any]]) -> dict[str, Any]:
+    def _trash_quality_report(records: list[dict[str, Any]], source_quality: dict[str, Any] | None = None) -> dict[str, Any]:
         """Measure records that are very likely unusable before semantic enrichment.
 
         This is deliberately deterministic and conservative. Strong extraction
@@ -5224,12 +5297,18 @@ CURRENT REVIEWED RECORD TEXT:
                 })
         total = len(records)
         ratio = len(trash) / max(1, total)
+        source_quality = source_quality or {}
+        image_only_page_count = int(source_quality.get("image_only_page_count") or 0)
+        source_page_count = int(source_quality.get("page_count") or 0)
+        image_only_page_ratio = image_only_page_count / max(1, source_page_count)
         return {
             "record_count": total,
             "trash_record_count": len(trash),
             "trash_ratio": round(ratio, 4),
             "threshold": 0.10,
-            "exceeds_threshold": bool(total and ratio > 0.10),
+            "unusable_page_count": image_only_page_count,
+            "unusable_page_ratio": round(image_only_page_ratio, 4),
+            "exceeds_threshold": bool((total and ratio > 0.10) or image_only_page_ratio > 0.10),
             "deterministic": True,
             "records": trash[:500],
         }
@@ -5413,7 +5492,7 @@ CURRENT REVIEWED RECORD TEXT:
         all_blocks = self.repo.load_blocks(build["asset_id"])
         blocks = [block for block in all_blocks if not block.get("excluded_reason")]
         if not blocks:
-            raise ValueError("No source text blocks were extracted from the PDF. Check OCR support and extraction warnings.")
+            raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
 
         manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
         if not isinstance(manifest, dict):
@@ -5451,7 +5530,7 @@ CURRENT REVIEWED RECORD TEXT:
                 build_id,
                 "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
             )
-        source_quality = self._source_quality_report(source_blocks)
+        source_quality = self._source_quality_report(source_blocks, asset.get("pages") or [])
         self._update(build_id, source_quality=source_quality)
         semantic_blocks = self._semantic_atoms(source_blocks)
         if len(semantic_blocks) < 2:
@@ -5579,7 +5658,7 @@ CURRENT REVIEWED RECORD TEXT:
                 record["needs_review"] = True
                 record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
         self.repo.save_records(build_id, records)
-        trash_quality = self._trash_quality_report(records)
+        trash_quality = self._trash_quality_report(records, scope.source_quality)
         current_build = self.repo.get_build(build_id)
         current_build["trash_quality"] = trash_quality
         self.repo.save_build(current_build)
@@ -6157,6 +6236,8 @@ CURRENT REVIEWED RECORD TEXT:
                 elif state == "llm_inferred": contribution["llm_fields_usable"] += 1
                 elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
                     contribution["llm_fields_review"] += 1
+                    if info.get("proposed_value") not in (None, "", []):
+                        contribution["llm_fields_proposed"] += 1
                 elif state in {"human_confirmed", "human_override"}: contribution["human_fields"] += 1
             ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
             for family in ("discourse", "quotation", "indexing"):
@@ -6166,7 +6247,7 @@ CURRENT REVIEWED RECORD TEXT:
                 try: llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
                 except (TypeError, ValueError): pass
                 contribution[f"tasks_{state or 'unknown'}"] += 1
-        useful = int(contribution.get("llm_fields_usable") or 0)
+        useful = int(contribution.get("llm_fields_usable") or 0) + int(contribution.get("llm_fields_proposed") or 0)
         build["llm_contribution"] = {
             **dict(contribution),
             "family_calls": llm_family_calls,
@@ -6492,6 +6573,7 @@ CURRENT REVIEWED RECORD TEXT:
             "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
             "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
             "semantic_classification_confidence", "attribution_confidence", "editorial_memory_used",
+            "text_touchup_proposal",
         ):
             if key in worker:
                 merged[key] = worker[key]
@@ -7095,7 +7177,7 @@ CURRENT REVIEWED RECORD TEXT:
 
     @_serialize_record_mutation
     def slice_to_neighbor(
-        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None,
+        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None, keep_end: int | None = None,
     ) -> dict[str, Any]:
         """Move reviewed text across an existing record boundary without creating a record.
 
@@ -7104,7 +7186,7 @@ CURRENT REVIEWED RECORD TEXT:
         immutable extraction is retained on both records; this operation edits the
         reviewed corpus layer and records an atomic two-record revision.
         """
-        if direction not in {"previous", "next"}:
+        if direction not in {"previous", "next", "keep"}:
             raise ValueError("Slice direction must be previous or next.")
         records = self.repo.load_records(build_id)
         index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
@@ -7113,16 +7195,43 @@ CURRENT REVIEWED RECORD TEXT:
         target = records[index]
         self._assert_human_review_available(build_id, target, structural=False)
         self._assert_record_revision(target, expected_revision)
-        neighbor_index = index - 1 if direction == "previous" else index + 1
-        if neighbor_index < 0 or neighbor_index >= len(records):
-            raise ValueError(f"No {direction} record is available for this slice.")
-        neighbor = records[neighbor_index]
         text = str(target.get("text") or "")
-        original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
+        if direction == "keep":
+            if index == 0 or index == len(records) - 1:
+                raise ValueError("Keeping a selected chunk requires both neighboring records.")
+            if keep_end is None or offset >= keep_end or keep_end > len(text):
+                raise ValueError("Keep selection must be inside the selected record text.")
+            previous, following = records[index - 1], records[index + 1]
+            prefix, retained, suffix = text[:offset].strip(), text[offset:keep_end].strip(), text[keep_end:].strip()
+            if not prefix or not retained or not suffix:
+                raise ValueError("Keep selection must leave non-empty text in all three records.")
+            original_texts = {
+                str(target.get("record_id")): text,
+                str(previous.get("record_id")): str(previous.get("text") or ""),
+                str(following.get("record_id")): str(following.get("text") or ""),
+            }
+            neighbors = (previous, following)
+        else:
+            neighbor_index = index - 1 if direction == "previous" else index + 1
+            if neighbor_index < 0 or neighbor_index >= len(records):
+                raise ValueError(f"No {direction} record is available for this slice.")
+            neighbor = records[neighbor_index]
+            neighbors = (neighbor,)
+        neighbor = neighbors[0]
+        if direction != "keep":
+            neighbor_index = index - 1 if direction == "previous" else index + 1
+            neighbor = records[neighbor_index]
+        if direction != "keep":
+            original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
         if offset <= 0 or offset >= len(text):
             raise ValueError("Slice point must be inside the selected record text.")
         self._push_review_history(build_id, records, action=f"slice_{direction}", selected_record_id=record_id)
-        if direction == "previous":
+        if direction == "keep":
+            previous, following = records[index - 1], records[index + 1]
+            previous["text"] = (str(previous.get("text") or "").rstrip() + "\n\n" + prefix).strip()
+            target["text"] = retained
+            following["text"] = (suffix + "\n\n" + str(following.get("text") or "").lstrip()).strip()
+        elif direction == "previous":
             moved, retained = text[:offset].strip(), text[offset:].lstrip()
             if not moved or not retained:
                 raise ValueError("Slice must leave non-empty text in both records.")
@@ -7136,7 +7245,8 @@ CURRENT REVIEWED RECORD TEXT:
             target["text"] = retained
         now = iso_now()
         transaction_id = f"slice-{uuid.uuid4().hex[:12]}"
-        for row in (target, neighbor):
+        affected_rows = (target, *neighbors)
+        for row in affected_rows:
             if "source_extracted_text" not in row:
                 row["source_extracted_text"] = original_texts.get(str(row.get("record_id")), str(row.get("text") or ""))
             row["text_length"] = len(str(row.get("text") or ""))
@@ -7160,18 +7270,32 @@ CURRENT REVIEWED RECORD TEXT:
             }
             row["metadata_execution_ledger"] = {}
             row["metadata_requeue_requested"] = True
+            lineage = dict(row.get("slice_lineage") or {})
+            lineage.update({
+                "transaction_id": transaction_id,
+                "source_record_id": record_id,
+                "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows],
+                "direction": direction,
+                "role": "source" if str(row.get("record_id")) == record_id else "neighbor",
+                "at": now,
+            })
+            row["slice_lineage"] = lineage
             row["record_revision"] = int(row.get("record_revision") or 1) + 1
             self._mark_human_touch(row, ["__text__", "__boundary__"])
             events = list(row.get("review_events") or [])
-            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id})
+            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id, "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows]})
             row["review_events"] = events[-100:]
-        left_row, right_row = (neighbor, target) if direction == "previous" else (target, neighbor)
+        left_row, right_row = (neighbors[0], target) if direction in {"previous", "keep"} else (target, neighbor)
         self._record_boundary_editorial_example(
             build_id, left=left_row, right=right_row,
             action=f"human_slice_{direction}", transaction_id=transaction_id,
         )
         self._rewrite_and_validate(build_id, records)
-        return {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
+        result = {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
+        if direction == "keep":
+            result["left_neighbor"] = neighbors[0]
+            result["right_neighbor"] = records[index + 1]
+        return result
 
     @_serialize_record_mutation
     def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str, request_override: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -7226,7 +7350,7 @@ CURRENT REVIEWED RECORD TEXT:
                 existing = merged_evidence.setdefault(field, {"block_ids": [], "confidence": 1.0, "reason": "Preserved across human merge.", "reviewed_by": "human", "reviewed_at": iso_now()})
                 existing["block_ids"] = list(dict.fromkeys(list(existing.get("block_ids") or []) + list(info.get("block_ids") or [])))
                 existing["confidence"] = min(float(existing.get("confidence") or 1.0), float(info.get("confidence") or 1.0))
-        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
+        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
         # Keep the first record's immutable identity. Unrelated downstream IDs never change.
         merged["record_id"] = first.get("record_id")
         records[first_index:second_index + 1] = [merged]
@@ -7259,7 +7383,7 @@ CURRENT REVIEWED RECORD TEXT:
                 kept = [block_id for block_id in (info.get("block_ids") or []) if block_id in piece_ids]
                 if kept:
                     piece_evidence[field] = {**info, "block_ids": kept, "reason": str(info.get("reason") or "") + " Preserved across human split."}
-            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
+            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": piece_ids, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
         pieces[0]["record_id"] = target.get("record_id")
         pieces[1]["record_id"] = f"{re.sub(r'-[0-9a-f]{8}$', '', str(target.get('record_id') or 'pdf'))}-s{uuid.uuid4().hex[:8]}"
         records[index:index + 1] = pieces
@@ -7456,7 +7580,7 @@ CURRENT REVIEWED RECORD TEXT:
             "provider": request.get("provider") or build.get("provider"), "model": request.get("model") or build.get("model"),
             "families": families, "scope": scope,
             "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
-            "record_ids": record_ids,
+            "record_ids": record_ids, "active_tasks": [], "current_record_id": None, "current_task": None,
         }
         for key in ("recheck_rate", "iaa_rate"):
             if request.get(key) is not None:
@@ -7500,13 +7624,52 @@ CURRENT REVIEWED RECORD TEXT:
         kept: list[str] = []
         disputes: list[dict[str, Any]] = []
         history_disputes: list[dict[str, Any]] = []
+        informational: list[dict[str, Any]] = []
         known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
+        model_name = str(request.get("model") or "")
+
+        def add_informational(
+            kind: str, field: str, *, authoritative: Any = None, proposed: Any = None,
+            confidence: Any = None, reason: str | None = None,
+        ) -> None:
+            event: dict[str, Any] = {
+                "kind": kind,
+                "field": field,
+                "run_id": run_id,
+                "pass": pass_number,
+                "model": model_name or None,
+                "at": iso_now(),
+            }
+            if authoritative is not None:
+                event["authoritative_value"] = authoritative
+            if proposed is not None:
+                event["proposed_value"] = proposed
+            if isinstance(confidence, (int, float)):
+                event["confidence"] = confidence
+            if reason:
+                event["reason"] = reason
+            informational.append(event)
+
         for family in families:
             for field in groups[family]:
                 new, old = candidate.get(field), live.get(field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
                 new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
-                if new in (None, "", []) or str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                if new in (None, "", []):
+                    continue
+                if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                    add_informational(
+                        "agreement" if same_value(old, new) else "protected_suggestion",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason=(
+                            "The model agreed with the human-owned value."
+                            if same_value(old, new)
+                            else "The model proposed a different value, but the human-owned value remains authoritative."
+                        ),
+                    )
                     continue
                 if old in (None, "", []):
                     live[field] = new
@@ -7518,10 +7681,26 @@ CURRENT REVIEWED RECORD TEXT:
                 if field in CONFIDENCE_FIELDS:
                     continue
                 if same_value(old, new):
+                    add_informational(
+                        "agreement",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model found no new supported value.",
+                    )
                     if field in cand_evidence:
                         live_evidence[field] = cand_evidence[field]
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
+                    add_informational(
+                        "duplicate",
+                        field,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model repeated an existing unresolved candidate.",
+                    )
                     continue
                 # PR #83 permits a valid LLM proposal to occupy the record while
                 # remaining pending human review. PR #81's generic resolver treats
@@ -7610,6 +7789,7 @@ CURRENT REVIEWED RECORD TEXT:
         history.append({
             "run_id": run_id, "pass": pass_number, "at": iso_now(), "state": "complete", "outcome": outcome, "added_fields": added,
             "replaced": replaced, "kept_existing": kept, "disputes": history_disputes,
+            "informational": informational,
             "provider_profile_id": request.get("provider_profile_id"), "model": request.get("model"),
         })
         live["metadata_enrichment_history"] = history[-30:]
@@ -7657,6 +7837,15 @@ CURRENT REVIEWED RECORD TEXT:
             live = self._latest_runtime_request(build_id, request)
             return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
+        def operation_stage_callback(record: dict[str, Any], task_name: str, state: str, _error: str | None) -> None:
+            self._update_enrichment_operation_task(
+                build_id,
+                run_id,
+                str(record.get("record_id") or ""),
+                task_name,
+                state,
+            )
+
         def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
             status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
@@ -7679,6 +7868,7 @@ CURRENT REVIEWED RECORD TEXT:
                 build_id=build_id,
                 previous_text=neighbors["previous_text"],
                 next_text=neighbors["next_text"],
+                stage_callback=operation_stage_callback,
             ), request_used
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
@@ -7722,6 +7912,33 @@ CURRENT REVIEWED RECORD TEXT:
                 on_progress(dict(totals), len(indices))
         return dict(totals)
 
+    def _update_enrichment_operation_task(
+        self, build_id: str, operation_id: str, record_id: str, task_name: str, state: str,
+    ) -> None:
+        """Expose the active rerun family without changing the aggregate counters."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            operation = dict(build.get("metadata_operation") or {})
+            if operation.get("operation_id") != operation_id:
+                return
+            active = [
+                item for item in operation.get("active_tasks") or []
+                if isinstance(item, dict)
+                and not (str(item.get("record_id") or "") == record_id and str(item.get("task") or "") == task_name)
+            ]
+            if state == "running":
+                active.append({
+                    "record_id": record_id,
+                    "task": task_name,
+                    "state": state,
+                    "started_at": iso_now(),
+                })
+            operation["active_tasks"] = active[:32]
+            current = active[0] if active else {}
+            operation["current_record_id"] = current.get("record_id")
+            operation["current_task"] = current.get("task")
+            self._update(build_id, metadata_operation=operation)
+
     def _metadata_enrichment_rerun_worker(self, build_id: str, request: dict[str, Any], operation_id: str, scope: str, families: list[str], passes: int) -> None:
         op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
         try:
@@ -7737,6 +7954,10 @@ CURRENT REVIEWED RECORD TEXT:
 
                 def on_progress(totals: dict[str, int], pass_total: int, pass_number: int = pass_number, before: dict[str, int] = before) -> None:
                     op.update({key: before[key] + totals.get(key, 0) for key in counter_keys})
+                    live_operation = self.repo.get_build(build_id).get("metadata_operation")
+                    if isinstance(live_operation, dict):
+                        for key in ("active_tasks", "current_record_id", "current_task"):
+                            op[key] = live_operation.get(key)
                     op.update({"state": "running", "current_pass": pass_number, "records_total": max(int(op.get("records_total") or 0), pass_total)})
                     fraction = ((pass_number - 1) + totals.get("records_processed", 0) / max(1, pass_total)) / passes
                     self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))

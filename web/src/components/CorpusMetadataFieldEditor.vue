@@ -19,16 +19,17 @@ const confidence=computed(()=>typeof props.status?.confidence==='number'&&Number
 const isLlm=computed(()=>String(props.status?.method||'').includes('llm'));
 const isMultiCombobox=computed(()=>props.control==='multi-combobox');
 const hasValue=(value:unknown)=>!(value===undefined||value===null||value===''||(Array.isArray(value)&&!value.length));
+const leakedAssessment=(value:unknown)=>typeof value==='string'&&/^\s*confidence\s*:\s*(?:null|[\d.]+)\s*,\s*needs_review\s*:/i.test(value);
 const resolvedValue=computed(()=>{
   const status=props.status||{};
   if(status.reason_code==='deterministic_llm_disagreement'&&status.prefilled_candidate==='llm'&&hasValue(status.llm_value))return normalizeMetadataFieldValue(props.field,status.llm_value);
-  if(hasValue(props.value))return normalizeMetadataFieldValue(props.field,props.value);
+  if(hasValue(props.value)&&!(props.control==='multi-combobox'&&leakedAssessment(props.value)))return normalizeMetadataFieldValue(props.field,props.value);
   // Backward compatibility for records created before populated-but-unverified
   // proposals were written into the record itself. Confidence affects review
   // state, not whether the reviewer may see the proposed value.
   if(!status.blind&&hasValue(status.proposed_value))return normalizeMetadataFieldValue(props.field,status.proposed_value);
   if(hasValue(props.constraint?.value))return normalizeMetadataFieldValue(props.field,props.constraint?.value);
-  return normalizeMetadataFieldValue(props.field,props.value??'');
+  return normalizeMetadataFieldValue(props.field,props.control==='multi-combobox'&&leakedAssessment(props.value)?[]:props.value??'');
 });
 function editableValue(){const value=resolvedValue.value;return Array.isArray(value)?value.join(', '):value??''}
 watch(()=>[props.field,props.value,props.status?.proposed_value,props.status?.llm_value,props.status?.prefilled_candidate,props.constraint?.value],()=>{if(!dirty.value)draft.value=editableValue()},{immediate:true,deep:true});

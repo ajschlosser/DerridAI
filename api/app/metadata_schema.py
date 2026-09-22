@@ -129,11 +129,19 @@ class SchemaGroup(BaseModel):
 class MetadataSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     format_version: int = FORMAT_VERSION
+    schema_version: str = "1.0.0"
     id: str = Field(default="", max_length=64)
     name: str = Field(min_length=1, max_length=80)
     description: str = Field(default="", max_length=600)
     groups: list[SchemaGroup] = Field(max_length=MAX_GROUPS)
     fields: list[SchemaField] = Field(default_factory=list, max_length=MAX_FIELDS)
+
+    @field_validator("schema_version")
+    @classmethod
+    def _schema_version(cls, value: str) -> str:
+        if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value):
+            raise ValueError("Schema version must use semantic versioning, for example 1.0.0.")
+        return value
 
     @model_validator(mode="after")
     def _consistent(self) -> MetadataSchema:

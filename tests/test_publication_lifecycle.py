@@ -45,7 +45,8 @@ def test_publication_emits_clean_scholarly_records_and_finishes_progress(tmp_pat
     assert row["record_id"]=="r1"
     assert row["text"]=="Record text"
     assert "corpus_build_details" not in row
-    assert "source_block_ids" not in row and "source_spans" not in row and "source_asset_id" not in row
+    assert "source_block_ids" not in row and "source_asset_id" not in row
+    assert row["source_document_id"] == "pdf-test" and row["source_spans"]
     assert "review_disposition" not in row and "accepted" not in row
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["status"]=="ready"

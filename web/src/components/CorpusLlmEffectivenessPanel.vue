@@ -6,7 +6,7 @@ const props=withDefaults(defineProps<{contribution?:Record<string,unknown>;edito
 const emit=defineEmits<{inspectEditorialMemory:[]}>();
 const i18n=useI18nStore();
 const calls=computed(()=>Number(props.contribution.family_calls||0));
-const useful=computed(()=>Number(props.contribution.llm_fields_usable||0));
+const useful=computed(()=>Number(props.contribution.llm_fields_usable||0)+Number(props.contribution.llm_fields_proposed||0));
 const review=computed(()=>Number(props.contribution.llm_fields_review||0));
 const minutes=computed(()=>Number(props.contribution.elapsed_ms||0)/60000);
 const usefulPerMinute=computed(()=>Number(props.contribution.useful_fields_per_minute||0));
