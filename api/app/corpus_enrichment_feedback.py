@@ -19,6 +19,7 @@ def enrichment_informational_event(
     confidence: Any = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
+    """Build an auditable no-change or protected-value model event."""
     event: dict[str, Any] = {
         "kind": kind,
         "field": field,
