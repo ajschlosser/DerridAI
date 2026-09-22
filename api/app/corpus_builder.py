@@ -914,6 +914,7 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                 "height": round(float(page.rect.height), 2),
                 "block_ids": [block["block_id"] for block in page_blocks],
                 "extraction_method": source,
+                "image_count": sum(1 for item in (data.get("blocks") or []) if item.get("type") == 1),
             })
             blocks.extend(page_blocks)
 
@@ -2844,6 +2845,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        # Embedded PDF metadata is a deterministic source assertion. A model
+        # may enrich missing bibliography, but must not replace an author
+        # explicitly declared by the source file.
+        if metadata.get("author"):
+            result["document_author"] = str(metadata["author"]).strip()
+            result["document_author_source"] = "pdf_metadata"
+            result["document_author_confidence"] = 1.0
         # A deterministic start-page inference (only present when it is more than 90% sure) outranks
         # the model's guess; the clues travel with the value so the reviewer can check them.
         inferred = asset.get("main_text_start_inference")
@@ -4349,6 +4357,38 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         schema = self._schema_for(build_id)
         profile = {**CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]), "review_metadata_fields": schema.review_fields()}
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
+        if bool(request.get("llm_touchup_during_enrichment")) and "__text__" not in set(record.get("human_touched_fields") or []):
+            current_text = str(record.get("text") or "")
+            if current_text.strip():
+                try:
+                    proposal = self.touchup_record_text(
+                        build_id, str(record.get("record_id") or ""), request,
+                        text_override=current_text,
+                    )
+                    record["text_touchup_proposal"] = {
+                        "status": "pending_review",
+                        "source_text": proposal["source_text"],
+                        "proposed_text": proposal["proposed_text"],
+                        "changes": proposal["changes"],
+                        "warnings": proposal["warnings"],
+                        "provider": proposal["provider"],
+                        "model": proposal["model"],
+                        "created_at": iso_now(),
+                    }
+                    record["needs_review"] = True
+                    record["metadata_needs_attention"] = True
+                    reasons = list(record.get("metadata_attention_reasons") or [])
+                    reasons.append("An LLM text touch-up proposal is available for review; reviewed text remains unchanged until approved.")
+                    record["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+                except InterruptedError:
+                    raise
+                except Exception as exc:
+                    record["text_touchup_proposal"] = {
+                        "status": "failed",
+                        "warnings": [f"LLM text touch-up failed: {exc}"],
+                        "created_at": iso_now(),
+                    }
+                    self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
         if self._metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
             return record
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
@@ -5131,7 +5171,7 @@ CURRENT REVIEWED RECORD TEXT:
         return []
 
     @staticmethod
-    def _source_quality_report(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    def _source_quality_report(blocks: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Detect extraction problems before asking an LLM to interpret damaged text.
 
         This is intentionally conservative: sparse pages are warnings, while only
@@ -5140,6 +5180,7 @@ CURRENT REVIEWED RECORD TEXT:
         """
         by_page: dict[int, list[str]] = {}
         methods: dict[int, Counter[str]] = {}
+        page_info = {int(item.get("pdf_page") or 0): item for item in (pages or []) if int(item.get("pdf_page") or 0) > 0}
         for block in blocks:
             try:
                 page = int(block.get("page") or 0)
@@ -5153,7 +5194,9 @@ CURRENT REVIEWED RECORD TEXT:
         issues: list[dict[str, Any]] = []
         blocking_pages: list[int] = []
         warning_pages: list[int] = []
-        for page, parts in sorted(by_page.items()):
+        all_pages = sorted(set(by_page) | set(page_info))
+        for page in all_pages:
+            parts = by_page.get(page, [])
             text = "\n".join(parts)
             chars = len(text)
             replacement = text.count("\ufffd")
@@ -5169,6 +5212,9 @@ CURRENT REVIEWED RECORD TEXT:
             if chars < 20:
                 if severity != "blocking": severity = "warning"
                 codes.append("very_low_text_density")
+            if not parts and int((page_info.get(page) or {}).get("image_count") or 0) > 0:
+                if severity != "blocking": severity = "warning"
+                codes.append("image_only_page")
             if codes:
                 issue = {
                     "page": page, "severity": severity, "codes": codes,
@@ -5179,16 +5225,17 @@ CURRENT REVIEWED RECORD TEXT:
                 (blocking_pages if severity == "blocking" else warning_pages).append(page)
         return {
             "valid_for_enrichment": not blocking_pages,
-            "page_count": len(by_page),
+            "page_count": len(all_pages),
             "blocking_page_count": len(blocking_pages),
             "warning_page_count": len(warning_pages),
+            "image_only_page_count": sum(1 for page in all_pages if "image_only_page" in next((item.get("codes") or [] for item in issues if item.get("page") == page), [])),
             "blocking_pages": blocking_pages,
             "warning_pages": warning_pages,
             "issues": issues,
         }
 
     @staticmethod
-    def _trash_quality_report(records: list[dict[str, Any]]) -> dict[str, Any]:
+    def _trash_quality_report(records: list[dict[str, Any]], source_quality: dict[str, Any] | None = None) -> dict[str, Any]:
         """Measure records that are very likely unusable before semantic enrichment.
 
         This is deliberately deterministic and conservative. Strong extraction
@@ -5226,12 +5273,18 @@ CURRENT REVIEWED RECORD TEXT:
                 })
         total = len(records)
         ratio = len(trash) / max(1, total)
+        source_quality = source_quality or {}
+        image_only_page_count = int(source_quality.get("image_only_page_count") or 0)
+        source_page_count = int(source_quality.get("page_count") or 0)
+        image_only_page_ratio = image_only_page_count / max(1, source_page_count)
         return {
             "record_count": total,
             "trash_record_count": len(trash),
             "trash_ratio": round(ratio, 4),
             "threshold": 0.10,
-            "exceeds_threshold": bool(total and ratio > 0.10),
+            "unusable_page_count": image_only_page_count,
+            "unusable_page_ratio": round(image_only_page_ratio, 4),
+            "exceeds_threshold": bool((total and ratio > 0.10) or image_only_page_ratio > 0.10),
             "deterministic": True,
             "records": trash[:500],
         }
@@ -5415,7 +5468,7 @@ CURRENT REVIEWED RECORD TEXT:
         all_blocks = self.repo.load_blocks(build["asset_id"])
         blocks = [block for block in all_blocks if not block.get("excluded_reason")]
         if not blocks:
-            raise ValueError("No source text blocks were extracted from the PDF. Check OCR support and extraction warnings.")
+            raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
 
         manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
         if not isinstance(manifest, dict):
@@ -5453,7 +5506,7 @@ CURRENT REVIEWED RECORD TEXT:
                 build_id,
                 "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
             )
-        source_quality = self._source_quality_report(source_blocks)
+        source_quality = self._source_quality_report(source_blocks, asset.get("pages") or [])
         self._update(build_id, source_quality=source_quality)
         semantic_blocks = self._semantic_atoms(source_blocks)
         if len(semantic_blocks) < 2:
@@ -5581,7 +5634,7 @@ CURRENT REVIEWED RECORD TEXT:
                 record["needs_review"] = True
                 record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
         self.repo.save_records(build_id, records)
-        trash_quality = self._trash_quality_report(records)
+        trash_quality = self._trash_quality_report(records, scope.source_quality)
         current_build = self.repo.get_build(build_id)
         current_build["trash_quality"] = trash_quality
         self.repo.save_build(current_build)
@@ -6496,6 +6549,7 @@ CURRENT REVIEWED RECORD TEXT:
             "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
             "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
             "semantic_classification_confidence", "attribution_confidence", "editorial_memory_used",
+            "text_touchup_proposal",
         ):
             if key in worker:
                 merged[key] = worker[key]

@@ -118,9 +118,13 @@ const preview = ref<SchemaPreview | null>(null);
 async function tryGroup(run: boolean) {
   const schema = draft.value;
   if (!schema || !previewText.value.trim()) return;
+  if (run && !(previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id)) {
+    error.value = t("preview_no_provider", "Configure an LLM provider profile before running a review.");
+    return;
+  }
   const payload: Record<string, unknown> = { schema, group: previewGroup.value, text: previewText.value, run };
-  if (run && (previewProfile.value || props.defaultProviderId)) {
-    payload.provider_profile_id = previewProfile.value || props.defaultProviderId;
+  if (run && (previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id)) {
+    payload.provider_profile_id = previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id;
   }
   const result = await guarded(() => metadataSchemasApi.preview(payload));
   if (result) preview.value = result;
@@ -134,6 +138,7 @@ watch(
   (profiles) => {
   if (!profiles.length) return;
   if (previewProfile.value && !profiles.some(profile => profile.id === previewProfile.value)) previewProfile.value = "";
+  if (!previewProfile.value && !props.defaultProviderId) previewProfile.value = profiles[0]?.id || "";
   },
   { immediate: true, deep: true },
 );
@@ -147,7 +152,7 @@ defineExpose({ select, draft });
         <li v-for="item in summaries" :key="item.id">
           <button type="button" class="schema-row" :aria-current="item.id === selectedId && !isNew ? 'true' : undefined" @click="select(item.id)">
             <b>{{ item.name }}</b>
-            <small>{{ item.builtin ? t("builtin", "Built in") : "" }} {{ i18n.tf("schemas.field_count", "{count} fields", { count: item.field_count }) }}</small>
+            <small>{{ item.builtin ? t("builtin", "Built in") : "" }} · v{{ item.schema_version || "1.0.0" }} · {{ i18n.tf("schemas.field_count", "{count} fields", { count: item.field_count }) }}</small>
           </button>
         </li>
         <li v-if="isNew" class="schema-row is-new" aria-current="true"><b>{{ draft?.name }}</b><small>{{ t("unsaved", "Not saved yet") }}</small></li>
@@ -169,6 +174,7 @@ defineExpose({ select, draft });
 
       <fieldset :disabled="builtin || busy" class="schema-fieldset">
         <label class="schema-field"><span>{{ t("name", "Name") }}</span><input v-model="draft.name" class="control" maxlength="80"></label>
+        <p class="schema-version">{{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b><span>{{ t("version_help", "Versions change automatically when the saved schema changes.") }}</span></p>
         <label class="schema-field"><span>{{ t("description", "Description") }}</span><textarea v-model="draft.description" class="control" rows="2" maxlength="600"></textarea></label>
 
         <div class="locked-core" role="note"><b>{{ t("locked_core", "Locked core") }}</b>

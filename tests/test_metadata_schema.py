@@ -220,9 +220,19 @@ def test_saving_gives_a_unique_id_and_survives_a_reload(tmp_path):
     assert (a.id, b.id) == ("reading-notes", "reading-notes-2")
     again = SchemaStore(tmp_path).get("reading-notes")
     assert again.content_hash() == custom().content_hash() and again.id == "reading-notes"
+    assert a.schema_version == "1.0.0"
+    unchanged = store.save(custom(), "reading-notes")
+    assert unchanged.schema_version == "1.0.0"
     updated = custom(); updated.description = "changed"
-    store.save(updated, "reading-notes")
-    assert store.get("reading-notes").description == "changed"
+    changed = store.save(updated, "reading-notes")
+    assert changed.schema_version == "1.0.1"
+    added = custom()
+    added.fields.append(ms.SchemaField(name="new_note", label="New note"))
+    assert store.save(added, "reading-notes").schema_version == "1.1.0"
+    removed = custom()
+    removed.fields = [field for field in removed.fields if field.name != "mood"]
+    assert store.save(removed, "reading-notes").schema_version == "2.0.0"
+    assert store.get("reading-notes").description == "Reading notes"
     store.delete("reading-notes-2")
     with pytest.raises(SchemaNotFound):
         store.get("reading-notes-2")

@@ -7,8 +7,8 @@ export interface SchemaField {
   instruction: string; definitions_heading: string; evidence: boolean; assess: boolean; review: boolean;
 }
 export interface SchemaGroup { key: string; label: string; intro: string; fields_heading: string; notes: string[]; trailer: string; footer: string }
-export interface MetadataSchema { format_version: number; id: string; name: string; description: string; groups: SchemaGroup[]; fields: SchemaField[] }
-export interface SchemaSummary { id: string; name: string; description: string; builtin: boolean; field_count: number; groups: string[]; hash: string }
+export interface MetadataSchema { format_version: number; schema_version?: string; id: string; name: string; description: string; groups: SchemaGroup[]; fields: SchemaField[] }
+export interface SchemaSummary { id: string; name: string; description: string; schema_version?: string; builtin: boolean; field_count: number; groups: string[]; hash: string }
 export interface SchemaPreview { prompt: string; answer_schema: unknown; ran: boolean; answer?: unknown; seconds?: number }
 
 /** The three fields every schema has, in the "discourse" group. Their instructions are built in and cannot be edited. */

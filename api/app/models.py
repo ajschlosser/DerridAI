@@ -518,6 +518,7 @@ class PdfCorpusBuildCreate(BaseModel):
     schema_id: str = Field(default="default", min_length=1, max_length=64)
     autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
+    llm_touchup_during_enrichment: bool = False
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False

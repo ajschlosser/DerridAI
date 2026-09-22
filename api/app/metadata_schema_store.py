@@ -73,7 +73,8 @@ class SchemaStore:
         with self._lock:
             if schema_id == DEFAULT_SCHEMA_ID:
                 raise SchemaLocked("The built-in schema cannot be changed. Duplicate it and edit the copy.")
-            if schema_id is None:
+            creating = schema_id is None
+            if creating:
                 base = _slug(schema.name)
                 schema_id = base if base != DEFAULT_SCHEMA_ID else "schema"
                 n = 2
@@ -84,12 +85,34 @@ class SchemaStore:
                 self._path(schema_id)  # validates the id
                 if not self._path(schema_id).exists():
                     raise SchemaNotFound(schema_id)
-            saved = schema.model_copy(update={"id": schema_id})
+            if creating:
+                saved = schema.model_copy(update={"id": schema_id, "schema_version": "1.0.0"})
+            else:
+                previous = self.get(schema_id)
+                saved = schema.model_copy(update={
+                    "id": schema_id,
+                    "schema_version": self._next_version(previous, schema),
+                })
             fd, tmp = tempfile.mkstemp(dir=self.dir, suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(saved.model_dump(mode="json", exclude={"id"}), handle, ensure_ascii=False, indent=1)
             os.replace(tmp, self._path(schema_id))
             return saved
+
+    @staticmethod
+    def _next_version(previous: MetadataSchema, proposed: MetadataSchema) -> str:
+        old = previous.model_dump(mode="json", exclude={"id", "schema_version"})
+        new = proposed.model_dump(mode="json", exclude={"id", "schema_version"})
+        if old == new:
+            return previous.schema_version
+        old_fields = {field.name for field in previous.fields}
+        new_fields = {field.name for field in proposed.fields}
+        major, minor, patch = (int(value) for value in previous.schema_version.split("."))
+        if old_fields - new_fields:
+            return f"{major + 1}.0.0"
+        if new_fields - old_fields:
+            return f"{major}.{minor + 1}.0.0"
+        return f"{major}.{minor}.{patch + 1}"
 
     def delete(self, schema_id: str) -> None:
         if schema_id == DEFAULT_SCHEMA_ID:

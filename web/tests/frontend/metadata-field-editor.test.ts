@@ -81,6 +81,20 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         status:{status:"llm_inferred",method:"llm",confidence:.82,auto_populated:true},
       },
     });
+
+    it("does not expose a leaked field assessment as a topic value", async () => {
+      const wrapper=mount(CorpusMetadataFieldEditor,{
+        props:{
+          field:"topics",
+          value:"confidence: null, needs_review: true, reason: No text could be used as evidence.",
+          control:"multi-combobox",
+          open:true,
+          status:{status:"unresolved",method:"llm",confidence:null,proposed_value:[],reason:"No text could be used as evidence."},
+        },
+      });
+      expect((wrapper.get("input").element as HTMLInputElement).value).toBe("");
+      wrapper.unmount();
+    });
     await nextTick();
     const values=[...wrapper.findAll("datalist option")].map(option=>option.attributes("value"));
     expect(values).toEqual(["cities of refuge","hospitality"]);

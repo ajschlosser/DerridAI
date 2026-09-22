@@ -13,7 +13,7 @@ export interface PdfAsset {
   metadata: Record<string, unknown>;
   document_layout?: DocumentLayoutPlan;
   document_layout_revision?: number;
-  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string;logical_pages?:Array<{slot:string;printed_page_label?:string|null}>;deterministic_region_type?:string;thread_ids?:string[]}>;
+  pages?: Array<{pdf_page:number;printed_page_label?:string|null;printed_page_label_source?:string|null;width:number;height:number;block_ids?:string[];extraction_method?:string;image_count?:number;logical_pages?:Array<{slot:string;printed_page_label?:string|null}>;deterministic_region_type?:string;thread_ids?:string[]}>;
 }
 
 
@@ -141,8 +141,8 @@ export interface CorpusBuild {
     records?:Array<{record_id?:string;fields?:string[];issues?:Array<Record<string,unknown>>;page_start?:number|string|null;page_end?:number|string|null}>
   };
   metadata_operation?: {operation_id?:string;kind?:string;state?:"queued"|"running"|"completed"|"failed"|string;started_at?:string;finished_at?:string|null;records_total?:number;records_processed?:number;fields_total?:number;fields_resolved?:number;fields_remaining?:number;provider_profile_id?:string|null;provider?:string|null;model?:string|null;target_fields?:Record<string,string[]>;error?:string|null;passes_requested?:number;passes_completed?:number;current_pass?:number;converged?:boolean;records_disputed?:number;fields_replaced?:number;fields_kept?:number;pass_results?:{pass:number;records_processed?:number;fields_added?:number}[]};
-  trash_quality?: {record_count?:number;trash_record_count?:number;trash_ratio?:number;threshold?:number;exceeds_threshold?:boolean;deterministic?:boolean};
-  source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
+  trash_quality?: {record_count?:number;trash_record_count?:number;trash_ratio?:number;threshold?:number;exceeds_threshold?:boolean;deterministic?:boolean;unusable_page_count?:number;unusable_page_ratio?:number};
+  source_quality?: {valid_for_enrichment?:boolean;page_count?:number;blocking_page_count?:number;warning_page_count?:number;image_only_page_count?:number;blocking_pages?:number[];warning_pages?:number[];issues?:Array<{page?:number;severity?:string;codes?:string[];characters?:number;replacement_characters?:number;control_characters?:number;extraction_methods?:Record<string,number>}>};
   pipeline_state?: {current?:string;stages?:Record<string,{state?:string;[key:string]:unknown}>};
   publication_readiness?: {can_publish?:boolean;next_action?:string;blockers?:Array<{code?:string;count?:number;fields?:string[]}>;required_metadata_fields?:string[];required_document_fields?:string[];missing_document_fields?:string[];records_total?:number;records_reviewed?:number;records_accepted?:number;records_rejected?:number;records_pending?:number;metadata_records_remaining?:number;metadata_fields_unresolved?:number;source_valid?:boolean;metadata_valid?:boolean;published?:boolean;no_publishable_records?:boolean};
   build_events?: Array<{at?:string;stage?:string;status?:string;progress?:number}>;
@@ -185,6 +185,7 @@ export interface CorpusRecord {
   resolved_source_quality_issues?: Array<Record<string,unknown>>;
   source_extracted_text?: string;
   text_review_status?: "human_corrected"|string;
+  text_touchup_proposal?: {status?:string;source_text?:string;proposed_text?:string;changes?:string[];warnings?:string[];provider?:string;model?:string;created_at?:string};
   text_reviewed_at?: string;
   text_revision_history?: Array<{at?:string;source?:string;previous_sha256?:string;text_sha256?:string;previous_length?:number;text_length?:number;diff?:string;resolved_source_issues?:boolean}>;
   review_events?: Array<{at?:string;event?:string;transaction_id?:string;direction?:string;source_record_id?:string;[key:string]:unknown}>;
