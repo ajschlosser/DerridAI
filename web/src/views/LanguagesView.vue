@@ -244,9 +244,21 @@ async function monitorPolicy(jobId: string) {
 async function generateContentPolicy() {
   const profile = selectedProvider.value;
   const code = current.value?.code;
-  if (!profile || !code) { error.value = i18n.t("language.provider_profile_required", "Configure an LLM provider profile before installing a dictionary."); return; }
+  if (!profile || !code) {
+    error.value = i18n.t(
+      "language.provider_profile_required",
+      "Configure an LLM provider profile before installing a dictionary.",
+    );
+    return;
+  }
   const model = String(profile.model || "").trim();
-  if (!model) { error.value = i18n.t("language.provider_model_required", "The selected provider profile does not have a model configured."); return; }
+  if (!model) {
+    error.value = i18n.t(
+      "language.provider_model_required",
+      "The selected provider profile does not have a model configured.",
+    );
+    return;
+  }
   error.value = "";
   try {
     const created = await systemApi.generateLanguageContentPolicy({
@@ -254,13 +266,19 @@ async function generateContentPolicy() {
       provider: profile.type,
       model,
       base_url: profile.base_url || undefined,
+      // The OpenAI key lives on the browser profile. Record review sends it with
+      // the request; leaving it off makes this call go out with no credential.
+      api_key: profile.api_key || undefined,
       generation: providerGeneration(profile),
       provider_profile_id: profile.id,
       max_concurrent_requests: profile.max_concurrent_requests || 1,
     });
     policyJob.value = created;
     runtime.registerExternalJob?.(created);
-    runtime.notifyToast?.(i18n.t("language.content_policy_generating", "Generating researcher text policy…"), { tone: "info" });
+    runtime.notifyToast?.(
+      i18n.t("language.content_policy_generating", "Generating researcher text policy…"),
+      { tone: "info" },
+    );
     void monitorPolicy(created.id);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);

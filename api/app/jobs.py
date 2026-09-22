@@ -1602,6 +1602,27 @@ class LLMToolJobManager(PersistentJobStateMixin):
             "errors": errors[:100],
         }
 
+    @staticmethod
+    def _language_provider(body: LLMToolJobCreate) -> tuple[str, str, str | None, str | None]:
+        """Choose the provider, model, endpoint, and API key for a language job.
+
+        Two places can hold the OpenAI key. An administrator's profile keeps it in
+        the browser and sends it on the request. A profile published for researchers
+        keeps it on the server, and the browser never receives it. A key on the
+        request wins. When the request omits the key, the stored profile is used.
+        An empty browser value must not hide a stored key.
+        """
+        config = body.language
+        assert config is not None
+        stored = {}
+        if body.provider_profile_id:
+            stored = system_store.researcher_profile(body.provider_profile_id) or {}
+        provider = str(stored.get("type") or config.provider)
+        model = str(config.model or stored.get("model") or "").strip()
+        base_url = config.base_url or stored.get("base_url")
+        api_key = config.api_key or stored.get("api_key")
+        return provider, model, base_url, api_key
+
     def _run_language_dictionary(self, job_id: str, body: LLMToolJobCreate) -> dict[str, Any]:
         assert body.language is not None
         config = body.language
@@ -1611,14 +1632,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
         base = system_store.get_language("en-US") or {"dictionary": {}}
         dictionary = dict(base.get("dictionary") or {})
 
-        # Provider profiles keep API keys write-only in the browser. Resolve the
-        # selected profile again on the server so translation jobs can use a
-        # stored secret without ever sending it back to the client.
-        stored_profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
-        provider = str((stored_profile or {}).get("type") or config.provider)
-        model = str(config.model or (stored_profile or {}).get("model") or "").strip()
-        base_url = config.base_url or (stored_profile or {}).get("base_url")
-        api_key = config.api_key or (stored_profile or {}).get("api_key")
+        provider, model, base_url, api_key = self._language_provider(body)
         if not model:
             raise ValueError("Select a model to translate the language dictionary.")
 
@@ -1811,11 +1825,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
         code = normalize_locale_code(config.code)
         if system_store.get_language(code) is None:
             raise ValueError(f"Locale {code} is not installed. Install the dictionary before generating its researcher text policy.")
-        stored_profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
-        provider = str((stored_profile or {}).get("type") or config.provider)
-        model = str(config.model or (stored_profile or {}).get("model") or "").strip()
-        base_url = config.base_url or (stored_profile or {}).get("base_url")
-        api_key = config.api_key or (stored_profile or {}).get("api_key")
+        provider, model, base_url, api_key = self._language_provider(body)
         if not model:
             raise ValueError("Select a model to generate the researcher text policy.")
 
