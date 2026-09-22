@@ -16,7 +16,9 @@ async function openScenario(page: Page, scenario: (typeof scenarios)[number]) {
   await page.goto(APP + scenario.path);
   await scenario.steps?.(page);
   // A view that loads its data first can take longer than the default five seconds on a busy CI machine.
-  await expect(scenario.ready(page), `${scenario.id} did not reach its state`).toBeVisible({ timeout: 15_000 });
+  await expect(scenario.ready(page), `${scenario.id} did not reach its state`).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 for (const scheme of ["light", "dark"] as const) {
@@ -69,10 +71,7 @@ test("the provider card keeps its name readable in a narrow column", async ({ pa
   );
   // The card sits in a column about 350px wide on the Languages page; its three-column grid used to
   // squeeze the name to nothing and overlap the stat boxes with the DEFAULT badge.
-  await openScenario(
-    page,
-    scenarios.find((s) => s.id === "languages-default")!,
-  );
+  await openScenario(page, scenarios.find((s) => s.id === "languages-default")!);
   const card = page.locator(".provider-summary-card");
   await expect(card).toBeVisible();
   const box = async (selector: string) => (await card.locator(selector).first().boundingBox())!;
@@ -92,14 +91,39 @@ test("the saved answer's heading is heading-sized, not display-sized", async ({
     "The view scan runs once, at desktop width.",
   );
   // The shared answer heading was declared at 112px, so a saved question filled the screen.
-  await openScenario(
-    page,
-    scenarios.find((s) => s.id === "faq-records")!,
-  );
+  await openScenario(page, scenarios.find((s) => s.id === "faq-records")!);
   const size = await page
     .locator(".research-answer-heading h2")
     .first()
     .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(size).toBeLessThanOrEqual(32);
   expect(size).toBeGreaterThanOrEqual(16);
+});
+
+test("Users exposes labelled controls and an accessible account list", async ({
+  browser,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium-desktop",
+    "The view scan runs once, at desktop width.",
+  );
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    colorScheme: "dark",
+    reducedMotion: "reduce",
+  });
+  await context.addInitScript((value) => {
+    localStorage.setItem("derridai.ui.scheme", value);
+  }, "dark");
+  const page = await context.newPage();
+  await openScenario(page, scenarios.find((scenario) => scenario.id === "users-default")!);
+
+  const accounts = page.getByRole("list", { name: "Accounts" });
+  await expect(accounts.getByRole("listitem")).toHaveCount(1);
+  await expect(accounts.getByText("Active")).toBeVisible();
+  await expect(page.getByLabel("Username")).toBeVisible();
+  await expect(page.getByLabel("Temporary password")).toBeVisible();
+  await expect(page.getByLabel("Role", { exact: true })).toBeVisible();
+
+  await context.close();
 });

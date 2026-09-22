@@ -46,6 +46,34 @@
   --accent-fg: var(--ui-accent-dark, #294c41);
   --accent-on: #fff;
 
+  /* Unified workbench contract. Components should consume these semantic names instead of
+     choosing between the legacy panel/card/ref aliases. */
+  --surface-page: var(--bg);
+  --surface-card: var(--card);
+  --surface-raised: var(--card);
+  --surface-inset: var(--soft);
+  --surface-overlay: var(--card);
+  --surface-glass: var(--card);
+  --surface-hover: color-mix(in srgb, var(--ui-accent, #355f52) 5%, var(--card));
+  --surface-selected: var(--ui-accent-soft, var(--soft));
+  --surface-disabled: color-mix(in srgb, var(--muted) 8%, var(--card));
+  --text-primary: var(--text);
+  --text-secondary: var(--text-2);
+  --text-tertiary: var(--muted);
+  --border-subtle: var(--line);
+  --border-strong: var(--line-strong);
+  --border-interactive: var(--ui-accent-border, var(--line-strong));
+  --control-height: 40px;
+  --control-height-small: 34px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-overlay: 16px;
+  --shadow-card: var(--elev-1);
+  --shadow-overlay: var(--elev-3);
+  --scrim: rgba(12, 18, 15, 0.72);
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+
   /* Type scale (rem, so it follows the reader's font-size setting). 12px is the floor. */
   --fs-xs: 0.75rem;
   --fs-sm: 0.8125rem;
@@ -117,6 +145,9 @@ html[data-color-scheme="dark"] {
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --elev-2: 0 4px 14px rgba(0, 0, 0, 0.45);
   --elev-3: 0 18px 44px rgba(0, 0, 0, 0.6);
+  --surface-hover: color-mix(in srgb, var(--ui-accent, #355f52) 12%, var(--card));
+  --surface-disabled: color-mix(in srgb, var(--muted) 16%, var(--card));
+  --scrim: rgba(0, 0, 0, 0.78);
 }
 
 /* Increased contrast: outlines take the text colour so boundaries never depend on a pale tint. */

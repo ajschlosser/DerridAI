@@ -7,8 +7,26 @@ function baseSnapshot() {
   return {
     available: true,
     shared: false,
-    files: [{ id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true, origin: "imported", origin_detail: "" }],
-    file: { id: "f1", name: "tab.jsonl", count: 2, dirty: 0, active: true, origin: "imported", origin_detail: "" },
+    files: [
+      {
+        id: "f1",
+        name: "tab.jsonl",
+        count: 2,
+        dirty: 0,
+        active: true,
+        origin: "imported",
+        origin_detail: "",
+      },
+    ],
+    file: {
+      id: "f1",
+      name: "tab.jsonl",
+      count: 2,
+      dirty: 0,
+      active: true,
+      origin: "imported",
+      origin_detail: "",
+    },
     query: "",
     rows: [
       {
@@ -242,7 +260,7 @@ describe("RecordsView", () => {
     expect(wrapper.get(".records-search input").attributes("placeholder")).toBe(
       "Rechercher le texte dans ce fichier",
     );
-    expect(wrapper.get(".db-status").text()).toBe("Synchronisée");
+    expect(wrapper.get(".db-status").text()).toContain("Synchronisée");
     expect(wrapper.get("#records-filter-work").attributes("placeholder")).toBe("Filtrer…");
     expect(wrapper.get(".records-sort").text()).toContain("Œuvre");
     wrapper.unmount();
@@ -253,8 +271,27 @@ describe("RecordsView", () => {
     const workHeader = wrapper.get("thead tr:first-child th:nth-child(3)");
     expect(workHeader.attributes("scope")).toBe("col");
     expect(workHeader.attributes("aria-sort")).toBe("none");
+    expect(wrapper.get(".records-table-scroll").attributes("role")).toBe("region");
+    expect(wrapper.get(".db-status").attributes("data-tone")).toBe("success");
     await wrapper.get(".records-sort").trigger("click");
     expect(runtime.setRecordsListSort).toHaveBeenCalledWith("work");
+    wrapper.unmount();
+  });
+
+  it("makes an unavailable corpus database explicit", async () => {
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      stores: [],
+      active_store: "",
+      has_database: false,
+      db_unavailable_reason: "The local database is still starting.",
+    });
+    const wrapper = await mountRecords();
+    expect(wrapper.get(".records-database-state").text()).toContain("No corpus collection");
+    expect(wrapper.get(".records-database-state").text()).toContain(
+      "The local database is still starting.",
+    );
+    expect(wrapper.get(".records-store select").attributes("disabled")).toBeDefined();
     wrapper.unmount();
   });
 
@@ -305,7 +342,9 @@ describe("RecordsView", () => {
     });
     const wrapper = await mountRecords();
     const byLabel = (label: string) =>
-      wrapper.findAll(".records-file-actions button").find((button) => button.text().includes(label));
+      wrapper
+        .findAll(".records-file-actions button")
+        .find((button) => button.text().includes(label));
     await byLabel("Open JSONL")?.trigger("click");
     expect(runtime.recordsListCommand).toHaveBeenCalledWith("import");
     await byLabel("Merge files")?.trigger("click");

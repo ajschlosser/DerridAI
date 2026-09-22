@@ -2,11 +2,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
-import { authApi, type AuthUser, type CapabilityDefinition, type RoleDefinition, type UserRole } from "../api/auth";
 import {
-  expandPermissions,
-  samePermissions,
-} from "../domain/roles";
+  authApi,
+  type AuthUser,
+  type CapabilityDefinition,
+  type RoleDefinition,
+  type UserRole,
+} from "../api/auth";
+import { expandPermissions, samePermissions } from "../domain/roles";
 import { useI18nStore } from "../stores/i18n";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
@@ -39,16 +42,22 @@ const roleName = ref("");
 const roleDescription = ref("");
 const cloneFrom = ref<UserRole>("researcher");
 const permissionFilter = ref("");
-const confirm = ref<{kind: ConfirmKind; title: string; message: string} | null>(null);
+const confirm = ref<{ kind: ConfirmKind; title: string; message: string } | null>(null);
 const pendingRole = ref<UserRole>("");
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
 
-const capabilityIds = computed(() => capabilities.value.map(item => item.id));
-const role = computed(() => roles.value.find(item => item.id === selectedRole.value));
-const templates = computed(() => roles.value.filter(item => item.id !== "admin"));
-const savedPermissions = computed(() => expandPermissions(role.value?.permissions || [], capabilityIds.value));
-const dirty = computed(() => !role.value?.locked && !samePermissions(permissions.value, savedPermissions.value));
-const enabledCount = computed(() => role.value?.permissions.includes("*") ? capabilityIds.value.length : permissions.value.length);
+const capabilityIds = computed(() => capabilities.value.map((item) => item.id));
+const role = computed(() => roles.value.find((item) => item.id === selectedRole.value));
+const templates = computed(() => roles.value.filter((item) => item.id !== "admin"));
+const savedPermissions = computed(() =>
+  expandPermissions(role.value?.permissions || [], capabilityIds.value),
+);
+const dirty = computed(
+  () => !role.value?.locked && !samePermissions(permissions.value, savedPermissions.value),
+);
+const enabledCount = computed(() =>
+  role.value?.permissions.includes("*") ? capabilityIds.value.length : permissions.value.length,
+);
 const saveStatus = computed<SaveStatus>(() => {
   if (role.value?.locked) return "readonly";
   if (saving.value) return "saving";
@@ -56,7 +65,9 @@ const saveStatus = computed<SaveStatus>(() => {
   if (dirty.value) return "dirty";
   return "saved";
 });
-const assignedCount = computed(() => users.value.filter(user => user.role === selectedRole.value).length);
+const assignedCount = computed(
+  () => users.value.filter((user) => user.role === selectedRole.value).length,
+);
 
 function announce(message: string) {
   liveMessage.value = message;
@@ -84,18 +95,22 @@ function displayName(item: RoleDefinition) {
 
 function assignedLabel(count: number) {
   if (count === 0) return i18n.t("roles.assigned_none", "No accounts use this role.");
-  if (count === 1) return i18n.tf("roles.assigned_one", "{count} account uses this role.", {count});
-  return i18n.tf("roles.assigned_many", "{count} accounts use this role.", {count});
+  if (count === 1)
+    return i18n.tf("roles.assigned_one", "{count} account uses this role.", { count });
+  return i18n.tf("roles.assigned_many", "{count} accounts use this role.", { count });
 }
 
 function assignedCountLabel(count: number) {
-  if (count === 1) return i18n.tf("roles.accounts_one", "{count} account", {count});
-  return i18n.tf("roles.accounts_many", "{count} accounts", {count});
+  if (count === 1) return i18n.tf("roles.accounts_one", "{count} account", { count });
+  return i18n.tf("roles.accounts_many", "{count} accounts", { count });
 }
 
 function applyRole(id: UserRole) {
   selectedRole.value = id;
-  permissions.value = expandPermissions(roles.value.find(item => item.id === id)?.permissions || [], capabilityIds.value);
+  permissions.value = expandPermissions(
+    roles.value.find((item) => item.id === id)?.permissions || [],
+    capabilityIds.value,
+  );
   permissionFilter.value = "";
 }
 
@@ -105,14 +120,17 @@ async function refresh(preferred?: string) {
   try {
     const [roleData, userData] = await Promise.all([
       authApi.listRoles(),
-      authApi.listUsers().catch(() => ({users: [] as AuthUser[]})),
+      authApi.listUsers().catch(() => ({ users: [] as AuthUser[] })),
     ]);
     roles.value = roleData.roles;
     capabilities.value = roleData.capabilities;
     users.value = userData.users;
     const next = preferred || selectedRole.value;
-    const fallback = roles.value.find(item => item.id === "researcher")?.id || roles.value[0]?.id || "researcher";
-    applyRole(roles.value.some(item => item.id === next) ? next : fallback);
+    const fallback =
+      roles.value.find((item) => item.id === "researcher")?.id ||
+      roles.value[0]?.id ||
+      "researcher";
+    applyRole(roles.value.some((item) => item.id === next) ? next : fallback);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -162,7 +180,9 @@ function discard() {
 function openCreate() {
   roleName.value = "";
   roleDescription.value = "";
-  cloneFrom.value = templates.value.some(item => item.id === "researcher") ? "researcher" : (templates.value[0]?.id || "researcher");
+  cloneFrom.value = templates.value.some((item) => item.id === "researcher")
+    ? "researcher"
+    : templates.value[0]?.id || "researcher";
   createOpen.value = true;
 }
 
@@ -193,13 +213,20 @@ function openDelete() {
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   if (assignedCount.value) {
-    error.value = i18n.t("roles.cannot_delete_assigned", "Reassign users from this role before deleting it.");
+    error.value = i18n.t(
+      "roles.cannot_delete_assigned",
+      "Reassign users from this role before deleting it.",
+    );
     return;
   }
   confirm.value = {
     kind: "delete",
     title: i18n.t("roles.delete", "Delete role"),
-    message: i18n.tf("roles.delete_confirm_named", "Delete the role “{name}”? Users must be reassigned first.", {name: current.name}),
+    message: i18n.tf(
+      "roles.delete_confirm_named",
+      "Delete the role “{name}”? Users must be reassigned first.",
+      { name: current.name },
+    ),
   };
 }
 
@@ -271,7 +298,7 @@ function closeConfirm() {
 }
 
 function openUsers() {
-  void router.push({name: "users"});
+  void router.push({ name: "users" });
 }
 
 function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -282,12 +309,15 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true;
-  return new Promise<boolean>(resolve => {
+  return new Promise<boolean>((resolve) => {
     routeGuardResolve.value = resolve;
     confirm.value = {
       kind: "leave",
       title: i18n.t("roles.leave_title", "Discard unsaved permission changes?"),
-      message: i18n.t("roles.leave_message", "Your unsaved role permission changes will be lost if you leave this page."),
+      message: i18n.t(
+        "roles.leave_message",
+        "Your unsaved role permission changes will be lost if you leave this page.",
+      ),
     };
   });
 });
@@ -306,12 +336,24 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       <div>
         <p class="roles-kicker">{{ i18n.t("section.system", "System") }}</p>
         <h1 id="roles-page-title">{{ i18n.t("roles.title", "Roles & permissions") }}</h1>
-        <p>{{ i18n.t("roles.description", "Create non-admin roles and define exactly which researcher-safe pages and features each role can use.") }}</p>
+        <p>
+          {{
+            i18n.t(
+              "roles.description",
+              "Create non-admin roles and define exactly which researcher-safe pages and features each role can use.",
+            )
+          }}
+        </p>
       </div>
       <div class="roles-hero-actions">
         <SettingsSaveState :status="saveStatus" :label="statusLabel(saveStatus)" />
         <UiButton icon="users" :label="i18n.t('nav.users', 'Users')" @click="openUsers" />
-        <UiButton variant="primary" icon="plus" :label="i18n.t('roles.create', 'Create role')" @click="openCreate" />
+        <UiButton
+          variant="primary"
+          icon="plus"
+          :label="i18n.t('roles.create', 'Create role')"
+          @click="openCreate"
+        />
       </div>
     </header>
     <p v-if="error" class="info error" role="alert">{{ error }}</p>
@@ -328,27 +370,47 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       @action="refresh()"
     />
     <div v-else class="roles-layout">
-      <UiCard as="div" class="roles-list" role="navigation" :padded="false" :aria-label="i18n.t('roles.role_list', 'Roles')">
+      <UiCard
+        as="div"
+        class="roles-list"
+        role="navigation"
+        :padded="false"
+        :aria-label="i18n.t('roles.role_list', 'Roles')"
+      >
         <p class="roles-list-head">{{ i18n.t("roles.role_list", "Roles") }}</p>
-        <div class="roles-list-items" role="listbox" :aria-label="i18n.t('roles.role_list', 'Roles')">
+        <div
+          class="roles-list-items"
+          role="listbox"
+          :aria-label="i18n.t('roles.role_list', 'Roles')"
+        >
           <button
             v-for="item in roles"
             :key="item.id"
             type="button"
             class="role-list-item"
-            :class="{active: selectedRole === item.id}"
+            :class="{ active: selectedRole === item.id }"
             role="option"
             :aria-selected="selectedRole === item.id"
             @click="requestSelect(item.id)"
           >
             <span>
               <b>{{ displayName(item) }}</b>
-              <small>{{ roleKind(item) }} · {{ assignedCountLabel(users.filter(user => user.role === item.id).length) }}</small>
+              <small
+                >{{ roleKind(item) }} ·
+                {{
+                  assignedCountLabel(users.filter((user) => user.role === item.id).length)
+                }}</small
+              >
             </span>
           </button>
         </div>
       </UiCard>
-      <UiCard as="section" class="role-editor" :padded="false" :heading-id="role ? 'role-editor-title' : undefined">
+      <UiCard
+        as="section"
+        class="role-editor"
+        :padded="false"
+        :heading-id="role ? 'role-editor-title' : undefined"
+      >
         <header v-if="role" class="role-editor-head">
           <div>
             <div class="role-editor-title-row">
@@ -367,7 +429,12 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               variant="danger"
               :label="i18n.t('roles.delete', 'Delete role')"
               :disabled="assignedCount > 0"
-              :disabled-reason="i18n.t('roles.cannot_delete_assigned', 'Reassign users from this role before deleting it.')"
+              :disabled-reason="
+                i18n.t(
+                  'roles.cannot_delete_assigned',
+                  'Reassign users from this role before deleting it.',
+                )
+              "
               @click="openDelete"
             />
             <UiButton
@@ -387,9 +454,29 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </div>
         </header>
         <div class="role-editor-body">
-          <p v-if="role?.locked" class="info">{{ i18n.t("roles.admin_locked_help", "Administrator access is fixed to full application control so administrative access cannot be accidentally removed.") }}</p>
-          <p v-else class="info">{{ i18n.t("roles.non_admin_help", "Researcher is the default non-admin role. Custom roles use the same protected non-admin data boundary, with the permissions you enable below.") }}</p>
-          <p class="note">{{ role?.locked ? i18n.t("roles.full_access", "Full access") : i18n.tf("roles.enabled_count", "{count} enabled", {count: enabledCount}) }}</p>
+          <p v-if="role?.locked" class="info">
+            {{
+              i18n.t(
+                "roles.admin_locked_help",
+                "Administrator access is fixed to full application control so administrative access cannot be accidentally removed.",
+              )
+            }}
+          </p>
+          <p v-else class="info">
+            {{
+              i18n.t(
+                "roles.non_admin_help",
+                "Researcher is the default non-admin role. Custom roles use the same protected non-admin data boundary, with the permissions you enable below.",
+              )
+            }}
+          </p>
+          <p class="note">
+            {{
+              role?.locked
+                ? i18n.t("roles.full_access", "Full access")
+                : i18n.tf("roles.enabled_count", "{count} enabled", { count: enabledCount })
+            }}
+          </p>
           <UiField
             v-if="!role?.locked"
             :label="i18n.t('roles.filter', 'Filter permissions')"
@@ -402,7 +489,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               type="search"
               autocomplete="off"
               :placeholder="i18n.t('roles.filter_placeholder', 'Search pages and capabilities')"
-            >
+            />
           </UiField>
           <RolePermissionMatrix
             v-model="permissions"
@@ -417,30 +504,65 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
     <UiDialog
       :open="createOpen"
       :title="i18n.t('roles.create', 'Create role')"
-      :description="i18n.t('roles.create_help', 'Start from an existing non-admin role, then adjust its permissions.')"
+      :description="
+        i18n.t(
+          'roles.create_help',
+          'Start from an existing non-admin role, then adjust its permissions.',
+        )
+      "
       :close-label="i18n.t('ui.close', 'Close')"
       size="medium"
       @close="createOpen = false"
     >
       <form class="role-create-fields" @submit.prevent="createRole">
-        <UiField :label="i18n.t('roles.name', 'Role name')" :hint="i18n.t('roles.create_name_help', 'Two to 80 characters. The role id is derived from this name.')" required>
-          <input id="newRoleName" v-model="roleName" class="control" minlength="2" maxlength="80" required>
+        <UiField
+          :label="i18n.t('roles.name', 'Role name')"
+          :hint="
+            i18n.t(
+              'roles.create_name_help',
+              'Two to 80 characters. The role id is derived from this name.',
+            )
+          "
+          required
+        >
+          <input
+            id="newRoleName"
+            v-model="roleName"
+            class="control"
+            minlength="2"
+            maxlength="80"
+            required
+          />
         </UiField>
         <UiField :label="i18n.t('roles.role_description', 'Description')" wide>
-          <textarea id="newRoleDescription" v-model="roleDescription" class="control" rows="3" maxlength="500"></textarea>
+          <textarea
+            id="newRoleDescription"
+            v-model="roleDescription"
+            class="control"
+            rows="3"
+            maxlength="500"
+          ></textarea>
         </UiField>
         <UiField :label="i18n.t('roles.template', 'Start with permissions from')">
           <select id="newRoleTemplate" v-model="cloneFrom" class="control">
-            <option v-for="item in templates" :key="item.id" :value="item.id">{{ displayName(item) }}</option>
+            <option v-for="item in templates" :key="item.id" :value="item.id">
+              {{ displayName(item) }}
+            </option>
           </select>
         </UiField>
       </form>
       <template #footer>
-        <UiButton :label="i18n.t('ui.cancel', 'Cancel')" :disabled="creating" @click="createOpen = false" />
+        <UiButton
+          :label="i18n.t('ui.cancel', 'Cancel')"
+          :disabled="creating"
+          @click="createOpen = false"
+        />
         <UiButton
           variant="primary"
           type="submit"
-          :label="creating ? i18n.t('ui.working', 'Working…') : i18n.t('roles.create', 'Create role')"
+          :label="
+            creating ? i18n.t('ui.working', 'Working…') : i18n.t('roles.create', 'Create role')
+          "
           :disabled="creating || roleName.trim().length < 2"
           @click="createRole"
         />
@@ -458,7 +580,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
     >
       <p>{{ confirm.message }}</p>
       <template #footer>
-        <UiButton :label="i18n.t('ui.cancel', 'Cancel')" :disabled="deleting || saving" @click="closeConfirm" />
+        <UiButton
+          :label="i18n.t('ui.cancel', 'Cancel')"
+          :disabled="deleting || saving"
+          @click="closeConfirm"
+        />
         <div class="roles-confirm-actions">
           <UiButton
             v-if="confirm.kind === 'switch'"
@@ -468,7 +594,15 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           />
           <UiButton
             :variant="confirm.kind === 'delete' || confirm.kind === 'leave' ? 'danger' : 'primary'"
-            :label="deleting || saving ? i18n.t('ui.working', 'Working…') : confirm.kind === 'delete' ? i18n.t('roles.delete', 'Delete role') : confirm.kind === 'switch' ? i18n.t('roles.switch_save', 'Save & switch') : i18n.t('roles.discard', 'Discard changes')"
+            :label="
+              deleting || saving
+                ? i18n.t('ui.working', 'Working…')
+                : confirm.kind === 'delete'
+                  ? i18n.t('roles.delete', 'Delete role')
+                  : confirm.kind === 'switch'
+                    ? i18n.t('roles.switch_save', 'Save & switch')
+                    : i18n.t('roles.discard', 'Discard changes')
+            "
             :disabled="deleting || saving"
             @click="applyConfirm"
           />
@@ -479,42 +613,187 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 </template>
 
 <style scoped>
-.roles-page{display:grid;gap:18px;max-width:1280px}
-.roles-hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
-.roles-hero h1{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(1.6rem,3vw,2.1rem);line-height:1.15}
-.roles-hero p{margin:6px 0 0;max-width:68ch;color:var(--muted);line-height:1.5}
-.roles-kicker{margin:0;font-size:.8125rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}
-.roles-hero-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.roles-loading{min-height:240px;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
-.roles-layout{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:16px;align-items:start}
-.roles-list{position:sticky;top:12px}
-.roles-list-head{margin:0;padding:14px 14px 6px;font-size:.8125rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
-.roles-list-items{display:grid;gap:4px;padding:0 8px 10px}
-.role-list-item{width:100%;border:0;background:transparent;border-radius:var(--radius-sm);padding:11px 12px;text-align:left;color:var(--text);cursor:pointer}
-.role-list-item:hover{background:var(--soft)}
-.role-list-item.active{background:var(--ui-accent-soft);color:var(--accent-fg)}
-.role-list-item span{display:grid;gap:2px}
-.role-list-item b{font-size:.875rem}
-.role-list-item small{font-size:.8125rem;color:var(--muted);line-height:1.4}
-.role-list-item:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
-.role-editor-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:18px 18px 0}
-.role-editor-title-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.role-editor-head h2{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:1.25rem;line-height:1.25;font-weight:650}
-.role-editor-copy{margin:6px 0 0;max-width:68ch;color:var(--muted);font-size:.875rem;line-height:1.5}
-.role-editor-tools{display:flex;flex-wrap:wrap;gap:8px}
-.role-editor-body{display:grid;gap:12px;padding:14px 18px 18px}
-.role-create-fields{display:grid;gap:14px}
-.roles-confirm-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-@media (max-width:900px){
-  .roles-layout{grid-template-columns:1fr}
-  .roles-list{position:static}
-  .roles-list-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+.roles-page {
+  display: grid;
+  gap: 18px;
+  max-width: 1280px;
 }
-@media (max-width:560px){
-  .roles-list-items{grid-template-columns:1fr}
-  .roles-hero-actions{width:100%}
+.roles-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
-@media (prefers-reduced-motion:reduce){
-  .roles-page *{transition:none !important}
+.roles-hero h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  line-height: 1.15;
+}
+.roles-hero p {
+  margin: 6px 0 0;
+  max-width: 68ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.roles-kicker {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-fg);
+}
+.roles-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.roles-loading {
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.roles-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.roles-list {
+  position: sticky;
+  top: 12px;
+}
+.roles-list-head {
+  margin: 0;
+  padding: 14px 14px 6px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.roles-list-items {
+  display: grid;
+  gap: 4px;
+  padding: 0 8px 10px;
+}
+.role-list-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-control);
+  padding: 11px 12px;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.role-list-item:hover {
+  background: var(--surface-hover);
+}
+.role-list-item.active {
+  background: var(--surface-selected);
+  color: var(--accent-fg);
+}
+.role-list-item span {
+  display: grid;
+  gap: 2px;
+}
+.role-list-item b {
+  font-size: 0.875rem;
+}
+.role-list-item small {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+.role-list-item:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.role-editor-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 18px 18px 0;
+}
+.role-editor-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.role-editor-head h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+  line-height: 1.25;
+  font-weight: 650;
+}
+.role-editor-copy {
+  margin: 6px 0 0;
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.role-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.role-editor-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px 18px;
+}
+.role-create-fields {
+  display: grid;
+  gap: 14px;
+}
+.roles-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  .roles-layout {
+    grid-template-columns: 1fr;
+  }
+  .roles-list {
+    position: static;
+  }
+  .roles-list-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .roles-list-items {
+    grid-template-columns: 1fr;
+  }
+  .roles-hero-actions {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roles-page * {
+    transition: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .role-list-item:focus-visible {
+    outline-color: Highlight;
+  }
+  .role-list-item.active {
+    outline: 1px solid Highlight;
+  }
 }
 </style>

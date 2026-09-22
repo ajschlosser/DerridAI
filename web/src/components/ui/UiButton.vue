@@ -51,5 +51,22 @@ const emit = defineEmits<{ click:[event:MouseEvent] }>();
 </template>
 
 <style scoped>
-.ui-button-wrap{display:inline-flex;position:relative}.ui-button{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:8px 12px;background:var(--panel);color:var(--text);font-size:.875rem;font-weight:700;line-height:1.2;box-shadow:0 1px 1px rgba(23,29,26,.025);transition:background .12s ease,border-color .12s ease,box-shadow .12s ease,transform .12s ease}.ui-button:hover:not(:disabled){background:var(--panel-2);border-color:var(--tone-ok-edge);box-shadow:0 3px 10px rgba(30,40,34,.06);transform:translateY(-1px)}.ui-button:active:not(:disabled){transform:none}.ui-button:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}.ui-button:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}.ui-button.variant-primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}.ui-button.variant-primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2)}.ui-button.variant-soft{background:var(--accent-soft);color: var(--accent-fg);border-color:var(--line)}.ui-button.variant-danger{background:var(--danger-bg);color:var(--danger);border-color:var(--tone-danger-edge)}.ui-button.variant-ghost{background:transparent;border-color:transparent;box-shadow:none}.ui-button.variant-ghost:hover:not(:disabled){background:var(--panel-2);border-color:var(--line)}.ui-button.size-small{min-height:36px;padding:6px 10px;font-size:.8125rem}.ui-button.icon-only{width:40px;padding:0}.ui-button.size-small.icon-only{width:36px}.ui-button :deep(svg){width:16px;height:16px}.ui-button-count{min-width:1.55em;padding:1px 5px;border-radius:999px;background:rgba(0,0,0,.08);font-size:.75rem;text-align:center}@media (prefers-reduced-motion:reduce){.ui-button{transition:none}.ui-button:hover:not(:disabled){transform:none}}
+.ui-button-wrap{display:inline-flex;position:relative}
+.ui-button{min-height:var(--control-height);display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--border-strong);border-radius:var(--radius-control);padding:8px 13px;background:var(--surface-card);color:var(--text-primary);font-size:.875rem;font-weight:700;line-height:1.2;box-shadow:var(--shadow-card);transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),box-shadow var(--motion-fast) var(--ease-standard),transform var(--motion-fast) var(--ease-standard)}
+.ui-button:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-interactive);box-shadow:var(--elev-2);transform:translateY(-1px)}
+.ui-button:active:not(:disabled){transform:none}
+.ui-button:focus-visible{outline:var(--focus-ring-width) solid var(--focus-ring);outline-offset:var(--focus-ring-offset)}
+.ui-button:disabled{background:var(--surface-disabled);opacity:.72;cursor:not-allowed;box-shadow:none}
+.ui-button.variant-primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+.ui-button.variant-primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2)}
+.ui-button.variant-soft{background:var(--surface-selected);color:var(--accent-fg);border-color:var(--border-interactive)}
+.ui-button.variant-danger{background:var(--tone-danger-bg);color:var(--tone-danger-fg);border-color:var(--tone-danger-border)}
+.ui-button.variant-ghost{background:transparent;border-color:transparent;box-shadow:none}
+.ui-button.variant-ghost:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-subtle)}
+.ui-button.size-small{min-height:var(--control-height-small);padding:6px 10px;font-size:.8125rem}
+.ui-button.icon-only{width:var(--control-height);padding:0}
+.ui-button.size-small.icon-only{width:var(--control-height-small)}
+.ui-button :deep(svg){width:16px;height:16px}
+.ui-button-count{min-width:1.55em;padding:1px 5px;border-radius:var(--radius-pill);background:var(--surface-inset);font-size:.75rem;text-align:center}
+@media (prefers-reduced-motion:reduce){.ui-button{transition:none}.ui-button:hover:not(:disabled){transform:none}}
 </style>

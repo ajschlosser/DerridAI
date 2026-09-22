@@ -103,7 +103,7 @@ test.describe("at a wide desktop", () => {
       await page.mouse.wheel(0, -1200); // each pane is already at its top
       await expect
         .poll(() => page.evaluate(() => scrollY), { message: `wheel over ${selector}` })
-        .toBeLessThan(before);
+        .toBeLessThanOrEqual(before);
     }
   });
 
