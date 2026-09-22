@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import fitz
@@ -21,13 +22,14 @@ from .main_text_start import infer_main_text_start
 
 def safe_filename(value: str) -> str:
     """Return a stable, filesystem-safe display filename."""
-    name = re.sub(r"[\x00-\x1f<>:\"/\\|?*]+", "_", str(value or "").strip())
-    return name[:240] or "document.pdf"
+    name = Path(str(value or "source.pdf")).name
+    return re.sub(r"[^A-Za-z0-9._ -]+", "_", name)[:240] or "source.pdf"
 
 
 def normalize_text(value: Any) -> str:
     """Normalize extracted text without changing scholarly content."""
-    return unicodedata.normalize("NFC", str(value or "").replace("\r\n", "\n").replace("\r", "\n"))
+    text = unicodedata.normalize("NFC", str(value or "").replace("\u00ad", ""))
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def block_text(block: dict[str, Any]) -> str:
