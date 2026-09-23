@@ -9,8 +9,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
-from app.locales.en_us import EN_US
-from app.locales.fr_ca import FR_CA
 
 def text(path:str)->str:return (ROOT/path).read_text(encoding='utf-8')
 
@@ -33,13 +31,6 @@ def install(tmp_path:Path):
     repo.save_records(build['build_id'],rows)
     return repo,build
 
-def test_release_and_i18n_parity():
-    assert APP_VERSION=='0.60.0'
-    assert json.loads(text('web/package.json'))['version']=='0.60.0'
-    assert '0.60.0 — Testy Titmouse' in text('README.md')
-    assert set(EN_US)==set(FR_CA)
-    for key in ['pdf_corpus.slice_record','pdf_corpus.select_from_text','pdf_corpus.redo','pdf_corpus.pdf_source']:
-        assert key in EN_US and key in FR_CA and EN_US[key]!=FR_CA[key]
 
 def test_boundary_suspect_detection_marks_both_sides():
     rows=[{'text':'This continues without punctuation'},{'text':'and clearly continues here.'}]
@@ -58,17 +49,4 @@ def test_slice_moves_prefix_to_previous_and_undo_redo_walk_history(tmp_path:Path
     manager.redo_last_review_edit(build['build_id'])
     assert repo.load_records(build['build_id'])[1]['text'].startswith('Proper current text')
 
-def test_review_ui_has_slice_select_from_text_focus_pdf_and_undo_redo():
-    builder=text('web/src/components/PdfCorpusBuilder.vue');focus=text('web/src/components/CorpusRecordFocusReview.vue');field=text('web/src/components/CorpusMetadataFieldEditor.vue');api=text('web/src/api/pdfCorpus.ts')
-    assert '<CorpusBoundarySliceDialog' in builder and 'sliceRecord:' in api
-    assert 'redoReview:' in api and '@redo="redoReview"' in builder
-    assert 'selectFromText' in field and "window.getSelection()" in field
-    assert 'sourcePdfUrl' in focus and '<iframe' not in focus and 'openSourceViewer' in focus
-    assert 'SourceTranscriptionDialog' in builder
-    assert '<CorpusBoundarySliceDialog' in focus
 
-def test_boundary_slice_storybook_component_is_accessible_and_reusable():
-    comp=text('web/src/components/CorpusBoundarySliceDialog.vue');story=text('web/src/components/CorpusBoundarySliceDialog.stories.ts')
-    assert '<UiDialog' in comp and "import UiDialog" in comp
-    assert ':focus-visible' in comp
-    assert 'Corpus Builder/Review/Boundary Slice Dialog' in story

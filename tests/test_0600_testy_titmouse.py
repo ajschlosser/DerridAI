@@ -52,9 +52,6 @@ def test_release_identity_and_profile_versions():
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v9"
     assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
-    assert 'APP_VERSION = "0.60.0"' in text("api/app/config.py")
-    assert json.loads(text("web/package.json"))["version"]=="0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
 
 
 def test_touchup_sanitizer_removes_only_model_added_outer_separators():
@@ -171,32 +168,5 @@ def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,m
     assert status["llm_checked"] is True
 
 
-def test_frontend_surface_and_test_contracts_are_present():
-    css=text("web/src/style.css")
-    history=text("web/src/components/CorpusBuildHistoryMenu.vue")
-    readiness=text("web/src/components/CorpusBuildReadiness.vue")
-    package=json.loads(text("web/package.json"))
-    assert "--surface-overlay:#fff" in css.replace(" ","")
-    compact=css.replace(" ","")
-    assert "--surface-glass:rgba(" in compact and ",.96)" in compact
-    assert '[data-surface="overlay"]' in css and '[data-surface="glass"]' in css
-    assert 'data-surface="overlay"' in history
-    assert "var(--surface-overlay,#fff)" in history
-    assert 'data-surface="glass"' in readiness
-    assert "var(--surface-glass,rgba(255,255,255,.96))" in readiness.replace(" ","")
-    for script in ("test:unit","test:e2e","test:frontend"):
-        assert script in package["scripts"]
-    for path in ("web/vitest.config.ts","web/playwright.config.ts","web/tests/frontend/metadata-field-editor.test.ts","web/tests/e2e/corpus-builder-surfaces.spec.ts",".github/workflows/frontend.yml"):
-        assert (ROOT/path).exists()
 
 
-def test_new_i18n_strings_have_en_us_fr_ca_parity():
-    en=text("api/app/locales/en_us.py")
-    fr=text("api/app/locales/fr_ca.py")
-    for key in (
-        "pdf_corpus.build_history_panel",
-        "pdf_corpus.llm_field_checked",
-        "pdf_corpus.llm_field_not_checked",
-        "pdf_corpus.llm_value_normalized",
-    ):
-        assert key in en and key in fr

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-APP_VERSION = "0.60.0"
+APP_VERSION = "0.61.0"
 
 
 def _float_env(name: str, default: float) -> float:
@@ -21,12 +21,27 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    token = raw.strip().casefold()
+    if token in {"1", "true", "yes", "on"}:
+        return True
+    if token in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 @dataclass(frozen=True)
 class Settings:
     chroma_path: str = os.getenv("CHROMA_PATH", "/data/chroma")
     chroma_data_root: str = os.getenv("CHROMA_DATA_ROOT", "/data")
     embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "ollama").strip().lower()
     auth_db_path: str = os.getenv("AUTH_DB_PATH", "/data/.home/derridai-auth.sqlite3")
+    session_cookie_secure: bool = _bool_env("SESSION_COOKIE_SECURE", False)
+    auth_login_max_failures: int = _int_env("AUTH_LOGIN_MAX_FAILURES", 5)
+    auth_login_lockout_seconds: int = _int_env("AUTH_LOGIN_LOCKOUT_SECONDS", 300)
     system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
     pdf_max_upload_mb: int = _int_env("PDF_MAX_UPLOAD_MB", 500)

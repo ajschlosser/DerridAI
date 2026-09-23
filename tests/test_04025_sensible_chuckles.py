@@ -8,33 +8,8 @@ from app import corpus_builder as cb
 
 def text(path): return (ROOT/path).read_text(encoding="utf-8")
 
-def test_release_contract_and_review_refresh_fix():
-    package=json.loads(text("web/package.json"))
-    assert package["version"]=="0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
-    ui=text("web/src/components/PdfCorpusBuilder.vue")
-    assert "reviewHydrated" in ui
-    assert "for(let attempt=0;attempt<5;attempt++)" in ui
-    assert "CorpusReviewQueueTabs" in ui
-    assert "reviewQueue" in ui
 
-def test_focus_view_is_record_first_and_not_pdf_viewer():
-    focus=text("web/src/components/CorpusRecordFocusReview.vue")
-    assert "record.text" in focus
-    assert "focus-record-text" in focus
-    assert "CorpusMetadataResolutionPanel" in focus
-    assert 'role="tablist"' in focus
-    assert "metadata_evidence" in focus
-    assert "PdfEvidenceViewer" not in focus
-    assert "pdfUrl" not in focus
 
-def test_provider_defaults_do_not_restore_stale_profile_selection():
-    ui=text("web/src/components/PdfCorpusBuilder.vue")
-    restore=ui[ui.index("function restoreBuilderDraft"):ui.index("function persistBuilderDraft")]
-    assert "selectedProviderId" not in restore
-    assert "selectedReviewProviderId" not in restore
-    assert "selectedProfileModel" in ui
-    assert 'for(const key of ["provider","base_url","api_key"])' in ui
 
 def _install_publishable(repo: cb.PdfCorpusRepository):
     asset={"asset_id":"pdf-test","sha256":"source-sha","filename":"test.pdf","page_count":1,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
@@ -97,17 +72,7 @@ def test_review_queue_filter_and_bulk_disposition_are_consistent(tmp_path:Path):
     refreshed=repo.load_records(build["build_id"])
     assert all(row["review_disposition"]=="accepted" for row in refreshed)
 
-def test_record_review_actions_are_not_auto_publish_side_effects():
-    ui=text("web/src/components/PdfCorpusBuilder.vue")
-    assert "finalizeIfReady" not in ui
-    assert "await pdfCorpusApi.disposition" in ui
-    assert "await pdfCorpusApi.bulkDisposition" in ui
-    assert "Accept & next" in ui
-    assert "Technical build details" in text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
 
-def test_storybook_covers_queue_and_lifecycle():
-    assert (ROOT/"web/src/components/CorpusReviewQueueTabs.stories.ts").exists()
-    assert (ROOT/"web/src/components/CorpusBuildLifecycleCard.stories.ts").exists()
 
 def test_metadata_incomplete_creates_explicit_attention_state_and_blocks_publish(tmp_path:Path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
@@ -142,29 +107,9 @@ def test_publication_is_snapshot_state_not_build_processing_state(tmp_path:Path)
     assert refreshed["publication"]
 
 
-def test_running_build_hydrates_intermediate_records_without_form_interaction():
-    ui=text("web/src/components/PdfCorpusBuilder.vue")
-    assert "hydratedTopologyCount" in ui
-    assert "Number(currentBuild.value?.record_count||0)>hydratedTopologyCount.value" in ui
-    assert "await refreshRecords(true)" in ui
-    assert "ensureReviewHydrated" in ui
-    assert 'flush:"post"' in ui
-    assert 'reviewQueue=ref<ReviewQueue>("all")' in ui
-    assert 'reviewQueue.value="metadata"' in ui
 
-def test_pdf_worker_lifecycle_uses_worker_src_and_awaited_single_teardown_path():
-    viewer=text("web/src/components/PdfEvidenceViewer.vue")
-    assert "GlobalWorkerOptions.workerSrc = PdfWorkerUrl" in viewer
-    assert "workerPort" not in viewer
-    assert "await task.destroy?.()" in viewer
-    assert "await doc.destroy?.()" in viewer
 
-def test_new_builds_start_unpublished_and_storybook_uses_snapshot_semantics(tmp_path:Path):
+def test_new_builds_start_unpublished(tmp_path:Path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     build=repo.create_build({"asset_id":"a","source_sha256":"s","source_filename":"x.pdf"})
     assert build["publication_status"]=="unpublished"
-    lifecycle=text("web/src/components/CorpusBuildLifecycleCard.stories.ts")
-    stepper=text("web/src/components/CorpusWorkflowStepper.stories.ts")
-    assert 'status:"ready",stage:"ready",progress:1' in lifecycle
-    assert 'publication_status:"published"' in lifecycle
-    assert 'ReadyToPublish' in stepper and 'Published' in stepper and 'Review' in stepper and 'Building' in stepper

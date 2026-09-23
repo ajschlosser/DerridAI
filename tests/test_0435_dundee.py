@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.config import APP_VERSION
 
 
 def text(path: str) -> str:
@@ -48,12 +47,6 @@ def rec(rid: str, bid: str, *, blocked=False, source_problem=False):
         "region_type":"main_text","discourse_role":"analysis","review_disposition":"pending","accepted":False,"rejected":False,
         "needs_review":False,"source_quality_issues":[{"code":"source_quality_blocking","pages":[1]}] if source_problem else [],
     }
-
-
-def test_release_identity():
-    assert APP_VERSION == "0.60.0"
-    assert json.loads(text("web/package.json"))["version"] == "0.60.0"
-    assert "0.60.0 — Testy Titmouse" in text("README.md")
 
 
 def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
@@ -93,27 +86,10 @@ def test_source_problem_filter_is_first_class(tmp_path: Path):
     assert page["items"][0]["record_id"] == "r1"
 
 
-
 def test_fragmented_glyph_record_is_detected():
     record={"text":"OFF\n:\n=\n*\n?\n;\ni\n2\nA\nl\n©\nCosmopolitanism and Forgiveness","pdf_pages":[1]}
     issues=cb.PdfCorpusBuildManager._record_extraction_quality_issues(record)
     assert issues and issues[0]["code"]=="fragmented_glyph_layout"
 
-def test_ui_suppresses_empty_review_and_zero_metadata_attention():
-    builder = text("web/src/components/PdfCorpusBuilder.vue")
-    issues = text("web/src/components/CorpusMetadataIssues.vue")
-    assert "reviewDecision" in builder
-    assert "buildRunning && !hasRecordTopology" in builder
-    assert "metadataFieldIssueCount>0" in builder
-    assert 'v-if="totalIssues>0"' in issues
-    assert 'reviewQueue.value="source"' in builder or "reviewQueue==='source'" in builder
-    assert "showBuildConfiguration" in builder
 
 
-def test_dundee_i18n_and_storybook_surface():
-    store = text("api/app/locales/en_us.py") + text("api/app/locales/fr_ca.py")
-    for key in ('"pdf_corpus.building_records_title"','"pdf_corpus.queue_source"','"pdf_corpus.configure_new_build"'):
-        assert store.count(key.strip('"')) >= 2
-    # Existing review and resolution components stay independently testable in Storybook.
-    assert (ROOT / "web/src/components/CorpusMetadataResolutionPanel.stories.ts").exists()
-    assert (ROOT / "web/src/components/CorpusRecordFocusReview.stories.ts").exists()

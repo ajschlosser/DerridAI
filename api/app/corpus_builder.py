@@ -633,6 +633,8 @@ def _json_write(path: Path, payload: Any) -> None:
         try:
             tmp.unlink(missing_ok=True)
         except OSError:
+            # Safe: best-effort removal of a leftover temp file after the
+            # atomic replace succeeded or the original error is propagating.
             pass
 
 
@@ -757,8 +759,12 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
             page = doc.load_page(page_index)
             try:
                 pdf_label = page.get_label() or None
-            except Exception:
+            except Exception as exc:
                 pdf_label = None
+                warnings.append(
+                    f"PDF page-label lookup failed for physical page {page_index + 1}; "
+                    f"continuing with visible-folio detection ({exc})."
+                )
             page_blocks, source, warning = _page_blocks(page, ocr_mode=ocr_mode, ocr_languages=ocr_languages, source_illegibility=source_illegibility)
             visible_page_labels = []
             for candidate in page_blocks:
@@ -1324,6 +1330,7 @@ class PdfCorpusRepository:
                 try:
                     tmp.unlink(missing_ok=True)
                 except OSError:
+                    # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
@@ -1817,6 +1824,9 @@ class PdfCorpusBuildManager:
         try:
             build = self.repo.get_build(build_id)
         except Exception:
+            # Adaptive routing is a performance optimization only. If its metrics
+            # cannot be read, run the metadata family rather than suppressing
+            # scholarly analysis on the basis of unavailable telemetry.
             return False, ""
         stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
         family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
@@ -1843,6 +1853,8 @@ class PdfCorpusBuildManager:
             try:
                 build = self.repo.get_build(build_id)
             except Exception:
+                # Effectiveness telemetry never determines record truth. Losing
+                # this optional metric must not fail otherwise valid enrichment.
                 return
             stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
             family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
@@ -1879,6 +1891,8 @@ class PdfCorpusBuildManager:
             try:
                 build = self.repo.get_build(build_id)
             except Exception:
+                # Calibration telemetry is advisory analytics only; reviewer-owned
+                # metadata has already been committed before this bookkeeping runs.
                 return
             stats = build.get("llm_family_effectiveness") if isinstance(build.get("llm_family_effectiveness"), dict) else {}
             family_stats = stats.get(family) if isinstance(stats.get(family), dict) else {}
@@ -2096,6 +2110,8 @@ class PdfCorpusBuildManager:
         try:
             return _extract_json(value)
         except Exception:
+            # Safe: this is the strict first pass; the fence-stripping and
+            # brace-scanning recovery below raises if nothing parses.
             pass
         value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
         value = re.sub(r"\s*```$", "", value)
@@ -3818,16 +3834,20 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         design keeps output schemas small, preserves successful partial work, and
         makes retries/escalation local to the failed metadata family.
         """
+        profile_id = PROFILE_VERSION
         if build_id:
             try:
                 current_build = self.repo.get_build(build_id)
-                current_manifest = current_build.get("manifest")
-                if isinstance(current_manifest, dict) and current_manifest:
-                    manifest = current_manifest
-                if not bool(request.get("_interactive_provider_override")):
-                    request = self._latest_runtime_request(build_id, request)
-            except Exception:
-                pass
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not refresh corpus build state before metadata enrichment: {exc}"
+                ) from exc
+            current_manifest = current_build.get("manifest")
+            if isinstance(current_manifest, dict) and current_manifest:
+                manifest = current_manifest
+            profile_id = str(current_build.get("profile_id") or PROFILE_VERSION)
+            if not bool(request.get("_interactive_provider_override")):
+                request = self._latest_runtime_request(build_id, request)
         self._apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record)
         editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or "")) if build_id else {"conventions": {}, "examples": {}}
@@ -3841,12 +3861,6 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             example_count = sum(len(values) for values in editorial_examples.values() if isinstance(values, list))
             if example_count:
                 self._increment_metric(build_id, "editorial_examples_used", example_count)
-        profile_id = PROFILE_VERSION
-        if build_id:
-            try:
-                profile_id = str(self.repo.get_build(build_id).get("profile_id") or PROFILE_VERSION)
-            except Exception:
-                pass
         profile = CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION])
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
         if self._metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
@@ -4040,8 +4054,21 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                 try:
                     live_rows = self.repo.load_records(build_id)
                     live_record = next((row for row in live_rows if str(row.get("record_id") or "") == str(record.get("record_id") or "")), None)
-                except Exception:
-                    live_record = None
+                except Exception as exc:
+                    reason = (
+                        f"Could not verify live reviewer ownership before {task_name} metadata enrichment: {exc}"
+                    )
+                    failure = RuntimeError(reason)
+                    stage_status[task_name] = "needs_review"
+                    stage_ledger[task_name] = {
+                        "state": "needs_review", "finished_at": iso_now(),
+                        "error": reason, "reason_code": "ownership_state_unavailable",
+                    }
+                    stage_results.append((task_name, None, failure))
+                    if stage_callback:
+                        stage_callback(record, task_name, "needs_review", reason)
+                    self._append_warning(build_id, f"{record.get('record_id')}: {reason}")
+                    continue
                 if isinstance(live_record, dict):
                     touched = {str(value) for value in (live_record.get("human_touched_fields") or [])}
                     live_status = live_record.get("metadata_field_status") if isinstance(live_record.get("metadata_field_status"), dict) else {}
@@ -4093,8 +4120,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
                         if stage_callback:
                             stage_callback(record, task_name, "skipped", str(exc))
                         continue
-                except KeyError:
-                    pass
+                except KeyError as exc:
+                    raise RuntimeError(
+                        "Could not verify metadata-settle state because the corpus build no longer exists."
+                    ) from exc
             # Resolve the active build profile at task start. A profile switch does
             # not interrupt an in-flight request, but the next family/record picks
             # up the newly selected profile.
@@ -5554,7 +5583,10 @@ Return field_assessments for topics, concepts, persons, and works_referenced whe
         try:
             rows = self.repo.load_records(build_id)
             build = self.repo.get_build(build_id)
-        except Exception:
+        except Exception as exc:
+            # Editorial memory only supplies advisory few-shot context; records
+            # are never altered by it. Proceed without it but say so on the build.
+            self._append_warning(build_id, f"Editorial memory was unavailable; enrichment ran without reviewer examples ({exc}).")
             return {"conventions": {}, "examples": {}}
         reset_at = str(build.get("editorial_memory_reset_at") or "")
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
