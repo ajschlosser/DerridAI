@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 export type TextCleanupRule = "page_numbers" | "repeated_short_lines" | "line_hyphenation" | "paragraph_lines" | "empty_lines" | "ocr_artifacts" | "whitespace";
 export type TextCleanupPreview = { text: string; removed: string[]; changes: number };
 
@@ -129,4 +130,20 @@ export function recurringShortLines(texts: string[], minimumOccurrences = 2): st
     }
   }
   return Array.from(counts.values()).filter(item => item.count >= minimumOccurrences).sort((a,b)=>b.count-a.count).map(item => item.display).slice(0,80);
+}
+
+const LIGATURES: Record<string, string> = { "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "ft", "ﬆ": "st" };
+
+/** Undo PDF-extraction ligatures, soft hyphens, zero-width marks, and mid-word line breaks. Used by the
+ * single-click OCR cleanup action (distinct from the multi-rule cleanupText dialog above). */
+export function stripLigaturesAndArtifacts(text: unknown): { text: string; changed: boolean } {
+  const before = String(text ?? "");
+  const s = before
+    .replace(/[ﬀﬁﬂﬃﬄﬅﬆ]/g, (c) => LIGATURES[c] || c)
+    .replace(/\u00ad/g, "")
+    // eslint-disable-next-line no-misleading-character-class -- SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics.
+    .replace(/[\u200b\u200c\u200d\u2060\ufeff\ufffe\uffff]/g, "")
+    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ])-[ \t]*\r?\n[ \t]*([a-zà-öø-ÿ])/g, "$1$2")
+    .replace(/\r\n/g, "\n");
+  return { text: s, changed: s !== before };
 }
