@@ -27,6 +27,10 @@ import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
+import CorpusRunGuidance, {
+  type RunGuidanceEntry,
+  type RunGuidanceField,
+} from "./CorpusRunGuidance.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 import type { RecordSizingPolicy, ReviewQueue } from "../types/corpus";
@@ -57,7 +61,11 @@ import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
 import CorpusTextNoiseSettings from "./CorpusTextNoiseSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
-import { metadataSchemasApi, type SchemaSummary } from "../api/metadataSchemas";
+import {
+  metadataSchemasApi,
+  type MetadataSchema,
+  type SchemaSummary,
+} from "../api/metadataSchemas";
 import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
@@ -134,15 +142,75 @@ const handsFreeOpen = ref(false);
 const schemaId = ref("default");
 const schemaChoices = ref<SchemaSummary[]>([]);
 const schemaEditorOpen = ref(false);
+const selectedSchema = ref<MetadataSchema | null>(null);
+const runGuidance = ref<Record<string, RunGuidanceEntry>>({});
+const runGuidanceFields = computed<RunGuidanceField[]>(() => {
+  const core = ["region_type", "primary_text", "discourse_role"].map((name) => ({
+    name,
+    label: i18n.t(`record.${name}`, name.replaceAll("_", " ")),
+    group: "discourse",
+  }));
+  const custom = (selectedSchema.value?.fields || []).map((field) => ({
+    name: field.name,
+    label: field.label,
+    group:
+      selectedSchema.value?.groups.find((item) => item.key === field.group)?.label || field.group,
+  }));
+  return [...core, ...custom];
+});
+async function loadSelectedSchema(id: string) {
+  try {
+    const loaded = await metadataSchemasApi.get(id);
+    if (schemaId.value === id) selectedSchema.value = loaded;
+  } catch {
+    if (schemaId.value === id) selectedSchema.value = null;
+  }
+}
 async function loadSchemaChoices() {
   try {
     schemaChoices.value = (await metadataSchemasApi.list()).items;
     if (!schemaChoices.value.some((item) => item.id === schemaId.value)) schemaId.value = "default";
   } catch {
     /* the built-in schema still works without the list */
+  } finally {
+    await loadSelectedSchema(schemaId.value);
   }
 }
+watch(schemaId, (id, previous) => {
+  if (id !== previous) runGuidance.value = {};
+  void loadSelectedSchema(id);
+});
 const chosenSchema = computed(() => schemaChoices.value.find((item) => item.id === schemaId.value));
+const activeRunGuidance = computed(() => {
+  const request = currentBuild.value?.request;
+  const guidance = request?.run_guidance;
+  if (!guidance || typeof guidance !== "object" || Array.isArray(guidance)) return [];
+  const schemaFields = new Map(
+    (currentBuild.value?.schema?.fields || []).map((field) => [field.name, field.label]),
+  );
+  return Object.entries(guidance as Record<string, RunGuidanceEntry>)
+    .filter(([, value]) => value && (value.instructions || value.look_for?.length))
+    .map(([field, value]) => ({
+      field,
+      label: schemaFields.get(field) || i18n.t(`record.${field}`, field.replaceAll("_", " ")),
+      instructions: value.instructions || "",
+      lookFor: value.look_for || [],
+    }));
+});
+function runGuidancePayload() {
+  const payload: Record<string, RunGuidanceEntry> = {};
+  for (const [field, value] of Object.entries(runGuidance.value)) {
+    const guidance = {
+      instructions: value.instructions.trim(),
+      look_for: value.look_for
+        .map((term) => term.trim())
+        .filter(Boolean)
+        .slice(0, 40),
+    };
+    if (guidance.instructions || guidance.look_for.length) payload[field] = guidance;
+  }
+  return payload;
+}
 async function runHandsFree() {
   if (!currentBuild.value) return;
   busy.value = "hands-free";
@@ -379,7 +447,10 @@ function restoreBuilderDraft() {
     if (typeof draft.llmTouchupDuringEnrichment === "boolean")
       llmTouchupDuringEnrichment.value = draft.llmTouchupDuringEnrichment;
     if (Number.isFinite(Number(draft.noiseUnusableThreshold)))
-      noiseUnusableThreshold.value = Math.max(0, Math.min(100, Number(draft.noiseUnusableThreshold)));
+      noiseUnusableThreshold.value = Math.max(
+        0,
+        Math.min(100, Number(draft.noiseUnusableThreshold)),
+      );
     if (typeof draft.llmAssessTextNoise === "boolean")
       llmAssessTextNoise.value = draft.llmAssessTextNoise;
   } catch {
@@ -1768,6 +1839,7 @@ async function startBuild() {
       asset_id: selectedAssetId.value,
       auto_enrich_work_metadata: true,
       schema_id: schemaId.value,
+      run_guidance: runGuidancePayload(),
       ...providerPayload.value,
       ...(handsFree.value.enabled ? { autonomous: { ...handsFree.value } } : {}),
     };
@@ -3891,6 +3963,28 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">F</span
           ><span
+            ><b>{{ i18n.t("pdf_corpus.run_guidance_title", "Run-specific field guidance") }}</b
+            ><small>{{
+              i18n.t(
+                "pdf_corpus.run_guidance_summary",
+                "Optional prompts and phrases for this build",
+              )
+            }}</small></span
+          >
+        </summary>
+        <div class="setup-disclosure-body">
+          <CorpusRunGuidance
+            v-model="runGuidance"
+            :fields="runGuidanceFields"
+            :disabled="busy !== ''"
+          />
+        </div>
+      </details>
+
+      <details class="setup-section setup-disclosure">
+        <summary>
+          <span class="setup-step">G</span
+          ><span
             ><b>{{ i18n.t("pdf_corpus.hands_free_title", "Hands-free mode") }}</b
             ><small>{{
               handsFree.enabled
@@ -3909,7 +4003,7 @@ onBeforeUnmount(() => {
 
       <div class="setup-section execution-wrapper">
         <div class="setup-section-inline-head">
-          <span class="setup-step">G</span
+          <span class="setup-step">H</span
           ><span
             ><b>{{ i18n.t("pdf_corpus.advanced_execution", "Advanced execution") }}</b
             ><small>{{
@@ -3961,8 +4055,20 @@ onBeforeUnmount(() => {
         ><span
           >{{ i18n.t("pdf_corpus.provider_profile", "Provider profile") }}:
           {{ activeProviderProfileLabel }}</span
-        ><span>{{ i18n.t("pdf_corpus.model", "Model") }}: {{ activeModelLabel }}</span
-        ><button
+        ><span>{{ i18n.t("pdf_corpus.model", "Model") }}: {{ activeModelLabel }}</span>
+        <details v-if="activeRunGuidance.length" class="active-guidance-summary">
+          <summary>
+            {{ i18n.t("pdf_corpus.run_guidance_title", "Run-specific field guidance") }}
+          </summary>
+          <ul>
+            <li v-for="item in activeRunGuidance" :key="item.field">
+              <b>{{ item.label }}</b>
+              <span v-if="item.instructions">{{ item.instructions }}</span>
+              <small v-if="item.lookFor.length">{{ item.lookFor.join(" · ") }}</small>
+            </li>
+          </ul>
+        </details>
+        <button
           type="button"
           class="btn small"
           @click="
@@ -6476,6 +6582,34 @@ summary:focus-visible {
   padding: 10px 12px;
   border-top: 1px solid var(--line);
   font-size: 0.8125rem;
+  color: var(--muted);
+}
+.active-guidance-summary {
+  flex-basis: 100%;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+}
+.active-guidance-summary > summary {
+  width: fit-content;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+.active-guidance-summary ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding-inline-start: 20px;
+}
+.active-guidance-summary li {
+  display: grid;
+  gap: 2px;
+}
+.active-guidance-summary small {
   color: var(--muted);
 }
 .technical-details {

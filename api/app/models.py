@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
@@ -497,6 +497,41 @@ class PdfCorpusAutonomy(BaseModel):
     publish: bool = False
 
 
+class PdfCorpusFieldRunGuidance(BaseModel):
+    """A temporary, build-specific hint for one metadata field."""
+
+    model_config = ConfigDict(extra="forbid")
+    instructions: str = Field(default="", max_length=1200)
+    look_for: list[str] = Field(default_factory=list, max_length=40)
+
+    @field_validator("instructions", mode="before")
+    @classmethod
+    def trim_instructions(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("look_for", mode="before")
+    @classmethod
+    def clean_terms(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("look_for must be a list of phrases")
+        if len(value) > 40:
+            raise ValueError("A field can have at most 40 look-for phrases")
+        terms: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            term = str(item or "").strip()
+            if not term:
+                continue
+            if len(term) > 160:
+                raise ValueError("Each look-for phrase must be 160 characters or fewer")
+            if term.casefold() not in seen:
+                terms.append(term)
+                seen.add(term.casefold())
+        return terms
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
     profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
@@ -516,6 +551,7 @@ class PdfCorpusBuildCreate(BaseModel):
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
     schema_id: str = Field(default="default", min_length=1, max_length=64)
+    run_guidance: dict[str, PdfCorpusFieldRunGuidance] = Field(default_factory=dict, max_length=60)
     autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
     llm_touchup_during_enrichment: bool = False
@@ -524,6 +560,14 @@ class PdfCorpusBuildCreate(BaseModel):
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
+
+    @field_validator("run_guidance")
+    @classmethod
+    def bound_run_guidance(cls, value: dict[str, PdfCorpusFieldRunGuidance]) -> dict[str, PdfCorpusFieldRunGuidance]:
+        total = sum(len(item.instructions) + sum(map(len, item.look_for)) for item in value.values())
+        if total > 24000:
+            raise ValueError("Run guidance must contain 24,000 characters or fewer in total")
+        return value
 
 
 class PdfCorpusManifestPatch(BaseModel):

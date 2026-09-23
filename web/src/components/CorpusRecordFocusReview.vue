@@ -83,6 +83,9 @@ const position = computed(() => {
   return index >= 0 && total > 0 ? `${index + 1} / ${total}` : "—";
 });
 const evidence = computed(() => Object.entries(props.record.metadata_evidence || {}));
+const guidanceMatches = computed(() =>
+  Object.entries(props.record.metadata_guidance_matches || {}),
+);
 const unresolved = computed(() =>
   Array.from(
     new Set([
@@ -457,6 +460,36 @@ watch(
           role="tabpanel"
           aria-labelledby="focus-tab-evidence"
         >
+          <section
+            v-if="guidanceMatches.length"
+            class="guidance-match-panel"
+            aria-labelledby="guidance-match-title"
+          >
+            <h3 id="guidance-match-title">
+              {{ i18n.t("pdf_corpus.run_guidance_matches", "Run guidance matches") }}
+            </h3>
+            <p>
+              {{
+                i18n.t(
+                  "pdf_corpus.run_guidance_matches_help",
+                  "Exact phrases from this build’s watch list were found in this record. Treat them as review cues, not verified metadata.",
+                )
+              }}
+            </p>
+            <ul>
+              <li v-for="[field, hits] in guidanceMatches" :key="field">
+                <b>{{ i18n.t(`record.${field}`, field.replace(/_/g, " ")) }}</b>
+                <span v-for="hit in hits" :key="`${hit.term}-${hit.occurrences}`"
+                  >{{ hit.term }} ·
+                  {{
+                    i18n.tf("pdf_corpus.run_guidance_occurrences", "{count} match(es)", {
+                      count: hit.occurrences,
+                    })
+                  }}</span
+                >
+              </li>
+            </ul>
+          </section>
           <article v-for="[field, info] in evidence" :key="field" class="evidence-row">
             <header>
               <b>{{ i18n.t(`record.${field}`, field.replace(/_/g, " ")) }}</b
@@ -887,6 +920,37 @@ watch(
 .focus-metadata-panel :deep(.metadata-review) {
   border: 0;
   border-radius: 0;
+}
+.guidance-match-panel {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--ui-accent-border);
+  border-radius: 9px;
+  background: var(--ui-accent-soft);
+  padding: 11px;
+}
+.guidance-match-panel h3,
+.guidance-match-panel p {
+  margin: 0;
+}
+.guidance-match-panel h3 {
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.guidance-match-panel p,
+.guidance-match-panel li {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.guidance-match-panel ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-inline-start: 18px;
+}
+.guidance-match-panel li span {
+  margin-inline-start: 8px;
 }
 .evidence-row,
 .source-row {

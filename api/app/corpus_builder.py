@@ -144,6 +144,7 @@ from .metadata_values import is_placeholder
 from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 from .reviewer_context import current_reviewer
+from .run_guidance import find_guidance_matches, format_group_guidance
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
@@ -1469,6 +1470,12 @@ class PdfCorpusBuildManager:
             schema = self._schemas.get(str(request.get("schema_id") or DEFAULT_SCHEMA_ID))
         except SchemaNotFound as exc:
             raise ValueError(f"Unknown metadata schema: {request.get('schema_id')}") from exc
+        guidance = request.get("run_guidance") or {}
+        if not isinstance(guidance, dict):
+            raise ValueError("Run guidance must be a field-to-guidance object")
+        unknown_guidance_fields = sorted(set(guidance) - set(schema.field_names()))
+        if unknown_guidance_fields:
+            raise ValueError("Run guidance references fields outside the selected schema: " + ", ".join(unknown_guidance_fields))
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build = self.repo.create_build({
             "schema": schema.model_dump(mode="json"), "schema_id": schema.id, "schema_hash": schema.content_hash(), "schema_name": schema.name,
@@ -4393,10 +4400,27 @@ CURRENT REVIEWED RECORD TEXT:
         quote_signal = any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’')) or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
         # One task per group of the build's schema: the prompt is assembled from the schema and the answer's shape is generated from it.
         all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {}
+        run_guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
+        guidance_matches = record.get("metadata_guidance_matches")
+        if not isinstance(guidance_matches, dict):
+            guidance_matches = find_guidance_matches(source_text, run_guidance)
         for group in schema.groups:
+            group_fields = [field.name for field in schema.fields_in(group.key)]
+            if group.key == CORE_GROUP:
+                group_fields = [*CORE_FIELDS, *group_fields]
+            prompt = build_group_prompt(
+                schema,
+                group.key,
+                base_context=base_context,
+                allowed_region_types=allowed_region_types,
+                allowed_discourse_roles=allowed_discourse_roles,
+            )
+            guidance_prompt = format_group_guidance(group_fields, run_guidance, guidance_matches)
+            if guidance_prompt:
+                prompt = prompt + "\n\n" + guidance_prompt
             all_task_specs[group.key] = (
                 group.key,
-                build_group_prompt(schema, group.key, base_context=base_context, allowed_region_types=allowed_region_types, allowed_discourse_roles=allowed_discourse_roles),
+                prompt,
                 response_model_for(schema, group.key, region_types=allowed_region_types, roles=allowed_discourse_roles),
                 int(limits.get(f"{group.key}_num_predict") or limits["indexing_num_predict"]),
                 f"derridai_record_{group.key}",
@@ -5662,6 +5686,14 @@ CURRENT REVIEWED RECORD TEXT:
             # Persist deterministic records before any metadata call. A provider
             # failure can therefore never discard successful segmentation work.
             self.repo.save_records(build_id, records)
+        guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
+        for record in records:
+            matches = find_guidance_matches(str(record.get("text") or ""), guidance)
+            if matches:
+                record["metadata_guidance_matches"] = matches
+            else:
+                record.pop("metadata_guidance_matches", None)
+        self.repo.save_records(build_id, records)
         trash_quality = self._apply_source_illegibility(
             build_id, records, request, source_quality, asset.get("pages") or [],
         )

@@ -1,0 +1,206 @@
+<script setup lang="ts">
+import { computed } from "vue";
+import { useI18nStore } from "../stores/i18n";
+
+export interface RunGuidanceEntry {
+  instructions: string;
+  look_for: string[];
+}
+
+export interface RunGuidanceField {
+  name: string;
+  label: string;
+  group: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    modelValue: Record<string, RunGuidanceEntry>;
+    fields: RunGuidanceField[];
+    disabled?: boolean;
+  }>(),
+  { disabled: false },
+);
+const emit = defineEmits<{ "update:modelValue": [value: Record<string, RunGuidanceEntry>] }>();
+const i18n = useI18nStore();
+const populated = computed(
+  () =>
+    Object.values(props.modelValue).filter(
+      (item) => item.instructions.trim() || item.look_for.length,
+    ).length,
+);
+
+function update(field: string, patch: Partial<RunGuidanceEntry>) {
+  const previous = props.modelValue[field] || { instructions: "", look_for: [] };
+  emit("update:modelValue", {
+    ...props.modelValue,
+    [field]: { ...previous, ...patch },
+  });
+}
+
+function updateTerms(field: string, value: string) {
+  const terms = value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 40);
+  update(field, { look_for: terms });
+}
+
+function termText(field: string) {
+  return (props.modelValue[field]?.look_for || []).join("\n");
+}
+</script>
+
+<template>
+  <section
+    class="run-guidance"
+    :aria-label="i18n.t('pdf_corpus.run_guidance_title', 'Run-specific field guidance')"
+  >
+    <p class="run-guidance-help">
+      {{
+        i18n.t(
+          "pdf_corpus.run_guidance_help",
+          "Add temporary instructions or names and phrases to look for. These guide this build without changing the schema or restricting other valid values.",
+        )
+      }}
+    </p>
+    <p class="run-guidance-count" aria-live="polite">
+      {{
+        i18n.tf("pdf_corpus.run_guidance_count", "{count} field(s) with guidance", {
+          count: populated,
+        })
+      }}
+    </p>
+    <details v-for="field in fields" :key="field.name" class="run-guidance-field">
+      <summary>
+        <span>{{ field.label }}</span>
+        <small>{{ field.group }}</small>
+      </summary>
+      <div class="run-guidance-controls">
+        <label :for="`run-guidance-instructions-${field.name}`">
+          <span>{{
+            i18n.t("pdf_corpus.run_guidance_instruction_label", "Instructions for this field")
+          }}</span>
+          <textarea
+            :id="`run-guidance-instructions-${field.name}`"
+            class="control"
+            rows="2"
+            maxlength="1200"
+            :disabled="disabled"
+            :value="modelValue[field.name]?.instructions || ''"
+            :placeholder="
+              i18n.t(
+                'pdf_corpus.run_guidance_instruction_placeholder',
+                'What should the model pay attention to for this field?',
+              )
+            "
+            @input="
+              update(field.name, { instructions: ($event.target as HTMLTextAreaElement).value })
+            "
+          />
+        </label>
+        <label :for="`run-guidance-terms-${field.name}`">
+          <span>{{
+            i18n.t("pdf_corpus.run_guidance_terms_label", "Names or phrases to look for")
+          }}</span>
+          <textarea
+            :id="`run-guidance-terms-${field.name}`"
+            class="control"
+            rows="3"
+            :disabled="disabled"
+            :value="termText(field.name)"
+            :placeholder="
+              i18n.t(
+                'pdf_corpus.run_guidance_terms_placeholder',
+                'One name, title, concept, or variant per line',
+              )
+            "
+            @input="updateTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
+          />
+          <small>{{
+            i18n.t(
+              "pdf_corpus.run_guidance_terms_help",
+              "Matches are cues to inspect, not proof or an exhaustive allowed-value list.",
+            )
+          }}</small>
+        </label>
+      </div>
+    </details>
+  </section>
+</template>
+
+<style scoped>
+.run-guidance {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.run-guidance-help,
+.run-guidance-count {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.run-guidance-count {
+  font-weight: 700;
+}
+.run-guidance-field {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.run-guidance-field > summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 11px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+}
+.run-guidance-field > summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.run-guidance-field > summary small {
+  color: var(--text-2);
+  font-size: 0.75rem;
+  text-transform: capitalize;
+}
+.run-guidance-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 11px 11px;
+}
+.run-guidance-controls label {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.run-guidance-controls textarea {
+  width: 100%;
+  min-height: 74px;
+  resize: vertical;
+}
+.run-guidance-controls small {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+@media (max-width: 640px) {
+  .run-guidance-controls {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
