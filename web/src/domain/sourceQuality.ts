@@ -31,6 +31,12 @@ export function recordHasSourceWarning(record?: { source_quality_issues?: unknow
   return Boolean(record?.source_quality_issues?.length);
 }
 
+export function firstRecordWithSourceWarning<T extends { source_quality_issues?: unknown[] }>(
+  records: T[],
+): T | undefined {
+  return records.find((record) => recordHasSourceWarning(record));
+}
+
 export function ingestWarningStorageKey(assetId: string): string {
   return `derridai.source-quality.seen.${assetId}`;
 }
