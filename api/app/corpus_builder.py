@@ -15,10 +15,10 @@ from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import fitz
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError
 
 from . import experiment
 from .autofill import decide as decide_autofill
@@ -26,10 +26,7 @@ from .autofill import in_audit_sample
 from .autonomous import Policy as AutonomousPolicy
 from .config import APP_VERSION, settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
-from .corpus_enrichment_helpers import (
-    _editorial_tokens,
-    _metadata_family_states,
-)
+from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices as _enrichment_pass_indices,
 )
@@ -38,6 +35,9 @@ from .corpus_enrichment_helpers import (
 )
 from .corpus_enrichment_helpers import (
     _merge_enrichment_snapshot as _merge_enrichment_snapshot,
+)
+from .corpus_enrichment_helpers import (
+    _metadata_family_states,
 )
 from .corpus_enrichment_helpers import (
     _semantic_atoms as _semantic_atoms,
@@ -53,8 +53,11 @@ from .corpus_llm_helpers import (
     _parse_json_robust,
     _stage_limits,
     _stage_timeouts,
-    _validate_execution_budget,
 )
+from .corpus_llm_helpers import (
+    _validate_execution_budget as _validate_execution_budget,
+)
+from .corpus_manifest_workflow import ManifestWorkflowMixin
 
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -114,6 +117,42 @@ from .corpus_metadata import (
 from .corpus_metadata import (
     apply_metadata_constraints as apply_metadata_constraints,
 )
+from .corpus_models import (
+    CORPUS_PROFILES,
+    PROFILE_VERSION,
+    SEGMENTATION_PROMPT_VERSION,
+    BoundaryAuditResponseModel,
+    BoundaryBatchResponseModel,
+    CompactSegmentationResponseModel,
+    DocumentManifestModel,
+    PairBoundaryResponseModel,
+    TextTouchupResponseModel,
+)
+from .corpus_models import (
+    DOCUMENT_PROMPT_VERSION as DOCUMENT_PROMPT_VERSION,
+)
+from .corpus_models import (
+    METADATA_PROMPT_VERSION as METADATA_PROMPT_VERSION,
+)
+from .corpus_models import (
+    SCHEMA_VERSION as SCHEMA_VERSION,
+)
+from .corpus_models import (
+    DiscourseMetadataModel as DiscourseMetadataModel,
+)
+from .corpus_models import (
+    DiscourseMetadataResponseModel as DiscourseMetadataResponseModel,
+)
+from .corpus_models import (
+    IndexMetadataResponseModel as IndexMetadataResponseModel,
+)
+from .corpus_models import (
+    QuotationMetadataResponseModel as QuotationMetadataResponseModel,
+)
+from .corpus_models import (
+    SegmentationResponseModel as SegmentationResponseModel,
+)
+from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
 from .corpus_publication import (
     build_text_touchup_prompt,
@@ -146,11 +185,13 @@ from .corpus_review_state import (
 from .corpus_reviewer_helpers import (
     _allowed_for,
     _metadata_issue_type,
-    _operation_from_build,
     _present_for_reviewer,
     _scrub_sealed_field,
-    _second_opinion_owed,
 )
+from .corpus_reviewer_helpers import (
+    _operation_from_build as _operation_from_build,
+)
+from .corpus_schema_profile import SchemaProfileMixin
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _apply_manifest_metadata,
@@ -160,19 +201,19 @@ from .corpus_segmentation import (
     _deterministic_boundary_candidates,
     _manifest_main_text_blocks,
     _mark_segmentation_review,
-    _normalize_text,
     _normalize_topology,
     _record_sizing_policy,
-    _scholarly_page_range,
     _topology_quality_report,
     _topology_sanity,
 )
 from .corpus_segmentation import (
     _is_protected_transition as _is_protected_transition,
 )
+from .corpus_segmentation import (
+    _normalize_text as _normalize_text,
+)
 from .enrichment_cycles import (
     GlobalLearningStore,
-    learn_from_pass,
 )
 from .enrichment_ledger import (
     ACCEPTED,
@@ -182,24 +223,19 @@ from .enrichment_ledger import (
     CORRECTED,
     PROPOSED,
     REJECTED,
-    RESUMED,
-    SUSPENDED,
     EnrichmentLedger,
 )
-from .enrichment_metrics import compute as compute_enrichment_metrics
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
-    DEFAULT_SCHEMA_ID,
     MetadataSchema,
     build_group_prompt,
     default_schema,
-    edit_model,
     response_model_for,
 )
-from .metadata_schema_store import SchemaNotFound, SchemaStore
+from .metadata_schema_store import SchemaStore
 from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, chat_complete
@@ -218,12 +254,7 @@ from .text_noise import (
     annotate_records as annotate_text_noise,
 )
 
-SCHEMA_VERSION = "pdf-corpus-v3"
-SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v11"
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
-DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
-PROFILE_VERSION = "derrida-scholarly-v12"
 
 
 _PROMPT_TAG_RE = re.compile(r"</?\s*SOURCE[_ ]?TEXT\s*/?\s*>", re.I)
@@ -490,264 +521,58 @@ def apply_automatic_text_cleanup(records: list[dict[str, Any]], rules: list[str]
     }
 
 
-class DocumentManifestModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    title: str | None = None
-    short_title: str | None = None
-    original_title: str | None = None
-    document_author: str | None = None
-    translator: str | None = None
-    publisher: str | None = None
-    publication_place: str | None = None
-    publication_year: int | str | None = None
-    edition: str | None = None
-    isbn: str | None = None
-    language: str | None = None
-    original_language: str | None = None
-    document_is_translation: bool | None = None
-    document_type: str | None = None
-    main_text_start_page: int | None = None
-    main_text_end_page: int | None = None
-    notes: str = ""
-
-    @field_validator("notes", mode="before")
-    @classmethod
-    def normalize_nullable_notes(cls, value: Any) -> str:
-        # Optional LLM manifest notes may be JSON null. Normalize that at
-        # the schema boundary so an internal validation detail never reaches UI.
-        return "" if value is None else str(value)
 
 
-class BoundaryChangeModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    speaker: bool = False
-    position_holder: bool = False
-    stance: bool = False
-    target: bool = False
-    quotation_frame: bool = False
-    discourse_role: bool = False
-    argumentative_move: bool = False
 
 
-class BoundaryDecisionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    after_block_id: str
-    decision: Literal["split", "keep", "uncertain"] = "uncertain"
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    reason: str = ""
-    change: BoundaryChangeModel = Field(default_factory=BoundaryChangeModel)
 
 
-class SegmentationResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    boundaries: list[BoundaryDecisionModel] = Field(default_factory=list)
 
 
-class ReconciliationDecisionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    after_block_id: str
-    decision: Literal["split", "keep"]
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    reason: str = ""
 
 
-class ReconciliationResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decisions: list[ReconciliationDecisionModel] = Field(default_factory=list)
 
 
-class FieldEvidenceModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    block_ids: list[str] = Field(default_factory=list)
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    reason: str = ""
 
 
-class RecordMetadataModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    language: str | None = None
-    region_type: str | None = None
-    region_author: str | None = None
-    primary_text: bool | None = None
-    speaker: str | None = None
-    position_holder: str | None = None
-    target: str | None = None
-    discourse_role: str | None = None
-    proposition_status: str | None = None
-    semantic_function: list[str] = Field(default_factory=list)
-    stance: str | None = None
-    claim_scope: str | None = None
-    is_direct_quote: bool | None = None
-    quoted_speaker: list[str] = Field(default_factory=list)
-    quoted_author: list[str] = Field(default_factory=list)
-    quoted_work: list[str] = Field(default_factory=list)
-    quoted_position_holder: list[str] = Field(default_factory=list)
-    quoted_addressee: list[str] = Field(default_factory=list)
-    quoted_referent: list[str] = Field(default_factory=list)
-    quotation_chain: list[str] = Field(default_factory=list)
-    topics: list[str] = Field(default_factory=list)
-    concepts: list[str] = Field(default_factory=list)
-    persons: list[str] = Field(default_factory=list)
-    works_referenced: list[str] = Field(default_factory=list)
 
 
-class MetadataResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    metadata: RecordMetadataModel = Field(default_factory=RecordMetadataModel)
-    field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
-    review_reason: str = ""
 
 
-BoundaryDimension = Literal[
-    "speaker", "position_holder", "stance", "target", "quotation_frame",
-    "discourse_role", "argumentative_move",
-]
 
 
-class CompactBoundaryDecisionModel(BaseModel):
-    """Compact boundary response used by book-scale segmentation.
-
-    Large prose reasons and nested boolean objects were a major source of local
-    model truncation. The corpus builder asks only for the topology-changing
-    facts here; uncertain boundaries can be adjudicated in a later, smaller call.
-    """
-    model_config = ConfigDict(extra="forbid")
-    after: str = Field(min_length=1, max_length=200)
-    decision: Literal["split", "keep", "uncertain"] = "uncertain"
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
 
 
-class PairBoundaryResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decision: Literal["split", "keep", "uncertain"] = "uncertain"
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
 
 
-class BatchBoundaryDecisionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    after: str = Field(min_length=1, max_length=200)
-    decision: Literal["split", "keep"]
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
 
 
-class BoundaryBatchResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decisions: list[BatchBoundaryDecisionModel] = Field(default_factory=list, max_length=12)
 
 
-class BoundaryAuditDecisionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    boundary_id: str = Field(min_length=1, max_length=240)
-    decision: Literal["keep", "move_earlier", "move_later", "uncertain"] = "uncertain"
-    suggested_after_block_id: str | None = Field(default=None, max_length=200)
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    signals: list[str] = Field(default_factory=list, max_length=8)
-    reason: str = Field(default="", max_length=500)
 
 
-class BoundaryAuditResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decisions: list[BoundaryAuditDecisionModel] = Field(default_factory=list, max_length=12)
 
 
-class CompactSegmentationResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=96)
 
 
-class CompactReconciliationDecisionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    after: str = Field(min_length=1, max_length=200)
-    decision: Literal["split", "keep"]
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
-class CompactReconciliationResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decisions: list[CompactReconciliationDecisionModel] = Field(default_factory=list, max_length=16)
 
 
-class DiscourseMetadataModel(BaseModel):
-    # Every field is required (null when unsupported). Optional fields let
-    # schema-constrained decoders omit them, which small models do routinely.
-    model_config = ConfigDict(extra="forbid")
-    language: str | None
-    region_type: Literal["front_matter", "main_text", "notes", "bibliography", "index", "appendix", "back_matter", "paratext", "unknown"] | None
-    region_author: str | None
-    primary_text: bool | None
-    speaker: str | None
-    position_holder: str | None
-    target: str | None
-    discourse_role: Literal["assertion", "analysis", "quotation", "reported_position", "critique", "qualification", "transition", "question", "definition", "example", "commentary", "paratext", "bibliographic"] | None
-    proposition_status: str | None
-    semantic_function: list[str] = Field(max_length=12)
-    stance: str | None
-    claim_scope: str | None
 
 
-class RecordFieldAssessmentModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    # The property is required; an explicit null means confidence is unavailable.
-    confidence: float | None = Field(ge=0.0, le=1.0)
-    needs_review: bool
-    reason: str = Field(max_length=500)
-    outcome: Literal["supported_value", "no_supported_value", "uncertain"]
 
 
-class DiscourseMetadataResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    # Required so schema-constrained decoding cannot return assessments alone.
-    metadata: DiscourseMetadataModel
-    field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
-    field_assessments: dict[str, RecordFieldAssessmentModel]
-    review_reason: str = Field(default="", max_length=1000)
 
 
-class QuotationMetadataModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    is_direct_quote: bool | None
-    quoted_speaker: list[str] = Field(max_length=12)
-    quoted_author: list[str] = Field(max_length=12)
-    quoted_work: list[str] = Field(max_length=12)
-    quoted_position_holder: list[str] = Field(max_length=12)
-    quoted_addressee: list[str] = Field(max_length=12)
-    quoted_referent: list[str] = Field(max_length=12)
-    quotation_chain: list[str] = Field(max_length=16)
 
 
-class QuotationMetadataResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    # Required so schema-constrained decoding cannot return assessments alone.
-    metadata: QuotationMetadataModel
-    field_evidence: dict[str, FieldEvidenceModel] = Field(default_factory=dict)
-    field_assessments: dict[str, RecordFieldAssessmentModel]
-    review_reason: str = Field(default="", max_length=1000)
 
 
-class IndexMetadataModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    topics: list[str] = Field(max_length=24)
-    concepts: list[str] = Field(max_length=24)
-    persons: list[str] = Field(max_length=24)
-    works_referenced: list[str] = Field(max_length=24)
 
 
-class TextTouchupResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    text: str = Field(min_length=1)
-    changes: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
 
 
-class IndexMetadataResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    # Required so schema-constrained decoding cannot return assessments alone.
-    metadata: IndexMetadataModel
-    field_assessments: dict[str, RecordFieldAssessmentModel]
-    review_reason: str = Field(default="", max_length=1000)
 
 
 def metric_stage_of(schema_name: str) -> str:
@@ -1405,38 +1230,9 @@ class PdfCorpusRepository:
         return self.root / "publications" / f"{publication_id}.jsonl"
 
 
-CORPUS_PROFILES: dict[str, dict[str, Any]] = {
-    PROFILE_VERSION: {
-        "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v12",
-        "version": 12,
-        "description": "Testy Titmouse: reviewer-owned document structure outranks semantic inference, closed-vocabulary LLM output is normalized with raw provenance retained, and field-level LLM participation remains auditable.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
-        "discourse_roles": DISCOURSE_ROLES,
-        "region_types": REGION_TYPES,
-        "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "publication_required_document_fields": ["title", "document_author"],
-        "review_metadata_fields": list(REVIEW_METADATA_FIELDS),
-        "min_boundary_confidence": 0.72,
-        "candidate_llm_threshold": 0.30,
-        "deterministic_split_threshold": 0.92,
-        "review_risk_threshold": 0.90,
-        "max_llm_boundary_calls_per_100_atoms": 18,
-        "boundary_batch_size": 6,
-        "min_metadata_confidence": 0.65,
-        "soft_min_chars": 180,
-        "preferred_record_chars": 1750,
-        "record_length_tolerance": 200,
-        "long_record_chars": 3500,
-        "absolute_record_chars": 6000,
-        "soft_max_chars": 3500,
-        "topology_review_chars": 6000,
-    }
-}
 
 
-class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentRerunsMixin):
+class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestWorkflowMixin, OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin):
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
@@ -1461,211 +1257,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentR
         self._mark_interrupted()
 
 
-    def create(self, request: dict[str, Any]) -> dict[str, Any]:
-        asset = self.repo.get_asset(str(request["asset_id"]))
-        profile_id = str(request.get("profile_id") or PROFILE_VERSION)
-        if profile_id not in CORPUS_PROFILES:
-            raise ValueError(f"Unknown corpus profile: {profile_id}")
-        _validate_execution_budget(request)
-        try:
-            schema = self._schemas.get(str(request.get("schema_id") or DEFAULT_SCHEMA_ID))
-        except SchemaNotFound as exc:
-            raise ValueError(f"Unknown metadata schema: {request.get('schema_id')}") from exc
-        guidance = request.get("run_guidance") or {}
-        if not isinstance(guidance, dict):
-            raise ValueError("Run guidance must be a field-to-guidance object")
-        unknown_guidance_fields = sorted(set(guidance) - set(schema.field_names()))
-        if unknown_guidance_fields:
-            raise ValueError("Run guidance references fields outside the selected schema: " + ", ".join(unknown_guidance_fields))
-        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
-        build = self.repo.create_build({
-            "schema": schema.model_dump(mode="json"), "schema_id": schema.id, "schema_hash": schema.content_hash(), "schema_name": schema.name,
-            "asset_id": asset["asset_id"],
-            "source_sha256": asset["sha256"],
-            "source_filename": asset["filename"],
-            "source_page_count": asset["page_count"],
-            "source_block_count": asset["block_count"],
-            "schema_version": SCHEMA_VERSION,
-            "metadata_schema_version": schema.schema_version,
-            "profile_id": profile_id,
-            "profile_version": CORPUS_PROFILES[profile_id]["version"],
-            "app_version": APP_VERSION,
-            "document_prompt_version": DOCUMENT_PROMPT_VERSION,
-            "segmentation_prompt_version": SEGMENTATION_PROMPT_VERSION,
-            "metadata_prompt_version": METADATA_PROMPT_VERSION,
-            "provider": request.get("provider") or "ollama",
-            "model": request.get("model"),
-            "request": public_request,
-            "manifest": {},
-        })
-        with self._lock:
-            self._runtime_requests[build["build_id"]] = dict(request)
-        self._executor.submit(self._run, build["build_id"], request, False)
-        return build
 
 
-    def preview_schema_group(self, schema: MetadataSchema, group: str, text: str, request: dict[str, Any], run: bool) -> dict[str, Any]:
-        """Show, and optionally run, the prompt one group of a schema produces for a passage.
-
-        This is for trying a schema without a build. It has none of a build's context (no document manifest, editorial
-        memory or neighbouring records), so a real build's prompt is this one plus that context.
-        """
-        if group not in {g.key for g in schema.groups}:
-            raise ValueError(f"The schema has no group '{group}'.")
-        # Keep the preview's context envelope identical to the enrichment
-        # prompt. A preview has no build-local values, but it must not use a
-        # second, simplified prompt contract.
-        context = f"""Document manifest: {json.dumps({}, ensure_ascii=False)}
-Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps({}, ensure_ascii=False)}
-Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps({}, ensure_ascii=False)}
-How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps({}, ensure_ascii=False)}
-Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({}, ensure_ascii=False)}
-Neighbor context (context only; never cite it as evidence): {json.dumps({"previous_record_tail": "", "next_record_head": ""}, ensure_ascii=False)}
-Current source block IDs: ["preview-1"]
-CURRENT REVIEWED RECORD TEXT:
-{text}
-"""
-        profile = CORPUS_PROFILES[PROFILE_VERSION]
-        prompt = build_group_prompt(schema, group, base_context=context, allowed_region_types=list(profile.get("region_types") or []), allowed_discourse_roles=list(profile.get("discourse_roles") or []))
-        model_cls = response_model_for(schema, group, region_types=list(profile.get("region_types") or []) or None, roles=list(profile.get("discourse_roles") or []) or None)
-        out: dict[str, Any] = {"prompt": prompt, "answer_schema": model_cls.model_json_schema(), "ran": False}
-        if not run:
-            return out
-        started = time.monotonic()
-        active = self._interactive_llm_request("", request or None)
-        result = self._chat_json(active, prompt, response_model=model_cls, max_tokens=int(_stage_limits(active).get("indexing_num_predict", 1200)), schema_name=f"derridai_record_{group}", build_id="")
-        return {**out, "ran": True, "answer": result, "seconds": round(time.monotonic() - started, 1)}
 
 
-    def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema:
-        """The schema a build was started with. It is a copy stored on the build, so editing or deleting the saved one changes nothing."""
-        build_id = str(build.get("build_id") or "")
-        cached = self._schema_cache.get(build_id)
-        if cached is not None:
-            return cached
-        raw = build.get("schema")
-        schema = MetadataSchema.model_validate(raw) if isinstance(raw, dict) and raw else default_schema()
-        if build_id:
-            self._schema_cache[build_id] = schema
-        return schema
-
-    def _allowed_fields(self, build_id: str) -> set[str]:
-        """Every field a model or a person may set on a record of this build: the fixed ones plus its schema's."""
-        return _allowed_for(self._schema_for(build_id))
 
 
-    def _editable_fields(self, build_id: str) -> set[str]:
-        """Fields a person may edit: the fixed editable ones, minus the default schema's, plus this build's schema's."""
-        return (HUMAN_EDITABLE_METADATA_FIELDS - {f.name for f in default_schema().fields}) | set(self._schema_for(build_id).field_names())
-
-    def _edit_model(self, build_id: str) -> type[BaseModel]:
-        return edit_model(self._schema_for(build_id), RecordMetadataModel)
-
-    def _schema_for(self, build_id: str) -> MetadataSchema:
-        if not build_id:
-            return default_schema()
-        return self._schema_of_build(self.repo.get_build(build_id))
-
-    def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]:
-        """The build's profile, with the fields a person must review taken from its schema."""
-        base = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES[PROFILE_VERSION])
-        schema = self._schema_of_build(build)
-        return {**base, "review_metadata_fields": schema.review_fields(), "attribution_evidence_fields": sorted(schema.attribution_fields()), "schema_field_names": schema.field_names()}
-
-    def _profile_for(self, build_id: str) -> dict[str, Any]:
-        return self._profile_of_build(self.repo.get_build(build_id))
-
-    def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None:
-        """Log the moment autofill is switched off or back on for a model and field, once, not on every value."""
-        with self._lock:
-            was = (model, field) in self._suspended
-            if suspended == was:
-                return
-            (self._suspended.add if suspended else self._suspended.discard)((model, field))
-        self._ledger.append(SUSPENDED if suspended else RESUMED, model=model, field=field, build_id=build_id, run_id=run_id, reviews=reviews, accepted=accepted)
-
-    def enrichment_metrics(self, build_id: str = "", run_id: str = "", arm: str = "", group_by: str = "") -> dict[str, Any]:
-        """The ten enrichment measures for the whole ledger, one build, or one run."""
-        records = self.repo.load_records(build_id) if build_id else None
-        return {
-            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id, arm=arm, group_by=group_by),
-            "concurrency": {"limit": max(1, int(settings.enrichment_max_concurrent_runs)), "working": self.active_enrichment_runs()},
-        }
-
-    def active_enrichment_runs(self) -> int:
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        return sum(1 for b in listing["items"] if b.get("status") in {"queued", "running"} and b.get("stage") == "metadata_enrichment_rerun")
-
-    def active_count(self) -> int:
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
 
 
-    def list_operations(self, limit: int = 200) -> list[dict[str, Any]]:
-        listing = self.repo.list_builds(offset=0, limit=max(1, min(1000, limit)))
-        return [
-            _operation_from_build(build)
-            for build in listing["items"]
-            if not build.get("operation_hidden")
-        ]
-
-    def operation(self, build_id: str) -> dict[str, Any]:
-        return _operation_from_build(self.repo.get_build(build_id))
-
-    def delete(self, build_id: str) -> None:
-        """Dismiss a finished build from the global Operations feed.
-
-        Corpus builds are scholarly artifacts, not disposable job-log rows. The
-        generic Operations "Remove" action therefore hides the operation entry
-        without deleting the build, its source bindings, or a publication.
-        """
-        build = self.repo.get_build(build_id)
-        if build.get("status") in {"queued", "running"}:
-            raise ValueError("Running corpus builds must be cancelled before they can be dismissed from Operations.")
-        build["operation_hidden"] = True
-        build["operation_hidden_at"] = iso_now()
-        self.repo.save_build(build)
-
-    def clear_finished(self) -> int:
-        count = 0
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        for build in listing["items"]:
-            if build.get("status") in {"queued", "running"} or build.get("operation_hidden"):
-                continue
-            build["operation_hidden"] = True
-            build["operation_hidden_at"] = iso_now()
-            self.repo.save_build(build)
-            count += 1
-        return count
-
-    def cancel(self, build_id: str) -> dict[str, Any]:
-        build = self.repo.get_build(build_id)
-        with self._lock:
-            self._cancel.add(build_id)
-        if build.get("status") in {"queued", "running"}:
-            build["cancel_requested"] = True
-            self.repo.save_build(build)
-        return build
-
-    @_serialize_record_mutation
-    def settle_metadata_unresolved(self, build_id: str) -> dict[str, Any]:
-        """Ask active enrichment workers to stop scheduling automatic families.
-
-        The currently executing provider call is allowed to reach its bounded read
-        deadline; subsequent families settle as explicit review exceptions. Source
-        text, topology, and already completed metadata checkpoints are preserved.
-        """
-        build = self.repo.get_build(build_id)
-        if build.get("status") not in {"queued", "running"} or build.get("stage") != "enriching":
-            raise ValueError("Metadata can only be settled while enrichment is running.")
-        build["metadata_settle_requested"] = True
-        build["metadata_settle_requested_at"] = iso_now()
-        self.repo.save_build(build)
-        return build
-
-    def _cancelled(self, build_id: str) -> bool:
-        with self._lock:
-            return build_id in self._cancel
 
     def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]:
         # A selective user-requested rerun is an explicit instruction and must
@@ -1785,123 +1384,6 @@ CURRENT REVIEWED RECORD TEXT:
             self.repo.save_build(build)
 
 
-    @classmethod
-    def _refresh_workflow_fields(cls, build: dict[str, Any]) -> dict[str, Any]:
-        """Persist one coherent, machine-readable corpus workflow/readiness model.
-
-        UI stages are derived from independent facts rather than one overloaded
-        status string. This keeps refreshes, retries, review completion and
-        publication snapshots consistent.
-        """
-        record_count = int(build.get("record_count") or 0)
-        accepted = int(build.get("accepted_count") or 0)
-        rejected = int(build.get("rejected_count") or 0)
-        reviewed = min(record_count, accepted + rejected)
-        pending = max(0, record_count - reviewed)
-        metadata_total = int(build.get("metadata_total") or record_count or 0)
-        metadata_completed = int(build.get("metadata_completed") or 0)
-        issue_summary_present = isinstance(build.get("metadata_issue_summary"), dict)
-        issue_summary = build.get("metadata_issue_summary") if issue_summary_present else {}
-        unresolved_fields = int(issue_summary.get("fields_unresolved") or 0)
-        # Once the issue summary exists it is the authoritative publication-facing
-        # metadata state. A stale worker counter must never manufacture blockers.
-        metadata_remaining = int(issue_summary.get("records_incomplete") or 0) if issue_summary_present else max(0, metadata_total - metadata_completed)
-        validation = build.get("validation") if isinstance(build.get("validation"), dict) else {}
-        _ = build.get("source_quality") if isinstance(build.get("source_quality"), dict) else {}
-        publication = build.get("publication") if isinstance(build.get("publication"), dict) else None
-        running = str(build.get("status") or "") in {"queued", "running"}
-        stage = str(build.get("stage") or "")
-        profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES.get(PROFILE_VERSION, {}))
-        required_fields = list(profile.get("publication_required_metadata_fields") or profile.get("required_metadata_fields") or [])
-        required_document_fields = list(profile.get("publication_required_document_fields") or [])
-        manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
-        missing_document_fields = [field for field in required_document_fields if manifest.get(field) in (None, "", [])]
-
-        blockers: list[dict[str, Any]] = []
-        no_publishable_records = bool(record_count and rejected == record_count and accepted == 0 and pending == 0)
-        if no_publishable_records:
-            blockers.append({"code": "no_publishable_records", "count": rejected})
-        if pending:
-            blockers.append({"code": "review_pending", "count": pending})
-        # Rejected records are intentionally excluded from the publishable corpus.
-        # They remain recoverable in review, but do not block publication of
-        # accepted records. An all-rejected build is handled as a terminal
-        # "no publishable records" outcome above.
-        if int(build.get("needs_review_count") or 0):
-            blockers.append({"code": "record_attention", "count": int(build.get("needs_review_count") or 0)})
-        if int(build.get("boundary_review_count") or 0):
-            blockers.append({"code": "boundary_attention", "count": int(build.get("boundary_review_count") or 0)})
-        if (metadata_remaining or unresolved_fields) and not no_publishable_records:
-            blockers.append({"code": "required_metadata", "count": max(metadata_remaining, int(issue_summary.get("records_incomplete") or 0)), "fields": required_fields})
-        if missing_document_fields:
-            blockers.append({"code": "required_document_metadata", "count": len(missing_document_fields), "fields": missing_document_fields})
-        if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
-            blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
-        if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
-            blockers.append({"code": "metadata_validation", "count": sum(len(validation.get(key) or []) for key in ("metadata_evidence_errors", "metadata_schema_errors", "citation_errors", "relationship_errors", "human_ownership_errors", "record_content_errors"))})
-        # Raw PDF extraction findings remain in build.source_quality for audit,
-        # but a reviewer may resolve a record-level extraction problem by
-        # correcting the reviewed text while preserving source_extracted_text.
-        # Publication is therefore gated by unresolved record source issues, not
-        # forever by the immutable raw-page diagnostic.
-        if int(build.get("source_problem_count") or 0):
-            blockers.append({"code": "source_quality", "count": int(build.get("source_problem_count") or 0)})
-
-        can_publish = bool(accepted > 0 and pending == 0 and not blockers and bool(validation.get("valid", True)) and accepted + rejected == record_count)
-        if publication:
-            next_action = "download_publication"
-        elif no_publishable_records:
-            next_action = "no_publishable_records"
-        elif running:
-            next_action = "wait"
-        elif pending or int(build.get("needs_review_count") or 0) or int(build.get("boundary_review_count") or 0) or metadata_remaining or unresolved_fields:
-            next_action = "review_records"
-        elif missing_document_fields:
-            next_action = "resolve_document_metadata"
-        elif blockers:
-            next_action = "resolve_validation"
-        elif can_publish:
-            next_action = "publish"
-        else:
-            next_action = "inspect"
-
-        extraction_state = "complete" if int(build.get("source_block_count") or 0) else ("active" if running and stage in {"structure", "document_review"} else "waiting")
-        construction_state = "complete" if record_count else ("active" if running and stage in {"segmenting", "reconciling"} else "waiting")
-        enrichment_state = "complete" if metadata_total and metadata_remaining == 0 else ("active" if running and stage in {"enriching", "metadata_retry"} else "attention" if record_count else "waiting")
-        review_state = "complete" if record_count and pending == 0 else ("attention" if record_count else "waiting")
-        validation_state = "complete" if validation.get("valid") else ("blocked" if validation else "waiting")
-        publication_state = "complete" if publication else ("active" if can_publish else "blocked" if record_count else "waiting")
-        build["pipeline_state"] = {
-            "current": next_action,
-            "stages": {
-                "extraction": {"state": extraction_state},
-                "construction": {"state": construction_state},
-                "enrichment": {"state": enrichment_state, "remaining_records": metadata_remaining, "unresolved_fields": unresolved_fields},
-                "review": {"state": review_state, "reviewed": reviewed, "pending": pending, "accepted": accepted, "rejected": rejected},
-                "validation": {"state": validation_state},
-                "publication": {"state": publication_state},
-            },
-        }
-        build["publication_readiness"] = {
-            "can_publish": can_publish,
-            "next_action": next_action,
-            "blockers": blockers,
-            "required_metadata_fields": required_fields,
-            "required_document_fields": required_document_fields,
-            "missing_document_fields": missing_document_fields,
-            "records_total": record_count,
-            "records_reviewed": reviewed,
-            "records_accepted": accepted,
-            "records_rejected": rejected,
-            "records_pending": pending,
-            "metadata_records_remaining": metadata_remaining,
-            "metadata_fields_unresolved": unresolved_fields,
-            "source_valid": bool(validation.get("source_valid", validation.get("valid", False))) if validation else False,
-            "metadata_valid": bool(validation.get("metadata_valid", validation.get("valid", False))) if validation else False,
-            "published": bool(publication),
-            "no_publishable_records": no_publishable_records,
-        }
-        return build
 
     def _update(self, build_id: str, **changes: Any) -> dict[str, Any]:
         # Metadata workers update telemetry and warnings concurrently. Serialize
@@ -3795,147 +3277,6 @@ CURRENT REVIEWED RECORD TEXT:
             annotate_text_noise(unmatched, pages=pages, threshold=threshold)
 
 
-    @staticmethod
-    def validate_records(blocks: list[dict[str, Any]], records: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
-        source_ids = [block["block_id"] for block in blocks]
-        source_index = {block_id: index for index, block_id in enumerate(source_ids)}
-        used_ids = [block_id for record in records for block_id in record.get("source_block_ids") or []]
-        missing = [block_id for block_id in source_ids if block_id not in used_ids]
-        usage_counts = Counter(used_ids)
-        duplicates = sorted(block_id for block_id, count in usage_counts.items() if count > 1)
-        block_map = {block["block_id"]: block for block in blocks}
-        fidelity_errors: list[str] = []
-        order_errors: list[str] = []
-        page_errors: list[str] = []
-        printed_page_errors: list[str] = []
-        evidence_errors: list[dict[str, str]] = []
-        citation_errors: list[str] = []
-        metadata_schema_errors: list[dict[str, str]] = []
-        relationship_errors: list[dict[str, str]] = []
-        human_ownership_errors: list[dict[str, str]] = []
-        record_content_errors: list[dict[str, str]] = []
-        suspicious: list[dict[str, Any]] = []
-        previous_last = -1
-        min_conf = float(profile.get("min_metadata_confidence") or 0.65)
-
-        for record in records:
-            record_id = str(record.get("record_id") or "")
-            ids = [str(value) for value in record.get("source_block_ids") or []]
-            expected = "\n\n".join(
-                block_map[block_id]["text"].strip()
-                for block_id in ids
-                if block_id in block_map and block_map[block_id]["text"].strip()
-            )
-            # Reviewed/cleaned text is allowed to differ from the immutable PDF
-            # extraction. Source fidelity validates the preserved extraction, not
-            # the editorial layer that intentionally repairs layout/OCR noise.
-            fidelity_text = record.get("source_extracted_text") if record.get("source_extracted_text") is not None else record.get("text")
-            if _normalize_text(expected) != _normalize_text(fidelity_text or ""):
-                fidelity_errors.append(record_id)
-
-            indexes = [source_index[value] for value in ids if value in source_index]
-            if indexes:
-                if indexes != sorted(indexes) or any(b != a + 1 for a, b in zip(indexes, indexes[1:])):
-                    order_errors.append(record_id)
-                if indexes[0] <= previous_last:
-                    order_errors.append(record_id)
-                previous_last = max(previous_last, indexes[-1])
-
-            expected_pdf_pages = sorted({int(block_map[value]["page"]) for value in ids if value in block_map})
-            actual_pdf_pages = sorted(int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int))
-            if expected_pdf_pages != actual_pdf_pages:
-                page_errors.append(record_id)
-            group = [block_map[value] for value in ids if value in block_map]
-            expected_start, expected_end = _scholarly_page_range(group)
-            if record.get("page_start") != expected_start or record.get("page_end") != expected_end:
-                page_errors.append(record_id)
-            source_labels = [str(block.get("printed_page_label") or "").strip() for block in group]
-            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-            if disposition == "rejected":
-                # Keep rejected records in topology/source validation so the workspace
-                # remains auditable, but exclude them from publication-facing
-                # metadata/content requirements.
-                continue
-            if ids and not any(source_labels):
-                printed_page_errors.append(record_id)
-
-            try:
-                RecordMetadataModel.model_validate({
-                    key: record.get(key)
-                    for key in RecordMetadataModel.model_fields
-                    if key in record
-                })
-            except ValidationError as exc:
-                metadata_schema_errors.append({"record_id": record_id, "reason": str(exc)[:1200]})
-
-            if not str(record.get("text") or "").strip():
-                record_content_errors.append({"record_id": record_id, "reason": "record text is empty"})
-            if str(record.get("discourse_role") or "") == "reported_position" and "position_holder" in (profile.get("schema_field_names") or ["position_holder"]) and not record.get("position_holder"):
-                relationship_errors.append({"record_id": record_id, "reason": "reported_position requires a position_holder"})
-            touched = {str(value) for value in (record.get("human_touched_fields") or [])}
-            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            for field in touched:
-                if field.startswith("__"):
-                    continue
-                info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
-                if str(info.get("status") or "") == "model_inferred":
-                    human_ownership_errors.append({"record_id": record_id, "reason": f"{field} is human-touched but still marked model_inferred"})
-
-            evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
-            valid_ids = set(ids)
-            for field in (profile.get("attribution_evidence_fields") or ATTRIBUTION_EVIDENCE_FIELDS):
-                value = record.get(field)
-                if value in (None, "", []):
-                    continue
-                info = evidence.get(field) if isinstance(evidence.get(field), dict) else None
-                if not info:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": "missing evidence"})
-                    continue
-                bound = [str(v) for v in info.get("block_ids") or [] if str(v) in valid_ids]
-                try:
-                    confidence = float(info.get("confidence") or 0)
-                except (TypeError, ValueError):
-                    confidence = 0.0
-                if not bound:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": "no valid source block"})
-                elif confidence < min_conf:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": f"confidence {confidence:.2f} below {min_conf:.2f}"})
-
-            if record.get("work") and record.get("document_author"):
-                if not str(record.get("inline_citation") or "").strip() or not str(record.get("full_citation") or "").strip():
-                    citation_errors.append(record_id)
-
-            length = len(record.get("text") or "")
-            if length < int(profile.get("soft_min_chars") or 0) or length > int(profile.get("soft_max_chars") or 10**9):
-                suspicious.append({
-                    "record_id": record_id,
-                    "text_length": length,
-                    "reason": "Length is an audit warning only; it did not create or change a semantic boundary.",
-                })
-
-        source_valid = not missing and not duplicates and not fidelity_errors and not order_errors and not page_errors
-        metadata_valid = not evidence_errors and not citation_errors and not printed_page_errors and not metadata_schema_errors and not relationship_errors and not human_ownership_errors and not record_content_errors
-        return {
-            "source_block_count": len(source_ids),
-            "used_block_count": len(used_ids),
-            "coverage": (len(set(used_ids) & set(source_ids)) / len(source_ids)) if source_ids else 1.0,
-            "missing_block_ids": missing,
-            "duplicate_block_ids": duplicates,
-            "text_fidelity_errors": fidelity_errors,
-            "source_order_errors": sorted(set(order_errors)),
-            "page_mapping_errors": sorted(set(page_errors)),
-            "printed_page_label_errors": sorted(set(printed_page_errors)),
-            "metadata_evidence_errors": evidence_errors,
-            "metadata_schema_errors": metadata_schema_errors,
-            "relationship_errors": relationship_errors,
-            "human_ownership_errors": human_ownership_errors,
-            "record_content_errors": record_content_errors,
-            "citation_errors": sorted(set(citation_errors)),
-            "suspicious_record_sizes": suspicious,
-            "source_valid": source_valid,
-            "metadata_valid": metadata_valid,
-            "valid": source_valid and metadata_valid,
-        }
 
     def _run(self, build_id: str, request: dict[str, Any], resume: bool = False) -> None:
         """Coordinate checkpointed stages; retain failure/cancellation recovery at one boundary."""
@@ -4611,208 +3952,7 @@ CURRENT REVIEWED RECORD TEXT:
             return
         self.repo.update_document_layout(asset_id, {**layout, "main_text_pdf_start": start_page})
 
-    def regenerate_manifest(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        """Ask the model for the document analysis again and fill only what is still empty.
 
-        A build whose first analysis failed (a model that was still loading, a restart) falls back to the PDF's own
-        properties. This tries again with the current provider without touching anything a person has entered or
-        that an earlier analysis already found; values that are missing are added through the ordinary manifest save,
-        so records inherit them and the affected ones are reopened as for any manifest edit.
-        """
-        build = self.repo.get_build(build_id)
-        if build.get("status") in {"queued", "running"}:
-            raise ValueError("Wait for the active corpus operation to finish before analysing the document again.")
-        if build.get("status") == "published":
-            raise ValueError("Published builds are immutable.")
-        asset = self.repo.get_asset(str(build.get("asset_id") or ""))
-        blocks = self.repo.load_blocks(str(build.get("asset_id") or ""))
-        active_request = self._interactive_llm_request(build_id, request or None)
-        fresh = self._document_manifest(asset, blocks, active_request, build_id)
-        if bool(active_request.get("auto_enrich_work_metadata", True)):
-            fresh = self._catalog_enrich_manifest(fresh, active_request, build_id)
-        current = dict(build.get("manifest") or {})
-        empty: tuple[object, ...] = (None, "", [])
-        filled = {
-            key: fresh[key] for key in DocumentManifestModel.model_fields
-            if current.get(key) in empty and fresh.get(key) not in empty
-        }
-        if not filled:
-            return {"build": build, "filled": []}
-        return {"build": self.patch_manifest(build_id, filled), "filled": sorted(filled)}
-
-    def patch_manifest(self, build_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
-        # Serialized with enrichment's own record writes: this rewrites every record's inherited fields, and a
-        # pass merging results at the same moment must not have its results overwritten by a stale copy.
-        build = self.repo.get_build(build_id)
-        if build.get("status") in {"queued", "running"}:
-            stage = str(build.get("stage") or "")
-            if stage not in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}:
-                raise ValueError("Document metadata becomes editable after segmentation is complete.")
-            if {"main_text_start_page", "main_text_end_page"} & set(changes):
-                raise ValueError("Main-text page boundaries are structural and cannot change while background enrichment is running.")
-        current_revision = int(build.get("manifest_revision") or 1)
-        if expected_revision is not None and int(expected_revision) != current_revision:
-            raise ValueError("This document manifest changed after it was opened. Reload it before saving.")
-        allowed = set(DocumentManifestModel.model_fields)
-        unknown = sorted(set(changes) - allowed)
-        if unknown:
-            raise ValueError(f"Unknown document manifest field(s): {', '.join(unknown)}")
-        current = dict(build.get("manifest") or {})
-        candidate = {key: current.get(key) for key in allowed}
-        candidate.update(changes)
-        validated = DocumentManifestModel.model_validate(candidate).model_dump(mode="json")
-        manifest = {**current, **validated}
-        manifest["source_asset_id"] = build.get("asset_id")
-        start_changed = "main_text_start_page" in changes and validated.get("main_text_start_page") != current.get("main_text_start_page")
-        if start_changed:
-            manifest.pop("main_text_start_inference", None)  # its clues describe a value that is no longer the one in use
-            self._write_start_page_to_layout(str(build.get("asset_id") or ""), validated.get("main_text_start_page"))
-        build["manifest"] = manifest
-        build["manifest_revision"] = current_revision + 1
-        build["manifest_reviewed_at"] = iso_now()
-        self.repo.save_checkpoint(build_id, "manifest", manifest)
-        self.repo.save_build(build)
-
-        records = self.repo.load_records(build_id)
-        if records:
-            for record in records:
-                # The page range also classifies the record (main text, front matter, back matter), so a change to it
-                # must count as a change here even though those fields are not inherited from the manifest.
-                before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"), record.get("primary_text"), record.get("region_type"))
-                field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-                if start_changed:
-                    # The layout plan labelled these records from the old start page; the new one relabels them.
-                    for field in ("region_type", "primary_text"):
-                        info = field_status.get(field)
-                        if isinstance(info, dict) and info.get("method") == "human_document_layout":
-                            field_status.pop(field, None)
-                for field in MANIFEST_INHERITED_FIELDS:
-                    info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-                    if str(info.get("status") or "") in {"human_override", "human_confirmed"}:
-                        continue
-                    record.pop(field, None)
-                    if str(info.get("status") or "") == "inherited":
-                        field_status.pop(field, None)
-                record["metadata_field_status"] = field_status
-                _apply_manifest_metadata(record, manifest)
-                inline, full = _citation_strings(record)
-                record["inline_citation"] = inline
-                record["full_citation"] = full
-                after = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, inline, full, record.get("primary_text"), record.get("region_type"))
-                # A record whose inherited values did not actually change has nothing new to review: leave its
-                # acceptance alone instead of reopening every record for an edit that did not touch it.
-                if after == before:
-                    continue
-                record["accepted"] = False
-                record["needs_review"] = True
-                record["review_reason"] = "Document manifest changed during human review; inherited metadata and citations were regenerated."
-                record["record_revision"] = int(record.get("record_revision") or 1) + 1
-            self._rewrite_and_validate(build_id, records)
-            build = self.repo.get_build(build_id)
-        return build
-
-
-    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]:
-        """Build advisory context from human decisions and the last enrichment pass.
-
-        Only human-confirmed/overridden fields are eligible as conventions and few-shot
-        examples. Repeated values become advisory conventions after two confirmations.
-        ``pass_learning`` also includes last-pass LLM inferences on two or more records
-        (working conventions, not confirmed) so a later pass can start before every
-        record has been reviewed. Nothing here is copied as truth.
-        """
-        try:
-            rows = self.repo.load_records(build_id)
-            build = self.repo.get_build(build_id)
-        except Exception as exc:
-            # Editorial memory only supplies advisory few-shot context; records
-            # are never altered by it. Proceed without it but say so on the build.
-            self._append_warning(build_id, f"Editorial memory was unavailable; enrichment ran without reviewer examples ({exc}).")
-            return {"conventions": {}, "examples": {}, "pass_learning": {}}
-        reset_at = str(build.get("editorial_memory_reset_at") or "")
-        counts: dict[str, dict[str, tuple[Any, int]]] = {}
-        eligible: list[tuple[dict[str, Any], str, Any]] = []
-        for row in rows:
-            if exclude_record_id and str(row.get("record_id") or "") == exclude_record_id:
-                continue
-            if reset_at and str(row.get("human_touched_at") or "") <= reset_at:
-                continue
-            if experiment.is_gold(str(row.get("record_id") or "")):
-                continue  # the frozen gold set is scored, never learned from
-            statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
-            for field, info in statuses.items():
-                if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
-                    continue
-                if _second_opinion_owed(row, field):
-                    continue  # a conventions list or example must not tell a second reviewer what the first one answered
-                value = row.get(field)
-                if value in (None, "", []):
-                    continue
-                key = json.dumps(value, ensure_ascii=False, sort_keys=True)
-                prior = counts.setdefault(str(field), {}).get(key)
-                counts[str(field)][key] = (value, (prior[1] if prior else 0) + 1)
-                if str(field) in {"discourse_role", "region_type", "primary_text", "speaker", "position_holder", "stance"}:
-                    eligible.append((row, str(field), value))
-        conventions: dict[str, Any] = {}
-        for field, values in counts.items():
-            ranked = sorted(values.values(), key=lambda item: item[1], reverse=True)
-            if ranked and ranked[0][1] >= 2:
-                conventions[field] = {"value": ranked[0][0], "confirmed_records": ranked[0][1]}
-
-        current_text = str((current_record or {}).get("text") or "")
-        current_tokens = _editorial_tokens(current_text)
-        by_field: dict[str, list[dict[str, Any]]] = {}
-        for row, field, value in eligible:
-            row_tokens = _editorial_tokens(str(row.get("text") or ""))
-            union = current_tokens | row_tokens
-            similarity = (len(current_tokens & row_tokens) / len(union)) if union else 0.0
-            # Region agreement is a useful but non-authoritative tie breaker.
-            if current_record and row.get("region_type") and row.get("region_type") == current_record.get("region_type"):
-                similarity += 0.08
-            by_field.setdefault(field, []).append({
-                "record_id": str(row.get("record_id") or ""),
-                "value": value,
-                "similarity": round(min(1.0, similarity), 4),
-                "excerpt": re.sub(r"\s+", " ", str(row.get("text") or "")).strip()[:420],
-            })
-        examples: dict[str, list[dict[str, Any]]] = {}
-        for field, items in by_field.items():
-            ranked = sorted(items, key=lambda item: float(item.get("similarity") or 0), reverse=True)
-            # Keep prompts compact. Include up to four field-specific examples;
-            # zero-overlap examples are still useful only for discourse role when
-            # a repeated build convention exists.
-            kept = [item for item in ranked if float(item.get("similarity") or 0) > 0][:4]
-            if not kept and field == "discourse_role" and conventions.get(field):
-                kept = ranked[:2]
-            if kept:
-                examples[field] = kept
-        # Conventions confirmed in other builds fill gaps only; this build's own
-        # reviewers always take precedence over the shared ones.
-        for field, convention in (self._global_learning.conventions(exclude_build_id=build_id).items() if use_global else []):
-            conventions.setdefault(field, convention)
-        return {"conventions": conventions, "examples": examples, "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id])}
-
-    def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
-        # Retained as the small conventions-only API used by older internal tests;
-        # new enrichment calls use _editorial_memory for retrieved examples too.
-        return self._editorial_memory(build_id, None, exclude_record_id=exclude_record_id).get("conventions", {})
-
-    def editorial_memory(self, build_id: str) -> dict[str, Any]:
-        build = self.repo.get_build(build_id)
-        memory = self._editorial_memory(build_id, None)
-        return {
-            **memory,
-            "reset_at": build.get("editorial_memory_reset_at"),
-            "convention_count": len(memory.get("conventions") or {}),
-            "example_count": sum(len(items) for items in (memory.get("examples") or {}).values() if isinstance(items, list)),
-        }
-
-    def reset_editorial_memory(self, build_id: str) -> dict[str, Any]:
-        with self._lock:
-            build = self.repo.get_build(build_id)
-            build["editorial_memory_reset_at"] = iso_now()
-            self.repo.save_build(build)
-        return self.editorial_memory(build_id)
 
 
     # Backward-compatible internal alias for older call sites in this source tree.
