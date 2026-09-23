@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import RuntimeSurface from "../components/RuntimeSurface.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
@@ -498,8 +497,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <RuntimeSurface v-if="!isNativeResearch" />
-  <main v-else class="vue-native-page research-native-page" aria-labelledby="research-page-title">
+  <main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
     <div v-if="loading && !workspace" class="research-loading" role="status">
       <span class="spinner"></span
       >{{ i18n.t("research.loading_workspace", "Loading Research workspace…") }}

@@ -2142,7 +2142,7 @@ async function bootstrapRuntime(){
   if(!canAccessPage(state.view))state.view="home";
   shell();
   // A native Vue route may be active without #main. In that case bootstrap
-  // background health/job state only; RuntimeSurface will render when mounted.
+  // background health/job state only; the mounted view owns #main and its own render.
   if(document.querySelector("#main"))renderView();
   await checkHealth();
   // One discovery request on startup is not a polling loop. Polling begins only

@@ -196,6 +196,47 @@ what this branch already had before re-pointing. Full verification suite (typech
 build, Storybook build, 131-scenario baseline, 287-test e2e suite, 429 backend tests) re-run clean against `master`
 before commit.
 
+## Session 10 status (branch `claude/runtime-refactor-23`)
+
+PR #108 (session 9, PDF Explorer) merged. Followed up on session 9's own flagged correction: session 9 said "no
+legacy views remain," which is true for *routed* views, but a closer look found `RuntimeSurface.vue` still had three
+listed consumers (`CorpusView.vue`, `SystemView.vue`, `ResearchView.vue`'s `v-if="!isNativeResearch"` branch).
+Verified all three were actually dead before touching anything:
+
+- `CorpusView.vue` and `SystemView.vue` have zero references anywhere (`router/index.ts`, every `.vue`/`.ts` under
+  `src`, and `tests/`) -- they were never wired into the router at all, presumably leftover from an earlier
+  refactoring pass. Deleted both.
+- `ResearchView.vue`'s `isNativeResearch` computed checks `route.name === "rag"`, and `"rag"` is the *only* route
+  `router/index.ts` ever mounts `ResearchView` under, so `isNativeResearch` is always `true` and the
+  `v-if="!isNativeResearch"` / `v-else` split always takes the `v-else` branch. Removed the dead `<RuntimeSurface
+  v-if="!isNativeResearch" />` line and made the `<main>` unconditional; left `isNativeResearch` and its other
+  (script-level) guards alone -- collapsing every one of those would be a larger refactor than this cleanup pass
+  warrants, and they are harmless no-ops as written.
+- With those three gone, `RuntimeSurface.vue` and `RuntimeSurface.stories.ts` had zero remaining consumers; deleted
+  both. Fixed one stale comment in `runtime.js`'s `bootstrapRuntime` that still referred to "RuntimeSurface will
+  render when mounted" (the mounted Vue view now owns `#main` and its own render directly).
+
+**Deliberately not done, flagged for whoever picks this up next:** `legacyCompat.js`/`translateLegacyDom` and the
+collapsible-card `enhanceCollapsibles`/`decorateDisabledControls` trio are **not** dead, even though `RuntimeSurface`
+is gone. `renderView()` (which calls all three) is still invoked from roughly 20 call sites across `pdfLinking.ts`,
+`appLifecycle.ts`, `workDialogs.ts`, `recordDialogs.ts`, `jobDialogs.ts`, `navigation.ts`, and `stores/i18n.ts` --
+not to render a legacy view anymore (it always returns `null` now), but as a generic "an action just happened,
+refresh `#main`'s decorations" hook that the now-Vue-owned dashboard/PDF-Explorer/response-cache pages still rely on
+for their own post-action UI refresh (see the `derridai:dashboard-refresh` / `derridai:pdf-explorer-refresh` event
+bridges those views listen for -- `renderView()` and those bridges are two different mechanisms doing adjacent jobs).
+Removing `legacyCompat.js` requires auditing each of those ~20 sites to confirm nothing still needs
+`enhanceCollapsibles`/`decorateDisabledControls`/`translateLegacyDom` run against the current `#main`, which is a
+real, mechanical, but nontrivial task on its own -- treat it as the next self-contained unit of work, not a quick
+follow-on to this session's file deletions.
+
+Full verification suite re-run clean after the deletions: typecheck, lint, 520 unit tests (up from 508 -- unrelated
+tests landed on `master` via other merges since session 9), production build, Storybook build, 131-scenario baseline,
+287-test e2e suite, 429 backend tests.
+
+**Conflict avoidance and branch note:** `master` had moved (PR #108 merge plus whatever else landed); re-based onto
+fresh `master` as `claude/runtime-refactor-23` rather than continuing on a now-merged branch, same pattern as
+session 9.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
@@ -321,18 +362,25 @@ Procedure per cluster (about 10 minutes each), from `web/`:
 5. Afterwards `python3 ../scripts/runtime-refactor/dead_functions.py` removes top-level functions nothing references (run it only
    after deleting a caller; it deliberately ignores the `export {}` block).
 
-### B. Replace the remaining legacy views with Vue -- DONE; do the cleanup below next
+### B. Replace the remaining legacy views with Vue -- DONE; `RuntimeSurface.vue` deleted (session 10); `legacyCompat.js` audit is next
 
 Response cache (session 7), the dashboard (session 8), and PDF Explorer (session 9) are all done: real Vue templates,
 no more `v-html`d whole-page strings, no more `renderResponseCache`/`renderDashboard`/`renderPdf` dispatch in
-`runtime.js`. **No legacy views are left.**
+`runtime.js`. **No legacy views are left**, and `RuntimeSurface.vue`, `CorpusView.vue`, `SystemView.vue`, and
+`RuntimeSurface.stories.ts` are deleted (session 10 -- all four were confirmed to have zero live consumers first).
 
-- **Next session should start here.** Confirm `RuntimeSurface.vue` has zero remaining consumers (`grep -rn
-  "RuntimeSurface" web/src`), then delete it along with `translateLegacyDom`, the collapsible `MutationObserver`,
-  `legacyCompat.js`, and any `runtimeBridge.ts` exports nothing imports anymore. Shrink `runtime.js`'s `export {}`
-  block to match (re-run the duplicate-export check: `sed -n '/^export {/,/^};/p' src/runtime/runtime.js | sort |
-  uniq -d`). Re-run the full verification suite after, since this removes code other views may still transitively
-  import.
+- **Next session should start here.** `legacyCompat.js`/`translateLegacyDom` are still imported by `runtime.js` and
+  are **not** dead: `renderView()` (which calls `translateLegacyDom`, `enhanceCollapsibles`, and
+  `decorateDisabledControls` on `#main`) is still invoked from roughly 20 call sites across `pdfLinking.ts`,
+  `appLifecycle.ts`, `workDialogs.ts`, `recordDialogs.ts`, `jobDialogs.ts`, `navigation.ts`, and `stores/i18n.ts` as a
+  generic post-action "refresh `#main`'s decorations" hook, separate from the `derridai:*-refresh` event bridges the
+  Vue-owned views use for their own data refresh. Audit each call site: does the Vue view currently mounted at
+  `#main` (dashboard, PDF Explorer, or response cache) still need `enhanceCollapsibles`/`decorateDisabledControls`
+  run again after that specific action, and if so, is `renderView()` actually still doing that job or is it a no-op
+  now that `result` is always `null`? Only once every site is accounted for can `legacyCompat.js`, `translateLegacyDom`,
+  and the collapsible `MutationObserver` be deleted and `runtimeBridge.ts` exports nothing imports anymore be removed.
+  Shrink `runtime.js`'s `export {}` block to match (re-run the duplicate-export check: `sed -n '/^export {/,/^};/p'
+  src/runtime/runtime.js | sort | uniq -d`). Re-run the full verification suite after.
 
 ### C. State and services to Vue idioms
 
