@@ -8,17 +8,19 @@ permanent record; keep only what a fresh session needs to pick up work safely.
 
 ## Current state
 
-- **`runtime.js`: 2,416 lines**, down from 10,472 at the start (76.9% removed). Sections A and B of the plan below
+- **`runtime.js`: 2,410 lines**, down from 10,472 at the start (77.0% removed). Sections A and B of the plan below
   are done: every cluster that could move to a `domain/*.ts` factory has moved, and every legacy HTML-string view
   (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
   audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
   small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
-- **`api/app/corpus_builder.py`: 7,240 lines**, down from 8,236 when this effort started (12% removed so far). Three
+- **`api/app/corpus_builder.py`: 7,080 lines**, down from 8,236 when this effort started (14% removed so far). Four
   of the ~7 planned clusters are extracted: publication/touchup (`corpus_publication.py`), most of the record-quality
   cluster (`corpus_record_quality.py`; `validate_records` deliberately deferred, see below), segmentation
-  (`corpus_segmentation.py`), and review-state derivation (`corpus_review_state.py`). Human review's stateful
-  mutation methods, build lifecycle/provider session management, enrichment reruns, and the smaller supporting
-  clusters (operations/job tracking, schema/profile resolution, editorial memory, manifest patching) are not started.
+  (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`), and a cross-cutting set of pure
+  LLM request/response helpers (`corpus_llm_helpers.py`) found by scanning the whole file's decorator list rather
+  than any one planned cluster. Human review's stateful mutation methods, build lifecycle/provider session
+  management, enrichment reruns, and the smaller supporting clusters (operations/job tracking, schema/profile
+  resolution, editorial memory, manifest patching) are not started.
 - **Release:** 0.70.0 "Amesbury" is tagged (`v0.70.0`) and current. See `docs/notes/0.70.0.md`.
 - **Assertion-status vocabulary** matches `SPECIFICATION.md` exactly (`model_inferred`, `confirmed_absent`); a
   lazy read-time migration in `corpus_builder.py`'s `PdfCorpusRepository` upgrades any build/record/checkpoint still
