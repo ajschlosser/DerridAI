@@ -13,15 +13,16 @@ permanent record; keep only what a fresh session needs to pick up work safely.
   (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
   audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
   small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
-- **`api/app/corpus_builder.py`: 6,939 lines**, down from 8,236 when this effort started (16% removed so far). Four
+- **`api/app/corpus_builder.py`: 6,768 lines**, down from 8,236 when this effort started (18% removed so far). Four
   of the ~7 planned clusters are extracted: publication/touchup (`corpus_publication.py`), most of the record-quality
   cluster (`corpus_record_quality.py`; `validate_records` deliberately deferred, see below), segmentation
-  (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`); plus two cross-cutting sets of pure
-  helpers found by scanning the whole file's decorator list rather than any one planned cluster: LLM
-  request/response handling (`corpus_llm_helpers.py`) and reviewer-facing blind-review helpers
+  (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`); plus three cross-cutting sets of
+  pure helpers found by scanning the whole file's decorator list rather than any one planned cluster: LLM
+  request/response handling (`corpus_llm_helpers.py`), reviewer-facing blind-review helpers
   (`corpus_reviewer_helpers.py`; `_refresh_workflow_fields` deferred alongside it for the same
-  `CORPUS_PROFILES`/`PROFILE_VERSION` circular-import reason as `validate_records`). Human review's stateful
-  mutation methods, build lifecycle/provider session
+  `CORPUS_PROFILES`/`PROFILE_VERSION` circular-import reason as `validate_records`), and enrichment/editorial
+  bookkeeping (`corpus_enrichment_helpers.py`). Human review's stateful mutation methods, build lifecycle/provider
+  session
   management, enrichment reruns, and the smaller supporting clusters (operations/job tracking, schema/profile
   resolution, editorial memory, manifest patching) are not started.
 - **Release:** 0.70.0 "Amesbury" is tagged (`v0.70.0`) and current. See `docs/notes/0.70.0.md`.
