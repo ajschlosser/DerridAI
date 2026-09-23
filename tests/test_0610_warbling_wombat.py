@@ -171,6 +171,23 @@ def test_gutenberg_search_and_import(monkeypatch, tmp_path: Path):
     assert asset["deterministic_checked_at"]
 
 
+def test_gutenberg_search_falls_through_when_the_client_host_does_not_resolve(monkeypatch):
+    class DeadClient:
+        instance_url = "https://gutendex.devbranch.co"
+
+        def search(self, query: str):
+            raise OSError(-2, "Name or service not known")
+
+    monkeypatch.setattr(gutenberg, "_pygutenberg_client", lambda: DeadClient())
+    monkeypatch.setattr(
+        gutenberg,
+        "_gutendex_search",
+        lambda query, limit, base="https://gutendex.com": [{"etext_id": 1, "title": "Book", "author": "Ada", "language": "en"}],
+    )
+    hits = gutenberg.search_project_gutenberg("ada")
+    assert hits[0]["title"] == "Book"
+
+
 def test_illegibility_forces_ocr_and_zero_preserves_native_text(monkeypatch, tmp_path: Path):
     assert sm.native_text_ocr_threshold(0) == 24
     assert sm.native_text_ocr_threshold(100) >= 10**8

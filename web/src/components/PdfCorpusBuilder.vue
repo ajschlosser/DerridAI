@@ -1907,7 +1907,7 @@ async function useCurrentPdf() {
     setMessage(
       i18n.t(
         "pdf_corpus.open_pdf_first",
-        "Open a PDF in Explorer first, or choose a source PDF here.",
+        "Open a PDF in Explorer first, or choose a source here.",
       ),
       "error",
     );
@@ -1920,7 +1920,7 @@ async function startBuild() {
     setMessage(
       i18n.t(
         "pdf_corpus.choose_pdf_before_build",
-        "Choose or load a source PDF before starting a corpus build.",
+        "Choose or load a source before starting a corpus build.",
       ),
       "error",
     );
@@ -3565,7 +3565,7 @@ onBeforeUnmount(() => {
       <div>
         <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow", "Corpus Builder") }}</span>
         <h1 id="pdf-corpus-builder-title">
-          {{ i18n.t("pdf_corpus.title", "Build auditable records from source PDFs") }}
+          {{ i18n.t("pdf_corpus.title", "Build auditable records from source documents") }}
         </h1>
         <p>
           {{

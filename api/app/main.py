@@ -1995,7 +1995,7 @@ def search_gutenberg_texts(q: str = Query(default="", max_length=200), limit: in
         return {"items": search_project_gutenberg(q, limit)}
     except Exception as exc:
         logger.exception("Project Gutenberg search failed")
-        raise HTTPException(status_code=502, detail=f"Project Gutenberg search failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="Project Gutenberg could not be reached. Try the search again.") from exc
 
 
 @app.post("/api/pdf/gutenberg/import")

@@ -44,7 +44,7 @@ const uploadInput = ref<HTMLInputElement | null>(null);
 
 const illegibilityText = computed(() => i18n.tf(
   "pdf_corpus.source_illegibility_value",
-  "{value} out of 100. Higher values OCR more of the source.",
+  "{value} out of 100. 0 uses text already in the file. 100 reads a hard scan with OCR.",
   { value: props.illegibility },
 ));
 
@@ -88,6 +88,10 @@ function importLabel(hit: GutenbergHit) {
 
 <template>
   <div class="source-ingest" :aria-busy="busy ? 'true' : undefined">
+    <p v-if="busy === 'upload' || busy === 'gutenberg'" class="ingest-status" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      {{ busy === 'gutenberg' ? i18n.t('pdf_corpus.searching_gutenberg', 'Searching Project Gutenberg…') : i18n.t('pdf_corpus.reading_source', 'Reading the source…') }}
+    </p>
     <div class="source-setup-grid">
       <label for="pdf-corpus-source">
         <span>{{ i18n.t("pdf_corpus.source_asset", "Source asset") }}</span>
@@ -98,14 +102,14 @@ function importLabel(hit: GutenbergHit) {
       </label>
       <div class="ingest-actions">
         <label class="illegibility-field" for="source-illegibility">
-          <span>{{ i18n.t("pdf_corpus.source_illegibility", "Source illegibility") }} <b>{{ illegibility }}</b></span>
+          <span>{{ i18n.t("pdf_corpus.source_illegibility", "Read a hard-to-read scan") }} <b>{{ illegibility }}</b></span>
           <input id="source-illegibility" :value="illegibility" type="range" min="0" max="100" step="1" :disabled="disabled" :aria-valuetext="illegibilityText" aria-describedby="source-illegibility-help" @input="onIllegibility">
-          <small id="source-illegibility-help">{{ i18n.t("pdf_corpus.source_illegibility_help", "Set this before choosing a file. Higher values OCR more aggressively when the source is hard to read.") }}</small>
+          <small id="source-illegibility-help">{{ i18n.t("pdf_corpus.source_illegibility_help", "Leave this at 0 when the file already has text, such as a normal PDF, Word file, or web page. Move it up only for a picture of a page. Higher means DerridAI reads the page with OCR instead of trusting text already in the file. This is not the noise threshold used later in review.") }}</small>
         </label>
         <div class="source-actions">
           <button type="button" class="btn" :disabled="disabled" @click="emit('useCurrent')">{{ i18n.t("pdf_corpus.use_current_pdf", "Use current Explorer PDF") }}</button>
-          <button type="button" class="btn source-choose" :disabled="disabled" @click="uploadInput?.click()">{{ busy === "upload" ? i18n.t("pdf_corpus.extracting", "Extracting…") : i18n.t("pdf_corpus.choose_pdf", "Choose source PDF") }}</button>
-          <input ref="uploadInput" class="sr-only" tabindex="-1" type="file" :accept="SOURCE_ACCEPT" :aria-label="i18n.t('pdf_corpus.choose_pdf', 'Choose source PDF')" @change="onFile">
+          <button type="button" class="btn source-choose" :disabled="disabled" @click="uploadInput?.click()">{{ busy === "upload" ? i18n.t("pdf_corpus.reading_source", "Reading the source…") : i18n.t("pdf_corpus.choose_pdf", "Choose source") }}</button>
+          <input ref="uploadInput" class="sr-only" tabindex="-1" type="file" :accept="SOURCE_ACCEPT" :aria-label="i18n.t('pdf_corpus.choose_pdf', 'Choose source')" @change="onFile">
         </div>
       </div>
     </div>
@@ -152,6 +156,7 @@ function importLabel(hit: GutenbergHit) {
 
 <style scoped>
 .source-ingest { display: grid; gap: 12px; }
+.ingest-status { display: flex; align-items: center; gap: 8px; margin: 0; }
 .source-setup-grid { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr); gap: 12px; align-items: end; }
 .source-setup-grid > label, .ingest-actions, .illegibility-field, .url-source label, .gutenberg-source label { display: grid; gap: 5px; }
 .ingest-actions { gap: 10px; align-content: end; }

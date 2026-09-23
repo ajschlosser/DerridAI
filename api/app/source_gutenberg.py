@@ -69,23 +69,31 @@ def _pygutenberg_client() -> Any | None:
     return None
 
 
-def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]]:
-    """Search Project Gutenberg through pygutenberg, then the Gutendex API it wraps.
+_PUBLIC_GUTENDEX = "https://gutendex.com"
 
-    Installed packages expose `search`, `search_books`, or only a Gutendex base
-    URL. An empty or failed client result falls through to the public catalog
-    so a missing method does not hide texts that can still be loaded.
+
+def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Search Project Gutenberg through pygutenberg, then the public Gutendex catalog.
+
+    Some installed clients default to a host that does not resolve. A failure
+    there is not fatal: the public catalog is tried next.
     """
     text = str(query or "").strip()
     if not text:
         return []
     limit = max(1, min(30, int(limit)))
     client = _pygutenberg_client()
-    raw = _search_with_client(client, text) if client is not None else None
-    hits = _coerce_gutenberg_results(raw)
-    if not hits:
-        hits = _gutendex_search(text, limit)
-    return hits[:limit]
+    if client is not None:
+        try:
+            hits = _coerce_gutenberg_results(_search_with_client(client, text))
+        except Exception:
+            hits = []
+        if hits:
+            return hits[:limit]
+    try:
+        return _gutendex_search(text, limit, base=_PUBLIC_GUTENDEX)
+    except Exception as exc:
+        raise ValueError("Project Gutenberg could not be reached. Try the search again.") from exc
 
 
 def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
@@ -122,9 +130,11 @@ def _search_with_client(client: Any, query: str) -> Any:
                 continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
         except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
             continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-    base = getattr(client, "instance_url", None) or getattr(client, "base_url", None)
-    if base:
-        return _gutendex_search(query, 12, base=str(base).rstrip("/"))
+    base = str(getattr(client, "instance_url", None) or getattr(client, "base_url", None) or "").rstrip("/")
+    # py-gutenberg's default host (gutendex.devbranch.co) does not resolve.
+    # Only reuse a client base when it is the public catalog.
+    if base.endswith("gutendex.com"):
+        return _gutendex_search(query, 12, base=base)
     return None
 
 

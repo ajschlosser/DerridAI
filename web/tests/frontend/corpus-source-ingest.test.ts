@@ -9,7 +9,8 @@ describe("Corpus source ingest", () => {
     const choose = wrapper.get("button.source-choose");
     expect(slider.attributes("aria-valuetext")).toContain("0");
     expect(slider.attributes("aria-describedby")).toBe("source-illegibility-help");
-    expect(choose.text()).toContain("Choose source PDF");
+    expect(choose.text()).toContain("Choose source");
+    expect(wrapper.text()).toContain("Leave this at 0");
     const following = Node.DOCUMENT_POSITION_FOLLOWING;
     expect(slider.element.compareDocumentPosition(choose.element) & following).toBe(following);
     expect(wrapper.get('input[type="file"]').attributes("tabindex")).toBe("-1");
@@ -29,6 +30,8 @@ describe("Corpus source ingest", () => {
     await wrapper.get("form.url-source").trigger("submit");
     expect(wrapper.emitted("loadUrl")).toHaveLength(1);
     await wrapper.get(".gutenberg-hits button").trigger("click");
+    await wrapper.setProps({ busy: "gutenberg" });
+    expect(wrapper.get(".ingest-status").text()).toContain("Searching Project Gutenberg");
     expect(wrapper.emitted("importGutenberg")?.[0]).toEqual([1342]);
     expect(wrapper.get(".gutenberg-hits button").attributes("aria-label")).toContain("Pride and Prejudice");
   });
