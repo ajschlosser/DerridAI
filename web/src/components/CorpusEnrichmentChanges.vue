@@ -11,7 +11,7 @@ interface HistoryEntry { run_id?: string; pass?: number; model?: string; outcome
 const props=defineProps<{record:Record<string,unknown>;busy?:boolean}>();
 const emit=defineEmits<{resolve:[field:string,value:unknown]}>();
 const i18n=useI18nStore();
-const owned=new Set(["human_confirmed","human_override","human_confirmed_absent"]);
+const owned=new Set(["human_confirmed","human_override","confirmed_absent"]);
 const stateOf=(field:string)=>String(((props.record.metadata_field_status as Record<string,{status?:string}>|undefined)?.[field]?.status)??"");
 const last=computed<HistoryEntry|null>(()=>{const history=(props.record.metadata_enrichment_history as HistoryEntry[]|undefined)??[];return history.length?[...history].reverse()[0]??null:null});
 const added=computed(()=>(last.value?.added_fields??[]).filter(field=>!owned.has(stateOf(field))));

@@ -20,7 +20,7 @@ def test_a_confident_proposal_is_taken_and_labelled_as_the_models_not_a_persons(
     out = settle_record(r, Policy(enabled=True, unresolved="leave"))
     assert r["stance"] == "critique" and out["filled"][0]["field"] == "stance"
     info = r["metadata_field_status"]["stance"]
-    assert info["status"] == "llm_inferred" and info["method"] == "autonomous_policy" and info["autonomous"] is True
+    assert info["status"] == "model_inferred" and info["method"] == "autonomous_policy" and info["autonomous"] is True
     assert "no person reviewed" in info["reason"]
 
 
@@ -83,7 +83,7 @@ def _setup(tmp_path: Path):
 def test_hands_free_settles_accepts_and_reports_what_it_could_not(tmp_path):
     m, repo, bid = _setup(tmp_path)
     good = {"record_id": "good", "text": "t", "discourse_role": "assertion", "region_type": "main_text", "primary_text": True,
-            "metadata_field_status": {"stance": unresolved(0.9), "discourse_role": {"status": "llm_inferred"}, "region_type": {"status": "deterministic"}, "primary_text": {"status": "deterministic"}}}
+            "metadata_field_status": {"stance": unresolved(0.9), "discourse_role": {"status": "model_inferred"}, "region_type": {"status": "deterministic"}, "primary_text": {"status": "deterministic"}}}
     hopeless = {"record_id": "hopeless", "text": "t", "discourse_role": "assertion", "metadata_field_status": {"target": {"status": "unresolved", "method": "llm", "reason_code": "ambiguous"}}}
     touched = {"record_id": "touched", "text": "t", "human_touched_fields": ["stance"], "metadata_field_status": {"stance": unresolved(0.9)}}
     repo.save_records(bid, [good, hopeless, touched])

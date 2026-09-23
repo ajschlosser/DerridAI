@@ -59,7 +59,7 @@ def ready_record(rid: str, bid: str) -> dict:
         "metadata_field_status":{
             "region_type":{"status":"deterministic","method":"test"},
             "primary_text":{"status":"deterministic","method":"test"},
-            "discourse_role":{"status":"llm_inferred","method":"llm","confidence":.96},
+            "discourse_role":{"status":"model_inferred","method":"llm","confidence":.96},
         },
         "metadata_incomplete_fields":[],"metadata_review_fields":[],"metadata_complete":True,"metadata_enrichment_state":"complete",
         "review_disposition":"pending","accepted":False,"rejected":False,"needs_review":False,"review_reason":"",

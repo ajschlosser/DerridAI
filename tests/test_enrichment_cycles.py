@@ -107,7 +107,7 @@ def proposal(record: dict, **fields) -> dict:
     status = dict(out.get("metadata_field_status") or {})
     for field, (value, confidence) in fields.items():
         out[field] = value
-        status[field] = {"status": "llm_inferred", "method": "llm", "confidence": confidence}
+        status[field] = {"status": "model_inferred", "method": "llm", "confidence": confidence}
     out["metadata_field_status"] = status
     return out
 
@@ -116,10 +116,10 @@ def test_resolve_conflict_decides_only_when_confidence_separates():
     """Human wins; a confident, clearly better proposal replaces; ties keep both."""
     human = {"status": "human_confirmed", "confidence": 0.2}
     assert ec.resolve_conflict(human, {"confidence": 0.99}) == "keep_existing"
-    weak_old = {"status": "llm_inferred", "confidence": 0.6}
+    weak_old = {"status": "model_inferred", "confidence": 0.6}
     assert ec.resolve_conflict(weak_old, {"confidence": 0.9}) == "replace"
-    assert ec.resolve_conflict({"status": "llm_inferred", "confidence": 0.85}, {"confidence": 0.8}) == "keep_both"
-    assert ec.resolve_conflict({"status": "llm_inferred", "confidence": 0.9}, {"confidence": 0.5}) == "keep_existing"
+    assert ec.resolve_conflict({"status": "model_inferred", "confidence": 0.85}, {"confidence": 0.8}) == "keep_both"
+    assert ec.resolve_conflict({"status": "model_inferred", "confidence": 0.9}, {"confidence": 0.5}) == "keep_existing"
     assert ec.resolve_conflict(weak_old, {"confidence": None}) == "keep_both"
     assert ec.resolve_conflict({"status": "unresolved"}, {"confidence": 0.8}) == "replace"
 
@@ -144,17 +144,17 @@ def test_learn_from_pass_uses_unreviewed_inferences_and_defers_to_reviewers():
     rows = [
         {"record_id": "rec-a", "discourse_role": "analysis", "speaker": "Derrida",
          "metadata_field_status": {
-             "discourse_role": {"status": "llm_inferred", "confidence": 0.9},
-             "speaker": {"status": "llm_inferred", "confidence": 0.88},
+             "discourse_role": {"status": "model_inferred", "confidence": 0.9},
+             "speaker": {"status": "model_inferred", "confidence": 0.88},
          }},
         {"record_id": "rec-b", "discourse_role": "analysis", "speaker": "Derrida",
          "metadata_field_status": {
-             "discourse_role": {"status": "llm_inferred", "confidence": 0.8},
-             "speaker": {"status": "llm_inferred", "confidence": 0.91},
+             "discourse_role": {"status": "model_inferred", "confidence": 0.8},
+             "speaker": {"status": "model_inferred", "confidence": 0.91},
          }},
         {"record_id": "rec-c", "discourse_role": "commentary", "stance": "critical",
          "metadata_field_status": {
-             "discourse_role": {"status": "llm_inferred", "confidence": 0.4},
+             "discourse_role": {"status": "model_inferred", "confidence": 0.4},
              "stance": {"status": "human_confirmed"},
          },
          "metadata_disputes": [{"field": "stance", "existing": "neutral", "proposed": "critical"}]},
@@ -226,7 +226,7 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
         "stance": "critical",
         "metadata_field_status": {
             "speaker": {"status": "human_confirmed"},
-            "stance": {"status": "llm_inferred", "method": "llm", "confidence": 0.8},
+            "stance": {"status": "model_inferred", "method": "llm", "confidence": 0.8},
         },
     }])
     manager._enrich_record = lambda record, manifest, request, **kw: proposal(
@@ -261,8 +261,8 @@ def test_boundary_mutation_only_requeues_records_that_have_started_enrichment():
 def test_chain_replaces_confidently_keeps_both_when_unsure_and_stops_when_converged(tmp_path: Path):
     """Pass 1 decides confident conflicts; pass 2 sees nothing new and ends the chain."""
     rows = [
-        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.5}}},
-        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "llm_inferred", "confidence": 0.8}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "model_inferred", "confidence": 0.5}}},
+        {"stance": "neutral", "review_disposition": "accepted", "accepted": True, "metadata_field_status": {"stance": {"status": "model_inferred", "confidence": 0.8}}},
         {"stance": "neutral", "metadata_field_status": {"stance": {"status": "human_confirmed"}}},
     ]
     manager, repo, build_id = make_manager(tmp_path, rows)
@@ -320,7 +320,7 @@ def test_pass_ignores_confidence_telemetry_and_near_duplicate_lists(tmp_path: Pa
     """Neither a self-reported confidence nor a near-identical topic list raises a dispute."""
     rows = [{
         "semantic_classification_confidence": 0.9917, "topics": ["hospitality", "ethics", "borders", "asylum"],
-        "metadata_field_status": {"topics": {"status": "llm_inferred", "confidence": 1.0}, "semantic_classification_confidence": {"status": "llm_inferred"}},
+        "metadata_field_status": {"topics": {"status": "model_inferred", "confidence": 1.0}, "semantic_classification_confidence": {"status": "model_inferred"}},
     }]
     manager, repo, build_id = make_manager(tmp_path, rows)
     manager._enrich_record = lambda record, manifest, request, **kw: proposal(
@@ -337,9 +337,9 @@ def test_pass_ignores_confidence_telemetry_and_near_duplicate_lists(tmp_path: Pa
 def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path: Path):
     """Starting another pass does not require accepting records; it sees last-pass conventions."""
     rows = [
-        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.9}}},
-        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.86}}},
-        {"discourse_role": "analysis", "review_disposition": "pending", "metadata_field_status": {"discourse_role": {"status": "llm_inferred", "confidence": 0.84}}},
+        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "model_inferred", "confidence": 0.9}}},
+        {"discourse_role": "analysis", "metadata_field_status": {"discourse_role": {"status": "model_inferred", "confidence": 0.86}}},
+        {"discourse_role": "analysis", "review_disposition": "pending", "metadata_field_status": {"discourse_role": {"status": "model_inferred", "confidence": 0.84}}},
     ]
     manager, repo, build_id = make_manager(tmp_path, rows)
     seen: list[dict] = []

@@ -135,7 +135,7 @@ def test_explicit_confident_supported_absence_can_auto_resolve_an_optional_field
 
     status = record["metadata_field_status"]["speaker"]
     assert record.get("speaker") in (None, "")
-    assert status["status"] == "llm_inferred"
+    assert status["status"] == "model_inferred"
     assert status["reason_code"] == "no_supported_value"
     assert status["verification_status"] == "auto_resolved"
     assert status["autofilled"] is False

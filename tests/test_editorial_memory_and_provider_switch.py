@@ -80,7 +80,7 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
     rows=[
         {'record_id':'r1','text':'Derrida reports Heidegger argues that sovereignty precedes law.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_confirmed'}}},
         {'record_id':'r2','text':'Here Derrida reports another proposition held by Heidegger concerning sovereignty.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_override'}}},
-        {'record_id':'r3','text':'The model guessed analysis here.','discourse_role':'analysis','metadata_field_status':{'discourse_role':{'status':'llm_inferred'}}},
+        {'record_id':'r3','text':'The model guessed analysis here.','discourse_role':'analysis','metadata_field_status':{'discourse_role':{'status':'model_inferred'}}},
         {'record_id':'r4','text':'Heidegger is presented as holding a proposition concerning sovereignty and law.','metadata_field_status':{}},
     ]
     repo,build=make_build(tmp_path,rows)

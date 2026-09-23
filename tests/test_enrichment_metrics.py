@@ -54,7 +54,7 @@ def test_learning_curve_uses_whole_buckets_only():
 def test_slicing_by_run_and_unresolved_count():
     rows = [ev("accepted", confidence=0.9), ev("corrected", confidence=0.9, run_id="run2")]
     assert compute(rows, run_id="run2")["models"]["m"]["acceptance_rate"] == 0.0
-    records = [{"metadata_field_status": {"a": {"status": "unresolved"}, "b": {"status": "llm_inferred"}}}]
+    records = [{"metadata_field_status": {"a": {"status": "unresolved"}, "b": {"status": "model_inferred"}}}]
     assert compute(rows, records)["unresolved_remaining"] == 1
 
 

@@ -33,13 +33,13 @@ def reconcile(m, confidence=0.95, needs_review=True, cite=True, record_id="r1"):
 
 def test_a_confident_value_is_filled_even_though_the_model_asked_for_review(tmp_path):
     status = reconcile(manager(tmp_path))["metadata_field_status"]["discourse_role"]
-    assert status["status"] == "llm_inferred" and status["autofilled"] is True
+    assert status["status"] == "model_inferred" and status["autofilled"] is True
     assert status["self_reported_confidence"] == 0.95 and status["model"] == "qwen"
 
 
 def test_no_cited_evidence_keeps_it_in_review(tmp_path):
     status = reconcile(manager(tmp_path), cite=False)["metadata_field_status"]["discourse_role"]
-    assert status["status"] != "llm_inferred" or not status.get("autofilled")
+    assert status["status"] != "model_inferred" or not status.get("autofilled")
 
 
 def test_below_the_bar_it_still_needs_review(tmp_path):
@@ -58,7 +58,7 @@ def test_reviews_that_corrected_the_model_suspend_autofill(tmp_path):
 def test_a_rejection_is_recorded_and_shown_to_the_next_pass(tmp_path):
     m = manager(tmp_path)
     record = {"record_id": "r1", "discourse_role": "assertion"}
-    info = {"status": "llm_inferred", "method": "llm", "model": "qwen", "confidence": 0.95, "autofilled": True}
+    info = {"status": "model_inferred", "method": "llm", "model": "qwen", "confidence": 0.95, "autofilled": True}
     build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
                                  "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "qwen", "request": {}})
     m._record_human_llm_feedback(build["build_id"], "discourse_role", "assertion", "critique", info, record)

@@ -21,7 +21,7 @@ from typing import Any, Literal
 
 from .experiment import is_gold
 
-HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "human_confirmed_absent"})
+HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "confirmed_absent"})
 MAX_PASSES = 10
 # A proposal at or above this confidence may replace a weaker value. It mirrors
 # the profile's ``min_metadata_confidence`` auto-fill floor.
@@ -167,7 +167,7 @@ def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize the last enrichment pass for the next one, including unreviewed inferences.
 
     Reviewer decisions still win: they occupy ``field_stats`` / ``rejected_examples``.
-    Values the previous pass wrote as ``llm_inferred`` on two or more records, at or
+    Values the previous pass wrote as ``model_inferred`` on two or more records, at or
     above the 65% auto-fill floor, become ``prior_pass.inferred_conventions``. Those
     are working conventions for this build only; they are not treated as confirmed
     and are omitted for any field a reviewer has already judged on any record.
@@ -187,7 +187,7 @@ def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
             if field in judged:
                 continue
             info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if str(info.get("status") or "") != "llm_inferred":
+            if str(info.get("status") or "") != "model_inferred":
                 continue
             confidence = info.get("confidence")
             if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or float(confidence) < PRIOR_PASS_MIN_CONFIDENCE:

@@ -5,7 +5,7 @@ import CorpusEnrichmentChanges from "../../src/components/CorpusEnrichmentChange
 
 const record=(over:Record<string,unknown>={})=>({
   needs_review:true,speaker:"Jacques Derrida",stance:"critique",target:"hospitality",
-  metadata_field_status:{speaker:{status:"llm_inferred"},stance:{status:"llm_inferred"},target:{status:"unresolved",method:"llm",verification_status:"pending_review"}},
+  metadata_field_status:{speaker:{status:"model_inferred"},stance:{status:"model_inferred"},target:{status:"unresolved",method:"llm",verification_status:"pending_review"}},
   metadata_enrichment_history:[{run_id:"r1",pass:2,model:"qwen3.5:4b",outcome:"disputed",added_fields:["speaker"],replaced:[{field:"stance",previous:"assertion",value:"critique"}],disputes:[]}],
   metadata_disputes:[{field:"target",existing:"cities of refuge",proposed:"hospitality",candidates:[
     {candidate_id:"c1",value:"cities of refuge",source:"current"},

@@ -480,7 +480,7 @@ export interface CorpusRecord {
     string,
     {
       status?:
-        "deterministic" | "llm_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
+        "deterministic" | "model_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
       method?: string;
       confidence?: number | null;
       reason?: string;

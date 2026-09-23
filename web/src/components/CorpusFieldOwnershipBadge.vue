@@ -15,12 +15,12 @@ const sourceKind = computed(() => {
     method = String(props.method || ""),
     valueSource = String(props.source || "");
   if (status === "human_override") return "override";
-  if (status === "human_confirmed" || status === "human_confirmed_absent") return "human";
+  if (status === "human_confirmed" || status === "confirmed_absent") return "human";
   if (status === "inherited") return "inherited";
   if (
     method.includes("llm") ||
     method === "hybrid" ||
-    status === "llm_inferred" ||
+    status === "model_inferred" ||
     valueSource === "llm"
   )
     return "llm";
@@ -69,11 +69,11 @@ const verificationKind = computed(() => {
   if (explicit) return explicit;
   const status = String(props.status || "");
   if (status === "unresolved" || status === "invalid") return "pending_review";
-  if (status === "llm_inferred") return "auto_resolved";
+  if (status === "model_inferred") return "auto_resolved";
   if (
     status === "human_confirmed" ||
     status === "human_override" ||
-    status === "human_confirmed_absent"
+    status === "confirmed_absent"
   )
     return "human_confirmed";
   return "";

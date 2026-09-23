@@ -96,7 +96,7 @@ def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):
     m, bid = manager(tmp_path, notes_schema())
     record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
     out = m._reconcile_metadata_results(record, m._profile_for(bid), ["b1"], [("discourse", answer(mood="calm"), None)], False, request={"model": "q"}, build_id=bid, schema=m._schema_for(bid))
-    assert out["mood"] == "calm" and out["metadata_field_status"]["mood"]["status"] == "llm_inferred"
+    assert out["mood"] == "calm" and out["metadata_field_status"]["mood"]["status"] == "model_inferred"
     assert out["metadata_evidence"]["mood"]["block_ids"] == ["b1"]
     # Without a cited source block the value waits for a person, because the field asks for evidence.
     bare = {"record_id": "r2", "text": "t", "metadata_field_status": {}}
