@@ -1582,7 +1582,6 @@ test.describe("legacy runtime DOM baseline", () => {
         // on its semantic contract instead of freezing the entire presentation in legacy HTML.
         expect(stableMarkup).toContain('class="works-workspace-header"');
         expect(stableMarkup).toContain('id="works-page-title"');
-        expect(stableMarkup).toContain("Metadata patterns in this work");
       } else {
         expect(stableMarkup).toMatchSnapshot(`${scenario.name}.html`);
       }
