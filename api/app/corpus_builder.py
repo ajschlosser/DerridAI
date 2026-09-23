@@ -7839,7 +7839,18 @@ CURRENT REVIEWED RECORD TEXT:
         target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
-        if build.get("status") == "running" and str(build.get("stage") or "").startswith("metadata_enrichment"):
+        metadata_operation = build.get("metadata_operation")
+        metadata_active = (
+            build.get("status") == "running"
+            and (
+                str(build.get("stage") or "").startswith("metadata_enrichment")
+                or (
+                    isinstance(metadata_operation, dict)
+                    and metadata_operation.get("state") == "running"
+                )
+            )
+        )
+        if metadata_active:
             priority = [str(value) for value in build.get("metadata_priority_record_ids") or [] if str(value) != record_id]
             build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
             feedback = list(build.get("metadata_review_feedback") or [])
