@@ -3453,9 +3453,15 @@ CURRENT REVIEWED RECORD TEXT:
             current_build["record_sizing_policy"] = sizing_policy
             self.repo.save_build(current_build)
             if not topology_validation.get("valid"):
+                raw_issues = [str(issue) for issue in topology_validation.get("issues") or []]
+                counts = {issue: raw_issues.count(issue) for issue in dict.fromkeys(raw_issues)}
+                issues = [
+                    f"{issue} ({count} records)" if count > 1 else issue
+                    for issue, count in counts.items()
+                ]
                 raise RuntimeError(
                     "Deterministic topology sanity check failed before metadata enrichment: "
-                    + ", ".join(topology_validation.get("issues") or ["unknown topology error"])
+                    + ", ".join(issues or ["unknown topology error"])
                 )
             # Optionally clean obvious extraction/layout noise before metadata
             # enrichment. The immutable extracted text remains bound in

@@ -6,6 +6,8 @@ export interface ProviderProfile {
   name: string;
   type: "ollama" | "openai";
   model?: string;
+  available?: boolean;
+  availability_error?: string;
   model_mode?: string;
   base_url?: string;
   max_concurrent_requests?: number;
@@ -60,6 +62,8 @@ export const systemApi = {
   researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
   setResearcherProviders: (profiles: ProviderProfile[]) => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers", {method: "PUT", body: JSON.stringify({profiles})}),
   researcherProviderStatus: (payload: Record<string, unknown>) => apiRequest<{available: boolean; models?: Array<{name: string; [key: string]: unknown}>; error?: string}>("/api/system/researcher-providers/status", {method: "POST", body: JSON.stringify(payload)}),
+  researcherProviderAvailability: (id: string) => apiRequest<{available: boolean; model_available: boolean; configured_model?: string; error?: string}>(`/api/system/researcher-providers/availability`, {method: "POST", body: JSON.stringify({id})}),
+  llmStatus: (payload: Record<string, unknown>) => apiRequest<{available: boolean; models?: Array<{name: string; [key: string]: unknown}>; error?: string}>("/api/llm/status", {method: "POST", body: JSON.stringify(payload)}),
   languages: () => apiRequest<{languages: LanguageInfo[]}>("/api/i18n/languages"),
   language: (code: string) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
   updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "PUT", body: JSON.stringify(payload)}),

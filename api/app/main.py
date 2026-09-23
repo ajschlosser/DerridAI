@@ -606,6 +606,31 @@ def researcher_provider_status(body: ResearcherProviderStatusRequest, request: R
     return llm_status(body.type, base_url=body.base_url or (stored or {}).get("base_url"), api_key=api_key)
 
 
+@app.post("/api/system/researcher-providers/availability")
+def researcher_provider_availability(
+    body: ResearcherProviderStatusRequest, request: Request
+) -> dict[str, Any]:
+    _request_user(request)
+    stored = system_store.researcher_profile(body.id) if body.id else None
+    if not stored:
+        return {"available": False, "model_available": False, "error": "Provider profile was not found."}
+    status = llm_status(
+        str(stored.get("type") or body.type),
+        base_url=str(stored.get("base_url") or "") or None,
+        api_key=str(stored.get("api_key") or "") or None,
+    )
+    configured_model = str(stored.get("model") or "").strip()
+    models = {str(item.get("name") or "") for item in status.get("models") or [] if isinstance(item, dict)}
+    model_available = bool(configured_model) and configured_model in models
+    return {
+        "available": bool(status.get("available")),
+        "model_available": model_available,
+        "configured_model": configured_model,
+        "models": status.get("models") or [],
+        "error": status.get("error"),
+    }
+
+
 @app.get("/api/i18n/languages")
 def i18n_languages() -> dict[str, Any]:
     # Read-only language metadata is public because the sign-in screen itself is

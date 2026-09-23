@@ -71,14 +71,13 @@ import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
-import { useSplitter } from "../composables/useSplitter";
+import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
+import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import {
-  assetHasExtractionWarning,
   firstRecordWithSourceWarning,
-  ingestWarningStorageKey,
   recordHasSourceWarning,
 } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
@@ -110,7 +109,6 @@ const serverProviderIds = ref<Set<string>>(new Set());
 const selectedProviderId = ref("");
 const selectedReviewProviderId = ref("");
 const selectedAssetId = ref("");
-const ingestWarningOpen = ref(false);
 const recordSourceWarningOpen = ref(false);
 const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
@@ -533,28 +531,11 @@ function extraIssueKinds(record: CorpusRecord) {
 const selectedAsset = computed(
   () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
 );
-
-function maybeOpenIngestWarning(asset?: PdfAsset | null) {
-  if (!assetHasExtractionWarning(asset) || !asset?.asset_id) return;
-  try {
-    if (sessionStorage.getItem(ingestWarningStorageKey(asset.asset_id))) return;
-  } catch {
-    /* private mode still gets the modal once per session in memory */
-  }
-  ingestWarningOpen.value = true;
-}
-
-function acknowledgeIngestWarning() {
-  const assetId = selectedAsset.value?.asset_id;
-  if (assetId) {
-    try {
-      sessionStorage.setItem(ingestWarningStorageKey(assetId), "1");
-    } catch {
-      /* ignore */
-    }
-  }
-  ingestWarningOpen.value = false;
-}
+const {
+  open: ingestWarningOpen,
+  maybeOpen: maybeOpenIngestWarning,
+  acknowledge: acknowledgeIngestWarning,
+} = useCorpusIngestWarning(selectedAsset);
 
 function openRecordSourceWarning(record: CorpusRecord) {
   selectRecord(record);
@@ -642,7 +623,6 @@ const canMergeNext = computed(() => {
   const globalIndex = recordOffset.value + selectedRecordIndex.value;
   return globalIndex >= 0 && globalIndex < recordTotal.value - 1;
 });
-const reviewGridEl = ref<HTMLElement | null>(null);
 // Review is the point of this screen, so the first time a build's records are ready, bring the workspace to the top.
 let reviewScrolledFor = "";
 watch(
@@ -655,32 +635,8 @@ watch(
   },
 );
 const reviewFrameEl = ref<HTMLElement | null>(null);
-// The queue and the inspector can be resized with the pointer or the keyboard, and are remembered.
-const queueSplitter = useSplitter({
-  key: "derridai.review.queueWidth",
-  min: 224,
-  max: 420,
-  initial: 256,
-  edge: "start",
-  container: () => reviewGridEl.value,
-});
-const inspectorSplitter = useSplitter({
-  key: "derridai.review.inspectorWidth",
-  min: 320,
-  max: 640,
-  initial: 368,
-  edge: "end",
-  container: () => reviewGridEl.value,
-});
-const reviewHeightSplitter = useSplitter({
-  key: "derridai.review.height",
-  min: 420,
-  max: 1200,
-  initial: 680,
-  edge: "start",
-  axis: "vertical",
-  container: () => reviewGridEl.value,
-});
+const { reviewGridEl, queueSplitter, inspectorSplitter, reviewHeightSplitter } =
+  usePdfCorpusPaneSizing();
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
 function mergeUnavailable(direction: "previous" | "next"): string | undefined {
   if (busy.value !== "")
@@ -1411,7 +1367,50 @@ async function refreshProviders() {
   // runtime bootstrap has completed. Prefer the richer runtime copy on conflicts.
   for (const profile of serverProfiles) merged.set(profile.id, profile);
   for (const profile of runtimeProfiles) merged.set(profile.id, profile);
-  providerProfiles.value = Array.from(merged.values());
+  const mergedProfiles = Array.from(merged.values());
+  const availability = await Promise.all(
+    mergedProfiles.map(async (profile) => {
+      try {
+        if (serverProviderIds.value.has(profile.id)) {
+          const status = await systemApi.researcherProviderAvailability(profile.id);
+          return {
+            ...profile,
+            available: Boolean(status.available && status.model_available),
+            availability_error:
+              status.error ||
+              (!status.model_available
+                ? `Configured model "${status.configured_model || profile.model || "unknown"}" was not found.`
+                : ""),
+          };
+        }
+        const config = directProfilePayload(profile.id);
+        if (!config) return { ...profile, available: false, availability_error: "Provider configuration is unavailable." };
+        const status = await systemApi.llmStatus({
+          provider: config.provider,
+          base_url: config.base_url,
+          api_key: config.api_key,
+        });
+        const names = new Set((status.models || []).map((model) => String(model.name || "")));
+        const modelAvailable = Boolean(config.model && names.has(String(config.model)));
+        return {
+          ...profile,
+          available: Boolean(status.available && modelAvailable),
+          availability_error:
+            status.error ||
+            (!modelAvailable
+              ? `Configured model "${String(config.model || "unknown")}" was not found.`
+              : ""),
+        };
+      } catch (exc) {
+        return {
+          ...profile,
+          available: false,
+          availability_error: exc instanceof Error ? exc.message : String(exc),
+        };
+      }
+    }),
+  );
+  providerProfiles.value = availability;
   const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
   const activeBuildProfile = String(
     (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id || "",
@@ -1427,8 +1426,8 @@ async function refreshProviders() {
     !providerProfiles.value.some((profile) => profile.id === selectedProviderId.value)
   ) {
     selectedProviderId.value =
-      providerProfiles.value.find((profile) => profile.id === defaultId)?.id ||
-      providerProfiles.value[0]?.id ||
+      providerProfiles.value.find((profile) => profile.id === defaultId && profile.available !== false)?.id ||
+      providerProfiles.value.find((profile) => profile.available !== false)?.id ||
       "";
   }
 }

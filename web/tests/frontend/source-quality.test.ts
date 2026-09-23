@@ -1,12 +1,82 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
-import { nextTick } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import {
   assetHasExtractionWarning,
   firstRecordWithSourceWarning,
   recordHasSourceWarning,
 } from "../../src/domain/sourceQuality";
+import { useCorpusIngestWarning } from "../../src/composables/useCorpusIngestWarning";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
+import ProviderProfileSelect from "../../src/components/ProviderProfileSelect.vue";
+
+describe("ProviderProfileSelect availability", () => {
+  it("does not offer unavailable profiles while retaining the active one for diagnosis", () => {
+    const wrapper = mount(ProviderProfileSelect, {
+      props: {
+        modelValue: "missing",
+        profiles: [
+          {
+            id: "missing",
+            name: "Missing",
+            type: "ollama",
+            model: "gone",
+            available: false,
+            availability_error: 'Configured model "gone" was not found.',
+          },
+          { id: "ready", name: "Ready", type: "ollama", model: "present", available: true },
+        ],
+      },
+    });
+    const options = wrapper.findAll("option");
+    expect(options).toHaveLength(2);
+    expect(options[0].attributes("disabled")).toBeDefined();
+    expect(options[1].attributes("disabled")).toBeUndefined();
+    expect(wrapper.get(".provider-unavailable").text()).toContain("Unavailable");
+    expect(wrapper.get(".provider-unavailable").text()).toContain("gone");
+    wrapper.unmount();
+  });
+});
+
+describe("useCorpusIngestWarning", () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it("opens once per asset and acknowledges through session storage", () => {
+    let warning!: ReturnType<typeof useCorpusIngestWarning>;
+    const asset = ref({ asset_id: "asset-1", extraction_noise: { exceeds_threshold: true } });
+    const Host = defineComponent({
+      setup() {
+        warning = useCorpusIngestWarning(asset);
+        return () => h("div");
+      },
+    });
+    const wrapper = mount(Host);
+
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(true);
+    warning.acknowledge();
+    expect(warning.open.value).toBe(false);
+    expect(sessionStorage.getItem("derridai.source-quality.seen.asset-1")).toBe("1");
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("does not open for a clean asset", () => {
+    let warning!: ReturnType<typeof useCorpusIngestWarning>;
+    const asset = ref({ asset_id: "asset-2", extraction_noise: { exceeds_threshold: false } });
+    const Host = defineComponent({
+      setup() {
+        warning = useCorpusIngestWarning(asset);
+        return () => h("div");
+      },
+    });
+    const wrapper = mount(Host);
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(false);
+    wrapper.unmount();
+  });
+});
 
 describe("source extraction warning placement", () => {
   it("flags ingest noise that exceeds the unusable threshold", () => {
