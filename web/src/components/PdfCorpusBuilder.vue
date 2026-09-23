@@ -37,7 +37,7 @@ import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusBuildStageNotice from "./CorpusBuildStageNotice.vue";
 import CorpusMetadataLiveStatus from "./CorpusMetadataLiveStatus.vue";
-import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
+import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusProviderSwitcher from "./CorpusProviderSwitcher.vue";
@@ -66,6 +66,11 @@ import { useSplitter } from "../composables/useSplitter";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
+import {
+  assetHasExtractionWarning,
+  ingestWarningStorageKey,
+  recordHasSourceWarning,
+} from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -95,6 +100,8 @@ const serverProviderIds = ref<Set<string>>(new Set());
 const selectedProviderId = ref("");
 const selectedReviewProviderId = ref("");
 const selectedAssetId = ref("");
+const ingestWarningOpen = ref(false);
+const recordSourceWarningOpen = ref(false);
 const selectedBuildId = ref("");
 const currentBuild = ref<CorpusBuild | null>(null);
 const records = ref<CorpusRecord[]>([]);
@@ -448,6 +455,33 @@ function extraIssueKinds(record: CorpusRecord) {
 const selectedAsset = computed(
   () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
 );
+
+function maybeOpenIngestWarning(asset?: PdfAsset | null) {
+  if (!assetHasExtractionWarning(asset) || !asset?.asset_id) return;
+  try {
+    if (sessionStorage.getItem(ingestWarningStorageKey(asset.asset_id))) return;
+  } catch {
+    /* private mode still gets the modal once per session in memory */
+  }
+  ingestWarningOpen.value = true;
+}
+
+function acknowledgeIngestWarning() {
+  const assetId = selectedAsset.value?.asset_id;
+  if (assetId) {
+    try {
+      sessionStorage.setItem(ingestWarningStorageKey(assetId), "1");
+    } catch {
+      /* ignore */
+    }
+  }
+  ingestWarningOpen.value = false;
+}
+
+function openRecordSourceWarning(record: CorpusRecord) {
+  selectRecord(record);
+  recordSourceWarningOpen.value = true;
+}
 const evidenceBlockIds = computed(() => {
   if (!selectedRecord.value) return new Set<string>();
   if (selectedEvidenceField.value) {
@@ -1668,6 +1702,7 @@ async function upload(file?: File | null) {
     const asset = await pdfCorpusApi.uploadAsset(file, "auto");
     await refreshAssets();
     selectedAssetId.value = asset.asset_id;
+    maybeOpenIngestWarning(asset);
     setMessage(
       i18n.tf(
         "pdf_corpus.source_ingested",
@@ -3249,6 +3284,13 @@ watch(selectedAssetId, () => {
   if (selectedAssetId.value) void refreshBuilds();
 });
 watch(
+  selectedAsset,
+  (asset) => {
+    maybeOpenIngestWarning(asset);
+  },
+  { immediate: true },
+);
+watch(
   () => route.query.build,
   async (value) => {
     const buildId = String(value || "");
@@ -4588,6 +4630,17 @@ onBeforeUnmount(() => {
                       }}</small></span
                     >
                   </button>
+                  <button
+                    v-if="recordHasSourceWarning(record)"
+                    type="button"
+                    class="record-source-warn"
+                    :aria-label="
+                      i18n.t('pdf_corpus.source_warning_icon', 'Source extraction warning')
+                    "
+                    @click.stop="openRecordSourceWarning(record)"
+                  >
+                    <AppIcon name="warning" />
+                  </button>
                 </div>
                 <div v-if="recordsLoading && !reviewHydrated" class="rail-empty" role="status">
                   {{ i18n.t("pdf_corpus.loading_records", "Loading generated records…") }}
@@ -4680,13 +4733,6 @@ onBeforeUnmount(() => {
                       </button>
                     </div>
                   </header>
-                  <CorpusSourceIssuePanel
-                    v-if="selectedRecord.source_quality_issues?.length"
-                    :issues="selectedRecord.source_quality_issues"
-                    interactive
-                    @edit-text="beginTextEdit"
-                    @open-source="reviewInspectorTab = 'source'"
-                  />
                   <aside
                     v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
                     class="review-reason touchup-review-notice"
@@ -5508,6 +5554,24 @@ onBeforeUnmount(() => {
       @close="sourceTranscriptionOpen = false"
       @page-change="(page) => (selectedPdfPage = page)"
       @save-text="saveSourceTranscription"
+    />
+    <CorpusSourceQualityDialog
+      :open="ingestWarningOpen"
+      :extraction-noise="selectedAsset?.extraction_noise"
+      @close="acknowledgeIngestWarning"
+    />
+    <CorpusSourceQualityDialog
+      :open="recordSourceWarningOpen && Boolean(selectedRecord?.source_quality_issues?.length)"
+      :issues="selectedRecord?.source_quality_issues"
+      @close="recordSourceWarningOpen = false"
+      @edit-text="
+        recordSourceWarningOpen = false;
+        beginTextEdit();
+      "
+      @open-source="
+        recordSourceWarningOpen = false;
+        reviewInspectorTab = 'source';
+      "
     />
     <UiDialog
       v-if="schemaEditorOpen"
@@ -7108,9 +7172,29 @@ summary:focus-visible {
 
 .record-row-wrap {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
   align-items: stretch;
   border-bottom: 1px solid var(--line);
+}
+.record-source-warn {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tone-warn-fg);
+  cursor: pointer;
+}
+.record-source-warn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.record-source-warn svg {
+  width: 18px;
+  height: 18px;
 }
 .record-row-wrap .record-row {
   border-bottom: 0;

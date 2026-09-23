@@ -145,6 +145,7 @@ from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 from .reviewer_context import current_reviewer
 from .sentence_boundaries import snap_boundaries_to_sentences
+from .source_quality import assess_extracted_source, page_source_quality_report
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
     TEXT_NOISE_LLM_PROMPT,
@@ -871,7 +872,7 @@ class PdfCorpusRepository:
         meta = _json_read(self.asset_meta_path(asset_id))
         if not isinstance(meta, dict):
             raise KeyError(asset_id)
-        return self._with_start_inference(meta)
+        return self._with_extraction_quality(self._with_start_inference(meta))
 
     def _with_start_inference(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Assets extracted before the inference existed get it the first time they are read, and keep it."""
@@ -897,17 +898,37 @@ class PdfCorpusRepository:
         for path in sorted((self.root / "assets").glob("pdf-*.json"), reverse=True):
             item = _json_read(path)
             if isinstance(item, dict):
-                items.append(self._with_start_inference(item))
+                items.append(self._with_extraction_quality(self._with_start_inference(item)))
         return items
 
-    def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:
-        self.get_asset(asset_id)
+    def _load_block_rows(self, asset_id: str) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
-        with self.asset_blocks_path(asset_id).open("r", encoding="utf-8") as handle:
+        path = self.asset_blocks_path(asset_id)
+        if not path.exists():
+            return blocks
+        with path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if line.strip():
                     blocks.append(json.loads(line))
         return blocks
+
+    def _with_extraction_quality(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Score extraction quality when the PDF is first loaded, including older assets."""
+        if (isinstance(meta.get("extraction_noise"), dict) and isinstance(meta.get("source_quality"), dict)) or not meta.get("asset_id"):
+            return meta
+        asset_id = str(meta["asset_id"])
+        try:
+            quality = assess_extracted_source(self._load_block_rows(asset_id), meta.get("pages") or [])
+            meta.update(quality)
+            with self._lock:
+                _json_write(self.asset_meta_path(asset_id), meta)
+        except Exception:  # noqa: BLE001,S110 - quality must never make an asset unreadable
+            return meta
+        return meta
+
+    def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:
+        self.get_asset(asset_id)
+        return self._load_block_rows(asset_id)
 
     def update_page_labels(self, asset_id: str, labels: dict[int, str | None]) -> dict[str, Any]:
         """Apply explicit scholarly page-label overrides to a source asset.
@@ -5128,7 +5149,7 @@ CURRENT REVIEWED RECORD TEXT:
         except (TypeError, ValueError):
             threshold = float(DEFAULT_NOISE_THRESHOLD)
         threshold = max(0.0, min(100.0, threshold))
-        annotate_text_noise(records, pages=pages, threshold=threshold)
+        self._attach_ingest_noise(records, request, pages, threshold)
         if request.get("llm_assess_text_noise"):
             self._llm_text_noise_pass(build_id, records, request, threshold)
         blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
@@ -5204,74 +5225,53 @@ CURRENT REVIEWED RECORD TEXT:
             )
         return trash_quality
 
+    def _attach_ingest_noise(
+        self,
+        records: list[dict[str, Any]],
+        request: dict[str, Any],
+        pages: list[dict[str, Any]] | None,
+        threshold: float,
+    ) -> None:
+        """Copy page scores computed at PDF ingest onto records; do not rescore text here."""
+        asset_id = str(request.get("asset_id") or "")
+        extraction_noise: dict[str, Any] | None = None
+        if asset_id:
+            try:
+                extraction_noise = self.repo.get_asset(asset_id).get("extraction_noise")
+            except Exception:  # noqa: BLE001
+                extraction_noise = None
+        page_rows = {
+            int(item.get("page") or 0): item
+            for item in ((extraction_noise or {}).get("pages") or [])
+            if int(item.get("page") or 0) > 0
+        }
+        if not page_rows:
+            annotate_text_noise(records, pages=pages, threshold=threshold)
+            return
+        unmatched: list[dict[str, Any]] = []
+        for record in records:
+            rec_pages = [int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int)]
+            hits = [page_rows[page] for page in rec_pages if page in page_rows]
+            if not hits:
+                unmatched.append(record)
+                continue
+            best = max(hits, key=lambda item: float(item.get("score") or 0))
+            record["text_noise"] = {
+                "score": best.get("score"),
+                "deterministic_score": best.get("score"),
+                "raster_score": None,
+                "threshold": threshold,
+                "unusable": bool(best.get("unusable")),
+                "reasons": list(best.get("reasons") or []),
+                "method": "ingest_page",
+                "effective_dpi": best.get("effective_dpi"),
+            }
+        if unmatched:
+            annotate_text_noise(unmatched, pages=pages, threshold=threshold)
+
     @staticmethod
     def _source_quality_report(blocks: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-        """Detect extraction problems before asking an LLM to interpret damaged text.
-
-        This is intentionally conservative: sparse pages are warnings, while only
-        strong corruption signals (replacement/control characters) block automatic
-        scholarly enrichment for records touching the affected page.
-        """
-        by_page: dict[int, list[str]] = {}
-        methods: dict[int, Counter[str]] = {}
-        page_info = {int(item.get("pdf_page") or 0): item for item in (pages or []) if int(item.get("pdf_page") or 0) > 0}
-        for block in blocks:
-            try:
-                page = int(block.get("page") or 0)
-            except (TypeError, ValueError):
-                continue
-            if page < 1:
-                continue
-            text = unicodedata.normalize("NFC", str(block.get("text") or ""))
-            by_page.setdefault(page, []).append(text)
-            methods.setdefault(page, Counter())[str(block.get("extraction_method") or "unknown")] += 1
-        issues: list[dict[str, Any]] = []
-        blocking_pages: list[int] = []
-        warning_pages: list[int] = []
-        all_pages = sorted(set(by_page) | set(page_info))
-        for page in all_pages:
-            parts = by_page.get(page, [])
-            text = "\n".join(parts)
-            chars = len(text)
-            replacement = text.count("\ufffd")
-            controls = sum(1 for ch in text if unicodedata.category(ch) == "Cc" and ch not in "\n\r\t")
-            printable = sum(1 for ch in text if not ch.isspace())
-            replacement_ratio = replacement / max(1, printable)
-            severity = "ok"
-            codes: list[str] = []
-            if replacement >= 2 and replacement_ratio >= 0.005:
-                severity = "blocking"; codes.append("replacement_characters")
-            if controls:
-                severity = "blocking"; codes.append("control_characters")
-            if chars < 20:
-                if severity != "blocking": severity = "warning"
-                codes.append("very_low_text_density")
-            if not parts and int((page_info.get(page) or {}).get("image_count") or 0) > 0:
-                if severity != "blocking": severity = "warning"
-                codes.append("image_only_page")
-            if codes:
-                issue = {
-                    "page": page, "severity": severity, "codes": codes,
-                    "characters": chars, "replacement_characters": replacement,
-                    "control_characters": controls, "extraction_methods": dict(methods.get(page) or {}),
-                }
-                issues.append(issue)
-                (blocking_pages if severity == "blocking" else warning_pages).append(page)
-        image_only_pages = {
-            int(issue["page"])
-            for issue in issues
-            if "image_only_page" in (issue.get("codes") or [])
-        }
-        return {
-            "valid_for_enrichment": not blocking_pages,
-            "page_count": len(all_pages),
-            "blocking_page_count": len(blocking_pages),
-            "warning_page_count": len(warning_pages),
-            "image_only_page_count": len(image_only_pages),
-            "blocking_pages": blocking_pages,
-            "warning_pages": warning_pages,
-            "issues": issues,
-        }
+        return page_source_quality_report(blocks, pages)
 
     @staticmethod
     def _trash_quality_report(records: list[dict[str, Any]], source_quality: dict[str, Any] | None = None) -> dict[str, Any]:

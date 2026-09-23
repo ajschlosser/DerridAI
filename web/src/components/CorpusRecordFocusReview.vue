@@ -4,12 +4,14 @@ import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
+import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
+import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
@@ -70,6 +72,7 @@ const editingText = ref(false);
 const textDraft = ref("");
 const resolveSourceIssues = ref(false);
 const cleanupOpen = ref(false);
+const sourceIssueOpen = ref(false);
 const sliceOpen = ref(false);
 const tabOrder = ["metadata", "evidence", "source"] as const;
 const state = computed(
@@ -309,6 +312,15 @@ watch(
             <span v-if="unresolved.length" class="unresolved-badge"
               >{{ unresolved.length }}
               {{ i18n.t("pdf_corpus.unresolved_fields", "unresolved fields") }}</span
+            ><button
+              v-if="record.source_quality_issues?.length"
+              class="source-warn-icon"
+              type="button"
+              :aria-label="i18n.t('pdf_corpus.source_warning_icon', 'Source extraction warning')"
+              @click="sourceIssueOpen = true"
+            >
+              <AppIcon name="warning" />
+            </button
             ><button class="btn" type="button" @click="emit('previewJsonl')" :disabled="busy">
               {{ i18n.t("pdf_corpus.preview_jsonl", "Preview JSONL") }}</button
             ><button
@@ -325,11 +337,6 @@ watch(
             </button>
           </div>
         </div>
-        <CorpusSourceIssuePanel
-          v-if="record.source_quality_issues?.length"
-          class="focus-source-issue"
-          :issues="record.source_quality_issues"
-        />
         <div
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
           class="touchup-proposal"
@@ -648,6 +655,19 @@ watch(
         }
       "
     />
+    <CorpusSourceQualityDialog
+      :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
+      :issues="record.source_quality_issues"
+      @close="sourceIssueOpen = false"
+      @edit-text="
+        sourceIssueOpen = false;
+        beginTextEdit();
+      "
+      @open-source="
+        sourceIssueOpen = false;
+        tab = 'source';
+      "
+    />
   </section>
 </template>
 
@@ -788,13 +808,26 @@ watch(
   align-items: center;
   flex-wrap: wrap;
 }
+.source-warn-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tone-warn-border);
+  border-radius: 10px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  cursor: pointer;
+}
+.source-warn-icon svg {
+  width: 18px;
+  height: 18px;
+}
 .unresolved-badge {
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
-}
-.focus-source-issue {
-  max-width: 86ch;
-  margin: 18px auto 0;
 }
 .focus-record-text {
   max-width: 78ch;

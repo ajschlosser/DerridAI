@@ -31,6 +31,39 @@ export interface PdfAsset {
     deterministic_region_type?: string;
     thread_ids?: string[];
   }>;
+  source_quality?: {
+    valid_for_enrichment?: boolean;
+    page_count?: number;
+    blocking_page_count?: number;
+    warning_page_count?: number;
+    image_only_page_count?: number;
+    blocking_pages?: number[];
+    warning_pages?: number[];
+    issues?: Array<{
+      page?: number;
+      severity?: string;
+      codes?: string[];
+      characters?: number;
+      replacement_characters?: number;
+      control_characters?: number;
+      extraction_methods?: Record<string, number>;
+    }>;
+  };
+  extraction_noise?: {
+    page_count?: number;
+    unusable_page_count?: number;
+    unusable_page_ratio?: number;
+    median_noise?: number | null;
+    threshold?: number;
+    exceeds_threshold?: boolean;
+    pages?: Array<{
+      page?: number;
+      score?: number;
+      unusable?: boolean;
+      reasons?: string[];
+      effective_dpi?: number | null;
+    }>;
+  };
 }
 
 export interface DocumentLayoutPlan {
