@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import tempfile
 import zipfile
@@ -36,6 +37,8 @@ from .content_filter import (
 )
 from .content_policy_generation import generate_policy_for_installed_language
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
+from .corpus_review_state import _queue_counts
+from .corpus_reviewer_helpers import _present_for_reviewer
 from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
@@ -156,11 +159,12 @@ def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
     product rule that new functionality is admin-only by default.
     """
     method = method.upper()
-    if path in {"/api/health", "/api/config"} and method == "GET":
+    # Health is needed by the researcher workspace, but the full configuration
+    # endpoint is an administrator surface. The health response itself is
+    # projected for non-admins in health().
+    if path == "/api/health" and method == "GET":
         return True
-    if path.startswith("/api/i18n/languages") and method == "GET":
-        if "/content-policy" in path:
-            return False
+    if _is_public_language_route(method, path):
         return role_has_capability(role, "i18n.read")
     if path == "/api/i18n/content-policy" and method == "GET":
         return role_has_capability(role, "i18n.read")
@@ -170,20 +174,22 @@ def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
         return role_has_capability(role, "annotations.read")
     if path == "/api/annotations" and method == "POST":
         return role_has_capability(role, "annotations.write")
-    if path.startswith("/api/annotations/") and method == "DELETE":
+    if method == "DELETE" and re.fullmatch(r"/api/annotations/\d+", path):
         return role_has_capability(role, "annotations.write")
     if path == "/api/stores" and method == "GET":
         return role_has_capability(role, "corpus.read")
     if path.startswith("/api/stores/"):
-        parts = [part for part in path.split("/") if part]
-        if method == "GET" and "export" not in parts and role_has_capability(role, "corpus.read"):
-            if len(parts) == 3:
+        parts = path.strip("/").split("/")
+        if method == "GET" and role_has_capability(role, "corpus.read"):
+            # Keep this aligned with the read-only corpus routes. In particular,
+            # don't let a future nested admin route inherit access from a prefix.
+            if len(parts) == 3 and parts[2]:
+                return True  # /api/stores/{store_name}
+            if len(parts) == 4 and parts[2] and parts[3] in {"records", "works"}:
                 return True
-            if len(parts) == 4 and parts[3] in {"records", "works"}:
-                return True
-            if len(parts) >= 5 and parts[3] == "records" and parts[4] != "status":
-                return True
-        if method == "POST" and len(parts) == 4 and parts[3] == "search":
+            if len(parts) >= 5 and parts[2] and parts[3] == "records" and parts[4]:
+                return True  # record IDs use a path converter and may contain slashes
+        if method == "POST" and len(parts) == 4 and parts[2] and parts[3] == "search":
             return role_has_capability(role, "corpus.search")
     if path == "/api/jobs" and method == "GET":
         return role_has_capability(role, "rag.jobs.own")
@@ -206,6 +212,14 @@ def _non_admin_route_allowed(role: str, path: str, method: str) -> bool:
     return False
 
 
+def _is_public_language_route(method: str, path: str) -> bool:
+    """Match only public dictionary reads; keep neighboring API routes private."""
+    return method.upper() == "GET" and (
+        path == "/api/i18n/languages"
+        or re.fullmatch(r"/api/i18n/languages/[^/]+", path) is not None
+    )
+
+
 @app.middleware("http")
 async def authentication_middleware(
     request: Request,
@@ -213,13 +227,7 @@ async def authentication_middleware(
 ) -> Response:
     path = request.url.path
     public_auth = {"/api/auth/status", "/api/auth/bootstrap", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
-    public_i18n = request.method.upper() == "GET" and (
-        path == "/api/i18n/languages"
-        or (
-            path.startswith("/api/i18n/languages/")
-            and "/content-policy" not in path
-        )
-    )
+    public_i18n = _is_public_language_route(request.method, path)
     if not path.startswith("/api/") or path == "/api/live" or path in public_auth or public_i18n:
         return await call_next(request)
     user = auth_store.user_for_session(request.cookies.get(SESSION_COOKIE))
@@ -246,7 +254,7 @@ def scrub_second_opinions(node: Any) -> bool:
     if isinstance(node, dict):
         if "record_id" in node and isinstance(node.get("second_opinion"), dict):
             before = json.dumps(node, default=str)
-            pdf_corpus_builds._present_for_reviewer(node)
+            _present_for_reviewer(node)
             hidden = json.dumps(node, default=str) != before
         for value in node.values():
             hidden = scrub_second_opinions(value) or hidden
@@ -735,8 +743,24 @@ def live() -> dict[str, Any]:
 
 
 @app.get("/api/health")
-def health() -> dict[str, Any]:
+def health(request: Request) -> dict[str, Any]:
     chroma = store.health()
+    if _request_user(request).role != "admin":
+        # Researchers need availability and collection counts to load the
+        # workspace. Paths, endpoints, tenant/database names, error details,
+        # provider configuration, and internal generation defaults are admin
+        # diagnostics and should stay server-side.
+        public_chroma = {
+            key: chroma.get(key)
+            for key in ("available", "mode", "heartbeat_ok", "collection_count")
+            if key in chroma
+        }
+        return {
+            "ok": True,
+            "version": APP_VERSION,
+            "git_commit": APP_GIT_COMMIT or None,
+            "chroma": public_chroma,
+        }
     ollama = llm_status("ollama")
     return {
         "ok": True,
@@ -779,7 +803,8 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/config")
-def config() -> dict[str, Any]:
+def config(request: Request) -> dict[str, Any]:
+    _require_admin(request)
     return {
         "version": APP_VERSION,
         "git_commit": APP_GIT_COMMIT or None,
@@ -2285,7 +2310,7 @@ def patch_pdf_corpus_record_metadata(
             return {
                 "record": record,
                 "build": pdf_corpus_builds.repo.get_build(build_id),
-                "queue_counts": pdf_corpus_builds._queue_counts(records),
+                "queue_counts": _queue_counts(records),
             }
         return record
     except KeyError as exc:

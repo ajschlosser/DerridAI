@@ -13,6 +13,7 @@ import { expandPermissions, samePermissions } from "../domain/roles";
 import { useI18nStore } from "../stores/i18n";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
+import RoleSelector, { type RoleChoice } from "../components/RoleSelector.vue";
 import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
@@ -33,6 +34,7 @@ const users = ref<AuthUser[]>([]);
 const selectedRole = ref<UserRole>("researcher");
 const permissions = ref<string[]>([]);
 const loading = ref(true);
+const dataCurrent = ref(false);
 const saving = ref(false);
 const creating = ref(false);
 const deleting = ref(false);
@@ -68,6 +70,14 @@ const saveStatus = computed<SaveStatus>(() => {
 });
 const assignedCount = computed(
   () => users.value.filter((user) => user.role === selectedRole.value).length,
+);
+const roleChoices = computed<RoleChoice[]>(() =>
+  roles.value.map((item) => ({
+    id: item.id,
+    name: displayName(item),
+    kind: roleKind(item),
+    assigned: assignedCountLabel(users.value.filter((user) => user.role === item.id).length),
+  })),
 );
 
 function announce(message: string) {
@@ -117,15 +127,16 @@ function applyRole(id: UserRole) {
 
 async function refresh(preferred?: string) {
   loading.value = true;
+  // Account assignments are part of the role-delete safety check. Treat both
+  // datasets as one snapshot so a partial request can never imply zero users.
+  dataCurrent.value = false;
   error.value = "";
   try {
-    const [roleData, userData] = await Promise.all([
-      authApi.listRoles(),
-      authApi.listUsers().catch(() => ({ users: [] as AuthUser[] })),
-    ]);
+    const [roleData, userData] = await Promise.all([authApi.listRoles(), authApi.listUsers()]);
     roles.value = roleData.roles;
     capabilities.value = roleData.capabilities;
     users.value = userData.users;
+    dataCurrent.value = true;
     const next = preferred || selectedRole.value;
     const fallback =
       roles.value.find((item) => item.id === "researcher")?.id ||
@@ -154,6 +165,7 @@ function requestSelect(id: UserRole) {
 }
 
 async function save() {
+  if (!dataCurrent.value) return false;
   if (role.value?.locked || !dirty.value) return true;
   saving.value = true;
   error.value = "";
@@ -179,6 +191,7 @@ function discard() {
 }
 
 function openCreate() {
+  if (!dataCurrent.value) return;
   roleName.value = "";
   roleDescription.value = "";
   cloneFrom.value = templates.value.some((item) => item.id === "researcher")
@@ -188,6 +201,7 @@ function openCreate() {
 }
 
 async function createRole() {
+  if (!dataCurrent.value) return;
   if (roleName.value.trim().length < 2) return;
   creating.value = true;
   error.value = "";
@@ -211,6 +225,7 @@ async function createRole() {
 }
 
 function openDelete() {
+  if (!dataCurrent.value) return;
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   if (assignedCount.value) {
@@ -232,6 +247,7 @@ function openDelete() {
 }
 
 async function deleteSelected() {
+  if (!dataCurrent.value) return;
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   deleting.value = true;
@@ -352,6 +368,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           variant="primary"
           icon="plus"
           :label="i18n.t('roles.create', 'Create role')"
+          :disabled="!dataCurrent"
           @click="openCreate"
         />
       </template>
@@ -370,40 +387,14 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       @action="refresh()"
     />
     <div v-else class="roles-layout">
-      <UiCard
-        as="div"
-        class="roles-list"
-        role="navigation"
-        :padded="false"
-        :aria-label="i18n.t('roles.role_list', 'Roles')"
-      >
-        <p class="roles-list-head">{{ i18n.t("roles.role_list", "Roles") }}</p>
-        <div
-          class="roles-list-items"
-          role="listbox"
-          :aria-label="i18n.t('roles.role_list', 'Roles')"
-        >
-          <button
-            v-for="item in roles"
-            :key="item.id"
-            type="button"
-            class="role-list-item"
-            :class="{ active: selectedRole === item.id }"
-            role="option"
-            :aria-selected="selectedRole === item.id"
-            @click="requestSelect(item.id)"
-          >
-            <span>
-              <b>{{ displayName(item) }}</b>
-              <small
-                >{{ roleKind(item) }} ·
-                {{
-                  assignedCountLabel(users.filter((user) => user.role === item.id).length)
-                }}</small
-              >
-            </span>
-          </button>
-        </div>
+      <UiCard as="div" class="roles-list" :padded="false">
+        <RoleSelector
+          :label="i18n.t('roles.role_list', 'Roles')"
+          :choices="roleChoices"
+          :model-value="selectedRole"
+          :disabled="!dataCurrent"
+          @update:model-value="requestSelect"
+        />
       </UiCard>
       <UiCard
         as="section"
@@ -428,7 +419,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               v-if="!role.locked && !role.builtin"
               variant="danger"
               :label="i18n.t('roles.delete', 'Delete role')"
-              :disabled="assignedCount > 0"
+              :disabled="!dataCurrent || assignedCount > 0"
               :disabled-reason="
                 i18n.t(
                   'roles.cannot_delete_assigned',
@@ -440,7 +431,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <UiButton
               v-if="!role.locked"
               :label="i18n.t('roles.discard', 'Discard changes')"
-              :disabled="!dirty || saving"
+              :disabled="!dataCurrent || !dirty || saving"
               @click="discard"
             />
             <UiButton
@@ -448,7 +439,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               variant="primary"
               icon="check"
               :label="saving ? i18n.t('ui.saving', 'Saving…') : i18n.t('ui.save', 'Save')"
-              :disabled="saving || !dirty"
+              :disabled="!dataCurrent || saving || !dirty"
               @click="save"
             />
           </div>
@@ -494,7 +485,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           <RolePermissionMatrix
             v-model="permissions"
             :capabilities="capabilities"
-            :disabled="Boolean(role?.locked)"
+            :disabled="!dataCurrent || Boolean(role?.locked)"
             :filter="permissionFilter"
           />
         </div>
@@ -635,53 +626,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   position: sticky;
   top: 12px;
 }
-.roles-list-head {
-  margin: 0;
-  padding: 14px 14px 6px;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.roles-list-items {
-  display: grid;
-  gap: 4px;
-  padding: 0 8px 10px;
-}
-.role-list-item {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-control);
-  padding: 11px 12px;
-  text-align: left;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.role-list-item:hover {
-  background: var(--surface-hover);
-}
-.role-list-item.active {
-  background: var(--surface-selected);
-  color: var(--accent-fg);
-}
-.role-list-item span {
-  display: grid;
-  gap: 2px;
-}
-.role-list-item b {
-  font-size: 0.875rem;
-}
-.role-list-item small {
-  font-size: 0.8125rem;
-  color: var(--text-tertiary);
-  line-height: 1.4;
-}
-.role-list-item:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
 .role-editor-head {
   display: flex;
   justify-content: space-between;
@@ -736,27 +680,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   }
   .roles-list {
     position: static;
-  }
-  .roles-list-items {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 560px) {
-  .roles-list-items {
-    grid-template-columns: 1fr;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .roles-page * {
-    transition: none !important;
-  }
-}
-@media (forced-colors: active) {
-  .role-list-item:focus-visible {
-    outline-color: Highlight;
-  }
-  .role-list-item.active {
-    outline: 1px solid Highlight;
   }
 }
 </style>

@@ -11,13 +11,15 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 # Importing app.main pulls in ChromaDB; stub it and put api/ on the path so this file works
 # on its own (pytest collects files alphabetically, so it cannot rely on an earlier test).
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
-from app.main import _non_admin_route_allowed  # noqa: E402
+from app import main  # noqa: E402
+from app.main import _is_public_language_route, _non_admin_route_allowed  # noqa: E402
 
 
 def test_researcher_can_load_hashed_content_policy_mirror():
@@ -35,3 +37,79 @@ def test_researcher_cannot_read_or_write_plaintext_locale_policies():
     assert _non_admin_route_allowed("researcher", "/api/i18n/languages/en-US/content-policy", "PUT") is False
     assert _non_admin_route_allowed("researcher", "/api/i18n/languages", "GET") is True
     assert _non_admin_route_allowed("researcher", "/api/i18n/languages/en-US", "GET") is True
+
+
+def test_researcher_route_allowlist_matches_only_intended_resource_shapes(monkeypatch):
+    """A permitted route prefix cannot make a neighboring future route public."""
+    monkeypatch.setattr(main, "role_has_capability", lambda _role, _capability: True)
+
+    assert _non_admin_route_allowed("researcher", "/api/config", "GET") is False
+    assert _is_public_language_route("GET", "/api/i18n/languages/en-US") is True
+    assert (
+        _is_public_language_route(
+            "GET", "/api/i18n/languages/en-US/content-policy/extra"
+        )
+        is False
+    )
+    assert _is_public_language_route("PUT", "/api/i18n/languages/en-US") is False
+    assert _non_admin_route_allowed("researcher", "/api/i18n/languages-extra", "GET") is False
+    assert (
+        _non_admin_route_allowed(
+            "researcher", "/api/i18n/languages/en-US/content-policy/extra", "GET"
+        )
+        is False
+    )
+    assert (
+        _non_admin_route_allowed("researcher", "/api/annotations/12/restore", "DELETE")
+        is False
+    )
+    assert (
+        _non_admin_route_allowed("researcher", "/api/stores/Corpus/admin/secret", "GET")
+        is False
+    )
+    assert (
+        _non_admin_route_allowed("researcher", "/api/stores/Corpus/export", "GET")
+        is False
+    )
+    assert (
+        _non_admin_route_allowed(
+            "researcher", "/api/stores/Corpus/records/id/extra", "GET"
+        )
+        is True
+    )
+
+
+def test_researcher_health_response_omits_internal_diagnostics(monkeypatch):
+    """Researcher health retains workspace availability without revealing infra config."""
+    monkeypatch.setattr(
+        main.store,
+        "health",
+        lambda: {
+            "available": True,
+            "mode": "http",
+            "heartbeat_ok": True,
+            "collection_count": 3,
+            "url": "https://internal.example",
+            "tenant": "private-tenant",
+            "database": "private-db",
+            "error": "internal diagnostic",
+            "identity": "private-identity",
+        },
+    )
+
+    def unexpected_llm_status(*_args, **_kwargs):
+        raise AssertionError("admin diagnostics queried")
+
+    monkeypatch.setattr(main, "llm_status", unexpected_llm_status)
+    request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(role="researcher")))
+
+    response = main.health(request)
+
+    assert response["chroma"] == {
+        "available": True,
+        "mode": "http",
+        "heartbeat_ok": True,
+        "collection_count": 3,
+    }
+    assert "ollama" not in response
+    assert "chroma_path" not in response

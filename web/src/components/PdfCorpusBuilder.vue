@@ -76,6 +76,7 @@ import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import {
   assetHasExtractionWarning,
+  firstRecordWithSourceWarning,
   ingestWarningStorageKey,
   recordHasSourceWarning,
 } from "../domain/sourceQuality";
@@ -110,6 +111,7 @@ const selectedReviewProviderId = ref("");
 const selectedAssetId = ref("");
 const ingestWarningOpen = ref(false);
 const recordSourceWarningOpen = ref(false);
+const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
 const currentBuild = ref<CorpusBuild | null>(null);
 const records = ref<CorpusRecord[]>([]);
@@ -1552,6 +1554,15 @@ async function refreshRecords(reset = false, preferredId = "") {
     records.value = result.items;
     recordTotal.value = result.total;
     reviewHydrated.value = true;
+    const firstSourceProblem = firstRecordWithSourceWarning(result.items);
+    if (
+      firstSourceProblem &&
+      sourceProblemDialogBuildId.value !== selectedBuildId.value &&
+      !recordSourceWarningOpen.value
+    ) {
+      sourceProblemDialogBuildId.value = selectedBuildId.value;
+      openRecordSourceWarning(firstSourceProblem);
+    }
     if (result.total > 0 || expected === 0)
       hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, expected, result.total);
     const wanted = preferredId || selectedRecordId.value;
@@ -3393,6 +3404,9 @@ watch(
 );
 watch(selectedAssetId, () => {
   if (selectedAssetId.value) void refreshBuilds();
+});
+watch(selectedBuildId, () => {
+  sourceProblemDialogBuildId.value = "";
 });
 watch(
   selectedAsset,

@@ -89,11 +89,11 @@ def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_re
     """
     live={'record_id':'r1','text':'reviewed','speaker':'Human','human_touched_fields':['speaker'],'metadata_field_status':{'speaker':{'status':'human_confirmed'}},'metadata_stage_status':{},'metadata_execution_ledger':{}}
     worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'model_inferred'},'target':{'status':'model_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
-    merged=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(live,worker)
+    merged=cb._merge_enrichment_snapshot(live,worker)
     assert merged['speaker']=='Human'
     assert merged['target']=='Kant'
     frozen={**live,'human_touched_fields':['__text__'],'target':'Human target'}
-    merged2=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(frozen,worker)
+    merged2=cb._merge_enrichment_snapshot(frozen,worker)
     assert merged2['target']=='Human target'
     assert merged2['metadata_stage_status']['discourse']=='skipped'
 

@@ -72,7 +72,7 @@ def _build(repo: cb.PdfCorpusRepository, *, blocks: int = 30):
 def test_parse_json_robust_handles_common_model_wrappers_and_trailing_commas():
     """Extract the JSON object from a fenced reply with trailing commas and extra text."""
     raw = '''Here is the requested object:\n```json\n{"boundaries": [{"after_block_id": "p001-b001", "decision": "keep", "confidence": 0.9, "reason": "continuous", "change": {},},],}\n```\nextra'''
-    parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
+    parsed = cb._parse_json_robust(raw)
     assert parsed["boundaries"][0]["after_block_id"] == "p001-b001"
 
 
@@ -163,7 +163,7 @@ def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch,
 def test_parse_json_robust_accepts_safe_python_literal_objects_from_local_models():
     """Accept a Python-style dict ('single quotes', True, None) from a local model."""
     raw = "{'boundaries': [], 'ok': True, 'note': None}"
-    parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
+    parsed = cb._parse_json_robust(raw)
     assert parsed == {"boundaries": [], "ok": True, "note": None}
 
 
@@ -227,7 +227,7 @@ def test_execution_budget_rejects_impossible_context_before_build():
     """
     request={"generation":{"num_ctx":4096},"stage_limits":{"segmentation_window_tokens":5000,"segmentation_num_predict":1200}}
     try:
-        cb.PdfCorpusBuildManager._validate_execution_budget(request)
+        cb._validate_execution_budget(request)
     except ValueError as exc:
         assert "context is too small" in str(exc)
     else:
@@ -328,7 +328,7 @@ def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(
     assert queued["retrying_segmentation"] is True
     assert queued["segmentation_blocked"] is True  # preserved until the retry resolves it
 
-    operation = manager._operation_from_build(queued)
+    operation = cb._operation_from_build(queued)
     assert operation["status"] == "queued"
     assert operation["raw_status"] == "queued"
     assert operation["stage_detail"] == "Retrying 1 unresolved segmentation region(s)"

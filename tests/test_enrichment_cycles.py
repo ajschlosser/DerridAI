@@ -34,7 +34,7 @@ def test_enrichment_scope_can_target_explicit_records() -> None:
         {"record_id": "r2", "review_disposition": "accepted"},
         {"record_id": "r3", "review_disposition": "pending"},
     ]
-    assert cb.PdfCorpusBuildManager._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
+    assert cb._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
 
 
 def test_trash_quality_ratio_is_deterministic() -> None:
@@ -42,7 +42,7 @@ def test_trash_quality_ratio_is_deterministic() -> None:
         {"record_id": "good", "text": "A sufficiently legible scholarly passage with normal words."},
         {"record_id": "bad", "text": "\ufffd\ufffd\nx\nx"},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["deterministic"] is True
     assert report["trash_record_count"] == 1
     assert report["exceeds_threshold"] is True
@@ -55,7 +55,7 @@ def test_trash_quality_counts_high_text_noise() -> None:
         {"record_id": "ocr", "text": "enough letters here to skip sparse-text heuristics on this row",
          "text_noise": {"score": 72, "threshold": 45, "unusable": True}},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["trash_record_count"] == 1
     assert "high_text_noise" in report["records"][0]["reasons"]
     assert report["median_noise"] == 40.0
@@ -358,7 +358,7 @@ def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path
 
 
 def test_initial_enrichment_operation_marks_the_first_pass_complete():
-    op = cb.PdfCorpusBuildManager._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
+    op = cb._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
     assert op["kind"] == "metadata_enrichment"
     assert op["state"] == "completed"
     assert op["passes_completed"] == 1
@@ -406,7 +406,7 @@ def test_settled_enrichment_reason_is_not_left_as_a_fake_blocker():
         "metadata_review_fields": [],
         "metadata_disputes": [{"field": "stance", "resolved_at": "now"}],
     }
-    cb.PdfCorpusBuildManager._settle_enrichment_review_reason(record)
+    cb._settle_enrichment_review_reason(record)
     assert record["review_reason"] == "Pending human review."
 
 

@@ -35,11 +35,11 @@ def test_source_quality_blocks_corruption_not_unicode():
     Why: enriching garbled text would create confident but meaningless metadata.
     """
     healthy = [{"page": 1, "text": "Hélène Cixous · Édouard Glissant · différance · Łódź · Ελληνικά · 東京", "extraction_method": "native"}]
-    report = cb.PdfCorpusBuildManager._source_quality_report(healthy)
+    report = cb.page_source_quality_report(healthy)
     assert report["valid_for_enrichment"] is True
     assert report["blocking_pages"] == []
     damaged = [{"page": 2, "text": "corrupt � � source text", "extraction_method": "ocr"}]
-    report = cb.PdfCorpusBuildManager._source_quality_report(damaged)
+    report = cb.page_source_quality_report(damaged)
     assert report["valid_for_enrichment"] is False
     assert report["blocking_pages"] == [2]
 
