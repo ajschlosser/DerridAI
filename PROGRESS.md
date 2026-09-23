@@ -237,6 +237,78 @@ tests landed on `master` via other merges since session 9), production build, St
 fresh `master` as `claude/runtime-refactor-23` rather than continuing on a now-merged branch, same pattern as
 session 9.
 
+## Session 11 status (branch `claude/runtime-refactor-24`) -- `legacyCompat.js` audit concluded: keep it
+
+Finished the audit flagged in section B / session 10. **Conclusion: `legacyCompat.js`/`translateLegacyDom` cannot be
+deleted; do not attempt this again without re-reading this note.**
+
+`legacyCompat.js` is not one thing -- most of its exports (`syncColorScheme`, `wireAppearanceMedia`, `applyUiTheme`,
+`applyAppearance`, `setTranslationDictionary`, `tr`, `trf`) are core, actively-used theme/i18n plumbing, unrelated to
+legacy view rendering; only `translateLegacyDom` (plus its private helpers `translateExactUiValue`/
+`translateDynamicUiValue`) was ever a candidate for removal, and even that piece is still load-bearing. It exists to
+translate text in any `v-html`'d markup-generator output that was not itself produced through `tr()`/`i18n.t()` --
+which still exists: `DashboardView.vue`'s metric carousel (`dashboardMetricBody` → `dashboardPieChart`/`lineChart` in
+`recordPresenters.ts`/`dashboardCharts.ts`) is `v-html`-bound and none of the three Vue-owned former-legacy views
+(`DashboardView.vue`, `PdfExplorerSurface.vue`, `ResponseCacheView.vue`) call `translateLegacyDom` themselves --
+French-locale translation of that markup, to the extent it happens at all, depends entirely on one of the ~20
+`renderView()` call sites elsewhere firing while that view is mounted. Deleting `legacyCompat.js` now would silently
+regress French-locale translation for that markup with no test coverage that would catch it (the baseline pins
+`en-US`; no French-locale dashboard-carousel scenario exists).
+
+**A real, separate i18n bug found along the way, not fixed here (out of this session's scope, logged instead):**
+`dashboardPieChart`/`lineChart`/`multiLineChart`'s empty-state text -- `` `${esc(title)} · no data yet` `` -- is a
+hardcoded English literal, never run through `tr()`, in four places across `dashboardCharts.ts` and
+`recordPresenters.ts`. It cannot pick up `translateDynamicUiValue`'s exact-match path either, since the composed
+string (title + " · no data yet") never matches a fixed dictionary value. Fixing it means threading `state`/`tr`
+through these currently-pure chart-rendering functions (`multiLineChart`, `lineChart`, `dashboardPieChart`) and every
+call site -- a real but self-contained follow-up, not attempted here to avoid scope creep on an audit task.
+
+No code changed in this session beyond this investigation; nothing to re-verify or commit for the audit itself.
+
+## Corpus Builder monolith: initial scope against `SPECIFICATION.md` (no code changed yet -- see below)
+
+`api/app/corpus_builder.py` is 8,105 lines, almost all of it one class, `PdfCorpusBuildManager` (~6,800 lines,
+~200 methods: segmentation, boundary detection, metadata assessment, review-state decoration, patch/merge/publish,
+editorial memory, checkpoints, second-opinions, LLM activity tracking). `web/src/components/PdfCorpusBuilder.vue`
+(8,186 lines) is the other largest file in the repo. Both are far larger than any other file and are the natural
+next monolith-decomposition target once the runtime-refactor work (this branch line) is done.
+
+**The domain model is already substantively spec-aligned**, which is the good news: `record_id` (197 uses),
+per-field assertion dicts with `status`/`method`/`confidence`/`reason` keys (matching the spec's FieldAssertion
+shape almost exactly), and an integer `record_revision` counter that increments on authoritative-text and
+human-touch changes (matching the spec's RecordRevision concept, though not its full recommended shape --
+`record_revision` is a bare counter, not an object with its own actor/time/reason/parent-revision fields; those
+appear to live in a separate `metadata_decisions`/undo-history structure instead. Not yet confirmed whether every
+revision-worthy change is captured there.).
+
+**Two naming deviations from the spec's own vocabulary found, both wide-reaching enough that renaming is a real
+decision, not a typo fix:**
+- Spec's assertion-status vocabulary is `deterministic`, `model_inferred`, `human_confirmed`, `human_override`,
+  `unresolved`, `invalid`, `confirmed_absent`. The codebase uses `deterministic`, `human_confirmed`,
+  `human_override`, `unresolved`, `invalid` -- matching -- but `llm_inferred` where the spec says `model_inferred`
+  (27 occurrences in `corpus_builder.py` alone), and `human_confirmed_absent` where the spec says `confirmed_absent`
+  (used in `autonomous.py`, `enrichment_cycles.py`, `corpus_builder.py`, and at least 6 frontend files:
+  `pdfCorpus.ts`, `CorpusFieldOwnershipBadge.vue` and its story, `CorpusEnrichmentChanges.vue`,
+  `CorpusMetadataFieldEditor.stories.ts`, `CorpusRecordFocusReview.stories.ts`,
+  `CorpusMetadataResolutionPanel.stories.ts`).
+- These values are very likely persisted in existing build data (SQLite/on-disk manifests), not just used
+  in-memory. A rename touches backend, frontend, and stored state -- exactly the kind of change AGENTS.md says to
+  version and migrate deliberately, not do as a drive-by rename alongside a decomposition. **Decision needed from
+  the owner: rename to match the spec's exact vocabulary (with a migration for existing persisted builds), or treat
+  `llm_inferred`/`human_confirmed_absent` as an intentional, documented profile extension of the spec's base
+  vocabulary and leave them as-is?** The spec does say "Profiles MAY add others" for statuses, so leaving them is
+  defensible, but the fact that `llm_inferred` has an exact spec synonym (`model_inferred`) rather than being a
+  genuinely new status suggests it was written before the spec settled on that term, not a deliberate profile
+  extension.
+
+**Not yet scoped:** the actual decomposition plan for `PdfCorpusBuildManager`'s ~200 methods into smaller,
+spec-aligned units (e.g. a segmentation module, a metadata-assessment/FieldAssertion module, a review/publish
+module, matching the spec's own section boundaries would be a natural seam to decompose along), and the parallel
+plan for `PdfCorpusBuilder.vue`'s composables/CSS extraction from the earlier session (deferred at the time for a
+PR conflict that has since merged and quieted down). Both need their own dedicated planning pass, the same way the
+runtime-refactor work started with a full read of `pdfExplorerRenderer.ts`/`dashboardRenderer.ts` before any code
+moved -- an 8,000-line file deserves the same care, not a quick pass.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
