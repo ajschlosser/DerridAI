@@ -301,13 +301,81 @@ decision, not a typo fix:**
   genuinely new status suggests it was written before the spec settled on that term, not a deliberate profile
   extension.
 
-**Not yet scoped:** the actual decomposition plan for `PdfCorpusBuildManager`'s ~200 methods into smaller,
-spec-aligned units (e.g. a segmentation module, a metadata-assessment/FieldAssertion module, a review/publish
-module, matching the spec's own section boundaries would be a natural seam to decompose along), and the parallel
-plan for `PdfCorpusBuilder.vue`'s composables/CSS extraction from the earlier session (deferred at the time for a
-PR conflict that has since merged and quieted down). Both need their own dedicated planning pass, the same way the
-runtime-refactor work started with a full read of `pdfExplorerRenderer.ts`/`dashboardRenderer.ts` before any code
-moved -- an 8,000-line file deserves the same care, not a quick pass.
+## Session 12 status (branch `claude/runtime-refactor-25`) -- vocabulary rename done; `PdfCorpusBuildManager` decomposition plan
+
+### Part 1: renamed `llm_inferred` -> `model_inferred`, `human_confirmed_absent` -> `confirmed_absent` (done, committed)
+
+Mechanical rename across 16 source files (`corpus_builder.py`, `autonomous.py`, `enrichment_cycles.py`, both locale
+modules -- including the `pdf_corpus.field_status.llm_inferred`/`pdf_corpus.metadata_field_status.llm_inferred`
+locale *keys*, not just values; the human-readable label text itself, e.g. "LLM inferred", is UI copy and was left
+alone -- `pdfCorpus.ts`, five `Corpus*` components/stories, and four frontend tests) plus 11 backend test files.
+Verified the old strings never appeared inside a prompt sent to a model (status is assigned by our own code after
+receiving a model's raw value, never returned by the model itself), so no prompt-contract version bump was needed
+per AGENTS.md's rule -- this is a pure internal-vocabulary rename, not a change to what a provider is asked to do.
+
+**Existing persisted builds still have the old vocabulary on disk.** Added a lazy, read-time migration
+(`_migrate_status_vocabulary`, next to `_json_read`) that walks any `status`/`source` key and rewrites the two old
+values, following the exact precedent `_with_start_inference` already established for backfilling assets read
+before a field existed. Wired into every read path that returns build/record/checkpoint data:
+`PdfCorpusRepository.get_build`, `list_builds`, `load_records`, `page_records`, and `load_checkpoint`. New
+regression coverage in `tests/test_status_vocabulary_migration.py` (6 tests) writes old-vocabulary data directly to
+disk (bypassing the repository's own write path, the way a real old build actually looks) and asserts every one of
+those five read paths returns the new vocabulary, plus one test that the migration leaves unrelated status-bearing
+values (`human_confirmed`, `human_confirmed_boundary`, `deterministic`) untouched.
+
+Full verification: typecheck, lint, 525 unit tests (up from 520), production build, 437 backend tests (up from 429
+-- the new migration test file), full 131-scenario baseline and 287-test e2e suite (both re-run since this branch
+touches backend files that could theoretically be exercised by the baseline's live-provider-mocked scenarios, even
+though no frontend-visible markup changed).
+
+### Part 2: `PdfCorpusBuildManager` decomposition plan (not yet executed -- for a future session)
+
+`PdfCorpusBuildManager` is one class, ~6,800 lines, 201 methods, with no internal section markers and heavy mutual
+coupling through `self.repo`, `self._update`, `self._chat_json`, and shared build/record dicts passed between
+methods. A structural read of every method name and its surrounding code (not just headers) groups them into the
+following clusters, ordered by size and by how directly each maps to a `SPECIFICATION.md` section -- the same
+"read the whole thing before moving anything" discipline the runtime-refactor work used for
+`pdfExplorerRenderer.ts`/`dashboardRenderer.ts`:
+
+1. **Segmentation** (~1,200 lines: `_segmentation_windows` through `_segment`/`_construct_records`/
+   `_mark_segmentation_review`, plus boundary detection/adjudication/audit and topology normalization/quality). The
+   single largest cluster; maps directly to the spec's "Segmentation" subsection ("An implementation MUST NOT
+   represent an engineering size split as semantic evidence merely because it created a Record boundary").
+2. **Metadata enrichment / FieldAssertion** (~1,100 lines: `_apply_manifest_metadata` through
+   `_reconcile_metadata_results`, `_metadata_source_quality_gate`, `validate_records`, source/trash quality
+   reports). Maps to the spec's "Record Field Classes and Assertions" section; this is also where the assertion
+   `status` vocabulary this session just renamed lives, so it is a natural second step once the rename has soaked.
+3. **Human review and record editing** (~600 lines: `_assert_human_review_available` through `patch_evidence`,
+   `slice_to_neighbor` -- disposition, review decisions, undo/redo, patch text/metadata/evidence). Maps to the
+   spec's "Human review is an authority event" language and to RecordRevision (`_assert_record_revision`,
+   `_push_review_history` already exist as seams).
+4. **Build lifecycle and provider/LLM session management** (~500 lines: `switch_provider_profile`, `create`,
+   `resume`, `confirm_manifest`, second-opinion handling, recheck scheduling, transport retry, LLM call logging,
+   `llm_activity`, autonomous-run start/settle).
+5. **Enrichment reruns** (~650 lines: `retry_incomplete_metadata` through `rerun_metadata`) -- could merge into
+   cluster 2 or stay separate; decide once cluster 2 is actually extracted and its real boundaries are visible.
+6. **Publication and text touchup** (~175 lines: `_validate_publication_record` through `publish`). Smallest
+   cluster; maps to the spec's "Publication and Corpus Interchange" section. Good first-extraction candidate
+   precisely because it is small and low-risk, to prove the extraction pattern before tackling segmentation.
+7. **Operations/job tracking, schema/profile resolution, editorial memory, manifest patching** -- smaller
+   supporting clusters (~150-250 lines each) that the above five depend on; likely become shared helper modules
+   rather than their own domain modules.
+
+**Recommended order: 6, then 1, then 2, then 3, then 4/5/7 as they shake out** -- smallest and most self-contained
+first to establish the extraction pattern (module boundary, how `self.repo`/`self._update`/`self._chat_json` get
+passed in, what the regression-test seam looks like) with the lowest blast radius, before the two largest and most
+interconnected clusters. Each extraction needs, at minimum: a verbatim move (not a rewrite) into its own module, a
+regression test for the extracted surface if one does not already exist, and a full `pytest -q` run before and
+after -- the same discipline `mk_factory.py`/`extract_factory.sh` enforced for the frontend runtime work, though
+those exact scripts are JS/TS-specific and a Python equivalent does not yet exist (worth writing one if this
+becomes a multi-session effort the way the runtime decomposition was).
+
+**Not started in this session; no `corpus_builder.py` structural changes beyond the vocabulary rename above.**
+
+The parallel plan for `PdfCorpusBuilder.vue`'s composables/CSS extraction was already given to the owner in an
+earlier session (phased: composable extraction, then CSS distribution, then template trim) and deferred only for a
+PR conflict that has since merged and quieted down -- it does not need re-planning, just a green light to start,
+independently of the backend plan above (different files, no shared risk).
 
 ## Goal and hard requirements (from the owner)
 
