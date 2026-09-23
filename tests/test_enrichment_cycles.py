@@ -42,7 +42,7 @@ def test_trash_quality_ratio_is_deterministic() -> None:
         {"record_id": "good", "text": "A sufficiently legible scholarly passage with normal words."},
         {"record_id": "bad", "text": "\ufffd\ufffd\nx\nx"},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["deterministic"] is True
     assert report["trash_record_count"] == 1
     assert report["exceeds_threshold"] is True
@@ -55,7 +55,7 @@ def test_trash_quality_counts_high_text_noise() -> None:
         {"record_id": "ocr", "text": "enough letters here to skip sparse-text heuristics on this row",
          "text_noise": {"score": 72, "threshold": 45, "unusable": True}},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["trash_record_count"] == 1
     assert "high_text_noise" in report["records"][0]["reasons"]
     assert report["median_noise"] == 40.0

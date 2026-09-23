@@ -16,7 +16,6 @@ import uuid
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
@@ -102,6 +101,12 @@ from .corpus_publication import (
     serialize_public_record,
     validate_publication_record,
 )
+from .corpus_record_quality import (
+    _metadata_source_quality_gate,
+    _record_extraction_quality_issues,
+    _trash_quality_report,
+    iso_now,
+)
 from .corpus_review_mutations import requeue_record_metadata
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
@@ -176,12 +181,6 @@ from .text_noise import (
 )
 from .text_noise import (
     annotate_records as annotate_text_noise,
-)
-from .text_noise import (
-    median_score as median_text_noise,
-)
-from .text_noise import (
-    threshold_from_records as record_noise_threshold,
 )
 
 SCHEMA_VERSION = "pdf-corpus-v3"
@@ -754,9 +753,6 @@ def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
                     row["review_reason"] = reason
             count += 1
     return count
-
-def iso_now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def corpus_root() -> Path:
@@ -3589,7 +3585,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         "created_at": iso_now(),
                     }
                     self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
-        if self._metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
+        if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
             return record
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
             record, manifest, request, profile, editorial_context, editorial_examples,
@@ -3600,48 +3596,6 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
         return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id, schema=schema)
 
-    @staticmethod
-    def _metadata_source_quality_gate(
-        record: dict[str, Any], required_metadata_fields: list[str],
-        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
-    ) -> bool:
-        """Settle unsafe source records without asking a model to interpret corruption."""
-        # Do not ask a model to interpret source text that deterministic extraction
-        # quality checks have already identified as corrupted. Preserve any
-        # deterministic classifications and route only the unresolved fields to
-        # explicit human/source repair.
-        blocking_source_issues = [
-            item for item in (record.get("source_quality_issues") or [])
-            if str(item.get("severity") or "blocking") == "blocking"
-        ]
-        if blocking_source_issues and record.get("text_review_status") != "human_corrected":
-            field_status = record.setdefault("metadata_field_status", {})
-            for field in required_metadata_fields:
-                current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-                if current.get("status") in {"deterministic", "human_confirmed"}:
-                    continue
-                field_status[field] = {
-                    "status": "unresolved", "method": "source_quality_gate",
-                    "confidence": None, "reason_code": "source_quality",
-                    "reason": "Automatic enrichment was skipped because this record touches a source page with blocking extraction-quality findings.",
-                }
-            incomplete_fields = [field for field in required_metadata_fields if str((field_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or record.get(field) in (None, "", [])]
-            record["metadata_incomplete_fields"] = incomplete_fields
-            record["metadata_complete"] = not incomplete_fields
-            record["metadata_stage_status"] = {"discourse": "skipped", "quotation": "skipped", "indexing": "skipped", "source_quality": "needs_review"}
-            record["metadata_execution_ledger"] = {
-                family: {"state": "skipped", "finished_at": iso_now(), "error": "Source quality gate"}
-                for family in ("discourse", "quotation", "indexing")
-            }
-            if stage_callback:
-                for family in ("discourse", "quotation", "indexing"):
-                    stage_callback(record, family, "skipped", "Source quality gate")
-            record["metadata_needs_attention"] = True
-            record["metadata_attention_reasons"] = ["Source extraction quality must be resolved before scholarly metadata enrichment."]
-            inline, full = _citation_strings(record)
-            record["inline_citation"] = inline; record["full_citation"] = full
-            return True
-        return False
 
     def _prepare_metadata_tasks(
         self, record: dict[str, Any], manifest: dict[str, Any], request: dict[str, Any],
@@ -4359,33 +4313,6 @@ CURRENT REVIEWED RECORD TEXT:
         record["full_citation"] = full
         return record
 
-    @staticmethod
-    def _record_extraction_quality_issues(record: dict[str, Any]) -> list[dict[str, Any]]:
-        """Detect layout/glyph fragmentation that page-level corruption checks miss.
-
-        PDF text layers sometimes emit one glyph per line/position. Those records may
-        contain valid Unicode yet are still unusable as scholarly text. Route them to
-        the Source problem queue instead of presenting them as ready for acceptance.
-        """
-        text = unicodedata.normalize("NFC", str(record.get("text") or ""))
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if len(lines) < 8:
-            return []
-        micro = sum(1 for line in lines if len(line) <= 2)
-        punctuation_only = sum(1 for line in lines if line and all((not ch.isalnum()) for ch in line))
-        alpha_chars = [ch for ch in text if ch.isalpha()]
-        separated_alpha = sum(1 for line in lines if len(line) == 1 and line.isalpha())
-        micro_ratio = micro / max(1, len(lines))
-        separated_ratio = separated_alpha / max(1, len(alpha_chars))
-        if micro_ratio >= 0.45 and (separated_alpha >= 5 or punctuation_only >= 5 or separated_ratio >= 0.12):
-            pages = [int(v) for v in (record.get("pdf_pages") or []) if isinstance(v, int)]
-            return [{
-                "code": "fragmented_glyph_layout",
-                "pages": sorted(set(pages)),
-                "micro_line_ratio": round(micro_ratio, 3),
-                "message": "Extracted text appears fragmented into individual glyphs or punctuation lines.",
-            }]
-        return []
 
     def _llm_text_noise_pass(
         self,
@@ -4464,7 +4391,7 @@ CURRENT REVIEWED RECORD TEXT:
                     "message": "The PDF text layer contains replacement or control characters on one or more pages.",
                     "page_findings": page_findings,
                 })
-            glyph_issues = self._record_extraction_quality_issues(record)
+            glyph_issues = _record_extraction_quality_issues(record)
             for item in glyph_issues:
                 item.setdefault("severity", "blocking")
             issues.extend(glyph_issues)
@@ -4512,7 +4439,7 @@ CURRENT REVIEWED RECORD TEXT:
                     "record text when appropriate, or rebuild/re-extract the source before acceptance."
                 )
         self.repo.save_records(build_id, records)
-        trash_quality = self._trash_quality_report(records, source_quality)
+        trash_quality = _trash_quality_report(records, source_quality)
         current_build = self.repo.get_build(build_id)
         current_build["trash_quality"] = trash_quality
         self.repo.save_build(current_build)
@@ -4569,74 +4496,6 @@ CURRENT REVIEWED RECORD TEXT:
         if unmatched:
             annotate_text_noise(unmatched, pages=pages, threshold=threshold)
 
-    @staticmethod
-    def _source_quality_report(blocks: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-        return page_source_quality_report(blocks, pages)
-
-    @staticmethod
-    def _trash_quality_report(records: list[dict[str, Any]], source_quality: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Measure records that are very likely unusable before semantic enrichment.
-
-        This is deliberately deterministic and conservative. Strong extraction
-        findings already live in ``source_quality_issues``; this ratio adds
-        record-level signals for sparse, replacement-heavy, or glyph-fragmented
-        text so a build can warn before spending model calls.
-        """
-        trash: list[dict[str, Any]] = []
-        for record in records:
-            text = unicodedata.normalize("NFC", str(record.get("text") or "")).strip()
-            compact = "".join(ch for ch in text if not ch.isspace())
-            alpha = sum(1 for ch in compact if ch.isalpha())
-            replacement = compact.count("\ufffd")
-            controls = sum(1 for ch in compact if unicodedata.category(ch) == "Cc")
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            micro = sum(1 for line in lines if len(line) <= 2)
-            fragmented = bool(PdfCorpusBuildManager._record_extraction_quality_issues(record))
-            reasons: list[str] = []
-            if len(compact) < 24:
-                reasons.append("very_low_text_density")
-            if replacement >= 2 or controls:
-                reasons.append("corrupt_characters")
-            if fragmented:
-                reasons.append("fragmented_glyph_layout")
-            if compact and alpha / max(1, len(compact)) < 0.25:
-                reasons.append("low_alphabetic_density")
-            if lines and micro / max(1, len(lines)) >= 0.65:
-                reasons.append("micro_line_fragmentation")
-            noise = record.get("text_noise") if isinstance(record.get("text_noise"), dict) else {}
-            try:
-                noise_score = float(noise.get("score"))
-            except (TypeError, ValueError):
-                noise_score = None
-            threshold = float(noise.get("threshold") if noise.get("threshold") is not None else DEFAULT_NOISE_THRESHOLD)
-            if noise_score is not None and noise_score >= threshold:
-                reasons.append("high_text_noise")
-            if reasons:
-                trash.append({
-                    "record_id": str(record.get("record_id") or ""),
-                    "pages": list(record.get("pdf_pages") or []),
-                    "reasons": reasons,
-                    "characters": len(compact),
-                })
-        total = len(records)
-        ratio = len(trash) / max(1, total)
-        source_quality = source_quality or {}
-        image_only_page_count = int(source_quality.get("image_only_page_count") or 0)
-        source_page_count = int(source_quality.get("page_count") or 0)
-        image_only_page_ratio = image_only_page_count / max(1, source_page_count)
-        return {
-            "record_count": total,
-            "trash_record_count": len(trash),
-            "trash_ratio": round(ratio, 4),
-            "threshold": 0.10,
-            "unusable_page_count": image_only_page_count,
-            "unusable_page_ratio": round(image_only_page_ratio, 4),
-            "exceeds_threshold": bool((total and ratio > 0.10) or image_only_page_ratio > 0.10),
-            "deterministic": True,
-            "records": trash[:500],
-            "median_noise": median_text_noise(records),
-            "noise_unusable_threshold": record_noise_threshold(records),
-        }
 
     @staticmethod
     def validate_records(blocks: list[dict[str, Any]], records: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
@@ -4855,7 +4714,7 @@ CURRENT REVIEWED RECORD TEXT:
                 build_id,
                 "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
             )
-        source_quality = self._source_quality_report(source_blocks, asset.get("pages") or [])
+        source_quality = page_source_quality_report(source_blocks, asset.get("pages") or [])
         self._update(build_id, source_quality=source_quality)
         semantic_blocks = self._semantic_atoms(source_blocks)
         if len(semantic_blocks) < 2:
@@ -5440,7 +5299,7 @@ CURRENT REVIEWED RECORD TEXT:
         blocks = _manifest_main_text_blocks(
             blocks, build.get("manifest") or {}, bounds_confirmed=bool(build.get("manifest_confirmed_at"))
         )
-        build["source_quality"] = self._source_quality_report(blocks)
+        build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
         validation = self.validate_records(blocks, records, profile)
         self.repo.save_records(build_id, records)

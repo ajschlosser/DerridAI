@@ -111,7 +111,7 @@ def test_fragmented_glyph_record_is_detected():
     source-problem queue instead of looking ready for acceptance.
     """
     record={"text":"OFF\n:\n=\n*\n?\n;\ni\n2\nA\nl\n©\nCosmopolitanism and Forgiveness","pdf_pages":[1]}
-    issues=cb.PdfCorpusBuildManager._record_extraction_quality_issues(record)
+    issues=cb._record_extraction_quality_issues(record)
     assert issues and issues[0]["code"]=="fragmented_glyph_layout"
 
 
