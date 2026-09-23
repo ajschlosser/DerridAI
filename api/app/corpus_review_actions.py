@@ -43,8 +43,8 @@ from .corpus_segmentation import (
     _scholarly_page_range,
 )
 from .enrichment_ledger import ACCEPTED
-from .metadata_schema import MetadataSchema
 from .metadata_adjudication_cache import remember as remember_adjudication
+from .metadata_schema import MetadataSchema
 from .rag import _citation_strings
 
 

@@ -51,9 +51,9 @@ from .metadata_schema import (
     default_schema,
     response_model_for,
 )
-from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
+from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 
 
 class MetadataEnrichmentExecutionMixin:
