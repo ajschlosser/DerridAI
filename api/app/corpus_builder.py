@@ -1253,6 +1253,7 @@ class PdfCorpusBuildManager:
         self._schema_cache: dict[str, MetadataSchema] = {}  # a build's schema never changes, so it is parsed once
         # Model calls in flight per build, so the UI can say what it is waiting for instead of showing a frozen bar.
         self._llm_inflight: dict[str, dict[int, dict[str, Any]]] = {}
+        self._llm_call_sequence = 0
         self._loaded_models_cache: tuple[float, str, set[str]] = (0.0, "", set())
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
@@ -1678,7 +1679,17 @@ class PdfCorpusBuildManager:
         token = time.monotonic_ns()
         if build_id:
             with self._lock:
-                self._llm_inflight.setdefault(build_id, {})[token] = {"since": time.monotonic(), "task": task, "provider": provider, "model": model, "base_url": base_url}
+                self._llm_call_sequence += 1
+                sequence = self._llm_call_sequence
+                token = sequence
+                self._llm_inflight.setdefault(build_id, {})[token] = {
+                    "since": time.monotonic(),
+                    "started_token": sequence,
+                    "task": task,
+                    "provider": provider,
+                    "model": model,
+                    "base_url": base_url,
+                }
         return token
 
     def _note_llm_call_end(self, build_id: str, token: int) -> None:
@@ -1710,7 +1721,7 @@ class PdfCorpusBuildManager:
             calls = list(self._llm_inflight.get(build_id, {}).values())
         if not calls:
             return None
-        oldest = min(calls, key=lambda call: call["since"])
+        oldest = min(calls, key=lambda call: call["started_token"])
         state = "working"
         if oldest["provider"] == "ollama":
             loaded = self._ollama_loaded_models(str(oldest["base_url"] or settings.ollama_base_url))
