@@ -114,6 +114,7 @@ from .corpus_metadata import (
 from .corpus_metadata import (
     apply_metadata_constraints as apply_metadata_constraints,
 )
+from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
 from .corpus_publication import (
     build_text_touchup_prompt,
@@ -146,10 +147,12 @@ from .corpus_review_state import (
 from .corpus_reviewer_helpers import (
     _allowed_for,
     _metadata_issue_type,
-    _operation_from_build,
     _present_for_reviewer,
     _scrub_sealed_field,
     _second_opinion_owed,
+)
+from .corpus_reviewer_helpers import (
+    _operation_from_build as _operation_from_build,
 )
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
@@ -1436,7 +1439,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
 }
 
 
-class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentRerunsMixin):
+class PdfCorpusBuildManager(BuildLifecycleMixin, OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin):
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
@@ -1600,72 +1603,6 @@ CURRENT REVIEWED RECORD TEXT:
         listing = self.repo.list_builds(offset=0, limit=10000)
         return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
 
-
-    def list_operations(self, limit: int = 200) -> list[dict[str, Any]]:
-        listing = self.repo.list_builds(offset=0, limit=max(1, min(1000, limit)))
-        return [
-            _operation_from_build(build)
-            for build in listing["items"]
-            if not build.get("operation_hidden")
-        ]
-
-    def operation(self, build_id: str) -> dict[str, Any]:
-        return _operation_from_build(self.repo.get_build(build_id))
-
-    def delete(self, build_id: str) -> None:
-        """Dismiss a finished build from the global Operations feed.
-
-        Corpus builds are scholarly artifacts, not disposable job-log rows. The
-        generic Operations "Remove" action therefore hides the operation entry
-        without deleting the build, its source bindings, or a publication.
-        """
-        build = self.repo.get_build(build_id)
-        if build.get("status") in {"queued", "running"}:
-            raise ValueError("Running corpus builds must be cancelled before they can be dismissed from Operations.")
-        build["operation_hidden"] = True
-        build["operation_hidden_at"] = iso_now()
-        self.repo.save_build(build)
-
-    def clear_finished(self) -> int:
-        count = 0
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        for build in listing["items"]:
-            if build.get("status") in {"queued", "running"} or build.get("operation_hidden"):
-                continue
-            build["operation_hidden"] = True
-            build["operation_hidden_at"] = iso_now()
-            self.repo.save_build(build)
-            count += 1
-        return count
-
-    def cancel(self, build_id: str) -> dict[str, Any]:
-        build = self.repo.get_build(build_id)
-        with self._lock:
-            self._cancel.add(build_id)
-        if build.get("status") in {"queued", "running"}:
-            build["cancel_requested"] = True
-            self.repo.save_build(build)
-        return build
-
-    @_serialize_record_mutation
-    def settle_metadata_unresolved(self, build_id: str) -> dict[str, Any]:
-        """Ask active enrichment workers to stop scheduling automatic families.
-
-        The currently executing provider call is allowed to reach its bounded read
-        deadline; subsequent families settle as explicit review exceptions. Source
-        text, topology, and already completed metadata checkpoints are preserved.
-        """
-        build = self.repo.get_build(build_id)
-        if build.get("status") not in {"queued", "running"} or build.get("stage") != "enriching":
-            raise ValueError("Metadata can only be settled while enrichment is running.")
-        build["metadata_settle_requested"] = True
-        build["metadata_settle_requested_at"] = iso_now()
-        self.repo.save_build(build)
-        return build
-
-    def _cancelled(self, build_id: str) -> bool:
-        with self._lock:
-            return build_id in self._cancel
 
     def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]:
         # A selective user-requested rerun is an explicit instruction and must
