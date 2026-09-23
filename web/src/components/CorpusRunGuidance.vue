@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 
 export interface RunGuidanceEntry {
@@ -23,6 +23,9 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ "update:modelValue": [value: Record<string, RunGuidanceEntry>] }>();
 const i18n = useI18nStore();
+const importInput = ref<HTMLInputElement | null>(null);
+const notice = ref("");
+const error = ref("");
 const populated = computed(
   () =>
     Object.values(props.modelValue).filter(
@@ -51,6 +54,71 @@ function updateTerms(field: string, value: string) {
 function termText(field: string) {
   return (props.modelValue[field]?.look_for || []).join("\n");
 }
+
+function exportGuidance() {
+  const payload = {
+    format: "derridai-run-guidance",
+    version: 1,
+    guidance: props.modelValue,
+  };
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "derridai-run-guidance.json";
+  link.click();
+  URL.revokeObjectURL(url);
+  error.value = "";
+  notice.value = i18n.t("pdf_corpus.run_guidance_exported", "Field guidance exported.");
+}
+
+function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidanceEntry> {
+  const source =
+    payload && typeof payload === "object" && !Array.isArray(payload) && "guidance" in payload
+      ? (payload as { guidance?: unknown }).guidance
+      : payload;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    throw new Error(
+      i18n.t("pdf_corpus.run_guidance_import_invalid", "That file does not contain field guidance."),
+    );
+  }
+  const fields = new Map(props.fields.map((field) => [field.name, field]));
+  const imported: Record<string, RunGuidanceEntry> = {};
+  for (const [field, raw] of Object.entries(source)) {
+    if (!fields.has(field) || !raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const entry = raw as { instructions?: unknown; look_for?: unknown };
+    const instructions = typeof entry.instructions === "string" ? entry.instructions : "";
+    const lookFor = Array.isArray(entry.look_for)
+      ? entry.look_for
+          .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
+          .slice(0, 40)
+      : [];
+    if (instructions.trim() || lookFor.length) imported[field] = { instructions, look_for: lookFor };
+  }
+  if (!Object.keys(imported).length) {
+    throw new Error(
+      i18n.t("pdf_corpus.run_guidance_import_no_fields", "No current schema fields were found."),
+    );
+  }
+  return imported;
+}
+
+async function importGuidance(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const imported = normaliseImportedGuidance(JSON.parse(await file.text()));
+    emit("update:modelValue", { ...props.modelValue, ...imported });
+    error.value = "";
+    notice.value = i18n.t("pdf_corpus.run_guidance_imported", "Field guidance imported.");
+  } catch (exc) {
+    notice.value = "";
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
 </script>
 
 <template>
@@ -73,6 +141,24 @@ function termText(field: string) {
         })
       }}
     </p>
+    <div class="run-guidance-actions">
+      <button type="button" class="btn small" :disabled="disabled" @click="exportGuidance">
+        {{ i18n.t("pdf_corpus.run_guidance_export", "Export guidance") }}
+      </button>
+      <label class="btn small import-button">
+        {{ i18n.t("pdf_corpus.run_guidance_import", "Import guidance") }}
+        <input
+          ref="importInput"
+          type="file"
+          accept="application/json,.json"
+          class="sr-only"
+          :disabled="disabled"
+          @change="importGuidance"
+        />
+      </label>
+    </div>
+    <p v-if="notice" class="run-guidance-notice" role="status">{{ notice }}</p>
+    <p v-if="error" class="run-guidance-error" role="alert">{{ error }}</p>
     <details v-for="field in fields" :key="field.name" class="run-guidance-field">
       <summary>
         <span>{{ field.label }}</span>
@@ -146,6 +232,22 @@ function termText(field: string) {
 }
 .run-guidance-count {
   font-weight: 700;
+}
+.run-guidance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.run-guidance-notice,
+.run-guidance-error {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+.run-guidance-notice {
+  color: var(--success);
+}
+.run-guidance-error {
+  color: var(--danger);
 }
 .run-guidance-field {
   min-width: 0;
