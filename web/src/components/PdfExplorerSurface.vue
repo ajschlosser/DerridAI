@@ -553,12 +553,10 @@ onBeforeUnmount(() => {
                   v-html="gearIconInner"
                 ></svg
                 >{{ copy.manageProviders }}</button>
-              >
             </div>
           </details>
           <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder"
             ><AppIcon name="spark" />{{ copy.buildRecordSet }}</button>
-          >
         </div>
         <div class="pdf-context-row">
           <div class="pdf-context-pill">
@@ -567,7 +565,7 @@ onBeforeUnmount(() => {
           <div class="pdf-context-pill">
             <span>{{ copy.works }}</span>
             <b
-              >{{ relatedWorks.slice(0, 2).join(" · ") || copy.noneLinked }}
+              >{{ relatedWorks.slice(0, 2).join(" · ") || copy.noneLinked
               }}{{ relatedWorks.length > 2 ? ` +${relatedWorks.length - 2}` : "" }}</b
             >
           </div>
@@ -774,7 +772,6 @@ onBeforeUnmount(() => {
                       v-html="closeIconInner"
                     ></svg
                     >{{ copy.unlink }}</button>
-                  >
                 </div>
               </div>
             </template>

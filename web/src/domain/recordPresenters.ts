@@ -407,7 +407,7 @@ export function createRecordPresenters(deps: Deps) {
       return {
         key,
         kind: "review",
-        text: record.needs_review ? tr("runtime.yes", "Yes") : tr("runtime.no", "No"),
+        text: record.needs_review ? "yes" : "no",
         title: "",
       };
     if (key === "text") return { key, kind: "text", text: snippet(record.text, query), title: "" };

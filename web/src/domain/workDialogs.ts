@@ -152,7 +152,15 @@ export function createWorkDialogs(deps: Deps) {
     const dialog = document.createElement("dialog");
     dialog.className = "work-metadata-dialog";
     dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.edit_work_metadata", "Edit work metadata"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(trf("works.associated_records_files", "{records} associated records across {files} files", { records: rows.length.toLocaleString(), files: new Set(rows.map((row: Any) => row.file.name)).size }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db work-metadata-body"><div class="info">${esc(tr("works.edit_metadata_apply_help", "Check Apply only for fields that should be changed across every associated record. Changing work renames the work for all loaded records. Every modified field is written to each record's updates history."))}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
+  <div class="db work-metadata-body"><div class="info">${trf(
+    "works.edit_metadata_apply_help",
+    "Check {apply} only for fields that should be changed across every associated record. Changing {work} renames the work for all loaded records. Every modified field is written to each record's {updates} history.",
+    {
+      apply: `<b>${esc(tr("common.apply", "Apply"))}</b>`,
+      work: "<code>work</code>",
+      updates: "<code>updates</code>",
+    },
+  )}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
   <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="applyWorkMetadata">${esc(trf("works.apply_selected_to_records", "Apply selected metadata to {count} records", { count: rows.length.toLocaleString() }))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
