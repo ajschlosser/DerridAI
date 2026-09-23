@@ -275,9 +275,20 @@ watch(
           >
         </div>
       </div>
-      <button ref="closeButton" class="btn" type="button" @click="emit('close')">
-        {{ i18n.t("ui.close", "Close") }}
-      </button>
+      <div class="focus-head-actions">
+        <details class="focus-shortcuts">
+          <summary :title="i18n.t('record.keyboard_shortcuts', 'Keyboard shortcuts')">?</summary>
+          <div class="focus-shortcuts-popover">
+            <strong>{{ i18n.t("record.keyboard_shortcuts", "Keyboard shortcuts") }}</strong>
+            <span><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> {{ i18n.t("record.previous_next", "Previous / next record") }}</span>
+            <span><kbd>Esc</kbd> {{ i18n.t("ui.close", "Close") }}</span>
+            <span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> {{ i18n.t("pdf_corpus.save_reviewed_text", "Save reviewed text") }}</span>
+          </div>
+        </details>
+        <button ref="closeButton" class="btn" type="button" @click="emit('close')">
+          {{ i18n.t("ui.close", "Close") }}
+        </button>
+      </div>
     </header>
     <main class="focus-workspace">
       <article class="focus-record" aria-labelledby="focus-record-heading">
@@ -676,6 +687,7 @@ watch(
   border-bottom: 1px solid var(--line);
   background: var(--card);
 }
+.focus-head-actions{display:flex;align-items:center;gap:8px;flex:none}.focus-shortcuts{position:relative}.focus-shortcuts summary{list-style:none;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:var(--card);cursor:pointer;font-weight:900}.focus-shortcuts summary::-webkit-details-marker{display:none}.focus-shortcuts-popover{position:absolute;right:0;top:46px;z-index:20;width:270px;display:grid;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--shadow-overlay);font-size:.75rem}.focus-shortcuts-popover span{color:var(--muted)}kbd{border:1px solid var(--line);border-radius:4px;background:var(--soft);padding:1px 4px;font:inherit}
 .focus-title-block {
   display: grid;
   gap: 6px;
@@ -991,8 +1003,12 @@ watch(
     border-top: 1px solid var(--line);
   }
   .focus-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
     align-items: stretch;
     flex-direction: column;
+    box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 10%, transparent);
   }
   .decision-actions {
     justify-content: flex-end;

@@ -492,6 +492,10 @@ Image-only PDFs still require an external OCR/vision workflow; DerridAI does not
 
 When there is nothing to search (no loaded JSONL records and no corpus database), **Search** and **Research** explain that on the page instead of redirecting you. Administrators see a **Create a collection** button; researchers are told to ask an administrator. The command search in the top bar focuses with `Ctrl K` (`⌘K` on Apple platforms). **Help** opens a short orientation dialog (not Response Library). JSONL file actions for administrators live on **Records**. Interface language is a named control showing the language, not a flag. The account menu shows your translated role, Settings, and Sign out. On a narrow screen, language and help move into that account menu rather than disappearing. The sidebar's **More tools** section is open by default for administrators; if you close or open it yourself, DerridAI remembers your choice in this browser. The menu is complete as soon as you sign in, before the workspace has finished loading.
 
+### Record review shortcuts
+
+The record header keeps navigation available while the text or inspector is scrolled. In Record View and Focus Review, `Alt+Left` / `Alt+Right` moves to the previous or next record without moving the page. In Focus Review, `Escape` closes the review surface and `Ctrl+S` (`⌘S` on Apple platforms) saves reviewed text while the text editor is active. Shortcuts are ignored while typing in another editable control. The `?` control beside record actions lists the shortcuts available in the current surface.
+
 ## RAG Research
 
 RAG runs as a background operation and exposes the pipeline itself rather than hiding it.
