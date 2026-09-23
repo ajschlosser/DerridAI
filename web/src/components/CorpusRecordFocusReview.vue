@@ -363,22 +363,52 @@ watch(
             }}
           </span>
         </p>
-        <nav class="queue-context" aria-label="Review queue context">
+        <nav
+          class="queue-context"
+          :aria-label="i18n.t('pdf_corpus.review_queue_context', 'Review queue context')"
+        >
           <span v-if="justProcessedRecordId">
             {{ i18n.t("pdf_corpus.just_processed", "Just processed") }}
-            <button type="button" class="text-link" @click="emit('navigateRecord', justProcessedRecordId)">
+            <button
+              type="button"
+              class="text-link"
+              :aria-label="
+                i18n.tf('pdf_corpus.open_processed_record', 'Open just processed record {record}', {
+                  record: justProcessedRecordId,
+                })
+              "
+              @click="emit('navigateRecord', justProcessedRecordId)"
+            >
               {{ justProcessedRecordId }}
             </button>
           </span>
           <span>
             {{ i18n.t("pdf_corpus.current_record", "Current") }}
-            <button type="button" class="text-link" @click="emit('navigateRecord', record.record_id)">
+            <button
+              type="button"
+              class="text-link"
+              :aria-label="
+                i18n.tf('pdf_corpus.open_current_record', 'Open current record {record}', {
+                  record: record.record_id,
+                })
+              "
+              @click="emit('navigateRecord', record.record_id)"
+            >
               {{ record.record_id }}
             </button>
           </span>
           <span v-if="nextRecordId">
             {{ i18n.t("pdf_corpus.next_record_in_queue", "Next") }}
-            <button type="button" class="text-link" @click="emit('navigateRecord', nextRecordId)">
+            <button
+              type="button"
+              class="text-link"
+              :aria-label="
+                i18n.tf('pdf_corpus.open_next_record', 'Open next record {record}', {
+                  record: nextRecordId,
+                })
+              "
+              @click="emit('navigateRecord', nextRecordId)"
+            >
               {{ nextRecordId }}
             </button>
           </span>

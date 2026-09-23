@@ -4786,11 +4786,15 @@ CURRENT REVIEWED RECORD TEXT:
     def _run(self, build_id: str, request: dict[str, Any], resume: bool = False) -> None:
         """Coordinate checkpointed stages; retain failure/cancellation recovery at one boundary."""
         try:
+            self._update(build_id, stage="preparing")
             scope = self._prepare_build_scope(build_id, request, resume)
             if scope is None:
                 return
+            self._update(build_id, stage="constructing_topology")
             records = self._construct_build_topology(build_id, request, resume, scope)
+            self._update(build_id, stage="enriching")
             records = self._schedule_build_enrichment(build_id, request, scope.manifest, records)
+            self._update(build_id, stage="finalizing_review")
             self._finalize_build_review(build_id, scope, records)
             if AutonomousPolicy.from_request(request).enabled:
                 self.run_autonomous(build_id, request)
@@ -4799,7 +4803,16 @@ CURRENT REVIEWED RECORD TEXT:
         except Exception as exc:
             # Checkpoints intentionally survive a failed stage. The user can repair
             # provider configuration and resume instead of restarting a long book.
-            self._update(build_id, status="failed", stage="failed", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
+            stage = str(self.repo.get_build(build_id).get("stage") or "unknown")
+            self._update(
+                build_id,
+                status="failed",
+                stage="failed",
+                finished_at=iso_now(),
+                error=f"{stage}: {exc}",
+                resumable=True,
+                retrying_segmentation=False,
+            )
         finally:
             with self._lock:
                 self._cancel.discard(build_id)
