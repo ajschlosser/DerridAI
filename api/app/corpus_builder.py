@@ -7847,6 +7847,7 @@ CURRENT REVIEWED RECORD TEXT:
                 and isinstance(metadata_operation, dict)
                 and metadata_operation.get("state") == "running"
             )
+            or "metadata_priority_record_ids" in build
         )
         if metadata_active:
             priority = [str(value) for value in build.get("metadata_priority_record_ids") or [] if str(value) != record_id]
