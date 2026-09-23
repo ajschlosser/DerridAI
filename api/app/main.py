@@ -46,10 +46,10 @@ from .llm_tools import run_pdf_llm, run_rag_grade
 from .metadata_adjudication_cache import (
     clear as clear_adjudication_cache,
 )
+from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_adjudication_cache import (
     suggestions as adjudication_suggestions,
 )
-from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
