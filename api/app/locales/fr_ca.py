@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 109354)
-Total output lines: 5715
-
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
@@ -908,7 +905,4127 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                                                                                                 'de '
                                                                                                                 'sauvegarde '
                                                                                                                 'de '
-                                                                                            …79354 tokens truncated…mpossible de lancer la recherche de métadonnées',
+                                                                                                                'façon '
+                                                                                                                'sécuritaire. '
+                                                                                                                'Les '
+                                                                                                                'modèles '
+                                                                                                                'Ollama '
+                                                                                                                'installés '
+                                                                                                                'et '
+                                                                                                                'les '
+                                                                                                                'images '
+                                                                                                                'Docker '
+                                                                                                                'ne '
+                                                                                                                'sont '
+                                                                                                                'pas '
+                                                                                                                'copiés.',
+ 'runtime.help.add_at_least_one_condition': 'Ajoutez au moins une condition.',
+ 'runtime.help.additional_options_json': 'Options JSON supplémentaires',
+ 'runtime.help.advanced_ollama_options_json': 'Options JSON avancées d’Ollama',
+ 'runtime.help.advanced_openai_compatible_options_json': 'Options JSON avancées du fournisseur compatible avec OpenAI',
+ 'runtime.help.advanced_options_json': 'Options JSON avancées',
+ 'runtime.help.advanced_provider_options': 'Options avancées du fournisseur',
+ 'runtime.help.all_cached_responses_were_processed': 'Toutes les réponses en mémoire cache ont été traitées.',
+ 'runtime.help.all_files_separately': 'Tous les fichiers séparément',
+ 'runtime.help.all_loaded_jsonl_files': 'Tous les fichiers JSONL chargés',
+ 'runtime.help.allow_researcher_accounts_to_use_this_profile_for_research_without_exposing_credentials_or_prov': 'Permettre '
+                                                                                                                'aux '
+                                                                                                                'comptes '
+                                                                                                                'chercheurs '
+                                                                                                                'd’utiliser '
+                                                                                                                'ce '
+                                                                                                                'profil '
+                                                                                                                'dans '
+                                                                                                                'Recherche '
+                                                                                                                'sans '
+                                                                                                                'exposer '
+                                                                                                                'les '
+                                                                                                                'identifiants '
+                                                                                                                'ni '
+                                                                                                                'l’administration '
+                                                                                                                'du '
+                                                                                                                'fournisseur.',
+ 'runtime.help.also_remove_from_chroma': 'Retirer également de Chroma',
+ 'runtime.help.an_administrator_must_create_or_restore_a_corpus_vector_database_before_researcher_search_and_r': 'Un '
+                                                                                                                'administrateur '
+                                                                                                                'doit '
+                                                                                                                'créer '
+                                                                                                                'ou '
+                                                                                                                'restaurer '
+                                                                                                                'une '
+                                                                                                                'base '
+                                                                                                                'de '
+                                                                                                                'données '
+                                                                                                                'vectorielle '
+                                                                                                                'du '
+                                                                                                                'corpus '
+                                                                                                                'avant '
+                                                                                                                'que '
+                                                                                                                'les '
+                                                                                                                'chercheurs '
+                                                                                                                'puissent '
+                                                                                                                'utiliser '
+                                                                                                                'la '
+                                                                                                                'recherche '
+                                                                                                                'et le '
+                                                                                                                'RAG.',
+ 'runtime.help.api_keys_are_intentionally_omitted': 'Les clés API sont volontairement omises.',
+ 'runtime.help.apply_one_field_value_consistently_across_a_selected_record_set_every_actual_change_is_audited': 'Appliquez '
+                                                                                                               'une '
+                                                                                                               'même '
+                                                                                                               'valeur '
+                                                                                                               'de '
+                                                                                                               'champ '
+                                                                                                               'à un '
+                                                                                                               'ensemble '
+                                                                                                               'de '
+                                                                                                               'fiches '
+                                                                                                               'sélectionnées. '
+                                                                                                               'Chaque '
+                                                                                                               'modification '
+                                                                                                               'réelle '
+                                                                                                               'est '
+                                                                                                               'consignée.',
+ 'runtime.help.ask_a_research_question_about_derrida': 'Posez une question de recherche sur Derrida…',
+ 'runtime.help.ask_an_administrator_to_create_or_populate_a_corpus_vector_database': 'Demandez à un administrateur de '
+                                                                                    'créer ou d’alimenter une base de '
+                                                                                    'données vectorielle du corpus.',
+ 'runtime.help.auto_grade_final_response_as_the_last_pipeline_step': 'Évaluer automatiquement la réponse finale comme '
+                                                                    'dernière étape du pipeline',
+ 'runtime.help.auto_grade_provider_profile': 'Profil fournisseur pour l’évaluation automatique',
+ 'runtime.help.auto_grade_the_final_rag_response_after_caching': 'Évaluer automatiquement la réponse RAG finale après '
+                                                                'la mise en cache',
+ 'runtime.help.auto_improve_pass_in_progress': 'Passe d’amélioration automatique en cours',
+ 'runtime.help.autocomplete_searches_record_ids_works_authors_and_source_files_without_rendering_an_enormous_s': 'La '
+                                                                                                                'saisie '
+                                                                                                                'semi-automatique '
+                                                                                                                'recherche '
+                                                                                                                'les '
+                                                                                                                'identifiants '
+                                                                                                                'de '
+                                                                                                                'fiche, '
+                                                                                                                'les '
+                                                                                                                'œuvres, '
+                                                                                                                'les '
+                                                                                                                'auteurs '
+                                                                                                                'et '
+                                                                                                                'les '
+                                                                                                                'fichiers '
+                                                                                                                'sources '
+                                                                                                                'sans '
+                                                                                                                'afficher '
+                                                                                                                'une '
+                                                                                                                'liste '
+                                                                                                                'démesurée.',
+ 'runtime.help.automatic_pipeline_grade': 'Évaluation automatique du pipeline',
+ 'runtime.help.browse_summarized_records': 'Parcourir les fiches résumées',
+ 'runtime.help.browser_permission_is_required_notifications_are_local_browser_notifications': 'L’autorisation du '
+                                                                                             'navigateur est requise. '
+                                                                                             'Les notifications sont '
+                                                                                             'envoyées localement par '
+                                                                                             'le navigateur.',
+ 'runtime.help.build_explicit_boolean_groups_such_as_a_and_b_and_c_or_d_or_e_and_f': 'Créez des groupes booléens '
+                                                                                    'explicites, par exemple A ET B ET '
+                                                                                    '(C OU D OU E) ET F.',
+ 'runtime.help.bulk_edit_one_field': 'Modifier un champ en lot',
+ 'runtime.help.cached_rag_responses': 'réponses RAG en mémoire cache',
+ 'runtime.help.changed_aggregate': 'Modifiés + agrégés',
+ 'runtime.help.changes_stay_local_until_you_export_or_upsert_them': 'Les modifications demeurent locales jusqu’à leur '
+                                                                   'exportation ou leur synchronisation.',
+ 'runtime.help.checking_configured_llm_provider': 'Vérification du fournisseur LLM configuré…',
+ 'runtime.help.choose_any_subset_the_selected_source_tabs_will_be_replaced_in_the_workspace_by_the_merged_tab': 'Choisissez '
+                                                                                                               'n’importe '
+                                                                                                               'quel '
+                                                                                                               'sous-ensemble. '
+                                                                                                               'Les '
+                                                                                                               'onglets '
+                                                                                                               'sources '
+                                                                                                               'sélectionnés '
+                                                                                                               'seront '
+                                                                                                               'remplacés '
+                                                                                                               'dans '
+                                                                                                               'l’espace '
+                                                                                                               'de '
+                                                                                                               'travail '
+                                                                                                               'par '
+                                                                                                               'l’onglet '
+                                                                                                               'fusionné.',
+ 'runtime.help.choose_discovered_model': 'Choisir un modèle découvert',
+ 'runtime.help.choose_the_grading_provider_model_in_the_rag_runner': 'Choisissez le fournisseur et le modèle '
+                                                                    'd’évaluation dans l’outil d’exécution RAG.',
+ 'runtime.help.clean_current_page_text': 'Nettoyer le texte de la page actuelle',
+ 'runtime.help.clear_column_filters': 'Effacer les filtres de colonnes',
+ 'runtime.help.clear_remembered_questions': 'Effacer les questions mémorisées',
+ 'runtime.help.completed_rag_runs_will_be_cached_automatically_and_appear_here': 'Les exécutions RAG terminées seront '
+                                                                                'automatiquement mises en cache et '
+                                                                                'apparaîtront ici.',
+ 'runtime.help.conservative_ligature_zero_width_character_and_broken_line_hyphen_cleanup_no_paraphrasing': 'Nettoyage '
+                                                                                                          'prudent des '
+                                                                                                          'ligatures, '
+                                                                                                          'des '
+                                                                                                          'caractères '
+                                                                                                          'de largeur '
+                                                                                                          'nulle et '
+                                                                                                          'des césures '
+                                                                                                          'de fin de '
+                                                                                                          'ligne. '
+                                                                                                          'Aucune '
+                                                                                                          'paraphrase.',
+ 'runtime.help.copy_entire_record_json': 'Copier tout le JSON de la fiche',
+ 'runtime.help.corpus_chroma_collections': 'collections Chroma du corpus',
+ 'runtime.help.could_not_load_response_faq': 'Impossible de charger la bibliothèque de réponses.',
+ 'runtime.help.could_not_read_response_cache': 'Impossible de lire la mémoire cache des réponses.',
+ 'runtime.help.could_not_render_this_item': 'Impossible d’afficher cet élément.',
+ 'runtime.help.create_draft_record': 'Créer une fiche provisoire',
+ 'runtime.help.create_jsonl_subset': 'Créer un sous-ensemble JSONL',
+ 'runtime.help.create_or_restore_a_corpus_vector_database_before_upserting_pdf_drafts': 'Créez ou restaurez une base de '
+                                                                                       'données vectorielle du corpus '
+                                                                                       'avant de synchroniser les '
+                                                                                       'brouillons issus de PDF.',
+ 'runtime.help.current_chroma_path': 'Chemin Chroma actuel',
+ 'runtime.help.decomposition_max_tokens': 'Nombre maximal de jetons pour la décomposition',
+ 'runtime.help.default_embedding_model': 'Modèle de plongement vectoriel par défaut',
+ 'runtime.help.default_embedding_provider': 'Fournisseur de plongements vectoriels par défaut',
+ 'runtime.help.default_provider_profile': 'Profil fournisseur par défaut',
+ 'runtime.help.default_review_preset': 'Préréglage de révision par défaut',
+ 'runtime.help.delete_audit_history': 'Supprimer l’historique d’audit…',
+ 'runtime.help.deletes_all_loaded_browser_jsonl_workspace_data_and_every_collection_in_the_current_chroma_pers': 'Supprime '
+                                                                                                                'toutes '
+                                                                                                                'les '
+                                                                                                                'données '
+                                                                                                                'JSONL '
+                                                                                                                'chargées '
+                                                                                                                'dans '
+                                                                                                                'l’espace '
+                                                                                                                'de '
+                                                                                                                'travail '
+                                                                                                                'du '
+                                                                                                                'navigateur '
+                                                                                                                'et '
+                                                                                                                'toutes '
+                                                                                                                'les '
+                                                                                                                'collections '
+                                                                                                                'de la '
+                                                                                                                'base '
+                                                                                                                'Chroma '
+                                                                                                                'actuelle. '
+                                                                                                                'Les '
+                                                                                                                'fichiers '
+                                                                                                                'des '
+                                                                                                                'modèles '
+                                                                                                                'installés '
+                                                                                                                'ne '
+                                                                                                                'sont '
+                                                                                                                'pas '
+                                                                                                                'supprimés.',
+ 'runtime.help.do_not_add_to_jsonl': 'Ne pas ajouter au JSONL',
+ 'runtime.help.download_merged_jsonl_immediately': 'Télécharger immédiatement le JSONL fusionné',
+ 'runtime.help.draft_record_from_pdf_page': 'Créer une fiche provisoire à partir de la page PDF',
+ 'runtime.help.drafts_persist_across_navigation_and_browser_refresh_the_40_most_recent_submitted_question_inst': 'Les '
+                                                                                                                'brouillons '
+                                                                                                                'persistent '
+                                                                                                                'pendant '
+                                                                                                                'la '
+                                                                                                                'navigation '
+                                                                                                                'et '
+                                                                                                                'après '
+                                                                                                                'l’actualisation '
+                                                                                                                'du '
+                                                                                                                'navigateur. '
+                                                                                                                'Les '
+                                                                                                                '40 '
+                                                                                                                'paires '
+                                                                                                                'question-instructions '
+                                                                                                                'les '
+                                                                                                                'plus '
+                                                                                                                'récentes '
+                                                                                                                'sont '
+                                                                                                                'conservées '
+                                                                                                                'localement.',
+ 'runtime.help.drop_one_or_more_jsonl_files_anywhere_on_this_page_or_choose_files_manually_each_file_stays_in_': 'Déposez '
+                                                                                                                'un ou '
+                                                                                                                'plusieurs '
+                                                                                                                'fichiers '
+                                                                                                                'JSONL '
+                                                                                                                'n’importe '
+                                                                                                                'où '
+                                                                                                                'sur '
+                                                                                                                'cette '
+                                                                                                                'page, '
+                                                                                                                'ou '
+                                                                                                                'choisissez-les '
+                                                                                                                'manuellement. '
+                                                                                                                'Chaque '
+                                                                                                                'fichier '
+                                                                                                                'reste '
+                                                                                                                'dans '
+                                                                                                                'son '
+                                                                                                                'propre '
+                                                                                                                'onglet '
+                                                                                                                'et '
+                                                                                                                'peut '
+                                                                                                                'être '
+                                                                                                                'modifié, '
+                                                                                                                'comparé, '
+                                                                                                                'recherché, '
+                                                                                                                'exporté '
+                                                                                                                'ou '
+                                                                                                                'envoyé '
+                                                                                                                'à '
+                                                                                                                'ChromaDB.',
+ 'runtime.help.each_action_lets_you_choose_provider_model_parameters_and_run_mode': 'Chaque action permet de choisir le '
+                                                                                   'fournisseur, le modèle, les '
+                                                                                   'paramètres et le mode d’exécution.',
+ 'runtime.help.each_cache_record_stores_the_original_rag_query_instructions_run_parameters_answer_evidence_ret': 'Chaque '
+                                                                                                                'entrée '
+                                                                                                                'de '
+                                                                                                                'cache '
+                                                                                                                'conserve '
+                                                                                                                'la '
+                                                                                                                'requête '
+                                                                                                                'RAG '
+                                                                                                                'originale, '
+                                                                                                                'les '
+                                                                                                                'instructions, '
+                                                                                                                'les '
+                                                                                                                'paramètres '
+                                                                                                                'd’exécution, '
+                                                                                                                'la '
+                                                                                                                'réponse, '
+                                                                                                                'les '
+                                                                                                                'preuves, '
+                                                                                                                'les '
+                                                                                                                'diagnostics '
+                                                                                                                'de '
+                                                                                                                'repérage, '
+                                                                                                                'les '
+                                                                                                                'durées '
+                                                                                                                'et '
+                                                                                                                'toutes '
+                                                                                                                'les '
+                                                                                                                'évaluations '
+                                                                                                                'LLM '
+                                                                                                                'enregistrées.',
+ 'runtime.help.enter_the_new_value_arrays_objects_use_json_enter_null_for_null': 'Saisissez la nouvelle valeur. Les '
+                                                                                'tableaux et objets utilisent JSON. '
+                                                                                'Saisissez __NULL__ pour une valeur '
+                                                                                'nulle.',
+ 'runtime.help.evidence_retrieval_and_pipeline_details': 'Détails des preuves, du repérage et du pipeline',
+ 'runtime.help.expand_all_ui_panels': 'Développer tous les panneaux de l’interface',
+ 'runtime.help.expand_navigation_sidebar': 'Développer le volet de navigation',
+ 'runtime.help.filter_linked_records': 'Filtrer les fiches liées',
+ 'runtime.help.five_most_recent_runs': 'Cinq exécutions les plus récentes',
+ 'runtime.help.freellm_openai_model_selection': 'Sélection du modèle FreeLLM / OpenAI',
+ 'runtime.help.generation_defaults_advanced_parameters': 'Valeurs de génération par défaut et paramètres avancés',
+ 'runtime.help.latest_100_response_cache_entries_use_response_faq_for_full_answer_evidence_browsing_and_re_run': 'Les '
+                                                                                                                '100 '
+                                                                                                                'entrées '
+                                                                                                                'les '
+                                                                                                                'plus '
+                                                                                                                'récentes '
+                                                                                                                'de la '
+                                                                                                                'mémoire '
+                                                                                                                'cache '
+                                                                                                                'des '
+                                                                                                                'réponses. '
+                                                                                                                'Utilisez '
+                                                                                                                'la '
+                                                                                                                'bibliothèque '
+                                                                                                                'des '
+                                                                                                                'réponses '
+                                                                                                                'pour '
+                                                                                                                'consulter '
+                                                                                                                'les '
+                                                                                                                'réponses, '
+                                                                                                                'les '
+                                                                                                                'preuves '
+                                                                                                                'et '
+                                                                                                                'relancer '
+                                                                                                                'des '
+                                                                                                                'recherches.',
+ 'runtime.help.llm_query_decomposition_french_query_formulation': 'Décomposition de la requête par LLM + formulation de '
+                                                                 'requêtes en français',
+ 'runtime.help.llm_review_workspace': 'Espace de révision LLM',
+ 'runtime.help.load_this_pdf_in_pdf_explorer_first': 'Chargez d’abord ce PDF dans l’explorateur PDF',
+ 'runtime.help.local_record_changed_since_job_started': 'la fiche locale a été modifiée depuis le début de la tâche',
+ 'runtime.help.match_link_page_to_record': 'Faire correspondre et lier la page à une fiche',
+ 'runtime.help.max_chars_evidence_record': 'Nombre maximal de caractères / preuve',
+ 'runtime.help.merge_and_replace_selected_tabs': 'Fusionner et remplacer les fichiers sélectionnés',
+ 'runtime.help.mixed_across_records': 'valeurs variables selon les fiches',
+ 'runtime.help.model_selection_mode': 'Mode de sélection du modèle',
+ 'runtime.help.new_jsonl_tab_name': 'Nom du nouveau fichier JSONL',
+ 'runtime.help.no_answer_returned': 'Aucune réponse reçue.',
+ 'runtime.help.no_audit_history_recorded': 'Aucun historique d’audit enregistré.',
+ 'runtime.help.no_background_operations_yet': 'Aucune opération en arrière-plan pour le moment.',
+ 'runtime.help.no_cached_responses_yet': 'Aucune réponse en mémoire cache pour le moment.',
+ 'runtime.help.no_changes_proposed': 'Aucune modification proposée.',
+ 'runtime.help.no_corpus_chroma_collections': 'Aucune collection Chroma du corpus',
+ 'runtime.help.no_events_recorded': 'Aucun évènement enregistré.',
+ 'runtime.help.no_evidence_returned': 'Aucune preuve reçue.',
+ 'runtime.help.no_evidence_selected_yet_use_add_to_evidence_on_record_search_rows': 'Aucune preuve sélectionnée. '
+                                                                                   'Utilisez « Ajouter aux preuves » '
+                                                                                   'dans une fiche ou un résultat de '
+                                                                                   'recherche.',
+ 'runtime.help.no_full_evidence_retained': 'Aucune preuve intégrale conservée.',
+ 'runtime.help.no_linked_records_match_this_filter': 'Aucune fiche liée ne correspond à ce filtre.',
+ 'runtime.help.no_llm_provider_profiles_configured': 'Aucun profil fournisseur LLM n’est configuré.',
+ 'runtime.help.no_matching_records': 'Aucune fiche correspondante',
+ 'runtime.help.no_matching_records_2': 'Aucune fiche correspondante.',
+ 'runtime.help.no_models_match_this_filter': 'Aucun modèle ne correspond à ce filtre.',
+ 'runtime.help.no_pdf_pages_linked_to_this_record': 'Aucune page PDF n’est liée à cette fiche.',
+ 'runtime.help.no_rag_jobs_yet_start_one_below': 'Aucune tâche RAG pour le moment. Lancez-en une ci-dessous.',
+ 'runtime.help.no_rag_pipeline_runs_recorded_yet': 'Aucune exécution de pipeline RAG enregistrée pour le moment.',
+ 'runtime.help.no_record_selected': 'Aucune fiche sélectionnée.',
+ 'runtime.help.no_records_linked_to_this_page_yet': 'Aucune fiche n’est encore liée à cette page.',
+ 'runtime.help.no_records_match_the_current_filters': 'Aucune fiche ne correspond aux filtres actuels.',
+ 'runtime.help.no_records_match_this_work': 'Aucune fiche ne correspond à cette œuvre.',
+ 'runtime.help.no_visible_columns': 'Aucune colonne visible.',
+ 'runtime.help.nuke_derridai_workspace': 'EFFACER l’espace de travail DerridAI',
+ 'runtime.help.ocr_text_cleanup': 'ROC / nettoyage du texte',
+ 'runtime.help.on_when_background_operations_finish': 'Activer à la fin des opérations en arrière-plan',
+ 'runtime.help.only_modify_records_whose_value_actually_differs': 'Modifier uniquement les fiches dont la valeur '
+                                                                 'diffère réellement',
+ 'runtime.help.open_a_corpus_workspace': 'Ouvrir un espace de travail du corpus',
+ 'runtime.help.open_a_pdf_to_render_pages_read_its_embedded_title_metadata_extract_text_and_move_directly_betw': 'Ouvrez '
+                                                                                                                'un '
+                                                                                                                'PDF '
+                                                                                                                'pour '
+                                                                                                                'afficher '
+                                                                                                                'ses '
+                                                                                                                'pages, '
+                                                                                                                'lire '
+                                                                                                                'les '
+                                                                                                                'métadonnées '
+                                                                                                                'de '
+                                                                                                                'titre '
+                                                                                                                'intégrées, '
+                                                                                                                'extraire '
+                                                                                                                'le '
+                                                                                                                'texte '
+                                                                                                                'et '
+                                                                                                                'passer '
+                                                                                                                'directement '
+                                                                                                                'des '
+                                                                                                                'pages '
+                                                                                                                'PDF '
+                                                                                                                'liées '
+                                                                                                                'aux '
+                                                                                                                'fiches '
+                                                                                                                'du '
+                                                                                                                'corpus.',
+ 'runtime.help.open_a_source_pdf': 'Ouvrir un PDF source',
+ 'runtime.help.openai_compatible_freellm': 'Compatible avec OpenAI / FreeLLM',
+ 'runtime.help.optional_constraints_on_the_answer_kept_separate_from_the_research_question': 'Contraintes facultatives '
+                                                                                            'sur la réponse, '
+                                                                                            'conservées séparément de '
+                                                                                            'la question de recherche.',
+ 'runtime.help.optional_instructions_applied_to_every_record_in_this_batch': 'Instructions facultatives appliquées à '
+                                                                            'chaque fiche de ce lot.',
+ 'runtime.help.parentheses_evaluate_this_block_as_one_boolean_value': 'Parenthèses : évaluer ce bloc comme une seule '
+                                                                     'valeur booléenne',
+ 'runtime.help.pipeline_query_metadata': 'Métadonnées de la requête du pipeline',
+ 'runtime.help.preview_this_version': 'Aperçu de cette version',
+ 'runtime.help.proposals_are_intentionally_hidden_until_every_queued_record_has_been_processed': 'Les propositions '
+                                                                                                'restent '
+                                                                                                'volontairement '
+                                                                                                'masquées jusqu’à ce '
+                                                                                                'que toutes les fiches '
+                                                                                                'en file aient été '
+                                                                                                'traitées.',
+ 'runtime.help.proposed_changes_for_this_record': 'Modifications proposées pour cette fiche',
+ 'runtime.help.provider_choice_default_review_preset_and_whether_llm_review_opens_interactively_or_runs_as_a_b': 'Choix '
+                                                                                                                'du '
+                                                                                                                'fournisseur, '
+                                                                                                                'préréglage '
+                                                                                                                'de '
+                                                                                                                'révision '
+                                                                                                                'par '
+                                                                                                                'défaut '
+                                                                                                                'et '
+                                                                                                                'mode '
+                                                                                                                'interactif '
+                                                                                                                'ou en '
+                                                                                                                'arrière-plan '
+                                                                                                                'de la '
+                                                                                                                'révision '
+                                                                                                                'LLM.',
+ 'runtime.help.provider_endpoints_credentials_models_concurrency_limits_generation_defaults_readiness_and_inde': 'Les '
+                                                                                                                'points '
+                                                                                                                'de '
+                                                                                                                'terminaison, '
+                                                                                                                'identifiants, '
+                                                                                                                'modèles, '
+                                                                                                                'limites '
+                                                                                                                'de '
+                                                                                                                'simultanéité, '
+                                                                                                                'valeurs '
+                                                                                                                'de '
+                                                                                                                'génération '
+                                                                                                                'par '
+                                                                                                                'défaut, '
+                                                                                                                'état '
+                                                                                                                'de '
+                                                                                                                'préparation '
+                                                                                                                'et '
+                                                                                                                'préchauffages '
+                                                                                                                'indépendants '
+                                                                                                                'se '
+                                                                                                                'configurent '
+                                                                                                                'dans '
+                                                                                                                'la '
+                                                                                                                'page '
+                                                                                                                'Fournisseurs.',
+ 'runtime.help.query_decomposition_max_tokens': 'Nombre maximal de jetons pour la décomposition de la requête',
+ 'runtime.help.question_instructions': 'Question et instructions',
+ 'runtime.help.rag_pipeline_activity': 'Activité du pipeline RAG',
+ 'runtime.help.rag_pipeline_defaults': 'Valeurs par défaut du pipeline RAG',
+ 'runtime.help.rag_response_cache': 'Mémoire cache des réponses RAG',
+ 'runtime.help.clear_rag_response_cache': 'Effacer la mémoire cache des réponses RAG ?',
+ 'runtime.help.clear_rag_response_cache_message': 'Supprimer les {count} réponses RAG mises en cache et les évaluations enregistrées ? Les bases vectorielles du corpus ne sont pas modifiées.',
+ 'runtime.help.could_not_clear_response_cache': 'Impossible d’effacer la mémoire cache des réponses : {error}',
+ 'runtime.help.open_response_library': 'Ouvrir la bibliothèque de réponses',
+ 'runtime.help.response_cache_record_contents': 'Chaque entrée de cache contient la requête RAG originale, les consignes, les paramètres d’exécution, la réponse, les preuves, les diagnostics de récupération, les durées et toutes les évaluations LLM enregistrées.',
+ 'runtime.help.system_cache_only': 'Mémoire cache système seulement. Cette collection est volontairement exclue des magasins vectoriels du corpus, des comptes de la base du corpus, de la mise en miroir des langues et de la sélection des sources RAG.',
+ 'runtime.help.rag_response_grade': 'Évaluation de la réponse RAG',
+ 'runtime.help.raw_evidence_tagged_answer': 'Réponse brute balisée par preuve',
+ 'runtime.help.recall_a_previous_question': 'Retrouver une question précédente…',
+ 'runtime.help.recent_audit_history': 'Historique d’audit récent',
+ 'runtime.help.recent_cached_responses': 'Réponses récentes en mémoire cache',
+ 'runtime.help.recent_rag_pipelines': 'Pipelines RAG récents',
+ 'runtime.help.record_a_json_jsonl': 'Fiche A — JSON / JSONL',
+ 'runtime.help.record_b_json_jsonl': 'Fiche B — JSON / JSONL',
+ 'runtime.help.records_linked_anywhere_in_this_pdf': 'Fiches liées à une page de ce PDF',
+ 'runtime.help.records_selected_across_corpus_tables_are_pinned_into_this_run_you_can_also_bypass_retrieval_en': 'Les '
+                                                                                                                'fiches '
+                                                                                                                'sélectionnées '
+                                                                                                                'dans '
+                                                                                                                'les '
+                                                                                                                'tableaux '
+                                                                                                                'du '
+                                                                                                                'corpus '
+                                                                                                                'sont '
+                                                                                                                'épinglées '
+                                                                                                                'à '
+                                                                                                                'cette '
+                                                                                                                'exécution. '
+                                                                                                                'Vous '
+                                                                                                                'pouvez '
+                                                                                                                'aussi '
+                                                                                                                'contourner '
+                                                                                                                'entièrement '
+                                                                                                                'le '
+                                                                                                                'repérage '
+                                                                                                                'et '
+                                                                                                                'répondre '
+                                                                                                                'uniquement '
+                                                                                                                'à '
+                                                                                                                'partir '
+                                                                                                                'de ce '
+                                                                                                                'paquet '
+                                                                                                                'de '
+                                                                                                                'preuves.',
+ 'runtime.help.remove_all_pdf_links': 'Supprimer tous les liens PDF',
+ 'runtime.help.render_pages_extract_text_connect_pages_to_records_and_run_llm_assisted_source_workflows': 'Affichez les '
+                                                                                                         'pages, '
+                                                                                                         'extrayez le '
+                                                                                                         'texte, '
+                                                                                                         'reliez les '
+                                                                                                         'pages aux '
+                                                                                                         'fiches et '
+                                                                                                         'exécutez des '
+                                                                                                         'flux de '
+                                                                                                         'travail '
+                                                                                                         'assistés par '
+                                                                                                         'LLM.',
+ 'runtime.help.request_notification_permission': 'Demander l’autorisation d’envoyer des notifications',
+ 'runtime.help.research_question_prompt': 'Question de recherche / invite',
+ 'runtime.help.research_run_context': 'Contexte de l’exécution de recherche',
+ 'runtime.help.reset_table_columns': 'Réinitialiser les colonnes du tableau',
+ 'runtime.help.reset_ui_choices_or_remove_audit_history_without_deleting_records': 'Réinitialisez les choix de '
+                                                                                  'l’interface ou supprimez '
+                                                                                  'l’historique d’audit sans supprimer '
+                                                                                  'les fiches.',
+ 'runtime.help.restore_removed_upsert_queue_items': 'Rétablir les éléments retirés de la file de synchronisation',
+ 'runtime.help.restore_this_version': 'Rétablir cette version',
+ 'runtime.help.retrieval_fusion_reranking_evidence_budget_and_query_decomposition_defaults_per_run_generation_': 'Valeurs '
+                                                                                                                'par '
+                                                                                                                'défaut '
+                                                                                                                'du '
+                                                                                                                'repérage, '
+                                                                                                                'de la '
+                                                                                                                'fusion, '
+                                                                                                                'du '
+                                                                                                                'reclassement, '
+                                                                                                                'du '
+                                                                                                                'budget '
+                                                                                                                'de '
+                                                                                                                'preuves '
+                                                                                                                'et de '
+                                                                                                                'la '
+                                                                                                                'décomposition '
+                                                                                                                'des '
+                                                                                                                'requêtes. '
+                                                                                                                'Les '
+                                                                                                                'paramètres '
+                                                                                                                'de '
+                                                                                                                'génération '
+                                                                                                                'propres '
+                                                                                                                'à '
+                                                                                                                'chaque '
+                                                                                                                'exécution '
+                                                                                                                'sont '
+                                                                                                                'aussi '
+                                                                                                                'accessibles '
+                                                                                                                'dans '
+                                                                                                                'Recherche.',
+ 'runtime.help.review_add_draft': 'Réviser / ajouter le brouillon',
+ 'runtime.help.review_link_page': 'Réviser et lier la page',
+ 'runtime.help.same_model_grading_warning': 'Avertissement : même modèle pour l’évaluation.',
+ 'runtime.help.saved_to_response_faq_when_caching_succeeds': 'Enregistré dans la bibliothèque de réponses lorsque la '
+                                                            'mise en cache réussit.',
+ 'runtime.help.saved_with_the_cached_rag_query_when_a_response_cache_record_is_available': 'Enregistré avec la requête '
+                                                                                          'RAG mise en cache '
+                                                                                          'lorsqu’une entrée '
+                                                                                          'correspondante est '
+                                                                                          'disponible.',
+ 'runtime.help.saving_updates_this_record_in_place_under_the_same_chroma_id_and_regenerates_its_embedding_when': 'L’enregistrement '
+                                                                                                                'met '
+                                                                                                                'cette '
+                                                                                                                'fiche '
+                                                                                                                'à '
+                                                                                                                'jour '
+                                                                                                                'sous '
+                                                                                                                'le '
+                                                                                                                'même '
+                                                                                                                'identifiant '
+                                                                                                                'Chroma '
+                                                                                                                'et '
+                                                                                                                'régénère '
+                                                                                                                'son '
+                                                                                                                'plongement '
+                                                                                                                'vectoriel '
+                                                                                                                'lorsque '
+                                                                                                                'le '
+                                                                                                                'fournisseur '
+                                                                                                                'configuré '
+                                                                                                                'le '
+                                                                                                                'permet.',
+ 'runtime.help.search_cached_questions': 'Rechercher dans les questions en mémoire cache',
+ 'runtime.help.search_text_in_this_file': 'Rechercher du texte dans ce fichier',
+ 'runtime.help.select_all_changes': 'Sélectionner toutes les modifications',
+ 'runtime.help.select_all_results': 'Sélectionner tous les résultats',
+ 'runtime.help.select_or_create_a_corpus_vector_database_first': 'Sélectionnez ou créez d’abord une base de données '
+                                                                'vectorielle du corpus.',
+ 'runtime.help.select_or_paste_two_records_to_compare_them': 'Sélectionnez ou collez deux fiches pour les comparer.',
+ 'runtime.help.select_record_changes': 'Sélectionner les modifications de fiches',
+ 'runtime.help.select_two_records': 'Sélectionner deux fiches',
+ 'runtime.help.select_visible_records': 'Sélectionner les fiches visibles',
+ 'runtime.help.selected_evidence_only_retrieval_disabled': 'Preuves sélectionnées seulement · repérage désactivé',
+ 'runtime.help.start_from_scratch': 'Recommencer à zéro',
+ 'runtime.help.start_typing_to_search_loaded_records': 'Commencez à taper pour rechercher dans les fiches chargées.',
+ 'runtime.help.stop_after_current': 'Arrêter après l’élément en cours',
+ 'runtime.help.switch_freely_between_interactive_review_background_review_and_aggregate_auto_improve_before_st': 'Avant '
+                                                                                                                'l’exécution, '
+                                                                                                                'passez '
+                                                                                                                'librement '
+                                                                                                                'de la '
+                                                                                                                'révision '
+                                                                                                                'interactive '
+                                                                                                                'à la '
+                                                                                                                'révision '
+                                                                                                                'en '
+                                                                                                                'arrière-plan '
+                                                                                                                'ou à '
+                                                                                                                'l’amélioration '
+                                                                                                                'automatique '
+                                                                                                                'agrégée.',
+ 'runtime.help.system_cache_only_this_collection_is_intentionally_excluded_from_corpus_vector_stores_corpus_db': 'Mémoire '
+                                                                                                                'cache '
+                                                                                                                'système '
+                                                                                                                'seulement. '
+                                                                                                                'Cette '
+                                                                                                                'collection '
+                                                                                                                'est '
+                                                                                                                'volontairement '
+                                                                                                                'exclue '
+                                                                                                                'des '
+                                                                                                                'bases '
+                                                                                                                'vectorielles '
+                                                                                                                'du '
+                                                                                                                'corpus, '
+                                                                                                                'des '
+                                                                                                                'décomptes '
+                                                                                                                'de '
+                                                                                                                'bases, '
+                                                                                                                'de la '
+                                                                                                                'réplication '
+                                                                                                                'linguistique '
+                                                                                                                'et de '
+                                                                                                                'la '
+                                                                                                                'sélection '
+                                                                                                                'des '
+                                                                                                                'sources '
+                                                                                                                'RAG.',
+ 'runtime.help.text_review_runs_separately_so_output_stays_bounded': 'La révision du texte s’exécute séparément afin de '
+                                                                    'limiter la taille de la sortie.',
+ 'runtime.help.these_records_are_identical_across_all_compared_fields': 'Ces fiches sont identiques pour tous les '
+                                                                       'champs comparés.',
+ 'runtime.help.this_cannot_be_undone_unless_you_have_exported_backed_up_your_jsonl_and_chroma_data': 'Cette action est '
+                                                                                                    'irréversible, '
+                                                                                                    'sauf si vous avez '
+                                                                                                    'exporté ou '
+                                                                                                    'sauvegardé vos '
+                                                                                                    'données JSONL et '
+                                                                                                    'Chroma.',
+ 'runtime.help.this_is_a_draft_generated_by_an_llm_review_attribution_page_metadata_quotation_provenance_and_t': 'Il '
+                                                                                                                's’agit '
+                                                                                                                'd’un '
+                                                                                                                'brouillon '
+                                                                                                                'généré '
+                                                                                                                'par '
+                                                                                                                'un '
+                                                                                                                'LLM. '
+                                                                                                                'Vérifiez '
+                                                                                                                'l’attribution, '
+                                                                                                                'les '
+                                                                                                                'métadonnées '
+                                                                                                                'de '
+                                                                                                                'page, '
+                                                                                                                'la '
+                                                                                                                'provenance '
+                                                                                                                'des '
+                                                                                                                'citations '
+                                                                                                                'et le '
+                                                                                                                'texte '
+                                                                                                                'avant '
+                                                                                                                'de '
+                                                                                                                'l’enregistrer.',
+ 'runtime.help.this_is_the_reconstructed_original_state_before_tracked_updates': 'Il s’agit de l’état d’origine '
+                                                                                'reconstitué avant les modifications '
+                                                                                'consignées.',
+ 'runtime.help.this_local_record_changed_after_the_llm_job_started_current_values_below_may_differ_from_the_va': 'Cette '
+                                                                                                                'fiche '
+                                                                                                                'locale '
+                                                                                                                'a été '
+                                                                                                                'modifiée '
+                                                                                                                'après '
+                                                                                                                'le '
+                                                                                                                'démarrage '
+                                                                                                                'de la '
+                                                                                                                'tâche '
+                                                                                                                'LLM. '
+                                                                                                                'Les '
+                                                                                                                'valeurs '
+                                                                                                                'actuelles '
+                                                                                                                'ci-dessous '
+                                                                                                                'peuvent '
+                                                                                                                'différer '
+                                                                                                                'de '
+                                                                                                                'celles '
+                                                                                                                'examinées '
+                                                                                                                'initialement.',
+ 'runtime.help.this_setting_is_fixed_by_the_administrator_approved_researcher_profile': 'Ce paramètre est fixé par le '
+                                                                                       'profil chercheur approuvé par '
+                                                                                       'l’administrateur.',
+ 'runtime.help.top_level_and_or_plus_explicit_nested_groups': 'ET/OU au niveau supérieur avec groupes imbriqués '
+                                                             'explicites',
+ 'runtime.help.type_nuke_to_enable': 'Tapez NUKE pour activer',
+ 'runtime.help.unlink_record_from_pdf': 'Dissocier la fiche du PDF',
+ 'runtime.help.use_as_current_page_text': 'Utiliser comme texte de la page actuelle',
+ 'runtime.help.use_extract_current_page_or_extract_all_text_if_both_pdf_js_and_pymupdf_find_no_text_the_page_l': 'Utilisez '
+                                                                                                                '« '
+                                                                                                                'Extraire '
+                                                                                                                'la '
+                                                                                                                'page '
+                                                                                                                'actuelle '
+                                                                                                                '» ou '
+                                                                                                                '« '
+                                                                                                                'Extraire '
+                                                                                                                'tout '
+                                                                                                                'le '
+                                                                                                                'texte '
+                                                                                                                '». Si '
+                                                                                                                'PDF.js '
+                                                                                                                'et '
+                                                                                                                'PyMuPDF '
+                                                                                                                'ne '
+                                                                                                                'trouvent '
+                                                                                                                'aucun '
+                                                                                                                'texte, '
+                                                                                                                'la '
+                                                                                                                'page '
+                                                                                                                'nécessite '
+                                                                                                                'probablement '
+                                                                                                                'une '
+                                                                                                                'ROC.',
+ 'runtime.help.vector_database_defaults': 'Valeurs par défaut des bases de données vectorielles',
+ 'runtime.help.vector_database_or_selected_evidence_required': 'Base de données vectorielle ou preuves sélectionnées '
+                                                              'requises',
+ 'runtime.help.waiting_for_model': 'En attente du modèle…',
+ 'runtime.help.when_more_than_one_provider_profile_is_configured_derridai_defaults_grading_to_a_profile_differ': 'Lorsque '
+                                                                                                                'plusieurs '
+                                                                                                                'profils '
+                                                                                                                'fournisseurs '
+                                                                                                                'sont '
+                                                                                                                'configurés, '
+                                                                                                                'DerridAI '
+                                                                                                                'utilise '
+                                                                                                                'par '
+                                                                                                                'défaut '
+                                                                                                                'un '
+                                                                                                                'profil '
+                                                                                                                'd’évaluation '
+                                                                                                                'différent '
+                                                                                                                'de '
+                                                                                                                'celui '
+                                                                                                                'qui '
+                                                                                                                'génère '
+                                                                                                                'la '
+                                                                                                                'réponse.',
+ 'runtime.history_suffix': 'historique.',
+ 'runtime.identical_compared_fields': 'Ces fiches sont identiques pour tous les champs comparés.',
+ 'runtime.identical_fields': 'champs identiques',
+ 'runtime.inline': 'Dans le texte',
+ 'runtime.inline_citation': 'Citation dans le texte',
+ 'runtime.inline_cite': 'Citation dans le texte',
+ 'runtime.inspect_differences': 'Examiner les différences de champs et de texte',
+ 'runtime.instructions': 'Instructions',
+ 'runtime.interactive_foreground': 'Premier plan interactif',
+ 'runtime.jsonl_destination': 'Destination JSONL',
+ 'runtime.jsonl_tabs': 'Fichiers JSONL',
+ 'runtime.kind_filter_help': 'Le filtre de type restreint les ID de modèles détectés par le point de terminaison selon '
+                            'leur nom. Le routage automatique envoie le modèle auto; le mode manuel accepte tout ID de '
+                            'modèle compatible.',
+ 'runtime.kind_filter_prefix': 'Le filtre de type restreint selon leur nom les ID de modèles détectés par le point de '
+                              'terminaison. Le routage automatique envoie le modèle',
+ 'runtime.kind_filter_suffix': '; le mode manuel accepte tout ID de modèle compatible.',
+ 'runtime.last': 'Dernier',
+ 'runtime.lexical_vector': 'Lexical/vectoriel',
+ 'runtime.lexical_vector_fallback': 'Solution de rechange lexicale/vectorielle',
+ 'runtime.linked_pdf': 'le PDF lié',
+ 'runtime.linked_records': 'fiches liées',
+ 'runtime.linked_works': 'œuvres liées',
+ 'runtime.llm_operation': 'Tâche LLM',
+ 'runtime.llm_proposals': 'Propositions du LLM',
+ 'runtime.llm_providers': 'Fournisseurs LLM',
+ 'runtime.llm_providers_2': 'Fournisseurs LLM',
+ 'runtime.llm_review': 'Révision par LLM',
+ 'runtime.load': 'Charger',
+ 'runtime.load_jsonl_first': 'Chargez d’abord des fiches JSONL.',
+ 'runtime.loaded_records': 'fiches chargées',
+ 'runtime.loading_view': 'Chargement de la vue',
+ 'runtime.make_default': 'Définir par défaut',
+ 'runtime.manual': 'Manuel',
+ 'runtime.manual_model_id': 'Identifiant manuel du modèle',
+ 'runtime.match_all_and': 'Correspondre à TOUTES (ET)',
+ 'runtime.match_any_or': 'Correspondre à AU MOINS UNE (OU)',
+ 'runtime.max_output': 'Sortie maximale',
+ 'runtime.max_output_tokens': 'Nombre maximal de jetons de sortie',
+ 'runtime.merge_jsonl_tabs': 'Fusionner les fichiers JSONL',
+ 'runtime.merge_tabs_help': 'Les fichiers non sélectionnés demeurent inchangés. Les fichiers sources sélectionnés sont '
+                           'retirés de l’espace de travail après la création de la fusion; leurs fichiers sources sur '
+                           'disque ne sont pas supprimés.',
+ 'runtime.merged_file_name': 'Nom du fichier fusionné',
+ 'runtime.metadata': 'Métadonnées',
+ 'runtime.metadata_output': 'Sortie des métadonnées',
+ 'runtime.mixed_leave_unchanged': 'Valeurs mixtes / laisser inchangé',
+ 'runtime.mmr_fetch_k': 'Bassin MMR (fetch_k)',
+ 'runtime.mmr_lambda': 'Lambda MMR',
+ 'runtime.model_default': 'valeur par défaut du modèle',
+ 'runtime.model_kind': 'Type de modèle',
+ 'runtime.model_kind_filter': 'Filtre du type de modèle',
+ 'runtime.model_mode': 'Mode du modèle',
+ 'runtime.model_name': 'Nom du modèle',
+ 'runtime.model_readiness': 'État de préparation du modèle',
+ 'runtime.model_selection_mode': 'Mode de sélection du modèle',
+ 'runtime.model_size': 'Taille du modèle',
+ 'runtime.more_text_tools': 'Autres outils de texte',
+ 'runtime.needs_review': 'À réviser',
+ 'runtime.needs_review_records': 'Fiches à réviser',
+ 'runtime.new_rag_query': 'Nouvelle requête RAG',
+ 'runtime.new_value': 'Nouvelle valeur',
+ 'runtime.newer': 'Plus récent →',
+ 'runtime.next_2': 'Suivant →',
+ 'runtime.no_cached_rag_search': 'Aucune réponse RAG mise en cache ne correspond à cette recherche.',
+ 'runtime.no_cached_responses': 'Aucune réponse mise en cache pour le moment.',
+ 'runtime.no_changes_proposed': 'Aucune modification proposée',
+ 'runtime.no_current_pdf_persist': 'Impossible d’enregistrer le PDF actuel dans le stockage persistant',
+ 'runtime.no_current_pdf_restore': 'Impossible de restaurer le PDF actuel',
+ 'runtime.no_data': 'Aucune donnée',
+ 'runtime.no_database': 'Aucune base de données',
+ 'runtime.no_earlier_location': 'Il n’y a aucun emplacement précédent dans l’historique de navigation.',
+ 'runtime.no_forward_location': 'Il n’y a aucun emplacement suivant dans l’historique de navigation.',
+ 'runtime.no_loaded_updates_history': 'Aucune fiche chargée n’a d’historique de modifications',
+ 'runtime.no_matches': 'Aucune correspondance',
+ 'runtime.no_next_newer': 'Il n’y a aucun élément suivant ni aucune version plus récente.',
+ 'runtime.no_pending_changes': 'Aucune modification en attente',
+ 'runtime.no_record_selected': 'Aucune fiche n’est sélectionnée.',
+ 'runtime.no_reranking': 'Aucun reclassement',
+ 'runtime.no_updates_history': 'Cette fiche n’a aucun historique de modifications',
+ 'runtime.no_workspace_prefs': 'Impossible d’enregistrer les préférences IndexedDB',
+ 'runtime.no_workspace_restore': 'Impossible de restaurer l’espace de travail IndexedDB',
+ 'runtime.none': 'Aucun',
+ 'runtime.none_reported': 'Aucun élément signalé.',
+ 'runtime.not_warmed': 'Pas encore préchauffé dans cette session',
+ 'runtime.notice': 'Avis',
+ 'runtime.ocr_text': 'ROC / texte',
+ 'runtime.offline': 'Hors ligne',
+ 'runtime.older': '← Plus ancien',
+ 'runtime.ollama_endpoint': 'Point de terminaison Ollama',
+ 'runtime.on_this_page': 'sur cette page',
+ 'runtime.online': 'En ligne',
+ 'runtime.only_changed_expanded': 'Seuls les champs modifiés sont développés par défaut.',
+ 'runtime.open_dashboard': 'Ouvrir l’accueil',
+ 'runtime.open_full_details': 'Ouvrir tous les détails',
+ 'runtime.open_in_faq': 'Ouvrir dans la bibliothèque de réponses',
+ 'runtime.open_jsonl': 'Ouvrir un fichier JSONL',
+ 'runtime.open_library': 'Ouvrir la bibliothèque',
+ 'runtime.open_pdf_explorer': 'Ouvrir l’explorateur PDF',
+ 'runtime.open_result': 'Ouvrir le résultat',
+ 'runtime.openai_compatible_endpoint': 'Point de terminaison compatible avec OpenAI',
+ 'runtime.operation_timeline': 'Chronologie de l’opération',
+ 'runtime.original_language': 'Langue originale',
+ 'runtime.original_title': 'Titre original',
+ 'runtime.other_fields': 'Autres champs',
+ 'runtime.page': 'Page',
+ 'runtime.page_end': 'Dernière page',
+ 'runtime.page_start': 'Première page',
+ 'runtime.page_text': 'Texte de la page',
+ 'runtime.pages': 'Pages',
+ 'runtime.pdf_document': 'Document PDF',
+ 'runtime.pdf_explorer': 'Explorateur PDF',
+ 'runtime.pdf_file': 'Fichier PDF',
+ 'runtime.pdf_links': 'Liens PDF',
+ 'runtime.pdf_page': 'Page PDF',
+ 'runtime.pdf_pages': 'Pages PDF',
+ 'runtime.pending': 'En attente',
+ 'runtime.pipeline_timings': 'Durées du pipeline',
+ 'runtime.pipeline_timings_source': 'Adapté des étapes du pipeline DerridAI fournies',
+ 'runtime.precomputed_vectors': 'Vecteurs précalculés',
+ 'runtime.preview_record': 'Aperçu de la fiche',
+ 'runtime.previous_2': '← Précédent',
+ 'runtime.primary_text': 'Texte principal',
+ 'runtime.profiles': 'profils',
+ 'runtime.progress': 'Progression',
+ 'runtime.proposed': 'Proposé',
+ 'runtime.proposed_change': 'modification proposée',
+ 'runtime.provider_concurrency_help': 'La simultanéité est propre à chaque profil. Ollama démarre normalement à 1 '
+                                     'requête simultanée; les profils FreeLLM ou compatibles avec OpenAI utilisent 32 '
+                                     'par défaut et peuvent être réglés de 1 à 64.',
+ 'runtime.provider_model': 'Fournisseur / modèle',
+ 'runtime.provider_overview_help': 'Créez et configurez les fournisseurs réutilisables une seule fois, puis '
+                                  'sélectionnez-les partout où DerridAI utilise un LLM.',
+ 'runtime.provider_profile': 'Profil fournisseur',
+ 'runtime.provider_profiles': 'Profils fournisseurs',
+ 'runtime.provider_profiles_help': 'Points de terminaison, modèle et paramètres de génération réutilisables pour tous '
+                                  'les flux de travail LLM. Les profils compatibles avec OpenAI interrogent GET '
+                                  '/models lorsque le point de terminaison le permet. Les profils Ollama qui partagent '
+                                  'un point de terminaison utilisent une même limite d’exécution et la plus faible '
+                                  'limite de simultanéité configurée pour ce point de terminaison.',
+ 'runtime.publication_place': 'Lieu de publication',
+ 'runtime.publication_year': 'Année de publication',
+ 'runtime.publisher': 'Maison d’édition',
+ 'runtime.quantization': 'Quantification',
+ 'runtime.query_decomposition': 'Décomposition de la requête',
+ 'runtime.question': 'Question',
+ 'runtime.question_prompt': 'Question / invite',
+ 'runtime.queued': 'En attente',
+ 'runtime.quotation_chain': 'Chaîne de citations',
+ 'runtime.quotation_provenance': 'Provenance des citations',
+ 'runtime.quoted_addressee': 'Destinataire cité',
+ 'runtime.quoted_author': 'Auteur cité',
+ 'runtime.quoted_referent': 'Référent cité',
+ 'runtime.quoted_work': 'Œuvre citée',
+ 'runtime.rag_language_exists_suffix': 'existe, le RAG utilise la collection linguistique correspondante. Les langues '
+                                      'demandées qui n’existent pas utilisent la collection source avec un filtre sur',
+ 'runtime.rag_pipeline': 'Pipeline RAG',
+ 'runtime.rag_result': 'Résultat RAG',
+ 'runtime.random': 'aléatoire',
+ 'runtime.rationale': 'Justification',
+ 'runtime.ready': 'Prêt',
+ 'runtime.reasoning': 'Raisonnement',
+ 'runtime.record': 'Fiche',
+ 'runtime.record_actions': 'Actions sur la fiche',
+ 'runtime.record_annotation': 'Annotation de fiche',
+ 'runtime.record_comparison': 'Comparaison de fiches',
+ 'runtime.record_history': 'Historique de la fiche',
+ 'runtime.record_preview': 'Aperçu de la fiche',
+ 'runtime.records': 'fiches',
+ 'runtime.records_to_sync': 'Fiches à synchroniser',
+ 'runtime.region_author': 'Auteur de la région',
+ 'runtime.region_type': 'Type de région',
+ 'runtime.reject_selected': 'Rejeter la sélection',
+ 'runtime.rejected_fields': 'champs rejetés',
+ 'runtime.rejected_results': 'résultats rejetés',
+ 'runtime.remove': 'Supprimer',
+ 'runtime.remove_condition': 'Supprimer la condition',
+ 'runtime.remove_evidence': 'Retirer la preuve',
+ 'runtime.remove_filter': 'Supprimer le filtre',
+ 'runtime.remove_from_queue': 'Retirer de la file',
+ 'runtime.remove_group': 'Supprimer le groupe',
+ 'runtime.remove_work': 'Retirer l’œuvre',
+ 'runtime.remove_work_help': 'Retirez toutes les fiches de cette œuvre des fichiers JSONL chargés sélectionnés et, au '
+                            'besoin, de la collection Chroma choisie. La suppression dans une collection principale '
+                            'retire également les fiches correspondantes de ses collections linguistiques.',
+ 'runtime.request_configuration': 'Configuration de la requête',
+ 'runtime.rerank_top_n': 'Reclasser les N premiers',
+ 'runtime.reranker': 'Module de reclassement',
+ 'runtime.researcher_access': 'Accès des chercheurs',
+ 'runtime.reset_defaults': 'Rétablir les valeurs par défaut',
+ 'runtime.response_faq': 'Bibliothèque de réponses',
+ 'runtime.response_language': 'Langue de la réponse',
+ 'runtime.responses': 'réponses',
+ 'runtime.restore_original': 'Rétablir l’original',
+ 'runtime.result_summary': 'Résumé du résultat',
+ 'runtime.retrieval_diagnostics': 'Diagnostics de repérage',
+ 'runtime.retrieval_k': 'k de repérage',
+ 'runtime.retrieval_routes': 'Voies de repérage',
+ 'runtime.review': 'Réviser',
+ 'runtime.review_available_results': 'Réviser les résultats disponibles',
+ 'runtime.review_behavior': 'Comportement de révision',
+ 'runtime.review_failed': 'Échec de la révision',
+ 'runtime.review_preset': 'Préréglage de révision',
+ 'runtime.review_reason': 'Motif de révision',
+ 'runtime.review_results': 'Résultats de la révision',
+ 'runtime.review_status': 'État de la révision',
+ 'runtime.reviewed': 'Révisé',
+ 'runtime.reviewing': 'Révision',
+ 'runtime.rotate_left_90': 'Rotation de 90° à gauche',
+ 'runtime.rotate_right_90': 'Rotation de 90° à droite',
+ 'runtime.run_in_background': 'Exécuter en arrière-plan',
+ 'runtime.run_in_foreground': 'Exécuter au premier plan',
+ 'runtime.run_mode': 'Mode d’exécution',
+ 'runtime.run_rag_query': 'Lancer une requête RAG',
+ 'runtime.run_review': 'Lancer la révision',
+ 'runtime.running': 'En cours…',
+ 'runtime.running_rag_pipeline': 'Pipeline RAG en cours',
+ 'runtime.same_model_grade_help': 'Ce fournisseur et ce modèle ont aussi servi à générer la réponse RAG. '
+                                 'L’autoévaluation peut être systématiquement biaisée; utilisez un autre modèle pour '
+                                 'obtenir une évaluation plus indépendante.',
+ 'runtime.save_columns': 'Enregistrer les colonnes',
+ 'runtime.search_cached_questions': 'Rechercher dans les questions mises en cache',
+ 'runtime.search_page_text': 'Rechercher dans le texte de la page',
+ 'runtime.search_record_id_work_file': 'Rechercher l’ID de fiche, l’œuvre ou le fichier source',
+ 'runtime.secondary_text': 'Texte secondaire',
+ 'runtime.select_all': 'Tout sélectionner',
+ 'runtime.select_change_first': 'Sélectionnez d’abord au moins une modification proposée.',
+ 'runtime.select_metadata': 'Sélectionner les métadonnées',
+ 'runtime.select_none': 'Tout désélectionner',
+ 'runtime.select_record_first': 'Sélectionnez d’abord une fiche.',
+ 'runtime.selected_changes_note': 'sélectionnées · les modifications acceptées sont immédiatement retirées de cette '
+                                 'file d’attente',
+ 'runtime.selected_evidence': 'preuves sélectionnées',
+ 'runtime.selected_records': 'Fiches sélectionnées',
+ 'runtime.selected_value': 'Valeur sélectionnée',
+ 'runtime.selection_mode': 'Mode de sélection',
+ 'runtime.self_grade_help': 'Cette évaluation a utilisé le même modèle que celui qui a généré la réponse; '
+                           'interprétez-la comme une autoévaluation plutôt que comme une évaluation indépendante.',
+ 'runtime.semantic_classification_confidence': 'Fiabilité de la classification sémantique',
+ 'runtime.semantic_function': 'Fonction sémantique',
+ 'runtime.semantics': 'Sémantique',
+ 'runtime.short_title': 'Titre abrégé',
+ 'runtime.source': 'Source',
+ 'runtime.source_collection': 'Collection source',
+ 'runtime.start_operation': 'Lancer l’opération',
+ 'runtime.start_typing_records': 'Commencez à saisir du texte pour rechercher les fiches chargées.',
+ 'runtime.started': 'Démarré',
+ 'runtime.started_by': 'Lancé par',
+ 'runtime.status': 'État',
+ 'runtime.status_error': 'Erreur d’état',
+ 'runtime.summary': 'Résumé',
+ 'runtime.target_records': 'Fiches ciblées',
+ 'runtime.temperature': 'Température',
+ 'runtime.text': 'Texte',
+ 'runtime.text_length': 'Longueur du texte',
+ 'runtime.think': 'Réflexion',
+ 'runtime.this_version': 'Cette version',
+ 'runtime.traditional_search': 'Recherche traditionnelle',
+ 'runtime.translation': 'Traduction',
+ 'runtime.translator': 'Traducteur',
+ 'runtime.type_choose_installed_model': 'Saisissez ou choisissez un modèle installé',
+ 'runtime.type_choose_model': 'Saisissez ou choisissez un ID de modèle',
+ 'runtime.type_record_work_author_file': 'Saisissez un ID de fiche, une œuvre, un auteur ou un fichier…',
+ 'runtime.unavailable': 'Indisponible',
+ 'runtime.unknown': 'Inconnu',
+ 'runtime.unknown_error': 'erreur inconnue',
+ 'runtime.untagged': 'sans étiquette',
+ 'runtime.untitled_question': 'Question sans titre',
+ 'runtime.use_model': 'Utiliser le modèle',
+ 'runtime.value': 'Valeur',
+ 'runtime.values': 'Valeurs',
+ 'runtime.vector_defaults_prefix': 'Les nouvelles collections utilisent par défaut les plongements vectoriels Ollama '
+                                  'avec',
+ 'runtime.vector_defaults_suffix': '. Les collections linguistiques Chroma utilisent les étiquettes générales',
+ 'runtime.verify': 'vérifier',
+ 'runtime.verify_carefully': 'vérifier attentivement',
+ 'runtime.viewer_configuration': 'Configuration du visualiseur',
+ 'runtime.waiting_in_queue': 'En attente dans la file.',
+ 'runtime.warm': 'Préchauffé',
+ 'runtime.warming': 'Préchauffage',
+ 'runtime.warmup': 'Préchauffage',
+ 'runtime.warmup_failed': 'Échec du préchauffage',
+ 'runtime.when': 'Lorsque',
+ 'runtime.words': 'mots',
+ 'runtime.work_metadata_help_prefix': 'uniquement pour les champs qui doivent être modifiés dans toutes les fiches '
+                                     'associées. La modification de',
+ 'runtime.work_metadata_help_suffix': 'renomme l’œuvre dans toutes les fiches chargées. Chaque champ modifié est '
+                                     'consigné dans l’',
+ 'runtime.works': 'œuvres',
+ 'runtime.works_and_records': 'Œuvres et fiches',
+ 'runtime.works_cited': 'Ouvrages cités',
+ 'runtime.works_referenced': 'Œuvres citées',
+ 'llm.connection_from_profile': 'Le point de terminaison et les identifiants proviennent du profil de fournisseur et '
+                                'sont gérés de façon centralisée.',
+ 'llm.manage_provider_profiles': 'Gérer les profils de fournisseur',
+ 'llm.model_not_set': 'Modèle non défini',
+ 'llm.openai_compatible': 'Compatible avec OpenAI',
+ 'llm.provider_profile': 'Profil de fournisseur',
+ 'llm.review_workspace': 'Espace de révision LLM',
+ 'llm.review_workspace_summary': '{count} fiche(s) · examinez les propositions avant d’appliquer les changements.',
+ 'llm.checking_provider': 'Vérification du fournisseur…',
+ 'llm.provider_ready': 'Fournisseur prêt',
+ 'llm.provider_unavailable': 'Fournisseur indisponible',
+ 'llm.text_review_separate': 'La révision du texte doit être exécutée séparément des métadonnées.',
+ 'llm.model_required': 'Aucun modèle sélectionné.',
+ 'llm.run_mode': 'Mode d’exécution',
+ 'llm.interactive_foreground': 'Révision interactive au premier plan',
+ 'llm.background_review': 'Révision en arrière-plan',
+ 'llm.review_preset': 'Préréglage de révision',
+ 'llm.attribution': 'Attribution',
+ 'llm.semantics': 'Sémantique',
+ 'llm.ocr_text': 'OCR / texte',
+ 'llm.allowed_fields': 'Champs autorisés',
+ 'llm.select_metadata': 'Sélectionner les métadonnées',
+ 'llm.verify': 'à vérifier',
+ 'llm.model': 'Modèle',
+ 'llm.model_name': 'Nom du modèle',
+ 'llm.additional_instructions': 'Instructions supplémentaires',
+ 'llm.instructions_optional': 'Instructions facultatives appliquées à chaque fiche de ce lot.',
+ 'llm.auto_progress': 'Passe d’amélioration automatique en cours',
+ 'llm.records_reviewed': 'fiches révisées',
+ 'llm.review_in_progress': 'Révision en cours',
+ 'llm.auto_results': 'Résultats de l’amélioration automatique',
+ 'llm.review_queue': 'File de révision',
+ 'llm.proposed_changes': 'changements proposés',
+ 'llm.expand_all': 'Tout développer',
+ 'llm.collapse_all': 'Tout réduire',
+ 'llm.select_all_changes': 'Sélectionner tous les changements',
+ 'llm.select_none': 'Ne rien sélectionner',
+ 'llm.failed': 'Échec',
+ 'llm.changes': 'changements',
+ 'llm.reviewing': 'Révision',
+ 'llm.queued': 'En file',
+ 'llm.waiting_model': 'En attente du modèle…',
+ 'llm.waiting_queue': 'En attente dans la file.',
+ 'llm.select_record_changes': 'Sélectionner les changements de la fiche',
+ 'llm.clear_record': 'Effacer la fiche',
+ 'llm.current': 'Actuel',
+ 'llm.proposed': 'Proposé',
+ 'llm.no_rationale': 'Aucune justification fournie.',
+ 'llm.review_running': 'La révision est en cours. Les fiches terminées restent consultables.',
+ 'llm.selected_changes': 'changements sélectionnés',
+ 'llm.review_again': 'Réviser à nouveau',
+ 'llm.accept_all': 'Accepter tous les changements',
+ 'llm.apply_selected': 'Appliquer la sélection',
+ 'llm.run_review': 'Lancer la révision',
+ 'nav.annotations': 'Annotations',
+ 'nav.cache': 'Mémoire cache des réponses',
+ 'nav.compare': 'Comparer',
+ 'nav.config': 'Paramètres',
+ 'nav.dashboard': 'Accueil',
+ 'nav.faq': 'Bibliothèque de réponses',
+ 'nav.home': 'Accueil',
+ 'nav.more_tools': 'Autres outils',
+ 'nav.pdf': 'Générateur de corpus',
+ 'nav.providers': 'Fournisseurs LLM',
+ 'nav.rag': 'Recherche',
+ 'nav.record': 'Vue de fiche',
+ 'nav.records': 'Fiches',
+ 'nav.roles': 'Rôles et autorisations',
+ 'nav.search': 'Recherche',
+ 'nav.users': 'Utilisateurs et rôles',
+ 'nav.vector': 'Bases vectorielles',
+ 'nav.works': 'Œuvres',
+ 'operations.active': 'active(s)',
+ 'operations.background': 'Opérations en arrière-plan',
+ 'operations.blocking_sync_help': 'Cette synchronisation volumineuse s’exécute au premier plan par lots de 500. Les '
+                                  'autres actions DerridAI sont suspendues jusqu’à la fin ou jusqu’à l’annulation.',
+ 'operations.cancelled_ollama_wait': 'Annulé pendant l’attente d’une place Ollama',
+ 'operations.cancelled_provider_wait': 'Annulé pendant l’attente d’une place chez le fournisseur',
+ 'operations.cancelled_queue': 'Annulé pendant l’attente dans la file',
+ 'operations.cancelling': 'Annulation…',
+ 'operations.cancelling_after_batch': 'Annulation de la requête en cours…',
+ 'operations.clear_finished': 'Effacer les opérations terminées',
+ 'operations.continue_sync': 'Continuer la synchronisation',
+ 'operations.cancelled_help': 'Annulé · des résultats partiels peuvent rester disponibles',
+ 'operations.clear_failed': 'Impossible d’effacer les opérations : {message}',
+ 'operations.collapse': 'Masquer les opérations',
+ 'operations.completed_help': 'Terminé · ouvrez le résultat ou fermez',
+ 'operations.drag_help': 'Faites glisser n’importe où · double-cliquez pour recentrer',
+ 'operations.expand': 'Afficher les opérations',
+ 'operations.failed_help': 'Échec · {detail}',
+ 'operations.live_cancelled': '{label} a été annulé',
+ 'operations.live_completed': '{label} est terminé',
+ 'operations.live_failed': '{label} a échoué',
+ 'operations.live_started': '{label} a commencé',
+ 'operations.open_details': 'Détails complets',
+ 'operations.open_result': 'Ouvrir le résultat',
+ 'operations.pill_failed_one': '{count} en échec',
+ 'operations.pill_failed_other': '{count} en échec',
+ 'operations.pill_finished_one': '{count} à traiter',
+ 'operations.pill_finished_other': '{count} à traiter',
+ 'operations.pill_primary': '{label}',
+ 'operations.pill_primary_progress': '{label} · {percent} %',
+ 'operations.pill_running_failed': '{running} en cours · {failed} en échec',
+ 'operations.pill_running_one': '{count} en cours',
+ 'operations.pill_running_other': '{count} en cours',
+ 'operations.remove_failed': 'Impossible de retirer l’opération : {message}',
+ 'operations.review_available': 'Réviser {count} disponible(s)',
+ 'operations.status.blocked': 'Bloqué',
+ 'operations.status.cancelled': 'Annulé',
+ 'operations.status.cancelling': 'Annulation',
+ 'operations.status.completed': 'Terminé',
+ 'operations.status.failed': 'Échec',
+ 'operations.status.queued': 'En file',
+ 'operations.status.running': 'En cours',
+ 'operations.title': 'Opérations',
+ 'operations.view_grade': 'Voir la note',
+ 'operations.foreground_sync_active_help': 'Attendez la fin de la grande synchronisation au premier plan avant d’en '
+                                           'lancer une autre.',
+ 'operations.foreground_sync_active_title': 'Grande synchronisation déjà en cours',
+ 'operations.foreground_sync_batch': 'Validation des fiches {start} à {end} sur {total}',
+ 'operations.foreground_sync_committed': '{count} fiches validées',
+ 'operations.foreground_sync_complete': '{count} fiches terminées sans créer d’opération en arrière-plan.',
+ 'operations.foreground_sync_done': '{count} fiches synchronisées vers {store}',
+ 'operations.foreground_sync_failed': 'Échec de la synchronisation : {message}',
+ 'operations.foreground_sync_failed_title': 'Échec de la grande synchronisation',
+ 'operations.foreground_sync_help': 'Les grandes synchronisations sont traitées par petits lots au premier plan afin '
+                                    'que le navigateur reste réactif.',
+ 'operations.foreground_sync_title': 'Synchronisation de {count} fiches',
+ 'operations.keep_tab_open': 'Gardez cet onglet DerridAI ouvert pendant la synchronisation.',
+ 'operations.large_sync_background_help': '{count} fiches seront préparées une fois, puis DerridAI construira et '
+                                          'validera la collection en arrière-plan. Vous pouvez continuer à travailler '
+                                          'pendant l’opération.',
+ 'operations.large_sync_background_title': 'Construire la collection en arrière-plan?',
+ 'operations.large_sync_foreground_help': '{count} fiches seront synchronisées par lots au premier plan afin que le '
+                                          'navigateur demeure réactif. Gardez cet onglet DerridAI ouvert jusqu’à la '
+                                          'fin.',
+ 'operations.large_sync_foreground_title': 'La grande synchronisation s’exécute au premier plan',
+ 'operations.minimize': 'Réduire les opérations',
+ 'operations.no_finished': 'Aucune opération terminée à effacer.',
+ 'operations.preparing_sync': 'Préparation des fiches…',
+ 'operations.rag_cancelled': 'Processus RAG annulé',
+ 'operations.rag_complete': 'Processus RAG terminé',
+ 'operations.rag_complete_cache_failed': 'Processus RAG terminé; échec de l’écriture dans la mémoire cache des '
+                                         'réponses',
+ 'operations.rag_complete_grade': 'Processus RAG et évaluation automatique terminés',
+ 'operations.rag_complete_grade_failed': 'Processus RAG terminé; échec de l’évaluation automatique',
+ 'operations.rag_job_cancelled': 'Tâche RAG annulée',
+ 'operations.refreshing_after_sync': 'Actualisation de l’état de la collection…',
+ 'operations.shared_queue': 'Les appels LLM, les pipelines RAG, les constructions de corpus PDF et les '
+                            'synchronisations Chroma partagent cette file',
+ 'operations.show': 'Afficher les opérations',
+ 'operations.start_background_build': 'Démarrer la construction en arrière-plan',
+ 'operations.summary': '{active} active(s) · {retained} conservée(s) · {queue}',
+ 'operations.progress_overall': '{percent} % global',
+ 'operations.decision.accepted': 'acceptée',
+ 'operations.decision.partially_accepted': 'partiellement acceptée',
+ 'operations.decision.pending': 'en attente',
+ 'operations.decision.rejected': 'rejetée',
+ 'operations.fact.accepted': 'Acceptés',
+ 'operations.fact.auto_grade': 'Notation auto',
+ 'operations.fact.cached_response': 'Réponse en cache',
+ 'operations.fact.collection': 'Collection',
+ 'operations.fact.committed': 'Validées',
+ 'operations.fact.current_record': 'Fiche en cours',
+ 'operations.fact.decision': 'Décision',
+ 'operations.fact.elapsed': 'Écoulé',
+ 'operations.fact.embedding': 'Plongement',
+ 'operations.fact.fields': 'Champs',
+ 'operations.fact.generation': 'Génération',
+ 'operations.fact.language_mirrors': 'Miroirs linguistiques',
+ 'operations.fact.languages': 'Langues',
+ 'operations.fact.max_concurrent': 'Simultanéité max.',
+ 'operations.fact.model': 'Modèle',
+ 'operations.fact.operation': 'Opération',
+ 'operations.fact.page': 'Page',
+ 'operations.fact.pdf': 'PDF',
+ 'operations.fact.pending_changes': 'Modifications en attente',
+ 'operations.fact.pending_results': 'Résultats en attente',
+ 'operations.fact.provider': 'Fournisseur',
+ 'operations.fact.records': 'Fiches',
+ 'operations.fact.rejected': 'Rejetés',
+ 'operations.fact.reranker': 'Réordonnanceur',
+ 'operations.fact.result_field_counts': '{results} résultat(s) · {fields} champ(s)',
+ 'operations.fact.retrieval': 'Récupération',
+ 'operations.fact.scope': 'Portée',
+ 'operations.fact.stage': 'Étape',
+ 'operations.fact.started_by': 'Lancé par',
+ 'operations.fact.total_time': 'Durée totale',
+ 'operations.fact.top_n': 'N premiers',
+ 'operations.fact.unprocessed_records': 'Fiches non traitées',
+ 'operations.job.auto': 'Amélioration automatique',
+ 'operations.job.llm_tool': 'Opération LLM',
+ 'operations.job.pdf_clean_text': 'PDF · nettoyage du texte',
+ 'operations.job.pdf_draft_record': 'PDF · ébauche de fiche',
+ 'operations.job.pdf_link_record': 'PDF · liaison de fiche',
+ 'operations.job.rag': 'Pipeline RAG',
+ 'operations.job.rag_grade': 'RAG · notation de la réponse',
+ 'operations.job.rag_grade_batch': 'RAG · notation du cache de réponses',
+ 'operations.job.review': 'Révision LLM',
+ 'operations.job.upsert': 'Synchronisation Chroma',
+ 'operations.progress_of': '{done} sur {total} ({percent} %)',
+ 'operations.sub.cancelling': 'Annulation demandée · l’appel ou le lot en cours atteint un point d’arrêt sûr',
+ 'operations.sub.collection': 'collection',
+ 'operations.sub.committed': 'validées',
+ 'operations.sub.current': 'en cours :',
+ 'operations.sub.failed': 'en échec',
+ 'operations.sub.mirrors_active': 'miroirs linguistiques actifs',
+ 'operations.sub.queued': 'en attente',
+ 'operations.sub.records': 'fiches',
+ 'operations.panel.clear_finished': 'Effacer les terminées',
+ 'operations.panel.filter_label': 'Afficher les opérations',
+ 'operations.panel.filter_all': 'Toutes',
+ 'operations.panel.filter_active': 'En cours',
+ 'operations.panel.filter_attention': 'À traiter',
+ 'operations.panel.filter_done': 'Terminées',
+ 'operations.panel.section_attention': 'À traiter',
+ 'operations.panel.section_active': 'En cours',
+ 'operations.panel.section_history': 'Historique',
+ 'operations.panel.status_queued': 'En attente',
+ 'operations.panel.status_running': 'En cours',
+ 'operations.panel.status_cancelling': 'Annulation',
+ 'operations.panel.status_completed': 'Terminée',
+ 'operations.panel.status_cancelled': 'Annulée',
+ 'operations.panel.status_failed': 'Échec',
+ 'operations.panel.status_blocked': 'Bloquée',
+ 'operations.panel.progress_for': 'Progression de {name}',
+ 'operations.panel.waiting': 'En attente de démarrage',
+ 'operations.panel.eta': 'Reste environ {time}',
+ 'operations.panel.elapsed': 'En cours depuis {time}',
+ 'operations.panel.took': 'Durée : {time}',
+ 'operations.panel.started': 'Démarrée {when}',
+ 'operations.panel.queued_at': 'En file {when}',
+ 'operations.panel.finished': 'Terminée {when}',
+ 'operations.panel.by': 'par {name}',
+ 'operations.panel.error_heading': 'Ce qui s’est passé',
+ 'operations.panel.action_details': 'Détails',
+ 'operations.panel.action_cancel': 'Annuler',
+ 'operations.panel.action_cancelling': 'Annulation…',
+ 'operations.panel.action_remove': 'Supprimer',
+ 'operations.panel.action_open_result': 'Ouvrir le résultat',
+ 'operations.panel.action_open_build': 'Ouvrir la construction du corpus',
+ 'operations.panel.action_review': 'Réviser les résultats',
+ 'operations.panel.action_review_partial': 'Réviser les résultats disponibles',
+ 'operations.panel.details_for': 'Détails de {name}',
+ 'operations.panel.cancel_for': 'Annuler {name}',
+ 'operations.panel.remove_for': 'Supprimer {name}',
+ 'operations.panel.open_result_for': 'Ouvrir le résultat de {name}',
+ 'operations.panel.open_build_for': 'Ouvrir la construction du corpus : {name}',
+ 'operations.panel.review_for': 'Réviser les résultats de {name}',
+ 'operations.panel.review_partial_for': 'Réviser les résultats disponibles de {name}',
+ 'operations.panel.removed': '{name} supprimée.',
+ 'operations.panel.cleared': '{count} opération(s) terminée(s) effacée(s).',
+ 'operations.panel.undo': 'Rétablir',
+ 'operations.panel.undo_hint': 'Vous pouvez rétablir pendant quelques secondes.',
+ 'operations.panel.restored': 'Rétablie.',
+ 'operations.panel.removal_failed': 'Suppression impossible : {error}',
+ 'operations.panel.announce_completed': '{name} : terminée.',
+ 'operations.panel.announce_failed': '{name} : échec.',
+ 'operations.panel.announce_blocked': '{name} nécessite votre attention.',
+ 'operations.panel.announce_cancelled': '{name} : annulée.',
+ 'operations.panel.announce_updated': 'Opérations mises à jour.',
+ 'operations.panel.empty_title': 'Rien en cours',
+ 'operations.panel.empty_body': 'Lancez une construction de corpus, installez une langue ou posez une question de recherche : elle apparaîtra ici.',
+ 'operations.panel.empty_filtered': 'Aucune opération ne correspond à ce filtre.',
+ 'operations.panel.show_all_history': 'Tout afficher ({count})',
+ 'operations.panel.show_fewer': 'En afficher moins',
+ 'operations.progress_build_complete': 'Construction terminée · prête pour la révision',
+ 'operations.count_one': '{count} opération',
+ 'operations.count_other': '{count} opérations',
+ 'operations.sync_cancelled': 'Synchronisation annulée. Les lots terminés restent synchronisés.',
+ 'operations.syncing_records': 'Synchronisation des fiches…',
+ 'operations.vector_build_queued': '{count} fiches mises en file pour la construction en arrière-plan de {store}',
+ 'operations.vector_sync_active_help': '{label} doit se terminer ou être annulée avant de démarrer une autre '
+                                       'construction.',
+ 'operations.vector_sync_active_title': 'Une synchronisation vectorielle est déjà active',
+ 'operations.waiting_to_start': 'En attente de démarrage',
+ 'pdf_corpus.absolute_safety_splits': 'Scissions au plafond absolu',
+ 'pdf_corpus.accept': 'Accepter',
+ 'pdf_corpus.accept_all': 'Tout accepter',
+ 'pdf_corpus.accept_all_queue': 'Accepter la file',
+ 'pdf_corpus.accept_blocked_metadata': 'Confirmez les métadonnées requises avant d’accepter cette fiche : {fields}.',
+ 'pdf_corpus.accept_blocked_source': 'Résolvez ou rejetez ce problème d’extraction de la source avant d’accepter la '
+                                     'fiche.',
+ 'pdf_corpus.accept_clean': 'Accepter les fiches nettes ({count})',
+ 'pdf_corpus.accept_clean_confirm': 'Accepter {count} fiche(s) sans problème? Les fiches ayant des problèmes de '
+                                    'métadonnées, de topologie ou de source resteront à réviser.',
+ 'pdf_corpus.accept_clean_done': '{count} fiche(s) sans problème acceptée(s). Seules les exceptions restent.',
+ 'pdf_corpus.accept_next': 'Accepter et suivante',
+ 'pdf_corpus.accept_selected': 'Accepter la sélection',
+ 'pdf_corpus.accepted': 'acceptées',
+ 'pdf_corpus.accepted_label': 'Acceptée',
+ 'pdf_corpus.accepted_notice': 'Fiche acceptée. Passage à la fiche suivante.',
+ 'pdf_corpus.active_build_capacity': '{count} construction(s) active(s). Une nouvelle construction est indépendante et '
+                                     'utilise la capacité du profil fournisseur sélectionné.',
+ 'pdf_corpus.active_metadata_tasks': 'Tâches de métadonnées actives',
+ 'pdf_corpus.active_now': 'Actives maintenant',
+ 'pdf_corpus.add_evidence': 'Ajouter comme preuve',
+ 'pdf_corpus.advanced_metadata': 'Métadonnées avancées',
+ 'pdf_corpus.already_running': 'Cette construction est déjà en cours. Son état en direct est affiché ci-dessous.',
+ 'pdf_corpus.api_key': 'Clé API',
+ 'pdf_corpus.attention_required': 'Vérification requise',
+ 'pdf_corpus.auto_published': 'Révision terminée. {count} fiches ont été publiées automatiquement.',
+ 'pdf_corpus.auto_retry': 'Relance automatique',
+ 'pdf_corpus.automatic_resolution': 'Résolution automatique',
+ 'pdf_corpus.base_url': 'URL de base',
+ 'pdf_corpus.blocking_pages': '{count} page(s) bloquante(s)',
+ 'pdf_corpus.blocks': 'SourceUnits',
+ 'pdf_corpus.source_units': 'unités sources',
+ 'pdf_corpus.pdf_author': 'Auteur du PDF',
+ 'pdf_corpus.source_facts_help': 'Les unités sources sont des unités de mise en page documentaire extraites, et non des Records. « Pages OCR » compte les pages où l’OCR a été utilisé; zéro signifie que la couche de texte du PDF a été utilisée directement. L’auteur intégré au PDF est une proposition déterministe qui demeure révisable dans le manifeste du document.',
+ 'pdf_corpus.quality.garbage_alert': 'Le contrôle déterministe de la qualité de la source a signalé {records} % des Records ou {pages} % des pages PDF comme potentiellement inutilisables. Examinez les SourceUnits et les avertissements d’extraction avant l’enrichissement.',
+ 'pdf_corpus.llm_touchup_during_enrichment': 'Utiliser le LLM pour retoucher le texte pendant l’enrichissement',
+ 'pdf_corpus.llm_touchup_during_enrichment_help': 'Propose des corrections prudentes des coquilles, diacritiques, formats, citations et retours à la ligne. Rien ne devient une valeur faisant autorité avant votre examen et votre enregistrement.',
+ 'pdf_corpus.boundary_budget_skipped': '{count} transition(s) candidate(s) de moindre valeur résolue(s) par CONSERVER '
+                                       'selon le budget LLM.',
+ 'pdf_corpus.boundary_candidates': 'Transitions candidates',
+ 'pdf_corpus.boundary_failures_kept': '{count} échec(s) du classificateur résolu(s) par CONSERVER.',
+ 'pdf_corpus.boundary_review_required': 'Limites à réviser',
+ 'pdf_corpus.build_configuration': 'Configuration de la construction',
+ 'pdf_corpus.build_error': 'Erreur de construction',
+ 'pdf_corpus.build_progress': 'Progression de la construction du corpus',
+ 'pdf_corpus.build_records': 'Construire l’ensemble de fiches',
+ 'pdf_corpus.build_resumed': 'Construction reprise depuis son dernier point de contrôle terminé.',
+ 'pdf_corpus.build_settings_summary': 'Paramètres de construction',
+ 'pdf_corpus.build_started': 'Construction du corpus démarrée. La progression et les points de contrôle terminés sont '
+                             'persistés côté serveur.',
+ 'pdf_corpus.build_stopped_checkpoint': 'La reprise ne recommence pas les étapes terminées et ne supprime pas les '
+                                        'notices validées.',
+ 'pdf_corpus.build_stopped_help': 'Les points de contrôle terminés ont été conservés. Vérifiez le fournisseur et les '
+                                  'paramètres d’exécution ci-dessus, puis reprenez au dernier point de contrôle sûr.',
+ 'pdf_corpus.build_stopped_title': 'Construction arrêtée avant la fin',
+ 'pdf_corpus.build_timeline': 'Chronologie de construction',
+ 'pdf_corpus.building_records': 'Construction des fiches',
+ 'pdf_corpus.building_records_help': 'DerridAI analyse la structure du document et les frontières sémantiques. '
+                                     'L’espace de révision apparaîtra automatiquement dès que des fiches révisables '
+                                     'seront enregistrées.',
+ 'pdf_corpus.building_records_title': 'La construction du corpus est en cours',
+ 'pdf_corpus.builds': 'Constructions de corpus',
+ 'pdf_corpus.bulk_confirm': '{action} {count} fiche(s) dans la file actuelle?',
+ 'pdf_corpus.bulk_done': '{count} fiche(s) mise(s) à jour.',
+ 'pdf_corpus.bulk_done_metadata_blocked': '{count} fiche(s) admissible(s) acceptée(s); {blocked} fiche(s) exigent '
+                                          'encore des décisions de métadonnées et sont maintenant affichées dans la '
+                                          'file des métadonnées.',
+ 'pdf_corpus.cancel_build': 'Annuler la construction',
+ 'pdf_corpus.cancel_requested': 'Annulation demandée. L’espace de travail segmenté demeure modifiable, et vous pourrez démarrer une autre construction dès que l’annulation sera terminée.',
+ 'pdf_corpus.characters': 'car.',
+ 'pdf_corpus.choose_pdf': 'Choisir un PDF source',
+ 'pdf_corpus.choose_persisted_pdf': 'Choisir un PDF persistant…',
+ 'pdf_corpus.choose_source_prompt': 'Choisissez un PDF source pour continuer.',
+ 'pdf_corpus.choose_value': 'Choisir une valeur…',
+ 'pdf_corpus.citation_issues': 'problème(s) de citation',
+ 'pdf_corpus.complete': 'Terminé',
+ 'pdf_corpus.concurrency': 'Concurrence',
+ 'pdf_corpus.concurrent_requests': 'requête(s) simultanée(s) max.',
+ 'pdf_corpus.confidence': 'Confiance',
+ 'pdf_corpus.configure_another_build': 'Configurer une autre construction',
+ 'pdf_corpus.configure_new_build': 'Configurer une nouvelle construction',
+ 'pdf_corpus.confirm_field_value': 'Confirmer la valeur',
+ 'pdf_corpus.confirm_manifest_continue': 'Confirmer le document et continuer',
+ 'pdf_corpus.confirm_no_value': 'Confirmer qu’aucune valeur n’est étayée',
+ 'pdf_corpus.confirmed_on_accept': 'Cette proposition sera confirmée par la personne réviseuse lors de l’acceptation '
+                                   'de la fiche.',
+ 'pdf_corpus.context_budget_detail': 'Le plus grand tour de segmentation exige environ {required} jetons avant les '
+                                     'frais généraux du fournisseur; le contexte est de {context}.',
+ 'pdf_corpus.context_safe': 'Le budget de contexte semble adéquat',
+ 'pdf_corpus.context_start_blocked': 'Augmentez la fenêtre de contexte ou réduisez la fenêtre/le budget de sortie de '
+                                     'segmentation avant de démarrer. Minimum approximatif : {count} jetons.',
+ 'pdf_corpus.context_unknown': 'Le profil de fournisseur ne précise pas de fenêtre de contexte; DerridAI ne peut pas '
+                               'vérifier la capacité à l’avance.',
+ 'pdf_corpus.context_unsafe': 'Le budget de contexte est insuffisant',
+ 'pdf_corpus.context_window': 'Fenêtre de contexte',
+ 'pdf_corpus.context_window_help': 'Nombre maximal de jetons de contexte du modèle pour cette construction.',
+ 'pdf_corpus.continue_unresolved': 'Continuer avec les métadonnées non résolues',
+ 'pdf_corpus.coverage': 'Couverture',
+ 'pdf_corpus.current_stage': 'Étape actuelle',
+ 'pdf_corpus.data_tab': 'Données',
+ 'pdf_corpus.decision_saved': 'Décision enregistrée',
+ 'pdf_corpus.deterministic_fields': 'Champs déterministes',
+ 'pdf_corpus.deterministic_splits': 'Scissions déterministes',
+ 'pdf_corpus.discourse_output': 'Sortie des métadonnées discursives',
+ 'pdf_corpus.disposition.accepted': 'Acceptée',
+ 'pdf_corpus.disposition.pending': 'En attente',
+ 'pdf_corpus.disposition.rejected': 'Rejetée',
+ 'pdf_corpus.document_manifest': 'Manifeste du document',
+ 'pdf_corpus.document_metadata_edit_help': 'Les modifications mettent à jour les métadonnées héritées et les citations '
+                                           'dans toute la construction. Les remplacements explicites effectués par une '
+                                           'personne au niveau de la fiche sont conservés.',
+ 'pdf_corpus.document_metadata_locked_running': 'Les métadonnées du document restent visibles, mais ne peuvent pas '
+                                                'être modifiées pendant l’enrichissement actif des fiches. Utilisez un '
+                                                'remplacement au niveau d’une fiche déjà traitée, ou attendez la fin '
+                                                'de l’enrichissement avant de modifier le manifeste du document.',
+ 'pdf_corpus.download_jsonl': 'Télécharger le JSONL',
+ 'pdf_corpus.edit_document_metadata': 'Modifier les métadonnées du document',
+ 'pdf_corpus.edit_text': 'Modifier le texte',
+ 'pdf_corpus.elapsed': 'Temps écoulé',
+ 'pdf_corpus.enrichment_deep': 'Enrichissement savant approfondi',
+ 'pdf_corpus.enrichment_deep_help': 'Exécute plus largement l’analyse du discours, des citations et l’indexation '
+                                    'sémantique. Plus lent; destiné à un enrichissement délibéré.',
+ 'pdf_corpus.enrichment_fast': 'Construction rapide du corpus',
+ 'pdf_corpus.enrichment_fast_help': 'Métadonnées déterministes d’abord; analyse des citations seulement en présence '
+                                    'd’indices; indexation sémantique désactivée sauf activation ci-dessous.',
+ 'pdf_corpus.enrichment_strategy': 'Stratégie d’enrichissement',
+ 'pdf_corpus.enrichment_strategy_help': 'Le mode rapide n’envoie au LLM que les questions de métadonnées réellement '
+                                        'utiles. Le mode approfondi élargit l’analyse de l’attribution, des citations '
+                                        'et de l’indexation.',
+ 'pdf_corpus.escalation_provider': 'Fournisseur de relève',
+ 'pdf_corpus.escalation_provider_help': 'Solution de repli facultative utilisée seulement après l’épuisement des '
+                                        'tentatives de sortie structurée du fournisseur principal.',
+ 'pdf_corpus.escalations': 'escalades',
+ 'pdf_corpus.eta': 'Temps restant estimé',
+ 'pdf_corpus.evidence_bindings': 'liens de preuve',
+ 'pdf_corpus.evidence_help': 'Choisissez un champ pour mettre en évidence uniquement les SourceUnits liés à cette '
+                             'relation de métadonnées.',
+ 'pdf_corpus.evidence_issues': 'problème(s) de preuve',
+ 'pdf_corpus.evidence_review_help': 'Sélectionnez un champ de métadonnées pour inspecter ou ajuster ses preuves liées '
+                                    'aux SourceUnits.',
+ 'pdf_corpus.evidence_saved': 'Lien de preuve enregistré. La fiche reste ouverte pour révision.',
+ 'pdf_corpus.evidence_tab': 'Preuves',
+ 'pdf_corpus.execution_settings': 'Paramètres d’exécution',
+ 'pdf_corpus.execution_settings_custom': 'Paramètres personnalisés',
+ 'pdf_corpus.execution_settings_help': 'Ajustez cette construction de corpus sans modifier le profil de fournisseur '
+                                       'enregistré. Les budgets d’étape limitent la sortie structurée; ils ne '
+                                       'déterminent jamais les limites des notices.',
+ 'pdf_corpus.execution_settings_using_defaults': 'Valeurs du fournisseur · budget de contexte sûr',
+ 'pdf_corpus.extracted_source_text': 'Texte source extrait',
+ 'pdf_corpus.extracted_source_text_help': 'Il s’agit de la référence d’audit produite par l’extraction PDF. Les '
+                                          'corrections humaines modifient le texte révisé de la fiche, jamais ces '
+                                          'SourceUnits.',
+ 'pdf_corpus.extracting': 'Extraction…',
+ 'pdf_corpus.eyebrow': 'Générateur de corpus',
+ 'pdf_corpus.field': 'Champ',
+ 'pdf_corpus.field_evidence': 'Preuves par champ',
+ 'pdf_corpus.field_status.deterministic': 'déterministe',
+ 'pdf_corpus.field_status.human_confirmed': 'confirmé par une personne',
+ 'pdf_corpus.field_status.invalid': 'invalide',
+ 'pdf_corpus.field_status.llm_inferred': 'inféré par LLM',
+ 'pdf_corpus.field_status.unresolved': 'non résolu',
+ 'pdf_corpus.fields_to_resolve': 'champs à résoudre',
+ 'pdf_corpus.fields_unresolved': 'champs non résolus',
+ 'pdf_corpus.final_validation': 'Validation finale',
+ 'pdf_corpus.finalize_publish': 'Finaliser et publier',
+ 'pdf_corpus.finish_blocked_help': 'La révision des fiches est terminée. Résolvez les obstacles restants ci-dessous; '
+                                   'DerridAI activera ensuite automatiquement la publication.',
+ 'pdf_corpus.finish_corpus_title': 'Terminer le corpus',
+ 'pdf_corpus.finish_metadata_before_publish': 'Terminer les métadonnées avant de publier',
+ 'pdf_corpus.finish_metadata_complete': 'Tous les champs de métadonnées requis pour la publication sont résolus et '
+                                        'validés.',
+ 'pdf_corpus.finish_metadata_summary': '{records} fiche(s) contiennent {fields} champ(s) requis non résolu(s).',
+ 'pdf_corpus.finish_phase': 'Terminer le corpus',
+ 'pdf_corpus.finish_published_help': 'Cet instantané de publication immuable est terminé. La modification du brouillon '
+                                     'crée une nouvelle révision non publiée.',
+ 'pdf_corpus.finish_ready_help': 'La révision des fiches, les métadonnées requises, la fidélité à la source et la '
+                                 'validation de publication sont réussies.',
+ 'pdf_corpus.flow_metadata_help': 'Toutes les fiches sont acceptées. Relancez ou corrigez les métadonnées incomplètes '
+                                  'avant la publication.',
+ 'pdf_corpus.flow_metadata_title': 'Révision terminée — métadonnées à vérifier',
+ 'pdf_corpus.flow_published_help': 'Cet instantané publié est immuable. La modification du brouillon crée une nouvelle '
+                                   'révision non publiée.',
+ 'pdf_corpus.flow_published_title': 'Révision publiée',
+ 'pdf_corpus.flow_ready_help': 'La révision des fiches est terminée. Résolvez toute métadonnée restante, puis publiez '
+                               'explicitement.',
+ 'pdf_corpus.flow_ready_title': 'Prêt à publier',
+ 'pdf_corpus.flow_review_help': 'Parcourez la file de révision. Accepter et Rejeter s’appliquent immédiatement et '
+                                'passent à la proposition suivante.',
+ 'pdf_corpus.flow_review_title': 'Réviser les fiches générées',
+ 'pdf_corpus.focus_detail_tabs': 'Vues détaillées de la fiche',
+ 'pdf_corpus.focus_record_help': 'Évaluez la fiche proposée comme unité savante. Le texte et ses données '
+                                 'interprétatives sont réunis afin de permettre une décision rapide.',
+ 'pdf_corpus.focus_record_title': 'Réviser la fiche proposée',
+ 'pdf_corpus.focus_view': 'Vue ciblée',
+ 'pdf_corpus.fragmentation_ratio': 'Taux de micro-lignes',
+ 'pdf_corpus.generated_records': 'Fiches générées',
+ 'pdf_corpus.home_empty': 'Aucune construction de corpus. Commencez avec un PDF source dans le Générateur de corpus.',
+ 'pdf_corpus.home_help': 'Les pipelines PDF-vers-corpus récents restent visibles ici même après avoir quitté le '
+                         'Générateur de corpus.',
+ 'pdf_corpus.home_title': 'Constructions de corpus',
+ 'pdf_corpus.human_corrected': 'Corrigé par l’humain',
+ 'pdf_corpus.human_evidence_reason': 'Lien de preuve révisé par une personne.',
+ 'pdf_corpus.human_fields': 'Champs confirmés/remplacés par l’humain',
+ 'pdf_corpus.human_metadata_fields': '{count} champ(s) exigent un jugement',
+ 'pdf_corpus.human_metadata_help': 'Ces champs sont ambigus ou dépendent de la qualité de la source. Révisez la fiche '
+                                   'proposée, les preuves, les valeurs permises et la provenance avant de confirmer '
+                                   'une valeur.',
+ 'pdf_corpus.human_resolution': 'Résolution humaine',
+ 'pdf_corpus.human_review': 'Révision humaine',
+ 'pdf_corpus.immutable_text': 'Texte source immuable',
+ 'pdf_corpus.indexing_output': 'Sortie des métadonnées d’indexation',
+ 'pdf_corpus.inherited_fields': 'Champs hérités',
+ 'pdf_corpus.inspect_remaining_work': 'Examiner le travail restant',
+ 'pdf_corpus.interpretive_data': 'Données interprétatives',
+ 'pdf_corpus.interpretive_metadata': 'Métadonnées interprétatives',
+ 'pdf_corpus.issue_filter': 'Type de problème',
+ 'pdf_corpus.issue_filter_all': 'Tous les problèmes',
+ 'pdf_corpus.label_source': 'Source',
+ 'pdf_corpus.last_progress': 'Dernière tâche terminée',
+ 'pdf_corpus.llm_adjudications': 'Adjudications LLM',
+ 'pdf_corpus.llm_batch_calls': 'Appels LLM groupés',
+ 'pdf_corpus.llm_calls': 'appels LLM',
+ 'pdf_corpus.llm_contribution': 'Contribution du LLM',
+ 'pdf_corpus.llm_contribution_help': 'Mode {mode} · {calls} appel(s) de famille au modèle · {minutes} min de temps '
+                                     'modèle.',
+ 'pdf_corpus.llm_contribution_title': 'Ce que l’automatisation a réellement apporté',
+ 'pdf_corpus.llm_retries': 'nouvelles tentatives',
+ 'pdf_corpus.llm_review_fields': 'Champs LLM à réviser',
+ 'pdf_corpus.llm_splits': 'Scissions LLM',
+ 'pdf_corpus.llm_usable_fields': 'Champs LLM utilisables',
+ 'pdf_corpus.loading_records': 'Chargement des fiches générées…',
+ 'pdf_corpus.manage_providers': 'Gérer les profils fournisseurs',
+ 'pdf_corpus.manifest_author': 'Auteur du document',
+ 'pdf_corpus.manifest_calls': 'analyse du document',
+ 'pdf_corpus.manifest_confirmed': 'Manifeste du document confirmé. La segmentation sémantique a commencé.',
+ 'pdf_corpus.manifest_edition': 'Édition',
+ 'pdf_corpus.manifest_help': 'Ces valeurs sont héritées de façon déterministe par les fiches. L’enregistrement '
+                             'régénère les métadonnées héritées et les citations et rouvre les fiches touchées pour '
+                             'révision.',
+ 'pdf_corpus.manifest_isbn': 'ISBN',
+ 'pdf_corpus.manifest_language': 'Langue du document',
+ 'pdf_corpus.manifest_main_end': 'Fin du texte principal à la page PDF physique',
+ 'pdf_corpus.manifest_start_inferred': 'Suggéré automatiquement ({percent} % de confiance). Vérifiez les indices :',
+ 'pdf_corpus.ownership.spot_check': 'Vérification ponctuelle',
+ 'pdf_corpus.ownership_help.spot_check': 'Cette valeur a été remplie automatiquement et tirée au hasard pour une vérification rapide. Confirmez-la ou corrigez-la.',
+ 'pdf_corpus.enrich_metrics.title': 'L’enrichissement fonctionne-t-il bien ?',
+ 'pdf_corpus.enrich_metrics.load': 'Charger les mesures',
+ 'pdf_corpus.enrich_metrics.loading': 'Mesure en cours…',
+ 'pdf_corpus.enrich_metrics.none': 'Rien n’a encore été mesuré. Lancez une passe et révisez quelques valeurs d’abord.',
+ 'pdf_corpus.enrich_metrics.model': 'Modèle',
+ 'pdf_corpus.enrich_metrics.proposals': 'Proposées',
+ 'pdf_corpus.enrich_metrics.reviews': 'Révisées',
+ 'pdf_corpus.enrich_metrics.acceptance': 'Conservées telles quelles',
+ 'pdf_corpus.enrich_metrics.corrections': 'Corrigées',
+ 'pdf_corpus.enrich_metrics.cleared': 'Effacées',
+ 'pdf_corpus.enrich_metrics.brier': 'Erreur d’étalonnage (Brier)',
+ 'pdf_corpus.enrich_metrics.precision90': 'Juste quand sûr à 90 % et plus',
+ 'pdf_corpus.enrich_metrics.coverage90': 'Valeurs sûres à 90 % et plus',
+ 'pdf_corpus.enrich_metrics.grounded': 'Source réelle citée',
+ 'pdf_corpus.enrich_metrics.ms_accepted': 'Temps par valeur conservée',
+ 'pdf_corpus.enrich_metrics.stability': 'Même réponse d’une exécution à l’autre',
+ 'pdf_corpus.enrich_metrics.touched': 'Ont encore demandé une personne',
+ 'pdf_corpus.enrich_metrics.agreement': 'Modèles d’accord sur un même champ',
+ 'pdf_corpus.enrich_metrics.unresolved': 'Champs en attente d’une personne',
+ 'pdf_corpus.enrich_metrics.concurrency': 'Exécutions en cours / limite',
+ 'pdf_corpus.enrich_metrics.help_brier': '0 est parfait et 0,25 équivaut à un tirage à pile ou face. Plus c’est bas, plus sa confiance est fiable.',
+ 'pdf_corpus.enrich_metrics.na': 'données insuffisantes',
+ 'pdf_corpus.enrich_metrics.curve': 'Acceptation au fil du temps (par 10 révisions)',
+ 'pdf_corpus.enrich_metrics.trust_title': 'Confiance, effort et coût',
+ 'pdf_corpus.enrich_metrics.acceptance_ci': 'Conservées telles quelles (intervalle à 95 %)',
+ 'pdf_corpus.enrich_metrics.substantive': 'Erreur de fond (intervalle à 95 %)',
+ 'pdf_corpus.enrich_metrics.autofill_precision': 'Valeurs remplies automatiquement qui ont tenu',
+ 'pdf_corpus.enrich_metrics.spot_checks': 'Vérifications ponctuelles restantes',
+ 'pdf_corpus.enrich_metrics.repeats': 'Valeur rejetée reproposée',
+ 'pdf_corpus.enrich_metrics.supported': 'Noms retrouvés dans le texte',
+ 'pdf_corpus.enrich_metrics.review_time': 'Temps de révision par décision',
+ 'pdf_corpus.enrich_metrics.first_value': 'Délai avant la première valeur utile',
+ 'pdf_corpus.enrich_metrics.suspensions': 'Remplissage désactivé / réactivé',
+ 'pdf_corpus.enrich_metrics.export': 'Télécharger tous les événements en CSV',
+ 'pdf_corpus.blind_review': 'Révision à l’aveugle : choisissez d’abord votre propre valeur. La suggestion du modèle s’affiche une fois enregistrée.',
+ 'pdf_corpus.blind_revealed': 'Le modèle avait suggéré : {value}',
+ 'pdf_corpus.recheck_prompt': 'Contrôle qualité : saisissez à nouveau votre valeur sans revenir en arrière. Votre réponse précédente s’affiche après l’enregistrement.',
+ 'pdf_corpus.recheck_same': 'Vous avez donné la même réponse qu’auparavant.',
+ 'pdf_corpus.recheck_changed': 'Votre réponse précédente était : {value}. La nouvelle est conservée.',
+ 'pdf_corpus.enrich_metrics.self_consistency': 'Le réviseur a redonné la même réponse',
+ 'pdf_corpus.enrich_metrics.inter_annotator': 'Deux réviseurs d’accord (le second à l’aveugle)',
+ 'pdf_corpus.bulk_metadata_help_v482': 'Donnez une valeur à un champ pour l’appliquer à chaque enregistrement visé. Les champs laissés vides ne sont pas modifiés.',
+ 'pdf_corpus.bulk_group_discourse_help': 'Qui parle, ce que fait le passage et de quoi il traite.',
+ 'pdf_corpus.bulk_group_indexing_help': 'Sujets, concepts, personnes et œuvres mentionnés par les passages.',
+ 'pdf_corpus.bulk_group_identity_help': 'Ces valeurs sont héritées de « Modifier les métadonnées du document ». Ne les changez ici que pour les remplacer sur les enregistrements choisis.',
+ 'pdf_corpus.bulk_scope_help': 'Les enregistrements auxquels ces changements s’appliquent.',
+ 'pdf_corpus.bulk_leave_unchanged': 'Laisser tel quel',
+ 'pdf_corpus.bulk_clear_field': 'Effacer sur chaque enregistrement visé',
+ 'pdf_corpus.bulk_no_changes': 'Aucun changement pour l’instant',
+ 'pdf_corpus.bulk_apply': 'Appliquer les changements',
+ 'pdf_corpus.model_task.manifest': 'la structure du document',
+ 'pdf_corpus.model_task.segmentation': 'les limites des enregistrements',
+ 'pdf_corpus.model_task.metadata': 'les métadonnées des enregistrements',
+ 'pdf_corpus.model_task.other': 'cette étape',
+ 'pdf_corpus.model_loading': 'En attente du chargement de {model} en mémoire ({elapsed}). Un grand modèle peut prendre quelques minutes la première fois.',
+ 'pdf_corpus.model_working': '{model} travaille sur {task} ({elapsed}).',
+ 'pdf_corpus.model_waiting': 'En attente d’une réponse de {model} ({elapsed}).',
+ 'pdf_corpus.reanalyze_document': 'Analyser à nouveau le document',
+ 'pdf_corpus.reanalyze_document_help': 'Demander à nouveau les détails du document au modèle. Seuls les champs encore vides sont remplis ; rien de ce que vous avez saisi n’est modifié.',
+ 'pdf_corpus.reanalyze_filled': 'Le modèle a rempli {count} détail(s) manquant(s) du document : {fields}.',
+ 'pdf_corpus.reanalyze_nothing': 'Le modèle n’a rien trouvé de nouveau à ajouter.',
+ 'providers.view_models': 'Voir les modèles',
+ 'providers.view_models_count': 'Voir les modèles ({count})',
+ 'providers.available_models': 'Modèles disponibles',
+ 'providers.models_discovered': '{name} · {count} découverts',
+ 'providers.filter_models': 'Filtrer les modèles',
+ 'providers.models_match': '{count} modèles correspondent',
+ 'providers.no_models_match': 'Aucun modèle ne correspond à ce filtre.',
+ 'providers.use_model': 'Utiliser ce modèle',
+ 'providers.model_in_use': 'Utilisé',
+ 'providers.model_no_details': 'Taille non indiquée',
+ 'providers.discovering': 'Interrogation du point d’accès pour ses modèles…',
+ 'providers.model_placeholder_ollama': 'Saisir ou choisir un modèle installé',
+ 'providers.model_placeholder_openai': 'Saisir ou choisir un identifiant de modèle',
+ 'providers.model_mode': 'Mode du modèle',
+ 'providers.mode_auto': 'Routeur automatique',
+ 'providers.mode_discovered': 'Découvert',
+ 'providers.mode_manual': 'Manuel',
+ 'providers.model_mode_help': 'Auto laisse le point d’accès choisir. Découvert et Manuel utilisent le modèle indiqué ici.',
+ 'providers.model_kind': 'Type de modèle',
+ 'providers.model_kind_help': 'Réduit la liste selon le nom ; ne change pas ce que le point d’accès offre.',
+ 'providers.kind_any': 'Tous',
+ 'providers.kind_general': 'Général/conversation',
+ 'providers.kind_reasoning': 'Raisonnement',
+ 'providers.kind_coding': 'Code',
+ 'providers.kind_fast': 'Rapide/petit',
+ 'pdf_corpus.enrichment_changes_title': 'Modifié par l’enrichissement',
+ 'pdf_corpus.enrichment_changes_model': 'Modèle : {model}. Rien ici n’est confirmé tant que vous ne l’avez pas décidé.',
+ 'pdf_corpus.change_added': 'Ajouté',
+ 'pdf_corpus.change_replaced': 'Remplacé',
+ 'pdf_corpus.change_disputed': 'Désaccord',
+ 'pdf_corpus.change_restore': 'Rétablir l’ancienne valeur',
+ 'pdf_corpus.change_keep_current': 'Garder la valeur actuelle',
+ 'pdf_corpus.change_use_proposed': 'Utiliser la proposition',
+ 'pdf_corpus.change_use_candidate': 'Utiliser {candidate}',
+ 'pdf_corpus.change_proposed': 'proposition',
+ 'pdf_corpus.scope_selected_records': 'Enregistrements sélectionnés ({count})',
+ 'pdf_corpus.metadata_enrichment_in_progress': 'Enrichissement des métadonnées en cours',
+ 'pdf_corpus.enrichment_pass_number': 'Passe {pass}',
+ 'pdf_corpus.default_model': 'modèle par défaut',
+ 'pdf_corpus.record_activity_summary': 'Consultations {views} · révisions humaines {human} · révisions LLM {llm} · passes d’enrichissement {passes}',
+ 'pdf_corpus.change_dispute_values': '« {existing} » conservé ; la passe proposait « {proposed} ».',
+ 'works.library_controls': 'Commandes de la bibliothèque des œuvres',
+ 'pdf_corpus.add_metadata_section': 'Ajouter d’autres détails',
+ 'pdf_corpus.add_metadata_help': 'Ces champs sont vides pour cet enregistrement. Remplissez ceux qui s’appliquent, par exemple un locuteur cité.',
+ 'providers.warm_on_start': 'Charger le modèle par défaut à l’ouverture de l’application',
+ 'providers.warm_on_start_help': 'Désactivé par défaut. Charger un modèle prend de la mémoire et du temps et éjecte celui qui est utilisé ; il est donc chargé à la première utilisation. Activez cette option si vous commencez toujours avec le modèle par défaut.',
+ 'pdf_corpus.hands_free_note': 'Personne ne révise les enregistrements dans ce mode. Les règles ci-dessous décident, chaque valeur proposée par le modèle reste identifiée comme la sienne, et ce que les règles ne peuvent pas trancher vous est laissé et listé ensuite.',
+ 'pdf_corpus.hands_free_enable': 'Exécuter sans intervention après la construction',
+ 'pdf_corpus.hands_free_passes': 'Passes d’enrichissement supplémentaires',
+ 'pdf_corpus.hands_free_passes_help': 'Chaque passe peut s’appuyer sur les précédentes. De 0 à 3.',
+ 'pdf_corpus.hands_free_confidence': 'Retenir une proposition à partir de {percent} de confiance',
+ 'pdf_corpus.hands_free_confidence_help': 'La confiance déclarée par le modèle lui-même. Plus c’est élevé, plus c’est strict.',
+ 'pdf_corpus.hands_free_unresolved': 'Quand un champ reste incertain',
+ 'pdf_corpus.hands_free_best_guess': 'Retenir quand même la meilleure hypothèse du modèle',
+ 'pdf_corpus.hands_free_leave': 'Me le laisser',
+ 'pdf_corpus.hands_free_accept': 'Accepter les enregistrements sans rien en attente',
+ 'pdf_corpus.hands_free_publish': 'Publier quand tous les enregistrements sont acceptés',
+ 'pdf_corpus.hands_free_publish_help': 'Désactivé par défaut. Une publication n’est pas annulée par une révision ultérieure.',
+ 'pdf_corpus.hands_free_title': 'Mode sans intervention',
+ 'pdf_corpus.hands_free_on': 'Activé : la construction se règle seule, puis signale ce qui reste',
+ 'pdf_corpus.hands_free_off': 'Désactivé : vous révisez chaque enregistrement',
+ 'pdf_corpus.run_hands_free': 'Exécuter sans intervention…',
+ 'pdf_corpus.run_hands_free_title': 'Exécuter sans intervention',
+ 'pdf_corpus.run_hands_free_help': 'Régler cette construction avec les règles ci-dessous, sans réviser chaque enregistrement.',
+ 'pdf_corpus.run_hands_free_action': 'Exécuter sans intervention',
+ 'pdf_corpus.hands_free_started': 'Exécution sans intervention lancée. Le rapport s’affiche ici à la fin.',
+ 'pdf_corpus.hands_free_report_title': 'Exécution sans intervention',
+ 'pdf_corpus.hands_free_report_summary': '{accepted} enregistrements sur {records} acceptés, {filled} valeurs retenues du modèle, {left} qui vous sont laissés.',
+ 'pdf_corpus.hands_free_published': 'Publié.',
+ 'pdf_corpus.hands_free_left': 'Laissés pour vous',
+ 'pdf_corpus.hands_free_more': 'et {count} autres dans la file de révision.',
+ 'schemas.saved': 'Schéma enregistré.',
+ 'schemas.version': 'Version du schéma',
+ 'schemas.version_help': 'Les versions changent automatiquement lorsque le schéma enregistré est modifié.',
+ 'schemas.preview_no_provider': 'Configurez un profil de fournisseur LLM avant de lancer une révision.',
+ 'schemas.delete_confirm': 'Supprimer ce schéma ? Les constructions qui l’ont déjà utilisé gardent leur propre copie.',
+ 'schemas.import_not_json': 'Ce fichier n’est pas du JSON.',
+ 'schemas.imported': 'Schéma importé.',
+ 'schemas.builtin': 'Intégré',
+ 'schemas.unsaved': 'Pas encore enregistré',
+ 'schemas.import': 'Importer un schéma…',
+ 'schemas.builtin_help': 'Le schéma intégré décrit les champs que DerridAI a toujours produits. Il ne peut pas être modifié ; dupliquez-le pour créer le vôtre.',
+ 'schemas.name': 'Nom',
+ 'schemas.description': 'Description',
+ 'schemas.locked_core': 'Noyau verrouillé',
+ 'schemas.locked_core_help': 'Chaque schéma comporte ces trois champs. La logique de pages et de mise en page de DerridAI en dépend : ils ne peuvent être ni modifiés ni retirés.',
+ 'schemas.holds_core': 'contient le noyau verrouillé',
+ 'schemas.remove_group': 'Retirer le groupe',
+ 'schemas.group_help': 'Chaque groupe correspond à un appel au modèle par enregistrement.',
+ 'schemas.group_label': 'Nom du groupe',
+ 'schemas.intro': 'Consignes d’ouverture',
+ 'schemas.fields_heading': 'Titre au-dessus de la liste des champs',
+ 'schemas.notes': 'Notes après la liste des champs (une par ligne)',
+ 'schemas.trailer': 'Remarques finales',
+ 'schemas.footer': 'Consignes de preuve et de confiance',
+ 'schemas.footer_help': 'Vous pouvez utiliser {fields} et {assessed_fields}.',
+ 'schemas.fields': 'Champs',
+ 'schemas.field_name': 'Nom du champ',
+ 'schemas.field_label': 'Libellé',
+ 'schemas.field_type': 'Type',
+ 'schemas.type_text': 'Texte',
+ 'schemas.type_number': 'Nombre',
+ 'schemas.type_boolean': 'Oui / non',
+ 'schemas.type_choice': 'Un choix dans une liste',
+ 'schemas.type_list': 'Liste de textes',
+ 'schemas.field_group': 'Groupe',
+ 'schemas.instruction': 'Ce que le modèle doit chercher',
+ 'schemas.instruction_help': 'Montré au modèle après le nom du champ. {values} est remplacé par les valeurs permises.',
+ 'schemas.remove': 'Retirer',
+ 'schemas.add_value': 'Ajouter une valeur',
+ 'schemas.strict': 'Le modèle ne peut renvoyer que ces valeurs',
+ 'schemas.evidence': 'Doit citer la source',
+ 'schemas.assess': 'Indiquer sa confiance',
+ 'schemas.review': 'Une personne doit le trancher avant l’acceptation',
+ 'schemas.up': 'Monter',
+ 'schemas.down': 'Descendre',
+ 'schemas.remove_field': 'Retirer le champ',
+ 'schemas.add_field': 'Ajouter un champ',
+ 'schemas.add_group': 'Ajouter un groupe',
+ 'schemas.preview': 'Essayer sur un passage',
+ 'schemas.preview_help': 'Voyez la consigne qu’un groupe produit, ou exécutez-la sur un passage avec un modèle. Une vraie construction ajoute les détails du document et les décisions de révision antérieures.',
+ 'schemas.preview_group': 'Groupe',
+ 'schemas.preview_model': 'Modèle',
+ 'schemas.preview_default_model': 'Fournisseur par défaut',
+ 'schemas.preview_text': 'Passage',
+ 'schemas.prompt': 'Consigne',
+ 'schemas.saved_schemas': 'Schémas enregistrés',
+ 'schemas.editor': 'Éditeur de schéma',
+ 'schemas.duplicate': 'Dupliquer',
+ 'schemas.export': 'Exporter',
+ 'schemas.delete': 'Supprimer',
+ 'schemas.save': 'Enregistrer le schéma',
+ 'schemas.value': 'Valeur permise',
+ 'schemas.definition': 'Ce qu’elle signifie (facultatif)',
+ 'schemas.show_prompt': 'Afficher la consigne',
+ 'schemas.run_sample': 'Exécuter sur ce passage',
+ 'schemas.field_count': '{count} champs',
+ 'schemas.answer': 'Réponse ({seconds} s)',
+ 'schemas.title': 'Schéma de métadonnées',
+ 'schemas.choose': 'Schéma de métadonnées',
+ 'schemas.choose_help': 'Les champs de métadonnées de chaque enregistrement et ce que le modèle doit chercher. La construction en garde une copie.',
+ 'schemas.manage': 'Gérer les schémas…',
+ 'schemas.manage_title': 'Schémas de métadonnées',
+ 'schemas.manage_help': 'Définissez les champs des enregistrements JSONL, leurs valeurs permises et les consignes données au modèle. Modifier un schéma ne change pas les constructions déjà faites.',
+ 'pdf_corpus.manifest_main_start': 'Début du texte principal à la page PDF physique',
+ 'pdf_corpus.manifest_notes': 'Notes appuyées par la source',
+ 'pdf_corpus.manifest_original_language': 'Langue originale',
+ 'pdf_corpus.manifest_original_title': 'Titre original',
+ 'pdf_corpus.manifest_output': 'Sortie du manifeste',
+ 'pdf_corpus.manifest_place': 'Lieu de publication',
+ 'pdf_corpus.manifest_publisher': 'Éditeur',
+ 'pdf_corpus.manifest_review_required': 'Réviser la structure du document',
+ 'pdf_corpus.manifest_review_required_help': 'Confirmez les métadonnées au niveau de l’œuvre et la correspondance des '
+                                             'pages imprimées avant leur propagation dans la segmentation et les '
+                                             'notices générées.',
+ 'pdf_corpus.manifest_saved': 'Manifeste du document enregistré. Les métadonnées héritées et les citations ont été '
+                              'régénérées pour révision.',
+ 'pdf_corpus.manifest_short_title': 'Titre abrégé',
+ 'pdf_corpus.manifest_title': 'Titre',
+ 'pdf_corpus.manifest_translation': 'Statut de traduction',
+ 'pdf_corpus.manifest_translator': 'Traducteur ou traductrice',
+ 'pdf_corpus.manifest_type': 'Type de document',
+ 'pdf_corpus.manifest_unknown': 'Inconnu',
+ 'pdf_corpus.manifest_year': 'Année de publication',
+ 'pdf_corpus.manual_provider': 'Paramètres manuels de compatibilité fournisseur',
+ 'pdf_corpus.manual_provider_help': 'Utilisés uniquement lorsqu’aucun profil fournisseur n’est sélectionné. Les '
+                                    'profils enregistrés sont recommandés, car DerridAI réutilise leurs paramètres de '
+                                    'modèle et n’écrit jamais les clés API dans les manifestes de construction.',
+ 'pdf_corpus.matches': 'correspondances',
+ 'pdf_corpus.max_concurrent': 'Notices simultanées maximales',
+ 'pdf_corpus.max_concurrent_help': 'Les familles de métadonnées restent séquentielles pour chaque notice; ce réglage '
+                                   'limite le nombre de notices traitées en parallèle.',
+ 'pdf_corpus.merge_next': 'Fusionner avec la suivante',
+ 'pdf_corpus.merge_previous': 'Fusionner avec la précédente',
+ 'pdf_corpus.merged': 'Fusion avec la fiche {direction}; la limite fusionnée doit maintenant être révisée.',
+ 'pdf_corpus.metadata_attention': 'Métadonnées à vérifier',
+ 'pdf_corpus.metadata_blocking_help': 'La révision des fiches est terminée, mais {count} fiche(s) contiennent encore '
+                                      'des métadonnées critiques à résoudre.',
+ 'pdf_corpus.metadata_calls': 'enrichissement des notices',
+ 'pdf_corpus.metadata_decision_required': 'Décision de métadonnées requise',
+ 'pdf_corpus.metadata_decisions_count': '{count} décision(s) de métadonnées',
+ 'pdf_corpus.metadata_enrichment': 'Enrichissement des métadonnées',
+ 'pdf_corpus.metadata_family.all': 'Toutes les familles de métadonnées',
+ 'pdf_corpus.metadata_family.discourse': 'Discours / attribution',
+ 'pdf_corpus.metadata_family.indexing': 'Indexation sémantique',
+ 'pdf_corpus.metadata_family.quotation': 'Relations de citation',
+ 'pdf_corpus.metadata_family_rerun': 'Métadonnées {family} relancées à partir du texte révisé actuel de la fiche.',
+ 'pdf_corpus.metadata_field_confirmed': '{field} confirmé. L’état de préparation à la publication a été recalculé.',
+ 'pdf_corpus.metadata_field_status.deterministic': 'Déterministe',
+ 'pdf_corpus.metadata_field_status.human_confirmed': 'Confirmé par une personne',
+ 'pdf_corpus.metadata_field_status.human_override': 'Remplacement humain',
+ 'pdf_corpus.metadata_field_status.inherited': 'Hérité',
+ 'pdf_corpus.metadata_field_status.invalid': 'Invalide',
+ 'pdf_corpus.metadata_field_status.llm_inferred': 'Inféré par LLM',
+ 'pdf_corpus.metadata_field_status.unresolved': 'Non résolu',
+ 'pdf_corpus.metadata_help': 'Seules les métadonnées appartenant au modèle ou à l’humain sont modifiables ici. Le '
+                             'texte, les pages, les segments source et les identifiants de fiche sont protégés côté '
+                             'serveur.',
+ 'pdf_corpus.metadata_inline_help': 'Les métadonnées sont révisées avec la fiche. Seuls les champs incertains exigent '
+                                    'une décision explicite.',
+ 'pdf_corpus.metadata_inline_help_v46': 'Les métadonnées de la fiche sont toujours inspectables. Les métadonnées '
+                                        'documentaires héritées peuvent être délibérément remplacées pour cette fiche; '
+                                        'les décisions humaines priment sur tout enrichissement automatique ultérieur.',
+ 'pdf_corpus.metadata_invalid': 'Les métadonnées doivent être un objet JSON valide.',
+ 'pdf_corpus.metadata_issue_help': 'Seuls les champs critiques pour la publication qui ne sont pas résolus sont '
+                                   'relancés. Les métadonnées terminées sont conservées.',
+ 'pdf_corpus.metadata_issue_queue': 'File des problèmes de métadonnées',
+ 'pdf_corpus.metadata_issue_table': 'Détails des problèmes de métadonnées',
+ 'pdf_corpus.metadata_live_summary': '{complete} terminées · {running} actives · {queued} en attente · {failed} à '
+                                     'réviser',
+ 'pdf_corpus.metadata_live_title': 'Les métadonnées automatiques sont en cours',
+ 'pdf_corpus.metadata_needs_attention': 'Métadonnées à vérifier',
+ 'pdf_corpus.metadata_ready': 'Prête',
+ 'pdf_corpus.metadata_reason.ambiguous': 'Les preuves de la source sont ambiguës',
+ 'pdf_corpus.metadata_reason.evidence_failed': 'Échec de la validation des preuves',
+ 'pdf_corpus.metadata_reason.invalid_value': 'Le modèle a retourné une valeur invalide',
+ 'pdf_corpus.metadata_reason.llm_failed': 'Échec de la requête au LLM',
+ 'pdf_corpus.metadata_reason.not_run': 'L’enrichissement n’est pas terminé',
+ 'pdf_corpus.metadata_reason.source_quality': 'La qualité de l’extraction bloque l’inférence',
+ 'pdf_corpus.metadata_reason.unresolved': 'Aucune valeur validée n’est disponible',
+ 'pdf_corpus.metadata_record_help': 'Ne résolvez que les champs requis affichés ci-dessous. L’acceptation structurelle '
+                                    'de cette fiche est suivie séparément.',
+ 'pdf_corpus.metadata_record_resolved': 'Tous les champs de métadonnées requis de cette fiche sont résolus.',
+ 'pdf_corpus.metadata_record_review_help': 'Révisez les métadonnées proposées par le LLM avec le texte. Les champs '
+                                           'incertains doivent être résolus avant l’acceptation; accepter la fiche '
+                                           'confirme les autres propositions.',
+ 'pdf_corpus.metadata_remaining': 'métadonnées restantes',
+ 'pdf_corpus.metadata_rerun': 'Métadonnées interprétatives relancées. Le texte source primaire est resté inchangé.',
+ 'pdf_corpus.metadata_resolution': 'Résolution des métadonnées',
+ 'pdf_corpus.metadata_resolution_intro': 'La construction du corpus et la révision des fiches peuvent être terminées '
+                                         'alors que des métadonnées savantes requises demeurent non résolues. '
+                                         '{records} fiche(s) contiennent {fields} problème(s) de champ requis.',
+ 'pdf_corpus.metadata_resolved_ready': 'Métadonnées confirmées. Cette fiche est prête à être approuvée.',
+ 'pdf_corpus.metadata_retry_complete': 'Relance des métadonnées terminée',
+ 'pdf_corpus.metadata_retry_failed': 'Échec de la relance des métadonnées',
+ 'pdf_corpus.metadata_retry_failed_help': 'La relance s’est arrêtée sans modifier les métadonnées réussies. Révisez la '
+                                          'file restante ou corrigez le fournisseur avant de réessayer.',
+ 'pdf_corpus.metadata_retry_progress': '{processed} fiche(s) sur {total} traitée(s) · {resolved} champs résolus',
+ 'pdf_corpus.metadata_retry_result': '{resolved} champs résolus · {remaining} champs nécessitent encore une '
+                                     'vérification',
+ 'pdf_corpus.metadata_retry_running': 'Relance des métadonnées résolubles automatiquement',
+ 'pdf_corpus.metadata_retry_start': 'Relance des métadonnées pour {count} fiche(s). Les métadonnées terminées ne '
+                                    'seront pas recalculées.',
+ 'pdf_corpus.metadata_retry_start_fields': 'Relance de {fields} champ(s) non résolu(s) dans {records} fiche(s). La '
+                                           'topologie et les métadonnées terminées sont conservées.',
+ 'pdf_corpus.metadata_saved': 'Métadonnées enregistrées. Le texte lié à la source et la provenance n’ont pas été '
+                              'modifiés.',
+ 'pdf_corpus.metadata_stalled_title': 'La progression des métadonnées semble bloquée',
+ 'pdf_corpus.metadata_tab': 'Métadonnées',
+ 'pdf_corpus.metadata_task.discourse': 'Discours',
+ 'pdf_corpus.metadata_task.indexing': 'Indexation',
+ 'pdf_corpus.metadata_task.quotation': 'Citation',
+ 'pdf_corpus.metadata_task_progress': 'Progression des tâches de métadonnées',
+ 'pdf_corpus.metadata_tasks_unit': 'tâches',
+ 'pdf_corpus.metadata_validation': 'Validation des métadonnées',
+ 'pdf_corpus.method': 'Méthode',
+ 'pdf_corpus.min_p': 'Min P',
+ 'pdf_corpus.mirostat': 'Mirostat',
+ 'pdf_corpus.mirostat_eta': 'Eta de Mirostat',
+ 'pdf_corpus.mirostat_off': 'Désactivé',
+ 'pdf_corpus.mirostat_tau': 'Tau de Mirostat',
+ 'pdf_corpus.model': 'Modèle',
+ 'pdf_corpus.model_not_set': 'modèle non défini',
+ 'pdf_corpus.need_attention': 'à vérifier',
+ 'pdf_corpus.need_review': 'à réviser',
+ 'pdf_corpus.needs_attention': 'À vérifier',
+ 'pdf_corpus.needs_review': 'À réviser',
+ 'pdf_corpus.next': 'suivante',
+ 'pdf_corpus.next_action.download_publication': 'Téléchargez l’instantané publié ou modifiez le brouillon pour créer '
+                                                'une nouvelle révision.',
+ 'pdf_corpus.next_action.inspect': 'Examinez l’état restant du corpus.',
+ 'pdf_corpus.next_action.publish': 'Publiez l’instantané validé du corpus.',
+ 'pdf_corpus.next_action.resolve_metadata': 'Résolvez les problèmes de métadonnées requises.',
+ 'pdf_corpus.next_action.resolve_rejections': 'Résolvez les fiches rejetées.',
+ 'pdf_corpus.next_action.resolve_validation': 'Résolvez les obstacles de validation ou de qualité de la source.',
+ 'pdf_corpus.next_action.review_records': 'Révisez les fiches proposées restantes.',
+ 'pdf_corpus.next_action.wait': 'L’opération en cours est en traitement.',
+ 'pdf_corpus.next_finish_metadata': 'Terminez ou relancez les métadonnées incomplètes avant la publication.',
+ 'pdf_corpus.next_publish': 'Les contrôles de qualité sont réussis. Vérifiez le résumé de publication et publiez le '
+                            'JSONL.',
+ 'pdf_corpus.next_published': 'Cette révision est publiée. Téléchargez-la ou modifiez le brouillon pour créer une '
+                              'nouvelle révision.',
+ 'pdf_corpus.next_resolve_rejections': 'Résolvez ou rouvrez les fiches rejetées avant la publication.',
+ 'pdf_corpus.next_review_records': 'Révisez les fiches proposées restantes.',
+ 'pdf_corpus.next_stage': 'Prochaine étape',
+ 'pdf_corpus.next_step': 'Étape suivante',
+ 'pdf_corpus.next_wait_build': 'La construction du corpus est en cours.',
+ 'pdf_corpus.no_active_builds': 'Aucune autre construction de corpus n’est active.',
+ 'pdf_corpus.no_automatic_metadata_work': 'Aucun champ relançable automatiquement ne reste.',
+ 'pdf_corpus.no_bound_blocks': 'Aucune SourceUnit liée',
+ 'pdf_corpus.no_builds': 'Aucune construction pour le moment.',
+ 'pdf_corpus.no_clean_records': 'Aucune fiche sans problème n’attend l’approbation.',
+ 'pdf_corpus.no_escalation_provider': 'Aucun — conserver les échecs pour révision humaine',
+ 'pdf_corpus.no_evidence': 'Aucune preuve par champ enregistrée.',
+ 'pdf_corpus.no_evidence_reason': 'Aucune justification de preuve n’est enregistrée.',
+ 'pdf_corpus.no_field_evidence': 'Aucune preuve au niveau du champ n’est enregistrée pour cette proposition.',
+ 'pdf_corpus.no_human_metadata_work': 'Aucun champ de métadonnées n’exige un jugement humain.',
+ 'pdf_corpus.no_provider_profiles': 'Aucun profil fournisseur LLM n’est configuré',
+ 'pdf_corpus.no_provider_profiles_help': 'Créez un profil fournisseur ou utilisez les paramètres de compatibilité '
+                                         'manuels ci-dessous.',
+ 'pdf_corpus.no_records_filter': 'Aucune fiche ne correspond à ce filtre de révision.',
+ 'pdf_corpus.no_retryable_metadata': 'Aucune métadonnée relançable automatiquement ne reste. Ouvrez la file des '
+                                     'problèmes pour une résolution humaine.',
+ 'pdf_corpus.no_selected_build': 'Aucune construction de corpus sélectionnée',
+ 'pdf_corpus.no_selected_build_help': 'Persistez une source PDF et lancez une construction sémantique, ou choisissez '
+                                      'une construction historique dans le rail.',
+ 'pdf_corpus.no_source_bound': 'aucune SourceUnit liée',
+ 'pdf_corpus.not_identified': 'Non identifié',
+ 'pdf_corpus.not_persisted': 'Non persistée dans le manifeste de construction',
+ 'pdf_corpus.not_yet': 'pas encore',
+ 'pdf_corpus.ocr_pages': 'page(s) OCR',
+ 'pdf_corpus.open_build': 'Ouvrir la construction du corpus',
+ 'pdf_corpus.open_builder': 'Ouvrir le générateur de corpus',
+ 'pdf_corpus.open_metadata_queue': 'Ouvrir la file des métadonnées',
+ 'pdf_corpus.open_pdf_explorer': 'Ouvrir dans l’explorateur PDF',
+ 'pdf_corpus.open_pdf_first': 'Ouvrez d’abord un PDF dans l’Explorateur, ou choisissez un PDF source ici.',
+ 'pdf_corpus.openai_compatible': 'Compatible OpenAI',
+ 'pdf_corpus.operation_label': 'Construction de corpus PDF',
+ 'pdf_corpus.ownership.attention': 'À réviser',
+ 'pdf_corpus.ownership.deterministic': 'Dérivé de la source',
+ 'pdf_corpus.ownership.human': 'Confirmé par l’humain',
+ 'pdf_corpus.ownership.inherited': 'Hérité',
+ 'pdf_corpus.ownership.llm': 'Source LLM',
+ 'pdf_corpus.ownership.override': 'Remplacement',
+ 'pdf_corpus.ownership.unknown': 'Non classé',
+ 'pdf_corpus.verification.pending': 'À vérifier',
+ 'pdf_corpus.verification.auto': 'Résolu automatiquement',
+ 'pdf_corpus.verification.human': 'Confirmé par une personne',
+ 'pdf_corpus.verification_help.auto': 'Le remplissage automatique calibré a approuvé cette valeur sans exiger une décision humaine au niveau du champ.',
+ 'pdf_corpus.verification_help.pending': 'La valeur du modèle est visible, mais exige encore une décision humaine.',
+ 'pdf_corpus.change_current_value': 'Valeur actuelle',
+ 'pdf_corpus.change_use_value': 'Utiliser cette valeur',
+ 'pdf_corpus.enrichment_changes_help': 'Les candidats non résolus conservent la provenance du modèle, de la passe et du niveau de confiance jusqu’à votre décision.',
+ 'pdf_corpus.ownership_help.attention': 'Ce champ exige une décision humaine.',
+ 'pdf_corpus.ownership_help.deterministic': 'Dérivé de la structure de la source ou de règles déterministes.',
+ 'pdf_corpus.ownership_help.human': 'Une personne a confirmé cette valeur au niveau de la fiche.',
+ 'pdf_corpus.ownership_help.inherited': 'Hérité du manifeste du document; cette valeur peut être remplacée pour cette '
+                                        'fiche.',
+ 'pdf_corpus.ownership_help.llm': 'La valeur actuelle ou proposée provient d’un modèle de langage. La vérification est affichée séparément.',
+ 'pdf_corpus.ownership_help.override': 'Cette fiche remplace délibérément une métadonnée documentaire héritée.',
+ 'pdf_corpus.ownership_help.unknown': 'Aucune provenance de propriété n’a été enregistrée.',
+ 'pdf_corpus.page_label_issues': 'problème(s) de pagination imprimée',
+ 'pdf_corpus.page_mapping': 'Correspondance des pages imprimées',
+ 'pdf_corpus.page_mapping_help': 'Les pages PDF physiques ne changent jamais. Corrigez uniquement l’étiquette de page '
+                                 'imprimée savante lorsque l’étiquette PDF ou le folio détecté est erroné.',
+ 'pdf_corpus.page_mapping_issues': 'problème(s) de correspondance des pages',
+ 'pdf_corpus.page_mapping_saved': 'Corrections des pages imprimées enregistrées. Les nouvelles constructions de corpus '
+                                  'utiliseront les étiquettes corrigées.',
+ 'pdf_corpus.pages': 'p.',
+ 'pdf_corpus.passed': 'Réussi',
+ 'pdf_corpus.pdf_highlight_help': 'Page {page}. Les cadres en surbrillance indiquent les SourceUnits liés au champ de '
+                                  'preuve sélectionné.',
+ 'pdf_corpus.pdf_loading': 'Rendu de la page source…',
+ 'pdf_corpus.pdf_page_canvas': 'Page PDF {page}',
+ 'pdf_corpus.pdf_page_of': 'Page PDF {page} sur {total}',
+ 'pdf_corpus.pdf_pages': 'Pages PDF',
+ 'pdf_corpus.pdf_render_error': 'Impossible d’afficher la page source : {error}',
+ 'pdf_corpus.pending': 'En attente',
+ 'pdf_corpus.persisted': 'persisté',
+ 'pdf_corpus.physical_pdf_page': 'Page PDF physique',
+ 'pdf_corpus.pipeline.construct': 'Construire les fiches',
+ 'pdf_corpus.pipeline.construct_wait': 'En attente de la topologie du corpus',
+ 'pdf_corpus.pipeline.enrich': 'Enrichir les métadonnées',
+ 'pdf_corpus.pipeline.enrich_wait': 'En attente des fiches',
+ 'pdf_corpus.pipeline.extract': 'Extraire la source',
+ 'pdf_corpus.pipeline.extract_detail': 'Texte PDF et géométrie des pages disponibles',
+ 'pdf_corpus.pipeline.extract_detail_count': '{count} SourceUnits disponibles',
+ 'pdf_corpus.pipeline.metadata_complete': 'Métadonnées requises résolues',
+ 'pdf_corpus.pipeline.metadata_progress': '{done} sur {total} aux métadonnées complètes',
+ 'pdf_corpus.pipeline.metadata_remaining': '{count} fiche(s) ont encore besoin de métadonnées requises',
+ 'pdf_corpus.pipeline.publish': 'Publier l’instantané',
+ 'pdf_corpus.pipeline.publish_wait': 'En attente des contrôles de validation',
+ 'pdf_corpus.pipeline.published': 'Instantané JSONL immuable publié',
+ 'pdf_corpus.pipeline.ready_publish': 'Prêt pour une publication explicite',
+ 'pdf_corpus.pipeline.records_created': '{count} fiches créées',
+ 'pdf_corpus.pipeline.review': 'Valider les fiches',
+ 'pdf_corpus.pipeline.review_progress': '{done} sur {total} révisées',
+ 'pdf_corpus.pipeline.review_wait': 'En attente des fiches',
+ 'pdf_corpus.pipeline.validate': 'Valider le corpus',
+ 'pdf_corpus.pipeline.validation_passed': 'Contrôles de source, métadonnées et schéma réussis',
+ 'pdf_corpus.pipeline.validation_wait': 'La validation comporte des obstacles non résolus',
+ 'pdf_corpus.pipeline_title': 'Pipeline du corpus',
+ 'pdf_corpus.previous': 'précédente',
+ 'pdf_corpus.primary_text_help': 'Indiquez si cette fiche appartient au texte substantiel de l’œuvre plutôt qu’aux '
+                                 'pages liminaires/finales ou à l’appareil éditorial.',
+ 'pdf_corpus.printed_label': 'Étiquette imprimée',
+ 'pdf_corpus.printed_label_for_page': 'Étiquette imprimée de la page PDF physique {page}',
+ 'pdf_corpus.printed_pages': 'imprimé',
+ 'pdf_corpus.profile_active_builds': '{count} active(s) sur ce profil',
+ 'pdf_corpus.profile_model': 'Modèle du profil',
+ 'pdf_corpus.profile_model_help': 'Les nouvelles constructions utilisent par défaut le modèle de ce profil '
+                                  'fournisseur.',
+ 'pdf_corpus.progress_percent': '{percent} % terminé',
+ 'pdf_corpus.proposed_record': 'Fiche proposée',
+ 'pdf_corpus.provenance': 'Provenance',
+ 'pdf_corpus.provider': 'Fournisseur',
+ 'pdf_corpus.provider_default': 'Valeur par défaut du fournisseur',
+ 'pdf_corpus.provider_profile': 'Profil fournisseur',
+ 'pdf_corpus.provider_profile_help': 'Utilisez un profil de fournisseur géré centralement. Son modèle et ses '
+                                     'paramètres de génération demeurent réutilisables dans les flux DerridAI.',
+ 'pdf_corpus.provisional_splits': 'Scissions de sécurité',
+ 'pdf_corpus.publication': 'Publication',
+ 'pdf_corpus.publication_ready_help': 'Tous les contrôles requis sont réussis. La publication crée un instantané JSONL '
+                                      'UTF-8 immuable.',
+ 'pdf_corpus.publication_snapshot_summary': 'Révision publiée avec {count} fiche(s).',
+ 'pdf_corpus.publication_waiting_help': 'La publication sera activée automatiquement après la résolution des obstacles '
+                                        'de cette vue Terminer le corpus.',
+ 'pdf_corpus.publish_corpus': 'Publier le corpus',
+ 'pdf_corpus.publish_jsonl': 'Publier le JSONL',
+ 'pdf_corpus.published': '{count} fiches publiées · SHA-256 {hash}…',
+ 'pdf_corpus.published_completion_help': 'L’instantané JSONL immuable est prêt à être téléchargé. La modification du '
+                                         'brouillon créera une nouvelle révision non publiée.',
+ 'pdf_corpus.published_revision': 'Révision publiée',
+ 'pdf_corpus.quality.accounted': 'de la source comptabilisée',
+ 'pdf_corpus.quality.attention': 'Attention requise',
+ 'pdf_corpus.quality.boundaries': 'limites validées',
+ 'pdf_corpus.quality.help': 'Les contrôles de qualité résument la topologie sémantique, l’achèvement des métadonnées '
+                            'et la fidélité à la source avant la publication.',
+ 'pdf_corpus.quality.median_chars': 'caractères médians',
+ 'pdf_corpus.quality.metadata': 'Métadonnées',
+ 'pdf_corpus.quality.need_review': '{count} à réviser',
+ 'pdf_corpus.quality.passed': 'Validation réussie',
+ 'pdf_corpus.quality.pending': 'En attente',
+ 'pdf_corpus.quality.record_size': 'Taille des notices',
+ 'pdf_corpus.quality.records_complete': 'notices terminées',
+ 'pdf_corpus.quality.resolved': 'Résolue',
+ 'pdf_corpus.quality.segmentation': 'Segmentation',
+ 'pdf_corpus.quality.size_detail': 'P10 {p10} · médiane {median} · P90 {p90} · max. {max} · {over} au-dessus de la '
+                                   'plage préférée · {long} exception(s) longue(s)',
+ 'pdf_corpus.quality.source': 'Fidélité à la source',
+ 'pdf_corpus.quality.target_range': 'cible {range} · P90 {p90}',
+ 'pdf_corpus.quality.title': 'Qualité de la construction',
+ 'pdf_corpus.quality.unresolved': '{count} non résolue(s)',
+ 'pdf_corpus.queue_accepted': 'Acceptées',
+ 'pdf_corpus.queue_all': 'Toutes',
+ 'pdf_corpus.queue_attention': 'Attention topologique',
+ 'pdf_corpus.queue_issues': 'À vérifier',
+ 'pdf_corpus.queue_metadata': 'Décisions de métadonnées',
+ 'pdf_corpus.queue_pending': 'Révision en attente',
+ 'pdf_corpus.queue_ready': 'Révisables',
+ 'pdf_corpus.queue_rejected': 'Rejetées',
+ 'pdf_corpus.queue_source': 'Problème de source',
+ 'pdf_corpus.queue_topology': 'Topologie',
+ 'pdf_corpus.quotation_output': 'Sortie des métadonnées de citation',
+ 'pdf_corpus.read_record': 'Lire la fiche',
+ 'pdf_corpus.readiness_blocker.boundary_attention': 'Des décisions de frontière exigent encore une révision',
+ 'pdf_corpus.readiness_blocker.metadata_validation': 'Échec de la validation des métadonnées',
+ 'pdf_corpus.readiness_blocker.record_attention': 'Des fiches exigent encore une vérification structurelle',
+ 'pdf_corpus.readiness_blocker.rejected_records': 'Les fiches rejetées doivent être résolues',
+ 'pdf_corpus.readiness_blocker.required_metadata': 'Des métadonnées requises ne sont pas résolues',
+ 'pdf_corpus.readiness_blocker.review_pending': 'La révision des fiches est incomplète',
+ 'pdf_corpus.readiness_blocker.source_quality': 'La qualité de l’extraction bloque l’enrichissement',
+ 'pdf_corpus.readiness_blocker.source_validation': 'Échec de la validation de fidélité à la source',
+ 'pdf_corpus.ready': 'Prêt',
+ 'pdf_corpus.ready_acceptance': 'Prête à être acceptée',
+ 'pdf_corpus.ready_completion_help': 'La révision, la validation de la source et les contrôles des métadonnées '
+                                     'requises sont réussis.',
+ 'pdf_corpus.ready_to_build': 'Prêt à construire',
+ 'pdf_corpus.ready_to_publish': 'Prêt à publier',
+ 'pdf_corpus.reason': 'Raison',
+ 'pdf_corpus.reconciliation_output': 'Sortie de réconciliation',
+ 'pdf_corpus.record': 'Fiche',
+ 'pdf_corpus.record_data': 'Données et preuves de la fiche',
+ 'pdf_corpus.record_decision': 'Décision sur la fiche',
+ 'pdf_corpus.record_inspector': 'Inspecteur de fiche',
+ 'pdf_corpus.record_metadata_review': 'Révision des métadonnées de la fiche',
+ 'pdf_corpus.record_review': 'Révision des fiches',
+ 'pdf_corpus.record_revision': 'Révision de la fiche',
+ 'pdf_corpus.record_sizing.absolute': 'Plafond absolu de sécurité',
+ 'pdf_corpus.record_sizing.absolute_help': 'Plafond de sécurité seulement. Le générateur peut demander une révision si '
+                                           'son respect exige de rompre une transition protégée d’attribution ou de '
+                                           'syntaxe.',
+ 'pdf_corpus.record_sizing.advanced': 'Limites avancées pour les exceptions',
+ 'pdf_corpus.record_sizing.help': 'La longueur guide une topologie adaptée à la recherche sans jamais primer sur '
+                                  'l’attribution ni l’intégrité sémantique. Le générateur vise la plage préférée et '
+                                  'permet des exceptions cohérentes plus longues au besoin.',
+ 'pdf_corpus.record_sizing.long': 'Exception pour notice longue',
+ 'pdf_corpus.record_sizing.long_help': 'Une pensée cohérente peut atteindre cette longueur lorsqu’aucune bonne limite '
+                                       'n’existe près de la plage préférée.',
+ 'pdf_corpus.record_sizing.preferred': 'Longueur préférée d’une notice',
+ 'pdf_corpus.record_sizing.preferred_range': 'Plage cible : environ {low} à {high} caractères.',
+ 'pdf_corpus.record_sizing.title': 'Taille des notices',
+ 'pdf_corpus.record_sizing.tolerance': 'Souplesse préférée',
+ 'pdf_corpus.record_sizing.tolerance_help': 'Permet une limite sémantique nette légèrement avant ou après la cible.',
+ 'pdf_corpus.record_state.accepted': 'Acceptée',
+ 'pdf_corpus.record_state.metadata': 'Métadonnées',
+ 'pdf_corpus.record_state.preparing': 'Préparation',
+ 'pdf_corpus.record_state.ready': 'Révisable',
+ 'pdf_corpus.record_state.rejected': 'Rejetée',
+ 'pdf_corpus.record_state.source': 'Problème de source',
+ 'pdf_corpus.record_state.topology': 'Topologie',
+ 'pdf_corpus.records': 'fiches',
+ 'pdf_corpus.records_incomplete': 'fiches incomplètes',
+ 'pdf_corpus.records_metadata_complete': 'fiches aux métadonnées complètes',
+ 'pdf_corpus.refresh_builds': 'Actualiser les constructions',
+ 'pdf_corpus.reject': 'Rejeter',
+ 'pdf_corpus.reject_all': 'Tout rejeter',
+ 'pdf_corpus.reject_all_queue': 'Rejeter la file',
+ 'pdf_corpus.reject_next': 'Rejeter et suivante',
+ 'pdf_corpus.reject_queue': 'Rejeter les fiches problématiques visibles',
+ 'pdf_corpus.reject_selected': 'Rejeter la sélection',
+ 'pdf_corpus.reject_selected_count': 'Rejeter la sélection ({count})',
+ 'pdf_corpus.rejected': 'Rejeté',
+ 'pdf_corpus.rejected_notice': 'Fiche rejetée. Passage à la fiche suivante.',
+ 'pdf_corpus.rejections_blocking_help': '{count} fiche(s) rejetée(s) doivent être corrigées, supprimées ou rouvertes '
+                                        'avant la publication.',
+ 'pdf_corpus.remaining': 'restantes',
+ 'pdf_corpus.remove_evidence': 'Retirer comme preuve',
+ 'pdf_corpus.reopen': 'Rouvrir',
+ 'pdf_corpus.reopened_notice': 'Fiche rouverte pour révision.',
+ 'pdf_corpus.repeat_penalty': 'Pénalité de répétition',
+ 'pdf_corpus.required_metadata': 'Métadonnées requises',
+ 'pdf_corpus.rerun_family': 'Relancer',
+ 'pdf_corpus.rerun_metadata': 'Relancer les métadonnées',
+ 'pdf_corpus.rerun_metadata_help': 'Réévaluez uniquement ce Record avec la famille de métadonnées sélectionnée.',
+ 'pdf_corpus.resolve_metadata_before_accept': 'Résolvez les champs de métadonnées signalés avant d’accepter cette '
+                                              'fiche.',
+ 'pdf_corpus.resolve_metadata_before_accept_fields': 'Confirmez {fields} avant d’accepter cette fiche.',
+ 'pdf_corpus.resolve_metadata_issues': 'Résoudre les problèmes de métadonnées',
+ 'pdf_corpus.resolve_metadata_to_accept': 'Résoudre les métadonnées pour accepter',
+ 'pdf_corpus.resolve_rejections_title': 'Résoudre les fiches rejetées',
+ 'pdf_corpus.resolve_source_before_accept': 'Résolvez le problème d’extraction de la source ou rejetez cette fiche '
+                                            'avant de l’accepter.',
+ 'pdf_corpus.resolve_source_with_correction': 'Marquer le problème source de cette fiche comme résolu par la '
+                                              'correction révisée',
+ 'pdf_corpus.resume': 'Reprendre au dernier point de contrôle',
+ 'pdf_corpus.resume_safe': 'Reprise sécurisée',
+ 'pdf_corpus.retry_automatically': 'Relancer automatiquement',
+ 'pdf_corpus.retry_fields_with_model': 'Relancer {count} champ(s) avec {model}',
+ 'pdf_corpus.retry_in_progress': 'Nouvelle tentative de segmentation non résolue',
+ 'pdf_corpus.retry_in_progress_help': 'DerridAI a repris au dernier point de contrôle sûr. L’action de nouvelle '
+                                      'tentative est verrouillée pendant l’exécution; suivez l’étape et la progression '
+                                      'ici ou à l’Accueil.',
+ 'pdf_corpus.retry_incomplete_metadata': 'Relancer les métadonnées incomplètes',
+ 'pdf_corpus.retry_metadata_count': 'Relancer {count} fiche(s)',
+ 'pdf_corpus.retry_metadata_failures': 'Réessayer les métadonnées incomplètes',
+ 'pdf_corpus.retry_metadata_fields': 'Relancer {count} champ(s)',
+ 'pdf_corpus.retry_segmentation': 'Réessayer la segmentation non résolue',
+ 'pdf_corpus.retryable_metadata_fields': '{count} champ(s) peuvent être relancés',
+ 'pdf_corpus.retryable_metadata_help': 'Ces problèmes proviennent d’une réponse de modèle échouée ou invalide, ou d’un '
+                                       'seuil de preuve. La relance ne touche que les fiches non résolues; les '
+                                       'métadonnées terminées et la topologie sont conservées.',
+ 'pdf_corpus.retrying_metadata': 'Relance des métadonnées…',
+ 'pdf_corpus.review_ambiguous_metadata': 'Réviser les métadonnées ambiguës',
+ 'pdf_corpus.review_complete': 'Révision des fiches terminée',
+ 'pdf_corpus.review_controls': 'Commandes de révision des fiches',
+ 'pdf_corpus.review_detail_views': 'Vues détaillées de révision',
+ 'pdf_corpus.review_details': 'Détails de la révision',
+ 'pdf_corpus.review_manually': 'Réviser manuellement',
+ 'pdf_corpus.review_metadata_issues': 'Réviser les problèmes de métadonnées',
+ 'pdf_corpus.review_metadata_records': 'Réviser {count} fiche(s) touchée(s)',
+ 'pdf_corpus.review_mode': 'Révision des fiches',
+ 'pdf_corpus.review_mode_help': 'Révisez la fiche proposée et ses métadonnées ensemble. Les diagnostics de '
+                                'construction restent accessibles sous Détails techniques de la construction.',
+ 'pdf_corpus.review_only': 'À réviser seulement',
+ 'pdf_corpus.review_preparing_help': 'L’enrichissement des métadonnées est toujours en cours. Chaque fiche devient '
+                                     'révisable dès que son propre enrichissement est terminé; vous pouvez donc '
+                                     'commencer sans attendre la fin du livre entier.',
+ 'pdf_corpus.review_preparing_progress': '{done} fiche(s) sur {total} ont terminé l’enrichissement des métadonnées. '
+                                         'Les fiches terminées peuvent être révisées immédiatement.',
+ 'pdf_corpus.review_preparing_title': 'Enrichissement des métadonnées des fiches',
+ 'pdf_corpus.review_progress_compact': '{accepted} acceptées · {pending} en attente · {metadata} décisions de '
+                                       'métadonnées',
+ 'pdf_corpus.review_queue': 'File de révision',
+ 'pdf_corpus.review_rejected_records': 'Réviser les fiches rejetées',
+ 'pdf_corpus.review_selected_preparing': 'La fiche sélectionnée est encore en cours d’enrichissement. Choisissez une '
+                                         'fiche terminée pour commencer la révision pendant que les autres continuent '
+                                         'en arrière-plan.',
+ 'pdf_corpus.review_selected_preparing_title': 'La fiche sélectionnée est encore en traitement',
+ 'pdf_corpus.review_validation_issues': 'Réviser les problèmes de validation',
+ 'pdf_corpus.reviewed': 'Révisées',
+ 'pdf_corpus.reviewed_record_text': 'Texte révisé de la fiche',
+ 'pdf_corpus.revision': 'révision',
+ 'pdf_corpus.save_field_value': 'Enregistrer la valeur',
+ 'pdf_corpus.save_manifest': 'Enregistrer le manifeste du document',
+ 'pdf_corpus.save_metadata': 'Enregistrer les métadonnées',
+ 'pdf_corpus.save_page_overrides': 'Enregistrer {count} correction(s)',
+ 'pdf_corpus.save_reviewed_text': 'Enregistrer le texte révisé',
+ 'pdf_corpus.saved_checkpoint': 'point de reprise enregistré',
+ 'pdf_corpus.saving_decision': 'Enregistrement de la décision…',
+ 'pdf_corpus.schema_issues': 'problème(s) de schéma de métadonnées',
+ 'pdf_corpus.search_records': 'Rechercher dans les fiches générées',
+ 'pdf_corpus.seconds': 'secondes',
+ 'pdf_corpus.seed': 'Graine',
+ 'pdf_corpus.segmentation_blocked': 'Segmentation bloquée',
+ 'pdf_corpus.segmentation_blocked_help': 'DerridAI n’a pas pu valider toutes les transitions sémantiques requises; la '
+                                         'construction s’est donc arrêtée avant de créer des notices. Aucune notice '
+                                         'géante de repli n’a été fabriquée. Ajustez le fournisseur ou les paramètres, '
+                                         'puis réessayez les régions non résolues.',
+ 'pdf_corpus.segmentation_calls': 'segmentation',
+ 'pdf_corpus.segmentation_output': 'Sortie de segmentation',
+ 'pdf_corpus.segmentation_review_help': 'Le corpus a été construit malgré un petit nombre de transitions incertaines. '
+                                        'Seuls les enregistrements concernés sont marqués À réviser. Inspectez-les '
+                                        'ci-dessous et utilisez Scinder ou Fusionner pour corriger la topologie; il '
+                                        'n’est pas nécessaire de répéter le même appel déterministe de segmentation.',
+ 'pdf_corpus.segmentation_review_title': 'Révision localisée de la segmentation',
+ 'pdf_corpus.segmentation_telemetry': 'Décisions de segmentation',
+ 'pdf_corpus.segmentation_telemetry_help': 'La plupart des transitions sont résolues de façon déterministe. Le LLM est '
+                                           'limité à un petit sous-ensemble ambigu; l’incertitude, l’omission et les '
+                                           'échecs du classificateur sont résolus prudemment par CONSERVER.',
+ 'pdf_corpus.segmentation_window': 'Fenêtre d’entrée de segmentation',
+ 'pdf_corpus.segmentation_window_help': 'Nombre approximatif de jetons d’entrée par fenêtre d’analyse sémantique; ce '
+                                        'réglage ne sert jamais de règle de taille des notices.',
+ 'pdf_corpus.select_record': 'Sélectionnez une fiche générée pour examiner son lien à la source et ses métadonnées.',
+ 'pdf_corpus.select_record_id': 'Sélectionner {record}',
+ 'pdf_corpus.select_records_first': 'Sélectionnez d’abord une ou plusieurs fiches.',
+ 'pdf_corpus.select_visible': 'Sélectionner les éléments visibles',
+ 'pdf_corpus.semantic_indexing': 'Indexation sémantique',
+ 'pdf_corpus.semantic_indexing_help': 'Générer les thèmes, concepts, personnes et œuvres citées. Le mode approfondi '
+                                      'inclut toujours l’indexation.',
+ 'pdf_corpus.settle_requested': 'Finalisation des tâches restantes…',
+ 'pdf_corpus.settle_requested_notice': 'Les tâches automatiques restantes deviendront des exceptions à réviser dès que '
+                                       'toute requête active aura atteint son délai maximal.',
+ 'pdf_corpus.show_all_records': 'Afficher toutes les fiches',
+ 'pdf_corpus.show_review_records': 'Afficher les enregistrements concernés',
+ 'pdf_corpus.size_optimized_splits': 'Limites optimisées selon la taille',
+ 'pdf_corpus.skip': 'Passer',
+ 'pdf_corpus.source_asset': 'Source PDF persistée',
+ 'pdf_corpus.source_blocks': 'SourceUnits',
+ 'pdf_corpus.source_context': 'Contexte source',
+ 'pdf_corpus.source_coverage': 'Couverture de la source',
+ 'pdf_corpus.source_fidelity': 'Fidélité à la source',
+ 'pdf_corpus.source_ingested': 'Source ingérée : {pages} pages · {blocks} SourceUnits · OCR sur {ocr} pages.',
+ 'pdf_corpus.source_issue.fragmented_glyph_layout': 'Mise en page du texte fragmentée',
+ 'pdf_corpus.source_issue.source_quality_blocking': 'Couche de texte PDF endommagée',
+ 'pdf_corpus.source_issue_default': 'La source extraite peut ne pas être assez fiable pour une interprétation savante '
+                                    'automatique.',
+ 'pdf_corpus.source_issue_help': 'Inspectez la source concernée et décidez s’il faut corriger le texte de la fiche ou '
+                                 'reconstruire/réextraire la source PDF.',
+ 'pdf_corpus.source_issue_resolved': 'Problème source résolu',
+ 'pdf_corpus.source_issue_resolved_help': 'La personne chargée de la révision a corrigé le texte du corpus; '
+                                          'l’extraction originale reste conservée pour l’audit.',
+ 'pdf_corpus.source_issue_title': 'Problème d’extraction de la source',
+ 'pdf_corpus.source_loading_or_unavailable': 'Les SourceUnits sont en cours de chargement ou indisponibles.',
+ 'pdf_corpus.source_order_issues': 'problème(s) d’ordre de la source',
+ 'pdf_corpus.source_page_navigation': 'Navigation dans les pages source',
+ 'pdf_corpus.source_pdf': 'PDF source',
+ 'pdf_corpus.source_pdf_for_record': 'PDF source de la fiche sélectionnée',
+ 'pdf_corpus.source_quality': 'Qualité de la source',
+ 'pdf_corpus.source_setup_help': 'Choisissez un PDF extrait ou ajoutez le PDF actuellement ouvert dans l’Explorateur.',
+ 'pdf_corpus.source_setup_title': 'PDF source',
+ 'pdf_corpus.source_severity.blocking': 'Bloquant',
+ 'pdf_corpus.source_severity.minor': 'Mineur',
+ 'pdf_corpus.source_severity.warning': 'Avertissement',
+ 'pdf_corpus.source_tab': 'Source',
+ 'pdf_corpus.split_after': 'Scinder après ce bloc',
+ 'pdf_corpus.split_done': 'Fiche scindée à la limite sémantique sélectionnée. Les deux fiches doivent être révisées.',
+ 'pdf_corpus.stage': 'Étape',
+ 'pdf_corpus.stage.cancelled': 'annulée',
+ 'pdf_corpus.stage.document_review': 'révision du document',
+ 'pdf_corpus.stage.enriching': 'enrichissement des métadonnées',
+ 'pdf_corpus.stage.failed': 'échec',
+ 'pdf_corpus.stage.interrupted': 'interrompue',
+ 'pdf_corpus.stage.metadata_review': 'révision des métadonnées',
+ 'pdf_corpus.stage.published': 'publiée',
+ 'pdf_corpus.stage.queued': 'en file',
+ 'pdf_corpus.stage.ready': 'prête',
+ 'pdf_corpus.stage.reconciling': 'réconciliation des limites',
+ 'pdf_corpus.stage.resuming': 'reprise',
+ 'pdf_corpus.stage.review': 'révision humaine',
+ 'pdf_corpus.stage.segmentation_review': 'révision de la segmentation',
+ 'pdf_corpus.stage.segmenting': 'segmentation sémantique',
+ 'pdf_corpus.stage.constructing_records': 'construction des fiches',
+ 'pdf_corpus.stage.structure': 'structure du document',
+ 'pdf_corpus.stage_budgets': 'Budgets de sortie structurée',
+ 'pdf_corpus.stage_budgets_help': 'Des réponses plus petites et bornées sont plus fiables avec les modèles locaux. '
+                                  'Augmentez un budget seulement si une sortie validée est tronquée.',
+ 'pdf_corpus.stage_help.published': 'Le corpus révisé a été finalisé au format JSONL. La provenance de construction '
+                                    'est regroupée sous corpus_build_details dans chaque fiche publiée.',
+ 'pdf_corpus.stage_help.reconciling': 'Finalisation de la topologie. Les classifications faibles, omises, incertaines '
+                                      'ou en échec sont résolues par CONSERVER. Une scission de sécurité n’exige une '
+                                      'révision que si toutes les limites proches présentent un risque de provenance.',
+ 'pdf_corpus.stage_help.segmenting': 'Évaluation locale des transitions structurelles. Les limites protégées ou '
+                                     'faibles sont résolues sans inférence; seul un sous-ensemble ambigu et borné est '
+                                     'soumis au LLM.',
+ 'pdf_corpus.stage_help.constructing_records': 'Construction des Records révisables à partir des SourceUnits conservées. La seconde lecture consultative des limites suspectes est différée afin de ne pas bloquer la révision.',
+ 'pdf_corpus.stage_timeouts': 'Délais maximaux par étape',
+ 'pdf_corpus.stage_timeouts_help': 'Durée maximale de lecture ou d’exécution d’une tentative LLM. Un dépassement '
+                                   'devient une exception révisable au lieu de bloquer toute la construction.',
+ 'pdf_corpus.start_another_build': 'Lancer une autre construction',
+ 'pdf_corpus.starting': 'Démarrage…',
+ 'pdf_corpus.status.awaiting_manifest_review': 'en attente de révision du document',
+ 'pdf_corpus.status.awaiting_metadata': 'en attente de métadonnées',
+ 'pdf_corpus.status.awaiting_review': 'en attente de révision',
+ 'pdf_corpus.status.blocked': 'bloquée',
+ 'pdf_corpus.status.cancelled': 'annulée',
+ 'pdf_corpus.status.failed': 'échec',
+ 'pdf_corpus.status.interrupted': 'interrompue',
+ 'pdf_corpus.status.published': 'publiée',
+ 'pdf_corpus.status.published_snapshot': 'publié',
+ 'pdf_corpus.status.queued': 'en file',
+ 'pdf_corpus.status.ready': 'prête',
+ 'pdf_corpus.status.running': 'en cours',
+ 'pdf_corpus.status_refresh_failed': 'L’actualisation de l’état a échoué. La construction peut toujours être en cours; '
+                                     'DerridAI réessaiera automatiquement.',
+ 'pdf_corpus.structured_failures': 'corrections de sortie structurée',
+ 'pdf_corpus.subtitle': 'Un LLM propose les limites sémantiques et les métadonnées interprétatives; le texte source, '
+                        'la provenance des pages, les identifiants, la validation et la publication restent '
+                        'déterministes.',
+ 'pdf_corpus.technical_details': 'Détails techniques de construction',
+ 'pdf_corpus.temperature': 'Température',
+ 'pdf_corpus.text_fidelity_issues': 'problème(s) de fidélité du texte',
+ 'pdf_corpus.text_saved': 'Texte révisé enregistré. Le texte extrait immuable reste disponible dans Source.',
+ 'pdf_corpus.text_saved_resolved': 'Texte révisé enregistré et problème source de la fiche marqué comme résolu. '
+                                   'Relancez les métadonnées si la correction affecte l’interprétation.',
+ 'pdf_corpus.thinking': 'Raisonnement',
+ 'pdf_corpus.thinking_high': 'Élevé',
+ 'pdf_corpus.thinking_low': 'Faible',
+ 'pdf_corpus.thinking_medium': 'Moyen',
+ 'pdf_corpus.thinking_off': 'Désactivé',
+ 'pdf_corpus.thinking_on': 'Activé',
+ 'pdf_corpus.timeout.discourse': 'Discours',
+ 'pdf_corpus.timeout.indexing': 'Indexation',
+ 'pdf_corpus.timeout.manifest': 'Manifeste',
+ 'pdf_corpus.timeout.quotation': 'Citation',
+ 'pdf_corpus.timeout.reconciliation': 'Réconciliation',
+ 'pdf_corpus.timeout.segmentation': 'Segmentation',
+ 'pdf_corpus.title': 'Créer des fiches auditables à partir de PDF sources',
+ 'pdf_corpus.top_k': 'Top K',
+ 'pdf_corpus.top_p': 'Top P',
+ 'pdf_corpus.total': 'au total',
+ 'pdf_corpus.undo': 'Annuler',
+ 'pdf_corpus.undo_done': 'La dernière fusion ou division a été annulée.',
+ 'pdf_corpus.unknown': 'inconnue',
+ 'pdf_corpus.unresolved_count': '{count} région(s) non résolue(s)',
+ 'pdf_corpus.unresolved_fields': 'champs non résolus',
+ 'pdf_corpus.unresolved_regions': 'décision(s) de limite à réviser',
+ 'pdf_corpus.use_current_pdf': 'Utiliser le PDF actuel de l’Explorateur',
+ 'pdf_corpus.use_profile_defaults': 'Utiliser les paramètres de génération du profil de fournisseur',
+ 'pdf_corpus.validation_attention': 'Validation à examiner',
+ 'pdf_corpus.validation_details': 'Détails de validation',
+ 'pdf_corpus.validation_passed': 'Validation réussie',
+ 'pdf_corpus.view_evidence': 'Preuves',
+ 'pdf_corpus.view_metadata_issue_details': 'Voir {count} problème(s) de métadonnées',
+ 'pdf_corpus.view_publication_blockers': 'Voir {count} obstacle(s) à la publication',
+ 'pdf_corpus.view_source_evidence': 'Voir les preuves de la source',
+ 'pdf_corpus.waiting': 'En attente',
+ 'pdf_corpus.warnings_count': '{count} avertissement(s) de construction',
+ 'pdf_corpus.what_next': 'Quelle est la prochaine étape?',
+ 'pdf_corpus.why_review': 'Pourquoi réviser',
+ 'pdf_corpus.workflow': 'Flux de travail',
+ 'pdf_corpus.workflow.analyze': 'Analyser la structure',
+ 'pdf_corpus.workflow.build': 'Construire les fiches',
+ 'pdf_corpus.workflow.complete': 'Terminé',
+ 'pdf_corpus.workflow.current': 'Étape actuelle',
+ 'pdf_corpus.workflow.enrich': 'Construire et enrichir',
+ 'pdf_corpus.workflow.label': 'Flux de construction du corpus',
+ 'pdf_corpus.workflow.publish': 'Publier',
+ 'pdf_corpus.workflow.review': 'Révision collaborative',
+ 'pdf_corpus.workflow.source': 'Source',
+ 'pdf_corpus.workflow.upcoming': 'À venir',
+ 'pdf_workspace.builder': 'Générateur de corpus',
+ 'pdf_workspace.explorer': 'Explorateur PDF',
+ 'pdf_workspace.help': 'Construisez des jeux de notices vérifiables; la lecture de la source demeure disponible dans '
+                       'l’Explorateur PDF',
+ 'pdf_workspace.modes': 'Modes du générateur de corpus',
+ 'permissions.annotations_denied': 'Votre rôle ne permet pas de créer des annotations.',
+ 'permissions.appearance_denied': 'Les paramètres d’apparence sont désactivés pour ce rôle.',
+ 'permissions.corpus_denied': 'Votre rôle ne permet pas de gérer les bases de données du corpus.',
+ 'permissions.corpus_manage_denied': 'Votre rôle ne permet pas de charger des fichiers de corpus.',
+ 'permissions.evidence_denied': 'Votre rôle ne permet pas de modifier les preuves sélectionnées.',
+ 'permissions.faq_denied': 'Votre rôle ne permet pas d’ouvrir la bibliothèque de réponses.',
+ 'permissions.no_workspace_shortcuts': 'Aucune autre page de l’espace de travail n’est activée pour ce rôle.',
+ 'permissions.pdf_denied': 'Votre rôle ne permet pas d’ouvrir l’Explorateur PDF.',
+ 'permissions.rag_denied': 'Votre rôle ne permet pas d’exécuter des pipelines de recherche.',
+ 'permissions.record_edit_denied': 'Votre rôle ne permet pas de modifier les fiches locales.',
+ 'permissions.research_result_denied': 'Votre rôle ne permet pas d’ouvrir les résultats de recherche.',
+ 'providers.context_tokens': 'jetons de contexte',
+ 'providers.add_ollama': 'Ajouter Ollama',
+ 'providers.add_openai': 'Ajouter un fournisseur compatible avec OpenAI',
+ 'providers.advanced': 'Valeurs de génération et paramètres avancés',
+ 'providers.api_key': 'Clé API',
+ 'providers.concurrency': 'Requêtes simultanées maximales',
+ 'providers.group_connection': 'Connexion',
+ 'providers.group_capacity': 'Capacité',
+ 'providers.group_access': 'Accès',
+ 'providers.group_sampling': 'Échantillonnage',
+ 'providers.group_lifecycle': 'Cycle de vie',
+ 'providers.group_raw': 'Substitutions brutes',
+ 'providers.concurrency_help': 'Les tâches en arrière-plan respectent cette limite.',
+ 'providers.context': 'Jetons de contexte',
+ 'providers.default': 'Par défaut',
+ 'providers.hide': 'Masquer',
+ 'providers.hide_api_key': 'Masquer la clé API',
+ 'providers.show': 'Afficher',
+ 'providers.show_api_key': 'Afficher la clé API',
+ 'providers.description': 'Configurez les points de terminaison, modèles, identifiants et accès réutilisables pour chaque flux LLM.',
+ 'providers.endpoint': 'Point de terminaison',
+ 'providers.extra_options': 'JSON des options avancées',
+ 'providers.max_output': 'Jetons de sortie maximaux',
+ 'providers.model': 'Modèle',
+ 'providers.not_verified': 'Non vérifié',
+ 'providers.ollama': 'Ollama',
+ 'providers.openai_compatible': 'Compatible avec OpenAI',
+ 'providers.profile_name': 'Nom du profil',
+ 'providers.profiles': 'Profils',
+ 'providers.ready_models': 'Prêt - {count} modèles',
+ 'providers.registry': 'Registre des fournisseurs',
+ 'providers.registry_help': 'Les profils sont partagés entre l’enrichissement du corpus, la révision, la traduction et Recherche. Les identifiants restent dans l’espace des fournisseurs.',
+ 'providers.registry_title': 'Accès aux modèles en un coup d’œil',
+ 'providers.remove_confirm': 'Supprimer le profil fournisseur {name} ?',
+ 'providers.researcher_access': 'Accès des chercheurs',
+ 'providers.researcher_access_help': 'Autoriser les comptes chercheurs à utiliser ce profil sans exposer l’administration des fournisseurs.',
+ 'providers.saved': 'Profils fournisseurs enregistrés.',
+ 'providers.set_default': 'Définir par défaut',
+ 'providers.shared_endpoint': 'Le point de terminaison Ollama partagé utilise la limite de profil la plus basse.',
+ 'providers.test': 'Tester / découvrir les modèles',
+ 'providers.testing': 'Test en cours...',
+ 'providers.title': 'Fournisseurs LLM',
+ 'providers.warm': 'Préchauffer séparément',
+ 'providers.warming': 'Préchauffage en cours...',
+ 'rag.selected_evidence': 'Preuves sélectionnées',
+ 'rag.skip_retrieval': 'Utiliser uniquement les preuves sélectionnées (sans repérage)',
+ 'rag.skip_retrieval_short': 'Preuves seulement',
+ 'record.add_evidence': 'Ajouter aux preuves',
+ 'record.add_evidence_help': 'Ajoutez cette fiche aux preuves sélectionnées utilisées par Recherche et les exécutions '
+                             'RAG fondées uniquement sur les preuves.',
+ 'record.add_selection': 'Ajouter à la sélection',
+ 'record.add_term': 'Ajouter : {label}',
+ 'record.attribution_path': 'Parcours d’attribution',
+ 'record.audit_trail': 'Piste d’audit',
+ 'record.change_history': 'Historique des modifications',
+ 'record.characters': 'caractères',
+ 'record.citations': 'Références',
+ 'record.clean_ocr': 'Nettoyer les artéfacts de ROC',
+ 'record.clear_find': 'Effacer la recherche dans la fiche',
+ 'record.clear_find_empty': 'Saisissez une recherche avant de l’effacer.',
+ 'record.clear_search': 'Effacer la recherche',
+ 'record.collection': 'Collection',
+ 'record.comma_separated': 'Séparez les valeurs multiples par des virgules.',
+ 'record.copy_failed': 'Impossible de copier la référence',
+ 'record.copy_full': 'Copier la référence complète',
+ 'record.copy_inline': 'Copier la citation dans le texte',
+ 'record.copy_json': 'Copier la fiche en JSON',
+ 'record.database_record': 'Fiche de la base de données',
+ 'record.discourse_role': 'Rôle discursif',
+ 'record.edit': 'Modifier la fiche',
+ 'record.edit_kicker': 'Métadonnées de la fiche',
+ 'record.evidence_selected': 'Preuve sélectionnée',
+ 'record.exit_focus': 'Quitter le mode concentration',
+ 'record.extracted_text': 'Texte extrait',
+ 'record.extraction_quality': 'Qualité de l’extraction',
+ 'record.find_text': 'Rechercher dans le texte de la fiche',
+ 'record.focus_mode': 'Mode concentration',
+ 'record.full_citation': 'Référence complète',
+ 'record.full_citation_copied': 'Référence complète copiée',
+ 'record.group_citation': 'Référence',
+ 'record.group_discourse': 'Discours',
+ 'record.group_indexing': 'Indexation',
+ 'record.group_language': 'Langue et traduction',
+ 'record.group_other': 'Autres champs',
+ 'record.group_quality': 'Qualité et révision',
+ 'record.group_quotation': 'Provenance de la citation',
+ 'record.group_source': 'Source',
+ 'record.group_text': 'Texte',
+ 'record.hide_inspector': 'Masquer le volet d’inspection',
+ 'record.history_undo': 'Historique et annulation',
+ 'record.id': 'Fiche',
+ 'record.indexing': 'Indexation',
+ 'record.indexing_kicker': 'Index de recherche',
+ 'record.inline_citation': 'Citation dans le texte',
+ 'record.inline_citation_copied': 'Citation dans le texte copiée',
+ 'record.inspector': 'Volet d’inspection de la fiche',
+ 'record.inspector_sections': 'Sections du volet d’inspection de la fiche',
+ 'record.link_current_pdf': 'Lier la page PDF actuelle',
+ 'record.load_failed': 'Impossible de charger la fiche',
+ 'record.loading': 'Chargement de la fiche…',
+ 'record.matches': 'correspondances',
+ 'record.metadata': 'Métadonnées',
+ 'record.more_actions': 'Autres actions sur la fiche',
+ 'record.navigation': 'Navigation entre les fiches',
+ 'record.needs_review': 'À réviser',
+ 'record.next': 'Fiche suivante',
+ 'record.no_changes': 'Aucun champ de la fiche n’a été modifié',
+ 'record.no_history': 'Aucune modification suivie pour cette fiche.',
+ 'record.no_pdf_links': 'Aucune page PDF n’est liée à cette fiche.',
+ 'record.no_record_help': 'Choisissez une fiche depuis Recherche globale, Œuvres ou Fiches.',
+ 'record.no_record_selected': 'Aucune fiche sélectionnée',
+ 'record.no_storage_id': 'Cette fiche de base de données n’a pas d’identifiant de stockage.',
+ 'record.no_unsaved_changes': 'Aucune modification non enregistrée',
+ 'record.open': 'Ouvrir la fiche',
+ 'record.open_history': 'Ouvrir l’historique et les options d’annulation',
+ 'record.open_page': 'Ouvrir la page',
+ 'record.open_pdf_first': 'Ouvrez {file} dans l’Explorateur PDF pour accéder à la page liée.',
+ 'record.overview': 'Aperçu',
+ 'record.page': 'Page',
+ 'record.page_not_recorded': 'Page non indiquée',
+ 'record.pdf_explorer': 'Explorateur PDF',
+ 'record.pdf_links': 'Liens PDF',
+ 'record.pdf_page': 'Page {page}',
+ 'record.position_of': '{current} sur {total}',
+ 'record.previous': 'Fiche précédente',
+ 'record.primary_text': 'Texte principal',
+ 'record.provenance': 'Provenance',
+ 'record.provenance_empty': 'Aucun champ d’attribution structurée n’est consigné pour ce passage.',
+ 'record.provenance_fields': '{count} champs d’attribution',
+ 'record.provenance_help': 'Vue structurée de l’attribution indiquant qui parle, quelle position est représentée, la '
+                           'posture adoptée et sa cible.',
+ 'record.provenance_kicker': 'Structure d’attribution',
+ 'record.quotation_provenance': 'Provenance de la citation',
+ 'record.record_context': 'Contexte de la fiche',
+ 'record.record_json': 'fiche',
+ 'record.region_type': 'Type de région',
+ 'record.remove_all_pdf': 'Retirer tous les liens PDF',
+ 'record.remove_selection': 'Retirer de la sélection',
+ 'record.remove_term': 'Retirer {value}',
+ 'record.researcher_summary': 'Résumé pour la recherche',
+ 'record.resize_inspector': 'Redimensionner le volet d’inspection',
+ 'record.review_llm': 'Réviser avec un LLM',
+ 'record.saved': 'Modifications de la fiche enregistrées',
+ 'record.secondary_text': 'Texte secondaire',
+ 'record.select_help': 'Sélectionnez cette fiche pour les actions de révision, modification ou synchronisation en lot.',
+ 'record.selection_actions': 'Actions sur le texte sélectionné',
+ 'record.show_inspector': 'Afficher le volet d’inspection',
+ 'record.source_documents': 'Documents sources',
+ 'record.sparse_save_help': 'Seuls les champs modifiés seront enregistrés et ajoutés à la piste d’audit.',
+ 'record.status': 'État de la fiche',
+ 'record.summary': 'Résumé chercheur',
+ 'record.tab_annotations': 'Annotations',
+ 'record.tab_history': 'Historique',
+ 'record.tab_indexing': 'Indexation',
+ 'record.tab_overview': 'Aperçu',
+ 'record.tab_pdf': 'PDF',
+ 'record.tab_provenance': 'Provenance',
+ 'record.text': 'Texte de la fiche',
+ 'record.translation': 'Traduction',
+ 'record.unsaved_fields': '{count} champs non enregistrés',
+ 'record.untitled': 'Fiche sans titre',
+ 'record.upsert': 'Synchroniser la fiche',
+ 'record.words': 'mots',
+ 'record.workspace_kicker': 'Fiche du corpus',
+ 'records.choose_jsonl': 'Choisir des fichiers JSONL',
+ 'records.close_edited_help': '{name} contient des fiches modifiées depuis son chargement. La fermeture le retire de '
+                              'l’espace de travail du navigateur; le fichier sur le disque n’est pas supprimé.',
+ 'records.close_edited_title': 'Fermer le JSONL modifié?',
+ 'records.close_named': 'Fermer {name}',
+ 'records.columns': 'Colonnes',
+ 'records.file_actions': 'Actions sur les fichiers JSONL',
+ 'records.file_count': '{count} fichiers',
+ 'records.file_edited': 'Modifié depuis le chargement',
+ 'records.file_origin_chroma': 'Issu de la collection',
+ 'records.file_origin_imported': 'Importé',
+ 'records.file_origin_merge': 'Fusionné',
+ 'records.file_origin_subset': 'Sous-ensemble',
+ 'records.file_origin_work_split': 'Séparé par œuvre',
+ 'records.files': 'JSONL locaux',
+ 'records.files_help': 'Fichiers de corpus locaux au navigateur. Le fichier sélectionné est celui qu’utilisent Fiches, '
+                       'la synchro vectorielle et l’appariement PDF.',
+ 'records.keep_open': 'Garder ouvert',
+ 'records.merge_files_help': 'Choisissez n’importe quel sous-ensemble. Les fichiers sources sélectionnés seront '
+                             'remplacés dans l’espace de travail par le fichier fusionné.',
+ 'records.merge_replace': 'Fusionner et remplacer les fichiers sélectionnés',
+ 'records.open_shared_workspace': 'Ouvrir l’espace de corpus partagé',
+ 'records.open_workspace': 'Ouvrir un espace de corpus',
+ 'records.open_workspace_help': 'Déposez un ou plusieurs fichiers JSONL n’importe où sur cette page ou choisissez-les '
+                                'manuellement. Chaque fichier demeure dans la liste locale du corpus et peut être '
+                                'modifié, comparé, recherché, exporté ou envoyé à la base de données du corpus.',
+ 'records.shared_workspace_help': 'Ce lien conserve l’état du tableau et les filtres, tandis que le contenu JSONL '
+                                  'demeure local au navigateur. Choisissez le même fichier JSONL pour rétablir cette '
+                                  'vue partagée.',
+ 'records.table_scroll_label': 'Tableau des fiches. Faites défiler horizontalement pour afficher les colonnes '
+                               'supplémentaires.',
+ 'records.page_help': 'Passez en revue les fiches JSONL chargées, gardez la provenance visible et agissez sur une sélection précise sans encombrer le tableau.',
+ 'records.view_actions': 'Actions de la vue Fiches',
+ 'records.workspace_stats': 'Statistiques de l’espace de travail',
+ 'records.no_file': 'Aucun fichier',
+ 'records.active_tab': 'Fichier actif',
+ 'records.visible_of_loaded': 'Visibles parmi les chargées',
+ 'records.needs_review_count': 'À relire',
+ 'records.no_matches': 'Aucune fiche correspondante',
+ 'records.no_matches_help': 'Effacez la recherche textuelle ou un filtre de colonne pour voir davantage de ce fichier.',
+ 'records.range': '{start}–{end} sur {matched}',
+ 'records.table_controls': 'Commandes du tableau des fiches',
+ 'records.search_in_file': 'Rechercher le texte dans ce fichier',
+ 'records.no_collection': 'Aucune collection du corpus',
+ 'records.density': 'Densité des lignes',
+ 'records.density_comfortable': 'Confortable',
+ 'records.density_compact': 'Compacte',
+ 'records.more_actions': 'Plus',
+ 'records.upsert_file': 'Synchroniser le fichier',
+ 'records.select_matches': 'Sélectionner les correspondances',
+ 'records.select_all': 'Tout sélectionner',
+ 'records.clear_column_filters': 'Effacer les filtres de colonnes',
+ 'records.review_flagged': 'Relire les fiches à relire ({count})',
+ 'records.auto_improve_flagged': 'Améliorer automatiquement les fiches à relire',
+ 'records.upsert_selected': 'Synchroniser la sélection',
+ 'records.filter_column': 'Filtrer {column}',
+ 'records.filter_all': 'Toutes',
+ 'records.filter_reviewed': 'Relues',
+ 'records.filter_placeholder': 'Filtrer…',
+ 'records.open_named': 'Ouvrir {record}',
+ 'records.pagination': 'Pages des fiches',
+ 'records.configure_columns': 'Configurer les colonnes',
+ 'records.configure_columns_help': 'Choisissez les champs affichés dans le tableau des fiches. L’ordre est conservé.',
+ 'records.table_view': 'Vue tableau',
+ 'records.visible_columns': 'Colonnes visibles',
+ 'records.available_fields': 'Champs disponibles',
+ 'records.find_column': 'Trouver un champ',
+ 'records.hide_column': 'Masquer {column}',
+ 'records.no_fields_to_add': 'Aucun autre champ ne correspond.',
+ 'records.add_column': 'Ajouter une colonne',
+ 'records.choose_column': 'Choisir un champ',
+ 'records.reset_columns': 'Réinitialiser',
+ 'records.save_columns': 'Enregistrer les colonnes',
+ 'records.first_page': 'Première',
+ 'records.last_page': 'Dernière',
+ 'records.sort_column': 'Trier par {column}',
+ 'records.column.database_status': 'État de la base de données',
+ 'records.column.record_id': 'Identifiant de la fiche',
+ 'records.column.work': 'Œuvre',
+ 'records.column.text': 'Texte',
+ 'records.column.speaker': 'Locuteur',
+ 'records.column.needs_review': 'À relire',
+ 'records.column.page_start': 'Page de début',
+ 'records.column.page_end': 'Page de fin',
+ 'records.status.synced': 'Synchronisée',
+ 'records.status.pending': 'En attente',
+ 'records.status.in_db': 'Dans la BD',
+ 'records.status.not_in_db': 'Absente de la BD',
+ 'records.status.unknown': 'Inconnu',
+ 'records.status.none': 'Aucune base',
+ 'research.active_pipelines': 'Pipelines de recherche actifs',
+ 'research.active_profile': 'Profil actif',
+ 'research.active_runs': 'actives',
+ 'research.add_filter': 'Ajouter un filtre',
+ 'research.add_metadata_filter': 'Ajouter un filtre de métadonnées',
+ 'research.added': 'Ajouté',
+ 'research.advanced_generation': 'Paramètres avancés de génération',
+ 'research.advanced_generation_help': 'Contexte, échantillonnage, limites de jetons et options propres au fournisseur',
+ 'research.all_records': 'Toutes les fiches',
+ 'research.answer': 'Réponse',
+ 'research.answer_copied': 'Réponse copiée',
+ 'research.answer_evidence': 'Preuves de la réponse',
+ 'research.answer_language': 'Langue de réponse',
+ 'research.answer_waiting': 'Votre réponse de recherche apparaîtra ici',
+ 'research.answer_waiting_help': 'Posez une question ci-dessus. La réponse reste dans l’espace de travail avec ses '
+                                 'preuves plutôt que dans une fenêtre modale.',
+ 'research.apply_settings': 'Appliquer à la recherche',
+ 'research.ask_help': 'Posez une question savante. DerridAI repère, reclasse et synthétise les passages pertinents, '
+                      'puis relie la réponse à des preuves vérifiables.',
+ 'research.ask_title': 'Que recherchez-vous?',
+ 'research.auto_grade': 'Évaluer automatiquement la réponse finale',
+ 'research.auto_grade_help': 'S’exécute comme dernière étape du pipeline en arrière-plan.',
+ 'research.bind_citations': 'Lier les balises de preuve aux citations',
+ 'research.bind_citations_help': 'Valider les identifiants de preuve avant le formatage final des sources.',
+ 'research.browse_description': 'Parcourez les œuvres et recherchez dans les bases vectorielles sans exposer de fiches '
+                                'modifiables ni le texte intégral du corpus.',
+ 'research.cached': 'Mise en cache',
+ 'research.cancel_run': 'Annuler l’exécution de recherche',
+ 'research.cancelled': 'Annulée',
+ 'research.cancelling': 'Annulation',
+ 'research.candidate_pool': 'Bassin de candidats',
+ 'research.candidate_pool_help': 'Déterminez l’étendue du repérage avant la fusion des classements et le reclassement.',
+ 'research.characters': 'caractères',
+ 'research.clear_filters': 'Effacer les filtres',
+ 'research.clipboard_failed': 'Impossible d’accéder au presse-papiers',
+ 'research.collection': 'Collection',
+ 'research.compare_help': 'Comparez côte à côte les fiches résumées visibles par les chercheurs.',
+ 'research.complete': 'Terminée',
+ 'research.concepts': 'Concepts',
+ 'research.concurrent_requests': 'requêtes simultanées',
+ 'research.contains': 'contient',
+ 'research.context': 'Contexte de recherche',
+ 'research.context_window': 'Fenêtre de contexte',
+ 'research.copy_answer': 'Copier la réponse',
+ 'research.corpus': 'Corpus',
+ 'research.corpus_database': 'Base de corpus',
+ 'research.corpus_retrieval': 'Corpus et repérage',
+ 'research.corpus_retrieval_help': 'Routage linguistique, profondeur du repérage, reclassement, liaison des citations '
+                                   'et évaluation.',
+ 'research.corpus_search': 'Recherche dans le corpus',
+ 'research.cross_encoder': 'Encodeur croisé',
+ 'research.cross_encoder_model': 'Modèle de cross-encoder',
+ 'research.current_run': 'Exécution actuelle',
+ 'research.database': 'Base de données',
+ 'research.database_count_many': '{count} bases de données',
+ 'research.database_count_one': '{count} base de données',
+ 'research.database_required': 'Une base de corpus ou des preuves sélectionnées sont requises.',
+ 'research.decomposition_tokens': 'Jetons de décomposition de requête',
+ 'research.discourse_role': 'Rôle discursif',
+ 'research.discover_models': 'Découvrir les modèles',
+ 'research.document_languages': 'Langues des documents',
+ 'research.evaluation': 'Évaluation',
+ 'research.evaluation_help': 'Évaluez facultativement la réponse finale après la génération, sans bloquer l’espace '
+                             'Recherche.',
+ 'research.evidence': 'Preuve',
+ 'research.evidence_budget': 'Budget de preuves',
+ 'research.evidence_budget_help': 'Fixez une limite pour chaque passage et pour l’ensemble des preuves transmis au '
+                                  'modèle de génération.',
+ 'research.evidence_citations': 'Preuves et citations',
+ 'research.evidence_citations_help': 'Contrôlez la taille du paquet de preuves et la liaison déterministe aux sources.',
+ 'research.evidence_list': 'Liste des preuves',
+ 'research.evidence_nav_help': 'Budget de contexte, liaison aux sources et évaluation',
+ 'research.evidence_only': 'Preuves seulement',
+ 'research.evidence_panel': 'Preuves',
+ 'research.evidence_records': 'preuves',
+ 'research.evidence_required': 'Sélectionnez au moins une preuve pour une recherche limitée aux preuves.',
+ 'research.expert_help': 'Ces paramètres servent à la reproductibilité, à l’évaluation et aux tâches inhabituelles. '
+                         'Une recherche normale ne devrait pas les exiger.',
+ 'research.expert_sections': 'Sections des paramètres experts',
+ 'research.expert_settings': 'Paramètres experts',
+ 'research.failed': 'Échouée',
+ 'research.fetch_k_help': 'Réservoir de candidats MMR',
+ 'research.fetch_k_label': 'Bassin de candidats MMR',
+ 'research.filter_value': 'Valeur exacte du filtre',
+ 'research.filter_works': 'Filtrer les œuvres par titre',
+ 'research.filters_only': 'Filtres uniquement',
+ 'research.full_citation': 'Citation complète',
+ 'research.generation': 'Génération',
+ 'research.generation_nav_help': 'Modèle et paramètres d’inférence propres à l’exécution',
+ 'research.generation_override_help': 'Dérogations facultatives pour cette exécution; le profil fournisseur enregistré '
+                                      'demeure inchangé.',
+ 'research.generation_provider': 'Fournisseur de génération',
+ 'research.generation_provider_help': 'Choisissez le fournisseur et le modèle autorisés pour cette exécution. Les '
+                                      'réglages fins demeurent masqués tant qu’ils ne sont pas nécessaires.',
+ 'research.global_search_admin_help': 'Recherchez dans les fiches chargées ou passez à la recherche sémantique dans la '
+                                      'base de corpus sélectionnée.',
+ 'research.global_search_help': 'Recherchez dans les fiches résumées par texte ou passez au classement sémantique dans '
+                                'la base de corpus sélectionnée.',
+ 'research.grade': 'Analyser et évaluer',
+ 'research.grading_profile': 'Profil d’évaluation',
+ 'research.include_works_cited': 'Ajouter les ouvrages cités',
+ 'research.inference_parameters': 'Paramètres d’inférence',
+ 'research.inference_parameters_help': 'Paramètres du modèle propres à cette exécution. Conservez les valeurs du '
+                                       'profil à moins qu’une dérogation reproductible soit nécessaire.',
+ 'research.inspect_evidence': 'Examiner les preuves pour',
+ 'research.instructions': 'Instructions supplémentaires',
+ 'research.instructions_placeholder': 'Contraintes facultatives sur le cadrage, la comparaison, les citations ou la '
+                                      'forme de la réponse.',
+ 'research.invalid_provider_options': 'Les options du fournisseur doivent former un objet JSON valide.',
+ 'research.k_help': 'Candidats conservés par voie de repérage',
+ 'research.k_label': 'Candidats conservés',
+ 'research.keep_alive': 'Maintenir le modèle chargé',
+ 'research.lambda_help': 'Équilibre entre pertinence et diversité',
+ 'research.lambda_label': 'Équilibre de pertinence',
+ 'research.language_auto': 'Automatique',
+ 'research.language_help': 'Le routage par langue source reste indépendant.',
+ 'research.layout_cards': 'Cartes',
+ 'research.layout_compact': 'Tableau compact',
+ 'research.layout_roomy': 'Tableau confortable',
+ 'research.lexical_fallback': 'Solution de rechange lexicale/vectorielle',
+ 'research.loaded_record_search_placeholder': 'Rechercher dans le texte des fiches de tous les fichiers chargés',
+ 'research.loading_databases': 'Chargement des bases de données du corpus…',
+ 'research.loading_workspace': 'Chargement de l’espace de recherche…',
+ 'research.max_output_tokens': 'Sortie maximale',
+ 'research.metadata_filters': 'Filtres de métadonnées',
+ 'research.minimum_probability': 'Probabilité minimale',
+ 'research.model': 'Modèle',
+ 'research.model_auto': 'Modèle automatique',
+ 'research.models_found': 'modèles trouvés',
+ 'research.no_database': 'Aucune base de données du corpus disponible',
+ 'research.no_database_admin_help': 'Créez ou restaurez une base de données du corpus pour utiliser la recherche '
+                                    'sémantique.',
+ 'research.no_database_help': 'Un administrateur doit créer ou restaurer une base de données du corpus avant que les '
+                              'chercheurs puissent utiliser la recherche et l’espace Recherche.',
+ 'research.no_evidence_text': 'Aucun passage n’a été conservé pour cet élément de preuve.',
+ 'research.no_filters': 'Aucun filtre de base de données appliqué.',
+ 'research.no_matches': 'Aucune fiche correspondante. Essayez une requête plus générale ou une autre base de corpus.',
+ 'research.no_profile': 'Aucun profil',
+ 'research.no_profile_configured': 'Aucun profil LLM de recherche n’est disponible.',
+ 'research.no_recent_questions': 'Aucune question récente correspondante.',
+ 'research.no_records': 'Aucune fiche disponible',
+ 'research.no_runs': 'Aucune exécution de recherche',
+ 'research.no_runs_help': 'Les exécutions terminées et actives apparaîtront ici.',
+ 'research.no_selected_evidence': 'Aucune preuve épinglée',
+ 'research.no_selected_evidence_help': 'Ajoutez des fiches depuis Recherche, Œuvres ou la vue Fiche. Le repérage peut '
+                                       'toujours trouver des preuves automatiquement.',
+ 'research.no_work_metadata': 'Aucune métadonnée d’œuvre n’a été trouvée dans cette collection.',
+ 'research.no_works': 'Aucune œuvre chargée.',
+ 'research.none': 'Aucun',
+ 'research.none_selected': 'Aucune base de données sélectionnée',
+ 'research.nucleus_sampling': 'Échantillonnage top-p',
+ 'research.of': 'sur',
+ 'research.off': 'Désactivé',
+ 'research.on': 'Activé',
+ 'research.open': 'Ouvrir',
+ 'research.optional': 'Facultatif',
+ 'research.page_kicker': 'Recherche fondée sur les preuves',
+ 'research.page_subtitle': 'Interrogez le corpus, examinez les preuves et conservez la provenance avec la réponse.',
+ 'research.page_title': 'Espace de recherche',
+ 'research.parallel_runs_help': 'Vous pouvez lancer une autre question à tout moment. Chaque exécution se poursuit '
+                                'indépendamment; les limites de simultanéité du fournisseur déterminent quand les '
+                                'tâches en attente s’exécutent.',
+ 'research.pipeline_help': 'Configurez le corpus, le repérage, les preuves et la génération. Les options avancées '
+                           'demeurent disponibles sans détourner l’attention du flux principal de recherche.',
+ 'research.pipeline_options': 'Repérage, preuves et génération',
+ 'research.pipeline_running_one': 'pipeline en cours',
+ 'research.pipeline_stage': 'Étape du pipeline',
+ 'research.pipeline_title': 'Pipeline de recherche',
+ 'research.pipelines_running_many': 'pipelines en cours',
+ 'research.position_holder': 'Détenteur de la position',
+ 'research.preset_balanced': 'Équilibré',
+ 'research.preset_custom': 'Personnalisé',
+ 'research.preset_evidence': 'Preuves sélectionnées seulement',
+ 'research.preset_precision': 'Haute précision',
+ 'research.preset_recall': 'Rappel élevé',
+ 'research.profile': 'Profil de recherche',
+ 'research.prompt_required': 'Entrez une question de recherche.',
+ 'research.proposition_status': 'Statut de la proposition',
+ 'research.provider': 'Fournisseur',
+ 'research.provider_options': 'Options du fournisseur en JSON',
+ 'research.provider_options_help': 'Les options avancées propres au fournisseur s’appliquent uniquement à cette '
+                                   'exécution.',
+ 'research.query_decomposition': 'Décomposition de la requête',
+ 'research.query_decomposition_help': 'Générer des sous-requêtes et des formulations françaises avant le repérage.',
+ 'research.query_metadata': 'Métadonnées de la requête',
+ 'research.question': 'Question de recherche',
+ 'research.question_placeholder': 'Interrogez un concept, un passage, une relation, une attribution ou un désaccord…',
+ 'research.question_restored': 'Question récente restaurée',
+ 'research.queued': 'En file',
+ 'research.quoted_speaker': 'Locuteur cité',
+ 'research.readonly_chip': 'Corpus en lecture seule · résumés Edmundson',
+ 'research.readonly_policy': 'La recherche RAG et la consultation des bases et œuvres sont en lecture seule. Le texte '
+                             'est retourné sous forme de résumés Edmundson de 2 à 3 phrases.',
+ 'research.ready_to_run': 'Prêt à lancer la recherche',
+ 'research.recent_activity_private': 'L’activité locale de modification est visible par les administrateurs.',
+ 'research.recent_questions': 'Questions récentes',
+ 'research.record_actions': 'Actions sur la fiche',
+ 'research.record_char_limit': 'Caractères / preuve',
+ 'research.record_search_empty': 'Lancez une recherche pour trouver des fiches résumées.',
+ 'research.record_search_placeholder': 'Rechercher dans le texte des fiches…',
+ 'research.records': 'fiches',
+ 'research.redirect_database': 'L’espace Recherche nécessite une base de données du corpus. Ouverture de la création '
+                               'd’une base de données.',
+ 'research.redirect_database_denied': 'Recherche nécessite une base de données du corpus, mais votre rôle ne permet '
+                                      'pas d’ouvrir cette page. Demandez à un administrateur de configurer une base de '
+                                      'données ou de vous accorder l’accès.',
+ 'research.empty_state_title': 'La recherche nécessite une base de données de corpus',
+ 'research.empty_state_help': 'Créez une collection vectorielle à partir de vos œuvres chargées, puis revenez ici pour poser des questions fondées sur les sources.',
+ 'research.empty_state_action': 'Créer une collection',
+ 'research.empty_state_denied': 'Demandez à un administrateur de configurer une base de données de corpus ou de vous en accorder l’accès.',
+ 'research.remove_run_confirm': 'Retirer cette exécution de recherche et son résultat?',
+ 'research.repeat_penalty': 'Pénalité de répétition',
+ 'research.rerank_score': 'Score de reclassement',
+ 'research.rerank_top_n': 'N premiers à reclasser',
+ 'research.reranker': 'Reclassement',
+ 'research.reranking_decomposition': 'Reclassement et décomposition de la requête',
+ 'research.reranking_decomposition_help': 'Affinez l’ensemble fusionné des candidats et, au besoin, développez la '
+                                          'question en sous-requêtes multilingues.',
+ 'research.rerun': 'Relancer avec ces paramètres',
+ 'research.rerun_loaded': 'Paramètres chargés dans le composeur',
+ 'research.research_history': 'Historique de recherche',
+ 'research.research_in_progress': 'Recherche en cours',
+ 'research.researcher_evidence_summary': 'Le texte du corpus peut être résumé pour les comptes chercheur.',
+ 'research.researcher_profile_locked': 'Les paramètres de génération sont fixés par le profil de recherche approuvé '
+                                       'par l’administrateur.',
+ 'research.reset_section': 'Réinitialiser la section',
+ 'research.result_layout': 'Disposition des résultats',
+ 'research.result_unavailable': 'Cette exécution de recherche ne possède aucun identifiant de résultat.',
+ 'research.results': 'résultats',
+ 'research.retained_runs': 'conservées',
+ 'research.retrieval': 'Repérage',
+ 'research.retrieval_diagnostics': 'Diagnostic de repérage',
+ 'research.retrieval_expert_help': 'Réglez le rappel, la fusion de rangs, le reclassement et le routage multilingue.',
+ 'research.retrieval_nav_help': 'Routage, profondeur du bassin de candidats et reclassement',
+ 'research.retrieval_profile': 'Repérage',
+ 'research.retrieval_ready': 'Repérage prêt',
+ 'research.retrieval_routes': 'Voies de repérage',
+ 'research.retrieval_settings': 'Paramètres de repérage et de preuves',
+ 'research.routing': 'Routage',
+ 'research.routing_help': 'Choisissez les langues documentaires et les stratégies de repérage utilisées pour trouver '
+                          'les candidats.',
+ 'research.rrf_help': 'Constante de lissage de fusion des rangs',
+ 'research.rrf_label': 'Lissage de la fusion',
+ 'research.run': 'Rechercher',
+ 'research.run_details': 'Détails de l’exécution',
+ 'research.run_failed': 'L’exécution de recherche a échoué.',
+ 'research.running': 'En cours',
+ 'research.runs': 'Exécutions',
+ 'research.saved_prompt': 'Question enregistrée',
+ 'research.search_embedding': 'Vectorisation de la requête et comparaison avec la collection sélectionnée…',
+ 'research.search_empty': 'Entrez une requête pour rechercher dans la base de corpus sélectionnée.',
+ 'research.search_failed': 'Échec de la recherche',
+ 'research.search_history': 'Rechercher dans les questions récentes',
+ 'research.search_loading': 'Recherche dans le corpus…',
+ 'research.search_method': 'Méthode de recherche',
+ 'research.search_placeholder': 'Rechercher sémantiquement dans le corpus',
+ 'research.search_results': 'Résultats de recherche',
+ 'research.section': 'Recherche',
+ 'research.seed': 'Graine',
+ 'research.selected': 'Sélectionnée',
+ 'research.selected_database_help': 'Les recherches portent uniquement sur la base de données sélectionnée.',
+ 'research.selected_evidence_count_many': '{count} preuves sélectionnées',
+ 'research.selected_evidence_count_one': '{count} preuve sélectionnée',
+ 'research.selected_evidence_only': 'Preuves sélectionnées seulement',
+ 'research.selected_preview_unavailable': 'L’aperçu du passage n’est pas disponible pour les preuves sélectionnées '
+                                          'avant cette version; la fiche complète est résolue lors de la recherche.',
+ 'research.semantic_db_search': 'Recherche sémantique dans la BD',
+ 'research.semantic_help': 'Recherchez dans la collection sélectionnée. Le texte retourné est résumé avant d’atteindre '
+                           'ce navigateur.',
+ 'research.semantic_search': 'Recherche sémantique en BD',
+ 'research.settings_applied': 'Paramètres de recherche appliqués',
+ 'research.settings_apply_note': 'Les changements s’appliqueront à la prochaine recherche; les profils de fournisseur '
+                                 'enregistrés ne seront pas modifiés.',
+ 'research.settings_reproducibility_note': 'Ces valeurs sont enregistrées avec chaque exécution afin que l’analyse '
+                                           'puisse être reproduite ultérieurement.',
+ 'research.similarity': 'Similarité',
+ 'research.similarity_help': 'Signal de classement dérivé de la distance vectorielle. Une valeur plus élevée indique '
+                             'une plus grande proximité sémantique; ce n’est ni une probabilité ni un niveau de '
+                             'confiance.',
+ 'research.source_binding': 'Liaison aux sources',
+ 'research.source_binding_help': 'Assurez la traçabilité des affirmations générées au moyen d’identifiants de preuve '
+                                 'et de citations déterministes.',
+ 'research.speaker': 'Locuteur',
+ 'research.stage_auto_grade': 'Évaluation de la réponse',
+ 'research.stage_bind_sources': 'Liaison des affirmations aux sources',
+ 'research.stage_cancelled': 'Recherche annulée',
+ 'research.stage_completed': 'Recherche terminée',
+ 'research.stage_context': 'Préparation du contexte de preuves',
+ 'research.stage_deduplicate': 'Déduplication des preuves',
+ 'research.stage_failed': 'Échec de la recherche',
+ 'research.stage_generation': 'Génération de la réponse',
+ 'research.stage_query_metadata': 'Interprétation de la question',
+ 'research.stage_queued': 'En attente d’une place d’exécution',
+ 'research.stage_rerank': 'Reclassement des preuves candidates',
+ 'research.stage_response_cache': 'Écriture dans la mémoire cache des réponses',
+ 'research.stage_retrieval': 'Repérage des preuves candidates',
+ 'research.stage_starting': 'Démarrage du processus de recherche',
+ 'research.stance': 'Position',
+ 'research.starting': 'Démarrage…',
+ 'research.status_cancelled': 'Annulé',
+ 'research.status_cancelling': 'Annulation',
+ 'research.status_completed': 'Terminé',
+ 'research.status_failed': 'Échec',
+ 'research.status_queued': 'En attente',
+ 'research.status_running': 'En cours',
+ 'research.summary_policy': 'Vue chercheur · résumé Edmundson · 2–3 phrases',
+ 'research.target': 'Cible',
+ 'research.temperature': 'Température',
+ 'research.thinking': 'Raisonnement',
+ 'research.thinking_high': 'Élevé',
+ 'research.thinking_low': 'Faible',
+ 'research.thinking_medium': 'Moyen',
+ 'research.top_k_sampling': 'Échantillonnage top-k',
+ 'research.topics': 'Thèmes',
+ 'research.total_char_limit': 'Total de caractères de preuve',
+ 'research.traditional_search': 'Recherche de fiches',
+ 'research.untitled_run': 'Recherche sans titre',
+ 'research.view_all_runs': 'Voir toutes les exécutions',
+ 'research.waiting': 'En attente du pipeline…',
+ 'research.works_cited': 'Ouvrages cités',
+ 'research.works_cited_help': 'Ajoutez une bibliographie déterministe après la réponse.',
+ 'research.works_menu_help': 'Parcourez les œuvres de la base de corpus sélectionnée. Sélectionnez une œuvre pour voir '
+                             'son aperçu, puis parcourez ses fiches résumées.',
+ 'research.workspace': 'Espace de recherche',
+ 'research.workspace_help': 'Formulez une question, choisissez les paramètres de repérage et de génération, épinglez '
+                            'des preuves, puis exécutez le pipeline complet en conservant la provenance.',
+ 'research.workspace_title': 'Espace de recherche fondé sur les preuves',
+ 'role.admin': 'Administrateur',
+ 'role.researcher': 'Chercheur',
+ 'roles.accounts_many': '{count} comptes',
+ 'roles.accounts_one': '{count} compte',
+ 'roles.admin_locked_help': 'L’accès administrateur demeure fixé au contrôle complet de '
+                            'l’application afin d’éviter sa suppression accidentelle.',
+ 'roles.admin_only': 'Administrateur seulement',
+ 'roles.assigned_many': '{count} comptes utilisent ce rôle.',
+ 'roles.assigned_none': 'Aucun compte n’utilise ce rôle.',
+ 'roles.assigned_one': '{count} compte utilise ce rôle.',
+ 'roles.cannot_delete_assigned': 'Réaffectez les utilisateurs de ce rôle avant de le supprimer.',
+ 'roles.cannot_delete_builtin': 'Les rôles intégrés ne peuvent pas être supprimés.',
+ 'roles.capability.activity.read': 'Activité récente',
+ 'roles.capability.activity.read.help': 'Voir l’activité des fonctions et des œuvres auxquelles '
+                            'le compte a accès.',
+ 'roles.capability.annotations.read': 'Lire les annotations',
+ 'roles.capability.annotations.read.help': 'Lire les annotations liées aux preuves de corpus '
+                            'accessibles.',
+ 'roles.capability.annotations.write': 'Écrire des annotations',
+ 'roles.capability.annotations.write.help': 'Créer et supprimer des annotations sur les preuves '
+                            'accessibles.',
+ 'roles.capability.appearance.manage': 'Apparence',
+ 'roles.capability.appearance.manage.help': 'Modifier les préférences d’apparence du navigateur.',
+ 'roles.capability.corpus.manage': 'Gérer le corpus',
+ 'roles.capability.corpus.manage.help': 'Créer, modifier, importer, exporter ou supprimer des '
+                            'données et collections de corpus.',
+ 'roles.capability.corpus.read': 'Lire le corpus',
+ 'roles.capability.corpus.read.help': 'Lire les notices de corpus protégées et les métadonnées '
+                            'des œuvres.',
+ 'roles.capability.corpus.search': 'Chercher dans le corpus',
+ 'roles.capability.corpus.search.help': 'Exécuter des recherches par mot-clé, filtre, similarité '
+                            'et MMR.',
+ 'roles.capability.evidence.select': 'Sélectionner des preuves',
+ 'roles.capability.evidence.select.help': 'Épingler des notices de corpus dans des paquets de '
+                            'preuves de recherche.',
+ 'roles.capability.i18n.manage': 'Gérer les langues',
+ 'roles.capability.i18n.manage.help': 'Installer, modifier ou supprimer des dictionnaires '
+                            'd’interface.',
+ 'roles.capability.i18n.read': 'Utiliser les traductions',
+ 'roles.capability.i18n.read.help': 'Lire les dictionnaires d’interface installés.',
+ 'roles.capability.page.annotations': 'Annotations',
+ 'roles.capability.page.annotations.help': 'Ouvrir l’espace des annotations.',
+ 'roles.capability.page.compare': 'Comparer',
+ 'roles.capability.page.compare.help': 'Comparer des notices visibles aux chercheurs.',
+ 'roles.capability.page.dashboard': 'Tableau de bord',
+ 'roles.capability.page.dashboard.help': 'Ouvrir le tableau de bord et les widgets d’aperçu '
+                            'protégés.',
+ 'roles.capability.page.faq': 'Bibliothèque de réponses',
+ 'roles.capability.page.faq.help': 'Ouvrir l’espace complet de la bibliothèque de réponses '
+                            'enregistrées.',
+ 'roles.capability.page.languages': 'Langues',
+ 'roles.capability.page.languages.help': 'Gérer les dictionnaires de traduction.',
+ 'roles.capability.page.pdf': 'Explorateur PDF',
+ 'roles.capability.page.pdf.help': 'Ouvrir les outils d’extraction et d’exploration PDF.',
+ 'roles.capability.page.providers': 'Profils LLM',
+ 'roles.capability.page.providers.help': 'Configurer les profils de fournisseurs LLM.',
+ 'roles.capability.page.record': 'Fiche',
+ 'roles.capability.page.record.help': 'Ouvrir une notice de corpus visible aux chercheurs.',
+ 'roles.capability.page.records': 'Notices chargées',
+ 'roles.capability.page.records.help': 'Ouvrir la gestion administrateur des notices chargées.',
+ 'roles.capability.page.research': 'Recherche',
+ 'roles.capability.page.research.help': 'Ouvrir l’espace de recherche fondé sur les preuves.',
+ 'roles.capability.page.response_cache': 'Cache de réponses',
+ 'roles.capability.page.response_cache.help': 'Parcourir et gérer le cache des réponses RAG.',
+ 'roles.capability.page.roles': 'Rôles et autorisations',
+ 'roles.capability.page.roles.help': 'Configurer les autorisations des rôles.',
+ 'roles.capability.page.search': 'Recherche',
+ 'roles.capability.page.search.help': 'Ouvrir la recherche de corpus ou globale.',
+ 'roles.capability.page.settings': 'Apparence et paramètres',
+ 'roles.capability.page.settings.help': 'Ouvrir les paramètres protégés tels que l’apparence.',
+ 'roles.capability.page.users': 'Utilisateurs',
+ 'roles.capability.page.users.help': 'Gérer les comptes utilisateurs.',
+ 'roles.capability.page.vector': 'Base de corpus',
+ 'roles.capability.page.vector.help': 'Parcourir les collections vectorielles visibles aux '
+                            'chercheurs.',
+ 'roles.capability.page.works': 'Œuvres',
+ 'roles.capability.page.works.help': 'Parcourir les œuvres exposées par les bases de corpus.',
+ 'roles.capability.providers.manage': 'Gérer les profils LLM',
+ 'roles.capability.providers.manage.help': 'Créer et configurer les profils de fournisseurs et '
+                            'les identifiants.',
+ 'roles.capability.providers.researcher.use': 'Utiliser les profils LLM approuvés',
+ 'roles.capability.providers.researcher.use.help': 'Utiliser les profils LLM chercheurs approuvés '
+                            'par l’administrateur.',
+ 'roles.capability.rag.jobs.own': 'Gérer ses propres tâches RAG',
+ 'roles.capability.rag.jobs.own.help': 'Voir, annuler et supprimer les tâches RAG de '
+                            'l’utilisateur connecté.',
+ 'roles.capability.rag.run': 'Lancer le RAG',
+ 'roles.capability.rag.run.help': 'Démarrer des tâches de génération RAG fondées sur les preuves.',
+ 'roles.capability.records.edit': 'Modifier les notices',
+ 'roles.capability.records.edit.help': 'Modifier les champs, l’historique et les métadonnées des '
+                            'notices.',
+ 'roles.capability.roles.manage': 'Gérer les rôles',
+ 'roles.capability.roles.manage.help': 'Modifier l’attribution des autorisations des rôles.',
+ 'roles.capability.users.manage': 'Gérer les utilisateurs',
+ 'roles.capability.users.manage.help': 'Créer, désactiver, réinitialiser et supprimer des comptes '
+                            'utilisateurs.',
+ 'roles.category.administration': 'Administration',
+ 'roles.category.annotations': 'Annotations',
+ 'roles.category.corpus': 'Corpus',
+ 'roles.category.dashboard': 'Tableau de bord',
+ 'roles.category.pages': 'Pages',
+ 'roles.category.research': 'Recherche',
+ 'roles.category.settings': 'Paramètres',
+ 'roles.category_all': 'Tout activer dans {category}',
+ 'roles.category_count': '{enabled} sur {total}',
+ 'roles.category_none': 'Tout effacer dans {category}',
+ 'roles.create': 'Créer un rôle',
+ 'roles.create_help': 'Commencez à partir d’un rôle non administrateur existant, puis ajustez ses '
+                            'autorisations.',
+ 'roles.create_name_help': 'De 2 à 80 caractères. L’identifiant du rôle est dérivé de ce nom.',
+ 'roles.created': 'Rôle créé.',
+ 'roles.custom_role': 'Rôle personnalisé',
+ 'roles.default_role': 'Rôle par défaut',
+ 'roles.delete': 'Supprimer le rôle',
+ 'roles.delete_confirm': 'Supprimer ce rôle? Les utilisateurs doivent d’abord être réaffectés.',
+ 'roles.delete_confirm_named': 'Supprimer le rôle « {name} »? Les utilisateurs doivent d’abord '
+                            'être réaffectés.',
+ 'roles.delete_help': 'Cela supprime le rôle. Les comptes qui y sont encore affectés doivent '
+                            'd’abord être déplacés.',
+ 'roles.deleted': 'Rôle supprimé.',
+ 'roles.description': 'Créez des rôles non administrateur et définissez précisément les pages et '
+                            'fonctions protégées que chaque rôle peut utiliser.',
+ 'roles.discard': 'Annuler les modifications',
+ 'roles.enabled_count': '{count} activées',
+ 'roles.filter': 'Filtrer les autorisations',
+ 'roles.filter_empty': 'Aucune autorisation ne correspond à cette recherche.',
+ 'roles.filter_placeholder': 'Rechercher des pages et des capacités',
+ 'roles.full_access': 'Accès complet',
+ 'roles.leave_message': 'Les modifications d’autorisations non enregistrées seront perdues si '
+                            'vous quittez cette page.',
+ 'roles.leave_title': 'Annuler les modifications d’autorisations non enregistrées?',
+ 'roles.loading': 'Chargement des rôles…',
+ 'roles.locked': 'Verrouillé',
+ 'roles.manage': 'Gérer les autorisations',
+ 'roles.name': 'Nom du rôle',
+ 'roles.non_admin_help': 'Chercheur est le rôle non administrateur par défaut. Les rôles '
+                            'personnalisés respectent la même frontière de protection des '
+                            'données, selon les autorisations activées ci-dessous.',
+ 'roles.permission_id': 'Identifiant de capacité',
+ 'roles.role_description': 'Description',
+ 'roles.role_list': 'Rôles',
+ 'roles.saved': 'Autorisations du rôle enregistrées.',
+ 'roles.superuser': 'Superutilisateur',
+ 'roles.switch_discard': 'Annuler et changer',
+ 'roles.switch_message': 'Ce rôle a des modifications d’autorisations non enregistrées.',
+ 'roles.switch_save': 'Enregistrer et changer',
+ 'roles.switch_title': 'Enregistrer d’abord les modifications d’autorisations?',
+ 'roles.template': 'Commencer avec les autorisations de',
+ 'roles.title': 'Rôles et autorisations',
+ 'roles.users_link_help': 'Les capacités des rôles sont configurées centralement et appliquées à '
+                            'la fois dans la navigation et dans les autorisations de l’API.',
+ 'search.active_filters': 'Filtres actifs',
+ 'search.advanced_filter_help': 'Utilisez des conditions par champ lorsque les facettes ne sont pas assez précises.',
+ 'search.advanced_filters': 'Filtres avancés',
+ 'search.auto_improve_selected': 'Améliorer automatiquement',
+ 'search.bulk_edit_selected': 'Modification en lot',
+ 'search.clear_all': 'Tout effacer',
+ 'search.clear_query': 'Effacer la requête',
+ 'search.clear_selection': 'Effacer la sélection',
+ 'search.column_help': 'Choisissez les champs affichés dans le tableau et leur ordre pour cette vue de recherche.',
+ 'search.condition': 'Condition',
+ 'search.configure_columns': 'Configurer les colonnes',
+ 'search.contains_filter_removed': 'Les filtres de métadonnées « contient » sont offerts seulement en mode Filtres '
+                                   'seulement et ont été retirés.',
+ 'search.copy_link': 'Copier le lien',
+ 'search.corpus_database': 'Base de données du corpus',
+ 'search.database_context_help': 'Les résultats et les preuves demeurent liés à cette base de données du corpus.',
+ 'search.database_placeholder': 'Rechercher sémantiquement dans le corpus…',
+ 'search.database_result_note': 'Les facettes des résultats sémantiques affinent l’ensemble de candidats retourné; la '
+                                'pertinence demeure liée à la méthode de classement choisie.',
+ 'search.db_in_database': 'Dans la BD',
+ 'search.db_none': 'Aucune base de données',
+ 'search.db_not_in_database': 'Absent de la BD',
+ 'search.db_pending': 'En attente',
+ 'search.db_synced': 'Synchronisé',
+ 'search.db_unknown': 'Inconnu',
+ 'search.delete_saved_view': 'Supprimer la vue enregistrée {name}',
+ 'search.enter_query': 'Saisissez d’abord une requête de recherche.',
+ 'search.exploration_history': 'Historique d’exploration',
+ 'search.field': 'Champ',
+ 'search.filter_facets': 'Filtrer les valeurs des facettes',
+ 'search.filter_match': 'Correspondance aux filtres de métadonnées',
+ 'search.filter_only_help': 'Retourne les fiches à l’aide des filtres de métadonnées sans vectoriser une requête '
+                            'textuelle.',
+ 'search.filter_value_placeholder': 'Saisissez ou choisissez une valeur…',
+ 'search.filter_values': 'Filtrer les valeurs…',
+ 'search.filtered_view': 'Vue filtrée',
+ 'search.filters': 'Filtres',
+ 'search.kicker': 'Exploration du corpus',
+ 'search.layout_cards': 'Cartes',
+ 'search.layout_comfortable': 'Tableau confortable',
+ 'search.layout_compact': 'Tableau compact',
+ 'search.link_copied': 'Lien partageable de la recherche copié',
+ 'search.load_failed': 'Impossible de charger la recherche',
+ 'search.loaded_placeholder': 'Rechercher dans le texte extrait des fiches chargées…',
+ 'search.loaded_records': 'Fiches chargées',
+ 'search.loaded_scope_unavailable': 'La recherche dans les fiches chargées est offerte aux administrateurs qui ont des '
+                                    'fiches JSONL locales.',
+ 'search.loading': 'Chargement de l’espace de recherche…',
+ 'search.method_filter': 'Filtres seulement',
+ 'search.method_filter_short': 'Métadonnées sans plongements vectoriels',
+ 'search.method_mmr': 'MMR',
+ 'search.method_mmr_short': 'Pertinent, mais moins répétitif',
+ 'search.method_similarity': 'Similarité',
+ 'search.method_similarity_short': 'Correspondances sémantiques les plus proches',
+ 'search.mmr_help': 'Équilibre la pertinence sémantique et la diversité de l’ensemble de résultats.',
+ 'search.mmr_lambda': 'Poids de pertinence (λ)',
+ 'search.mmr_match': 'Pertinence sémantique + diversité',
+ 'search.move_column_down': 'Déplacer {column} vers le bas',
+ 'search.move_column_up': 'Déplacer {column} vers le haut',
+ 'search.needs_review': 'À réviser',
+ 'search.no_database_help': 'Une base de données du corpus doit être créée avant de pouvoir lancer une recherche dans '
+                            'la base de données.',
+ 'search.no_database_title': 'Aucune base de données du corpus disponible',
+ 'search.no_facet_values': 'Aucune valeur de facette ne correspond à ce filtre.',
+ 'search.no_recent_searches': 'Aucune recherche récente.',
+ 'search.no_results': 'Aucune fiche correspondante',
+ 'search.no_results_help': 'Essayez une requête plus générale, retirez un filtre ou choisissez une autre portée de '
+                           'recherche.',
+ 'search.no_saved_views': 'Aucune vue enregistrée.',
+ 'search.operator_empty': 'est vide',
+ 'search.operator_eq': 'est égal à',
+ 'search.operator_gte': 'au moins',
+ 'search.operator_has': 'contient',
+ 'search.operator_lte': 'au plus',
+ 'search.operator_neq': 'n’est pas égal à',
+ 'search.operator_nhas': 'ne contient pas',
+ 'search.operator_notempty': 'n’est pas vide',
+ 'search.page': 'page',
+ 'search.page_of': 'Page {page} sur {pages}',
+ 'search.pagination': 'Pages des résultats de recherche',
+ 'search.precise_metadata_filter': 'Filtre précis de métadonnées',
+ 'search.query': 'Requête de recherche',
+ 'search.ranking_method': 'Méthode de classement',
+ 'search.ready_help': 'Saisissez une question, une expression, un concept ou un passage. Les options de recherche '
+                      'règlent le classement sémantique et les contraintes de métadonnées.',
+ 'search.ready_title': 'Rechercher dans la base de données du corpus',
+ 'search.recent_searches': 'Recherches récentes',
+ 'search.recent_searches_help': 'États d’exploration récents de ce navigateur.',
+ 'search.redirect_database': 'La recherche nécessite une base de données du corpus. Ouverture de la création de base '
+                             'de données.',
+ 'search.nothing_to_search_title': 'La recherche a besoin de contenu à explorer',
+ 'search.nothing_to_search_help': 'Ouvrez un espace de travail JSONL ou créez une collection de corpus, puis cherchez dans vos œuvres, métadonnées et annotations.',
+ 'search.empty_state_action': 'Créer une collection',
+ 'search.empty_state_denied': 'Demandez à un administrateur de configurer une base de données de corpus ou de vous en accorder l’accès.',
+ 'search.refine': 'Affiner',
+ 'search.relevance': 'Pertinence',
+ 'search.reset_defaults': 'Rétablir les valeurs par défaut',
+ 'search.resize_column': 'Redimensionner la colonne {column}',
+ 'search.result_count_many': '{count} résultats',
+ 'search.result_count_one': '{count} résultat',
+ 'search.result_layout': 'Disposition des résultats',
+ 'search.results': 'Résultats',
+ 'search.results_per_page': 'Résultats par page',
+ 'search.results_table_scroll': 'Tableau des résultats de recherche. Faites défiler horizontalement pour afficher les '
+                                'colonnes supplémentaires.',
+ 'search.review_selected': 'Réviser avec un LLM',
+ 'search.reviewed': 'Révisé',
+ 'search.save_current': 'Enregistrer l’état actuel',
+ 'search.save_view': 'Enregistrer la vue',
+ 'search.save_view_help': 'Les vues enregistrées conservent l’URL partageable actuelle, y compris la portée, la '
+                          'requête, les filtres, le tri, les colonnes et la disposition.',
+ 'search.saved_and_recent': 'Recherches enregistrées et récentes',
+ 'search.saved_views': 'Vues enregistrées',
+ 'search.saved_views_help': 'Espaces de recherche réutilisables enregistrés dans ce navigateur.',
+ 'search.scope': 'Portée de la recherche',
+ 'search.search_controls': 'Commandes de recherche',
+ 'search.search_options': 'Options de recherche',
+ 'search.searching': 'Recherche en cours…',
+ 'search.select_page': 'Sélectionner les fiches de cette page',
+ 'search.select_record': 'Sélectionner',
+ 'search.select_record_named': 'Sélectionner {record}',
+ 'search.selected_records': 'fiches sélectionnées',
+ 'search.selection_actions': 'Actions sur les fiches sélectionnées',
+ 'search.semantic_match': 'Similarité sémantique',
+ 'search.show_less': 'Afficher moins',
+ 'search.show_more': 'Afficher plus',
+ 'search.similar': 'similaire',
+ 'search.similarity_explanation': 'La similarité est dérivée de la distance vectorielle; une valeur plus élevée '
+                                  'indique une correspondance sémantique plus étroite.',
+ 'search.similarity_help': 'Classe les fiches selon leur similarité sémantique avec votre requête.',
+ 'search.sort': 'Trier',
+ 'search.subtitle': 'Explorez les fiches chargées ou interrogez la base de données du corpus sans perdre le contexte '
+                    'de votre requête, de vos filtres et de vos preuves.',
+ 'search.table_view': 'Vue tableau',
+ 'search.text_match': 'Correspondance textuelle',
+ 'search.title': 'Recherche',
+ 'search.value': 'Valeur',
+ 'search.view_actions': 'Actions de la vue de recherche',
+ 'search.view_name': 'Nom de la vue',
+ 'search.view_name_placeholder': 'p. ex. Passages d’Adieu à réviser',
+ 'search.view_saved': 'Vue de recherche enregistrée',
+ 'search.why_result': 'Pourquoi ce résultat',
+ 'section.corpus': 'Corpus',
+ 'section.overview': 'Aperçu',
+ 'section.research': 'Recherche',
+ 'section.storage': 'Stockage',
+ 'section.system': 'Système',
+ 'section.tools': 'Outils',
+ 'settings.a11y_note': 'Les indicateurs de focus restent visibles dans chaque thème. Les animation'
+                                       's sont réduites lorsque l’appareil le demande. Le mode con'
+                                       'traste élevé utilise des bordures plus marquées plutôt que'
+                                       ' la couleur seulement.',
+ 'settings.action_complete': 'Action terminée',
+ 'settings.active_jobs': 'opérations actives',
+ 'settings.advanced_retrieval': 'Repérage avancé',
+ 'settings.appearance': 'Apparence',
+ 'settings.appearance_help': 'Choisissez le thème de couleur de votre espace de travail.',
+ 'settings.appearance_saved': 'Apparence enregistrée',
+ 'settings.appearance_unavailable': 'Votre rôle ne peut pas modifier l’apparence de l’espace de tr'
+                                       'avail.',
+ 'settings.backup': 'Sauvegarde et restauration',
+ 'settings.backup_confirm_message': 'Créer une sauvegarde complète de cet espace de travail, des n'
+                                       'otices, de la configuration et des collections vectorielle'
+                                       's.',
+ 'settings.backup_confirm_title': 'Créer une sauvegarde complète?',
+ 'settings.backup_help': 'Une archive portable de l’espace de travail du navigateur, des notices c'
+                                       'hargées, de la configuration, du PDF courant et des collec'
+                                       'tions Chroma avec leurs vecteurs.',
+ 'settings.backup_keys_warning': 'Cette sauvegarde complète peut contenir des clés d’API de fourni'
+                                       'sseurs. Rangez le fichier ZIP en lieu sûr. Les fichiers de'
+                                       ' modèles installés ne sont pas copiés.',
+ 'settings.browser_workspace_note': 'Les préférences de thème sont enregistrées dans cet espace de'
+                                       ' travail du navigateur.',
+ 'settings.chroma_path': 'Chemin Chroma actuel',
+ 'settings.chroma_path_help': 'Rapporté par l’API en cours. Changez le serveur depuis Magasins vec'
+                                       'toriels.',
+ 'settings.clear_updates': 'Effacer toutes les mises à jour de notices',
+ 'settings.clear_updates_message': 'Ceci supprime définitivement les historiques d’audit locaux de'
+                                       's notices chargées.',
+ 'settings.clear_updates_title': 'Effacer tous les historiques de mises à jour?',
+ 'settings.color_scheme': 'Schéma de couleurs',
+ 'settings.color_scheme_help': 'Clair, sombre, ou suivre cet appareil. Enregistré dans ce navigate'
+                                       'ur.',
+ 'settings.color_theme': 'Thème de couleur',
+ 'settings.columns_reset': 'Colonnes du tableau réinitialisées',
+ 'settings.contents': 'Sommaire',
+ 'settings.contrast': 'Contraste',
+ 'settings.contrast_help': 'Augmente le contraste des bordures et du texte atténué dans cet espace'
+                                       ' de travail.',
+ 'settings.contrast_more': 'Plus de contraste',
+ 'settings.contrast_system': 'Suivre l’appareil',
+ 'settings.default_provider': 'Profil de fournisseur par défaut',
+ 'settings.default_provider_help': 'Utilisé lorsqu’un flux ne choisit pas lui-même de profil. Les '
+                                       'identifiants restent sur la page Fournisseurs.',
+ 'settings.desktop_notifications': 'Notifications de bureau',
+ 'settings.download_backup': 'Télécharger une sauvegarde complète',
+ 'settings.embedding_model': 'Modèle d’intégration par défaut',
+ 'settings.embedding_provider': 'Fournisseur d’intégration par défaut',
+ 'settings.error.rag_fetch_k': 'Le fetch_k MMR doit être au moins aussi grand que le k de repérage'
+                                       '.',
+ 'settings.error.rag_locales': 'Sélectionnez au moins une langue de document.',
+ 'settings.error.rag_routes': 'Sélectionnez au moins une voie de repérage.',
+ 'settings.error.rag_total_chars': 'Le total de caractères de preuve doit être au moins égal à la '
+                                       'limite par notice.',
+ 'settings.expand_panels': 'Développer tous les panneaux',
+ 'settings.expand_sidebar': 'Développer la barre de navigation',
+ 'settings.interface_language': 'Langue de l’interface',
+ 'settings.interface_language_help': 'S’applique immédiatement aux libellés, dates et nombres dans'
+                                       ' ce navigateur.',
+ 'settings.jsonl_tabs': 'fichiers JSONL',
+ 'settings.lang_auto': 'Auto',
+ 'settings.lang_en': 'Anglais',
+ 'settings.lang_fr': 'Français',
+ 'settings.language_changed': 'La langue de l’interface est maintenant {name}.',
+ 'settings.language_help': 'La langue de l’interface s’applique immédiatement. Les dictionnaires s'
+                                       'e modifient à la page Langues.',
+ 'settings.language_title': 'Langue et accessibilité',
+ 'settings.last_checked': 'Dernière vérification : {time}',
+ 'settings.leave_message': 'Vos modifications de Paramètres non enregistrées seront perdues si vou'
+                                       's quittez cette page.',
+ 'settings.leave_title': 'Abandonner les paramètres non enregistrés?',
+ 'settings.max_concurrent': 'max {count}',
+ 'settings.nav.language': 'Langue et accessibilité',
+ 'settings.nav.language_help': 'Langue de l’interface et préférences de lecture.',
+ 'settings.nav.providers': 'Fournisseurs et modèles',
+ 'settings.nav.providers_help': 'Les points de terminaison, modèles et limites de concurrence se g'
+                                       'èrent à la page Fournisseurs.',
+ 'settings.nav.research': 'Valeurs de recherche par défaut',
+ 'settings.nav.research_help': 'Points de départ pour les exécutions de recherche fondées sur des '
+                                       'preuves.',
+ 'settings.nav.retrieval': 'Magasins vectoriels et repérage',
+ 'settings.nav.retrieval_help': 'Valeurs d’intégration par défaut et budgets de repérage RAG.',
+ 'settings.nav.review': 'Révision et comportement de l’IA',
+ 'settings.nav.review_help': 'Fournisseur par défaut, préréglage de révision et mode d’exécution d'
+                                       'e la révision LLM.',
+ 'settings.nav.security': 'Sécurité, comptes et permissions',
+ 'settings.nav.security_help': 'Les comptes et les capacités des rôles se gèrent sur des pages déd'
+                                       'iées.',
+ 'settings.nav.system': 'Système et opérations',
+ 'settings.nav.system_help': 'Sauvegarde, restauration, réinitialisation de l’espace de travail et'
+                                       ' commandes destructives.',
+ 'settings.nav.workspace': 'Espace de travail et apparence',
+ 'settings.nav.workspace_help': 'Thème, schéma de couleurs et contraste pour ce navigateur.',
+ 'settings.no_providers': 'Aucun profil de fournisseur LLM n’est configuré.',
+ 'settings.not_checked': 'Pas encore vérifié',
+ 'settings.not_configured': 'Non configuré',
+ 'settings.notifications_enabled': 'Notifications de bureau activées',
+ 'settings.notifications_help': 'L’autorisation du navigateur est requise. Les notifications reste'
+                                       'nt locales à ce navigateur.',
+ 'settings.notifications_off': 'Désactivées',
+ 'settings.notifications_on': 'Activées à la fin des opérations en arrière-plan',
+ 'settings.notifications_permission': 'Autorisation de notification : {status}',
+ 'settings.notifications_saved': 'Préférence de notification enregistrée',
+ 'settings.notifications_unsupported': 'Ce navigateur ne prend pas en charge les notifications de '
+                                       'bureau.',
+ 'settings.open_providers': 'Ouvrir les fournisseurs LLM',
+ 'settings.openai_compatible': 'Compatible OpenAI',
+ 'settings.page_help': 'Contrôlez l’apparence de l’espace de travail, les valeurs de recherche par'
+                                       ' défaut et les outils d’exploitation. Chaque groupe s’enre'
+                                       'gistre séparément; quitter avec des modifications non enre'
+                                       'gistrées demandera confirmation.',
+ 'settings.page_help_short': 'Espace de travail, recherche et opérations',
+ 'settings.panels_expanded': 'Tous les panneaux de l’interface sont développés',
+ 'settings.persist.backend': 'Opération serveur',
+ 'settings.persist.browser': 'Enregistré dans ce navigateur',
+ 'settings.persist.link': 'Géré ailleurs',
+ 'settings.persist.readonly': 'Lecture seule',
+ 'settings.preset_attribution': 'Attribution',
+ 'settings.preset_semantic': 'Sémantique',
+ 'settings.preset_text': 'Nettoyage OCR / texte',
+ 'settings.provider_not_ready': 'Non prêt',
+ 'settings.provider_ollama': 'Ollama',
+ 'settings.provider_ready': 'Prêt',
+ 'settings.providers_help': 'Les points de terminaison, identifiants, modèles, limites de concurre'
+                                       'nce et préchauffages se configurent à la page Fournisseurs'
+                                       '. Les secrets ne sont jamais affichés ici.',
+ 'settings.providers_title': 'Fournisseurs et modèles',
+ 'settings.rag_auto_grade': 'Noter automatiquement la réponse de recherche après la mise en cache',
+ 'settings.rag_auto_grade_help': 'Choisissez le fournisseur de notation dans Recherche. L’auto-not'
+                                       'ation y est signalée.',
+ 'settings.rag_cross_encoder': 'Modèle de cross-encodeur',
+ 'settings.rag_decompose': 'Jetons max. de décomposition de requête',
+ 'settings.rag_decompose_help': 'Limite supérieure de l’étape facultative de découpage de la quest'
+                                       'ion avant le repérage.',
+ 'settings.rag_fetch_k': 'fetch_k MMR',
+ 'settings.rag_fetch_k_help': 'Taille du bassin de candidats avant le classement par diversité. Do'
+                                       'it être au moins égal au k de repérage.',
+ 'settings.rag_help': 'Valeurs par défaut de repérage, fusion, reclassement et budget de preuves. '
+                                       'Ces valeurs sont conservées avec chaque exécution pour en '
+                                       'permettre l’audit.',
+ 'settings.rag_k': 'k de repérage',
+ 'settings.rag_k_help': 'Nombre de passages à conserver après le classement. Les exécutions savant'
+                                       'es typiques utilisent 24–64.',
+ 'settings.rag_lambda': 'lambda MMR',
+ 'settings.rag_lambda_help': '0 favorise la diversité; 1 favorise la pertinence par rapport à la q'
+                                       'uestion.',
+ 'settings.rag_locales': 'Langues des documents',
+ 'settings.rag_record_chars': 'Caractères max. par notice de preuve',
+ 'settings.rag_record_chars_help': 'Limite chaque passage pour que le modèle ne puisse pas avaler '
+                                       'un chapitre entier comme une seule preuve.',
+ 'settings.rag_reranker': 'Reclassement par défaut',
+ 'settings.rag_response_language': 'Langue de la réponse',
+ 'settings.rag_response_language_help': 'Oriente les réponses générées. Les étiquettes de langue d'
+                                       'es notices sources ne changent pas.',
+ 'settings.rag_routes': 'Voies de repérage',
+ 'settings.rag_rrf_k': 'k RRF',
+ 'settings.rag_rrf_k_help': 'Constante de lissage pour la fusion par rang réciproque. 60 est une v'
+                                       'aleur courante.',
+ 'settings.rag_title': 'Valeurs par défaut du pipeline RAG',
+ 'settings.rag_top_n': 'N de reclassement',
+ 'settings.rag_top_n_help': 'Nombre de candidats inspectés par le reclassement.',
+ 'settings.rag_total_chars': 'Caractères totaux de preuve',
+ 'settings.request_notifications': 'Demander l’autorisation de notification',
+ 'settings.reranker_ce': 'Cross-encodeur',
+ 'settings.reranker_lexical': 'Lexical/vectoriel',
+ 'settings.reranker_none': 'Aucun',
+ 'settings.research_help': 'Langue de réponse et présentation des preuves. La génération par exécu'
+                                       'tion reste dans Recherche.',
+ 'settings.research_title': 'Valeurs de recherche par défaut',
+ 'settings.researcher_workspace': 'Espace de recherche',
+ 'settings.researcher_workspace_help': 'Les comptes chercheur utilisent du texte de corpus résumé '
+                                       'et n’affichent pas les contrôles de gestion des bases ou d'
+                                       'es sources.',
+ 'settings.reset_appearance': 'Réinitialiser l’apparence',
+ 'settings.reset_columns': 'Réinitialiser les colonnes du tableau',
+ 'settings.reset_rag': 'Réinitialiser le repérage',
+ 'settings.restore_backup': 'Charger depuis une sauvegarde',
+ 'settings.restore_confirm_message': 'Ceci remplace l’espace de travail du navigateur et chaque co'
+                                       'llection de la base Chroma active.',
+ 'settings.restore_confirm_title': 'Restaurer une sauvegarde complète DerridAI?',
+ 'settings.restore_upsert': 'Restaurer les éléments retirés de la file d’insertion',
+ 'settings.review_help': 'Choix du fournisseur, préréglage de révision et exécution interactive ou'
+                                       ' en arrière-plan.',
+ 'settings.review_preset': 'Préréglage de révision par défaut',
+ 'settings.review_title': 'Révision et comportement de l’IA',
+ 'settings.route_lexical': 'Lexical (BM25)',
+ 'settings.route_mmr': 'MMR',
+ 'settings.run_background': 'Révision en arrière-plan',
+ 'settings.run_foreground': 'Premier plan interactif',
+ 'settings.run_mode': 'Mode d’exécution par défaut',
+ 'settings.run_mode_help': 'La révision interactive reste à l’écran. La révision en arrière-plan s'
+                                       '’annule depuis Opérations.',
+ 'settings.save_appearance': 'Enregistrer l’apparence',
+ 'settings.save_embedding': 'Enregistrer l’intégration',
+ 'settings.save_rag': 'Enregistrer les valeurs RAG',
+ 'settings.save_research': 'Enregistrer la recherche',
+ 'settings.save_review': 'Enregistrer le comportement de révision',
+ 'settings.scheme_dark': 'Sombre',
+ 'settings.scheme_light': 'Clair',
+ 'settings.scheme_system': 'Suivre l’appareil',
+ 'settings.search_count_many': '{count} paramètres correspondants',
+ 'settings.search_count_one': '{count} paramètre correspondant',
+ 'settings.search_empty': 'Aucun paramètre ne correspond à cette recherche.',
+ 'settings.search_help': 'La recherche utilise les libellés traduits. Les flèches parcourent les r'
+                                       'ésultats; Entrée ouvre la section.',
+ 'settings.search_label': 'Rechercher dans les paramètres',
+ 'settings.search_placeholder': 'Trouver un paramètre',
+ 'settings.security_help': 'Les comptes et les capacités des rôles sont appliqués par l’API, pas s'
+                                       'eulement cette page.',
+ 'settings.security_title': 'Sécurité, comptes et permissions',
+ 'settings.sidebar_expanded': 'Barre de navigation développée',
+ 'settings.status.readonly': 'Lecture seule',
+ 'settings.status.save_failed': 'Échec de l’enregistrement',
+ 'settings.status.saved': 'Enregistré',
+ 'settings.status.saved_ok': 'Enregistrement réussi',
+ 'settings.status.saving': 'Enregistrement',
+ 'settings.status.unsaved': 'Modifications non enregistrées',
+ 'settings.theme_blue': 'Bleu New Haven',
+ 'settings.theme_blue_help': 'La palette bleue utilisée dans la référence visuelle de New Haven.',
+ 'settings.theme_green': 'Vert Hanover',
+ 'settings.theme_green_help': 'La palette verte sobre d’origine.',
+ 'settings.theme_slate': 'Ardoise Boston',
+ 'settings.theme_slate_help': 'Une palette de recherche neutre, bleu graphite.',
+ 'settings.upsert_restored': 'Éléments retirés de la file d’insertion restaurés',
+ 'settings.validation_summary': 'Certaines valeurs de repérage n’ont pas pu être enregistrées.',
+ 'settings.vector_help': 'Les nouvelles collections utilisent par défaut les intégrations Ollama a'
+                                       'vec bge-m3:latest. Modifier une collection déjà peuplée ex'
+                                       'ige une nouvelle construction.',
+ 'settings.vector_title': 'Valeurs de base vectorielle par défaut',
+ 'settings.viewer_help': 'Réinitialiser les choix d’interface ou retirer l’historique d’audit sans'
+                                       ' supprimer les notices.',
+ 'settings.viewer_title': 'Configuration de l’afficheur',
+ 'storage.advanced_deployment': 'Paramètre de déploiement avancé.',
+ 'storage.apply_path': 'Appliquer le chemin',
+ 'storage.change_location': 'Modifier l’emplacement des données',
+ 'storage.change_location_short': 'Modifier l’emplacement',
+ 'storage.container_path': 'Chemin dans le conteneur',
+ 'storage.container_path_help': 'Chemin correspondant à l’intérieur du service DerridAI.',
+ 'storage.host_folder': 'Dossier hôte',
+ 'storage.host_folder_help': 'Dossier persistant sur l’ordinateur qui exécute DerridAI.',
+ 'storage.new_container_path': 'Nouveau chemin dans le conteneur',
+ 'storage.persistent': 'Stockage persistant',
+ 'storage.review_chroma': 'Vérifiez l’emplacement où les données Chroma sont stockées.',
+ 'storage.review_paths': 'Vérifiez le dossier persistant de l’hôte et le chemin du service.',
+ 'storage.settings': 'Paramètres de stockage',
+ 'subset.no_value': 'Aucune valeur requise',
+ 'subset.value': 'Valeur',
+ 'theme.blue': 'Bleu New Haven',
+ 'theme.green': 'Vert Hanover',
+ 'theme.slate': 'Ardoise Boston',
+ 'time.days_ago_one': 'il y a {count} jour',
+ 'time.days_ago_other': 'il y a {count} jours',
+ 'time.hours_ago_one': 'il y a {count} heure',
+ 'time.hours_ago_other': 'il y a {count} heures',
+ 'time.just_now': 'à l’instant',
+ 'time.minutes_ago_one': 'il y a {count} minute',
+ 'time.minutes_ago_other': 'il y a {count} minutes',
+ 'time.recently': 'Récemment',
+ 'ui.account_menu': 'Menu du compte',
+ 'ui.account_menu_named': 'Menu du compte pour {name}',
+ 'ui.actions': 'Actions',
+ 'ui.active': 'Actif',
+ 'ui.add': 'Ajouter',
+ 'ui.add_evidence': 'Ajouter aux preuves',
+ 'ui.admin_actions': 'Actions',
+ 'ui.advanced': 'Avancé',
+ 'ui.all': 'Tout',
+ 'ui.authentication_authorization': 'Authentification et autorisation',
+ 'ui.auto_improve_flagged': 'Améliorer les éléments signalés',
+ 'ui.back': 'Retour',
+ 'ui.bulk_edit': 'Modifier un champ en lot',
+ 'ui.cached_responses': 'réponses en cache',
+ 'ui.cannot_delete_self': 'Vous ne pouvez pas supprimer votre compte actuel.',
+ 'ui.cannot_disable_self': 'Vous ne pouvez pas désactiver votre compte actuel.',
+ 'ui.change_role': 'Changer le rôle',
+ 'ui.clean_ocr': 'Nettoyer les artefacts OCR',
+ 'ui.clear_selection': 'Effacer la sélection',
+ 'ui.close_file': 'Fermer le fichier',
+ 'ui.collapse_all': 'Tout réduire',
+ 'ui.collapse_sidebar': 'Réduire la barre latérale',
+ 'ui.columns': 'Colonnes',
+ 'ui.configure_columns': 'Configurer les colonnes',
+ 'ui.copied': 'Copié',
+ 'ui.copy': 'Copier',
+ 'ui.copy_full': 'Copier la citation complète',
+ 'ui.copy_inline': 'Copier la citation abrégée',
+ 'ui.corpus_dbs': 'BD de corpus',
+ 'ui.corpus_viewer': 'Visionneuse de corpus',
+ 'ui.create': 'Créer',
+ 'ui.create_subset': 'Créer un sous-ensemble',
+ 'ui.created': 'créé',
+ 'ui.current_role_locked': 'Votre rôle actuel ne peut pas être modifié dans cette ligne.',
+ 'ui.db_records': 'fiches en BD',
+ 'ui.default': 'Par défaut',
+ 'ui.disable': 'Désactiver',
+ 'ui.disabled': 'Désactivé',
+ 'ui.dismiss': 'Fermer',
+ 'ui.done': 'Terminé',
+ 'ui.download': 'Télécharger',
+ 'ui.edit': 'Modifier',
+ 'ui.edit_record': 'Modifier la fiche',
+ 'ui.enable': 'Activer',
+ 'ui.evidence': 'Preuve',
+ 'ui.expand_all': 'Tout développer',
+ 'ui.expand_sidebar': 'Développer la barre latérale',
+ 'ui.export': 'Exporter',
+ 'ui.first_page': 'Vous êtes déjà à la première page.',
+ 'ui.forward': 'Suivant',
+ 'ui.full': 'Complète',
+ 'ui.get_citation': 'Obtenir la citation',
+ 'ui.global_search_placeholder': 'Rechercher dans le corpus, les œuvres, les concepts ou les annotations…',
+ 'ui.help': 'Aide',
+ 'ui.help_body': 'Recherchez dans le corpus depuis la barre du haut. La barre latérale ouvre les '
+                 'espaces de travail. Le menu du compte contient les paramètres et la déconnexion. '
+                 'La langue de l’interface est à côté.',
+ 'ui.help_compact': 'Sur un écran étroit, la langue et l’aide se trouvent dans le menu du compte.',
+ 'ui.help_open': 'Ouvrir l’aide',
+ 'ui.help_response_library': 'Ouvrir la bibliothèque de réponses',
+ 'ui.help_search': 'La recherche globale s’active avec Ctrl K (⌘K sur les plateformes Apple).',
+ 'ui.help_settings': 'Ouvrir les paramètres',
+ 'ui.help_title': 'Utiliser DerridAI',
+ 'ui.hide_api_key': 'Masquer la clé API',
+ 'ui.inline': 'Abrégée',
+ 'ui.jsonl_tabs': 'fichiers JSONL',
+ 'ui.language_current': 'Langue de l’interface, {language}',
+ 'ui.language_dictionaries_translation': 'Dictionnaires de langue et traduction',
+ 'ui.language_menu': 'Langue de l’interface',
+ 'ui.last_page': 'Vous êtes déjà à la dernière page.',
+ 'ui.loading': 'Chargement…',
+ 'ui.loading_derridai': 'Chargement de DerridAI…',
+ 'ui.loading_dictionary': 'Chargement du dictionnaire…',
+ 'ui.merge_tabs': 'Fusionner les fichiers',
+ 'ui.more_actions': 'Autres actions',
+ 'ui.navigation_history': 'Historique de navigation',
+ 'ui.need_records_bulk_edit': 'Chargez des fiches JSONL avant la modification en lot.',
+ 'ui.need_records_export': 'Chargez des fiches JSONL avant l’exportation.',
+ 'ui.need_records_ocr': 'Chargez des fiches JSONL avant le nettoyage OCR.',
+ 'ui.need_records_subset': 'Chargez des fiches JSONL avant de créer un sous-ensemble.',
+ 'ui.need_two_tabs_merge': 'Chargez au moins deux fichiers JSONL pour les fusionner.',
+ 'ui.no_matches': 'Aucun résultat',
+ 'ui.none': 'Aucun',
+ 'ui.not_set': 'Non défini',
+ 'ui.off': 'Désactivée',
+ 'ui.on': 'Activée',
+ 'ui.open': 'Ouvrir',
+ 'ui.open_jsonl': 'Ouvrir JSONL',
+ 'ui.operations': 'Opérations',
+ 'ui.primary_navigation': 'Navigation principale',
+ 'ui.record_actions': 'Actions de la fiche',
+ 'ui.records_loaded': 'fiches chargées',
+ 'ui.refresh': 'Actualiser',
+ 'ui.remove': 'Retirer',
+ 'ui.removing': 'Retrait…',
+ 'ui.remove_evidence': 'Retirer des preuves',
+ 'ui.reset': 'Réinitialiser',
+ 'ui.retry': 'Réessayer',
+ 'ui.review_flagged': 'Examiner les éléments signalés',
+ 'ui.rows_per_page': 'Lignes par page',
+ 'ui.save': 'Enregistrer',
+ 'ui.saving': 'Enregistrement…',
+ 'ui.search': 'Rechercher',
+ 'ui.select_all': 'Tout sélectionner',
+ 'ui.selected': 'Sélectionné',
+ 'ui.set_password': 'Définir le mot de passe',
+ 'ui.show_api_key': 'Afficher la clé API',
+ 'ui.sign_out': 'Déconnexion',
+ 'ui.signed_in_as': 'Connecté en tant que {name}',
+ 'ui.skip_to_content': 'Aller au contenu principal',
+ 'ui.stay': 'Rester ici',
+ 'ui.unset': 'Non défini',
+ 'ui.upsert_queue': 'File de synchronisation',
+ 'ui.working': 'Traitement…',
+ 'ui.workspace_menu': 'Espace de travail',
+ 'users.accounts': 'Comptes',
+ 'users.add_first_profile': 'Ajouter le premier profil',
+ 'users.add_profile': 'Ajouter un profil',
+ 'users.add_researcher_provider': 'Ajouter un fournisseur LLM chercheur',
+ 'users.add_researcher_provider_help': 'Configurez le point de terminaison, découvrez les modèles disponibles, puis '
+                                       'choisissez le modèle que les chercheurs pourront utiliser.',
+ 'users.api_key': 'Clé API',
+ 'users.api_key_optional_help': 'Facultatif sauf si votre point de terminaison exige une authentification.',
+ 'users.api_key_placeholder': 'Laisser vide pour conserver la clé stockée',
+ 'users.api_key_stored_help': 'Une clé est déjà stockée côté serveur. Laisser vide la conserve.',
+ 'users.assign_existing_profile': 'Attribuer un profil LLM existant',
+ 'users.assign_existing_profile_help': 'Copie un fournisseur administrateur existant dans l’ensemble des profils '
+                                       'approuvés pour les chercheurs. Les secrets restent côté serveur pour les '
+                                       'comptes chercheurs.',
+ 'users.base_url': 'URL de base',
+ 'users.base_url_help': 'Point de terminaison utilisé par les chercheurs via ce profil côté serveur.',
+ 'users.choose_existing_profile': 'Choisir un fournisseur configuré…',
+ 'users.configured_account_many': '{count} comptes configurés',
+ 'users.configured_account_one': '{count} compte configuré',
+ 'users.create': 'Créer un utilisateur',
+ 'users.create_help': 'Chercheur est le rôle non administrateur par défaut. Vous pouvez créer d’autres rôles dans '
+                      'Rôles et autorisations.',
+ 'users.created_toast': 'Compte créé.',
+ 'users.delete_help': 'Cette action supprime le compte et toutes ses sessions actives. Les données des tâches RAG '
+                      'existantes ne sont pas supprimées automatiquement.',
+ 'users.deleted_toast': 'Compte supprimé.',
+ 'users.description': 'Les administrateurs ont accès à tout l’espace du corpus. Les chercheurs peuvent utiliser '
+                      'Recherche ainsi que la recherche en lecture seule dans les bases et les œuvres; le texte du '
+                      'corpus est résumé côté serveur avec Edmundson.',
+ 'users.disabled_toast': 'Compte désactivé.',
+ 'users.discover_models': 'Tester / découvrir les modèles',
+ 'users.discover_models_help': 'Testez le fournisseur pour découvrir les modèles disponibles.',
+ 'users.enabled_toast': 'Compte activé.',
+ 'users.last_login': 'Dernière connexion',
+ 'users.loading': 'Chargement des utilisateurs…',
+ 'users.login_count': 'Connexions',
+ 'users.max_concurrent': 'Requêtes simultanées maximales',
+ 'users.max_concurrent_help': 'Limite les appels chercheur simultanés via ce profil.',
+ 'users.model': 'Modèle',
+ 'users.model_not_set': 'modèle non défini',
+ 'users.model_placeholder': 'Choisir un modèle découvert ou saisir un ID',
+ 'users.models_discovered': 'modèles découverts',
+ 'users.never': 'Jamais',
+ 'users.new_password': 'Nouveau mot de passe',
+ 'users.new_provider': 'Nouveau fournisseur',
+ 'users.no_researcher_profiles': 'Aucun profil LLM chercheur',
+ 'users.no_researcher_profiles_help': 'Ajoutez un fournisseur approuvé afin que les chercheurs puissent utiliser '
+                                      'Recherche sans voir les identifiants administrateur ni une configuration de '
+                                      'fournisseur sans restriction.',
+ 'users.password_help': 'Minimum de 6 caractères.',
+ 'users.password_saved_toast': 'Mot de passe réinitialisé.',
+ 'users.profile_id': 'ID du profil',
+ 'users.profile_id_help': 'Identifiant stable utilisé par les tâches chercheur.',
+ 'users.profile_id_placeholder': 'recherche-locale',
+ 'users.profile_name': 'Nom d’affichage',
+ 'users.profile_name_placeholder': 'Modèle de recherche local',
+ 'users.profile_required': 'L’identifiant, le nom et le modèle du profil sont requis.',
+ 'users.profile_save_help': 'Les modifications des cartes existantes sont préparées jusqu’à leur enregistrement.',
+ 'users.provider_ready': 'Fournisseur prêt',
+ 'users.provider_type': 'Type de fournisseur',
+ 'users.provider_unavailable': 'Fournisseur indisponible',
+ 'users.refresh': 'Actualiser',
+ 'users.remove_profile_confirm': 'Supprimer ce profil LLM chercheur?',
+ 'users.researcher_profiles': 'Profils LLM pour chercheurs',
+ 'users.researcher_profiles_help': 'Seuls ces profils statiques sont offerts aux chercheurs. Les secrets restent côté '
+                                   'serveur. Les profils Ollama locaux respectent la concurrence maximale; les '
+                                   'requêtes RAG supplémentaires attendent qu’une place se libère.',
+ 'users.reset_password': 'Réinitialiser le mot de passe',
+ 'users.role': 'Rôle',
+ 'users.role_saved_toast': 'Rôle mis à jour.',
+ 'users.save_profiles': 'Enregistrer les profils',
+ 'users.temporary_password': 'Mot de passe temporaire',
+ 'users.title': 'Utilisateurs et rôles',
+ 'users.use_profile': 'Utiliser le profil',
+ 'users.username': 'Nom d’utilisateur',
+ 'vector.advanced': 'Avancé',
+ 'vector.apply_storage_path': 'Appliquer le chemin de stockage',
+ 'vector.available_loaded_works': 'Œuvres chargées disponibles',
+ 'vector.available_works_count': '{count} œuvres dans l’espace de travail du navigateur',
+ 'vector.backend': 'Moteur',
+ 'vector.backend_compose': 'Conteneur Chroma de DerridAI',
+ 'vector.backend_embedded': 'Stockage local persistant',
+ 'vector.backend_http': 'Serveur Chroma en cours d’exécution',
+ 'vector.background_build': 'Construction en arrière-plan',
+ 'vector.background_build_help': 'Après la création, {count} fiches sélectionnées seront placées dans une seule '
+                                 'construction serveur en arrière-plan. Vous pouvez continuer à utiliser DerridAI.',
+ 'vector.browse_works': 'Parcourir les œuvres',
+ 'vector.browse_works_help': 'Ouvrez une œuvre pour ne parcourir que ses fiches dans cette collection.',
+ 'vector.build': 'Construction',
+ 'vector.build_history': 'Historique des constructions ({count})',
+ 'vector.change_location': 'Changer l’emplacement',
+ 'vector.change_storage_location': 'Changer l’emplacement des données',
+ 'vector.change_storage_location_help': 'Paramètre de déploiement avancé. Les collections existantes ne sont pas '
+                                        'déplacées automatiquement.',
+ 'vector.change_storage_path': 'Modifier le chemin de stockage',
+ 'vector.change_storage_warning': 'La modification de ce chemin fait basculer DerridAI vers un autre répertoire de '
+                                  'persistance Chroma. Les collections existantes restent dans leur répertoire '
+                                  'd’origine jusqu’à ce que vous y reveniez.',
+ 'vector.changes_pending': '{count} modifications en attente',
+ 'vector.checking_path': 'Vérification…',
+ 'vector.chroma_database': 'Base',
+ 'vector.chroma_database_help': 'Nom logique de base Chroma. Conservez la valeur par défaut sauf si ce serveur est '
+                                'partagé.',
+ 'vector.chroma_tenant': 'Locataire',
+ 'vector.chroma_tenant_help': 'Locataire Chroma. Conservez la valeur par défaut sauf si ce serveur est partagé.',
+ 'vector.chroma_token': 'Jeton d’accès',
+ 'vector.chroma_token_help': 'Jeton Bearer facultatif pour un serveur Chroma qui exige une authentification. Il n’est '
+                             'jamais inscrit dans une URL de sauvegarde.',
+ 'vector.chroma_token_kept': 'Un jeton est déjà configuré. Laissez ce champ vide pour le conserver.',
+ 'vector.chroma_url': 'URL du serveur Chroma',
+ 'vector.chroma_url_credentials': 'N’inscrivez pas d’identifiants dans l’URL. Utilisez le champ jeton d’accès.',
+ 'vector.chroma_url_help': 'Origine http(s) absolue, par exemple http://chroma:8000 pour le service Compose ou '
+                           'http://host.docker.internal:8001 pour un serveur sur l’hôte.',
+ 'vector.collection': 'Collection',
+ 'vector.collection_basics': 'Paramètres de base',
+ 'vector.collection_basics_help': 'Nommez la collection et indiquez comment DerridAI doit l’utiliser.',
+ 'vector.collection_created': '{name} créée',
+ 'vector.collection_created_build': '{name} créée; construction en arrière-plan mise en file.',
+ 'vector.collection_created_sync': '{name} créée; les œuvres sélectionnées sont en cours de synchronisation.',
+ 'vector.collection_creation_steps': 'Étapes de création de la collection',
+ 'vector.collection_deleted': 'Collection supprimée',
+ 'vector.collection_description': 'Description',
+ 'vector.collection_description_placeholder': 'Corpus principal multilingue de recherche sur Derrida',
+ 'vector.collection_name': 'Nom de la collection',
+ 'vector.collection_name_help': 'Utilisez un nom court et stable. Vous pourrez la parcourir et la rechercher depuis '
+                                'les bases vectorielles.',
+ 'vector.collection_name_required': 'Saisissez un nom de collection',
+ 'vector.collection_name_rules': 'De 3 à 128 caractères; commencez et terminez par une lettre ou un chiffre; utilisez '
+                                 'lettres, chiffres, points, traits de soulignement ou traits d’union.',
+ 'vector.collection_role': 'Rôle de la collection',
+ 'vector.collection_role_help': 'Les collections principales constituent la base du corpus; les collections '
+                                'linguistiques sont dérivées ou limitées par langue.',
+ 'vector.collection_switch_help': 'Choisissez une collection à gérer ou à parcourir.',
+ 'vector.collections': 'Collections',
+ 'vector.compare_modes': 'Comparer les modes',
+ 'vector.compare_modes_help': 'Exécute la même requête avec les modes disponibles afin de comparer leur classement.',
+ 'vector.comparing_modes': 'Comparaison des modes de recherche…',
+ 'vector.completed_builds': 'constructions achevées',
+ 'vector.compose_profile_help': 'Démarrez le service fourni avec docker compose --profile chroma up -d, puis utilisez '
+                                'http://chroma:8000 depuis le conteneur de l’API.',
+ 'vector.connection': 'Connexion Chroma',
+ 'vector.connection_apply': 'Appliquer la connexion',
+ 'vector.connection_changed': 'Connexion Chroma mise à jour. Les collections existantes n’ont pas été déplacées.',
+ 'vector.connection_failed': 'Impossible d’atteindre Chroma : {message}',
+ 'vector.connection_help': 'Choisissez le stockage local persistant, le conteneur Chroma fourni par DerridAI, ou un '
+                           'serveur que vous exécutez déjà. Changer de moteur ne migre pas les collections.',
+ 'vector.connection_mode': 'Moteur de stockage',
+ 'vector.connection_mode_embedded': 'Système de fichiers local',
+ 'vector.connection_mode_embedded_help': 'Chroma intégré dans le répertoire de données monté depuis l’hôte. Valeur par '
+                                         'défaut pour une installation locale. La sauvegarde copie ce répertoire par '
+                                         'l’API client.',
+ 'vector.connection_mode_http': 'Serveur Chroma en cours d’exécution',
+ 'vector.connection_mode_http_help': 'Connexion HTTP, comme Ollama peut être un processus hôte ou le service Compose. '
+                                     'Utilisez ce mode pour le profil chroma fourni ou un serveur de laboratoire.',
+ 'vector.connection_ok': 'Chroma est joignable',
+ 'vector.connection_probe': 'Tester la connexion',
+ 'vector.connection_probing': 'Test de connexion…',
+ 'vector.connection_switch_caution': 'Changer de moteur ne déplace pas les collections existantes.',
+ 'vector.connection_switch_caution_help': 'DerridAI utilisera le moteur choisi immédiatement. Les collections restent '
+                                          'où elles sont jusqu’à reconstruction ou restauration. Ne dirigez pas le '
+                                          'stockage intégré et un serveur Chroma vers le même répertoire.',
+ 'vector.container_path': 'Chemin du conteneur',
+ 'vector.container_path_help': 'Chemin correspondant à l’intérieur du service DerridAI. Il sert surtout au dépannage '
+                               'du déploiement.',
+ 'vector.create_and_build': 'Créer et construire',
+ 'vector.create_and_sync': 'Créer et synchroniser les œuvres sélectionnées',
+ 'vector.create_collection': 'Créer une collection',
+ 'vector.create_collection_help': 'Configurez d’abord la collection, puis synchronisez éventuellement les œuvres '
+                                  'chargées.',
+ 'vector.create_empty': 'Créer une collection vide',
+ 'vector.create_failed': 'Impossible de créer la collection',
+ 'vector.create_first_collection': 'Créer la première collection',
+ 'vector.create_large_sync_help': 'Comme cette sélection contient {count} fiches, DerridAI la synchronisera par lots '
+                                  'au premier plan après la création. Gardez cet onglet ouvert jusqu’à la fin.',
+ 'vector.create_step_basics': 'Collection',
+ 'vector.create_step_embedding': 'Vectorisation',
+ 'vector.create_step_retrieval': 'Recherche',
+ 'vector.create_step_review': 'Réviser et construire',
+ 'vector.create_step_source': 'Source',
+ 'vector.create_step_sync': 'Synchroniser les œuvres',
+ 'vector.created_with': 'Créée avec',
+ 'vector.creating_collection': 'Création de la collection…',
+ 'vector.creation_steps': 'Étapes de création de la collection',
+ 'vector.current': 'À jour',
+ 'vector.current_build': 'Construction courante',
+ 'vector.current_container_path': 'Chemin actuel dans le conteneur',
+ 'vector.default': 'par défaut',
+ 'vector.delete_collection': 'Supprimer la collection',
+ 'vector.delete_collection_confirm': 'Supprimer la collection Chroma {name} ? Cette action est irréversible.',
+ 'vector.deletion_protection': 'Protection contre la suppression',
+ 'vector.deletion_protection_help': 'Empêche la suppression accidentelle jusqu’à ce que la protection soit '
+                                    'explicitement désactivée.',
+ 'vector.derive_confirm': 'Générer {en} et {fr} à partir de {source} ?',
+ 'vector.dimension_auto': 'Détectée automatiquement',
+ 'vector.dimension_optional': 'Facultatif jusqu’au premier vecteur',
+ 'vector.disable_protection': 'Désactiver la protection',
+ 'vector.disable_protection_before_delete': 'Désactivez la protection avant de supprimer cette collection.',
+ 'vector.distance': 'Distance',
+ 'vector.distance_metric': 'Métrique de distance',
+ 'vector.download_current_work': 'Télécharger l’œuvre actuelle',
+ 'vector.download_db_jsonl': 'Télécharger le JSONL complet de la collection',
+ 'vector.embedding_configuration': 'Configuration des vecteurs',
+ 'vector.embedding_dimension': 'Dimension vectorielle',
+ 'vector.embedding_dimension_help': 'DerridAI sonde automatiquement les intégrations générées et refuse les dimensions '
+                                    'incompatibles avant d’écrire des fiches.',
+ 'vector.embedding_edit_help': 'Choisissez comment DerridAI crée les vecteurs de cette collection.',
+ 'vector.embedding_locked_help': 'Les paramètres de vectorisation sont verrouillés après l’ajout de fiches. Créez une '
+                                 'nouvelle collection vide pour les modifier.',
+ 'vector.embedding_model': 'Modèle de vectorisation',
+ 'vector.embedding_model_help': 'Ce paramètre est verrouillé dès que la collection contient des fiches.',
+ 'vector.embedding_model_required': 'Choisissez un modèle d’intégration Ollama',
+ 'vector.embedding_provider': 'Fournisseur de vecteurs',
+ 'vector.embedding_saved': 'Paramètres d’intégration enregistrés',
+ 'vector.embedding_setup': 'Configuration des vecteurs',
+ 'vector.embedding_setup_help': 'Choisissez comment les nouvelles fiches de cette collection recevront leurs vecteurs.',
+ 'vector.empty_help': 'Une collection vectorielle fournit à DerridAI une base de corpus persistante pour la recherche '
+                      'sémantique, la navigation des chercheurs et le RAG. Configurez-la, puis synchronisez '
+                      'éventuellement les œuvres déjà chargées.',
+ 'vector.empty_kicker': 'Bases vectorielles',
+ 'vector.empty_manifest_help': 'La collection vide conservera tout de même son contrat d’intégration validé et son '
+                               'manifeste.',
+ 'vector.empty_title': 'Créez votre première collection de corpus',
+ 'vector.enable_protection': 'Activer la protection',
+ 'vector.english_collection': 'Collection anglaise',
+ 'vector.english_collection_help': 'Reçoit les fiches acheminées comme étant en anglais.',
+ 'vector.enter_query': 'Saisissez une requête pour comparer les modes de recherche.',
+ 'vector.enter_storage_path': 'Saisissez un chemin de stockage Chroma',
+ 'vector.export_from_collection': 'Exporter depuis la collection',
+ 'vector.filter_collections': 'Rechercher des collections…',
+ 'vector.french_collection': 'Collection française',
+ 'vector.french_collection_help': 'Reçoit les fiches acheminées comme étant en français.',
+ 'vector.generate_language_collections': 'Générer les collections EN / FR',
+ 'vector.health_ready': 'Chroma prêt',
+ 'vector.health_unavailable': 'Chroma indisponible',
+ 'vector.heartbeat': 'Battement',
+ 'vector.host_path': 'Dossier hôte',
+ 'vector.host_path_help': 'Dossier persistant sur la machine qui exécute DerridAI. Sauvegardez ce dossier pour '
+                          'préserver les collections.',
+ 'vector.http_nuke_help': 'La réinitialisation de DerridAI connecté à un serveur Chroma supprime les collections sur '
+                          'ce serveur. Elle ne vide pas un répertoire chroma local.',
+ 'vector.hybrid': 'Hybride',
+ 'vector.hybrid_help': 'La recherche hybride fusionne les résultats sémantiques et lexicaux exacts afin que noms, '
+                       'citations, néologismes et termes multilingues aient une voie indépendante des intégrations.',
+ 'vector.hybrid_recommended': 'Hybride — recommandé',
+ 'vector.hybrid_score': 'Hybride',
+ 'vector.identity': 'Moteur',
+ 'vector.import_export': 'Importer et exporter des fiches',
+ 'vector.import_export_help': 'Synchronisez les fiches JSONL chargées vers cette collection, ou exportez les fiches de '
+                              'la collection vers un JSONL propre. L’export ne modifie pas la collection.',
+ 'vector.language_collections': 'Collections linguistiques',
+ 'vector.language_derive_help': 'Créez des collections anglaise et française séparées en acheminant les fiches selon '
+                                'les métadonnées document_language.',
+ 'vector.language_source_help': 'La collection source demeure inchangée. Les collections cibles existantes sont mises '
+                                'à jour selon les règles de routage actuelles.',
+ 'vector.language_tags': 'Étiquettes de langue',
+ 'vector.language_tags_help': 'Étiquettes descriptives facultatives. Laissez les deux décochées pour une collection '
+                              'multilingue.',
+ 'vector.language_tags_saved': 'Étiquettes de langue de la collection enregistrées',
+ 'vector.language_tags_scope_help': 'Portée descriptive et de filtrage seulement; une collection principale '
+                                    'multilingue est préférable à des bases physiques dupliquées par langue.',
+ 'vector.last_build_error': 'Dernière erreur de construction',
+ 'vector.last_synced': 'Dernière synchro',
+ 'vector.lexical': 'Lexical (BM25)',
+ 'vector.lexical_only': 'Lexical seulement',
+ 'vector.load_jsonl_any_first': 'Chargez d’abord au moins un fichier JSONL.',
+ 'vector.load_jsonl_first': 'Chargez et sélectionnez d’abord un fichier JSONL.',
+ 'vector.loading_stores': 'Chargement des bases vectorielles',
+ 'vector.manage_collections': 'Gérer les collections',
+ 'vector.manage_collections_help': 'Créez une collection ou actualisez la liste après des modifications effectuées '
+                                   'ailleurs.',
+ 'vector.manifest_builds': 'Manifeste et constructions',
+ 'vector.manifest_builds_help': 'Consultez le contrat de recherche reproductible, l’instantané source et l’historique '
+                                'récent des constructions achevées.',
+ 'vector.model_not_used': 'Ce fournisseur n’utilise pas de nom de modèle Ollama.',
+ 'vector.never_synced': 'Pas encore synchronisée',
+ 'vector.new_collection': 'Nouvelle collection vectorielle',
+ 'vector.new_collection_short': 'Nouvelle',
+ 'vector.new_container_path': 'Nouveau chemin du conteneur',
+ 'vector.new_container_path_help': 'Saisissez le répertoire de persistance Chroma côté serveur. Ne le modifiez que si '
+                                   'vous comprenez la correspondance du déploiement.',
+ 'vector.new_direction_build': 'Créer une collection de recherche reproductible',
+ 'vector.new_direction_build_help': 'Choisissez la source, validez le contrat de recherche, puis créez une collection '
+                                    'avec manifeste sans bloquer l’espace de travail.',
+ 'vector.no_build': 'Aucune construction',
+ 'vector.no_build_history': 'Aucune construction de synchronisation achevée n’a encore été enregistrée.',
+ 'vector.no_collection_matches': 'Aucune collection ne correspond à cette recherche.',
+ 'vector.no_loaded_works': 'Aucune œuvre JSONL chargée n’est disponible pour la synchronisation.',
+ 'vector.no_matching_records': 'Aucune fiche ne correspond aux filtres actuels.',
+ 'vector.no_results': 'Aucun résultat',
+ 'vector.no_unsynced_changes': 'Aucune modification locale non synchronisée confirmée.',
+ 'vector.no_unsynced_changes_help': 'DerridAI n’a trouvé aucune fiche chargée modifiée depuis sa dernière '
+                                    'synchronisation ni confirmée absente de cette collection.',
+ 'vector.open_connection': 'Paramètres de connexion',
+ 'vector.open_current_page': 'Ouvrir la page actuelle du tableau en JSONL',
+ 'vector.open_current_work': 'Ouvrir l’œuvre actuelle en JSONL',
+ 'vector.open_db_jsonl': 'Ouvrir toute la collection en JSONL',
+ 'vector.open_work_records': 'Ouvrir les fiches',
+ 'vector.page_export_help': 'Ouvrez uniquement les fiches visibles sur cette page paginée dans un fichier JSONL '
+                            'temporaire. Il ne s’agit pas d’un export complet de la collection.',
+ 'vector.page_export_title': 'Page actuelle du tableau',
+ 'vector.page_help': 'Créez, synchronisez, parcourez, recherchez et exportez les collections Chroma persistantes '
+                     'utilisées par DerridAI.',
+ 'vector.persistent_storage': 'Stockage persistant',
+ 'vector.precomputed_search_help': 'Les collections à vecteurs précalculés peuvent utiliser la recherche lexicale et '
+                                   'le volet lexical de la recherche hybride. Les recherches sémantique et MMR exigent '
+                                   'une fonction d’intégration de requête.',
+ 'vector.preflight_and_review': 'Prévalider et réviser',
+ 'vector.preflight_failed': 'Échec de la prévalidation des intégrations',
+ 'vector.preflight_passed': 'Prévalidation des intégrations réussie',
+ 'vector.preflight_ready': 'Prêt à créer',
+ 'vector.protected': 'Protégée',
+ 'vector.protection_disabled': 'Protection contre la suppression désactivée',
+ 'vector.protection_enabled': 'Protection contre la suppression activée',
+ 'vector.protection_failed': 'Impossible de modifier la protection contre la suppression',
+ 'vector.provider_chroma': 'Chroma par défaut',
+ 'vector.provider_chroma_help': 'Laisser Chroma utiliser sa fonction de vectorisation par défaut.',
+ 'vector.provider_ollama': 'Ollama',
+ 'vector.provider_ollama_help': 'Générer les vecteurs avec un modèle Ollama local configuré.',
+ 'vector.provider_precomputed': 'Pré-calculés',
+ 'vector.provider_precomputed_help': 'Les fiches doivent déjà contenir des vecteurs; la recherche sémantique par '
+                                     'requête n’est pas disponible.',
+ 'vector.query_embedding': 'Intégration de la requête',
+ 'vector.record_inspector': 'Inspecteur de fiche',
+ 'vector.retrieval_contract': 'Définir le contrat de recherche',
+ 'vector.retrieval_contract_help': 'L’identité du modèle d’intégration, la dimension, la métrique de distance et le '
+                                   'mode de recherche forment un contrat durable validé avant la création.',
+ 'vector.retrieval_mode': 'Mode de recherche',
+ 'vector.retrieval_search_placeholder': 'Rechercher dans cette collection…',
+ 'vector.review_build': 'Réviser la construction',
+ 'vector.review_build_help': 'La création est stricte : DerridAI ne réutilise jamais silencieusement une collection '
+                             'existante. Le contrat résolu et l’instantané source font partie du manifeste.',
+ 'vector.role_general': 'Générale',
+ 'vector.role_language': 'Spécifique à une langue',
+ 'vector.role_language_help': 'Le rôle et les étiquettes de langue décrivent l’utilisation prévue de cette base.',
+ 'vector.role_language_title': 'Rôle et langue',
+ 'vector.role_primary': 'Principale',
+ 'vector.running_preflight': 'Prévalidation en cours…',
+ 'vector.search_method': 'Méthode de recherche',
+ 'vector.search_results_empty': 'Les résultats de recherche apparaîtront ici.',
+ 'vector.select_collection': 'Sélectionnez une collection',
+ 'vector.select_collection_help': 'Choisissez une collection dans la liste pour gérer ses paramètres, synchroniser des '
+                                  'fiches, effectuer des recherches ou parcourir son contenu.',
+ 'vector.selected_collection': 'Collection sélectionnée',
+ 'vector.selected_works_label': '{count} œuvres sélectionnées',
+ 'vector.semantic': 'Sémantique',
+ 'vector.semantic_only': 'Sémantique seulement',
+ 'vector.semantic_precomputed_help': 'La recherche sémantique est indisponible car cette collection contient des '
+                                     'vecteurs pré-calculés sans fonction de vectorisation des requêtes.',
+ 'vector.semantic_search': 'Recherche sémantique',
+ 'vector.semantic_search_help': 'Trouvez des fiches par leur sens à l’aide du fournisseur de vectorisation configuré '
+                                'pour cette collection.',
+ 'vector.semantic_search_placeholder': 'Rechercher cette collection par le sens…',
+ 'vector.server_unreachable': 'Le serveur Chroma n’a pas répondu. Vérifiez l’URL, le jeton et que le processus '
+                              'est en cours d’exécution.',
+ 'vector.source': 'Source',
+ 'vector.source_dataset': 'Choisir le jeu de données source',
+ 'vector.source_dataset_help': 'Définissez la collection logique et le corpus que cette construction représentera. La '
+                               'sélection source est inscrite dans le manifeste.',
+ 'vector.source_records': 'Fiches source',
+ 'vector.source_snapshot': 'Instantané source',
+ 'vector.source_unrecorded': 'Non consignée',
+ 'vector.status': 'État',
+ 'vector.storage_change_caution': 'Changer l’emplacement de stockage ne déplace pas les collections existantes.',
+ 'vector.storage_change_caution_help': 'DerridAI commencera à utiliser le nouveau répertoire. Les collections '
+                                       'existantes restent dans le répertoire actuel jusqu’à ce que vous y reveniez ou '
+                                       'les déplaciez hors de l’application.',
+ 'vector.storage_change_failed': 'Impossible de modifier le stockage Chroma : {message}',
+ 'vector.storage_changed': 'Stockage Chroma modifié vers {path}',
+ 'vector.storage_help': 'Chroma conserve sa base dans un répertoire côté serveur. Le chemin du conteneur est celui que '
+                        'DerridAI voit; le dossier hôte est le dossier mappé sur la machine qui exécute DerridAI, qui '
+                        'survit aux redémarrages du conteneur et peut être sauvegardé normalement.',
+ 'vector.storage_settings': 'Paramètres de stockage',
+ 'vector.storage_settings_help': 'Consultez l’emplacement des données Chroma. La plupart des installations devraient '
+                                 'conserver ces paramètres tels quels.',
+ 'vector.summary': 'Résumé des bases vectorielles',
+ 'vector.sync': 'Synchroniser',
+ 'vector.sync_active_jsonl': 'Synchroniser le JSONL actif',
+ 'vector.sync_all_loaded': 'Synchroniser tous les JSONL chargés',
+ 'vector.sync_available_works': 'Synchroniser les œuvres disponibles',
+ 'vector.sync_available_works_help': 'Ajoutez éventuellement les œuvres du corpus déjà chargées juste après la '
+                                     'création. Vous pouvez aussi laisser la collection vide.',
+ 'vector.sync_behavior_help': 'La synchronisation met à jour les fiches correspondantes et insère les nouvelles. Toute '
+                              'synchronisation de plus de 500 fiches exige une confirmation, s’exécute au premier plan '
+                              'par lots de 500 et bloque les autres actions DerridAI jusqu’à sa fin ou son annulation.',
+ 'vector.sync_into_collection': 'Synchroniser vers la collection',
+ 'vector.sync_selected': 'Synchroniser la sélection',
+ 'vector.sync_state': 'État de synchronisation',
+ 'vector.synced_at': 'Dernière synchro {time}',
+ 'vector.system_storage': 'Stockage système',
+ 'vector.tab_builds': 'Constructions',
+ 'vector.tab_data': 'Données',
+ 'vector.tab_overview': 'Aperçu',
+ 'vector.tab_retrieval': 'Recherche',
+ 'vector.tab_settings': 'Paramètres',
+ 'vector.test_retrieval': 'Tester la recherche',
+ 'vector.test_retrieval_help': 'Comparez la recherche sémantique, lexicale, hybride et diversifiée sur le même corpus '
+                               'stocké.',
+ 'vector.text_field': 'Champ texte',
+ 'vector.unsynced_changes': 'Modifications locales non synchronisées',
+ 'vector.unsynced_changes_count': '{count} modifications locales non synchronisées',
+ 'vector.unsynced_changes_help': 'Il s’agit des fiches de l’espace de travail modifiées depuis leur dernière '
+                                 'synchronisation confirmée, ainsi que de celles dont DerridAI a confirmé l’absence '
+                                 'dans la collection sélectionnée. Retirer un élément ne masque que sa version '
+                                 'actuelle; une modification ultérieure le remettra dans la file.',
+ 'vector.unsynced_changes_what': 'Que contient cette liste?',
+ 'vector.workspace_actions': 'Espace des collections',
+ 'vector.workspace_sections': 'Sections de la collection',
+ 'works.add_jsonl': 'Ajouter un fichier JSONL',
+ 'works.add_jsonl_help': 'Ouvrez une autre source de corpus et ajoutez ses œuvres à cet espace de travail.',
+ 'works.all_records_label': 'fiches de toutes les œuvres',
+ 'works.apply_metadata': 'Appliquer les métadonnées',
+ 'works.apply_metadata_confirm': 'Appliquer les métadonnées de l’œuvre ?',
+ 'works.apply_metadata_confirm_help': 'Appliquer les métadonnées sélectionnées à {works} œuvre(s) et {records} fiches '
+                                      'associées ?',
+ 'works.apply_selected_metadata': 'Appliquer les métadonnées sélectionnées',
+ 'works.applying_metadata': 'Application des métadonnées…',
+ 'works.auto_improve': 'Améliorer les signalements',
+ 'works.background_operation': 'Opération en arrière-plan',
+ 'works.background_operation_help': 'Vous pouvez quitter la page Œuvres. Ouvrez l’opération terminée pour vérifier et '
+                                    'appliquer les modifications proposées.',
+ 'works.browse_records': 'Parcourir les fiches',
+ 'works.catalog_source': 'Source du catalogue',
+ 'works.catalogue_selected': 'Correspondance de catalogue bibliographique public sélectionnée par le LLM.',
+ 'works.checking_database': 'Vérification de la base vectorielle…',
+ 'works.concurrent_requests': 'requête(s) simultanée(s) max.',
+ 'works.cover_alt': 'Couverture de {work}',
+ 'works.cover_of': 'Couverture de {title}',
+ 'works.current_value': 'Actuel',
+ 'works.database_context': 'Base de synchronisation des œuvres',
+ 'works.database_context_help': 'L’état de synchronisation et les actions Synchroniser de cette page concernent la '
+                                'base de corpus sélectionnée. La changer ne modifie pas vos fichiers JSONL chargés.',
+ 'works.edit_metadata': 'Modifier les métadonnées',
+ 'works.field': 'Champ',
+ 'works.files': 'fichiers',
+ 'works.filter_title': 'Filtrer les œuvres par titre',
+ 'works.indexed_patterns': 'Motifs de métadonnées dans cette œuvre',
+ 'works.inspect_mixed_aria': 'Consulter les {count} valeurs uniques pour {field}',
+ 'works.leave_metadata_help': 'Cela fermera le flux de métadonnées et ouvrira les fournisseurs LLM. La recherche n’a '
+                              'pas encore commencé.',
+ 'works.leave_metadata_title': 'Ouvrir les profils de fournisseurs?',
+ 'works.loading': 'Chargement des œuvres',
+ 'works.loading_cards': 'Chargement de {count} cartes d’œuvres',
+ 'works.lookup_scope': 'Portée de la recherche',
+ 'works.lookup_scope_help': 'Obtenir les métadonnées bibliographiques de {count} œuvre(s).',
+ 'works.metadata_applied': '{records} fiches mises à jour · {fields} modifications de champs suivies',
+ 'works.metadata_fields_help': 'Les propositions peuvent inclure l’éditeur, l’année/le lieu de publication, l’édition, '
+                               'le traducteur, l’ISBN, la langue, la citation et la couverture.',
+ 'works.metadata_lookup_failed': 'Impossible de lancer la recherche de métadonnées',
  'works.metadata_lookup_started': 'Recherche de métadonnées lancée pour {count} œuvre(s).',
  'works.metadata_no_match_count': '{count} œuvre(s) n’ont pas de correspondance exploitable ou ont renvoyé une erreur.',
  'works.metadata_variants': 'Variantes des métadonnées',
