@@ -215,7 +215,11 @@ def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_pat
     ]
     repo.save_records(build["build_id"], records)
     active = repo.get_build(build["build_id"])
-    active.update({"status": "running", "stage": "metadata_enrichment"})
+    active.update({
+        "status": "running",
+        "stage": "metadata_enrichment:discourse",
+        "metadata_priority_record_ids": [],
+    })
     repo.save_build(active)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
 
