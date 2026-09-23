@@ -2889,6 +2889,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.no_provider_profiles': 'Aucun profil fournisseur LLM n’est configuré',
  'pdf_corpus.no_provider_profiles_help': 'Créez un profil fournisseur ou utilisez les paramètres de compatibilité '
                                          'manuels ci-dessous.',
+ 'pdf_corpus.no_provider_profile': 'Aucun profil fournisseur LLM disponible n’est configuré.',
  'pdf_corpus.no_records_filter': 'Aucune fiche ne correspond à ce filtre de révision.',
  'pdf_corpus.no_retryable_metadata': 'Aucune métadonnée relançable automatiquement ne reste. Ouvrez la file des '
                                      'problèmes pour une résolution humaine.',

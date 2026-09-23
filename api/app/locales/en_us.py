@@ -2683,6 +2683,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.no_human_metadata_work': 'No metadata fields require human judgment.',
  'pdf_corpus.no_provider_profiles': 'No LLM provider profiles are configured',
  'pdf_corpus.no_provider_profiles_help': 'Create a provider profile or use the manual compatibility settings below.',
+ 'pdf_corpus.no_provider_profile': 'No available LLM provider profile is configured.',
  'pdf_corpus.no_records_filter': 'No records match this review filter.',
  'pdf_corpus.no_retryable_metadata': 'No automatically retryable metadata remains. Open the metadata issue queue for '
                                      'human resolution.',
