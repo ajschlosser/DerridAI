@@ -7,6 +7,7 @@ pydantic>=2.10,<3
 python-multipart>=0.0.20,<1
 
 pymupdf>=1.26,<2
+py-gutenberg>=1.0,<2
 
 # Optional-but-default RAG cross-encoder reranking from the supplied pipeline.
 sentence-transformers>=5.1,<6
