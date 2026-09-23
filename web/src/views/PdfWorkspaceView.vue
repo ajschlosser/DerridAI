@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PdfExplorerSurface from "../components/PdfExplorerSurface.vue";
 import PdfCorpusBuilder from "../components/PdfCorpusBuilder.vue";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -12,15 +11,11 @@ const router = useRouter();
 const requestedMode = () => (route.query.mode === "explorer" ? "explorer" : "builder");
 const mode = ref<"explorer" | "builder">(requestedMode());
 async function setMode(next: "explorer" | "builder") {
-  // Switch the URL first: the Explorer's runtime surface syncs the URL as soon as it mounts, and if the mode is not in
-  // the URL yet it writes the old one back and the tab appears not to work.
+  // Switch the URL first: PdfExplorerSurface syncs the URL as soon as it mounts, and if the mode is not in the URL
+  // yet it writes the old one back and the tab appears not to work.
   const query = { ...route.query, mode: next };
   await router.replace({ query });
   mode.value = next;
-  if (next === "explorer") {
-    await nextTick();
-    await runtime.renderView();
-  }
 }
 function openBuilder() {
   void setMode("builder");

@@ -16,7 +16,6 @@ type Helper =
   | "normalizePdfLinkChanges"
   | "openMessageModal"
   | "pdfLinks"
-  | "renderPdf"
   | "renderView"
   | "shell"
   | "toast";
@@ -30,13 +29,10 @@ export function createPdfLinking(deps: Deps) {
     normalizePdfLinkChanges,
     openMessageModal,
     pdfLinks,
-    renderPdf,
     renderView,
     shell,
     toast,
   } = deps;
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
   function pdfDisplayTitle() {
     return state.pdf.title || state.pdf.name || "PDF";
   }
@@ -151,7 +147,7 @@ export function createPdfLinking(deps: Deps) {
     const count = applyRecordChanges(file, index, normalizePdfLinkChanges(record, next), {
       source: "pdf_unlink",
     });
-    if (stayInPdf) renderPdf(document.querySelector("#main"));
+    if (stayInPdf) window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
     else {
       shell();
       renderView();

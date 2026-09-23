@@ -44,7 +44,6 @@ type Helper =
   | "refreshJobs"
   | "refreshRagProgressPanel"
   | "refreshStores"
-  | "renderPdf"
   | "renderView"
   | "reviewDiffSides"
   | "reviewItemFromKey"
@@ -97,7 +96,6 @@ export function createJobDialogs(deps: Deps) {
     refreshJobs,
     refreshRagProgressPanel,
     refreshStores,
-    renderPdf,
     renderView,
     reviewDiffSides,
     reviewItemFromKey,
@@ -870,7 +868,8 @@ export function createJobDialogs(deps: Deps) {
       state.pdf.text = result.text || "";
       state.pdf.extractionSource = `LLM cleanup · ${job.model || result.model || "model"}`;
       close();
-      if (state.view === "pdf") renderPdf(document.querySelector("#main"));
+      if (state.view === "pdf")
+        window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
     });
     dialog.querySelector("#openToolDraft")?.addEventListener("click", () => {
       close();
