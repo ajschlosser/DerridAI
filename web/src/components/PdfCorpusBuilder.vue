@@ -29,8 +29,6 @@ import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
 import CorpusRunGuidance, {
-  type RunGuidanceEntry,
-  type RunGuidanceField,
 } from "./CorpusRunGuidance.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
@@ -73,6 +71,7 @@ import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
 import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
+import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
@@ -152,21 +151,12 @@ const schemaId = ref("default");
 const schemaChoices = ref<SchemaSummary[]>([]);
 const schemaEditorOpen = ref(false);
 const selectedSchema = ref<MetadataSchema | null>(null);
-const runGuidance = ref<Record<string, RunGuidanceEntry>>({});
-const runGuidanceFields = computed<RunGuidanceField[]>(() => {
-  const core = ["region_type", "primary_text", "discourse_role"].map((name) => ({
-    name,
-    label: i18n.t(`record.${name}`, name.replaceAll("_", " ")),
-    group: "discourse",
-  }));
-  const custom = (selectedSchema.value?.fields || []).map((field) => ({
-    name: field.name,
-    label: field.label,
-    group:
-      selectedSchema.value?.groups.find((item) => item.key === field.group)?.label || field.group,
-  }));
-  return [...core, ...custom];
-});
+const {
+  guidance: runGuidance,
+  fields: runGuidanceFields,
+  active: activeRunGuidance,
+  payload: runGuidancePayload,
+} = useCorpusRunGuidance(selectedSchema, currentBuild, (key, fallback) => i18n.t(key, fallback));
 async function loadSelectedSchema(id: string) {
   try {
     const loaded = await metadataSchemasApi.get(id);
@@ -185,41 +175,10 @@ async function loadSchemaChoices() {
     await loadSelectedSchema(schemaId.value);
   }
 }
-watch(schemaId, (id, previous) => {
-  if (id !== previous) runGuidance.value = {};
+watch(schemaId, (id) => {
   void loadSelectedSchema(id);
 });
 const chosenSchema = computed(() => schemaChoices.value.find((item) => item.id === schemaId.value));
-const activeRunGuidance = computed(() => {
-  const request = currentBuild.value?.request;
-  const guidance = request?.run_guidance;
-  if (!guidance || typeof guidance !== "object" || Array.isArray(guidance)) return [];
-  const schemaFields = new Map(
-    (currentBuild.value?.schema?.fields || []).map((field) => [field.name, field.label]),
-  );
-  return Object.entries(guidance as Record<string, RunGuidanceEntry>)
-    .filter(([, value]) => value && (value.instructions || value.look_for?.length))
-    .map(([field, value]) => ({
-      field,
-      label: schemaFields.get(field) || i18n.t(`record.${field}`, field.replaceAll("_", " ")),
-      instructions: value.instructions || "",
-      lookFor: value.look_for || [],
-    }));
-});
-function runGuidancePayload() {
-  const payload: Record<string, RunGuidanceEntry> = {};
-  for (const [field, value] of Object.entries(runGuidance.value)) {
-    const guidance = {
-      instructions: value.instructions.trim(),
-      look_for: value.look_for
-        .map((term) => term.trim())
-        .filter(Boolean)
-        .slice(0, 40),
-    };
-    if (guidance.instructions || guidance.look_for.length) payload[field] = guidance;
-  }
-  return payload;
-}
 async function runHandsFree() {
   if (!currentBuild.value) return;
   busy.value = "hands-free";
