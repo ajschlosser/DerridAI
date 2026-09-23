@@ -182,6 +182,7 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
     merged = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
     assert merged["metadata_requeue_requested"] is True
     assert merged["metadata_enrichment_state"] == "stale"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == ["r1"]
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):
@@ -236,7 +237,6 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
     result=manager.bulk_disposition(build["build_id"],"accepted",review_queue="ready")
     assert result["changed"] == 1
     assert result["queue_counts"]["issues"] == 3
-
 
 
 

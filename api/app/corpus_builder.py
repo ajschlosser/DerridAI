@@ -7205,6 +7205,10 @@ CURRENT REVIEWED RECORD TEXT:
         )
         records[first_index:second_index + 1] = [merged]
         self._rewrite_and_validate(build_id, records)
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            self._prepend_metadata_priority(build, str(merged.get("record_id") or ""))
+            self.repo.save_build(build)
         return merged
 
     @_serialize_record_mutation
@@ -7832,6 +7836,18 @@ CURRENT REVIEWED RECORD TEXT:
             self._cancel.discard(build_id)
             self.repo.save_build(build)
 
+    @staticmethod
+    def _prepend_metadata_priority(build: dict[str, Any], record_id: str) -> None:
+        """Put a changed record ahead of ordinary enrichment work."""
+        if not record_id:
+            return
+        priority = [
+            str(value)
+            for value in build.get("metadata_priority_record_ids") or []
+            if str(value) != record_id
+        ]
+        build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
+
     @_serialize_record_mutation
     def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -7850,8 +7866,7 @@ CURRENT REVIEWED RECORD TEXT:
             or "metadata_priority_record_ids" in build
         )
         if metadata_active:
-            priority = [str(value) for value in build.get("metadata_priority_record_ids") or [] if str(value) != record_id]
-            build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
+            self._prepend_metadata_priority(build, record_id)
             feedback = list(build.get("metadata_review_feedback") or [])
             feedback.append({
                 "record_id": record_id,

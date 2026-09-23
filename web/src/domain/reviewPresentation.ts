@@ -35,6 +35,17 @@ export function llmDiffSides(field: string, current: unknown, proposed: unknown)
   return { left, right };
 }
 
+export function llmDiffSummary(current: unknown, proposed: unknown) {
+  const parts = diffWordsWithSpace(String(current ?? ""), String(proposed ?? ""));
+  const countWords = (value: string) => (value.trim() ? value.trim().split(/\s+/).length : 0);
+  return {
+    removed: parts.filter((part) => part.removed).reduce((total, part) => total + countWords(part.value), 0),
+    added: parts.filter((part) => part.added).reduce((total, part) => total + countWords(part.value), 0),
+    before: countWords(String(current ?? "")),
+    after: countWords(String(proposed ?? "")),
+  };
+}
+
 export function jsonPretty(value: unknown): string {
   if (typeof value === "string") return value;
   try {
