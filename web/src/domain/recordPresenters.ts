@@ -68,7 +68,7 @@ export function createRecordPresenters(deps: Deps) {
       0,
     );
     if (!total)
-      return `<p class="note">${esc(tr("works.no_indexed_values", "No indexed values in the loaded records."))}</p>`;
+      return `<p class="note">${esc(tr("works.no_indexed_values", "No populated metadata values yet."))}</p>`;
     const colors = [
       "var(--chart-1)",
       "var(--chart-2)",
@@ -199,7 +199,7 @@ export function createRecordPresenters(deps: Deps) {
   }
   function workInsightsPanelHtml(rows: Loose[], work: string) {
     const metrics = workInsightMetrics(rows, work);
-    return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights", "Work insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights", "Work insights"))}</span><h2>${esc(tr("works.indexed_patterns", "Indexed patterns in this work"))}</h2></div><p>${esc(tr("works.work_insights_help", "Counts are derived from the currently loaded records and use the corpus metadata fields directly."))}</p></div><div class="work-insights-grid">${metrics.map((metric) => `<article class="work-insight-card ${metric.type === "pie" ? "work-insight-card-pie" : ""}"><h3>${esc(metric.title.replace(" in the work", "").replace(" mentioned in the work", ""))}</h3>${metric.type === "pie" ? workInsightPieHtml(metric) : `<ol>${metric.values.map((item) => `<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("") || `<li class="note">${esc(tr("works.no_indexed_values", "No indexed values in the loaded records."))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
+    return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights", "Work insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights", "Work insights"))}</span><h2>${esc(tr("works.indexed_patterns", "Metadata patterns in this work"))}</h2></div><p>${esc(tr("works.work_insights_help", "Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet."))}</p></div><div class="work-insights-grid">${metrics.map((metric) => `<article class="work-insight-card ${metric.type === "pie" ? "work-insight-card-pie" : ""}"><h3>${esc(metric.title.replace(" in the work", "").replace(" mentioned in the work", ""))}</h3>${metric.type === "pie" ? workInsightPieHtml(metric) : `<ol>${metric.values.map((item) => `<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("") || `<li class="note">${esc(tr("works.no_indexed_values", "No populated metadata values yet."))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
   }
   function dashboardPieChart(
     series: Loose[],
@@ -258,7 +258,7 @@ export function createRecordPresenters(deps: Deps) {
       return lineChart(metric.values, metric.title, metric.valueLabel || metric.title);
     const ranking = metric.values,
       maxRank = Math.max(1, ...ranking.map((item: Loose) => Number(item.value) || 0));
-    return `<div class="dashboard-average-list">${ranking.map((item: Loose) => `<button class="dashboard-average-row" ${metric.field ? `data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"` : `data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4, Math.round((Number(item.value) / maxRank) * 100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("") || `<div class="note">${esc(metric.field ? tr("works.no_indexed_values", "No indexed values in the loaded records.") : tr("research.no_works", "No works loaded yet."))}</div>`}</div>`;
+    return `<div class="dashboard-average-list">${ranking.map((item: Loose) => `<button class="dashboard-average-row" ${metric.field ? `data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"` : `data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4, Math.round((Number(item.value) / maxRank) * 100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("") || `<div class="note">${esc(metric.field ? tr("works.no_indexed_values", "No populated metadata values yet.") : tr("research.no_works", "No works loaded yet."))}</div>`}</div>`;
   }
   function worksBiblioValue(rows: Loose[], field: string) {
     const value = commonWorkValue(rows, field);
