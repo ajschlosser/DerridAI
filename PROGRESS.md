@@ -474,6 +474,51 @@ range (#120 touches `_prepare_metadata_tasks`/`_construct_build_topology`/`creat
 #121 touches `_apply_source_illegibility`/asset loading, cluster 2 and `PdfCorpusRepository`). Re-based onto fresh
 `master` as `claude/runtime-refactor-26` before starting, same pattern as every prior session in this range.
 
+## Session 15 status (branch `claude/runtime-refactor-27`) -- cluster 2 (metadata/FieldAssertion) partially extracted
+
+Extracted the metadata cluster's pure subset into a new `corpus_record_quality.py` module: `_metadata_source_quality_gate`,
+`_record_extraction_quality_issues`, `_trash_quality_report`, plus `iso_now` (a trivial, 90+-call-site helper the
+first of those three needed, re-imported back into `corpus_builder.py`'s namespace, same as `_normalize_text` in
+session 14). Same `ast`-based extraction method as segmentation.
+
+**Cluster 2 has far fewer pure candidates than segmentation did: 5 of its ~10 methods were `@staticmethod`, versus
+19 of ~30 for segmentation.** Most of the cluster (`_enrich_record`, `_prepare_metadata_tasks`,
+`_execute_metadata_tasks`, `_reconcile_metadata_results`, `_llm_text_noise_pass`, `_apply_source_illegibility`,
+`_attach_ingest_noise`) is LLM-orchestrating and genuinely needs `self`. **Grep every cluster's decorator list before
+starting, the way this session and the last one did -- do not assume a cluster's line-count estimate predicts how
+much of it is actually pure; segmentation and metadata had similar per-line size but very different pure/stateful
+ratios.**
+
+**One of the 5 pure candidates, `validate_records` (~140 lines), was deliberately NOT extracted.** It depends on
+`RecordMetadataModel`, a Pydantic model class defined in `corpus_builder.py` and used by two other manager methods
+(`edit_model(self._schema_for(build_id), RecordMetadataModel)` and `MetadataResponseModel`'s default factory) --
+extracting `validate_records` alone would recreate exactly the circular-import problem `_normalize_text` caused in
+session 14 (the new module would need `RecordMetadataModel` back from `corpus_builder.py`, which would need
+`validate_records` from the new module). **Next session on this cluster: either move `RecordMetadataModel` (and
+whatever else in its immediate Pydantic-model neighborhood) into the new module too, since Pydantic models are
+usually safe to relocate wholesale, or accept that `validate_records` stays a `PdfCorpusBuildManager` method
+permanently and move on to cluster 3.** Not decided here -- a real design choice, not a mechanical next step.
+
+**A fifth dead thin-wrapper method found and deleted along the way (same pattern as session 13's
+`_validate_publication_record`/`_serialize_public_record`):** `_source_quality_report` did nothing but call
+`page_source_quality_report`, already imported from `source_quality.py`. Its two internal call sites and three test
+call sites now call `page_source_quality_report` directly.
+
+`corpus_builder.py`: 8,236 -> 8,110 lines (this branch's starting count already includes #120/#121/#122's additions,
+so it is not directly comparable to session 14's 8,236 -> 7,514 -- the two branches diverged from different points).
+Confirmed no behavior change: full backend suite (450 tests), mypy, ruff (added a `corpus_record_quality.py`
+per-file ignore for `E701`/`E702`), and `compileall` all pass clean. Skipped re-running the frontend baseline/e2e
+suites for this commit -- backend-only change, and the previous session already established the baseline harness
+drives a mocked backend that cannot observe a Python-only change.
+
+**Conflict avoidance:** checked `gh pr list` before starting this cluster; #120/#121/#122 (which touched this exact
+area of `corpus_builder.py`) had all merged since the last check, clearing the conflict this file's own earlier note
+flagged. Only #123 (segmentation, this session's sibling branch) remained open at the time, and its line range does
+not overlap cluster 2's; #123 merged shortly after this session, and this branch was then rebased onto that merge
+-- the two sessions' notes above are kept in original session order rather than combined, and this branch's own line
+counts (8,236 -> 8,110) are measured from its own pre-rebase starting point, not from session 14's post-segmentation
+7,514.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
