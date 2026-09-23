@@ -30,7 +30,6 @@ type Helper =
   | "refreshProviderStatuses"
   | "refreshStoreWorks"
   | "refreshStores"
-  | "renderDashboard"
   | "renderView"
   | "shell"
   | "stableJsonlFileIdentity"
@@ -61,7 +60,6 @@ export function createAppLifecycle(deps: Deps) {
     refreshProviderStatuses,
     refreshStoreWorks,
     refreshStores,
-    renderDashboard,
     renderView,
     shell,
     stableJsonlFileIdentity,
@@ -93,7 +91,7 @@ export function createAppLifecycle(deps: Deps) {
     };
     state.providerWarmups[profile.id] = running;
     if (profile.id === state.appConfig.default_provider_profile) state.warmup = running;
-    if (state.view === "home") renderDashboard(document.querySelector("#main"));
+    if (state.view === "home") window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
     try {
       const result = await api("/api/llm/warmup", {
         method: "POST",
@@ -136,7 +134,7 @@ export function createAppLifecycle(deps: Deps) {
       state.providerWarmups[profile.id] = failed;
       if (profile.id === state.appConfig.default_provider_profile) state.warmup = failed;
     }
-    if (state.view === "home") renderDashboard(document.querySelector("#main"));
+    if (state.view === "home") window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
   }
   async function warmupConfiguredLlm() {
     return warmupProviderProfile(state.appConfig.default_provider_profile);

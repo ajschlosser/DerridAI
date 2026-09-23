@@ -301,7 +301,15 @@ export function createNavigation(deps: Deps) {
     const compressed = params.get("ts");
     if (compressed) applyCompressedTableUrlState(decompressUrlState(compressed));
   }
-  function navigateTo(view: Any, { fileId = null, index = null, push = true, href = null } = {}) {
+  function navigateTo(
+    view: Any,
+    {
+      fileId = null,
+      index = null,
+      push = true,
+      href = null,
+    }: { fileId?: Any; index?: Any; push?: boolean; href?: Any } = {},
+  ) {
     if (!canAccessPage(view)) view = "home";
     // Research performs an authoritative store refresh on entry. Do not redirect
     // from this legacy navigation bridge using the cached hasCorpusDb() value; a

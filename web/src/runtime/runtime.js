@@ -392,7 +392,7 @@ const {backupContainsCredentials,downloadFullBackup,restoreFullBackup}=createBac
   toast:(...args)=>toast(...args),
   workspacePrefs:(...args)=>workspacePrefs(...args),
 });
-const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview,renderDashboard}=createDashboardRenderer({
+const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview}=createDashboardRenderer({
   state,
   openAnnotationsWorkspaceRecord:(...args)=>openAnnotationsWorkspaceRecord(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -470,7 +470,6 @@ const {warmupProviderProfile,warmupConfiguredLlm,importFiles,closeFile,checkHeal
   refreshProviderStatuses:(...args)=>refreshProviderStatuses(...args),
   refreshStoreWorks:(...args)=>refreshStoreWorks(...args),
   refreshStores:(...args)=>refreshStores(...args),
-  renderDashboard:(...args)=>renderDashboard(...args),
   renderView:(...args)=>renderView(...args),
   shell:(...args)=>shell(...args),
   stableJsonlFileIdentity:(...args)=>stableJsonlFileIdentity(...args),
@@ -857,7 +856,6 @@ const {openMixedWorkValuesDialog,openWorkMetadataEditor,openWorkMetadataLlmDialo
   providerRequestConfig:(...args)=>providerRequestConfig(...args),
   recordStores:(...args)=>recordStores(...args),
   refreshStores:(...args)=>refreshStores(...args),
-  renderDashboard:(...args)=>renderDashboard(...args),
   renderView:(...args)=>renderView(...args),
   representativeWorkMetadata:(...args)=>representativeWorkMetadata(...args),
   shell:(...args)=>shell(...args),
@@ -1415,8 +1413,7 @@ function renderView(){
   if(!canAccessPage(state.view))state.view="home";
   syncUrl({replace:true});
   let result;
-  if(state.view==="home") result=renderDashboard(main);
-  else if(state.view==="pdf") result=renderPdf(main);
+  if(state.view==="pdf") result=renderPdf(main);
   else result=null;
   Promise.resolve(result).finally(()=>requestAnimationFrame(()=>{enhanceCollapsibles(main);decorateDisabledControls(main);translateLegacyDom(main)}));
   return result;
@@ -2155,7 +2152,6 @@ async function bootstrapRuntime(){
   // One discovery request on startup is not a polling loop. Polling begins only
   // if this request finds an active job and then runs every four seconds.
   await refreshJobs({rerender:false});
-  if(state.view==="home"&&document.querySelector("#main"))renderDashboard(document.querySelector("#main"));
   startJobPolling();
   if(!isResearcher()&&state.appConfig.warm_default_provider_on_start===true)warmupConfiguredLlm();
 }
@@ -2252,7 +2248,39 @@ export {
   refreshStores,
   responseCacheStore,
   enhanceCollapsibles,
-  renderDashboard,
+  dashboardTotals,
+  dashboardRecordPreview,
+  dashboardWorkspaceRecordTarget,
+  openSharedAnnotationRecord,
+  dashboardMetricBody,
+  pieShareSeries,
+  workInsightMetrics,
+  compactNumber,
+  recentAnnotations,
+  recentAuditChanges,
+  recordStores,
+  refreshServerAnnotations,
+  refreshStoreWorks,
+  relativeTime,
+  renderCorpusBuildsHomeCard,
+  renderOperationsPanel,
+  researcherDbRecords,
+  searchByMetadata,
+  mountOperationsPanelHost,
+  wireCorpusBuildsHomeCard,
+  workIndex,
+  defaultProviderProfile,
+  providerDisplayName,
+  dbSearchWhere,
+  isResearcher,
+  hasCapability,
+  canAccessPage,
+  syncUrl,
+  navigateTo,
+  uid,
+  openJobResults,
+  api,
+  label,
   flushWorkspacePrefs,
   applyUiTheme,
   applyAppearance,

@@ -31,7 +31,6 @@ type Helper =
   | "providerRequestConfig"
   | "recordStores"
   | "refreshStores"
-  | "renderDashboard"
   | "renderView"
   | "representativeWorkMetadata"
   | "shell"
@@ -104,7 +103,6 @@ export function createWorkDialogs(deps: Deps) {
     providerRequestConfig,
     recordStores,
     refreshStores,
-    renderDashboard,
     renderView,
     representativeWorkMetadata,
     shell,
@@ -327,7 +325,8 @@ export function createWorkDialogs(deps: Deps) {
             count: works.length,
           }),
         );
-        if (state.view === "home") renderDashboard(document.querySelector("#main"));
+        if (state.view === "home")
+          window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
       } catch (error: Any) {
         button.disabled = false;
         button.innerHTML = `${icon("spark")}${esc(tr("works.start_metadata_lookup", "Start background lookup"))}`;
