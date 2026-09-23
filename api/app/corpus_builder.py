@@ -863,9 +863,23 @@ def _migrate_status_vocabulary(value: Any) -> Any:
     return value
 
 
-def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = 'auto', ocr_languages: str = 'eng+fra+deu') -> dict[str, Any]:
+def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = 'auto', ocr_languages: str = 'eng+fra+deu', source_illegibility: float = 0) -> dict[str, Any]:
     """Compatibility facade for the dedicated PDF SourceDocument extractor."""
-    return _extract_source_document(data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
+    return _extract_source_document(data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages, source_illegibility=source_illegibility)
+
+
+def _image_bytes_to_pdf(data: bytes, filename: str) -> bytes:
+    filetype = "png" if data.startswith(b"\x89PNG") or str(filename).lower().endswith(".png") else "jpeg"
+    try:
+        image = fitz.open(stream=data, filetype=filetype)
+    except Exception as exc:
+        raise ValueError(f"Could not read image: {exc}") from exc
+    try:
+        return image.convert_to_pdf()
+    except Exception as exc:
+        raise ValueError(f"Could not prepare image for OCR: {exc}") from exc
+    finally:
+        image.close()
 
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
@@ -883,28 +897,114 @@ class PdfCorpusRepository:
     def asset_blocks_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.blocks.jsonl"
 
-    def save_asset(self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
+    def asset_content_path(self, asset_id: str, suffix: str = ".pdf") -> Path:
+        suffix = suffix if str(suffix).startswith(".") else f".{suffix}"
+        return self.root / "assets" / f"{asset_id}{suffix}"
+
+    def save_asset(
+        self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
+        source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
+        source_url: str | None = None,
+    ) -> dict[str, Any]:
+        if not data:
+            raise ValueError("The uploaded source was empty.")
+        from .source_media import (
+            clamp_illegibility,
+            content_suffix_for,
+            detect_media_kind,
+            infer_initial_metadata,
+            media_type_for,
+        )
+        from .source_quality import page_source_quality_report
+
+        illegibility = clamp_illegibility(source_illegibility)
+        kind = detect_media_kind(filename, data, content_type)
         digest = hashlib.sha256(data).hexdigest()
-        asset_id = f"pdf-{digest[:24]}"
+        # Default PDF uploads keep the historical content-addressed id.
+        identity = digest
+        if kind != "pdf" or ocr_mode != "auto" or illegibility:
+            identity = hashlib.sha256(f"{digest}|{kind}|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
+        asset_id = f"pdf-{identity[:24]}"
+        suffix = ".pdf" if kind == "pdf" else content_suffix_for(kind, filename)
         meta_path = self.asset_meta_path(asset_id)
         with self._lock:
             existing = _json_read(meta_path)
-            if isinstance(existing, dict) and self.asset_pdf_path(asset_id).exists():
+            existing_suffix = str(existing.get("content_suffix") or ".pdf") if isinstance(existing, dict) else suffix
+            if isinstance(existing, dict) and self.asset_content_path(asset_id, existing_suffix).exists():
                 return existing
-            extracted = extract_source_document(data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
-            self.asset_pdf_path(asset_id).write_bytes(data)
-            with self.asset_blocks_path(asset_id).open("w", encoding="utf-8") as handle:
-                for block in extracted.pop("blocks"):
-                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            extracted = self._extract_for_ingest(
+                data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
+                source_illegibility=illegibility, catalog_metadata=catalog_metadata,
+            )
+            if catalog_metadata and catalog_metadata.get("gutenberg_id"):
+                extracted["media_kind"] = "gutenberg"
+            blocks = list(extracted.pop("blocks"))
+            if not isinstance(extracted.get("initial_metadata"), dict):
+                extracted["initial_metadata"] = infer_initial_metadata(
+                    "\n\n".join(str(block.get("text") or "") for block in blocks),
+                    embedded=extracted.get("metadata") if isinstance(extracted.get("metadata"), dict) else {},
+                    blocks=blocks, catalog=catalog_metadata,
+                )
+            checked_at = iso_now()
             meta = {
                 "asset_id": asset_id,
                 "sha256": digest,
                 "filename": extracted["filename"],
-                "created_at": iso_now(),
+                "created_at": checked_at,
+                "content_suffix": suffix,
+                "media_type": media_type_for(str(extracted.get("media_kind") or kind), extracted["filename"]),
+                "source_illegibility": illegibility,
+                "source_quality": page_source_quality_report(blocks, extracted.get("pages") or []),
+                "deterministic_checked_at": checked_at,
+                **({} if not source_url else {"source_url": source_url}),
                 **extracted,
             }
+            self.asset_content_path(asset_id, suffix).write_bytes(data)
+            with self.asset_blocks_path(asset_id).open("w", encoding="utf-8") as handle:
+                for block in blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             _json_write(meta_path, meta)
             return meta
+
+    def _extract_for_ingest(
+        self, data: bytes, *, filename: str, kind: str, ocr_mode: str, ocr_languages: str,
+        source_illegibility: float, catalog_metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        from .source_media import (
+            extract_non_pdf,
+            infer_initial_metadata,
+            png_text_metadata,
+        )
+
+        if kind == "image":
+            pdf_bytes = _image_bytes_to_pdf(data, filename)
+            extracted = extract_source_document(
+                pdf_bytes, filename=filename,
+                ocr_mode="always" if source_illegibility >= 99.9 else ocr_mode,
+                ocr_languages=ocr_languages, source_illegibility=source_illegibility,
+            )
+            extracted["media_kind"] = "image"
+            metadata = dict(extracted.get("metadata") or {})
+            metadata.update(png_text_metadata(data))
+            extracted["metadata"] = metadata
+            extracted["initial_metadata"] = infer_initial_metadata(
+                "\n\n".join(str(block.get("text") or "") for block in extracted.get("blocks") or []),
+                embedded=metadata, blocks=list(extracted.get("blocks") or []), catalog=catalog_metadata,
+            )
+            return extracted
+        if kind == "pdf":
+            extracted = extract_source_document(
+                data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
+                source_illegibility=source_illegibility,
+            )
+            extracted["media_kind"] = "pdf"
+            extracted["initial_metadata"] = infer_initial_metadata(
+                "\n\n".join(str(block.get("text") or "") for block in extracted.get("blocks") or []),
+                embedded=extracted.get("metadata") if isinstance(extracted.get("metadata"), dict) else {},
+                blocks=list(extracted.get("blocks") or []), catalog=catalog_metadata,
+            )
+            return extracted
+        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata)
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         meta = _json_read(self.asset_meta_path(asset_id))
@@ -2556,7 +2656,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         result["pdf_metadata"] = metadata
         result["source_asset_id"] = asset["asset_id"]
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
-        return result
+        from .source_media import apply_deterministic_ingest_metadata
+        return apply_deterministic_ingest_metadata(result, asset)
 
     def _catalog_enrich_manifest(self, manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         """Fill missing work-level bibliography through the same multi-catalog LLM path used by Works.

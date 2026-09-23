@@ -19,6 +19,7 @@ import fitz
 
 from .main_text_start import infer_main_text_start
 from .raster_quality import assess_page_raster
+from .source_media import native_text_ocr_threshold
 from .source_quality import assess_extracted_source
 
 
@@ -49,14 +50,20 @@ def block_text(block: dict[str, Any]) -> str:
 
 def page_source_units(
     page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
+    source_illegibility: float = 0,
 ) -> tuple[list[dict[str, Any]], str, str | None, int]:
-    """Extract SourceUnits from one page and report the page extraction mode."""
+    """Extract SourceUnits from one page and report the page extraction mode.
+
+    Illegibility 0 keeps the historical rule: OCR only when the native text
+    layer has fewer than 24 characters. Higher values lower that bar, and 100
+    treats the page as illegible.
+    """
     source = "native"
     warning: str | None = None
     data = page.get_text("dict", sort=True)
     raw_units = data.get("blocks") or []
     native_chars = sum(len(block_text(unit)) for unit in raw_units if unit.get("type") == 0)
-    should_ocr = ocr_mode == "always" or (ocr_mode == "auto" and native_chars < 24)
+    should_ocr = ocr_mode == "always" or (ocr_mode == "auto" and native_chars < native_text_ocr_threshold(source_illegibility))
     if should_ocr:
         try:
             textpage = page.get_textpage_ocr(language=ocr_languages, dpi=200, full=True)
@@ -127,6 +134,7 @@ def page_source_units(
 
 def extract_source_document(
     data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
+    source_illegibility: float = 0,
 ) -> dict[str, Any]:
     """Extract a stable SourceDocument projection from PDF bytes."""
     if not data:
@@ -152,7 +160,7 @@ def extract_source_document(
                     f"continuing with visible-folio detection ({exc})."
                 )
             page_units, source, warning, image_count = page_source_units(
-                page, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
+                page, ocr_mode=ocr_mode, ocr_languages=ocr_languages, source_illegibility=source_illegibility,
             )
             visible_page_labels = [
                 normalize_text(unit.get("text") or "")

@@ -24,6 +24,7 @@ import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
 import CorpusExecutionSettings from "./CorpusExecutionSettings.vue";
 import CorpusWorkflowStepper from "./CorpusWorkflowStepper.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
+import CorpusSourceIngest from "./CorpusSourceIngest.vue";
 import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
@@ -283,7 +284,10 @@ const metadataSavingField = ref("");
 const metadataSavedField = ref("");
 const error = ref("");
 const notice = ref("");
-const uploadInput = ref<HTMLInputElement | null>(null);
+const sourceIllegibility = ref(0);
+const sourceUrl = ref("");
+const gutenbergQuery = ref("");
+const gutenbergHits = ref<Array<{ etext_id: number; title: string; author: string; language: string }>>([]);
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const manualProvider = ref<"ollama" | "openai">("ollama");
@@ -838,9 +842,12 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
-const sourcePdfUrl = computed(() =>
-  selectedAssetId.value ? pdfCorpusApi.assetContentUrl(selectedAssetId.value) : "",
-);
+const sourcePdfUrl = computed(() => {
+  if (!selectedAssetId.value) return "";
+  const kind = selectedAsset.value?.media_kind;
+  if (kind && kind !== "pdf") return "";
+  return pdfCorpusApi.assetContentUrl(selectedAssetId.value);
+});
 const recordPdfPages = computed(() =>
   Array.from(
     new Set((selectedRecord.value?.pdf_pages || []).map(Number).filter((value) => value > 0)),
@@ -1781,7 +1788,7 @@ async function upload(file?: File | null) {
   busy.value = "upload";
   setMessage("");
   try {
-    const asset = await pdfCorpusApi.uploadAsset(file, "auto");
+    const asset = await pdfCorpusApi.uploadAsset(file, "auto", sourceIllegibility.value);
     await refreshAssets();
     selectedAssetId.value = asset.asset_id;
     maybeOpenIngestWarning(asset);
@@ -1792,6 +1799,54 @@ async function upload(file?: File | null) {
         { pages: asset.page_count, blocks: asset.block_count, ocr: asset.ocr_pages || 0 },
       ),
     );
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
+  }
+}
+async function loadSourceUrl() {
+  const url = sourceUrl.value.trim();
+  if (!url) return;
+  busy.value = "upload";
+  setMessage("");
+  try {
+    const asset = await pdfCorpusApi.importUrl(url, sourceIllegibility.value);
+    await refreshAssets();
+    selectedAssetId.value = asset.asset_id;
+    maybeOpenIngestWarning(asset);
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
+  }
+}
+async function searchGutenberg() {
+  const query = gutenbergQuery.value.trim();
+  if (!query) {
+    gutenbergHits.value = [];
+    return;
+  }
+  busy.value = "gutenberg";
+  setMessage("");
+  try {
+    const result = await pdfCorpusApi.searchGutenberg(query);
+    gutenbergHits.value = result.items || [];
+    if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty", "No Project Gutenberg texts matched that search."));
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
+  }
+}
+async function importGutenberg(etextId: number) {
+  busy.value = "upload";
+  setMessage("");
+  try {
+    const asset = await pdfCorpusApi.importGutenberg(etextId, sourceIllegibility.value);
+    await refreshAssets();
+    selectedAssetId.value = asset.asset_id;
+    maybeOpenIngestWarning(asset);
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
@@ -3615,61 +3670,35 @@ onBeforeUnmount(() => {
             <span class="setup-step">A</span>
             <div>
               <h3 id="pdf-corpus-source-title">
-                {{ i18n.t("pdf_corpus.source_setup_title", "Source PDF") }}
+                {{ i18n.t("pdf_corpus.source_setup_title", "Source document") }}
               </h3>
               <p>
                 {{
                   i18n.t(
                     "pdf_corpus.source_setup_help",
-                    "Choose an extracted PDF, or add the PDF currently open in Explorer.",
+                    "Choose a PDF, text, rich text, Word, image, or audio file, or add the PDF currently open in Explorer. URLs and Project Gutenberg texts load into the same source spans.",
                   )
                 }}
               </p>
             </div>
           </div>
         </div>
-        <div class="source-setup-grid">
-          <label for="pdf-corpus-source"
-            ><span>{{ i18n.t("pdf_corpus.source_asset", "Source asset") }}</span
-            ><select id="pdf-corpus-source" v-model="selectedAssetId" class="control">
-              <option value="">
-                {{ i18n.t("pdf_corpus.choose_persisted_pdf", "Choose a persisted PDF…") }}
-              </option>
-              <option v-for="asset in assets" :key="asset.asset_id" :value="asset.asset_id">
-                {{ asset.filename }} · {{ asset.page_count }} pp · {{ asset.block_count }}
-                {{ i18n.t("pdf_corpus.source_units", "source units") }}
-              </option>
-            </select></label
-          >
-          <div class="source-actions">
-            <button
-              type="button"
-              class="btn"
-              @click="useCurrentPdf"
-              :disabled="busy !== '' || buildRunning"
-            >
-              {{ i18n.t("pdf_corpus.use_current_pdf", "Use current Explorer PDF") }}</button
-            ><button
-              type="button"
-              class="btn"
-              @click="uploadInput?.click()"
-              :disabled="busy !== '' || buildRunning"
-            >
-              {{
-                busy === "upload"
-                  ? i18n.t("pdf_corpus.extracting", "Extracting…")
-                  : i18n.t("pdf_corpus.choose_pdf", "Choose source PDF")
-              }}</button
-            ><input
-              ref="uploadInput"
-              class="sr-only"
-              type="file"
-              accept="application/pdf,.pdf"
-              :aria-label="i18n.t('pdf_corpus.choose_pdf', 'Choose source PDF')"
-              @change="upload(($event.target as HTMLInputElement).files?.[0])"
-            />
-          </div>
-        </div>
+        <CorpusSourceIngest
+          v-model:asset-id="selectedAssetId"
+          v-model:illegibility="sourceIllegibility"
+          v-model:source-url="sourceUrl"
+          v-model:gutenberg-query="gutenbergQuery"
+          :assets="assets"
+          :hits="gutenbergHits"
+          :selected-asset="selectedAsset"
+          :disabled="busy !== '' || buildRunning"
+          :busy="busy"
+          @use-current="useCurrentPdf"
+          @file="upload"
+          @load-url="loadSourceUrl"
+          @search-gutenberg="searchGutenberg"
+          @import-gutenberg="importGutenberg"
+        />
         <div v-if="selectedAsset" class="source-facts">
           <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages", "pages") }}</span
           ><span

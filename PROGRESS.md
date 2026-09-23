@@ -6,6 +6,16 @@ class being split into focused modules). It exists so another agent (Codex, Copi
 the current one stops. **Delete this file when both efforts are finished** -- git log and `docs/notes/` are the
 permanent record; keep only what a fresh session needs to pick up work safely.
 
+## Corpus Builder generic media
+
+Status: rebuilt on current `master`.
+
+Generic media is added beside the current extractor, segmentation, enrichment, and review code. It does not restore the older corpus-builder monolith. Text, Word, images, audio, URLs, and Project Gutenberg become source spans. A deterministic metadata check runs on load. The illegibility slider stays before Choose source PDF.
+
+New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_kinds.py`. Setup UI is `CorpusSourceIngest.vue`.
+
+`tests/test_0610_warbling_wombat.py`: 9 passed, through behavior rather than source scans.
+
 ## Current state
 
 - **`runtime.js`: 2,410 lines**, down from 10,472 at the start (77.0% removed). Sections A and B of the plan below

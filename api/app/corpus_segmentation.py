@@ -576,6 +576,23 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         layout_regions = [str(block.get("deterministic_region_type") or "") for block in group if block.get("deterministic_region_type")]
         layout_region = layout_regions[0] if layout_regions and len(set(layout_regions)) == 1 else None
         thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
+        speakers = [str(block.get("speaker") or "").strip() for block in group if str(block.get("speaker") or "").strip()]
+        uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 else None
+        field_status: dict[str, Any] = {}
+        if layout_region:
+            field_status["region_type"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
+            field_status["primary_text"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
+        if uniform_speaker:
+            field_status["speaker"] = {"status": "deterministic", "method": "source_span_speaker", "confidence": 0.95, "reason": "Speaker label assigned when the source was loaded."}
+        source_spans = []
+        for block in group:
+            span = {"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
+            if block.get("speaker"):
+                span["speaker"] = block.get("speaker")
+            if block.get("start") is not None:
+                span["start"] = block.get("start")
+                span["end"] = block.get("end")
+            source_spans.append(span)
         records.append({
             "record_id": f"{prefix}-{index:05d}",
             "record_revision": 1,
@@ -589,13 +606,12 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
             "source_asset_id": asset["asset_id"],
             "source_unit_ids": [block["block_id"] for block in group],
             "source_block_ids": [block["block_id"] for block in group],
-            "source_spans": [{"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
+            "source_spans": source_spans,
             "boundary_evidence": boundary,
             "metadata_evidence": {},
-            **({"region_type": layout_region, "primary_text": layout_region == "main_text", "metadata_field_status": {
-                "region_type": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
-                "primary_text": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
-            }} if layout_region else {}),
+            **({"region_type": layout_region, "primary_text": layout_region == "main_text"} if layout_region else {}),
+            **({"speaker": uniform_speaker} if uniform_speaker else {}),
+            **({"metadata_field_status": field_status} if field_status else {}),
             **({"region_language": thread_languages, "region_is_multilingual": len(thread_languages) > 1} if thread_languages else {}),
             "needs_review": False,
             "review_reason": "",
@@ -636,6 +652,8 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
         status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
         if status.get("status") in {"human_confirmed", "human_override"}:
             return
+        if field == "speaker" and status.get("method") == "source_span_speaker":
+            return
         record[field] = value
         field_status[field] = {
             "status": "inherited", "method": "document_manifest", "confidence": 1.0,
@@ -656,6 +674,7 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     inherited("short_title", manifest.get("short_title"))
     inherited("original_title", manifest.get("original_title"))
     inherited("document_author", author)
+    inherited("speaker", manifest.get("speaker"))
     inherited("translator", translator)
     inherited("edition", edition)
     inherited("publisher", manifest.get("publisher"))
