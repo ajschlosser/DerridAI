@@ -96,6 +96,20 @@ async function previous() {
 async function next() {
   await refreshAfter(() => runtime.recordWorkspaceNavigate(1));
 }
+function isTypingTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null;
+  return Boolean(element?.matches("input, textarea, select, [contenteditable='true']"));
+}
+function handleKeyboard(event: KeyboardEvent) {
+  if (isTypingTarget(event.target)) return;
+  if (event.altKey && event.key === "ArrowLeft" && snapshot.value.has_previous) {
+    event.preventDefault();
+    void previous();
+  } else if (event.altKey && event.key === "ArrowRight" && snapshot.value.has_next) {
+    event.preventDefault();
+    void next();
+  }
+}
 function setFind(value: string) {
   snapshot.value = { ...snapshot.value, find_query: value };
   runtime.setRecordWorkspaceFind(value);
@@ -203,10 +217,12 @@ function onRecordUpdated() {
 }
 onMounted(() => {
   window.addEventListener("derridai:record-updated", onRecordUpdated);
+  window.addEventListener("keydown", handleKeyboard);
   void load();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("derridai:record-updated", onRecordUpdated);
+  window.removeEventListener("keydown", handleKeyboard);
   window.removeEventListener("pointermove", resize);
   document.body.classList.remove("record-resizing");
 });
