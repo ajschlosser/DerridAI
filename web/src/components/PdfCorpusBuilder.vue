@@ -8384,12 +8384,17 @@ summary:focus-visible {
   container: record/inline-size;
 }
 .record-decision-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  margin-block-start: auto;
+  position: fixed;
+  inset-inline: var(--sidebar) 0;
+  inset-block-end: 0;
+  z-index: 20;
   border-top: 1px solid var(--line);
-  background: var(--card);
+  background: var(--surface-overlay, var(--card));
+  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.review-frame .record-review-pane {
+  padding-bottom: 5.25rem;
 }
 .record-decision-dock .metadata-accept-blocker {
   margin: 0;
@@ -8479,6 +8484,11 @@ summary:focus-visible {
   .record-decision-dock .decision-bar {
     flex-direction: column-reverse;
     align-items: stretch;
+  }
+  @media (max-width: 720px) {
+    .record-decision-dock {
+      inset-inline-start: 0;
+    }
   }
   .decision-actions {
     margin-inline-start: 0;

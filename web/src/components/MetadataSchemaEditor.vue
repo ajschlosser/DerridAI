@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
+import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
   CORE_FIELDS,
   CORE_GROUP,
@@ -519,16 +520,17 @@ defineExpose({ select, draft });
               <option v-for="key in groupKeys" :key="key" :value="key">{{ key }}</option>
             </select></label
           >
-          <label v-if="providerProfiles.length" class="schema-field"
-            ><span>{{ t("preview_model", "Model") }}</span
-            ><select v-model="previewProfile" class="control">
-              <option value="">{{ t("preview_default_model", "Default provider") }}</option>
-              <option v-for="p in providerProfiles" :key="p.id" :value="p.id">
-                {{ p.name || p.id }}{{ p.model ? ` · ${p.model}` : "" }}
-              </option>
-            </select></label
-          >
         </div>
+        <ProviderProfileSelect
+          v-if="providerProfiles.length"
+          v-model="previewProfile"
+          :profiles="providerProfiles"
+          :default-profile-id="defaultProviderId"
+          :label="t('preview_model', 'Provider profile')"
+          :help="t('preview_provider_help', 'Use the same configured profile and credentials as a Corpus Builder run.')"
+          :manage-label="t('preview_manage_provider', 'Manage provider profiles')"
+          @manage="emit('changed')"
+        />
         <label class="schema-field"
           ><span>{{ t("preview_text", "Passage") }}</span
           ><textarea v-model="previewText" class="control" rows="5"></textarea>
