@@ -2708,6 +2708,14 @@ CURRENT REVIEWED RECORD TEXT:
                         f"Validation error: {failure}. Return ONLY one complete JSON object that exactly "
                         "matches the supplied schema. Do not include Markdown, commentary, or trailing text."
                     )
+                    if "field_evidence" in str(failure):
+                        retry_note += (
+                            "\nThe validation error concerns evidence, not the metadata value. For every "
+                            "field whose assessment outcome is supported_value and whose schema requires "
+                            "evidence, include a field_evidence object with at least one valid current-record "
+                            "block_id. Use the block IDs shown in the source context; never invent IDs and "
+                            "never omit the evidence object for a supported value."
+                        )
                     if diagnostic:
                         retry_note += f"\nPrevious response excerpt: {diagnostic[:1200]}"
                 try:
