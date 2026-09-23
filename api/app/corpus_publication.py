@@ -147,8 +147,10 @@ def publication_blocker(
     caller captures it *before* that refresh -- preserved exactly from the original
     inline `publish()` method, not changed here.
     """
-    readiness = build.get("publication_readiness") if isinstance(build.get("publication_readiness"), dict) else {}
-    readiness_blockers = readiness.get("blockers") if isinstance(readiness.get("blockers"), list) else []
+    publication_readiness = build.get("publication_readiness")
+    readiness: dict[str, Any] = publication_readiness if isinstance(publication_readiness, dict) else {}
+    readiness_blockers_raw = readiness.get("blockers")
+    readiness_blockers: list[Any] = readiness_blockers_raw if isinstance(readiness_blockers_raw, list) else []
     missing_document = [item for item in readiness_blockers if isinstance(item, dict) and item.get("code") == "required_document_metadata"]
     if missing_document:
         fields = ", ".join(str(value) for value in (missing_document[0].get("fields") or []))
