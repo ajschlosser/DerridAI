@@ -4389,6 +4389,23 @@ html[data-color-scheme="dark"][data-contrast="more"]{
 
 .works-database-context,.works-toolbar{background:var(--surface-raised)}
 .work-overview-card{background:var(--surface-raised)}
+.work-overview-card{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:var(--space-5)!important;
+  align-items:stretch;
+}
+.work-overview-card .work-overview-cover{
+  width:12.5rem!important;
+  height:18.75rem!important;
+}
+@media(max-width:720px){
+  .work-overview-card{grid-template-columns:minmax(0,1fr)!important}
+  .work-overview-card .work-overview-cover{width:8.75rem!important;height:13.125rem!important}
+}
+@media(max-width:520px){
+  .work-overview-card .work-overview-cover{width:6.75rem!important;height:10.125rem!important}
+}
 .work-overview-metadata>div{background:var(--soft);border-color:transparent}
 .work-overview-citation{background:var(--ui-accent-soft);border-color:var(--ui-accent-border)}
 .work-insights-panel{background:var(--soft)}
