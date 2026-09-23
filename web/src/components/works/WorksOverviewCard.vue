@@ -89,13 +89,13 @@ const i18n = useI18nStore();
         <div class="work-insights-heading">
           <div>
             <span class="section-label">{{ i18n.t("works.work_insights", "Work insights") }}</span>
-            <h2>{{ i18n.t("works.indexed_patterns", "Indexed patterns in this work") }}</h2>
+            <h2>{{ i18n.t("works.indexed_patterns", "Metadata patterns in this work") }}</h2>
           </div>
           <p>
             {{
               i18n.t(
                 "works.work_insights_help",
-                "Counts are derived from the currently loaded records and use the corpus metadata fields directly.",
+                "Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet.",
               )
             }}
           </p>
