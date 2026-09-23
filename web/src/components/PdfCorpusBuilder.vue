@@ -2740,10 +2740,10 @@ async function requeueCurrentRecord() {
   if (!currentBuild.value || !selectedRecord.value) return;
   busy.value = "record";
   try {
+    const availableProfileIds = new Set(providerProfiles.value.map((profile) => profile.id));
     const profileId =
-      llmActionProviderId.value ||
-      selectedProviderId.value ||
-      providerProfiles.value.find((profile) => profile.id === currentBuild.value?.profile_id)?.id ||
+      [llmActionProviderId.value, selectedProviderId.value]
+        .find((id) => Boolean(id) && availableProfileIds.has(id)) ||
       providerProfiles.value[0]?.id ||
       "";
     if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile", "No available LLM provider profile is configured."));
