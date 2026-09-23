@@ -7,7 +7,8 @@ import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { notify } from "../composables/notifications";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
-import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
+import UserAccountRow from "../components/UserAccountRow.vue";
+import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -15,6 +16,7 @@ const i18n = useI18nStore();
 const users = ref<AuthUser[]>([]);
 const roles = ref<RoleDefinition[]>([]);
 const loading = ref(true);
+const dataCurrent = ref(false);
 const error = ref("");
 const username = ref("");
 const password = ref("");
@@ -28,11 +30,13 @@ const dialogBusy = ref(false);
 
 async function refresh() {
   loading.value = true;
+  dataCurrent.value = false;
   error.value = "";
   try {
     const [userData, roleData] = await Promise.all([authApi.listUsers(), authApi.listRoles()]);
     users.value = userData.users;
     roles.value = roleData.roles;
+    dataCurrent.value = true;
     if (!roles.value.some((item) => item.id === role.value))
       role.value =
         roles.value.find((item) => item.id === "researcher")?.id ||
@@ -45,6 +49,7 @@ async function refresh() {
   }
 }
 async function createUser() {
+  if (!dataCurrent.value) return;
   createBusy.value = true;
   error.value = "";
   try {
@@ -68,6 +73,7 @@ async function createUser() {
   }
 }
 async function changeRole(user: AuthUser, nextRole: UserRole) {
+  if (!dataCurrent.value) return;
   try {
     const result = await authApi.updateUser(user.id, { role: nextRole });
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
@@ -76,10 +82,8 @@ async function changeRole(user: AuthUser, nextRole: UserRole) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   }
 }
-function onRoleChange(user: AuthUser, event: Event) {
-  void changeRole(user, (event.target as HTMLSelectElement).value as UserRole);
-}
 async function toggleActive(user: AuthUser) {
+  if (!dataCurrent.value) return;
   try {
     const result = await authApi.updateUser(user.id, { active: !user.active });
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
@@ -94,12 +98,14 @@ async function toggleActive(user: AuthUser) {
   }
 }
 function openPasswordModal(user: AuthUser) {
+  if (!dataCurrent.value) return;
   dialogMode.value = "password";
   dialogUser.value = user;
   newPassword.value = "";
   dialogRef.value?.showModal();
 }
 function openDeleteModal(user: AuthUser) {
+  if (!dataCurrent.value) return;
   dialogMode.value = "delete";
   dialogUser.value = user;
   newPassword.value = "";
@@ -109,7 +115,7 @@ function closeDialog() {
   if (!dialogBusy.value) dialogRef.value?.close();
 }
 async function applyDialog() {
-  if (!dialogUser.value) return;
+  if (!dataCurrent.value || !dialogUser.value) return;
   dialogBusy.value = true;
   error.value = "";
   try {
@@ -139,11 +145,6 @@ function openRoles() {
   void router.push({ name: "roles" });
 }
 
-function formatLogin(value?: string | null) {
-  if (!value) return i18n.t("users.never", "Never");
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(i18n.locale);
-}
 onMounted(refresh);
 </script>
 
@@ -160,7 +161,7 @@ onMounted(refresh);
       "
     />
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
-    <section class="card user-create-card">
+    <section class="card user-create-card" :aria-busy="!dataCurrent">
       <div class="cardhead">
         <div>
           <b>{{ i18n.t("users.create", "Create user") }}</b>
@@ -177,7 +178,14 @@ onMounted(refresh);
       <form class="user-create-grid" @submit.prevent="createUser">
         <div class="field">
           <label for="new-username">{{ i18n.t("users.username", "Username") }}</label>
-          <input id="new-username" v-model="username" class="control" required minlength="2" />
+          <input
+            id="new-username"
+            v-model="username"
+            class="control"
+            required
+            minlength="2"
+            :disabled="!dataCurrent || createBusy"
+          />
         </div>
         <div class="field">
           <label for="new-user-password">{{
@@ -190,15 +198,29 @@ onMounted(refresh);
             type="password"
             required
             minlength="6"
+            :disabled="!dataCurrent || createBusy"
           />
         </div>
         <div class="field">
           <label for="new-user-role">{{ i18n.t("users.role", "Role") }}</label>
-          <select id="new-user-role" v-model="role" class="control">
-            <option v-for="item in roles" :key="item.id" :value="item.id">{{ item.name }}</option>
+          <select
+            id="new-user-role"
+            v-model="role"
+            class="control"
+            :disabled="!dataCurrent || createBusy"
+          >
+            <option v-for="item in roles" :key="item.id" :value="item.id">
+              {{
+                item.id === "admin"
+                  ? i18n.t("role.admin", item.name)
+                  : item.id === "researcher"
+                    ? i18n.t("role.researcher", item.name)
+                    : item.name
+              }}
+            </option>
           </select>
         </div>
-        <button class="btn primary" :disabled="createBusy">
+        <button class="btn primary" :disabled="!dataCurrent || createBusy">
           {{
             createBusy ? i18n.t("ui.loading", "Creating…") : i18n.t("users.create", "Create user")
           }}
@@ -221,95 +243,42 @@ onMounted(refresh);
             }}
           </div>
         </div>
-        <button class="btn small" type="button" @click="refresh">
+        <button class="btn small" type="button" :disabled="loading" @click="refresh">
           {{ i18n.t("users.refresh", "Refresh") }}
         </button>
       </div>
-      <div v-if="loading" class="users-loading">
+      <div v-if="loading && !dataCurrent" class="users-loading" role="status">
         {{ i18n.t("users.loading", "Loading users…") }}
       </div>
+      <AccessibleEmptyState
+        v-else-if="error && !users.length"
+        icon="users"
+        icon-tone="neutral"
+        :title="i18n.t('users.title', 'Users')"
+        :description="error"
+        :action-label="i18n.t('ui.retry', 'Retry')"
+        @action="refresh"
+      />
+      <AccessibleEmptyState
+        v-else-if="!users.length && !error"
+        icon="users"
+        icon-tone="neutral"
+        :title="i18n.t('users.empty_title', 'No user accounts yet')"
+        :description="i18n.t('users.empty_description', 'Create an account above to get started.')"
+      />
       <div v-else class="user-list" role="list" aria-labelledby="users-accounts-title">
-        <article
+        <UserAccountRow
           v-for="user in users"
           :key="user.id"
-          class="user-row"
-          :class="{ inactive: !user.active }"
-          role="listitem"
-        >
-          <div class="user-avatar">{{ user.username.slice(0, 1).toUpperCase() }}</div>
-          <div class="user-identity">
-            <b>{{ user.username }}</b>
-            <span class="user-status-line">
-              <UiStatusBadge
-                :label="
-                  user.active ? i18n.t('ui.active', 'Active') : i18n.t('ui.disabled', 'Disabled')
-                "
-                :tone="user.active ? 'success' : 'neutral'"
-              />
-              <span>
-                · {{ i18n.t("ui.created", "created") }}
-                {{ new Date(user.created_at).toLocaleDateString(i18n.locale) }}
-              </span>
-            </span>
-            <small>
-              {{ i18n.t("users.last_login", "Last login") }}: {{ formatLogin(user.last_login) }} ·
-              {{ user.login_count || 0 }} {{ i18n.t("users.login_count", "Logins") }}
-            </small>
-          </div>
-          <select
-            class="control user-role-select"
-            :value="user.role"
-            :disabled="user.id === auth.user?.id"
-            :title="
-              user.id === auth.user?.id
-                ? i18n.t(
-                    'ui.current_role_locked',
-                    'Your current role cannot be changed from this row.',
-                  )
-                : i18n.t('ui.change_role', 'Change role')
-            "
-            @change="onRoleChange(user, $event)"
-          >
-            <option v-for="item in roles" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-          <div class="user-actions">
-            <button class="btn small" type="button" @click="openPasswordModal(user)">
-              {{ i18n.t("users.reset_password", "Reset password") }}
-            </button>
-            <span
-              class="action-tooltip-wrap"
-              :data-tooltip="
-                user.id === auth.user?.id
-                  ? i18n.t('ui.cannot_disable_self', 'You cannot disable your current account.')
-                  : ''
-              "
-              ><button
-                class="btn small"
-                type="button"
-                :disabled="user.id === auth.user?.id"
-                @click="toggleActive(user)"
-              >
-                {{ user.active ? i18n.t("ui.disable", "Disable") : i18n.t("ui.enable", "Enable") }}
-              </button></span
-            >
-            <span
-              class="action-tooltip-wrap"
-              :data-tooltip="
-                user.id === auth.user?.id
-                  ? i18n.t('ui.cannot_delete_self', 'You cannot delete your current account.')
-                  : ''
-              "
-              ><button
-                class="btn small danger"
-                type="button"
-                :disabled="user.id === auth.user?.id"
-                @click="openDeleteModal(user)"
-              >
-                {{ i18n.t("users.delete", "Delete") }}
-              </button></span
-            >
-          </div>
-        </article>
+          :user="user"
+          :roles="roles"
+          :current-user-id="auth.user?.id"
+          :disabled="!dataCurrent"
+          @role-change="changeRole"
+          @toggle-active="toggleActive"
+          @reset-password="openPasswordModal"
+          @delete-user="openDeleteModal"
+        />
       </div>
     </section>
 
@@ -332,10 +301,15 @@ onMounted(refresh);
       </div>
     </section>
 
-    <dialog ref="dialogRef" class="message-dialog user-admin-dialog" @cancel.prevent="closeDialog">
+    <dialog
+      ref="dialogRef"
+      class="message-dialog user-admin-dialog"
+      aria-labelledby="user-admin-dialog-title"
+      @cancel.prevent="closeDialog"
+    >
       <div class="dh">
         <div>
-          <h2 class="dialog-title">
+          <h2 id="user-admin-dialog-title" class="dialog-title">
             {{
               dialogMode === "password"
                 ? i18n.t("users.reset_password", "Reset password")
@@ -344,7 +318,13 @@ onMounted(refresh);
           </h2>
           <div class="dialog-subtitle">{{ dialogUser?.username }}</div>
         </div>
-        <button class="btn icon-only" type="button" :disabled="dialogBusy" @click="closeDialog">
+        <button
+          class="btn icon-only"
+          type="button"
+          :aria-label="i18n.t('common.close', 'Close')"
+          :disabled="dialogBusy"
+          @click="closeDialog"
+        >
           ×
         </button>
       </div>
@@ -406,47 +386,6 @@ onMounted(refresh);
 .user-list {
   display: grid;
 }
-.user-row {
-  display: grid;
-  grid-template-columns: 38px minmax(180px, 1fr) 160px auto;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-card);
-  transition: background-color var(--motion-fast) var(--ease-standard);
-}
-.user-row:hover {
-  background: var(--surface-hover);
-}
-.user-row.inactive {
-  color: var(--text-tertiary);
-}
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  background: var(--surface-selected);
-  color: var(--accent-fg);
-  font-weight: 800;
-}
-.user-status-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-.user-role-select {
-  min-width: 140px;
-}
-.user-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  flex-wrap: wrap;
-}
 .users-loading {
   padding: 24px;
   color: var(--text-tertiary);
@@ -454,31 +393,5 @@ onMounted(refresh);
 }
 .user-admin-dialog {
   width: min(520px, calc(100vw - 32px));
-}
-@media (forced-colors: active) {
-  .user-row {
-    border-color: CanvasText;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .user-row {
-    transition: none;
-  }
-}
-@media (max-width: 900px) {
-  .user-row {
-    grid-template-columns: 36px 1fr;
-  }
-}
-@media (max-width: 900px) {
-  .user-role-select,
-  .user-actions {
-    grid-column: 2;
-  }
-}
-@media (max-width: 900px) {
-  .user-actions {
-    justify-content: flex-start;
-  }
 }
 </style>
