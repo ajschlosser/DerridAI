@@ -23,6 +23,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from .config import APP_VERSION, settings
 from .corpus_pipeline import BuildScope
+from .source_media import (
+    apply_deterministic_ingest_metadata,
+    clamp_illegibility,
+    content_suffix_for,
+    detect_media_kind,
+    extract_non_pdf,
+    media_type_for,
+    native_text_ocr_threshold,
+    png_text_metadata,
+)
 from .corpus_publication import validate_publication_record, serialize_public_record
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -655,13 +665,14 @@ def _block_text(block: dict[str, Any]) -> str:
     return unicodedata.normalize("NFC", str(block.get("text") or "").strip())
 
 
-def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> tuple[list[dict[str, Any]], str, str | None]:
+def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu", source_illegibility: float = 0) -> tuple[list[dict[str, Any]], str, str | None]:
     source = "native"
     warning: str | None = None
     data = page.get_text("dict", sort=True)
     raw_blocks = data.get("blocks") or []
     native_chars = sum(len(_block_text(block)) for block in raw_blocks if block.get("type") == 0)
-    should_ocr = ocr_mode == "always" or (ocr_mode == "auto" and native_chars < 24)
+    ocr_threshold = native_text_ocr_threshold(source_illegibility)
+    should_ocr = ocr_mode == "always" or (ocr_mode == "auto" and native_chars < ocr_threshold)
     if should_ocr:
         try:
             textpage = page.get_textpage_ocr(language=ocr_languages, dpi=200, full=True)
@@ -729,7 +740,7 @@ def _page_blocks(page: fitz.Page, *, ocr_mode: str = "auto", ocr_languages: str 
     return blocks, source, warning
 
 
-def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
+def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu", source_illegibility: float = 0) -> dict[str, Any]:
     if not data:
         raise ValueError("The uploaded PDF was empty.")
     try:
@@ -748,7 +759,7 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
                 pdf_label = page.get_label() or None
             except Exception:
                 pdf_label = None
-            page_blocks, source, warning = _page_blocks(page, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
+            page_blocks, source, warning = _page_blocks(page, ocr_mode=ocr_mode, ocr_languages=ocr_languages, source_illegibility=source_illegibility)
             visible_page_labels = []
             for candidate in page_blocks:
                 if candidate.get("type") != "header_footer":
@@ -845,9 +856,24 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = "auto
             "ocr_pages": ocr_pages,
             "warnings": warnings,
             "extractor": "pymupdf-layout-v2",
+            "media_kind": "pdf",
         }
     finally:
         doc.close()
+
+
+def _image_to_pdf(data: bytes, filename: str) -> bytes:
+    filetype = "png" if data.startswith(b"\x89PNG") or str(filename).lower().endswith(".png") else "jpeg"
+    try:
+        image = fitz.open(stream=data, filetype=filetype)
+    except Exception as exc:
+        raise ValueError(f"Could not read image: {exc}") from exc
+    try:
+        return image.convert_to_pdf()
+    except Exception as exc:
+        raise ValueError(f"Could not prepare image for OCR: {exc}") from exc
+    finally:
+        image.close()
 
 
 class PdfCorpusRepository:
@@ -861,33 +887,155 @@ class PdfCorpusRepository:
         return self.root / "assets" / f"{asset_id}.json"
 
     def asset_pdf_path(self, asset_id: str) -> Path:
-        return self.root / "assets" / f"{asset_id}.pdf"
+        return self.asset_content_path(asset_id, ".pdf")
+
+    def asset_content_path(self, asset_id: str, suffix: str = ".pdf") -> Path:
+        suffix = suffix if str(suffix).startswith(".") else f".{suffix}"
+        return self.root / "assets" / f"{asset_id}{suffix}"
 
     def asset_blocks_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.blocks.jsonl"
 
-    def save_asset(self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu") -> dict[str, Any]:
+    def save_asset(
+        self,
+        data: bytes,
+        *,
+        filename: str,
+        ocr_mode: str = "auto",
+        ocr_languages: str = "eng+fra+deu",
+        source_illegibility: float = 0,
+        content_type: str = "",
+        catalog_metadata: dict[str, Any] | None = None,
+        source_url: str | None = None,
+    ) -> dict[str, Any]:
+        if not data:
+            raise ValueError("The uploaded source was empty.")
+        illegibility = clamp_illegibility(source_illegibility)
+        kind = detect_media_kind(filename, data, content_type)
         digest = hashlib.sha256(data).hexdigest()
-        asset_id = f"pdf-{digest[:24]}"
+        identity = digest
+        if kind != "pdf" or ocr_mode != "auto" or illegibility:
+            identity = hashlib.sha256(f"{digest}|{kind}|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
+        asset_id = f"pdf-{identity[:24]}"
         meta_path = self.asset_meta_path(asset_id)
+        suffix = content_suffix_for(kind, filename)
         with self._lock:
             existing = _json_read(meta_path)
-            if isinstance(existing, dict) and self.asset_pdf_path(asset_id).exists():
-                return existing
-            extracted = extract_source_document(data, filename=filename, ocr_mode=ocr_mode, ocr_languages=ocr_languages)
-            self.asset_pdf_path(asset_id).write_bytes(data)
-            with self.asset_blocks_path(asset_id).open("w", encoding="utf-8") as handle:
-                for block in extracted.pop("blocks"):
-                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            existing_suffix = str(existing.get("content_suffix") or ".pdf") if isinstance(existing, dict) else suffix
+            if isinstance(existing, dict) and self.asset_content_path(asset_id, existing_suffix).exists():
+                return self._ensure_deterministic_check(existing)
+            extracted = self._extract_uploaded(
+                data,
+                filename=filename,
+                kind=kind,
+                ocr_mode=ocr_mode,
+                ocr_languages=ocr_languages,
+                source_illegibility=illegibility,
+                catalog_metadata=catalog_metadata,
+            )
+            extracted["filename"] = _safe_filename(extracted.get("filename") or filename)
+            if catalog_metadata and catalog_metadata.get("gutenberg_id"):
+                extracted["media_kind"] = "gutenberg"
+            content_path = self.asset_content_path(asset_id, suffix)
+            content_path.write_bytes(data)
+            blocks = list(extracted.pop("blocks"))
+            checked_at = iso_now()
+            if not isinstance(extracted.get("initial_metadata"), dict):
+                from .source_media import infer_initial_metadata
+                extracted["initial_metadata"] = infer_initial_metadata(
+                    "\n\n".join(str(block.get("text") or "") for block in blocks),
+                    embedded=extracted.get("metadata") if isinstance(extracted.get("metadata"), dict) else {},
+                    blocks=blocks,
+                    catalog=catalog_metadata,
+                )
             meta = {
                 "asset_id": asset_id,
                 "sha256": digest,
                 "filename": extracted["filename"],
-                "created_at": iso_now(),
+                "created_at": checked_at,
+                "content_suffix": suffix,
+                "media_type": media_type_for(str(extracted.get("media_kind") or kind), extracted["filename"]),
+                "source_illegibility": illegibility,
+                "source_quality": PdfCorpusBuildManager._source_quality_report(blocks),
+                "deterministic_checked_at": checked_at,
+                **({} if not source_url else {"source_url": source_url}),
                 **extracted,
             }
+            with self.asset_blocks_path(asset_id).open("w", encoding="utf-8") as handle:
+                for block in blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             _json_write(meta_path, meta)
             return meta
+
+    def _extract_uploaded(
+        self,
+        data: bytes,
+        *,
+        filename: str,
+        kind: str,
+        ocr_mode: str,
+        ocr_languages: str,
+        source_illegibility: float,
+        catalog_metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if kind == "image":
+            image_meta = png_text_metadata(data)
+            pdf_bytes = _image_to_pdf(data, filename)
+            extracted = extract_source_document(
+                pdf_bytes,
+                filename=filename,
+                ocr_mode="always" if source_illegibility >= 99.9 else ocr_mode,
+                ocr_languages=ocr_languages,
+                source_illegibility=source_illegibility,
+            )
+            extracted["media_kind"] = "image"
+            extracted["extractor"] = "pymupdf-image-ocr-v1"
+            metadata = dict(extracted.get("metadata") or {})
+            metadata.update({key: value for key, value in image_meta.items() if value})
+            extracted["metadata"] = metadata
+            from .source_media import infer_initial_metadata
+            extracted["initial_metadata"] = infer_initial_metadata(
+                "\n\n".join(str(block.get("text") or "") for block in extracted.get("blocks") or []),
+                embedded=metadata,
+                blocks=list(extracted.get("blocks") or []),
+                catalog=catalog_metadata,
+            )
+            return extracted
+        if kind == "pdf":
+            extracted = extract_source_document(
+                data,
+                filename=filename,
+                ocr_mode=ocr_mode,
+                ocr_languages=ocr_languages,
+                source_illegibility=source_illegibility,
+            )
+            from .source_media import infer_initial_metadata
+            extracted["initial_metadata"] = infer_initial_metadata(
+                "\n\n".join(str(block.get("text") or "") for block in extracted.get("blocks") or []),
+                embedded=extracted.get("metadata") if isinstance(extracted.get("metadata"), dict) else {},
+                blocks=list(extracted.get("blocks") or []),
+                catalog=catalog_metadata,
+            )
+            return extracted
+        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata)
+
+    def _ensure_deterministic_check(self, meta: dict[str, Any]) -> dict[str, Any]:
+        if meta.get("deterministic_checked_at") and isinstance(meta.get("initial_metadata"), dict) and isinstance(meta.get("source_quality"), dict):
+            return meta
+        try:
+            blocks = self.load_blocks(str(meta.get("asset_id") or ""))
+        except (KeyError, OSError, ValueError):
+            return meta
+        from .source_media import infer_initial_metadata
+        meta["initial_metadata"] = infer_initial_metadata(
+            "\n\n".join(str(block.get("text") or "") for block in blocks),
+            embedded=meta.get("metadata") if isinstance(meta.get("metadata"), dict) else {},
+            blocks=blocks,
+        )
+        meta["source_quality"] = PdfCorpusBuildManager._source_quality_report(blocks)
+        meta["deterministic_checked_at"] = iso_now()
+        _json_write(self.asset_meta_path(str(meta["asset_id"])), meta)
+        return meta
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         meta = _json_read(self.asset_meta_path(asset_id))
@@ -2219,7 +2367,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         result["pdf_metadata"] = metadata
         result["source_asset_id"] = asset["asset_id"]
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]
-        return result
+        return apply_deterministic_ingest_metadata(result, asset)
 
     def _catalog_enrich_manifest(self, manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         """Fill missing work-level bibliography through the same multi-catalog LLM path used by Works.
@@ -3476,6 +3624,23 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             layout_regions = [str(block.get("deterministic_region_type") or "") for block in group if block.get("deterministic_region_type")]
             layout_region = layout_regions[0] if layout_regions and len(set(layout_regions)) == 1 else None
             thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
+            speakers = [str(block.get("speaker") or "").strip() for block in group if str(block.get("speaker") or "").strip()]
+            uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 else None
+            field_status: dict[str, Any] = {}
+            if layout_region:
+                field_status["region_type"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
+                field_status["primary_text"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
+            if uniform_speaker:
+                field_status["speaker"] = {"status": "deterministic", "method": "source_span_speaker", "confidence": 0.95, "reason": "Speaker label assigned when the source was loaded."}
+            source_spans = []
+            for block in group:
+                span = {"block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
+                if block.get("speaker"):
+                    span["speaker"] = block.get("speaker")
+                if block.get("start") is not None:
+                    span["start"] = block.get("start")
+                    span["end"] = block.get("end")
+                source_spans.append(span)
             records.append({
                 "record_id": f"{prefix}-{index:05d}",
                 "record_revision": 1,
@@ -3487,13 +3652,12 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 "pdf_pages": pages,
                 "source_asset_id": asset["asset_id"],
                 "source_block_ids": [block["block_id"] for block in group],
-                "source_spans": [{"block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")} for block in group],
+                "source_spans": source_spans,
                 "boundary_evidence": boundary,
                 "metadata_evidence": {},
-                **({"region_type": layout_region, "primary_text": layout_region == "main_text", "metadata_field_status": {
-                    "region_type": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
-                    "primary_text": {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."},
-                }} if layout_region else {}),
+                **({"region_type": layout_region, "primary_text": layout_region == "main_text"} if layout_region else {}),
+                **({"speaker": uniform_speaker} if uniform_speaker else {}),
+                **({"metadata_field_status": field_status} if field_status else {}),
                 **({"region_language": thread_languages, "region_is_multilingual": len(thread_languages) > 1} if thread_languages else {}),
                 "needs_review": False,
                 "review_reason": "",
@@ -3534,6 +3698,8 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
             if status.get("status") in {"human_confirmed", "human_override"}:
                 return
+            if field == "speaker" and status.get("method") == "source_span_speaker":
+                return
             record[field] = value
             field_status[field] = {
                 "status": "inherited", "method": "document_manifest", "confidence": 1.0,
@@ -3554,6 +3720,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         inherited("short_title", manifest.get("short_title"))
         inherited("original_title", manifest.get("original_title"))
         inherited("document_author", author)
+        inherited("speaker", manifest.get("speaker"))
         inherited("translator", translator)
         inherited("edition", edition)
         inherited("publisher", manifest.get("publisher"))
