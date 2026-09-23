@@ -621,7 +621,12 @@ onBeforeUnmount(() => {
             <button
               :disabled="isResearcher"
               :data-disabled-reason="
-                isResearcher ? 'Word totals are not exposed to researcher accounts.' : undefined
+                isResearcher
+                  ? i18n.t(
+                      'dashboard.words_hidden_researcher',
+                      'Word totals are not exposed to researcher accounts.',
+                    )
+                  : undefined
               "
             >
               <span class="dashboard-overview-icon"><AppIcon name="list" /></span>

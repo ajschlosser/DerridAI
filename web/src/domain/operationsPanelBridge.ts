@@ -33,19 +33,20 @@ type Helper =
   | "refreshJobs"
   | "showAppModal"
   | "toast"
-  | "tr";
+  | "tr"
+  | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
-const RAG_STAGE_ORDER: Any[] = [
-  ["query_metadata", "Query decomposition"],
-  ["retrieval", "Vector retrieval"],
-  ["deduplicate", "Deduplication / rank fusion"],
-  ["rerank", "Reranking"],
-  ["context", "Evidence packaging"],
-  ["generation", "Answer generation"],
-  ["bind_sources", "Citation/source binding"],
-  ["response_cache", "Response cache"],
-  ["auto_grade", "Automatic grade"],
+const RAG_STAGE_ORDER: Array<[string, string, string]> = [
+  ["query_metadata", "rag.stage.query_metadata", "Query decomposition"],
+  ["retrieval", "rag.stage.retrieval", "Vector retrieval"],
+  ["deduplicate", "rag.stage.deduplicate", "Deduplication / rank fusion"],
+  ["rerank", "rag.stage.rerank", "Reranking"],
+  ["context", "rag.stage.context", "Evidence packaging"],
+  ["generation", "rag.stage.generation", "Answer generation"],
+  ["bind_sources", "rag.stage.bind_sources", "Citation/source binding"],
+  ["response_cache", "rag.stage.response_cache", "Response cache"],
+  ["auto_grade", "rag.stage.auto_grade", "Automatic grade"],
 ];
 
 export function createOperationsPanelBridge(deps: Deps) {
@@ -70,6 +71,7 @@ export function createOperationsPanelBridge(deps: Deps) {
     showAppModal,
     toast,
     tr,
+    trf,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
@@ -149,9 +151,11 @@ export function createOperationsPanelBridge(deps: Deps) {
   }: Any) {
     openLlmTaskLauncher({
       task: "rag_grade",
-      title: "Analyze & grade RAG response",
-      description:
+      title: tr("rag.grade_title", "Analyze & grade RAG response"),
+      description: tr(
+        "rag.grade_help",
         "Grade relevance, source binding, attribution, fidelity, precision, coverage, and interpretive usefulness.",
+      ),
       contextText: question,
       generationProvider,
       generationModel,
@@ -166,7 +170,7 @@ export function createOperationsPanelBridge(deps: Deps) {
       onForegroundResult: async (result: Any) => {
         const dialog = document.createElement("dialog");
         dialog.className = "rag-grade-dialog";
-        dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">RAG response grade</h2><div class="dialog-subtitle">Saved with the cached RAG query when a response-cache record is available.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${ragGradeHtml(result.grade || {})}</div><div class="da"><button class="btn" data-close>Close</button></div>`;
+        dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("rag.grade_result_title", "RAG response grade"))}</h2><div class="dialog-subtitle">${esc(tr("rag.grade_result_help", "Saved with the cached RAG query when a response-cache record is available."))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${ragGradeHtml(result.grade || {})}</div><div class="da"><button class="btn" data-close>${esc(tr("common.close", "Close"))}</button></div>`;
         document.body.appendChild(dialog);
         showAppModal(dialog);
         const close = () => {
@@ -181,13 +185,17 @@ export function createOperationsPanelBridge(deps: Deps) {
     const job = state.jobs.find((item: Any) => item.id === jobId);
     if (!job) return pruneClientJobState(jobId);
     if (["queued", "running", "cancelling"].includes(job.status))
-      return toast("Cancel the RAG pipeline before removing it");
+      return toast(tr("rag.cancel_before_remove", "Cancel the RAG pipeline before removing it"));
     const approved = await openMessageModal({
-      title: "Remove RAG pipeline result?",
-      message: `Remove this ${job.status} RAG pipeline and its retained result from activity history?`,
+      title: tr("rag.remove_title", "Remove RAG pipeline result?"),
+      message: trf(
+        "rag.remove_help",
+        "Remove this {status} RAG pipeline and its retained result from activity history?",
+        { status: job.status },
+      ),
       tone: "danger",
-      confirmLabel: "Remove pipeline",
-      cancelLabel: "Cancel",
+      confirmLabel: tr("rag.remove_confirm", "Remove pipeline"),
+      cancelLabel: tr("common.cancel", "Cancel"),
     });
     if (!approved) return;
     try {
@@ -196,16 +204,16 @@ export function createOperationsPanelBridge(deps: Deps) {
       persistPrefs();
       refreshRagProgressPanel();
       if (state.view === "home") refreshOperationsPanelOnly();
-      toast("RAG pipeline removed");
+      toast(tr("rag.pipeline_removed", "RAG pipeline removed"));
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
         persistPrefs();
         refreshRagProgressPanel();
-        return toast("RAG pipeline was already removed");
+        return toast(tr("rag.already_removed", "RAG pipeline was already removed"));
       }
       openMessageModal({
-        title: "Could not remove RAG pipeline",
+        title: tr("rag.remove_failed", "Could not remove RAG pipeline"),
         message: error.message,
         tone: "danger",
       });
@@ -215,14 +223,18 @@ export function createOperationsPanelBridge(deps: Deps) {
     const finished = state.jobs.filter(
       (job: Any) => job.type === "rag" && !["queued", "running", "cancelling"].includes(job.status),
     );
-    if (!finished.length) return toast("There are no past RAG results to clear");
+    if (!finished.length) return toast(tr("rag.none_to_clear", "There are no past RAG results to clear"));
     if (
       !(await openMessageModal({
-        title: "Clear past RAG results?",
-        message: `Clear ${finished.length} finished RAG operation${finished.length === 1 ? "" : "s"} and their retained results?`,
+        title: tr("rag.clear_past_title", "Clear past RAG results?"),
+        message: trf(
+          "rag.clear_past_help",
+          "Clear {count} finished RAG operation(s) and their retained results?",
+          { count: finished.length },
+        ),
         tone: "danger",
-        confirmLabel: "Clear results",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("rag.clear_results", "Clear results"),
+        cancelLabel: tr("ui.cancel", "Cancel"),
       }))
     )
       return;
@@ -241,7 +253,13 @@ export function createOperationsPanelBridge(deps: Deps) {
     await refreshJobs();
     refreshRagProgressPanel();
     toast(
-      `Cleared ${removed} past RAG result${removed === 1 ? "" : "s"}${failed ? ` · ${failed} could not be removed` : ""}`,
+      failed
+        ? trf(
+            "rag.cleared_past_failed",
+            "Cleared {count} past RAG result(s) · {failed} could not be removed",
+            { count: removed, failed },
+          )
+        : trf("rag.cleared_past", "Cleared {count} past RAG result(s)", { count: removed }),
     );
   }
   function ragProgressPanelHtml() {
@@ -251,8 +269,10 @@ export function createOperationsPanelBridge(deps: Deps) {
       ["queued", "running", "cancelling"].includes(job.status),
     ).length;
     const finishedCount = allRagJobs.length - activeCount;
+    const param = (key: string, fallback: string, value: unknown) =>
+      trf(key, fallback, { value: value == null || value === "" ? "—" : String(value) });
     return `<section class="card rag-live-panel" id="ragProgressPanel">
-    <div class="cardhead"><div><b>RAG pipeline activity</b><div class="note">${activeCount} active · ${finishedCount} past result${finishedCount === 1 ? "" : "s"} · stage, model, parameters, and timing refresh automatically</div></div><div class="tools"><button class="btn small" id="ragRefreshJobs">${icon("refresh")}Refresh</button>${finishedCount ? '<button class="btn small danger" id="ragClearFinished">Clear past results</button>' : ""}</div></div>
+    <div class="cardhead"><div><b>${esc(tr("rag.activity_title", "RAG pipeline activity"))}</b><div class="note">${esc(trf("rag.activity_summary", "{active} active · {finished} past result(s) · stage, model, parameters, and timing refresh automatically", { active: activeCount, finished: finishedCount }))}</div></div><div class="tools"><button class="btn small" id="ragRefreshJobs">${icon("refresh")}${esc(tr("ui.refresh", "Refresh"))}</button>${finishedCount ? `<button class="btn small danger" id="ragClearFinished">${esc(tr("rag.clear_past", "Clear past results"))}</button>` : ""}</div></div>
     <div class="rag-live-jobs">${
       jobs
         .map((job: Any) => {
@@ -264,7 +284,9 @@ export function createOperationsPanelBridge(deps: Deps) {
           const stageIndex = stageOrder.findIndex(([stage]) => stage === job.stage);
           const generation = request.generation || {};
           const elapsed = humanDuration(jobElapsedSeconds(job));
-          const totalLabel = job.finished_at ? `Total ${elapsed}` : `Elapsed ${elapsed}`;
+          const totalLabel = job.finished_at
+            ? trf("rag.total_time", "Total {time}", { time: elapsed })
+            : trf("rag.elapsed_time", "Elapsed {time}", { time: elapsed });
           const sourceStore = state.stores.find(
             (store: Any) => store.name === job.source_collection,
           );
@@ -277,42 +299,65 @@ export function createOperationsPanelBridge(deps: Deps) {
           const stageElapsed = Number.isFinite(stageStart as Any)
             ? humanDuration(Math.max(0, (Date.now() - (stageStart as Any)) / 1000))
             : "—";
+          const scheduler = job.provider === "openai"
+            ? tr("rag.param.scheduler_uncapped", "scheduler uncapped")
+            : param(
+                "rag.param.scheduler",
+                "scheduler {value}",
+                `${job.scheduling?.active_when_started ?? state.health?.rag_concurrency?.ollama_active ?? "—"}/${job.scheduling?.limit ?? state.appConfig.ollama_rag_concurrency ?? 1}`,
+              );
           const params = [
-            `started by ${job.owner || "—"}`,
-            `provider ${job.provider || "—"}`,
-            `generation ${job.model || "—"}`,
-            `embedding ${sourceStore?.embedding_model || sourceStore?.embedding_provider || "—"}`,
-            `reranker model ${request.cross_encoder_model || request.reranker || "—"}`,
-            `languages ${(request.locales || []).join("+") || "—"}`,
-            `retrieval ${(request.search_types || []).join("+") || "—"}`,
-            `k ${request.k ?? "—"}`,
-            `fetch ${request.fetch_k ?? "—"}`,
-            `λ ${request.lambda_mult ?? "—"}`,
-            `RRF ${request.rrf_k ?? "—"}`,
-            `topN ${request.rerank_top_n ?? "—"}`,
-            `auto-grade ${request.auto_grade ? "on" : "off"}`,
-            `num_ctx ${generation.num_ctx ?? "—"}`,
-            `num_predict ${generation.num_predict ?? "—"}`,
-            job.provider === "openai"
-              ? "scheduler uncapped"
-              : `scheduler ${job.scheduling?.active_when_started ?? state.health?.rag_concurrency?.ollama_active ?? "—"}/${job.scheduling?.limit ?? state.appConfig.ollama_rag_concurrency ?? 1}`,
-            `stage time ${stageElapsed}`,
+            param("rag.param.started_by", "started by {value}", job.owner || "—"),
+            param("rag.param.provider", "provider {value}", job.provider || "—"),
+            param("rag.param.generation", "generation {value}", job.model || "—"),
+            param(
+              "rag.param.embedding",
+              "embedding {value}",
+              sourceStore?.embedding_model || sourceStore?.embedding_provider || "—",
+            ),
+            param(
+              "rag.param.reranker",
+              "reranker model {value}",
+              request.cross_encoder_model || request.reranker || "—",
+            ),
+            param("rag.param.languages", "languages {value}", (request.locales || []).join("+") || "—"),
+            param("rag.param.retrieval", "retrieval {value}", (request.search_types || []).join("+") || "—"),
+            param("rag.param.k", "k {value}", request.k ?? "—"),
+            param("rag.param.fetch", "fetch {value}", request.fetch_k ?? "—"),
+            param("rag.param.lambda", "λ {value}", request.lambda_mult ?? "—"),
+            param("rag.param.rrf", "RRF {value}", request.rrf_k ?? "—"),
+            param("rag.param.topn", "topN {value}", request.rerank_top_n ?? "—"),
+            param(
+              "rag.param.auto_grade",
+              "auto-grade {value}",
+              request.auto_grade ? tr("ui.on", "On") : tr("ui.off", "Off"),
+            ),
+            param("rag.param.num_ctx", "num_ctx {value}", generation.num_ctx ?? "—"),
+            param("rag.param.num_predict", "num_predict {value}", generation.num_predict ?? "—"),
+            scheduler,
+            param("rag.param.stage_time", "stage time {value}", stageElapsed),
           ];
+          const statusLabel = tr(`operations.status.${job.status}`, String(job.status || ""));
           return `<article class="rag-live-job">
-        <div class="rag-live-job-head"><div><b>${esc(job.prompt || "RAG query")}</b><span>${esc(job.source_collection || "")} · ${esc(job.model || job.provider || "")} · ${esc(totalLabel)}</span></div><span class="job-status ${esc(job.status)}">${esc(job.status)}</span></div>
+        <div class="rag-live-job-head"><div><b>${esc(job.prompt || tr("rag.query", "RAG query"))}</b><span>${esc(job.source_collection || "")} · ${esc(job.model || job.provider || "")} · ${esc(totalLabel)}</span></div><span class="job-status ${esc(job.status)}">${esc(statusLabel)}</span></div>
         <div class="rag-live-params">${params.map((value) => `<span>${esc(value)}</span>`).join("")}</div>
         <div class="rag-stage-rail">${stageOrder
-          .map(([_stage, name], index: Any) => {
+          .map(([_stage, key, fallback], index: Any) => {
             const done = job.status === "completed" || index < stageIndex;
             const current = active && index === stageIndex;
-            return `<div class="rag-stage-node ${done ? "done" : ""} ${current ? "current" : ""}"><i>${done ? "✓" : index + 1}</i><div><b>${esc(name)}</b><span>${current ? esc(job.stage_detail || "Running…") : done ? "Complete" : "Pending"}</span></div></div>`;
+            const stageState = current
+              ? job.stage_detail || tr("rag.stage.running", "Running…")
+              : done
+                ? tr("rag.stage.complete", "Complete")
+                : tr("rag.stage.pending", "Pending");
+            return `<div class="rag-stage-node ${done ? "done" : ""} ${current ? "current" : ""}"><i>${done ? "✓" : index + 1}</i><div><b>${esc(tr(key, fallback))}</b><span>${esc(stageState)}</span></div></div>`;
           })
           .join("")}</div>
-        <div class="rag-live-detail">${job.status === "cancelling" || job.cancel_requested ? "Cancellation requested · waiting for the current pipeline call to reach a safe checkpoint." : esc(job.stage_detail || job.fatal_error || "Queued")}</div>
-        <div class="rag-live-footer"><div class="rag-live-timing"><span>${esc(totalLabel)}</span><span>${job.started_at ? `Started ${esc(formatTimestamp(job.started_at))}` : "Not started"}</span>${job.finished_at ? `<span>Finished ${esc(formatTimestamp(job.finished_at))}</span>` : ""}</div><div class="tools"><button class="btn small" data-rag-job-details="${job.id}">Details / timeline</button>${job.status === "completed" ? `<button class="btn small primary" data-rag-job-result="${job.id}">Open result</button>` : ""}${active ? (job.cancel_requested || job.status === "cancelling" ? '<button class="btn small" disabled>Cancelling…</button>' : `<button class="btn small danger" data-rag-job-cancel="${job.id}">Cancel</button>`) : `<button class="btn small danger" data-rag-job-remove="${job.id}">Remove</button>`}</div></div>
+        <div class="rag-live-detail">${job.status === "cancelling" || job.cancel_requested ? esc(tr("rag.cancellation_wait", "Cancellation requested · waiting for the current pipeline call to reach a safe checkpoint.")) : esc(job.stage_detail || job.fatal_error || tr("operations.status.queued", "Queued"))}</div>
+        <div class="rag-live-footer"><div class="rag-live-timing"><span>${esc(totalLabel)}</span><span>${job.started_at ? esc(trf("operations.panel.started", "Started {when}", { when: formatTimestamp(job.started_at) })) : esc(tr("rag.not_started", "Not started"))}</span>${job.finished_at ? `<span>${esc(trf("operations.panel.finished", "Finished {when}", { when: formatTimestamp(job.finished_at) }))}</span>` : ""}</div><div class="tools"><button class="btn small" data-rag-job-details="${job.id}">${esc(tr("rag.details_timeline", "Details / timeline"))}</button>${job.status === "completed" ? `<button class="btn small primary" data-rag-job-result="${job.id}">${esc(tr("operations.panel.action_open_result", "Open result"))}</button>` : ""}${active ? (job.cancel_requested || job.status === "cancelling" ? `<button class="btn small" disabled>${esc(tr("operations.cancelling", "Cancelling…"))}</button>` : `<button class="btn small danger" data-rag-job-cancel="${job.id}">${esc(tr("operations.panel.action_cancel", "Cancel"))}</button>`) : `<button class="btn small danger" data-rag-job-remove="${job.id}">${esc(tr("operations.panel.action_remove", "Remove"))}</button>`}</div></div>
       </article>`;
         })
-        .join("") || '<div class="llm-empty">No RAG jobs yet. Start one below.</div>'
+        .join("") || `<div class="llm-empty">${esc(tr("rag.empty", "No RAG jobs yet. Start one below."))}</div>`
     }</div>
   </section>`;
   }

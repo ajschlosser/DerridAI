@@ -18,7 +18,9 @@ type Helper =
   | "pdfLinks"
   | "renderView"
   | "shell"
-  | "toast";
+  | "toast"
+  | "tr"
+  | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
 export function createPdfLinking(deps: Deps) {
@@ -32,6 +34,8 @@ export function createPdfLinking(deps: Deps) {
     renderView,
     shell,
     toast,
+    tr,
+    trf,
   } = deps;
   function pdfDisplayTitle() {
     return state.pdf.title || state.pdf.name || "PDF";
@@ -86,7 +90,7 @@ export function createPdfLinking(deps: Deps) {
   }
   function openLoadedPdfPage(page: Any) {
     if (!state.pdf.doc && !state.pdf.file)
-      return toast("Open the linked PDF in PDF Explorer first");
+      return toast(tr("pdf.link.open_first_explorer", "Open the linked PDF in PDF Explorer first"));
     const max = state.pdf.doc?.numPages || Number(page) || 1;
     state.pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
     state.pdf.text = "";
@@ -103,7 +107,7 @@ export function createPdfLinking(deps: Deps) {
     );
   }
   async function linkPdfPage(file: Any, index: Any, page: Any) {
-    if (!state.pdf.name) return toast("Open a PDF first");
+    if (!state.pdf.name) return toast(tr("pdf.link.open_first", "Open a PDF first"));
     const record = file.records[index];
     let links = pdfLinks(record);
     const target = { pdf_file: state.pdf.name, pdf_page: Number(page) };
@@ -113,15 +117,19 @@ export function createPdfLinking(deps: Deps) {
           link.pdf_file === target.pdf_file && Number(link.pdf_page) === target.pdf_page,
       )
     )
-      return toast(`Record is already linked to page ${page}`);
+      return toast(trf("pdf.link.already", "Record is already linked to page {page}", { page }));
     if (links.length && links.some((link: Any) => link.pdf_file !== target.pdf_file)) {
       if (
         !(await openMessageModal({
-          title: "Replace PDF links?",
-          message: `This record is linked to ${links[0].pdf_file}. Replace those PDF links with ${target.pdf_file}?`,
+          title: tr("pdf.link.replace_title", "Replace PDF links?"),
+          message: trf(
+            "pdf.link.replace_message",
+            "This record is linked to {current}. Replace those PDF links with {next}?",
+            { current: links[0].pdf_file, next: target.pdf_file },
+          ),
           tone: "danger",
-          confirmLabel: "Replace links",
-          cancelLabel: "Cancel",
+          confirmLabel: tr("pdf.link.replace_confirm", "Replace links"),
+          cancelLabel: tr("common.cancel", "Cancel"),
         }))
       )
         return;
@@ -133,7 +141,7 @@ export function createPdfLinking(deps: Deps) {
     });
     shell();
     renderView();
-    toast(count ? `Linked record to PDF page ${page}` : "PDF link unchanged");
+    toast(count ? trf("pdf.link.linked", "Linked record to PDF page {page}", { page }) : tr("pdf.link.unchanged", "PDF link unchanged"));
   }
   function unlinkPdfLink(file: Any, index: Any, link: Any, { stayInPdf = false } = {}) {
     const record = file?.records?.[index];
@@ -143,7 +151,7 @@ export function createPdfLinking(deps: Deps) {
       (item: Any) =>
         !(item.pdf_file === link.pdf_file && Number(item.pdf_page) === Number(link.pdf_page)),
     );
-    if (next.length === links.length) return toast("That PDF link was not found");
+    if (next.length === links.length) return toast(tr("pdf.link.not_found", "That PDF link was not found"));
     const count = applyRecordChanges(file, index, normalizePdfLinkChanges(record, next), {
       source: "pdf_unlink",
     });
@@ -152,17 +160,24 @@ export function createPdfLinking(deps: Deps) {
       shell();
       renderView();
     }
-    toast(count ? `Unlinked ${link.pdf_file} page ${link.pdf_page}` : "PDF link unchanged");
+    toast(
+      count
+        ? trf("pdf.link.unlinked", "Unlinked {file} page {page}", {
+            file: link.pdf_file,
+            page: link.pdf_page,
+          })
+        : tr("pdf.link.unchanged", "PDF link unchanged"),
+    );
   }
   function unlinkAllPdfLinks(file: Any, index: Any) {
     const record = file?.records?.[index];
-    if (!record || !pdfLinks(record).length) return toast("This record has no PDF links");
+    if (!record || !pdfLinks(record).length) return toast(tr("pdf.link.none", "This record has no PDF links"));
     const count = applyRecordChanges(file, index, normalizePdfLinkChanges(record, []), {
       source: "pdf_unlink",
     });
     shell();
     renderView();
-    toast(count ? "All PDF links removed" : "No PDF links changed");
+    toast(count ? tr("pdf.link.all_removed", "All PDF links removed") : tr("pdf.link.none_changed", "No PDF links changed"));
   }
   return {
     pdfDisplayTitle,

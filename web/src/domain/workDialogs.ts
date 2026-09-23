@@ -136,7 +136,7 @@ export function createWorkDialogs(deps: Deps) {
     dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
   }
   function openWorkMetadataEditor(work: Any, rows: Any) {
-    if (!rows?.length) return toast("No records found for this work");
+    if (!rows?.length) return toast(tr("works.no_records_found", "No records found for this work"));
     const available = [
       ...new Set([
         ...WORK_METADATA_FIELDS,
@@ -151,9 +151,9 @@ export function createWorkDialogs(deps: Deps) {
     ].filter((field) => field !== "updates");
     const dialog = document.createElement("dialog");
     dialog.className = "work-metadata-dialog";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Edit work metadata</h2><div class="dialog-subtitle">${esc(work)} · ${rows.length.toLocaleString()} associated records across ${new Set(rows.map((row: Any) => row.file.name)).size} files</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db work-metadata-body"><div class="info">Check <b>Apply</b> only for fields that should be changed across every associated record. Changing <code>work</code> renames the work for all loaded records. Every modified field is written to each record's <code>updates</code> history.</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="applyWorkMetadata">Apply selected metadata to ${rows.length.toLocaleString()} records</button></div>`;
+    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.edit_work_metadata", "Edit work metadata"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(trf("works.associated_records_files", "{records} associated records across {files} files", { records: rows.length.toLocaleString(), files: new Set(rows.map((row: Any) => row.file.name)).size }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
+  <div class="db work-metadata-body"><div class="info">${esc(tr("works.edit_metadata_apply_help", "Check Apply only for fields that should be changed across every associated record. Changing work renames the work for all loaded records. Every modified field is written to each record's updates history."))}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
+  <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="applyWorkMetadata">${esc(trf("works.apply_selected_to_records", "Apply selected metadata to {count} records", { count: rows.length.toLocaleString() }))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -172,7 +172,8 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(
         (box) => box.dataset.workMetaApply,
       );
-      if (!selected.length) return toast("Select at least one work metadata field to apply");
+      if (!selected.length)
+        return toast(tr("works.select_field_to_apply", "Select at least one work metadata field to apply"));
       const changes: Any = {};
       try {
         for (const field of selected) {
@@ -184,10 +185,14 @@ export function createWorkDialogs(deps: Deps) {
       }
       if (
         !(await openMessageModal({
-          title: "Apply work metadata?",
-          message: `Apply ${selected.length} metadata field${selected.length === 1 ? "" : "s"} to all ${rows.length} records associated with ${work}?`,
-          confirmLabel: "Apply metadata",
-          cancelLabel: "Cancel",
+          title: tr("works.apply_metadata_confirm", "Apply work metadata?"),
+          message: trf(
+            "works.apply_fields_to_records",
+            "Apply {fields} metadata field(s) to all {records} records associated with {work}?",
+            { fields: selected.length, records: rows.length, work },
+          ),
+          confirmLabel: tr("works.apply_metadata", "Apply metadata"),
+          cancelLabel: tr("ui.cancel", "Cancel"),
         }))
       )
         return;
@@ -244,7 +249,7 @@ export function createWorkDialogs(deps: Deps) {
     <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope", "Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider", "Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review", "Review proposals"))}</b></li></ol>
     <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope", "Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help", "Retrieve bibliographic metadata for {count} work(s).", { count: works.length.toLocaleString() }))}</span></div><div class="work-metadata-scope"><strong>${works.length.toLocaleString()} ${esc(tr("dynamic.works", "works"))}</strong><div class="work-metadata-sample">${sample}${works.length > 6 ? `<span>+${works.length - 6}</span>` : ""}</div><small>${esc(tr("works.metadata_fields_help", "Proposals can include source type, container/journal, volume/issue/pages, publisher, year, edition, translator/editor, ISBN/DOI, language, MLA citation, and cover image."))}</small></div></section>
     <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile", "Provider profile"))}</b><span>${esc(tr("works.provider_profile_help", "Uses the same configured provider profiles as RAG, PDF tools, and LLM review."))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers", "Manage provider profiles"))}</button></div></section>
-    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation", "Background operation"))}</b><small>${esc(tr("works.background_operation_help", "You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source", "Catalogue source"))}</b><small>Open Library · Google Books · Crossref</small></span></section></div>
+    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation", "Background operation"))}</b><small>${esc(tr("works.background_operation_help", "You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source", "Catalogue source"))}</b><small>${esc(tr("works.catalog_source_names", "Open Library · Google Books · Crossref"))}</small></span></section></div>
     <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length ? "" : `disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help", "Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup", "Start background lookup"))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
@@ -468,11 +473,11 @@ export function createWorkDialogs(deps: Deps) {
       state.activeStore && recordStores().some((store: Any) => store.name === state.activeStore)
         ? state.activeStore
         : "";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Remove entire work</h2><div class="dialog-subtitle">${esc(work)} · destructive operation</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db remove-work-body"><div class="info warn">Remove every record for this work from selected loaded JSONL files and, optionally, from the selected Chroma collection. Primary collection deletion also removes matching records from its language collections.</div>
-    <div class="remove-work-files">${[...fileCounts].map(([file, count]) => `<label class="check-item"><input type="checkbox" data-remove-work-file="${esc(file.id)}" checked><span><b>${esc(file.name)}</b><small>${count.toLocaleString()} matching record${count === 1 ? "" : "s"}</small></span></label>`).join("")}</div>
-    <label class="check-item"><input type="checkbox" id="removeWorkDb" ${dbStore ? "" : `disabled data-disabled-reason="Select or create a corpus vector database first." title="Select or create a corpus vector database first."`}><span><b>Also remove from Chroma</b><small>${dbStore ? esc(dbStore) : "Select a corpus collection first"}</small></span></label></div>
-    <div class="da"><button class="btn" data-close>Cancel</button><button class="btn danger" id="confirmRemoveWork">Remove work</button></div>`;
+    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.remove_entire", "Remove entire work"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(tr("works.destructive_operation", "destructive operation"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
+    <div class="db remove-work-body"><div class="info warn">${esc(tr("works.remove_help", "Remove every record for this work from selected loaded JSONL files and, optionally, from the selected Chroma collection. Primary collection deletion also removes matching records from its language collections."))}</div>
+    <div class="remove-work-files">${[...fileCounts].map(([file, count]) => `<label class="check-item"><input type="checkbox" data-remove-work-file="${esc(file.id)}" checked><span><b>${esc(file.name)}</b><small>${esc(trf("works.matching_records", "{count} matching record(s)", { count: count.toLocaleString() }))}</small></span></label>`).join("")}</div>
+    <label class="check-item"><input type="checkbox" id="removeWorkDb" ${dbStore ? "" : `disabled data-disabled-reason="${esc(tr("works.select_or_create_db", "Select or create a corpus vector database first."))}" title="${esc(tr("works.select_or_create_db", "Select or create a corpus vector database first."))}"`}><span><b>${esc(tr("works.also_remove_chroma", "Also remove from Chroma"))}</b><small>${dbStore ? esc(dbStore) : esc(tr("works.select_collection", "Select a corpus collection first."))}</small></span></label></div>
+    <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn danger" id="confirmRemoveWork">${esc(tr("works.remove_work", "Remove work"))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -486,10 +491,12 @@ export function createWorkDialogs(deps: Deps) {
       );
       const removeDb = Boolean(dialog.querySelector("#removeWorkDb")?.checked && dbStore);
       if (!fileIds.length && !removeDb)
-        return toast("Select at least one JSONL file or the Chroma collection");
+        return toast(
+          tr("works.select_file_or_chroma", "Select at least one JSONL file or the Chroma collection"),
+        );
       const button = dialog.querySelector("#confirmRemoveWork");
       button.disabled = true;
-      button.textContent = "Removing…";
+      button.textContent = tr("works.removing", "Removing…");
       let localDeleted = 0,
         dbDeleted = 0,
         mirrored = 0;
@@ -499,7 +506,7 @@ export function createWorkDialogs(deps: Deps) {
           if (!file) continue;
           const before = file.records.length;
           file.records = file.records.filter(
-            (record: Any) => String(record.work || "(Untitled work)") !== work,
+            (record: Any) => String(record.work || tr("works.untitled", "Untitled work")) !== work,
           );
           const removed = before - file.records.length;
           if (removed) {
@@ -529,13 +536,30 @@ export function createWorkDialogs(deps: Deps) {
         shell();
         renderView();
         toast(
-          `Removed “${work}” · ${localDeleted.toLocaleString()} local record${localDeleted === 1 ? "" : "s"}${removeDb ? ` · ${dbDeleted.toLocaleString()} DB${mirrored ? ` · ${mirrored.toLocaleString()} language mirror` : ""}` : ""}`,
+          trf(
+            "works.removed_summary",
+            "Removed “{work}” · {local} local record(s){db}",
+            {
+              work,
+              local: localDeleted.toLocaleString(),
+              db: removeDb
+                ? trf("works.removed_db", " · {db} DB{mirror}", {
+                    db: dbDeleted.toLocaleString(),
+                    mirror: mirrored
+                      ? trf("works.removed_mirror", " · {count} language mirror", {
+                          count: mirrored.toLocaleString(),
+                        })
+                      : "",
+                  })
+                : "",
+            },
+          ),
         );
       } catch (error: Any) {
         button.disabled = false;
-        button.textContent = "Remove work";
+        button.textContent = tr("works.remove_work", "Remove work");
         openMessageModal({
-          title: "Could not remove work",
+          title: tr("works.remove_failed", "Could not remove work"),
           message: error.message,
           tone: "danger",
         });
@@ -551,16 +575,17 @@ export function createWorkDialogs(deps: Deps) {
       );
       return works.size > 1;
     });
-    if (!eligible.length) return toast("No loaded JSONL file contains multiple named works");
+    if (!eligible.length)
+      return toast(tr("works.no_multi_work_jsonl", "No loaded JSONL file contains multiple named works"));
     const dialog = document.createElement("dialog");
     dialog.className = "work-separate-dialog";
     const options = eligible
       .map(
         (file: Any) =>
-          `<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} records</option>`,
+          `<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} ${esc(tr("dynamic.records", "records"))}</option>`,
       )
       .join("");
-    dialog.innerHTML = `<div class="dh"><div><span class="section-label">JSONL organization</span><h2 class="dialog-title">Separate works from a JSONL file</h2><div class="dialog-subtitle">Create one derived JSONL tab per selected work while preserving record metadata and audit history.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>Source JSONL</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>Remove separated records from the source tab after creating the new tabs</span></label><div class="info">By default this is non-destructive: new tabs are created as copies. Enable removal only when you want to partition the original loaded JSONL.</div></div><div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="separateWorksCreate">Separate selected works</button></div>`;
+    dialog.innerHTML = `<div class="dh"><div><span class="section-label">${esc(tr("works.jsonl_organization", "JSONL organization"))}</span><h2 class="dialog-title">${esc(tr("works.separate_works_title", "Separate works from a JSONL file"))}</h2><div class="dialog-subtitle">${esc(tr("works.separate_works_help", "Create one derived JSONL tab per selected work while preserving record metadata and audit history."))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>${esc(tr("works.source_jsonl", "Source JSONL"))}</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>${esc(tr("works.remove_separated", "Remove separated records from the source tab after creating the new tabs"))}</span></label><div class="info">${esc(tr("works.separate_nondestructive_help", "By default this is non-destructive: new tabs are created as copies. Enable removal only when you want to partition the original loaded JSONL."))}</div></div><div class="da"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="separateWorksCreate">${esc(tr("works.separate_selected", "Separate selected works"))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -577,14 +602,14 @@ export function createWorkDialogs(deps: Deps) {
       const groups = new Map();
       for (const record of file?.records || []) {
         const work =
-          String(record?.work || record?.document_title || "").trim() || "(Untitled work)";
+          String(record?.work || record?.document_title || "").trim() || tr("works.untitled", "Untitled work");
         if (!groups.has(work)) groups.set(work, []);
         groups.get(work).push(record);
       }
       dialog.querySelector("#separateWorksList").innerHTML = [...groups.entries()]
         .map(
           ([work, records]) =>
-            `<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work === "(Untitled work)" ? "" : "checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} records</small></span></label>`,
+            `<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work === tr("works.untitled", "Untitled work") ? "" : "checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} ${esc(tr("dynamic.records", "records"))}</small></span></label>`,
         )
         .join("");
     };
@@ -595,14 +620,15 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-separate-work]:checked")].map(
         (box) => box.dataset.separateWork,
       );
-      if (!selected.length) return toast("Select at least one work");
+      if (!selected.length) return toast(tr("works.select_at_least_one", "Select at least one work"));
       const selectedSet = new Set(selected);
       const created = [];
       for (const work of selected) {
         const records = file.records
           .filter(
             (record: Any) =>
-              (String(record?.work || record?.document_title || "").trim() || "(Untitled work)") ===
+              (String(record?.work || record?.document_title || "").trim() ||
+                tr("works.untitled", "Untitled work")) ===
               work,
           )
           .map(cloneAuditValue);
@@ -629,7 +655,8 @@ export function createWorkDialogs(deps: Deps) {
         file.records = file.records.filter(
           (record: Any) =>
             !selectedSet.has(
-              String(record?.work || record?.document_title || "").trim() || "(Untitled work)",
+              String(record?.work || record?.document_title || "").trim() ||
+              tr("works.untitled", "Untitled work"),
             ),
         );
         file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
@@ -641,7 +668,7 @@ export function createWorkDialogs(deps: Deps) {
       persistPrefs();
       shell();
       renderView();
-      toast(`Created ${created.length} work JSONL tab${created.length === 1 ? "" : "s"}`, {
+      toast(trf("works.created_tabs", "Created {count} work JSONL tab(s)", { count: created.length }), {
         tone: "success",
       });
     };

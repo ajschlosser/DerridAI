@@ -38,6 +38,19 @@ describe("dashboard charts", () => {
     expect(pieChart("Share", entries)).toMatchSnapshot();
     expect(pieChart("Share", [["a", 0]])).toContain("no records loaded");
     expect(statList("Top", entries)).toMatchSnapshot();
+    expect(statList("Top", [])).toContain("No data");
+  });
+  it("localizes empty states through the chart i18n API", () => {
+    const tr = (key: string, fallback = "") =>
+      key === "dashboard.no_data_yet"
+        ? "aucune donnée pour le moment"
+        : key === "dashboard.no_records_loaded"
+          ? "aucune fiche chargée"
+          : fallback;
+    expect(multiLineChart([], "Runs", [{ key: "a" }], { tr })).toContain("aucune donnée pour le moment");
+    expect(lineChart([], "Trend", "Legend", { tr })).not.toContain("no data yet");
+    expect(pieChart("Share", [["a", 0]], { tr })).toContain("aucune fiche chargée");
+    expect(barChart([], "Length", { tr })).toContain("aucune donnée pour le moment");
   });
   it("escapes titles", () => {
     expect(barChart(series, "<i>x")).toContain("&lt;i&gt;x");

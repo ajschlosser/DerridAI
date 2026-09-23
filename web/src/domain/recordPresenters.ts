@@ -185,29 +185,30 @@ export function createRecordPresenters(deps: Deps) {
     const current = mixed ? "" : value;
     let control;
     if (typeof exemplar === "boolean" || field === "document_is_translation") {
-      control = `<select class="control work-meta-value" data-work-meta-value="${esc(field)}"><option value="" ${mixed || current == null ? "selected" : ""}>${mixed ? "Mixed / leave unchanged" : "Unset"}</option><option value="true" ${current === true ? "selected" : ""}>true</option><option value="false" ${current === false ? "selected" : ""}>false</option></select>`;
+      control = `<select class="control work-meta-value" data-work-meta-value="${esc(field)}"><option value="" ${mixed || current == null ? "selected" : ""}>${esc(mixed ? tr("works.mixed_leave_unchanged", "Mixed / leave unchanged") : tr("works.unset", "Unset"))}</option><option value="true" ${current === true ? "selected" : ""}>true</option><option value="false" ${current === false ? "selected" : ""}>false</option></select>`;
     } else if (Array.isArray(exemplar) || (exemplar && typeof exemplar === "object")) {
-      control = `<textarea class="work-meta-value work-meta-json" data-work-meta-value="${esc(field)}" placeholder='${mixed ? "Mixed values — enter JSON to replace" : "JSON value"}'>${mixed ? "" : esc(JSON.stringify(current ?? [], null, 2))}</textarea>`;
+      control = `<textarea class="work-meta-value work-meta-json" data-work-meta-value="${esc(field)}" placeholder='${esc(mixed ? tr("works.mixed_values_json", "Mixed values — enter JSON to replace") : tr("works.json_value", "JSON value"))}'>${mixed ? "" : esc(JSON.stringify(current ?? [], null, 2))}</textarea>`;
     } else if (typeof exemplar === "number" || ["year", "publication_year"].includes(field)) {
-      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" type="number" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? "Mixed values" : ""}">`;
+      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" type="number" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? esc(tr("works.mixed_values", "Mixed values")) : ""}">`;
     } else if (field === "full_citation" || field === "edition") {
-      control = `<textarea class="work-meta-value" data-work-meta-value="${esc(field)}" placeholder="${mixed ? "Mixed values" : ""}">${mixed ? "" : esc(current ?? "")}</textarea>`;
+      control = `<textarea class="work-meta-value" data-work-meta-value="${esc(field)}" placeholder="${mixed ? esc(tr("works.mixed_values", "Mixed values")) : ""}">${mixed ? "" : esc(current ?? "")}</textarea>`;
     } else {
-      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? "Mixed values" : ""}">`;
+      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? esc(tr("works.mixed_values", "Mixed values")) : ""}">`;
     }
     return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply", "Apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed ? mixedWorkValueButton(rows, field, { compact: true }) : ""}</div>${control}</div>`;
   }
   function workInsightsPanelHtml(rows: Loose[], work: string) {
     const metrics = workInsightMetrics(rows, work);
-    return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights", "Work insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights", "Work insights"))}</span><h2>${esc(tr("works.indexed_patterns", "Metadata patterns in this work"))}</h2></div><p>${esc(tr("works.work_insights_help", "Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet."))}</p></div><div class="work-insights-grid">${metrics.map((metric) => `<article class="work-insight-card ${metric.type === "pie" ? "work-insight-card-pie" : ""}"><h3>${esc(metric.title.replace(" in the work", "").replace(" mentioned in the work", ""))}</h3>${metric.type === "pie" ? workInsightPieHtml(metric) : `<ol>${metric.values.map((item) => `<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("") || `<li class="note">${esc(tr("works.no_indexed_values", "No populated metadata values yet."))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
+    return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights", "Work insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights", "Work insights"))}</span><h2>${esc(tr("works.indexed_patterns", "Metadata patterns in this work"))}</h2></div><p>${esc(tr("works.work_insights_help", "Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet."))}</p></div><div class="work-insights-grid">${metrics.map((metric) => `<article class="work-insight-card ${metric.type === "pie" ? "work-insight-card-pie" : ""}"><h3>${esc(metric.title)}</h3>${metric.type === "pie" ? workInsightPieHtml(metric) : `<ol>${metric.values.map((item) => `<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("") || `<li class="note">${esc(tr("works.no_indexed_values", "No populated metadata values yet."))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
   }
   function dashboardPieChart(
     series: Loose[],
     title: string,
-    { valueLabel = "records", searchField = "" } = {},
+    { valueLabel = tr("dynamic.records", "records"), searchField = "" } = {},
   ) {
     const total = series.reduce((sum: number, item: Loose) => sum + Number(item.value || 0), 0);
-    if (!total) return `<div class="dash-chart-empty">${esc(title)} · no data yet</div>`;
+    if (!total)
+      return `<div class="dash-chart-empty">${esc(title)} · ${esc(tr("dashboard.no_data_yet", "no data yet"))}</div>`;
     let cursor = 0;
     const colors = [
       "var(--chart-1)",
@@ -255,7 +256,7 @@ export function createRecordPresenters(deps: Deps) {
         searchField: metric.field || "",
       });
     if (metric.type === "line")
-      return lineChart(metric.values, metric.title, metric.valueLabel || metric.title);
+      return lineChart(metric.values, metric.title, metric.valueLabel || metric.title, { tr, trf });
     const ranking = metric.values,
       maxRank = Math.max(1, ...ranking.map((item: Loose) => Number(item.value) || 0));
     return `<div class="dashboard-average-list">${ranking.map((item: Loose) => `<button class="dashboard-average-row" ${metric.field ? `data-dashboard-search-field="${esc(metric.field)}" data-dashboard-search-value="${esc(item.key)}"` : `data-dashboard-work="${esc(item.key)}"`}><span>${esc(item.key)}</span><i><em style="width:${Math.max(4, Math.round((Number(item.value) / maxRank) * 100))}%"></em></i><b>${esc(metric.format(item.value))}</b></button>`).join("") || `<div class="note">${esc(metric.field ? tr("works.no_indexed_values", "No populated metadata values yet.") : tr("research.no_works", "No works loaded yet."))}</div>`}</div>`;
@@ -324,40 +325,51 @@ export function createRecordPresenters(deps: Deps) {
     };
   }
   function pager(pg: Loose, total: number, prefix: string) {
-    return `<div class="pagebar"><span>${total ? `${pg.start + 1}–${pg.end} of ${total}` : "0 results"}</span><div class="inline">
-  <button class="btn small" data-page="${prefix}:first" ${pg.page <= 1 ? "disabled" : ""}>First</button>
-  <button class="btn small" data-page="${prefix}:prev" ${pg.page <= 1 ? "disabled" : ""}>Previous</button>
-  <span>Page ${pg.page} / ${pg.pages}</span>
-  <button class="btn small" data-page="${prefix}:next" ${pg.page >= pg.pages ? "disabled" : ""}>Next</button>
-  <button class="btn small" data-page="${prefix}:last" ${pg.page >= pg.pages ? "disabled" : ""}>Last</button></div></div>`;
+    const range = total
+      ? trf("ui.pager_range", "{start}–{end} of {total}", {
+          start: pg.start + 1,
+          end: pg.end,
+          total,
+        })
+      : tr("ui.pager_no_results", "0 results");
+    return `<div class="pagebar"><span>${esc(range)}</span><div class="inline">
+  <button class="btn small" data-page="${prefix}:first" ${pg.page <= 1 ? "disabled" : ""}>${esc(tr("runtime.first", "First"))}</button>
+  <button class="btn small" data-page="${prefix}:prev" ${pg.page <= 1 ? "disabled" : ""}>${esc(tr("ui.previous", "Previous"))}</button>
+  <span>${esc(trf("dynamic.page_of_pages", "Page {page} / {pages}", { page: pg.page, pages: pg.pages }))}</span>
+  <button class="btn small" data-page="${prefix}:next" ${pg.page >= pg.pages ? "disabled" : ""}>${esc(tr("ui.next", "Next"))}</button>
+  <button class="btn small" data-page="${prefix}:last" ${pg.page >= pg.pages ? "disabled" : ""}>${esc(tr("runtime.last", "Last"))}</button></div></div>`;
   }
   function ragEvidencePreview(item: Loose, index: number) {
     const record = item.record || {};
     const metadata = [
-      ["Record ID", record.record_id],
-      ["Work", record.work],
-      ["Pages", pages(record)],
-      ["Document author", record.document_author],
-      ["Speaker", record.speaker],
-      ["Position holder", record.position_holder],
-      ["Stance", record.stance],
-      ["Target", record.target],
-      ["Role", record.discourse_role],
-      ["Proposition status", record.proposition_status],
-      ["Quoted speaker", record.quoted_speaker],
-      ["Quoted author", record.quoted_author],
-      ["Quoted work", record.quoted_work],
-      ["Topics", record.topics],
-      ["Concepts", record.concepts],
-      ["Persons", record.persons],
+      [label("record_id"), record.record_id],
+      [label("work"), record.work],
+      [tr("runtime.pages", "Pages"), pages(record)],
+      [label("document_author"), record.document_author],
+      [label("speaker"), record.speaker],
+      [label("position_holder"), record.position_holder],
+      [label("stance"), record.stance],
+      [label("target"), record.target],
+      [label("discourse_role"), record.discourse_role],
+      [label("proposition_status"), record.proposition_status],
+      [label("quoted_speaker"), record.quoted_speaker],
+      [label("quoted_author"), record.quoted_author],
+      [label("quoted_work"), record.quoted_work],
+      [label("topics"), record.topics],
+      [label("concepts"), record.concepts],
+      [label("persons"), record.persons],
     ].filter(([, value]) => value !== undefined && value !== null && display(value) !== "—");
+    const untitled = record.record_id || trf("dashboard.record_n", "Record {n}", { n: index + 1 });
+    const copyLabel = record._researcher_text_policy
+      ? tr("research.copy_summarized_record", "Copy summarized record")
+      : tr("research.copy_record", "Copy record");
     return `<details class="rag-evidence-card" ${index < 3 ? "open" : ""}>
-    <summary><span class="rag-evidence-id">[[${esc(item.evidence_id || `E${index}`)}]]</span><span class="rag-evidence-title"><b>${esc(record.record_id || `Record ${index + 1}`)}</b><small>${esc(record.work || item.collection || "")} · ${esc(item.inline_citation || pages(record))}</small></span><span class="rag-evidence-score">${item.rerank_score == null ? "" : Number(item.rerank_score).toFixed(3)}</span></summary>
+    <summary><span class="rag-evidence-id">[[${esc(item.evidence_id || `E${index}`)}]]</span><span class="rag-evidence-title"><b>${esc(untitled)}</b><small>${esc(record.work || item.collection || "")} · ${esc(item.inline_citation || pages(record))}</small></span><span class="rag-evidence-score">${item.rerank_score == null ? "" : Number(item.rerank_score).toFixed(3)}</span></summary>
     <div class="rag-evidence-body">
       <div class="rag-evidence-meta">${metadata.map(([name, value]) => `<div><span>${esc(name)}</span><b>${esc(display(value))}</b></div>`).join("")}</div>
-      <div class="rag-evidence-source"><span>Collection</span><b>${esc(item.collection || "")}</b><span>Full citation</span><b>${esc(item.full_citation || "")}</b></div>
-      ${record._researcher_text_policy ? `<div class="info researcher-evidence-policy">Researcher view · Edmundson extractive summary · ${Number(record._researcher_text_policy.source_chars || 0).toLocaleString()} source characters · topics, concepts, and persons used as bonus terms.</div>` : ""}
-      <div class="tools"><button class="btn tiny" data-copy-rag-record="${index}">${icon("copy")}Copy ${record._researcher_text_policy ? "summarized " : ""}record</button></div>
+      <div class="rag-evidence-source"><span>${esc(tr("research.collection", "Collection"))}</span><b>${esc(item.collection || "")}</b><span>${esc(tr("runtime.full_citation", "Full citation"))}</span><b>${esc(item.full_citation || "")}</b></div>
+      ${record._researcher_text_policy ? `<div class="info researcher-evidence-policy">${esc(trf("research.evidence_policy", "Researcher view · Edmundson extractive summary · {count} source characters · topics, concepts, and persons used as bonus terms.", { count: Number(record._researcher_text_policy.source_chars || 0).toLocaleString() }))}</div>` : ""}
+      <div class="tools"><button class="btn tiny" data-copy-rag-record="${index}">${icon("copy")}${esc(copyLabel)}</button></div>
       <pre>${esc(record.text || "")}</pre>
     </div>
   </details>`;
@@ -367,7 +379,7 @@ export function createRecordPresenters(deps: Deps) {
       return `<td class="chroma-id-col"><div class="scroll-cell id" title="${esc(record._chroma_id || "")}">${esc(record._chroma_id || "")}</div></td>`;
     if (key === "page_start") return `<td>${esc(pages(record))}</td>`;
     if (key === "needs_review")
-      return `<td>${record.needs_review ? '<span class="review">Review</span>' : "—"}</td>`;
+      return `<td>${record.needs_review ? `<span class="review">${esc(tr("runtime.review", "Review"))}</span>` : "—"}</td>`;
     if (key === "text") return `<td class="textcell">${esc(snippet(record.text, "", 240))}</td>`;
     if (key === "inline_citation")
       return `<td><div class="scroll-cell">${esc(inlineCitation(record))}</div></td>`;
@@ -392,7 +404,12 @@ export function createRecordPresenters(deps: Deps) {
     }
     if (key === "page_start") return { key, kind: "pages", text: pages(record), title: "" };
     if (key === "needs_review")
-      return { key, kind: "review", text: record.needs_review ? "yes" : "no", title: "" };
+      return {
+        key,
+        kind: "review",
+        text: record.needs_review ? tr("runtime.yes", "Yes") : tr("runtime.no", "No"),
+        title: "",
+      };
     if (key === "text") return { key, kind: "text", text: snippet(record.text, query), title: "" };
     if (key === "inline_citation")
       return { key, kind: "plain", text: inlineCitation(record), title: "" };

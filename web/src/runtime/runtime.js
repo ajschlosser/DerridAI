@@ -489,6 +489,8 @@ const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdf
   renderView:(...args)=>renderView(...args),
   shell:(...args)=>shell(...args),
   toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
 });
 const {notifyOperationsChanged,operationsBridge,renderOperationsPanel,mountOperationsPanelHost,refreshOperationsPanelOnly,wireCorpusBuildsHomeCard,refreshCorpusBuildsHomeCardOnly,gradeRagResponse,removeRagJob,clearFinishedRagJobs,ragProgressPanelHtml,wireRagProgressPanel,refreshRagProgressPanel,renderCorpusBuildsHomeCard}=createOperationsPanelBridge({
   state,
@@ -512,6 +514,7 @@ const {notifyOperationsChanged,operationsBridge,renderOperationsPanel,mountOpera
   showAppModal:(...args)=>showAppModal(...args),
   toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
 });
 const {applyRecordChanges,clearRecordUpdates,clearAllUpdates,historyVersionChanges,restoreRecordHistoryVersion}=createRecordEditing({
   state,
@@ -624,6 +627,7 @@ const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openL
   syncJobProgressToasts:(...args)=>syncJobProgressToasts(...args),
   toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
   uid:(...args)=>uid(...args),
   upsertRecordPayload:(...args)=>upsertRecordPayload(...args),
   getUrlSyncHook:()=>getUrlSyncHook(),
@@ -631,38 +635,8 @@ const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openL
 });
 const {renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfPageSmart,extractPdfAllSmart}=createPdfExplorerRenderer({
   state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile:(...args)=>activeFile(...args),
-  allLinkedRowsForLoadedPdf:(...args)=>allLinkedRowsForLoadedPdf(...args),
-  cleanPdfPageWithLlm:(...args)=>cleanPdfPageWithLlm(...args),
-  defaultProviderProfile:(...args)=>defaultProviderProfile(...args),
-  draftPdfPageWithLlm:(...args)=>draftPdfPageWithLlm(...args),
-  evidenceIsSelected:(...args)=>evidenceIsSelected(...args),
-  linkPdfPage:(...args)=>linkPdfPage(...args),
-  linkPdfPageWithLlm:(...args)=>linkPdfPageWithLlm(...args),
-  linkedPdfRows:(...args)=>linkedPdfRows(...args),
-  loadPdfMetadata:(...args)=>loadPdfMetadata(...args),
-  loadedPdfPagesForRecord:(...args)=>loadedPdfPagesForRecord(...args),
-  lookupRecord:(...args)=>lookupRecord(...args),
-  navigateTo:(...args)=>navigateTo(...args),
-  openMessageModal:(...args)=>openMessageModal(...args),
-  pages:(...args)=>pages(...args),
-  pdfDisplayTitle:(...args)=>pdfDisplayTitle(...args),
-  persistCurrentPdfAsset:(...args)=>persistCurrentPdfAsset(...args),
-  providerDisplayName:(...args)=>providerDisplayName(...args),
-  recordOptionForKey:(...args)=>recordOptionForKey(...args),
-  recordOptionLabel:(...args)=>recordOptionLabel(...args),
-  renderView:(...args)=>renderView(...args),
-  reviewKey:(...args)=>reviewKey(...args),
-  searchRecordOptions:(...args)=>searchRecordOptions(...args),
-  selectedIndex:(...args)=>selectedIndex(...args),
-  selectedRecord:(...args)=>selectedRecord(...args),
-  shell:(...args)=>shell(...args),
-  syncUrl:(...args)=>syncUrl(...args),
-  toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
-  unlinkPdfLink:(...args)=>unlinkPdfLink(...args),
-  workspaceEvidenceSelectionKey:(...args)=>workspaceEvidenceSelectionKey(...args),
+  trf:(...args)=>trf(...args),
 });
 const {researchConfigForUi,getResearchWorkspaceSnapshot,updateResearchConfig,removeResearchEvidence,clearResearchEvidence,discoverResearchModels,refreshResearchJobs,getResearchJob,cancelResearchJob,deleteResearchJob,generationFromProfile,startResearchRun,gradeResearchJob,prepareResearchRerun,getResponseFaqPage,gradeResponseFaqRecord,rerunResponseFaqRecord,rememberRagPrompt,rememberRagRun,prepareRagRerun}=createResearchWorkspace({
   state,
@@ -1066,6 +1040,7 @@ const {openMergeDialog,openBulkFieldEditor,openOcrCleanupDialog,openEditor,openS
   showAppModal:(...args)=>showAppModal(...args),
   toast:(...args)=>toast(...args),
   tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
   uid:(...args)=>uid(...args),
   upsertRows:(...args)=>upsertRows(...args),
 });
