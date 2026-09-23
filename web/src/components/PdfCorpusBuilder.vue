@@ -72,13 +72,12 @@ import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
+import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import {
-  assetHasExtractionWarning,
   firstRecordWithSourceWarning,
-  ingestWarningStorageKey,
   recordHasSourceWarning,
 } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
@@ -110,7 +109,6 @@ const serverProviderIds = ref<Set<string>>(new Set());
 const selectedProviderId = ref("");
 const selectedReviewProviderId = ref("");
 const selectedAssetId = ref("");
-const ingestWarningOpen = ref(false);
 const recordSourceWarningOpen = ref(false);
 const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
@@ -533,28 +531,11 @@ function extraIssueKinds(record: CorpusRecord) {
 const selectedAsset = computed(
   () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
 );
-
-function maybeOpenIngestWarning(asset?: PdfAsset | null) {
-  if (!assetHasExtractionWarning(asset) || !asset?.asset_id) return;
-  try {
-    if (sessionStorage.getItem(ingestWarningStorageKey(asset.asset_id))) return;
-  } catch {
-    /* private mode still gets the modal once per session in memory */
-  }
-  ingestWarningOpen.value = true;
-}
-
-function acknowledgeIngestWarning() {
-  const assetId = selectedAsset.value?.asset_id;
-  if (assetId) {
-    try {
-      sessionStorage.setItem(ingestWarningStorageKey(assetId), "1");
-    } catch {
-      /* ignore */
-    }
-  }
-  ingestWarningOpen.value = false;
-}
+const {
+  open: ingestWarningOpen,
+  maybeOpen: maybeOpenIngestWarning,
+  acknowledge: acknowledgeIngestWarning,
+} = useCorpusIngestWarning(selectedAsset);
 
 function openRecordSourceWarning(record: CorpusRecord) {
   selectRecord(record);
