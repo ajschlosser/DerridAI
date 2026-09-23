@@ -21,29 +21,29 @@ const props=withDefaults(defineProps<{
 const emit=defineEmits<{build:[]} >();
 const i18n=useI18nStore();
 const ready=computed(()=>Boolean(props.sourceFilename&&props.canStart&&props.contextSafe));
-const modeLabel=computed(()=>props.enrichmentMode==="deep"?i18n.t("pdf_corpus.enrichment_deep","Deep scholarly enrichment"):i18n.t("pdf_corpus.enrichment_fast","Fast corpus build"));
-const sizing=computed(()=>props.targetChars?i18n.tf("pdf_corpus.readiness.sizing","{target} ± {tolerance} characters",{target:props.targetChars.toLocaleString(),tolerance:props.toleranceChars.toLocaleString()}):"—");
+const modeLabel=computed(()=>props.enrichmentMode==="deep"?i18n.t("pdf_corpus.enrichment_deep"):i18n.t("pdf_corpus.enrichment_fast"));
+const sizing=computed(()=>props.targetChars?i18n.tf("pdf_corpus.readiness.sizing", {target:props.targetChars.toLocaleString(),tolerance:props.toleranceChars.toLocaleString()}):"—");
 </script>
 
 <template>
   <section class="build-readiness" :data-ready="ready?'true':'false'" aria-labelledby="build-readiness-title" data-surface="glass">
     <div class="readiness-copy">
       <div class="readiness-heading">
-        <span class="eyebrow">{{i18n.t('pdf_corpus.readiness.eyebrow','Build summary')}}</span>
-        <h3 id="build-readiness-title">{{ready?i18n.t('pdf_corpus.readiness.ready','Ready to build'):i18n.t('pdf_corpus.readiness.not_ready','Complete setup to build')}}</h3>
+        <span class="eyebrow">{{i18n.t('pdf_corpus.readiness.eyebrow')}}</span>
+        <h3 id="build-readiness-title">{{ready?i18n.t('pdf_corpus.readiness.ready'):i18n.t('pdf_corpus.readiness.not_ready')}}</h3>
       </div>
       <dl>
-        <div><dt>{{i18n.t('pdf_corpus.readiness.source','Source')}}</dt><dd>{{sourceFilename||i18n.t('pdf_corpus.choose_source_prompt','Choose a source PDF to continue.')}}<small v-if="sourceFilename">{{pageCount}} {{i18n.t('pdf_corpus.pages','pages')}} · {{blockCount}} {{i18n.t('pdf_corpus.blocks','blocks')}}</small></dd></div>
-        <div><dt>{{i18n.t('pdf_corpus.readiness.structure','Structure')}}</dt><dd>{{structureSummary||i18n.t('pdf_corpus.readiness.structure_unset','Automatic defaults; review recommended')}}</dd></div>
-        <div><dt>{{i18n.t('pdf_corpus.readiness.enrichment','Enrichment')}}</dt><dd>{{modeLabel}}</dd></div>
-        <div><dt>{{i18n.t('pdf_corpus.readiness.llm','LLM')}}</dt><dd>{{providerLabel||i18n.t('pdf_corpus.provider_default','Provider default')}}<small v-if="modelLabel">{{modelLabel}}</small></dd></div>
-        <div><dt>{{i18n.t('pdf_corpus.readiness.record_size','Record target')}}</dt><dd>{{sizing}}</dd></div>
+        <div><dt>{{i18n.t('pdf_corpus.readiness.source')}}</dt><dd>{{sourceFilename||i18n.t('pdf_corpus.choose_source_prompt')}}<small v-if="sourceFilename">{{pageCount}} {{i18n.t('pdf_corpus.pages')}} · {{blockCount}} {{i18n.t('pdf_corpus.blocks')}}</small></dd></div>
+        <div><dt>{{i18n.t('pdf_corpus.readiness.structure')}}</dt><dd>{{structureSummary||i18n.t('pdf_corpus.readiness.structure_unset')}}</dd></div>
+        <div><dt>{{i18n.t('pdf_corpus.readiness.enrichment')}}</dt><dd>{{modeLabel}}</dd></div>
+        <div><dt>{{i18n.t('pdf_corpus.readiness.llm')}}</dt><dd>{{providerLabel||i18n.t('pdf_corpus.provider_default')}}<small v-if="modelLabel">{{modelLabel}}</small></dd></div>
+        <div><dt>{{i18n.t('pdf_corpus.readiness.record_size')}}</dt><dd>{{sizing}}</dd></div>
       </dl>
-      <div v-if="!contextSafe" class="readiness-alert" role="alert">{{i18n.t('pdf_corpus.context_unsafe','Context budget is too small')}}</div>
-      <ul v-if="warnings.length" class="readiness-warnings" :aria-label="i18n.t('pdf_corpus.readiness.warnings','Setup notes')"><li v-for="warning in warnings" :key="warning">{{warning}}</li></ul>
-      <p v-if="activeBuildCount" class="capacity-note">{{i18n.tf('pdf_corpus.active_build_capacity','{count} active build(s). Starting another build is independent and uses the selected provider profile capacity.',{count:activeBuildCount})}}</p>
+      <div v-if="!contextSafe" class="readiness-alert" role="alert">{{i18n.t('pdf_corpus.context_unsafe')}}</div>
+      <ul v-if="warnings.length" class="readiness-warnings" :aria-label="i18n.t('pdf_corpus.readiness.warnings')"><li v-for="warning in warnings" :key="warning">{{warning}}</li></ul>
+      <p v-if="activeBuildCount" class="capacity-note">{{i18n.tf('pdf_corpus.active_build_capacity', {count:activeBuildCount})}}</p>
     </div>
-    <button type="button" class="btn primary build-action" :disabled="!ready||busy" @click="emit('build')">{{busy?i18n.t('pdf_corpus.starting','Starting…'):i18n.t(activeBuildCount?'pdf_corpus.start_another_build':'pdf_corpus.build_records',activeBuildCount?'Start another build':'Build record set')}}</button>
+    <button type="button" class="btn primary build-action" :disabled="!ready||busy" @click="emit('build')">{{busy?i18n.t('pdf_corpus.starting'):i18n.t(activeBuildCount?'pdf_corpus.start_another_build':'pdf_corpus.build_records')}}</button>
   </section>
 </template>
 

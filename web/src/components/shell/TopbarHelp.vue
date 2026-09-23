@@ -33,34 +33,34 @@ function go(view: string) {
     variant="ghost"
     icon="help"
     icon-only
-    :label="i18n.t('ui.help', 'Help')"
+    :label="i18n.t('ui.help')"
     @click="openHelp"
   />
   <UiDialog
     :open="props.open"
     size="medium"
-    :title="i18n.t('ui.help_title', 'Using DerridAI')"
-    :description="i18n.t('ui.help_body', 'Search the corpus from the bar at the top. The sidebar opens workspaces. Your account menu has settings and sign out. Interface language sits next to it.')"
-    :close-label="i18n.t('common.close', 'Close')"
+    :title="i18n.t('ui.help_title')"
+    :description="i18n.t('ui.help_body')"
+    :close-label="i18n.t('common.close')"
     @close="closeHelp"
   >
-    <p>{{ i18n.t("ui.help_search", "Command search focuses with Ctrl K (⌘K on Apple platforms).") }}</p>
-    <p>{{ i18n.t("ui.help_compact", "On a narrow screen, language and help move into the account menu.") }}</p>
+    <p>{{ i18n.t("ui.help_search") }}</p>
+    <p>{{ i18n.t("ui.help_compact") }}</p>
     <template #footer>
       <div class="help-footer-actions">
         <UiButton
           v-if="canSettings"
-          :label="i18n.t('ui.help_settings', 'Open Settings')"
+          :label="i18n.t('ui.help_settings')"
           icon="gear"
           @click="go('config')"
         />
         <UiButton
           v-if="canFaq"
-          :label="i18n.t('ui.help_response_library', 'Open Response Library')"
+          :label="i18n.t('ui.help_response_library')"
           icon="spark"
           @click="go('faq')"
         />
-        <UiButton variant="primary" :label="i18n.t('common.close', 'Close')" @click="closeHelp" />
+        <UiButton variant="primary" :label="i18n.t('common.close')" @click="closeHelp" />
       </div>
     </template>
   </UiDialog>

@@ -17,15 +17,15 @@ const activeCount=computed(()=>props.facets.reduce((sum,facet)=>sum+facet.values
 </script>
 
 <template>
-  <aside class="search-facets" :class="{compact}" :aria-label="i18n.t('search.filters','Filters')">
+  <aside class="search-facets" :class="{compact}" :aria-label="i18n.t('search.filters')">
     <div class="search-facets-head">
-      <div><span class="section-label">{{i18n.t('search.refine','Refine')}}</span><h2>{{i18n.t('search.filters','Filters')}}</h2></div>
-      <button v-if="activeCount" type="button" class="text-button" @click="emit('clear')">{{i18n.t('search.clear_all','Clear all')}} ({{activeCount}})</button>
+      <div><span class="section-label">{{i18n.t('search.refine')}}</span><h2>{{i18n.t('search.filters')}}</h2></div>
+      <button v-if="activeCount" type="button" class="text-button" @click="emit('clear')">{{i18n.t('search.clear_all')}} ({{activeCount}})</button>
     </div>
     <label class="search-facet-find">
-      <span class="sr-only">{{i18n.t('search.filter_facets','Filter facet values')}}</span>
+      <span class="sr-only">{{i18n.t('search.filter_facets')}}</span>
       <AppIcon name="search"/>
-      <input v-model="filter" type="search" :placeholder="i18n.t('search.filter_values','Filter values…')" />
+      <input v-model="filter" type="search" :placeholder="i18n.t('search.filter_values')" />
     </label>
     <div v-if="visibleFacets.length" class="search-facet-groups">
       <details v-for="(facet,index) in visibleFacets" :key="facet.field" class="search-facet-group" :open="index<4||facet.values.some(item=>item.selected)">
@@ -39,7 +39,7 @@ const activeCount=computed(()=>props.facets.reduce((sum,facet)=>sum+facet.values
         </div>
       </details>
     </div>
-    <p v-else class="search-facet-empty">{{i18n.t('search.no_facet_values','No facet values match this filter.')}}</p>
+    <p v-else class="search-facet-empty">{{i18n.t('search.no_facet_values')}}</p>
   </aside>
 </template>
 

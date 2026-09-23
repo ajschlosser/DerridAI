@@ -195,7 +195,7 @@ export function createResearchWorkspace(deps: Deps) {
   function removeResearchEvidence(key: Any) {
     if (!hasCapability("evidence.select"))
       throw new Error(
-        tr("permissions.evidence_denied", "Your role cannot change selected evidence."),
+        tr("permissions.evidence_denied"),
       );
     setEvidence(String(key || ""), null, false);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
@@ -207,7 +207,7 @@ export function createResearchWorkspace(deps: Deps) {
   function clearResearchEvidence() {
     if (!hasCapability("evidence.select"))
       throw new Error(
-        tr("permissions.evidence_denied", "Your role cannot change selected evidence."),
+        tr("permissions.evidence_denied"),
       );
     clearSelectedEvidence();
     state.ragConfig.skip_retrieval = false;
@@ -270,7 +270,7 @@ export function createResearchWorkspace(deps: Deps) {
   }
   async function startResearchRun(input: Loose = {}) {
     if (!hasCapability("rag.run"))
-      throw new Error(tr("permissions.rag_denied", "Your role cannot run Research pipelines."));
+      throw new Error(tr("permissions.rag_denied"));
     const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
     updateResearchConfig({
       k: cfg.k,
@@ -481,7 +481,7 @@ export function createResearchWorkspace(deps: Deps) {
   }
   async function getResponseFaqPage({ limit = 50, offset = 0, query = "" } = {}) {
     if (!canAccessPage("faq"))
-      throw new Error(tr("permissions.faq_denied", "Your role cannot open Response Library."));
+      throw new Error(tr("permissions.faq_denied"));
     const params = new URLSearchParams({
       limit: String(Math.max(1, Math.min(1000, Number(limit) || 50))),
       offset: String(Math.max(0, Number(offset) || 0)),

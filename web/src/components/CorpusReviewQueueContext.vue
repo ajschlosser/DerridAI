@@ -18,15 +18,15 @@ const i18n = useI18nStore();
 <template>
   <nav
     class="queue-context"
-    :aria-label="i18n.t('pdf_corpus.review_queue_context', 'Review queue context')"
+    :aria-label="i18n.t('pdf_corpus.review_queue_context')"
   >
     <span v-if="props.justProcessedRecordId">
-      {{ i18n.t("pdf_corpus.just_processed", "Just processed") }}
+      {{ i18n.t("pdf_corpus.just_processed") }}
       <button
         type="button"
         class="text-link"
         :aria-label="
-          i18n.tf('pdf_corpus.open_processed_record', 'Open just processed record {record}', {
+          i18n.tf('pdf_corpus.open_processed_record', {
             record: props.justProcessedRecordId,
           })
         "
@@ -36,12 +36,12 @@ const i18n = useI18nStore();
       </button>
     </span>
     <span>
-      {{ i18n.t("pdf_corpus.current_record", "Current") }}
+      {{ i18n.t("pdf_corpus.current_record") }}
       <button
         type="button"
         class="text-link"
         :aria-label="
-          i18n.tf('pdf_corpus.open_current_record', 'Open current record {record}', {
+          i18n.tf('pdf_corpus.open_current_record', {
             record: props.currentRecordId,
           })
         "
@@ -51,12 +51,12 @@ const i18n = useI18nStore();
       </button>
     </span>
     <span v-if="props.nextRecordId">
-      {{ i18n.t("pdf_corpus.next_record_in_queue", "Next") }}
+      {{ i18n.t("pdf_corpus.next_record_in_queue") }}
       <button
         type="button"
         class="text-link"
         :aria-label="
-          i18n.tf('pdf_corpus.open_next_record', 'Open next record {record}', {
+          i18n.tf('pdf_corpus.open_next_record', {
             record: props.nextRecordId,
           })
         "

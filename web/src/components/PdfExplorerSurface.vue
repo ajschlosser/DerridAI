@@ -723,14 +723,14 @@ onBeforeUnmount(() => {
                     class="btn small"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
+                    :title="i18n.t('ui.copy_inline')"
                     v-text="copy.inline"
                   ></button>
                   <button
                     class="btn small"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
+                    :title="i18n.t('ui.copy_full')"
                     v-text="copy.full"
                   ></button>
                   <button
@@ -739,8 +739,8 @@ onBeforeUnmount(() => {
                     :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
                     :title="
                       runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
                   >
                     <AppIcon
@@ -831,14 +831,14 @@ onBeforeUnmount(() => {
                     class="copy-record-mini"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
+                    :title="i18n.t('ui.copy_inline')"
                     v-text="'I'"
                   ></button>
                   <button
                     class="copy-record-mini"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
+                    :title="i18n.t('ui.copy_full')"
                     v-text="'F'"
                   ></button>
                   <button
@@ -847,8 +847,8 @@ onBeforeUnmount(() => {
                     :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
                     :title="
                       runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
                     v-text="runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? '✓' : '+'"
                   ></button>

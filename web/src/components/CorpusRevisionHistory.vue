@@ -7,23 +7,23 @@ const i18n=useI18nStore();
 const items=computed(()=>{
   const rows:Array<{at?:string;kind:string;label:string;detail?:string}>=[];
   for(const entry of props.record.text_revision_history||[]){
-    rows.push({at:entry.at,kind:"text",label:entry.source==="automatic_cleanup"?i18n.t("pdf_corpus.history_auto_cleanup","Automatic text cleanup"):i18n.t("pdf_corpus.history_text_edit","Reviewed text edit"),detail:entry.diff?i18n.t("pdf_corpus.history_diff_available","Text diff recorded"):undefined});
+    rows.push({at:entry.at,kind:"text",label:entry.source==="automatic_cleanup"?i18n.t("pdf_corpus.history_auto_cleanup"):i18n.t("pdf_corpus.history_text_edit"),detail:entry.diff?i18n.t("pdf_corpus.history_diff_available"):undefined});
   }
   for(const entry of props.record.metadata_decisions||[]){
     const field=String(entry.field||"");
-    rows.push({at:entry.at,kind:"metadata",label:i18n.tf("pdf_corpus.history_metadata_change","Metadata: {field}",{field:i18n.t(`record.${field}`,field.replace(/_/g," "))}),detail:entry.source?i18n.t(`pdf_corpus.history_source.${entry.source}`,String(entry.source).replace(/_/g," ")):undefined});
+    rows.push({at:entry.at,kind:"metadata",label:i18n.tf("pdf_corpus.history_metadata_change", {field:i18n.t(`record.${field}`,field.replace(/_/g," "))}),detail:entry.source?i18n.t(`pdf_corpus.history_source.${entry.source}`,String(entry.source).replace(/_/g," ")):undefined});
   }
   for(const entry of props.record.metadata_enrichment_history||[]){
     for(const event of entry.informational||[]){
       const field=String(event.field||"");
       const kind=String(event.kind||"agreement");
       const label=kind==="protected_suggestion"
-        ? i18n.t("pdf_corpus.history_enrichment_protected","LLM suggestion retained for human-owned metadata")
+        ? i18n.t("pdf_corpus.history_enrichment_protected")
         : kind==="duplicate"
-          ? i18n.t("pdf_corpus.history_enrichment_duplicate","LLM repeated an existing candidate")
-          : i18n.t("pdf_corpus.history_enrichment_agreement","LLM found no new supported value");
+          ? i18n.t("pdf_corpus.history_enrichment_duplicate")
+          : i18n.t("pdf_corpus.history_enrichment_agreement");
       const model=event.model?String(event.model):"";
-      const pass=event.pass?i18n.tf("pdf_corpus.enrichment_pass_number","pass {pass}",{pass:event.pass}):"";
+      const pass=event.pass?i18n.tf("pdf_corpus.enrichment_pass_number", {pass:event.pass}):"";
       rows.push({
         at:event.at||entry.at,
         kind:"enrichment",
@@ -42,9 +42,9 @@ function formatDate(value?:string){if(!value)return "—";try{return new Intl.Da
 </script>
 <template>
 <section class="revision-history" aria-labelledby="revision-history-title">
-  <header><div><span class="eyebrow">{{i18n.t('pdf_corpus.audit_trail','Audit trail')}}</span><h3 id="revision-history-title">{{i18n.t('pdf_corpus.revision_history','Revision history')}}</h3></div><span class="count">{{items.length}}</span></header>
+  <header><div><span class="eyebrow">{{i18n.t('pdf_corpus.audit_trail')}}</span><h3 id="revision-history-title">{{i18n.t('pdf_corpus.revision_history')}}</h3></div><span class="count">{{items.length}}</span></header>
   <ol v-if="items.length"><li v-for="(item,index) in items" :key="`${item.at}-${item.kind}-${index}`"><div><b>{{item.label}}</b><small v-if="item.detail">{{item.detail}}</small></div><time :datetime="item.at">{{formatDate(item.at)}}</time></li></ol>
-  <p v-else>{{i18n.t('pdf_corpus.no_revision_history','No human or cleanup revisions have been recorded yet.')}}</p>
+  <p v-else>{{i18n.t('pdf_corpus.no_revision_history')}}</p>
 </section>
 </template>
 <style scoped>

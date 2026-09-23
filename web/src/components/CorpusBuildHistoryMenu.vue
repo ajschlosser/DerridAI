@@ -5,17 +5,17 @@ import { useI18nStore } from '../stores/i18n';
 const props=withDefaults(defineProps<{builds:CorpusBuild[];selectedBuildId?:string;total?:number}>(),{selectedBuildId:'',total:0});
 const emit=defineEmits<{select:[build:CorpusBuild];refresh:[]}>();
 const i18n=useI18nStore();
-function statusLabel(build:CorpusBuild){if(build.publication)return i18n.t('pdf_corpus.status.published_snapshot','published');return i18n.t(`pdf_corpus.status.${String(build.status||'unknown')}`,String(build.status||'unknown').replace(/_/g,' '))}
+function statusLabel(build:CorpusBuild){if(build.publication)return i18n.t('pdf_corpus.status.published_snapshot');return i18n.t(`pdf_corpus.status.${String(build.status||'unknown')}`,String(build.status||'unknown').replace(/_/g,' '))}
 function formatDate(value?:string|null){if(!value)return '—';try{return new Intl.DateTimeFormat(i18n.locale||undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))}catch{return value}}
 </script>
 <template>
 <details class="history-menu">
-  <summary class="btn">{{i18n.t('pdf_corpus.builds','Corpus builds')}} <span class="count">{{total}}</span></summary>
-  <div class="history-popover" role="region" :aria-label="i18n.t('pdf_corpus.build_history_panel','Corpus build history')" data-surface="overlay">
-    <header><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><small>{{i18n.t('pdf_corpus.build_history_anywhere','Open or monitor another build without leaving the current task.')}}</small></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="emit('refresh')">↻</button></header>
+  <summary class="btn">{{i18n.t('pdf_corpus.builds')}} <span class="count">{{total}}</span></summary>
+  <div class="history-popover" role="region" :aria-label="i18n.t('pdf_corpus.build_history_panel')" data-surface="overlay">
+    <header><div><b>{{i18n.t('pdf_corpus.builds')}}</b><small>{{i18n.t('pdf_corpus.build_history_anywhere')}}</small></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds')" @click="emit('refresh')">↻</button></header>
     <div class="history-list">
-      <button v-for="build in builds" :key="build.build_id" type="button" class="history-row" :class="{active:build.build_id===selectedBuildId}" :aria-current="build.build_id===selectedBuildId?'true':undefined" @click="emit('select',build)"><span class="dot" :data-status="build.status" aria-hidden="true"></span><span><b>{{build.source_filename}}</b><small>{{statusLabel(build)}} · {{Math.round((build.progress||0)*100)}}% · {{build.record_count||0}} {{i18n.t('pdf_corpus.records','records')}}</small><small>{{formatDate(build.created_at)}}</small></span></button>
-      <p v-if="!builds.length" class="empty">{{i18n.t('pdf_corpus.no_builds','No builds yet.')}}</p>
+      <button v-for="build in builds" :key="build.build_id" type="button" class="history-row" :class="{active:build.build_id===selectedBuildId}" :aria-current="build.build_id===selectedBuildId?'true':undefined" @click="emit('select',build)"><span class="dot" :data-status="build.status" aria-hidden="true"></span><span><b>{{build.source_filename}}</b><small>{{statusLabel(build)}} · {{Math.round((build.progress||0)*100)}}% · {{build.record_count||0}} {{i18n.t('pdf_corpus.records')}}</small><small>{{formatDate(build.created_at)}}</small></span></button>
+      <p v-if="!builds.length" class="empty">{{i18n.t('pdf_corpus.no_builds')}}</p>
     </div>
   </div>
 </details>

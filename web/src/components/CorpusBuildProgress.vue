@@ -117,19 +117,19 @@ const nextStage = computed(() => {
 <template>
   <section
     class="corpus-build-progress"
-    :aria-label="i18n.t('pdf_corpus.build_progress', 'Corpus build progress')"
+    :aria-label="i18n.t('pdf_corpus.build_progress')"
     aria-live="polite"
   >
     <div class="build-status-line">
       <span class="pill">{{ statusLabel() }}</span
-      ><span>{{ i18n.t("pdf_corpus.stage", "Stage") }}: {{ stageLabel() }}</span
-      ><span>{{ props.recordCount }} {{ i18n.t("pdf_corpus.records", "records") }}</span
-      ><span>{{ props.reviewCount }} {{ i18n.t("pdf_corpus.need_review", "need review") }}</span
-      ><span>{{ props.acceptedCount }} {{ i18n.t("pdf_corpus.accepted", "accepted") }}</span>
+      ><span>{{ i18n.t("pdf_corpus.stage") }}: {{ stageLabel() }}</span
+      ><span>{{ props.recordCount }} {{ i18n.t("pdf_corpus.records") }}</span
+      ><span>{{ props.reviewCount }} {{ i18n.t("pdf_corpus.need_review") }}</span
+      ><span>{{ props.acceptedCount }} {{ i18n.t("pdf_corpus.accepted") }}</span>
     </div>
     <div v-if="Number(props.unresolvedCount || 0) > 0" class="unresolved-line" role="status">
       <b>{{ props.unresolvedCount }}</b>
-      {{ i18n.t("pdf_corpus.unresolved_regions", "boundary decision(s) to review") }}
+      {{ i18n.t("pdf_corpus.unresolved_regions") }}
     </div>
     <div
       v-if="
@@ -140,34 +140,30 @@ const nextStage = computed(() => {
       role="status"
     >
       <b>{{
-        i18n.t("pdf_corpus.metadata_enrichment_in_progress", "Metadata enrichment in progress")
+        i18n.t("pdf_corpus.metadata_enrichment_in_progress")
       }}</b
       ><span
         >{{ props.metadataOperation.records_processed || 0 }} /
         {{ props.metadataOperation.records_total || 0 }}
-        {{ i18n.t("pdf_corpus.records", "records") }} ·
+        {{ i18n.t("pdf_corpus.records") }} ·
         {{ props.metadataOperation.provider || "ollama" }} ·
         {{
-          props.metadataOperation.model || i18n.t("pdf_corpus.default_model", "default model")
+          props.metadataOperation.model || i18n.t("pdf_corpus.default_model")
         }}</span
       ><span v-if="props.metadataOperation.current_pass">{{
-        i18n.tf("pdf_corpus.enrichment_pass_number", "Pass {pass}", {
+        i18n.tf("pdf_corpus.enrichment_pass_number", {
           pass: props.metadataOperation.current_pass,
         })
       }}</span
       ><span v-if="props.metadataOperation.records_reopened">{{
-        i18n.tf(
-          "pdf_corpus.record_span_reopened_notice",
-          "{count} RecordSpan-changed record(s) are prioritized for re-evaluation in this run.",
-          { count: props.metadataOperation.records_reopened },
-        )
+        i18n.tf("pdf_corpus.record_span_reopened_notice", { count: props.metadataOperation.records_reopened })
       }}</span>
     </div>
     <div class="stage-explanation">
       <b>{{ stageLabel() }}</b
       ><span>{{ stageExplanation }}</span
       ><small v-if="nextStage"
-        >{{ i18n.t("pdf_corpus.next_stage", "Next") }}: {{ nextStage }}</small
+        >{{ i18n.t("pdf_corpus.next_stage") }}: {{ nextStage }}</small
       >
     </div>
     <CorpusSegmentationTelemetry
@@ -177,35 +173,35 @@ const nextStage = computed(() => {
     <div v-if="props.llmMetrics && Number(props.llmMetrics.calls || 0) > 0" class="llm-metrics">
       <span
         ><b>{{ props.llmMetrics.calls || 0 }}</b>
-        {{ i18n.t("pdf_corpus.llm_calls", "LLM calls") }}</span
+        {{ i18n.t("pdf_corpus.llm_calls") }}</span
       ><span v-if="props.llmMetrics.manifest_calls"
         >{{ props.llmMetrics.manifest_calls }}
-        {{ i18n.t("pdf_corpus.manifest_calls", "document analysis") }}</span
+        {{ i18n.t("pdf_corpus.manifest_calls") }}</span
       ><span v-if="props.llmMetrics.segmentation_calls"
         >{{ props.llmMetrics.segmentation_calls }}
-        {{ i18n.t("pdf_corpus.segmentation_calls", "segmentation") }}</span
+        {{ i18n.t("pdf_corpus.segmentation_calls") }}</span
       ><span v-if="props.llmMetrics.metadata_calls"
         >{{ props.llmMetrics.metadata_calls }}
-        {{ i18n.t("pdf_corpus.metadata_calls", "record enrichment") }}</span
+        {{ i18n.t("pdf_corpus.metadata_calls") }}</span
       ><span v-if="props.llmMetrics.retries"
-        >{{ props.llmMetrics.retries }} {{ i18n.t("pdf_corpus.llm_retries", "retries") }}</span
+        >{{ props.llmMetrics.retries }} {{ i18n.t("pdf_corpus.llm_retries") }}</span
       ><span v-if="props.llmMetrics.structured_output_failures"
         >{{ props.llmMetrics.structured_output_failures }}
-        {{ i18n.t("pdf_corpus.structured_failures", "structured-output corrections") }}</span
+        {{ i18n.t("pdf_corpus.structured_failures") }}</span
       ><span v-if="props.llmMetrics.escalations"
         >{{ props.llmMetrics.escalations }}
-        {{ i18n.t("pdf_corpus.escalations", "escalations") }}</span
+        {{ i18n.t("pdf_corpus.escalations") }}</span
       >
     </div>
     <div
       class="progress-track"
       role="progressbar"
-      :aria-label="i18n.t('pdf_corpus.build_progress', 'Corpus build progress')"
+      :aria-label="i18n.t('pdf_corpus.build_progress')"
       aria-valuemin="0"
       aria-valuemax="100"
       :aria-valuenow="Math.round((props.progress || 0) * 100)"
       :aria-valuetext="
-        i18n.tf('pdf_corpus.progress_percent', '{percent}% complete', {
+        i18n.tf('pdf_corpus.progress_percent', {
           percent: Math.round((props.progress || 0) * 100),
         })
       "
@@ -213,13 +209,13 @@ const nextStage = computed(() => {
       <span :style="{ width: `${Math.round((props.progress || 0) * 100)}%` }"></span>
     </div>
     <div v-if="props.error" class="build-warning" role="alert">
-      <b>{{ i18n.t("pdf_corpus.build_error", "Build error") }}</b
+      <b>{{ i18n.t("pdf_corpus.build_error") }}</b
       ><span>{{ props.error }}</span>
     </div>
     <details v-if="props.warnings?.length" class="warnings">
       <summary>
         {{
-          i18n.tf("pdf_corpus.warnings_count", "{count} build warning(s)", {
+          i18n.tf("pdf_corpus.warnings_count", {
             count: props.warnings.length,
           })
         }}
@@ -231,45 +227,45 @@ const nextStage = computed(() => {
     <div v-if="validationReady" class="validation-strip" :class="{ invalid: !validationValid }">
       <b>{{
         validationValid
-          ? i18n.t("pdf_corpus.validation_passed", "Validation passed")
-          : i18n.t("pdf_corpus.validation_attention", "Validation needs attention")
+          ? i18n.t("pdf_corpus.validation_passed")
+          : i18n.t("pdf_corpus.validation_attention")
       }}</b
       ><span
         >{{ validationCoverage }}%
-        {{ i18n.t("pdf_corpus.source_coverage", "source coverage") }}</span
+        {{ i18n.t("pdf_corpus.source_coverage") }}</span
       ><span v-if="validationEvidenceIssues"
         >{{ validationEvidenceIssues }}
-        {{ i18n.t("pdf_corpus.evidence_issues", "evidence issue(s)") }}</span
+        {{ i18n.t("pdf_corpus.evidence_issues") }}</span
       ><span v-if="validationSchemaIssues"
         >{{ validationSchemaIssues }}
-        {{ i18n.t("pdf_corpus.schema_issues", "metadata schema issue(s)") }}</span
+        {{ i18n.t("pdf_corpus.schema_issues") }}</span
       ><span v-if="validationPageLabelIssues"
         >{{ validationPageLabelIssues }}
-        {{ i18n.t("pdf_corpus.page_label_issues", "printed-page issue(s)") }}</span
+        {{ i18n.t("pdf_corpus.page_label_issues") }}</span
       >
     </div>
     <details v-if="validationReady && !validationValid" class="validation-details">
-      <summary>{{ i18n.t("pdf_corpus.validation_details", "Validation details") }}</summary>
+      <summary>{{ i18n.t("pdf_corpus.validation_details") }}</summary>
       <ul>
         <li v-if="validationTextFidelityIssues">
           {{ validationTextFidelityIssues }}
-          {{ i18n.t("pdf_corpus.text_fidelity_issues", "text-fidelity issue(s)") }}
+          {{ i18n.t("pdf_corpus.text_fidelity_issues") }}
         </li>
         <li v-if="validationSourceOrderIssues">
           {{ validationSourceOrderIssues }}
-          {{ i18n.t("pdf_corpus.source_order_issues", "source-order issue(s)") }}
+          {{ i18n.t("pdf_corpus.source_order_issues") }}
         </li>
         <li v-if="validationPageMappingIssues">
           {{ validationPageMappingIssues }}
-          {{ i18n.t("pdf_corpus.page_mapping_issues", "page-mapping issue(s)") }}
+          {{ i18n.t("pdf_corpus.page_mapping_issues") }}
         </li>
         <li v-if="validationSchemaIssues">
           {{ validationSchemaIssues }}
-          {{ i18n.t("pdf_corpus.schema_issues", "metadata schema issue(s)") }}
+          {{ i18n.t("pdf_corpus.schema_issues") }}
         </li>
         <li v-if="validationCitationIssues">
           {{ validationCitationIssues }}
-          {{ i18n.t("pdf_corpus.citation_issues", "citation issue(s)") }}
+          {{ i18n.t("pdf_corpus.citation_issues") }}
         </li>
       </ul>
     </details>

@@ -39,7 +39,7 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function highlightParts(value: string): HighlightPart[] {
-  const text = value || i18n.t("faq.untitled_question", "Untitled question");
+  const text = value || i18n.t("faq.untitled_question");
   const terms = props.search
     .trim()
     .split(/\s+/)
@@ -61,14 +61,14 @@ function highlightParts(value: string): HighlightPart[] {
 </script>
 
 <template>
-  <nav class="response-library-list" :aria-label="i18n.t('faq.saved_responses', 'Saved responses')">
+  <nav class="response-library-list" :aria-label="i18n.t('faq.saved_responses')">
     <button
       v-for="(record, index) in records"
       :key="recordKey(record, index)"
       type="button"
       :class="{ active: selectedId === recordKey(record, index) }"
       :aria-current="selectedId === recordKey(record, index) ? 'true' : undefined"
-      :aria-label="record.question || i18n.t('faq.untitled_question', 'Untitled question')"
+      :aria-label="record.question || i18n.t('faq.untitled_question')"
       @click="emit('select', record)"
     >
       <span class="response-library-question-icon" aria-hidden="true">Q</span>
@@ -86,7 +86,7 @@ function highlightParts(value: string): HighlightPart[] {
           <span v-if="record.model" class="model">{{ record.model }}</span>
           <span
             ><AppIcon name="books" />{{ evidenceCount(record) }}
-            {{ i18n.t("faq.evidence_short", "evidence") }}</span
+            {{ i18n.t("faq.evidence_short") }}</span
           >
           <span v-if="gradeValue(record)" class="grade"
             ><AppIcon name="spark" />{{ gradeValue(record) }}/10</span

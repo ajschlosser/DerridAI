@@ -49,13 +49,13 @@ function display(value: unknown) {
 }
 const relationRows = computed(() =>
   [
-    [i18n.t("research.speaker", "Speaker"), record.value.speaker],
-    [i18n.t("research.position_holder", "Position holder"), record.value.position_holder],
-    [i18n.t("research.stance", "Stance"), record.value.stance],
-    [i18n.t("research.discourse_role", "Discourse role"), record.value.discourse_role],
-    [i18n.t("research.proposition_status", "Proposition status"), record.value.proposition_status],
-    [i18n.t("research.target", "Target"), record.value.target],
-    [i18n.t("research.quoted_speaker", "Quoted speaker"), record.value.quoted_speaker],
+    [i18n.t("research.speaker"), record.value.speaker],
+    [i18n.t("research.position_holder"), record.value.position_holder],
+    [i18n.t("research.stance"), record.value.stance],
+    [i18n.t("research.discourse_role"), record.value.discourse_role],
+    [i18n.t("research.proposition_status"), record.value.proposition_status],
+    [i18n.t("research.target"), record.value.target],
+    [i18n.t("research.quoted_speaker"), record.value.quoted_speaker],
   ].filter(([, value]) => display(value)),
 );
 </script>
@@ -64,18 +64,18 @@ const relationRows = computed(() =>
   <aside
     id="researchEvidencePanel"
     class="research-evidence-panel card"
-    :aria-label="i18n.t('research.evidence_panel', 'Evidence')"
+    :aria-label="i18n.t('research.evidence_panel')"
   >
     <header class="research-panel-heading">
       <div>
         <b>{{
           showingResult
-            ? i18n.t("research.answer_evidence", "Answer evidence")
-            : i18n.t("rag.selected_evidence", "Selected evidence")
+            ? i18n.t("research.answer_evidence")
+            : i18n.t("rag.selected_evidence")
         }}</b
         ><small
           >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
-          {{ i18n.t("research.records", "records") }}</small
+          {{ i18n.t("research.records") }}</small
         >
       </div>
       <button
@@ -84,7 +84,7 @@ const relationRows = computed(() =>
         type="button"
         @click="emit('clear')"
       >
-        {{ i18n.t("ui.clear", "Clear") }}
+        {{ i18n.t("ui.clear") }}
       </button>
     </header>
 
@@ -92,7 +92,7 @@ const relationRows = computed(() =>
       <div
         class="research-evidence-index"
         role="list"
-        :aria-label="i18n.t('research.evidence_list', 'Evidence list')"
+        :aria-label="i18n.t('research.evidence_list')"
       >
         <button
           v-for="(item, index) in resultEvidence"
@@ -107,7 +107,7 @@ const relationRows = computed(() =>
             ><b>{{
               display(item.record?.work) ||
               display(item.record?.record_id) ||
-              i18n.t("research.evidence", "Evidence")
+              i18n.t("research.evidence")
             }}</b
             ><small
               ><template v-if="pageLabel(item.record || {})"
@@ -126,7 +126,7 @@ const relationRows = computed(() =>
             <b>{{
               display(record.work) ||
               display(record.record_id) ||
-              i18n.t("research.evidence", "Evidence")
+              i18n.t("research.evidence")
             }}</b
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
@@ -141,14 +141,8 @@ const relationRows = computed(() =>
         <p v-else class="note">
           {{
             researcher
-              ? i18n.t(
-                  "research.researcher_evidence_summary",
-                  "Corpus text may be summarized for researcher accounts.",
-                )
-              : i18n.t(
-                  "research.no_evidence_text",
-                  "No retained passage text for this evidence item.",
-                )
+              ? i18n.t("research.researcher_evidence_summary")
+              : i18n.t("research.no_evidence_text")
           }}
         </p>
         <div
@@ -162,23 +156,23 @@ const relationRows = computed(() =>
           class="research-evidence-metadata"
         >
           <span v-if="active.full_citation"
-            ><b>{{ i18n.t("research.full_citation", "Full citation") }}</b
+            ><b>{{ i18n.t("research.full_citation") }}</b
             >{{ active.full_citation }}</span
           >
           <span v-if="active.collection"
-            ><b>{{ i18n.t("research.collection", "Collection") }}</b
+            ><b>{{ i18n.t("research.collection") }}</b
             >{{ active.collection }}</span
           >
           <span v-if="active.rerank_score != null"
-            ><b>{{ i18n.t("research.rerank_score", "Rerank score") }}</b
+            ><b>{{ i18n.t("research.rerank_score") }}</b
             >{{ Number(active.rerank_score).toFixed(3) }}</span
           >
           <span v-if="display(record.topics)"
-            ><b>{{ i18n.t("research.topics", "Topics") }}</b
+            ><b>{{ i18n.t("research.topics") }}</b
             >{{ display(record.topics) }}</span
           >
           <span v-if="display(record.concepts)"
-            ><b>{{ i18n.t("research.concepts", "Concepts") }}</b
+            ><b>{{ i18n.t("research.concepts") }}</b
             >{{ display(record.concepts) }}</span
           >
         </div>
@@ -191,7 +185,7 @@ const relationRows = computed(() =>
           <details class="research-selected-details">
             <summary>
               <span
-                ><b>{{ item.work || item.record_id || i18n.t("research.evidence", "Evidence") }}</b
+                ><b>{{ item.work || item.record_id || i18n.t("research.evidence") }}</b
                 ><small
                   >{{ item.record_id
                   }}<template v-if="selectedPage(item)"> · pp. {{ selectedPage(item) }}</template
@@ -215,27 +209,27 @@ const relationRows = computed(() =>
                 class="research-relation-grid compact"
               >
                 <template v-if="item.speaker"
-                  ><dt>{{ i18n.t("research.speaker", "Speaker") }}</dt>
+                  ><dt>{{ i18n.t("research.speaker") }}</dt>
                   <dd>{{ item.speaker }}</dd></template
                 >
                 <template v-if="item.position_holder"
-                  ><dt>{{ i18n.t("research.position_holder", "Position holder") }}</dt>
+                  ><dt>{{ i18n.t("research.position_holder") }}</dt>
                   <dd>{{ item.position_holder }}</dd></template
                 >
                 <template v-if="item.stance"
-                  ><dt>{{ i18n.t("research.stance", "Stance") }}</dt>
+                  ><dt>{{ i18n.t("research.stance") }}</dt>
                   <dd>{{ item.stance }}</dd></template
                 >
                 <template v-if="item.discourse_role"
-                  ><dt>{{ i18n.t("research.discourse_role", "Discourse role") }}</dt>
+                  ><dt>{{ i18n.t("research.discourse_role") }}</dt>
                   <dd>{{ item.discourse_role }}</dd></template
                 >
                 <template v-if="item.proposition_status"
-                  ><dt>{{ i18n.t("research.proposition_status", "Proposition status") }}</dt>
+                  ><dt>{{ i18n.t("research.proposition_status") }}</dt>
                   <dd>{{ item.proposition_status }}</dd></template
                 >
                 <template v-if="item.target"
-                  ><dt>{{ i18n.t("research.target", "Target") }}</dt>
+                  ><dt>{{ i18n.t("research.target") }}</dt>
                   <dd>{{ item.target }}</dd></template
                 >
               </dl>
@@ -244,10 +238,7 @@ const relationRows = computed(() =>
               </p>
               <p v-else class="note">
                 {{
-                  i18n.t(
-                    "research.selected_preview_unavailable",
-                    "Passage preview is unavailable for evidence selected before this release; the full record is resolved when Research runs.",
-                  )
+                  i18n.t("research.selected_preview_unavailable")
                 }}
               </p>
             </div>
@@ -255,7 +246,7 @@ const relationRows = computed(() =>
           <button
             v-if="canRemove"
             type="button"
-            :aria-label="`${i18n.t('ui.remove_evidence', 'Remove from evidence')}: ${item.record_id || item.work}`"
+            :aria-label="`${i18n.t('ui.remove_evidence')}: ${item.record_id || item.work}`"
             @click="emit('remove', item.key)"
           >
             ×
@@ -264,13 +255,10 @@ const relationRows = computed(() =>
       </div>
       <div v-else class="research-evidence-empty">
         <span aria-hidden="true">∴</span>
-        <b>{{ i18n.t("research.no_selected_evidence", "No pinned evidence") }}</b>
+        <b>{{ i18n.t("research.no_selected_evidence") }}</b>
         <p>
           {{
-            i18n.t(
-              "research.no_selected_evidence_help",
-              "Add records from Search, Works, or Record View. Retrieval can still find evidence automatically.",
-            )
+            i18n.t("research.no_selected_evidence_help")
           }}
         </p>
       </div>

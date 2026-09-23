@@ -17,12 +17,12 @@ const props = withDefaults(defineProps<{
 });
 
 const i18n = useI18nStore();
-const holder = computed(() => i18n.t("about.copyright_holder", "The New England Transcendental Club of California"));
-const copyright = computed(() => i18n.tf("about.copyright", "© {year} {holder}", {year: COPYRIGHT_YEAR, holder: holder.value}));
-const product = computed(() => i18n.tf("about.product_version", "DerridAI {version}", {version: APP_VERSION}));
+const holder = computed(() => i18n.t("about.copyright_holder"));
+const copyright = computed(() => i18n.tf("about.copyright", {year: COPYRIGHT_YEAR, holder: holder.value}));
+const product = computed(() => i18n.tf("about.product_version", {version: APP_VERSION}));
 const commitLabel = computed(() => {
   const commit = String(APP_GIT_COMMIT || "").trim();
-  return commit ? i18n.tf("about.build_commit", "Build {commit}", {commit}) : "";
+  return commit ? i18n.tf("about.build_commit", {commit}) : "";
 });
 </script>
 
@@ -31,7 +31,7 @@ const commitLabel = computed(() => {
     class="app-build-info"
     :class="{compact: props.compact}"
     :role="props.landmark ? 'contentinfo' : undefined"
-    :aria-label="i18n.t('about.title', 'About DerridAI')"
+    :aria-label="i18n.t('about.title')"
   >
     <p v-if="props.showCopyright">{{ copyright }}</p>
     <p>{{ product }}</p>

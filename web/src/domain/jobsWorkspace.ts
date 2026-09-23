@@ -155,7 +155,7 @@ export function createJobsWorkspace(deps: Deps) {
       else updateOperationStackCount();
     } catch (error) {
       toast(
-        trf("operations.remove_failed", "Could not remove the operation: {message}", {
+        trf("operations.remove_failed", {
           message: (error as Error).message,
         }),
       );
@@ -174,7 +174,7 @@ export function createJobsWorkspace(deps: Deps) {
       updateOperationStackCount();
     } catch (error) {
       toast(
-        trf("operations.clear_failed", "Could not clear jobs: {message}", {
+        trf("operations.clear_failed", {
           message: (error as Error).message,
         }),
       );
@@ -333,7 +333,7 @@ export function createJobsWorkspace(deps: Deps) {
       if (isActiveJobStatus(job.status)) {
         if (previous.size && !previous.has(job.id)) {
           announceOperationDock(
-            trf("operations.live_started", "{label} started", { label: jobLabel(job) }),
+            trf("operations.live_started", { label: jobLabel(job) }),
           );
         }
         ensureJobProgressCard(job);

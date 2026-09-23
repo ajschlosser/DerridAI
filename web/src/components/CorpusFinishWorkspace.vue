@@ -15,13 +15,13 @@ const validation=computed(()=>props.build.validation||{});
 const sourceQuality=computed(()=>props.build.source_quality||{});
 const noPublishable=computed(()=>Boolean(readiness.value.no_publishable_records));
 const primaryLabel=computed(()=>{
-  if(publication.value)return i18n.t('pdf_corpus.download_jsonl','Download JSONL');
-  if(noPublishable.value)return i18n.t('pdf_corpus.return_to_review','Return to review');
-  if(next.value==='review_records')return i18n.t('pdf_corpus.continue_review','Continue review');
-  if(next.value==='resolve_document_metadata')return i18n.t('pdf_corpus.edit_document_metadata','Edit document metadata');
-  if(next.value==='resolve_validation')return i18n.t('pdf_corpus.review_validation_issues','Review validation issues');
-  if(next.value==='publish')return i18n.t('pdf_corpus.publish_corpus','Publish corpus');
-  return i18n.t('pdf_corpus.inspect_remaining_work','Inspect remaining work');
+  if(publication.value)return i18n.t('pdf_corpus.download_jsonl');
+  if(noPublishable.value)return i18n.t('pdf_corpus.return_to_review');
+  if(next.value==='review_records')return i18n.t('pdf_corpus.continue_review');
+  if(next.value==='resolve_document_metadata')return i18n.t('pdf_corpus.edit_document_metadata');
+  if(next.value==='resolve_validation')return i18n.t('pdf_corpus.review_validation_issues');
+  if(next.value==='publish')return i18n.t('pdf_corpus.publish_corpus');
+  return i18n.t('pdf_corpus.inspect_remaining_work');
 });
 function act(){
   if(noPublishable.value){emit('reviewRejected');return}
@@ -45,9 +45,9 @@ function fixBlocker(code?:string){
   <section class="finish-workspace" aria-labelledby="finish-corpus-title">
     <header class="finish-head">
       <div>
-        <span class="eyebrow">{{i18n.t('pdf_corpus.finish_phase','Finish corpus')}}</span>
-        <h2 id="finish-corpus-title">{{publication?i18n.t('pdf_corpus.published_revision','Published revision'):readiness.can_publish?i18n.t('pdf_corpus.ready_to_publish','Ready to publish'):i18n.t('pdf_corpus.finish_corpus_title','Finish corpus')}}</h2>
-        <p>{{publication?i18n.t('pdf_corpus.finish_published_help','This immutable publication snapshot is complete. Editing the draft creates a new unpublished revision.'):readiness.can_publish?i18n.t('pdf_corpus.finish_ready_help','Record review, required metadata, source fidelity, and publication validation have passed.'):i18n.t('pdf_corpus.finish_blocked_help','Record review is complete. Resolve the remaining publication blockers below; DerridAI will then enable publication automatically.')}}</p>
+        <span class="eyebrow">{{i18n.t('pdf_corpus.finish_phase')}}</span>
+        <h2 id="finish-corpus-title">{{publication?i18n.t('pdf_corpus.published_revision'):readiness.can_publish?i18n.t('pdf_corpus.ready_to_publish'):i18n.t('pdf_corpus.finish_corpus_title')}}</h2>
+        <p>{{publication?i18n.t('pdf_corpus.finish_published_help'):readiness.can_publish?i18n.t('pdf_corpus.finish_ready_help'):i18n.t('pdf_corpus.finish_blocked_help')}}</p>
       </div>
       <div class="finish-primary">
         <a v-if="publication" class="btn primary" :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`">{{primaryLabel}}</a>
@@ -55,45 +55,45 @@ function fixBlocker(code?:string){
       </div>
     </header>
 
-    <section v-if="noPublishable" class="no-publishable" role="status" aria-labelledby="no-publishable-title"><div><span class="card-state">{{i18n.t('pdf_corpus.no_publishable_status','No publishable records')}}</span><h3 id="no-publishable-title">{{i18n.t('pdf_corpus.no_publishable_title','All records are currently rejected')}}</h3><p>{{i18n.t('pdf_corpus.no_publishable_help','Rejected records are excluded from metadata and publication requirements. Restore records to continue editing, or start a new build.')}}</p></div><div class="card-actions"><button type="button" class="btn primary" @click="emit('reviewRejected')">{{i18n.t('pdf_corpus.return_to_review','Return to review')}}</button><button type="button" class="btn" :disabled="busy" @click="emit('restoreRejected')">{{i18n.t('pdf_corpus.restore_all_rejected','Restore all rejected')}}</button><button type="button" class="btn" @click="emit('startNew')">{{i18n.t('pdf_corpus.start_new_build','Start another build')}}</button></div></section>
+    <section v-if="noPublishable" class="no-publishable" role="status" aria-labelledby="no-publishable-title"><div><span class="card-state">{{i18n.t('pdf_corpus.no_publishable_status')}}</span><h3 id="no-publishable-title">{{i18n.t('pdf_corpus.no_publishable_title')}}</h3><p>{{i18n.t('pdf_corpus.no_publishable_help')}}</p></div><div class="card-actions"><button type="button" class="btn primary" @click="emit('reviewRejected')">{{i18n.t('pdf_corpus.return_to_review')}}</button><button type="button" class="btn" :disabled="busy" @click="emit('restoreRejected')">{{i18n.t('pdf_corpus.restore_all_rejected')}}</button><button type="button" class="btn" @click="emit('startNew')">{{i18n.t('pdf_corpus.start_new_build')}}</button></div></section>
 
-    <div v-if="readiness.missing_document_fields?.length" class="document-blocker" role="alert"><b>{{i18n.t('pdf_corpus.readiness_blocker.required_document_metadata','Required document metadata is missing')}}</b><span>{{readiness.missing_document_fields.map(field=>i18n.t(`record.${field}`,field.replace(/_/g,' '))).join(', ')}}</span></div>
+    <div v-if="readiness.missing_document_fields?.length" class="document-blocker" role="alert"><b>{{i18n.t('pdf_corpus.readiness_blocker.required_document_metadata')}}</b><span>{{readiness.missing_document_fields.map(field=>i18n.t(`record.${field}`,field.replace(/_/g,' '))).join(', ')}}</span></div>
 
     <div v-if="!noPublishable" class="finish-grid">
       <article class="finish-card" data-state="complete">
-        <span class="card-state">{{i18n.t('pdf_corpus.complete','Complete')}}</span>
-        <h3>{{i18n.t('pdf_corpus.record_review','Record review')}}</h3>
-        <dl><div><dt>{{i18n.t('pdf_corpus.reviewed','Reviewed')}}</dt><dd>{{readiness.records_reviewed||0}} / {{readiness.records_total||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.accepted_label','Accepted')}}</dt><dd>{{readiness.records_accepted||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.rejected','Rejected')}}</dt><dd>{{readiness.records_rejected||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.pending','Pending')}}</dt><dd>{{readiness.records_pending||0}}</dd></div></dl>
-        <button v-if="Number(readiness.records_rejected||0)>0" type="button" class="link-action" @click="emit('reviewRejected')">{{i18n.t('pdf_corpus.review_rejected_records','Review rejected records')}}</button>
+        <span class="card-state">{{i18n.t('pdf_corpus.complete')}}</span>
+        <h3>{{i18n.t('pdf_corpus.record_review')}}</h3>
+        <dl><div><dt>{{i18n.t('pdf_corpus.reviewed')}}</dt><dd>{{readiness.records_reviewed||0}} / {{readiness.records_total||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.accepted_label')}}</dt><dd>{{readiness.records_accepted||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.rejected')}}</dt><dd>{{readiness.records_rejected||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.pending')}}</dt><dd>{{readiness.records_pending||0}}</dd></div></dl>
+        <button v-if="Number(readiness.records_rejected||0)>0" type="button" class="link-action" @click="emit('reviewRejected')">{{i18n.t('pdf_corpus.review_rejected_records')}}</button>
       </article>
 
       <article class="finish-card" :data-state="Number(summary.fields_unresolved||0)>0?'attention':'complete'">
-        <span class="card-state">{{Number(summary.fields_unresolved||0)>0?i18n.t('pdf_corpus.attention_required','Attention required'):i18n.t('pdf_corpus.complete','Complete')}}</span>
-        <h3>{{i18n.t('pdf_corpus.required_metadata','Required metadata')}}</h3>
-        <p v-if="Number(summary.fields_unresolved||0)>0">{{i18n.tf('pdf_corpus.finish_metadata_summary','{records} record(s) contain {fields} unresolved required field(s).',{records:Number(summary.records_incomplete||0),fields:Number(summary.fields_unresolved||0)})}}</p>
-        <p v-else>{{i18n.t('pdf_corpus.finish_metadata_complete','All publication-required metadata fields are resolved and validated.')}}</p>
-        <dl><div><dt>{{i18n.t('pdf_corpus.auto_retry','Auto retry')}}</dt><dd>{{summary.auto_retry_fields||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.human_review','Human review')}}</dt><dd>{{summary.human_review_fields||0}}</dd></div></dl>
-        <div class="card-actions"><button v-if="Number(summary.fields_unresolved||0)>0" type="button" class="btn" @click="emit('reviewMetadata')">{{i18n.t('pdf_corpus.open_metadata_queue','Open metadata queue')}}</button><button v-if="Number(summary.fields_unresolved||0)>0&&Number(summary.auto_retry_fields||0)>0" type="button" class="btn" :disabled="busy" @click="emit('retryMetadata')">{{i18n.tf('pdf_corpus.retry_metadata_fields','Retry {count} field(s)',{count:Number(summary.auto_retry_fields||0)})}}</button><button type="button" class="btn" :disabled="busy" @click="emit('rerunEnrichment')">{{i18n.t('pdf_corpus.metadata_enrichment_again','Run metadata enrichment again')}}</button></div>
+        <span class="card-state">{{Number(summary.fields_unresolved||0)>0?i18n.t('pdf_corpus.attention_required'):i18n.t('pdf_corpus.complete')}}</span>
+        <h3>{{i18n.t('pdf_corpus.required_metadata')}}</h3>
+        <p v-if="Number(summary.fields_unresolved||0)>0">{{i18n.tf('pdf_corpus.finish_metadata_summary', {records:Number(summary.records_incomplete||0),fields:Number(summary.fields_unresolved||0)})}}</p>
+        <p v-else>{{i18n.t('pdf_corpus.finish_metadata_complete')}}</p>
+        <dl><div><dt>{{i18n.t('pdf_corpus.auto_retry')}}</dt><dd>{{summary.auto_retry_fields||0}}</dd></div><div><dt>{{i18n.t('pdf_corpus.human_review')}}</dt><dd>{{summary.human_review_fields||0}}</dd></div></dl>
+        <div class="card-actions"><button v-if="Number(summary.fields_unresolved||0)>0" type="button" class="btn" @click="emit('reviewMetadata')">{{i18n.t('pdf_corpus.open_metadata_queue')}}</button><button v-if="Number(summary.fields_unresolved||0)>0&&Number(summary.auto_retry_fields||0)>0" type="button" class="btn" :disabled="busy" @click="emit('retryMetadata')">{{i18n.tf('pdf_corpus.retry_metadata_fields', {count:Number(summary.auto_retry_fields||0)})}}</button><button type="button" class="btn" :disabled="busy" @click="emit('rerunEnrichment')">{{i18n.t('pdf_corpus.metadata_enrichment_again')}}</button></div>
       </article>
 
       <article class="finish-card" :data-state="validation.valid?'complete':'attention'">
-        <span class="card-state">{{validation.valid?i18n.t('pdf_corpus.complete','Complete'):i18n.t('pdf_corpus.attention_required','Attention required')}}</span>
-        <h3>{{i18n.t('pdf_corpus.final_validation','Final validation')}}</h3>
-        <dl><div><dt>{{i18n.t('pdf_corpus.source_fidelity','Source fidelity')}}</dt><dd>{{validation.source_valid?i18n.t('pdf_corpus.passed','Passed'):i18n.t('pdf_corpus.needs_attention','Needs attention')}}</dd></div><div><dt>{{i18n.t('pdf_corpus.metadata_validation','Metadata validation')}}</dt><dd>{{validation.metadata_valid?i18n.t('pdf_corpus.passed','Passed'):i18n.t('pdf_corpus.needs_attention','Needs attention')}}</dd></div><div><dt>{{i18n.t('pdf_corpus.source_quality','Source quality')}}</dt><dd>{{Number(sourceQuality.blocking_page_count||0)===0?i18n.t('pdf_corpus.passed','Passed'):i18n.tf('pdf_corpus.blocking_pages','{count} blocking page(s)',{count:Number(sourceQuality.blocking_page_count||0)})}}</dd></div><div><dt>{{i18n.t('pdf_corpus.coverage','Coverage')}}</dt><dd>{{Math.round(Number(validation.coverage||0)*100)}}%</dd></div></dl>
+        <span class="card-state">{{validation.valid?i18n.t('pdf_corpus.complete'):i18n.t('pdf_corpus.attention_required')}}</span>
+        <h3>{{i18n.t('pdf_corpus.final_validation')}}</h3>
+        <dl><div><dt>{{i18n.t('pdf_corpus.source_fidelity')}}</dt><dd>{{validation.source_valid?i18n.t('pdf_corpus.passed'):i18n.t('pdf_corpus.needs_attention')}}</dd></div><div><dt>{{i18n.t('pdf_corpus.metadata_validation')}}</dt><dd>{{validation.metadata_valid?i18n.t('pdf_corpus.passed'):i18n.t('pdf_corpus.needs_attention')}}</dd></div><div><dt>{{i18n.t('pdf_corpus.source_quality')}}</dt><dd>{{Number(sourceQuality.blocking_page_count||0)===0?i18n.t('pdf_corpus.passed'):i18n.tf('pdf_corpus.blocking_pages', {count:Number(sourceQuality.blocking_page_count||0)})}}</dd></div><div><dt>{{i18n.t('pdf_corpus.coverage')}}</dt><dd>{{Math.round(Number(validation.coverage||0)*100)}}%</dd></div></dl>
       </article>
 
       <article class="finish-card" :data-state="publication?'complete':readiness.can_publish?'ready':'waiting'">
-        <span class="card-state">{{publication?i18n.t('pdf_corpus.complete','Complete'):readiness.can_publish?i18n.t('pdf_corpus.ready','Ready'):i18n.t('pdf_corpus.waiting','Waiting')}}</span>
-        <h3>{{i18n.t('pdf_corpus.publication','Publication')}}</h3>
-        <p v-if="publication">{{i18n.tf('pdf_corpus.publication_snapshot_summary','Revision published with {count} record(s).',{count:publication.record_count})}}</p>
-        <p v-else-if="readiness.can_publish">{{i18n.t('pdf_corpus.publication_ready_help','All required gates have passed. Publication creates an immutable UTF-8 JSONL snapshot.')}}</p>
-        <p v-else>{{i18n.t('pdf_corpus.publication_waiting_help','Publication will unlock automatically after the blockers in this Finish corpus view are resolved.')}}</p>
+        <span class="card-state">{{publication?i18n.t('pdf_corpus.complete'):readiness.can_publish?i18n.t('pdf_corpus.ready'):i18n.t('pdf_corpus.waiting')}}</span>
+        <h3>{{i18n.t('pdf_corpus.publication')}}</h3>
+        <p v-if="publication">{{i18n.tf('pdf_corpus.publication_snapshot_summary', {count:publication.record_count})}}</p>
+        <p v-else-if="readiness.can_publish">{{i18n.t('pdf_corpus.publication_ready_help')}}</p>
+        <p v-else>{{i18n.t('pdf_corpus.publication_waiting_help')}}</p>
       </article>
     </div>
 
     <details v-if="blockers.length&&!noPublishable" class="blockers">
-      <summary>{{i18n.tf('pdf_corpus.view_publication_blockers','View {count} publication blocker(s)',{count:blockers.length})}}</summary>
-      <ul><li v-for="(blocker,index) in blockers" :key="`${blocker.code}-${index}`"><span><b>{{blockerLabel(blocker.code)}}</b><span v-if="blocker.count"> · {{blocker.count}}</span></span><button type="button" class="link-action" @click="fixBlocker(blocker.code)">{{i18n.t('pdf_corpus.go_fix','Go fix')}}</button></li></ul>
+      <summary>{{i18n.tf('pdf_corpus.view_publication_blockers', {count:blockers.length})}}</summary>
+      <ul><li v-for="(blocker,index) in blockers" :key="`${blocker.code}-${index}`"><span><b>{{blockerLabel(blocker.code)}}</b><span v-if="blocker.count"> · {{blocker.count}}</span></span><button type="button" class="link-action" @click="fixBlocker(blocker.code)">{{i18n.t('pdf_corpus.go_fix')}}</button></li></ul>
     </details>
   </section>
 </template>

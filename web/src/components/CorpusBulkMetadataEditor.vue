@@ -241,24 +241,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
         <header class="bulk-head">
           <div>
             <span class="eyebrow">{{
-              i18n.t("pdf_corpus.bulk_edit_eyebrow", "Record metadata")
+              i18n.t("pdf_corpus.bulk_edit_eyebrow")
             }}</span>
             <h2 id="bulk-metadata-title" ref="titleEl" tabindex="-1">
-              {{ i18n.t("pdf_corpus.bulk_metadata_title", "Bulk edit record metadata") }}
+              {{ i18n.t("pdf_corpus.bulk_metadata_title") }}
             </h2>
             <p id="bulk-metadata-help">
               {{
-                i18n.t(
-                  "pdf_corpus.bulk_metadata_help_v482",
-                  "Give a field a value to set it on every record in scope. Fields you leave empty are not touched.",
-                )
+                i18n.t("pdf_corpus.bulk_metadata_help_v482")
               }}
             </p>
           </div>
           <button
             type="button"
             class="bulk-close"
-            :aria-label="i18n.t('ui.close', 'Close')"
+            :aria-label="i18n.t('ui.close')"
             @click="emit('close')"
           >
             ×
@@ -266,9 +263,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
         </header>
         <div class="bulk-scroll">
           <MetadataFormSection
-            :title="i18n.t('pdf_corpus.bulk_scope', 'Scope')"
+            :title="i18n.t('pdf_corpus.bulk_scope')"
             :description="
-              i18n.t('pdf_corpus.bulk_scope_help', 'Which records these changes apply to.')
+              i18n.t('pdf_corpus.bulk_scope_help')
             "
           >
             <fieldset class="bulk-scope wide">
@@ -280,9 +277,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   name="bulk-scope"
                   :disabled="disabled"
                 /><span
-                  ><b>{{ i18n.t("pdf_corpus.bulk_selected_records", "Selected records") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.bulk_selected_records") }}</b
                   ><small>{{
-                    i18n.tf("pdf_corpus.bulk_selected_count", "{count} selected", {
+                    i18n.tf("pdf_corpus.bulk_selected_count", {
                       count: selectedCount,
                     })
                   }}</small></span
@@ -296,21 +293,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   name="bulk-scope"
                   :disabled="disabled"
                 /><span
-                  ><b>{{ i18n.t("pdf_corpus.bulk_apply_all", "Apply to every record") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.bulk_apply_all") }}</b
                   ><small>{{
-                    i18n.tf("pdf_corpus.bulk_total_count", "{count} total records", {
+                    i18n.tf("pdf_corpus.bulk_total_count", {
                       count: totalCount,
                     })
                   }}</small></span
                 ></label
               >
             </fieldset>
-            <UiField class="wide" :label="i18n.t('pdf_corpus.bulk_find_field', 'Find a field')"
+            <UiField class="wide" :label="i18n.t('pdf_corpus.bulk_find_field')"
               ><input
                 v-model="query"
                 class="control"
                 type="search"
-                :placeholder="i18n.t('pdf_corpus.bulk_search_fields', 'Search metadata fields…')"
+                :placeholder="i18n.t('pdf_corpus.bulk_search_fields')"
             /></UiField>
           </MetadataFormSection>
 
@@ -328,7 +325,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                 :disabled="disabled || cleared[field]"
               >
                 <option value="">
-                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged", "Leave unchanged") }}
+                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged") }}
                 </option>
                 <option v-for="option in enumValues[field]" :key="option" :value="option">
                   {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
@@ -341,10 +338,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                 :disabled="disabled || cleared[field]"
               >
                 <option value="">
-                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged", "Leave unchanged") }}
+                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged") }}
                 </option>
-                <option value="true">{{ i18n.t("ui.yes", "Yes") }}</option>
-                <option value="false">{{ i18n.t("ui.no", "No") }}</option>
+                <option value="true">{{ i18n.t("ui.yes") }}</option>
+                <option value="false">{{ i18n.t("ui.no") }}</option>
               </select>
               <template v-else
                 ><input
@@ -354,8 +351,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   :disabled="disabled || cleared[field]"
                   :placeholder="
                     listFields.has(field)
-                      ? i18n.t('pdf_corpus.bulk_list_hint', 'Comma- or line-separated values')
-                      : i18n.t('pdf_corpus.bulk_leave_unchanged', 'Leave unchanged')
+                      ? i18n.t('pdf_corpus.bulk_list_hint')
+                      : i18n.t('pdf_corpus.bulk_leave_unchanged')
                   " /><datalist :id="`bulk-values-${field}`">
                   <option
                     v-for="option in suggestions[field] || []"
@@ -370,42 +367,42 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   type="checkbox"
                   :disabled="disabled"
                 /><label :for="`bulk-clear-${field}`">{{
-                  i18n.t("pdf_corpus.bulk_clear_field", "Clear this field on every record in scope")
+                  i18n.t("pdf_corpus.bulk_clear_field")
                 }}</label></span
               >
             </UiField>
           </MetadataFormSection>
           <p v-if="!filteredGroups.length" class="empty">
-            {{ i18n.t("pdf_corpus.bulk_no_fields", "No metadata fields match that search.") }}
+            {{ i18n.t("pdf_corpus.bulk_no_fields") }}
           </p>
         </div>
         <MetadataFormFooter
           class="bulk-footer"
           :summary="
             activeCount
-              ? i18n.tf('pdf_corpus.bulk_changes_count', '{count} field(s) will change', {
+              ? i18n.tf('pdf_corpus.bulk_changes_count', {
                   count: activeCount,
                 })
-              : i18n.t('pdf_corpus.bulk_no_changes', 'No changes yet')
+              : i18n.t('pdf_corpus.bulk_no_changes')
           "
           :detail="
             applyToAll
-              ? i18n.tf('pdf_corpus.bulk_scope_all', 'Will update all {count} records', {
+              ? i18n.tf('pdf_corpus.bulk_scope_all', {
                   count: totalCount,
                 })
-              : i18n.tf('pdf_corpus.bulk_scope_selected', 'Will update {count} selected records', {
+              : i18n.tf('pdf_corpus.bulk_scope_selected', {
                   count: selectedCount,
                 })
           "
         >
-          <UiButton :label="i18n.t('ui.cancel', 'Cancel')" @click="emit('close')" /><UiButton
-            :label="i18n.t('ui.reset', 'Reset')"
+          <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
+            :label="i18n.t('ui.reset')"
             :disabled="disabled || (!activeCount && !applyToAll)"
             @click="reset"
           /><UiButton
             type="submit"
             variant="primary"
-            :label="i18n.t('pdf_corpus.bulk_apply', 'Apply changes')"
+            :label="i18n.t('pdf_corpus.bulk_apply')"
             :disabled="disabled || !activeCount || (!applyToAll && selectedCount < 1)"
           />
         </MetadataFormFooter>

@@ -27,37 +27,37 @@ function formatDate(value?: string) {
   <section
     class="response-selection-bar"
     :aria-label="
-      i18n.t('faq.current_question', i18n.t('faq.current_response', 'Current saved response'))
+      i18n.t('faq.current_question')
     "
   >
     <div class="response-selection-main">
       <span class="response-selection-label"
         ><AppIcon name="search" aria-hidden="true" />{{
-          i18n.t("faq.current_question", "Current question")
+          i18n.t("faq.current_question")
         }}</span
       >
-      <h2>{{ record.question || i18n.t("faq.untitled_question", "Untitled question") }}</h2>
+      <h2>{{ record.question || i18n.t("faq.untitled_question") }}</h2>
       <div class="response-selection-meta">
         <span v-if="record.created_at"
           ><AppIcon name="history" />{{ formatDate(record.created_at) }}</span
         >
         <span v-if="record.provider || record.model"
-          ><AppIcon name="spark" />{{ record.provider || i18n.t("research.provider", "Provider")
+          ><AppIcon name="spark" />{{ record.provider || i18n.t("research.provider")
           }}<template v-if="record.model"> · {{ record.model }}</template></span
         >
         <span
           ><AppIcon name="books" />{{ evidenceCount }}
-          {{ i18n.t("research.evidence_records", "evidence records") }}</span
+          {{ i18n.t("research.evidence_records") }}</span
         >
         <span v-if="grade != null" class="grade"
-          ><AppIcon name="spark" />{{ i18n.t("faq.saved_grade", "Saved grade") }}
+          ><AppIcon name="spark" />{{ i18n.t("faq.saved_grade") }}
           {{ grade }}/10</span
         >
       </div>
     </div>
     <button type="button" class="response-selection-browse" @click="emit('browse')">
       <AppIcon name="search" />{{
-        i18n.t("faq.find_another_question", i18n.t("faq.browse_archive", "Browse saved research"))
+        i18n.t("faq.find_another_question")
       }}
     </button>
   </section>

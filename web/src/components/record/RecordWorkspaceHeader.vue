@@ -52,19 +52,19 @@ function act(fn:()=>void){ menuOpen.value=false; fn(); }
 
 <template>
   <header class="record-workspace-header">
-    <div class="record-workspace-nav" :aria-label="i18n.t('record.navigation','Record navigation')">
-      <button type="button" class="record-icon-button" :disabled="!props.hasPrevious" :title="i18n.t('record.previous','Previous record')" @click="emit('previous')">
-        <span aria-hidden="true">←</span><span class="sr-only">{{ i18n.t('record.previous','Previous record') }}</span>
+    <div class="record-workspace-nav" :aria-label="i18n.t('record.navigation')">
+      <button type="button" class="record-icon-button" :disabled="!props.hasPrevious" :title="i18n.t('record.previous')" @click="emit('previous')">
+        <span aria-hidden="true">←</span><span class="sr-only">{{ i18n.t('record.previous') }}</span>
       </button>
       <span class="record-position">{{ props.position }}</span>
-      <button type="button" class="record-icon-button" :disabled="!props.hasNext" :title="i18n.t('record.next','Next record')" @click="emit('next')">
-        <span aria-hidden="true">→</span><span class="sr-only">{{ i18n.t('record.next','Next record') }}</span>
+      <button type="button" class="record-icon-button" :disabled="!props.hasNext" :title="i18n.t('record.next')" @click="emit('next')">
+        <span aria-hidden="true">→</span><span class="sr-only">{{ i18n.t('record.next') }}</span>
       </button>
     </div>
 
     <div class="record-identity">
-      <p class="record-kicker">{{ i18n.t('record.workspace_kicker','Corpus record') }}</p>
-      <h1 :class="titleClass" :title="props.work || i18n.t('record.untitled','Untitled record')">{{ props.work || i18n.t('record.untitled','Untitled record') }}</h1>
+      <p class="record-kicker">{{ i18n.t('record.workspace_kicker') }}</p>
+      <h1 :class="titleClass" :title="props.work || i18n.t('record.untitled')">{{ props.work || i18n.t('record.untitled') }}</h1>
       <div class="record-identity-meta">
         <span v-if="props.author">{{ props.author }}</span>
         <span v-if="props.year">{{ props.year }}</span>
@@ -76,28 +76,28 @@ function act(fn:()=>void){ menuOpen.value=false; fn(); }
     <div class="record-header-actions">
       <button v-if="props.canEvidence" type="button" class="record-primary-action" :class="{selected:props.evidenceSelected}" @click="emit('evidence')">
         <AppIcon :name="props.evidenceSelected?'record':'plus'" />
-        {{ props.evidenceSelected ? i18n.t('record.evidence_selected','Evidence selected') : i18n.t('record.add_evidence','Add evidence') }}
+        {{ props.evidenceSelected ? i18n.t('record.evidence_selected') : i18n.t('record.add_evidence') }}
       </button>
-      <button v-if="props.canEdit" type="button" class="record-primary-action" @click="emit('edit')"><AppIcon name="edit" />{{ i18n.t('record.edit','Edit record') }}</button>
+      <button v-if="props.canEdit" type="button" class="record-primary-action" @click="emit('edit')"><AppIcon name="edit" />{{ i18n.t('record.edit') }}</button>
       <details class="record-shortcuts">
-        <summary :title="i18n.t('record.keyboard_shortcuts','Keyboard shortcuts')">?</summary>
+        <summary :title="i18n.t('record.keyboard_shortcuts')">?</summary>
         <div class="record-shortcuts-popover">
-          <strong>{{ i18n.t('record.keyboard_shortcuts','Keyboard shortcuts') }}</strong>
-          <span><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> {{ i18n.t('record.previous_next','Previous / next record') }}</span>
+          <strong>{{ i18n.t('record.keyboard_shortcuts') }}</strong>
+          <span><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> {{ i18n.t('record.previous_next') }}</span>
         </div>
       </details>
       <details class="record-more-menu" :open="menuOpen" @toggle="menuOpen=($event.currentTarget as HTMLDetailsElement).open">
-        <summary :aria-label="i18n.t('record.more_actions','More record actions')">•••</summary>
+        <summary :aria-label="i18n.t('record.more_actions')">•••</summary>
         <div class="record-more-popover">
-          <button type="button" @click="act(()=>emit('copyInline'))"><AppIcon name="copy" />{{ i18n.t('record.copy_inline','Copy inline citation') }}</button>
-          <button type="button" @click="act(()=>emit('copyFull'))"><AppIcon name="copy" />{{ i18n.t('record.copy_full','Copy full citation') }}</button>
-          <button type="button" @click="act(()=>emit('copyJson'))"><AppIcon name="copy" />{{ i18n.t('record.copy_json','Copy record JSON') }}</button>
-          <button v-if="props.canReview" type="button" @click="act(()=>emit('review'))"><AppIcon name="plus" />{{ props.reviewSelected?i18n.t('record.remove_selection','Remove from selection'):i18n.t('record.add_selection','Add to selection') }}</button>
-          <button v-if="props.canLlm" type="button" @click="act(()=>emit('llm'))"><AppIcon name="spark" />{{ i18n.t('record.review_llm','Review with LLM') }}</button>
-          <button v-if="props.canUpsert" type="button" @click="act(()=>emit('upsert'))"><AppIcon name="database" />{{ i18n.t('record.upsert','Upsert record') }}</button>
-          <button v-if="props.canEdit" type="button" @click="act(()=>emit('ocr'))"><AppIcon name="broom" />{{ i18n.t('record.clean_ocr','Clean OCR artifacts') }}</button>
-          <button v-if="props.canHistory&&props.hasHistory" type="button" @click="act(()=>emit('history'))"><AppIcon name="history" />{{ i18n.t('record.history_undo','History & undo') }}</button>
-          <button v-if="props.canPdf" type="button" @click="act(()=>emit('pdf'))"><AppIcon name="pdf" />{{ i18n.t('record.pdf_explorer','Open PDF Explorer') }}</button>
+          <button type="button" @click="act(()=>emit('copyInline'))"><AppIcon name="copy" />{{ i18n.t('record.copy_inline') }}</button>
+          <button type="button" @click="act(()=>emit('copyFull'))"><AppIcon name="copy" />{{ i18n.t('record.copy_full') }}</button>
+          <button type="button" @click="act(()=>emit('copyJson'))"><AppIcon name="copy" />{{ i18n.t('record.copy_json') }}</button>
+          <button v-if="props.canReview" type="button" @click="act(()=>emit('review'))"><AppIcon name="plus" />{{ props.reviewSelected?i18n.t('record.remove_selection'):i18n.t('record.add_selection') }}</button>
+          <button v-if="props.canLlm" type="button" @click="act(()=>emit('llm'))"><AppIcon name="spark" />{{ i18n.t('record.review_llm') }}</button>
+          <button v-if="props.canUpsert" type="button" @click="act(()=>emit('upsert'))"><AppIcon name="database" />{{ i18n.t('record.upsert') }}</button>
+          <button v-if="props.canEdit" type="button" @click="act(()=>emit('ocr'))"><AppIcon name="broom" />{{ i18n.t('record.clean_ocr') }}</button>
+          <button v-if="props.canHistory&&props.hasHistory" type="button" @click="act(()=>emit('history'))"><AppIcon name="history" />{{ i18n.t('record.history_undo') }}</button>
+          <button v-if="props.canPdf" type="button" @click="act(()=>emit('pdf'))"><AppIcon name="pdf" />{{ i18n.t('record.pdf_explorer') }}</button>
         </div>
       </details>
     </div>

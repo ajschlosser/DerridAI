@@ -13,7 +13,7 @@ const loading = ref(false);
 const failed = ref("");
 
 const rows = computed(() => Object.entries(metrics.value?.models ?? {}));
-const na = computed(() => i18n.t("pdf_corpus.enrich_metrics.na", "not enough data"));
+const na = computed(() => i18n.t("pdf_corpus.enrich_metrics.na"));
 const pct = (value: number | null | undefined) => (value == null ? na.value : `${Math.round(value * 100)}%`);
 const seconds = (value: number | null | undefined) => (value == null ? na.value : `${(value / 1000).toFixed(1)} s`);
 const brier = (value: number | null | undefined) => (value == null ? na.value : value.toFixed(3));

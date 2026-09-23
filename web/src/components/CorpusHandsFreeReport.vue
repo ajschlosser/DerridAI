@@ -13,17 +13,17 @@ const more = computed(() => Math.max(0, (props.report?.left_for_review ?? 0) - s
 
 <template>
   <section v-if="report" class="hf-report" aria-labelledby="hf-report-title">
-    <h3 id="hf-report-title">{{ i18n.t("pdf_corpus.hands_free_report_title", "Hands-free run") }}</h3>
-    <p>{{ i18n.tf("pdf_corpus.hands_free_report_summary", "{accepted} of {records} records accepted, {filled} values taken from the model, {left} left for you.", { accepted: report.accepted, records: report.records, filled: report.fields_filled, left: report.left_for_review }) }}
-      <span v-if="report.published">{{ i18n.t("pdf_corpus.hands_free_published", "Published.") }}</span></p>
+    <h3 id="hf-report-title">{{ i18n.t("pdf_corpus.hands_free_report_title") }}</h3>
+    <p>{{ i18n.tf("pdf_corpus.hands_free_report_summary", { accepted: report.accepted, records: report.records, filled: report.fields_filled, left: report.left_for_review }) }}
+      <span v-if="report.published">{{ i18n.t("pdf_corpus.hands_free_published") }}</span></p>
     <ul v-if="report.notes?.length" class="hf-notes"><li v-for="note in report.notes" :key="note">{{ note }}</li></ul>
-    <ul v-if="shown.length" class="hf-exceptions" :aria-label="i18n.t('pdf_corpus.hands_free_left', 'Left for you')">
+    <ul v-if="shown.length" class="hf-exceptions" :aria-label="i18n.t('pdf_corpus.hands_free_left')">
       <li v-for="item in shown" :key="item.record_id">
         <button type="button" class="link-button" @click="emit('open-record', item.record_id)">{{ item.record_id }}</button>
         <span>{{ item.reasons.join("; ") }}</span>
       </li>
     </ul>
-    <p v-if="more" class="hf-more">{{ i18n.tf("pdf_corpus.hands_free_more", "and {count} more in the review queue.", { count: more }) }}</p>
+    <p v-if="more" class="hf-more">{{ i18n.tf("pdf_corpus.hands_free_more", { count: more }) }}</p>
   </section>
 </template>
 

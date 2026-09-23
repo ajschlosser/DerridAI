@@ -20,6 +20,8 @@ type Helper =
   | "sameValue"
   | "shell"
   | "toast"
+  | "tr"
+  | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -36,6 +38,8 @@ export function createRecordEditing(deps: Deps) {
     sameValue,
     shell,
     toast,
+    tr,
+    trf,
     uid,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
@@ -90,17 +94,20 @@ export function createRecordEditing(deps: Deps) {
     const record = file?.records?.[index];
     const count = Array.isArray(record?.updates) ? record.updates.length : 0;
     if (!record || !count) {
-      toast("This record has no updates history");
+      toast(tr("runtime.toast.no_updates_history"));
       return false;
     }
     if (
       confirmFirst &&
       !(await openMessageModal({
-        title: "Clear record update history?",
-        message: `Clear all ${count} updates entries from ${record.record_id || `record ${index + 1}`}? This history cannot be reconstructed automatically.`,
+        title: tr("record.clear_history_title"),
+        message: trf("record.clear_history_message", {
+          count,
+          record: record.record_id || `record ${index + 1}`,
+        }),
         tone: "danger",
-        confirmLabel: "Clear history",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("record.clear_history_confirm"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return false;
@@ -113,16 +120,15 @@ export function createRecordEditing(deps: Deps) {
     const rows = allRows().filter(
       (row: Any) => Array.isArray(row.record.updates) && row.record.updates.length,
     );
-    if (!rows.length) return toast("No loaded records have updates history");
-    const entries = rows.reduce((sum: Any, row: Any) => sum + row.record.updates.length, 0);
+    if (!rows.length) return toast(tr("runtime.toast.no_loaded_updates"));
     if (
       !confirmed &&
       !(await openMessageModal({
-        title: "Clear all update histories?",
-        message: `Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,
+        title: tr("settings.clear_updates_title"),
+        message: tr("settings.clear_updates_message"),
         tone: "danger",
-        confirmLabel: "Clear all histories",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("settings.clear_updates"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return;

@@ -33,14 +33,14 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
 
 <template>
   <div class="pdf-workspace-native" data-page-width="full">
-    <nav class="pdf-mode-tabs" :aria-label="i18n.t('pdf_workspace.modes', 'Corpus Builder modes')">
+    <nav class="pdf-mode-tabs" :aria-label="i18n.t('pdf_workspace.modes')">
       <button
         type="button"
         :class="{ active: mode === 'builder' }"
         :aria-current="mode === 'builder' ? 'page' : undefined"
         @click="setMode('builder')"
       >
-        {{ i18n.t("pdf_workspace.builder", "Corpus Builder") }}
+        {{ i18n.t("pdf_workspace.builder") }}
       </button>
       <button
         type="button"
@@ -48,13 +48,10 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
         :aria-current="mode === 'explorer' ? 'page' : undefined"
         @click="setMode('explorer')"
       >
-        {{ i18n.t("pdf_workspace.explorer", "PDF Explorer") }}
+        {{ i18n.t("pdf_workspace.explorer") }}
       </button>
       <span>{{
-        i18n.t(
-          "pdf_workspace.help",
-          "Build auditable record sets, with source reading available in PDF Explorer",
-        )
+        i18n.t("pdf_workspace.help")
       }}</span>
     </nav>
     <PdfCorpusBuilder v-if="mode === 'builder'" />

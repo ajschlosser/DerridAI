@@ -30,9 +30,9 @@ const message = computed(() => {
   const a = props.activity;
   if (!a) return "";
   const values = { model: a.model, task: task.value, elapsed: elapsed.value };
-  if (a.state === "loading_model") return i18n.tf("pdf_corpus.model_loading", "Waiting for {model} to load into memory ({elapsed}). A large model can take a few minutes the first time.", values);
-  if (a.state === "working") return i18n.tf("pdf_corpus.model_working", "{model} is working on {task} ({elapsed}).", values);
-  return i18n.tf("pdf_corpus.model_waiting", "Waiting for {model} to answer ({elapsed}).", values);
+  if (a.state === "loading_model") return i18n.tf("pdf_corpus.model_loading", values);
+  if (a.state === "working") return i18n.tf("pdf_corpus.model_working", values);
+  return i18n.tf("pdf_corpus.model_waiting", values);
 });
 </script>
 

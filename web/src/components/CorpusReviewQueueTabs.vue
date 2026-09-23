@@ -48,7 +48,7 @@ function onKeydown(event:KeyboardEvent,current:ReviewQueue){
 
 <template>
   <div class="queue-controls">
-    <div class="queue-tabs" role="toolbar" :aria-label="i18n.t('pdf_corpus.review_queue','Review queue')">
+    <div class="queue-tabs" role="toolbar" :aria-label="i18n.t('pdf_corpus.review_queue')">
       <button v-for="tab in primaryTabs" :key="tab.id" type="button" class="queue-tab"
         :data-review-queue="tab.id" :aria-pressed="modelValue===tab.id||primaryModel===tab.id" :tabindex="primaryModel===tab.id?0:-1" :disabled="disabled"
         @keydown="onKeydown($event,tab.id)" @click="selectPrimary(tab.id)">
@@ -56,16 +56,16 @@ function onKeydown(event:KeyboardEvent,current:ReviewQueue){
       </button>
     </div>
     <label v-if="primaryModel==='issues'" class="issue-filter">
-      <span>{{i18n.t('pdf_corpus.issue_filter','Issue type')}}</span>
+      <span>{{i18n.t('pdf_corpus.issue_filter')}}</span>
       <select class="control" :disabled="disabled" :value="issueFilter" @change="selectIssue">
-        <option value="issues">{{i18n.t('pdf_corpus.issue_filter_all','All issues')}} · {{issues}}</option>
-        <option v-if="metadata>0||modelValue==='metadata'" value="metadata">{{i18n.t('pdf_corpus.queue_metadata','Metadata')}} · {{metadata}}</option>
-        <option v-if="topology>0||modelValue==='topology'" value="topology">{{i18n.t('pdf_corpus.queue_topology','Topology')}} · {{topology}}</option>
-        <option v-if="sourceProblems>0||modelValue==='source'" value="source">{{i18n.t('pdf_corpus.queue_source','Source problem')}} · {{sourceProblems}}</option>
+        <option value="issues">{{i18n.t('pdf_corpus.issue_filter_all')}} · {{issues}}</option>
+        <option v-if="metadata>0||modelValue==='metadata'" value="metadata">{{i18n.t('pdf_corpus.queue_metadata')}} · {{metadata}}</option>
+        <option v-if="topology>0||modelValue==='topology'" value="topology">{{i18n.t('pdf_corpus.queue_topology')}} · {{topology}}</option>
+        <option v-if="sourceProblems>0||modelValue==='source'" value="source">{{i18n.t('pdf_corpus.queue_source')}} · {{sourceProblems}}</option>
       </select>
     </label>
     <p class="queue-count-help" role="note">
-      {{ i18n.t("pdf_corpus.queue_count_help", "Issue-type counts may overlap because one record can have multiple issues.") }}
+      {{ i18n.t("pdf_corpus.queue_count_help") }}
     </p>
   </div>
 </template>

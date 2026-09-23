@@ -27,51 +27,51 @@ function reasonLabel(code?:string){return i18n.t(`pdf_corpus.metadata_reason.${c
   <section v-if="totalIssues>0" class="metadata-issues" aria-labelledby="metadata-resolution-title">
     <header class="resolution-head">
       <div>
-        <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_resolution','Metadata resolution')}}</span>
-        <h3 id="metadata-resolution-title">{{i18n.t('pdf_corpus.metadata_needs_attention','Metadata needs attention')}}</h3>
-        <p>{{i18n.tf('pdf_corpus.metadata_resolution_intro','Corpus construction and record review can be complete while required scholarly metadata remains unresolved. {records} record(s) contain {fields} required field issue(s).',{records:Number(summary.records_incomplete||0),fields:Number(summary.fields_unresolved||0)})}}</p>
+        <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_resolution')}}</span>
+        <h3 id="metadata-resolution-title">{{i18n.t('pdf_corpus.metadata_needs_attention')}}</h3>
+        <p>{{i18n.tf('pdf_corpus.metadata_resolution_intro', {records:Number(summary.records_incomplete||0),fields:Number(summary.fields_unresolved||0)})}}</p>
       </div>
-      <div class="resolution-count" aria-label="Metadata issue count"><strong>{{summary.fields_unresolved||0}}</strong><span>{{i18n.t('pdf_corpus.fields_to_resolve','fields to resolve')}}</span></div>
+      <div class="resolution-count" aria-label="Metadata issue count"><strong>{{summary.fields_unresolved||0}}</strong><span>{{i18n.t('pdf_corpus.fields_to_resolve')}}</span></div>
     </header>
 
     <section v-if="operationRunning||operation.state==='completed'||operation.state==='failed'" class="operation" :data-state="operation.state" role="status" aria-live="polite">
       <div class="operation-copy">
-        <b>{{operationRunning?i18n.t('pdf_corpus.metadata_retry_running','Retrying automatically resolvable metadata'):operation.state==='completed'?i18n.t('pdf_corpus.metadata_retry_complete','Metadata retry complete'):i18n.t('pdf_corpus.metadata_retry_failed','Metadata retry failed')}}</b>
-        <span v-if="operationRunning">{{i18n.tf('pdf_corpus.metadata_retry_progress','{processed} of {total} records processed · {resolved} fields resolved',{processed:Number(operation.records_processed||0),total:Number(operation.records_total||0),resolved:Number(operation.fields_resolved||0)})}}</span>
-        <span v-else-if="operation.state==='completed'">{{i18n.tf('pdf_corpus.metadata_retry_result','{resolved} fields resolved · {remaining} fields still need attention',{resolved:Number(operation.fields_resolved||0),remaining:Number(operation.fields_remaining||0)})}}</span>
-        <span v-else>{{operation.error||i18n.t('pdf_corpus.metadata_retry_failed_help','The retry stopped without changing successful metadata. Review the remaining issue queue or try again after correcting the provider.')}}</span>
+        <b>{{operationRunning?i18n.t('pdf_corpus.metadata_retry_running'):operation.state==='completed'?i18n.t('pdf_corpus.metadata_retry_complete'):i18n.t('pdf_corpus.metadata_retry_failed')}}</b>
+        <span v-if="operationRunning">{{i18n.tf('pdf_corpus.metadata_retry_progress', {processed:Number(operation.records_processed||0),total:Number(operation.records_total||0),resolved:Number(operation.fields_resolved||0)})}}</span>
+        <span v-else-if="operation.state==='completed'">{{i18n.tf('pdf_corpus.metadata_retry_result', {resolved:Number(operation.fields_resolved||0),remaining:Number(operation.fields_remaining||0)})}}</span>
+        <span v-else>{{operation.error||i18n.t('pdf_corpus.metadata_retry_failed_help')}}</span>
       </div>
       <progress v-if="operationRunning" :value="progress" max="100">{{progress}}%</progress>
     </section>
 
     <div class="resolution-paths">
       <article class="resolution-path" :data-empty="retryable.length===0">
-        <span class="path-kicker">{{i18n.t('pdf_corpus.automatic_resolution','Automatic resolution')}}</span>
-        <h4>{{i18n.tf('pdf_corpus.retryable_metadata_fields','{count} field(s) can be retried',{count:Number(summary.auto_retry_fields??retryable.length)})}}</h4>
-        <p>{{i18n.t('pdf_corpus.retryable_metadata_help','These issues came from a failed/invalid model response or evidence threshold. Retrying affects only unresolved records; completed metadata and topology are preserved.')}}</p>
-        <div class="execution"><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}} <code>{{provider}}</code></span><span>{{i18n.t('pdf_corpus.model','Model')}} <code>{{model}}</code></span></div>
-        <button v-if="Number(summary.auto_retry_fields??retryable.length)>0" type="button" class="btn primary" :disabled="busy||operationRunning" @click="emit('retry')">{{operationRunning?i18n.t('pdf_corpus.retrying_metadata','Retrying metadata…'):i18n.tf('pdf_corpus.retry_fields_with_model','Retry {count} field(s) with {model}',{count:Number(summary.auto_retry_fields??retryable.length),model})}}</button>
-        <span v-else class="path-done">{{i18n.t('pdf_corpus.no_automatic_metadata_work','No automatically retryable fields remain.')}}</span>
+        <span class="path-kicker">{{i18n.t('pdf_corpus.automatic_resolution')}}</span>
+        <h4>{{i18n.tf('pdf_corpus.retryable_metadata_fields', {count:Number(summary.auto_retry_fields??retryable.length)})}}</h4>
+        <p>{{i18n.t('pdf_corpus.retryable_metadata_help')}}</p>
+        <div class="execution"><span>{{i18n.t('pdf_corpus.provider_profile')}} <code>{{provider}}</code></span><span>{{i18n.t('pdf_corpus.model')}} <code>{{model}}</code></span></div>
+        <button v-if="Number(summary.auto_retry_fields??retryable.length)>0" type="button" class="btn primary" :disabled="busy||operationRunning" @click="emit('retry')">{{operationRunning?i18n.t('pdf_corpus.retrying_metadata'):i18n.tf('pdf_corpus.retry_fields_with_model', {count:Number(summary.auto_retry_fields??retryable.length),model})}}</button>
+        <span v-else class="path-done">{{i18n.t('pdf_corpus.no_automatic_metadata_work')}}</span>
       </article>
 
       <article class="resolution-path" :data-empty="human.length===0">
-        <span class="path-kicker">{{i18n.t('pdf_corpus.human_resolution','Human resolution')}}</span>
-        <h4>{{i18n.tf('pdf_corpus.human_metadata_fields','{count} field(s) require judgment',{count:Number(summary.human_review_fields??human.length)})}}</h4>
-        <p>{{i18n.t('pdf_corpus.human_metadata_help','These fields are ambiguous or depend on source quality. Review the proposed record, source evidence, allowed values, and field provenance before confirming a value.')}}</p>
-        <button v-if="firstHumanRecord" type="button" class="btn" :disabled="busy" @click="emit('review',firstHumanRecord)">{{i18n.t('pdf_corpus.review_ambiguous_metadata','Review ambiguous metadata')}}</button>
-        <span v-else class="path-done">{{i18n.t('pdf_corpus.no_human_metadata_work','No metadata fields require human judgment.')}}</span>
+        <span class="path-kicker">{{i18n.t('pdf_corpus.human_resolution')}}</span>
+        <h4>{{i18n.tf('pdf_corpus.human_metadata_fields', {count:Number(summary.human_review_fields??human.length)})}}</h4>
+        <p>{{i18n.t('pdf_corpus.human_metadata_help')}}</p>
+        <button v-if="firstHumanRecord" type="button" class="btn" :disabled="busy" @click="emit('review',firstHumanRecord)">{{i18n.t('pdf_corpus.review_ambiguous_metadata')}}</button>
+        <span v-else class="path-done">{{i18n.t('pdf_corpus.no_human_metadata_work')}}</span>
       </article>
     </div>
 
     <details v-if="issues.length" class="issue-details">
-      <summary>{{i18n.tf('pdf_corpus.view_metadata_issue_details','View {count} metadata issue(s)',{count:issues.length})}}</summary>
-      <div class="issue-table" role="table" :aria-label="i18n.t('pdf_corpus.metadata_issue_table','Metadata issue details')">
-        <div class="issue-row issue-header" role="row"><span role="columnheader">{{i18n.t('pdf_corpus.record','Record')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.field','Field')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.reason','Reason')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.next_step','Next step')}}</span></div>
+      <summary>{{i18n.tf('pdf_corpus.view_metadata_issue_details', {count:issues.length})}}</summary>
+      <div class="issue-table" role="table" :aria-label="i18n.t('pdf_corpus.metadata_issue_table')">
+        <div class="issue-row issue-header" role="row"><span role="columnheader">{{i18n.t('pdf_corpus.record')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.field')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.reason')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.next_step')}}</span></div>
         <button v-for="issue in issues" :key="`${issue.record_id}-${issue.field}`" type="button" class="issue-row" role="row" @click="issue.record_id&&emit('review',String(issue.record_id))">
-          <span role="cell"><b>{{issue.record_id}}</b><small>{{i18n.t('pdf_corpus.pages','pp.')}} {{issue.page_start??'—'}}–{{issue.page_end??'—'}}</small></span>
+          <span role="cell"><b>{{issue.record_id}}</b><small>{{i18n.t('pdf_corpus.pages')}} {{issue.page_start??'—'}}–{{issue.page_end??'—'}}</small></span>
           <span role="cell">{{i18n.t(`record.${issue.field}`,String(issue.field||'').replace(/_/g,' '))}}</span>
           <span role="cell">{{reasonLabel(issue.issue_type)}}<small v-if="issue.reason">{{issue.reason}}</small></span>
-          <span role="cell">{{issue.retryable?i18n.t('pdf_corpus.retry_automatically','Retry automatically'):i18n.t('pdf_corpus.review_manually','Review manually')}}</span>
+          <span role="cell">{{issue.retryable?i18n.t('pdf_corpus.retry_automatically'):i18n.t('pdf_corpus.review_manually')}}</span>
         </button>
       </div>
     </details>

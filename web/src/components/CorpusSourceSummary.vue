@@ -37,32 +37,32 @@ const i18n = useI18nStore();
   <section
     class="source-summary"
     :class="{ zoomable }"
-    :aria-label="i18n.t('pdf_corpus.source_context', 'Source context')"
+    :aria-label="i18n.t('pdf_corpus.source_context')"
   >
     <header class="source-summary-head">
       <div>
-        <b>{{ i18n.t("pdf_corpus.source_context", "Source context") }}</b
+        <b>{{ i18n.t("pdf_corpus.source_context") }}</b
         ><span>{{
           pageCount
-            ? i18n.tf("pdf_corpus.pdf_page_of", "PDF page {page} of {total}", {
+            ? i18n.tf("pdf_corpus.pdf_page_of", {
                 page,
                 total: pageCount,
               })
-            : i18n.tf("pdf_corpus.pdf_page", "PDF page {page}", { page })
+            : i18n.tf("pdf_corpus.pdf_page", { page })
         }}</span>
       </div>
     </header>
     <div
       v-if="pageCount > 1"
       class="source-page-nav"
-      :aria-label="i18n.t('pdf_corpus.source_page_navigation', 'Source page navigation')"
+      :aria-label="i18n.t('pdf_corpus.source_page_navigation')"
     >
       <button type="button" class="btn small" :disabled="!canPrevious" @click="emit('previous')">
-        ← {{ i18n.t("ui.previous", "Previous") }}
+        ← {{ i18n.t("ui.previous") }}
       </button>
       <span aria-live="polite">{{ page }} / {{ pageCount }}</span>
       <button type="button" class="btn small" :disabled="!canNext" @click="emit('next')">
-        {{ i18n.t("ui.next", "Next") }} →
+        {{ i18n.t("ui.next") }} →
       </button>
     </div>
     <div v-if="pdfUrl" class="source-thumbnail">
@@ -78,18 +78,15 @@ const i18n = useI18nStore();
     </div>
     <div v-else class="source-unavailable">
       {{
-        i18n.t(
-          "pdf_corpus.source_loading_or_unavailable",
-          "Source blocks are loading or unavailable.",
-        )
+        i18n.t("pdf_corpus.source_loading_or_unavailable")
       }}
     </div>
     <div class="source-summary-actions">
       <button type="button" class="btn primary" @click="emit('openViewer')">
-        {{ i18n.t("pdf_corpus.open_source_viewer", "Open source viewer") }}
+        {{ i18n.t("pdf_corpus.open_source_viewer") }}
       </button>
       <button v-if="showPdfExplorer" type="button" class="btn" @click="emit('openPdfExplorer')">
-        {{ i18n.t("pdf_corpus.open_pdf_explorer", "Open in PDF Explorer") }}
+        {{ i18n.t("pdf_corpus.open_pdf_explorer") }}
       </button>
     </div>
   </section>

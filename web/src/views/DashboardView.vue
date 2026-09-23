@@ -118,7 +118,7 @@ async function refresh() {
         {
           id: "average",
           type: "bars",
-          title: i18n.t("dashboard.top_avg_record_length", "Top 5 Works by Average Record Length"),
+          title: i18n.t("dashboard.top_avg_record_length"),
           values: [...workItems]
             .sort((a, b) => b.averageRecordLength - a.averageRecordLength)
             .slice(0, 5)
@@ -128,7 +128,7 @@ async function refresh() {
         {
           id: "words",
           type: "bars",
-          title: i18n.t("dashboard.top_total_words", "Top 5 Works by Total Words"),
+          title: i18n.t("dashboard.top_total_words"),
           values: [...workItems]
             .sort((a, b) => b.totalWords - a.totalWords)
             .slice(0, 5)
@@ -138,7 +138,7 @@ async function refresh() {
         {
           id: "records",
           type: "bars",
-          title: i18n.t("dashboard.top_works_records", "Top 5 Works by Number of Records"),
+          title: i18n.t("dashboard.top_works_records"),
           values: [...workItems]
             .sort((a, b) => b.count - a.count)
             .slice(0, 5)
@@ -148,16 +148,16 @@ async function refresh() {
         {
           id: "record-share",
           type: "pie",
-          title: i18n.t("dashboard.work_record_share", "Works as percentage of total records"),
+          title: i18n.t("dashboard.work_record_share"),
           values: runtime.pieShareSeries(workItems, "count"),
-          valueLabel: i18n.t("dynamic.records", "records"),
+          valueLabel: i18n.t("dynamic.records"),
         },
         {
           id: "word-share",
           type: "pie",
-          title: i18n.t("dashboard.work_word_share", "Works as percentage of total words"),
+          title: i18n.t("dashboard.work_word_share"),
           values: runtime.pieShareSeries(workItems, "totalWords"),
-          valueLabel: i18n.t("dashboard.words", "words"),
+          valueLabel: i18n.t("dashboard.words"),
         },
       ];
   state.dashboardMetricIndex = Math.max(
@@ -219,7 +219,7 @@ async function refresh() {
   previewTarget.value = preview.target;
   previewLastViewed.value = preview.lastViewed;
 
-  corpusBuildsAriaLabel.value = i18n.t("pdf_corpus.home_title", "Corpus builds");
+  corpusBuildsAriaLabel.value = i18n.t("pdf_corpus.home_title");
   if (isResearcher.value) {
     corpusBuilds.value = [];
     corpusBuildsActive.value = 0;
@@ -273,16 +273,13 @@ async function goSearch() {
       runtime.persistPrefs();
       if (runtime.canAccessPage("vector")) {
         runtime.notifyToast(
-          i18n.t(
-            "search.redirect_database",
-            "Search needs a corpus database. Opening database creation now.",
-          ),
+          i18n.t("search.redirect_database"),
           { tone: "info" },
         );
         runtime.openDatabaseCreationFromResearch();
       } else {
         runtime.navigateTo("global");
-        runtime.notifyToast(i18n.t("research.no_database", "No corpus database available"), {
+        runtime.notifyToast(i18n.t("research.no_database"), {
           tone: "warn",
         });
       }
@@ -316,7 +313,7 @@ async function goSearch() {
       state.storeSearchResults = data.results || [];
     } catch (error) {
       runtime.notifyToast(
-        `${i18n.t("research.search_failed", "Search failed")}: ${error instanceof Error ? error.message : String(error)}`,
+        `${i18n.t("research.search_failed")}: ${error instanceof Error ? error.message : String(error)}`,
         { tone: "danger" },
       );
     } finally {
@@ -389,7 +386,7 @@ function openRecentRecord(fileId: string, index: number) {
 async function setUiTheme(value: string) {
   runtime.applyUiTheme(value);
   runtime.persistPrefs();
-  runtime.notifyToast(i18n.t("dashboard.appearance_saved", "Appearance updated"), {
+  runtime.notifyToast(i18n.t("dashboard.appearance_saved"), {
     tone: "success",
   });
   await refresh();
@@ -508,22 +505,22 @@ onBeforeUnmount(() => {
         <article class="card dashboard-hero">
           <img src="/brand/derridai-mark.png" alt="" class="dashboard-hero-mark" />
           <div class="dashboard-hero-copy">
-            <h1>{{ i18n.t("dashboard.welcome", "Welcome to DerridAI") }}</h1>
+            <h1>{{ i18n.t("dashboard.welcome") }}</h1>
             <p class="dashboard-hero-tagline">
-              {{ i18n.t("dashboard.tagline", "Search. Compare. Annotate. Always already.") }}
+              {{ i18n.t("dashboard.tagline") }}
             </p>
             <blockquote>
-              {{ i18n.t("dashboard.quote", "“Il n’y a pas de hors-texte.”") }}
+              {{ i18n.t("dashboard.quote") }}
             </blockquote>
             <small>— Jacques Derrida</small>
             <div class="dashboard-hero-actions">
               <button class="btn dark" id="dashStartSearch" @click="goNav('global')">
                 <AppIcon name="search" />{{
-                  i18n.t("dashboard.start_searching", "Start searching")
+                  i18n.t("dashboard.start_searching")
                 }}
               </button>
               <button class="btn" id="dashBrowseWorks" @click="goNav('works')">
-                <AppIcon name="books" />{{ i18n.t("dashboard.browse_works", "Browse works") }}
+                <AppIcon name="books" />{{ i18n.t("dashboard.browse_works") }}
               </button>
             </div>
           </div>
@@ -531,7 +528,7 @@ onBeforeUnmount(() => {
         <article class="card dashboard-search-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="search" /></span>
-            <b>{{ i18n.t("dashboard.global_search", "Global Search") }}</b>
+            <b>{{ i18n.t("dashboard.global_search") }}</b>
           </div>
           <div class="dashboard-search-tabs">
             <button
@@ -551,7 +548,7 @@ onBeforeUnmount(() => {
               data-dash-search-mode="database"
               @click="setSearchMode('database')"
             >
-              {{ i18n.t("research.semantic_db_search", "Semantic DB Search") }}
+              {{ i18n.t("research.semantic_db_search") }}
             </button>
           </div>
           <div class="dashboard-search-line">
@@ -561,7 +558,7 @@ onBeforeUnmount(() => {
                 id="dashSearchQuery"
                 ref="searchQueryInputEl"
                 :value.attr="globalSearch"
-                :placeholder="i18n.t('dashboard.search_corpus_placeholder', 'Search the corpus…')"
+                :placeholder="i18n.t('dashboard.search_corpus_placeholder')"
                 @keydown="onSearchQueryKeydown"
               />
             </div>
@@ -569,15 +566,15 @@ onBeforeUnmount(() => {
               id="dashSearchWork"
               ref="searchWorkSelectEl"
               class="control"
-              :aria-label="i18n.t('field.work', 'Work')"
+              :aria-label="i18n.t('field.work')"
             >
-              <option value="">{{ i18n.t("dashboard.all_works", "All works") }}</option>
+              <option value="">{{ i18n.t("dashboard.all_works") }}</option>
               <option v-for="item in works" :key="String(item.work)" :value="item.work">
                 {{ item.work }}
               </option>
             </select>
             <button class="btn dark" id="dashRunSearch" @click="goSearch">
-              <AppIcon name="search" />{{ i18n.t("ui.search", "Search") }}
+              <AppIcon name="search" />{{ i18n.t("ui.search") }}
             </button>
           </div>
           <div class="dashboard-search-footer">
@@ -585,14 +582,11 @@ onBeforeUnmount(() => {
               class="dashboard-advanced-link"
               id="dashAdvancedSearch"
               @click="goSearch"
-              v-text="`${i18n.t('dashboard.advanced_filters', 'Advanced filters')} →`"
+              v-text="`${i18n.t('dashboard.advanced_filters')} →`"
             ></button>
             <p class="dashboard-search-help">
               {{
-                i18n.t(
-                  "dashboard.search_help",
-                  "Search across works, metadata, annotations, and—when available—the semantic database.",
-                )
+                i18n.t("dashboard.search_help")
               }}
             </p>
           </div>
@@ -602,13 +596,13 @@ onBeforeUnmount(() => {
         <article class="card dashboard-overview-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="books" /></span>
-            <b>{{ i18n.t("dashboard.corpus_overview", "Corpus Overview") }}</b>
+            <b>{{ i18n.t("dashboard.corpus_overview") }}</b>
           </div>
           <div class="dashboard-overview-grid">
             <button data-dashboard-nav="works" @click="goNav('works')">
               <span class="dashboard-overview-icon"><AppIcon name="books" /></span>
               <strong>{{ works.length.toLocaleString() }}</strong>
-              <small>{{ i18n.t("dashboard.works", "Works") }}</small>
+              <small>{{ i18n.t("dashboard.works") }}</small>
             </button>
             <button
               :data-dashboard-nav="isResearcher ? 'vector' : 'list'"
@@ -616,27 +610,24 @@ onBeforeUnmount(() => {
             >
               <span class="dashboard-overview-icon"><AppIcon name="record" /></span>
               <strong>{{ Number(totals.records || 0).toLocaleString() }}</strong>
-              <small>{{ i18n.t("dashboard.records", "Records") }}</small>
+              <small>{{ i18n.t("dashboard.records") }}</small>
             </button>
             <button
               :disabled="isResearcher"
               :data-disabled-reason="
                 isResearcher
-                  ? i18n.t(
-                      'dashboard.words_hidden_researcher',
-                      'Word totals are not exposed to researcher accounts.',
-                    )
+                  ? i18n.t('dashboard.words_hidden_researcher')
                   : undefined
               "
             >
               <span class="dashboard-overview-icon"><AppIcon name="list" /></span>
               <strong>{{ isResearcher ? "—" : runtime.compactNumber(words) }}</strong>
-              <small>{{ i18n.t("dashboard.total_words", "Total words") }}</small>
+              <small>{{ i18n.t("dashboard.total_words") }}</small>
             </button>
             <button data-dashboard-nav="vector" @click="goNav('vector')">
               <span class="dashboard-overview-icon"><AppIcon name="database" /></span>
               <strong>{{ Number(totals.dbs || 0).toLocaleString() }}</strong>
-              <small>{{ i18n.t("dashboard.databases", "Databases") }}</small>
+              <small>{{ i18n.t("dashboard.databases") }}</small>
             </button>
           </div>
         </article>
@@ -654,7 +645,7 @@ onBeforeUnmount(() => {
                 class="dashboard-metric-arrow"
                 id="dashMetricPrev"
                 type="button"
-                :aria-label="i18n.t('dashboard.previous_chart', 'Previous chart')"
+                :aria-label="i18n.t('dashboard.previous_chart')"
                 @click="stepMetric(-1)"
                 v-text="'←'"
               ></button>
@@ -663,7 +654,7 @@ onBeforeUnmount(() => {
                 class="dashboard-metric-arrow"
                 id="dashMetricNext"
                 type="button"
-                :aria-label="i18n.t('dashboard.next_chart', 'Next chart')"
+                :aria-label="i18n.t('dashboard.next_chart')"
                 @click="stepMetric(1)"
                 v-text="'→'"
               ></button>
@@ -677,7 +668,7 @@ onBeforeUnmount(() => {
           <div
             class="dashboard-metric-dots"
             role="tablist"
-            :aria-label="i18n.t('dashboard.work_charts', 'Work charts')"
+            :aria-label="i18n.t('dashboard.work_charts')"
           >
             <button
               v-for="(metric, index) in metricSets"
@@ -698,7 +689,7 @@ onBeforeUnmount(() => {
         <article class="card dashboard-activity-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="history" /></span>
-            <b>{{ i18n.t("dashboard.recent_activity", "Recent Activity") }}</b>
+            <b>{{ i18n.t("dashboard.recent_activity") }}</b>
           </div>
           <div class="dashboard-activity-list">
             <template v-if="recent.length">
@@ -750,15 +741,15 @@ onBeforeUnmount(() => {
                   )
                 }}</time>
                 <span v-if="item.kind === 'annotation'">
-                  {{ i18n.t("annotations.record_note", "Annotation") }} ·
+                  {{ i18n.t("annotations.record_note") }} ·
                   {{
                     (item.annotation as Any).work ||
                     (item.annotation as Any).record_id ||
-                    i18n.t("nav.record", "Record")
+                    i18n.t("nav.record")
                   }}
                 </span>
                 <span v-else-if="item.kind === 'rag'">
-                  {{ i18n.t("nav.rag", "Research") }} ·
+                  {{ i18n.t("nav.rag") }} ·
                   {{
                     String((item.job as Any).prompt || (item.job as Any).label || "RAG").slice(
                       0,
@@ -770,7 +761,7 @@ onBeforeUnmount(() => {
                   {{
                     runtime.label(
                       (item.update as Any).field_name ||
-                        i18n.t("dashboard.updated_record", "Updated record"),
+                        i18n.t("dashboard.updated_record"),
                     )
                   }}
                   ·
@@ -784,10 +775,7 @@ onBeforeUnmount(() => {
             </template>
             <div v-else class="dashboard-activity-empty">
               {{
-                i18n.t(
-                  "dashboard.no_recent_activity",
-                  "No recent activity in areas available to this account.",
-                )
+                i18n.t("dashboard.no_recent_activity")
               }}
             </div>
           </div>
@@ -797,13 +785,13 @@ onBeforeUnmount(() => {
         <div class="dashboard-section-heading">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="books" /></span>
-            <b>{{ i18n.t("dashboard.works", "Works") }}</b>
+            <b>{{ i18n.t("dashboard.works") }}</b>
           </div>
           <button
             class="dashboard-text-link"
             id="dashViewAllWorks"
             @click="goNav('works')"
-            v-text="`${i18n.t('dashboard.view_all_works', 'View all works')} →`"
+            v-text="`${i18n.t('dashboard.view_all_works')} →`"
           ></button>
         </div>
         <div class="dashboard-work-carousel-shell">
@@ -811,8 +799,8 @@ onBeforeUnmount(() => {
             class="carousel-arrow"
             id="dashWorksPrev"
             type="button"
-            :title="i18n.t('ui.previous', 'Previous')"
-            :aria-label="i18n.t('ui.previous', 'Previous')"
+            :title="i18n.t('ui.previous')"
+            :aria-label="i18n.t('ui.previous')"
             @click="scrollWorks(-1)"
             v-text="'‹'"
           ></button>
@@ -829,7 +817,7 @@ onBeforeUnmount(() => {
                   v-if="item.cover"
                   class="dashboard-book-cover image"
                   :src="String(item.cover)"
-                  :alt="i18n.tf('works.cover_alt', 'Cover of {work}', { work: String(item.work) })"
+                  :alt="i18n.tf('works.cover_alt', { work: String(item.work) })"
                   loading="lazy"
                 />
                 <span v-else class="dashboard-book-cover placeholder">{{
@@ -838,23 +826,23 @@ onBeforeUnmount(() => {
                 <span>
                   <b>{{ item.work }}</b>
                   <small>{{
-                    item.year || i18n.t("dashboard.year_not_recorded", "Year not recorded")
+                    item.year || i18n.t("dashboard.year_not_recorded")
                   }}</small>
                   <small
                     >{{ Number(item.count).toLocaleString() }}
-                    {{ i18n.t("dynamic.records", "records") }}</small
+                    {{ i18n.t("dynamic.records") }}</small
                   >
                 </span>
               </button>
             </template>
-            <div v-else class="note">{{ i18n.t("research.no_works", "No works loaded yet.") }}</div>
+            <div v-else class="note">{{ i18n.t("research.no_works") }}</div>
           </div>
           <button
             class="carousel-arrow"
             id="dashWorksNext"
             type="button"
-            :title="i18n.t('ui.next', 'Next')"
-            :aria-label="i18n.t('ui.next', 'Next')"
+            :title="i18n.t('ui.next')"
+            :aria-label="i18n.t('ui.next')"
             @click="scrollWorks(1)"
             v-text="'›'"
           ></button>
@@ -867,23 +855,20 @@ onBeforeUnmount(() => {
         >
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.appearance", "Appearance") }}</b>
+            <b>{{ i18n.t("dashboard.appearance") }}</b>
           </div>
           <p>
             {{
-              i18n.t(
-                "dashboard.appearance_help",
-                "Choose the interface accent that is easiest for you to read.",
-              )
+              i18n.t("dashboard.appearance_help")
             }}
           </p>
           <fieldset class="dashboard-theme-options">
-            <legend>{{ i18n.t("dashboard.interface_theme", "Interface theme") }}</legend>
+            <legend>{{ i18n.t("dashboard.interface_theme") }}</legend>
             <label
               v-for="pair in [
-                ['green', i18n.t('theme.green', 'Green')],
-                ['blue', i18n.t('theme.blue', 'Blue')],
-                ['slate', i18n.t('theme.slate', 'Slate')],
+                ['green', i18n.t('theme.green')],
+                ['blue', i18n.t('theme.blue')],
+                ['slate', i18n.t('theme.slate')],
               ]"
               :key="pair[0]"
             >
@@ -899,79 +884,70 @@ onBeforeUnmount(() => {
             </label>
           </fieldset>
           <button class="btn" id="dashAppearanceSettings" @click="openAppearanceSettings">
-            {{ i18n.t("dashboard.more_appearance_settings", "More appearance settings") }}
+            {{ i18n.t("dashboard.more_appearance_settings") }}
           </button>
         </article>
         <article v-else-if="isResearcher" class="card dashboard-quick-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.appearance", "Appearance") }}</b>
+            <b>{{ i18n.t("dashboard.appearance") }}</b>
           </div>
           <p>
             {{
-              i18n.t(
-                "permissions.appearance_denied",
-                "Appearance controls are disabled for this role.",
-              )
+              i18n.t("permissions.appearance_denied")
             }}
           </p>
         </article>
         <article v-else class="card dashboard-quick-card dashboard-language-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.language_settings", "Language Settings") }}</b>
+            <b>{{ i18n.t("dashboard.language_settings") }}</b>
           </div>
           <p>
             {{
-              i18n.t(
-                "dashboard.language_settings_help",
-                "Choose the interface language and manage translation dictionaries.",
-              )
+              i18n.t("dashboard.language_settings_help")
             }}
           </p>
           <div class="dashboard-quick-field dashboard-locale-field">
-            <span>{{ i18n.t("dashboard.interface_language", "Interface language") }}</span>
+            <span>{{ i18n.t("dashboard.interface_language") }}</span>
             <b
               ><i class="dashboard-locale-symbol">{{ currentLanguageFlag }}</i
               >{{ currentLanguage }}</b
             >
           </div>
           <button class="btn primary" id="dashLanguages" @click="openLanguages">
-            {{ i18n.t("dashboard.manage_languages", "Manage languages") }}
+            {{ i18n.t("dashboard.manage_languages") }}
           </button>
         </article>
         <article class="card dashboard-quick-card dashboard-provider-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="spark" /></span>
-            <b>{{ i18n.t("dashboard.llm_provider_settings", "LLM Provider Settings") }}</b>
+            <b>{{ i18n.t("dashboard.llm_provider_settings") }}</b>
           </div>
           <p>
             {{
-              i18n.t(
-                "dashboard.llm_provider_help",
-                "Configure the provider used for LLM-assisted workflows.",
-              )
+              i18n.t("dashboard.llm_provider_help")
             }}
           </p>
           <div class="dashboard-provider-fields">
             <div class="dashboard-quick-field">
-              <span>{{ i18n.t("dashboard.default_provider", "Default provider") }}</span>
+              <span>{{ i18n.t("dashboard.default_provider") }}</span>
               <b>{{
                 currentProvider
                   ? runtime.providerDisplayName(currentProvider)
-                  : i18n.t("dashboard.not_configured", "Not configured")
+                  : i18n.t("dashboard.not_configured")
               }}</b>
             </div>
             <div class="dashboard-quick-field">
-              <span>{{ i18n.t("dashboard.model", "Model") }}</span>
+              <span>{{ i18n.t("dashboard.model") }}</span>
               <b>{{ currentProvider ? (currentProvider as Any).model || "auto" : "—" }}</b>
             </div>
           </div>
           <button class="btn" id="dashProviders" @click="openProviders">
             {{
               isResearcher
-                ? i18n.t("nav.rag", "Research")
-                : i18n.t("dashboard.manage_provider", "Manage provider")
+                ? i18n.t("nav.rag")
+                : i18n.t("dashboard.manage_provider")
             }}
           </button>
         </article>
@@ -979,7 +955,7 @@ onBeforeUnmount(() => {
           <div class="dashboard-section-heading">
             <div class="dashboard-card-title">
               <span class="dashboard-title-icon"><AppIcon name="record" /></span>
-              <b>{{ i18n.t("dashboard.record_view", "Record View") }}</b>
+              <b>{{ i18n.t("dashboard.record_view") }}</b>
             </div>
             <button
               class="dashboard-text-link"
@@ -987,26 +963,26 @@ onBeforeUnmount(() => {
               :disabled="!previewTarget"
               :data-disabled-reason="
                 !previewTarget
-                  ? i18n.t('dashboard.no_record_available', 'No record is available to open.')
+                  ? i18n.t('dashboard.no_record_available')
                   : undefined
               "
               @click="openRecordPreview"
-              v-text="`${i18n.t('research.open', 'Open')} →`"
+              v-text="`${i18n.t('research.open')} →`"
             ></button>
           </div>
           <template v-if="previewRecord">
             <div class="dashboard-record-state">
               {{
                 previewLastViewed
-                  ? i18n.t("dashboard.last_viewed_record", "Last viewed record")
-                  : i18n.t("dashboard.random_record", "A record from the corpus")
+                  ? i18n.t("dashboard.last_viewed_record")
+                  : i18n.t("dashboard.random_record")
               }}
             </div>
             <div class="dashboard-record-meta">
               <b>{{
                 (previewRecord as Any).work ||
                 (previewRecord as Any).record_id ||
-                i18n.t("dashboard.record", "Record")
+                i18n.t("dashboard.record")
               }}</b>
               <span class="dashboard-record-pages">{{
                 mlaPageSpan(previewRecord as Any) || ""
@@ -1021,7 +997,7 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div v-else class="dashboard-record-empty">
-            {{ i18n.t("dashboard.no_record_selected", "No corpus record is currently available.") }}
+            {{ i18n.t("dashboard.no_record_selected") }}
           </div>
         </article>
         <article
@@ -1031,13 +1007,13 @@ onBeforeUnmount(() => {
           <div class="dashboard-section-heading">
             <div class="dashboard-card-title">
               <span class="dashboard-title-icon"><AppIcon name="record" /></span>
-              <b>{{ i18n.t("dashboard.latest_annotation", "Latest annotation") }}</b>
+              <b>{{ i18n.t("dashboard.latest_annotation") }}</b>
             </div>
             <button
               class="dashboard-text-link"
               id="dashAnnotations"
               @click="openAnnotations"
-              v-text="`${i18n.t('annotations.view_all', 'View all')} →`"
+              v-text="`${i18n.t('annotations.view_all')} →`"
             ></button>
           </div>
           <button
@@ -1071,18 +1047,18 @@ onBeforeUnmount(() => {
               <span class="dashboard-annotation-work">{{ (latestAnnotation as Any).work }}</span>
               <span class="dashboard-annotation-pages">{{
                 mlaPageSpan((latestAnnotation as Any).record) ||
-                i18n.t("record.page_not_recorded", "Page not recorded")
+                i18n.t("record.page_not_recorded")
               }}</span>
               <span class="dashboard-annotation-author">{{
                 (latestAnnotation as Any).annotation.initiated_by ||
                 (latestAnnotation as Any).annotation.author ||
-                i18n.t("annotations.unknown_author", "Unknown author")
+                i18n.t("annotations.unknown_author")
               }}</span>
               <time>{{
                 runtime.formatTimestamp((latestAnnotation as Any).annotation.created_at)
               }}</time>
               <small>{{
-                (latestAnnotation as Any).record.record_id || i18n.t("nav.record", "Record")
+                (latestAnnotation as Any).record.record_id || i18n.t("nav.record")
               }}</small>
             </div>
             <p v-if="(latestAnnotation as Any).annotation.note">
@@ -1091,33 +1067,27 @@ onBeforeUnmount(() => {
             <blockquote v-else-if="(latestAnnotation as Any).annotation.quote">
               {{ (latestAnnotation as Any).annotation.quote }}
             </blockquote>
-            <p v-else>{{ i18n.t("annotations.record_note", "Record annotation") }}</p>
+            <p v-else>{{ i18n.t("annotations.record_note") }}</p>
           </button>
         </article>
         <article v-else class="card dashboard-quick-card dashboard-annotations-card">
           <div class="dashboard-section-heading">
             <div class="dashboard-card-title">
               <span class="dashboard-title-icon"><AppIcon name="record" /></span>
-              <b>{{ i18n.t("dashboard.annotations", "Annotations") }}</b>
+              <b>{{ i18n.t("dashboard.annotations") }}</b>
             </div>
             <button
               class="dashboard-text-link"
               id="dashAnnotations"
               @click="openAnnotations"
-              v-text="`${i18n.t('research.open', 'Open')} →`"
+              v-text="`${i18n.t('research.open')} →`"
             ></button>
           </div>
           <p>
             {{
               isResearcher
-                ? i18n.t(
-                    "annotations.researcher_help",
-                    "Annotations are organized by work when available in the current workspace.",
-                  )
-                : i18n.t(
-                    "dashboard.annotations_help",
-                    "Collect notes, tags, and discussion threads attached to corpus evidence.",
-                  )
+                ? i18n.t("annotations.researcher_help")
+                : i18n.t("dashboard.annotations_help")
             }}
           </p>
         </article>
@@ -1132,22 +1102,19 @@ onBeforeUnmount(() => {
             <span class="dashboard-title-icon"><AppIcon name="pdf" /></span>
             <b>{{ corpusBuildsAriaLabel }}</b>
             <span v-if="corpusBuildsActive" class="dashboard-corpus-active">
-              {{ corpusBuildsActive }} {{ i18n.t("operations.active", "active") }}
+              {{ corpusBuildsActive }} {{ i18n.t("operations.active") }}
             </span>
           </div>
           <button
             class="dashboard-text-link"
             id="dashCorpusBuilder"
             @click="openCorpusBuilder"
-            v-text="`${i18n.t('pdf_corpus.open_builder', 'Open Corpus Builder')} →`"
+            v-text="`${i18n.t('pdf_corpus.open_builder')} →`"
           ></button>
         </div>
         <p class="dashboard-corpus-help">
           {{
-            i18n.t(
-              "pdf_corpus.home_help",
-              "Recent PDF-to-corpus pipelines stay visible here even after you leave Corpus Builder.",
-            )
+            i18n.t("pdf_corpus.home_help")
           }}
         </p>
         <div class="dashboard-corpus-list">
@@ -1167,7 +1134,7 @@ onBeforeUnmount(() => {
               ></span>
               <span class="dashboard-corpus-copy">
                 <b>{{
-                  (job as Any).source_filename || i18n.t("pdf_corpus.source_pdf", "Source PDF")
+                  (job as Any).source_filename || i18n.t("pdf_corpus.source_pdf")
                 }}</b>
                 <small>{{ corpusBuildStatusLabel(job as Any) }}</small>
               </span>
@@ -1179,10 +1146,7 @@ onBeforeUnmount(() => {
           </template>
           <div v-else class="dashboard-corpus-empty">
             {{
-              i18n.t(
-                "pdf_corpus.home_empty",
-                "No corpus builds yet. Start with a source PDF in Corpus Builder.",
-              )
+              i18n.t("pdf_corpus.home_empty")
             }}
           </div>
         </div>

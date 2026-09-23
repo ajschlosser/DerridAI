@@ -151,11 +151,8 @@ export function createOperationsPanelBridge(deps: Deps) {
   }: Any) {
     openLlmTaskLauncher({
       task: "rag_grade",
-      title: tr("rag.grade_title", "Analyze & grade RAG response"),
-      description: tr(
-        "rag.grade_help",
-        "Grade relevance, source binding, attribution, fidelity, precision, coverage, and interpretive usefulness.",
-      ),
+      title: tr("rag.grade_title"),
+      description: tr("rag.grade_help"),
       contextText: question,
       generationProvider,
       generationModel,
@@ -170,7 +167,7 @@ export function createOperationsPanelBridge(deps: Deps) {
       onForegroundResult: async (result: Any) => {
         const dialog = document.createElement("dialog");
         dialog.className = "rag-grade-dialog";
-        dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("rag.grade_result_title", "RAG response grade"))}</h2><div class="dialog-subtitle">${esc(tr("rag.grade_result_help", "Saved with the cached RAG query when a response-cache record is available."))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${ragGradeHtml(result.grade || {})}</div><div class="da"><button class="btn" data-close>${esc(tr("common.close", "Close"))}</button></div>`;
+        dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("rag.grade_result_title"))}</h2><div class="dialog-subtitle">${esc(tr("rag.grade_result_help"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${ragGradeHtml(result.grade || {})}</div><div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button></div>`;
         document.body.appendChild(dialog);
         showAppModal(dialog);
         const close = () => {
@@ -185,17 +182,13 @@ export function createOperationsPanelBridge(deps: Deps) {
     const job = state.jobs.find((item: Any) => item.id === jobId);
     if (!job) return pruneClientJobState(jobId);
     if (["queued", "running", "cancelling"].includes(job.status))
-      return toast(tr("rag.cancel_before_remove", "Cancel the RAG pipeline before removing it"));
+      return toast(tr("rag.cancel_before_remove"));
     const approved = await openMessageModal({
-      title: tr("rag.remove_title", "Remove RAG pipeline result?"),
-      message: trf(
-        "rag.remove_help",
-        "Remove this {status} RAG pipeline and its retained result from activity history?",
-        { status: job.status },
-      ),
+      title: tr("rag.remove_title"),
+      message: trf("rag.remove_help", { status: job.status }),
       tone: "danger",
-      confirmLabel: tr("rag.remove_confirm", "Remove pipeline"),
-      cancelLabel: tr("common.cancel", "Cancel"),
+      confirmLabel: tr("rag.remove_confirm"),
+      cancelLabel: tr("common.cancel"),
     });
     if (!approved) return;
     try {
@@ -204,16 +197,16 @@ export function createOperationsPanelBridge(deps: Deps) {
       persistPrefs();
       refreshRagProgressPanel();
       if (state.view === "home") refreshOperationsPanelOnly();
-      toast(tr("rag.pipeline_removed", "RAG pipeline removed"));
+      toast(tr("rag.pipeline_removed"));
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
         persistPrefs();
         refreshRagProgressPanel();
-        return toast(tr("rag.already_removed", "RAG pipeline was already removed"));
+        return toast(tr("rag.already_removed"));
       }
       openMessageModal({
-        title: tr("rag.remove_failed", "Could not remove RAG pipeline"),
+        title: tr("rag.remove_failed"),
         message: error.message,
         tone: "danger",
       });
@@ -223,18 +216,14 @@ export function createOperationsPanelBridge(deps: Deps) {
     const finished = state.jobs.filter(
       (job: Any) => job.type === "rag" && !["queued", "running", "cancelling"].includes(job.status),
     );
-    if (!finished.length) return toast(tr("rag.none_to_clear", "There are no past RAG results to clear"));
+    if (!finished.length) return toast(tr("rag.none_to_clear"));
     if (
       !(await openMessageModal({
-        title: tr("rag.clear_past_title", "Clear past RAG results?"),
-        message: trf(
-          "rag.clear_past_help",
-          "Clear {count} finished RAG operation(s) and their retained results?",
-          { count: finished.length },
-        ),
+        title: tr("rag.clear_past_title"),
+        message: trf("rag.clear_past_help", { count: finished.length }),
         tone: "danger",
-        confirmLabel: tr("rag.clear_results", "Clear results"),
-        cancelLabel: tr("ui.cancel", "Cancel"),
+        confirmLabel: tr("rag.clear_results"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return;
@@ -254,12 +243,8 @@ export function createOperationsPanelBridge(deps: Deps) {
     refreshRagProgressPanel();
     toast(
       failed
-        ? trf(
-            "rag.cleared_past_failed",
-            "Cleared {count} past RAG result(s) · {failed} could not be removed",
-            { count: removed, failed },
-          )
-        : trf("rag.cleared_past", "Cleared {count} past RAG result(s)", { count: removed }),
+        ? trf("rag.cleared_past_failed", { count: removed, failed })
+        : trf("rag.cleared_past", { count: removed }),
     );
   }
   function ragProgressPanelHtml() {
@@ -272,7 +257,7 @@ export function createOperationsPanelBridge(deps: Deps) {
     const param = (key: string, fallback: string, value: unknown) =>
       trf(key, fallback, { value: value == null || value === "" ? "—" : String(value) });
     return `<section class="card rag-live-panel" id="ragProgressPanel">
-    <div class="cardhead"><div><b>${esc(tr("rag.activity_title", "RAG pipeline activity"))}</b><div class="note">${esc(trf("rag.activity_summary", "{active} active · {finished} past result(s) · stage, model, parameters, and timing refresh automatically", { active: activeCount, finished: finishedCount }))}</div></div><div class="tools"><button class="btn small" id="ragRefreshJobs">${icon("refresh")}${esc(tr("ui.refresh", "Refresh"))}</button>${finishedCount ? `<button class="btn small danger" id="ragClearFinished">${esc(tr("rag.clear_past", "Clear past results"))}</button>` : ""}</div></div>
+    <div class="cardhead"><div><b>${esc(tr("rag.activity_title"))}</b><div class="note">${esc(trf("rag.activity_summary", { active: activeCount, finished: finishedCount }))}</div></div><div class="tools"><button class="btn small" id="ragRefreshJobs">${icon("refresh")}${esc(tr("ui.refresh"))}</button>${finishedCount ? `<button class="btn small danger" id="ragClearFinished">${esc(tr("rag.clear_past"))}</button>` : ""}</div></div>
     <div class="rag-live-jobs">${
       jobs
         .map((job: Any) => {
@@ -285,8 +270,8 @@ export function createOperationsPanelBridge(deps: Deps) {
           const generation = request.generation || {};
           const elapsed = humanDuration(jobElapsedSeconds(job));
           const totalLabel = job.finished_at
-            ? trf("rag.total_time", "Total {time}", { time: elapsed })
-            : trf("rag.elapsed_time", "Elapsed {time}", { time: elapsed });
+            ? trf("rag.total_time", { time: elapsed })
+            : trf("rag.elapsed_time", { time: elapsed });
           const sourceStore = state.stores.find(
             (store: Any) => store.name === job.source_collection,
           );
@@ -300,7 +285,7 @@ export function createOperationsPanelBridge(deps: Deps) {
             ? humanDuration(Math.max(0, (Date.now() - (stageStart as Any)) / 1000))
             : "—";
           const scheduler = job.provider === "openai"
-            ? tr("rag.param.scheduler_uncapped", "scheduler uncapped")
+            ? tr("rag.param.scheduler_uncapped")
             : param(
                 "rag.param.scheduler",
                 "scheduler {value}",
@@ -330,7 +315,7 @@ export function createOperationsPanelBridge(deps: Deps) {
             param(
               "rag.param.auto_grade",
               "auto-grade {value}",
-              request.auto_grade ? tr("ui.on", "On") : tr("ui.off", "Off"),
+              request.auto_grade ? tr("ui.on") : tr("ui.off"),
             ),
             param("rag.param.num_ctx", "num_ctx {value}", generation.num_ctx ?? "—"),
             param("rag.param.num_predict", "num_predict {value}", generation.num_predict ?? "—"),
@@ -339,25 +324,25 @@ export function createOperationsPanelBridge(deps: Deps) {
           ];
           const statusLabel = tr(`operations.status.${job.status}`, String(job.status || ""));
           return `<article class="rag-live-job">
-        <div class="rag-live-job-head"><div><b>${esc(job.prompt || tr("rag.query", "RAG query"))}</b><span>${esc(job.source_collection || "")} · ${esc(job.model || job.provider || "")} · ${esc(totalLabel)}</span></div><span class="job-status ${esc(job.status)}">${esc(statusLabel)}</span></div>
+        <div class="rag-live-job-head"><div><b>${esc(job.prompt || tr("rag.query"))}</b><span>${esc(job.source_collection || "")} · ${esc(job.model || job.provider || "")} · ${esc(totalLabel)}</span></div><span class="job-status ${esc(job.status)}">${esc(statusLabel)}</span></div>
         <div class="rag-live-params">${params.map((value) => `<span>${esc(value)}</span>`).join("")}</div>
         <div class="rag-stage-rail">${stageOrder
           .map(([_stage, key, fallback], index: Any) => {
             const done = job.status === "completed" || index < stageIndex;
             const current = active && index === stageIndex;
             const stageState = current
-              ? job.stage_detail || tr("rag.stage.running", "Running…")
+              ? job.stage_detail || tr("rag.stage.running")
               : done
-                ? tr("rag.stage.complete", "Complete")
-                : tr("rag.stage.pending", "Pending");
+                ? tr("rag.stage.complete")
+                : tr("rag.stage.pending");
             return `<div class="rag-stage-node ${done ? "done" : ""} ${current ? "current" : ""}"><i>${done ? "✓" : index + 1}</i><div><b>${esc(tr(key, fallback))}</b><span>${esc(stageState)}</span></div></div>`;
           })
           .join("")}</div>
-        <div class="rag-live-detail">${job.status === "cancelling" || job.cancel_requested ? esc(tr("rag.cancellation_wait", "Cancellation requested · waiting for the current pipeline call to reach a safe checkpoint.")) : esc(job.stage_detail || job.fatal_error || tr("operations.status.queued", "Queued"))}</div>
-        <div class="rag-live-footer"><div class="rag-live-timing"><span>${esc(totalLabel)}</span><span>${job.started_at ? esc(trf("operations.panel.started", "Started {when}", { when: formatTimestamp(job.started_at) })) : esc(tr("rag.not_started", "Not started"))}</span>${job.finished_at ? `<span>${esc(trf("operations.panel.finished", "Finished {when}", { when: formatTimestamp(job.finished_at) }))}</span>` : ""}</div><div class="tools"><button class="btn small" data-rag-job-details="${job.id}">${esc(tr("rag.details_timeline", "Details / timeline"))}</button>${job.status === "completed" ? `<button class="btn small primary" data-rag-job-result="${job.id}">${esc(tr("operations.panel.action_open_result", "Open result"))}</button>` : ""}${active ? (job.cancel_requested || job.status === "cancelling" ? `<button class="btn small" disabled>${esc(tr("operations.cancelling", "Cancelling…"))}</button>` : `<button class="btn small danger" data-rag-job-cancel="${job.id}">${esc(tr("operations.panel.action_cancel", "Cancel"))}</button>`) : `<button class="btn small danger" data-rag-job-remove="${job.id}">${esc(tr("operations.panel.action_remove", "Remove"))}</button>`}</div></div>
+        <div class="rag-live-detail">${job.status === "cancelling" || job.cancel_requested ? esc(tr("rag.cancellation_wait")) : esc(job.stage_detail || job.fatal_error || tr("operations.status.queued"))}</div>
+        <div class="rag-live-footer"><div class="rag-live-timing"><span>${esc(totalLabel)}</span><span>${job.started_at ? esc(trf("operations.panel.started", { when: formatTimestamp(job.started_at) })) : esc(tr("rag.not_started"))}</span>${job.finished_at ? `<span>${esc(trf("operations.panel.finished", { when: formatTimestamp(job.finished_at) }))}</span>` : ""}</div><div class="tools"><button class="btn small" data-rag-job-details="${job.id}">${esc(tr("rag.details_timeline"))}</button>${job.status === "completed" ? `<button class="btn small primary" data-rag-job-result="${job.id}">${esc(tr("operations.panel.action_open_result"))}</button>` : ""}${active ? (job.cancel_requested || job.status === "cancelling" ? `<button class="btn small" disabled>${esc(tr("operations.cancelling"))}</button>` : `<button class="btn small danger" data-rag-job-cancel="${job.id}">${esc(tr("operations.panel.action_cancel"))}</button>`) : `<button class="btn small danger" data-rag-job-remove="${job.id}">${esc(tr("operations.panel.action_remove"))}</button>`}</div></div>
       </article>`;
         })
-        .join("") || `<div class="llm-empty">${esc(tr("rag.empty", "No RAG jobs yet. Start one below."))}</div>`
+        .join("") || `<div class="llm-empty">${esc(tr("rag.empty"))}</div>`
     }</div>
   </section>`;
   }
@@ -400,19 +385,19 @@ export function createOperationsPanelBridge(deps: Deps) {
     const active = builds.filter((job: Any) =>
       ["queued", "running", "cancelling"].includes(job.status),
     ).length;
-    return `<section class="card dashboard-corpus-builds" aria-label="${esc(tr("pdf_corpus.home_title", "Corpus builds"))}">
-    <div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("pdf")}</span><b>${esc(tr("pdf_corpus.home_title", "Corpus builds"))}</b>${active ? `<span class="dashboard-corpus-active">${active} ${esc(tr("operations.active", "active"))}</span>` : ""}</div><button class="dashboard-text-link" id="dashCorpusBuilder">${esc(tr("pdf_corpus.open_builder", "Open Corpus Builder"))} →</button></div>
-    <p class="dashboard-corpus-help">${esc(tr("pdf_corpus.home_help", "Recent PDF-to-corpus pipelines stay visible here even after you leave Corpus Builder."))}</p>
+    return `<section class="card dashboard-corpus-builds" aria-label="${esc(tr("pdf_corpus.home_title"))}">
+    <div class="dashboard-section-heading"><div class="dashboard-card-title"><span class="dashboard-title-icon">${icon("pdf")}</span><b>${esc(tr("pdf_corpus.home_title"))}</b>${active ? `<span class="dashboard-corpus-active">${active} ${esc(tr("operations.active"))}</span>` : ""}</div><button class="dashboard-text-link" id="dashCorpusBuilder">${esc(tr("pdf_corpus.open_builder"))} →</button></div>
+    <p class="dashboard-corpus-help">${esc(tr("pdf_corpus.home_help"))}</p>
     <div class="dashboard-corpus-list">${
       builds.length
         ? builds
             .map((job: Any) => {
               const pct = Math.max(0, Math.min(100, Math.round(Number(job.progress || 0) * 100)));
               const status = job.raw_status || job.status || "unknown";
-              return `<button type="button" class="dashboard-corpus-row" data-dashboard-corpus-build="${esc(job.id)}"><span class="dashboard-corpus-state ${esc(job.status || "")}" aria-hidden="true"></span><span class="dashboard-corpus-copy"><b>${esc(job.source_filename || tr("pdf_corpus.source_pdf", "Source PDF"))}</b><small>${esc(String(status).replaceAll("_", " "))} · ${esc(String(job.stage_detail || job.stage || ""))}</small></span><span class="dashboard-corpus-progress"><b>${pct}%</b><i><span style="width:${pct}%"></span></i></span></button>`;
+              return `<button type="button" class="dashboard-corpus-row" data-dashboard-corpus-build="${esc(job.id)}"><span class="dashboard-corpus-state ${esc(job.status || "")}" aria-hidden="true"></span><span class="dashboard-corpus-copy"><b>${esc(job.source_filename || tr("pdf_corpus.source_pdf"))}</b><small>${esc(String(status).replaceAll("_", " "))} · ${esc(String(job.stage_detail || job.stage || ""))}</small></span><span class="dashboard-corpus-progress"><b>${pct}%</b><i><span style="width:${pct}%"></span></i></span></button>`;
             })
             .join("")
-        : `<div class="dashboard-corpus-empty">${esc(tr("pdf_corpus.home_empty", "No corpus builds yet. Start with a source PDF in Corpus Builder."))}</div>`
+        : `<div class="dashboard-corpus-empty">${esc(tr("pdf_corpus.home_empty"))}</div>`
     }</div>
   </section>`;
   }

@@ -268,18 +268,18 @@ function close() {
     <form method="dialog" @submit.prevent="save">
       <header class="record-edit-head">
         <div>
-          <p>{{ i18n.t("record.edit_kicker", "Record metadata") }}</p>
-          <h2 id="recordEditTitle">{{ i18n.t("record.edit", "Edit record") }}</h2>
+          <p>{{ i18n.t("record.edit_kicker") }}</p>
+          <h2 id="recordEditTitle">{{ i18n.t("record.edit") }}</h2>
           <span>{{
             dirtyCount
-              ? i18n.tf("record.unsaved_fields", "{count} unsaved fields", { count: dirtyCount })
-              : i18n.t("record.no_unsaved_changes", "No unsaved changes")
+              ? i18n.tf("record.unsaved_fields", { count: dirtyCount })
+              : i18n.t("record.no_unsaved_changes")
           }}</span>
         </div>
         <button
           type="button"
           class="record-sheet-close"
-          :aria-label="i18n.t('ui.close', 'Close')"
+          :aria-label="i18n.t('ui.close')"
           @click="close"
         >
           ×
@@ -303,9 +303,9 @@ function close() {
                 "
                 @change="updateField(field, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="">{{ i18n.t("ui.not_set", "Not set") }}</option>
-                <option value="true">{{ i18n.t("runtime.yes", "Yes") }}</option>
-                <option value="false">{{ i18n.t("runtime.no", "No") }}</option></select
+                <option value="">{{ i18n.t("ui.not_set") }}</option>
+                <option value="true">{{ i18n.t("runtime.yes") }}</option>
+                <option value="false">{{ i18n.t("runtime.no") }}</option></select
               ><textarea
                 v-else-if="isLongField(field)"
                 :value="displayInputValue(field)"
@@ -327,13 +327,13 @@ function close() {
                 :value="displayInputValue(field)"
                 @input="updateField(field, ($event.target as HTMLInputElement).value)"
               /><small v-if="isArrayField(field)">{{
-                i18n.t("record.comma_separated", "Separate multiple values with commas.")
+                i18n.t("record.comma_separated")
               }}</small></label
             >
           </div>
         </fieldset>
         <fieldset v-if="additionalFields.length" class="record-edit-group">
-          <legend>{{ i18n.t("record.group_other", "Other fields") }}</legend>
+          <legend>{{ i18n.t("record.group_other") }}</legend>
           <div class="record-edit-grid">
             <label v-for="field in additionalFields" :key="field"
               ><span>{{ fieldLabel(field) }}</span
@@ -347,19 +347,16 @@ function close() {
       <footer class="record-edit-actions">
         <div>
           <button type="button" class="record-reset" :disabled="!dirtyCount" @click="reset">
-            <AppIcon name="refresh" />{{ i18n.t("ui.reset", "Reset") }}</button
+            <AppIcon name="refresh" />{{ i18n.t("ui.reset") }}</button
           ><span>{{
-            i18n.t(
-              "record.sparse_save_help",
-              "Only changed fields will be saved and added to the audit trail.",
-            )
+            i18n.t("record.sparse_save_help")
           }}</span>
         </div>
         <div>
           <button type="button" class="record-cancel" @click="close">
-            {{ i18n.t("ui.cancel", "Cancel") }}</button
+            {{ i18n.t("ui.cancel") }}</button
           ><button type="submit" class="record-save" :disabled="!dirtyCount">
-            <AppIcon name="edit" />{{ i18n.t("ui.save", "Save") }}
+            <AppIcon name="edit" />{{ i18n.t("ui.save") }}
           </button>
         </div>
       </footer>

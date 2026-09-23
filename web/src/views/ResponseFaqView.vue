@@ -81,12 +81,12 @@ const runMetrics = computed(() => {
       items.push({ label, value: String(value) });
   };
   if (selected.value?.elapsed_seconds != null)
-    add(i18n.t("faq.elapsed", "Elapsed"), `${Number(selected.value.elapsed_seconds).toFixed(2)} s`);
-  add(i18n.t("faq.evidence_bound", "Evidence bound"), evidenceCount.value);
-  add(i18n.t("faq.retrieved", "Retrieved"), retrieval.raw_count);
-  add(i18n.t("faq.deduplicated", "After deduplication"), retrieval.deduplicated_count);
+    add(i18n.t("faq.elapsed"), `${Number(selected.value.elapsed_seconds).toFixed(2)} s`);
+  add(i18n.t("faq.evidence_bound"), evidenceCount.value);
+  add(i18n.t("faq.retrieved"), retrieval.raw_count);
+  add(i18n.t("faq.deduplicated"), retrieval.deduplicated_count);
   add(
-    i18n.t("faq.reranked", "After reranking"),
+    i18n.t("faq.reranked"),
     retrieval.reranked_count ?? retrieval.effective_rerank_top_n,
   );
   return items;
@@ -165,7 +165,7 @@ function gradeOverall(entry: Record<string, unknown>) {
 function formatMetaValue(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
   if (typeof value === "boolean")
-    return value ? i18n.t("research.on", "On") : i18n.t("research.off", "Off");
+    return value ? i18n.t("research.on") : i18n.t("research.off");
   if (value && typeof value === "object") return JSON.stringify(value);
   return String(value ?? "");
 }
@@ -266,9 +266,9 @@ function scheduleSearch() {
 async function copyAnswer() {
   try {
     await navigator.clipboard.writeText(result.value?.answer || "");
-    runtime.notifyToast(i18n.t("research.answer_copied", "Answer copied"), { tone: "success" });
+    runtime.notifyToast(i18n.t("research.answer_copied"), { tone: "success" });
   } catch {
-    runtime.notifyToast(i18n.t("research.clipboard_failed", "Could not access the clipboard"), {
+    runtime.notifyToast(i18n.t("research.clipboard_failed"), {
       tone: "danger",
     });
   }
@@ -329,16 +329,13 @@ onMounted(() => void load({ chooseFirst: true }));
 <template>
   <main class="vue-native-page response-faq-page" aria-labelledby="response-faq-title">
     <UiPageHeader
-      :kicker="i18n.t('faq.page_kicker', 'Research archive')"
-      :title="i18n.t('nav.faq', 'Response Library')"
+      :kicker="i18n.t('faq.page_kicker')"
+      :title="i18n.t('nav.faq')"
       title-id="response-faq-title"
       :description="
-        i18n.t(
-          'faq.page_subtitle',
-          'Revisit cached answers with the same source-bound evidence experience used in Research.',
-        )
+        i18n.t('faq.page_subtitle')
       "
-      :actions-label="i18n.t('faq.page_actions', 'Response Library actions')"
+      :actions-label="i18n.t('faq.page_actions')"
     >
       <template #actions>
         <div class="response-faq-page-actions">
@@ -349,30 +346,27 @@ onMounted(() => void load({ chooseFirst: true }));
             @click="archiveOpen = true"
           >
             <AppIcon name="search" />
-            {{ i18n.t("faq.find_question", i18n.t("faq.browse_archive", "Browse saved research")) }}
+            {{ i18n.t("faq.find_question") }}
             <span>{{ cacheTotal.toLocaleString(i18n.locale) }}</span>
           </button>
           <button class="btn primary" type="button" @click="newResearch">
-            <AppIcon name="spark" />{{ i18n.t("faq.new_research", "New research") }}
+            <AppIcon name="spark" />{{ i18n.t("faq.new_research") }}
           </button>
         </div>
       </template>
     </UiPageHeader>
 
     <div v-if="loading && !payload" class="research-loading response-faq-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("faq.loading", "Loading cached research responses…") }}
+      <span class="spinner"></span>{{ i18n.t("faq.loading") }}
     </div>
 
     <AccessibleEmptyState
       v-else-if="payload && !cacheTotal"
       icon="spark"
       icon-tone="neutral"
-      :title="i18n.t('faq.empty_title', 'No cached research responses yet')"
+      :title="i18n.t('faq.empty_title')"
       :description="
-        i18n.t(
-          'faq.empty_help',
-          'Completed cached Research runs will appear here with their evidence bindings.',
-        )
+        i18n.t('faq.empty_help')
       "
     />
 
@@ -387,11 +381,11 @@ onMounted(() => void load({ chooseFirst: true }));
       <aside
         v-if="selected.instructions"
         class="response-faq-instructions"
-        :aria-label="i18n.t('research.instructions', 'Instructions')"
+        :aria-label="i18n.t('research.instructions')"
       >
         <AppIcon name="edit" aria-hidden="true" />
         <div>
-          <strong>{{ i18n.t("research.instructions", "Instructions") }}</strong>
+          <strong>{{ i18n.t("research.instructions") }}</strong>
           <p>{{ selected.instructions }}</p>
         </div>
       </aside>
@@ -412,12 +406,9 @@ onMounted(() => void load({ chooseFirst: true }));
         <summary>
           <span><AppIcon name="history" aria-hidden="true" /></span>
           <div>
-            <strong>{{ i18n.t("faq.run_provenance", "Run provenance & saved evaluation") }}</strong
+            <strong>{{ i18n.t("faq.run_provenance") }}</strong
             ><small>{{
-              i18n.t(
-                "faq.run_provenance_help",
-                "Inspect retrieval diagnostics, query metadata, and retained grades without obscuring the answer.",
-              )
+              i18n.t("faq.run_provenance_help")
             }}</small>
           </div>
           <b aria-hidden="true">⌄</b>
@@ -425,13 +416,10 @@ onMounted(() => void load({ chooseFirst: true }));
         <div class="response-faq-details-body">
           <section v-if="runMetrics.length" class="response-faq-run-summary">
             <header>
-              <h2>{{ i18n.t("faq.run_summary", "Run summary") }}</h2>
+              <h2>{{ i18n.t("faq.run_summary") }}</h2>
               <p>
                 {{
-                  i18n.t(
-                    "faq.run_summary_help",
-                    "A compact view of what happened before the answer was generated.",
-                  )
+                  i18n.t("faq.run_summary_help")
                 }}
               </p>
             </header>
@@ -446,13 +434,10 @@ onMounted(() => void load({ chooseFirst: true }));
           <div class="response-faq-detail-columns">
             <section v-if="retrievalEntries.length" class="response-faq-metadata-section">
               <header>
-                <h2>{{ i18n.t("research.retrieval_diagnostics", "Retrieval diagnostics") }}</h2>
+                <h2>{{ i18n.t("research.retrieval_diagnostics") }}</h2>
                 <p>
                   {{
-                    i18n.t(
-                      "faq.retrieval_help",
-                      "The retrieval settings and counts retained with this cached answer.",
-                    )
+                    i18n.t("faq.retrieval_help")
                   }}
                 </p>
               </header>
@@ -465,13 +450,10 @@ onMounted(() => void load({ chooseFirst: true }));
             </section>
             <section v-if="queryEntries.length" class="response-faq-metadata-section">
               <header>
-                <h2>{{ i18n.t("research.query_metadata", "Query metadata") }}</h2>
+                <h2>{{ i18n.t("research.query_metadata") }}</h2>
                 <p>
                   {{
-                    i18n.t(
-                      "faq.query_help",
-                      "How the question was interpreted and routed for this run.",
-                    )
+                    i18n.t("faq.query_help")
                   }}
                 </p>
               </header>
@@ -486,17 +468,17 @@ onMounted(() => void load({ chooseFirst: true }));
 
           <section v-if="savedGrades.length" class="response-faq-grades">
             <header>
-              <h2>{{ i18n.t("faq.saved_grades", "Saved LLM grades") }}</h2>
+              <h2>{{ i18n.t("faq.saved_grades") }}</h2>
               <p>
                 {{
-                  i18n.t("faq.saved_grades_help", "Evaluations retained with this cached response.")
+                  i18n.t("faq.saved_grades_help")
                 }}
               </p>
             </header>
             <div>
               <article v-for="(entry, index) in [...savedGrades].reverse()" :key="index">
                 <span
-                  ><b>{{ entry.provider || i18n.t("research.provider", "Provider") }}</b
+                  ><b>{{ entry.provider || i18n.t("research.provider") }}</b
                   ><small
                     >{{ entry.model || ""
                     }}<template v-if="entry.graded_at">
@@ -505,7 +487,7 @@ onMounted(() => void load({ chooseFirst: true }));
                   ></span
                 ><strong>{{ gradeOverall(entry) }}<small>/10</small></strong>
                 <details class="response-faq-grade-output">
-                  <summary>{{ i18n.t("faq.full_grade_output", "Full evaluation report") }}</summary>
+                  <summary>{{ i18n.t("faq.full_grade_output") }}</summary>
                   <EvaluationReport :report="entry.result || entry" />
                 </details>
               </article>
@@ -513,14 +495,14 @@ onMounted(() => void load({ chooseFirst: true }));
           </section>
 
           <details class="response-faq-technical">
-            <summary>{{ i18n.t("faq.technical_metadata", "Technical metadata") }}</summary>
+            <summary>{{ i18n.t("faq.technical_metadata") }}</summary>
             <div>
               <section>
-                <h3>{{ i18n.t("research.retrieval_diagnostics", "Retrieval diagnostics") }}</h3>
+                <h3>{{ i18n.t("research.retrieval_diagnostics") }}</h3>
                 <pre>{{ formatJson(selected.retrieval) }}</pre>
               </section>
               <section>
-                <h3>{{ i18n.t("research.query_metadata", "Query metadata") }}</h3>
+                <h3>{{ i18n.t("research.query_metadata") }}</h3>
                 <pre>{{ formatJson(selected.query_metadata) }}</pre>
               </section>
             </div>

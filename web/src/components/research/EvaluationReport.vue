@@ -86,13 +86,13 @@ function scoreText(score: number | null) {
 <template>
   <section
     class="evaluation-report"
-    :aria-label="i18n.t('faq.evaluation_report', 'Evaluation report')"
+    :aria-label="i18n.t('faq.evaluation_report')"
   >
     <header class="evaluation-report-hero">
       <div
         class="evaluation-score"
         :aria-label="
-          i18n.tf('faq.overall_score', 'Overall score: {score} out of 10', {
+          i18n.tf('faq.overall_score', {
             score: scoreText(overall),
           })
         "
@@ -102,12 +102,12 @@ function scoreText(score: number | null) {
       </div>
       <div>
         <span class="evaluation-kicker">{{
-          i18n.t("faq.evaluation_report", "Evaluation report")
+          i18n.t("faq.evaluation_report")
         }}</span>
         <h3>
           {{
             summary ||
-            i18n.t("faq.grade_summary_fallback", "Structured evidence-grounding assessment")
+            i18n.t("faq.grade_summary_fallback")
           }}
         </h3>
         <p v-if="analysis">{{ analysis }}</p>
@@ -116,7 +116,7 @@ function scoreText(score: number | null) {
 
     <section
       class="evaluation-categories"
-      :aria-label="i18n.t('faq.grade_categories', 'Scoring categories')"
+      :aria-label="i18n.t('faq.grade_categories')"
     >
       <article v-for="key in CATEGORY_KEYS" :key="key" class="evaluation-category">
         <div class="evaluation-category-head">
@@ -141,7 +141,7 @@ function scoreText(score: number | null) {
       <section v-if="strengths.length" class="evaluation-finding positive">
         <header>
           <AppIcon name="check" />
-          <h4>{{ i18n.t("faq.grade_strengths", "Strengths") }}</h4>
+          <h4>{{ i18n.t("faq.grade_strengths") }}</h4>
         </header>
         <ul>
           <li v-for="item in strengths" :key="item">{{ item }}</li>
@@ -150,7 +150,7 @@ function scoreText(score: number | null) {
       <section v-if="weaknesses.length" class="evaluation-finding">
         <header>
           <AppIcon name="warning" />
-          <h4>{{ i18n.t("faq.grade_weaknesses", "Weaknesses") }}</h4>
+          <h4>{{ i18n.t("faq.grade_weaknesses") }}</h4>
         </header>
         <ul>
           <li v-for="item in weaknesses" :key="item">{{ item }}</li>
@@ -159,7 +159,7 @@ function scoreText(score: number | null) {
       <section v-if="risky.length" class="evaluation-finding risk">
         <header>
           <AppIcon name="warning" />
-          <h4>{{ i18n.t("faq.grade_risky_claims", "Unsupported or risky claims") }}</h4>
+          <h4>{{ i18n.t("faq.grade_risky_claims") }}</h4>
         </header>
         <ul>
           <li v-for="item in risky" :key="item">{{ item }}</li>
@@ -168,13 +168,10 @@ function scoreText(score: number | null) {
     </div>
 
     <details class="evaluation-raw">
-      <summary>{{ i18n.t("faq.grade_raw_output", "Technical raw output") }}</summary>
+      <summary>{{ i18n.t("faq.grade_raw_output") }}</summary>
       <p>
         {{
-          i18n.t(
-            "faq.grade_raw_output_help",
-            "Raw grader output is retained for auditability and debugging.",
-          )
+          i18n.t("faq.grade_raw_output_help")
         }}
       </p>
       <pre>{{ formatJson(rawOutput) }}</pre>

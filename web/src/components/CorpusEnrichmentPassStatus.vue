@@ -52,28 +52,17 @@ const changes = computed(() => ({
 }));
 const heading = computed(() => {
   if (running.value)
-    return i18n.tf("pdf_corpus.enrichment_pass_running", "Pass {current} of {total} is running", {
+    return i18n.tf("pdf_corpus.enrichment_pass_running", {
       current: currentPass.value,
       total: totalPasses.value,
     });
   if (isEnrichmentOp.value && state.value === "failed")
-    return i18n.t("pdf_corpus.enrichment_pass_failed", "Enrichment failed");
+    return i18n.t("pdf_corpus.enrichment_pass_failed");
   if (isEnrichmentOp.value && state.value === "cancelled")
-    return i18n.tf(
-      "pdf_corpus.enrichment_pass_cancelled",
-      "Enrichment was stopped. Passes completed: {passes}.",
-      { passes: passesRun.value },
-    );
+    return i18n.tf("pdf_corpus.enrichment_pass_cancelled", { passes: passesRun.value });
   if (isEnrichmentOp.value)
-    return i18n.tf(
-      "pdf_corpus.enrichment_pass_complete",
-      "Enrichment finished. Passes run: {passes}.",
-      { passes: passesRun.value },
-    );
-  return i18n.t(
-    "pdf_corpus.enrichment_pass_idle",
-    "The last enrichment pass has finished. You can start another without reviewing every record.",
-  );
+    return i18n.tf("pdf_corpus.enrichment_pass_complete", { passes: passesRun.value });
+  return i18n.t("pdf_corpus.enrichment_pass_idle");
 });
 </script>
 
@@ -88,7 +77,7 @@ const heading = computed(() => {
   >
     <div class="pass-copy">
       <span class="eyebrow">{{
-        i18n.t("pdf_corpus.enrichment_status_title", "Metadata enrichment")
+        i18n.t("pdf_corpus.enrichment_status_title")
       }}</span>
       <b id="pass-status-title">{{ heading }}</b>
       <template v-if="running">
@@ -96,81 +85,52 @@ const heading = computed(() => {
           :max="passTotal"
           :value="processedThisPass"
           :aria-label="
-            i18n.tf(
-              'pdf_corpus.enrichment_pass_progress',
-              '{processed} of {total} records checked in this pass',
-              { processed: processedThisPass, total: passTotal },
-            )
+            i18n.tf('pdf_corpus.enrichment_pass_progress', { processed: processedThisPass, total: passTotal })
           "
         ></progress>
         <span>{{
-          i18n.tf(
-            "pdf_corpus.enrichment_pass_progress",
-            "{processed} of {total} records checked in this pass",
-            { processed: processedThisPass, total: passTotal },
-          )
+          i18n.tf("pdf_corpus.enrichment_pass_progress", { processed: processedThisPass, total: passTotal })
         }}</span>
         <small>{{
-          i18n.t(
-            "pdf_corpus.enrichment_keep_working",
-            "You can keep reviewing while this runs. New suggestions appear in the queue as they arrive.",
-          )
+          i18n.t("pdf_corpus.enrichment_keep_working")
         }}</small>
         <small v-if="operation.current_record_id">{{
-          i18n.tf(
-            "pdf_corpus.enrichment_current_task",
-            "Working on Record {record} · {task}",
-            { record: operation.current_record_id, task: operation.current_task || i18n.t("pdf_corpus.metadata_enrichment", "metadata") },
-          )
+          i18n.tf("pdf_corpus.enrichment_current_task", { record: operation.current_record_id, task: operation.current_task || i18n.t("pdf_corpus.metadata_enrichment", "metadata") })
         }}</small>
         <small v-if="(operation.active_tasks || []).length > 1">{{
-          i18n.tf(
-            "pdf_corpus.enrichment_active_tasks",
-            "{count} metadata tasks currently active",
-            { count: operation.active_tasks?.length || 0 },
-          )
+          i18n.tf("pdf_corpus.enrichment_active_tasks", { count: operation.active_tasks?.length || 0 })
         }}</small>
       </template>
       <span v-else-if="isEnrichmentOp && state === 'failed'">{{ operation.error }}</span>
       <template v-else-if="isEnrichmentOp">
         <span>{{
-          i18n.tf(
-            "pdf_corpus.enrichment_pass_changes",
-            "Values added: {added} · replaced: {replaced} · kept: {kept} · records with disagreements: {disputed}",
-            changes,
-          )
+          i18n.tf("pdf_corpus.enrichment_pass_changes", changes)
         }}</span>
         <small v-if="operation.converged">{{
-          i18n.t(
-            "pdf_corpus.enrichment_pass_converged",
-            "Stopped early because the last pass found nothing new.",
-          )
+          i18n.t("pdf_corpus.enrichment_pass_converged")
         }}</small>
       </template>
       <small v-else>{{
-        i18n.t(
-          "pdf_corpus.enrichment_pass_idle_help",
-          "The next pass uses what the last pass inferred and any reviewer decisions already made.",
-        )
+        i18n.t("pdf_corpus.enrichment_pass_idle_help")
       }}</small>
     </div>
     <div class="pass-actions">
       <UiButton
         v-if="running"
-        :label="i18n.t('pdf_corpus.enrichment_stop', 'Stop enrichment')"
+        :label="i18n.t('pdf_corpus.enrichment_stop')"
         :disabled="disabled"
         @click="emit('stop')"
       />
       <template v-else>
         <UiButton
           variant="primary"
-          :label="i18n.t('pdf_corpus.enrichment_run_another', 'Run another pass')"
+          :label="i18n.t('pdf_corpus.enrichment_run_another')"
           :disabled="disabled"
           @click="emit('run-another')"
         />
         <UiButton
           v-if="isEnrichmentOp"
-          :label="i18n.t('pdf_corpus.enrichment_dismiss', 'Dismiss')"
+          :label="i18n.t('pdf_corpus.enrichment_dismiss')"
           @click="dismissedId = String(operation.operation_id || '')"
         />
       </template>

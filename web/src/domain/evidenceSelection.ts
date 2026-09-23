@@ -74,7 +74,7 @@ export function createEvidenceSelection(deps: Deps) {
       );
     } catch (error: Any) {
       toast(
-        trf("record.copy_failed_reason", "Could not copy citation: {error}", {
+        trf("record.copy_failed_reason", {
           error: error?.message || String(error),
         }),
         { tone: "danger" },
@@ -120,7 +120,7 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function toggleWorkspaceEvidence(file: Any, index: Any) {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
+      toast(tr("permissions.evidence_denied"), {
         tone: "warn",
       });
       return;
@@ -166,7 +166,7 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function toggleDbEvidence(collection: Any, id: Any, record: Any = {}) {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
+      toast(tr("permissions.evidence_denied"), {
         tone: "warn",
       });
       return;
@@ -202,7 +202,7 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function clearSelectedEvidence() {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
+      toast(tr("permissions.evidence_denied"), {
         tone: "warn",
       });
       return;

@@ -22,7 +22,7 @@ function chartCopy(i18n: ChartI18n = {}): { tr: Tr; trf: Trf } {
 
 function emptyChart(title: string, i18n?: ChartI18n): string {
   const { tr } = chartCopy(i18n);
-  return `<div class="dash-chart-empty">${esc(title)} · ${esc(tr("dashboard.no_data_yet", "no data yet"))}</div>`;
+  return `<div class="dash-chart-empty">${esc(title)} · ${esc(tr("dashboard.no_data_yet"))}</div>`;
 }
 
 // SVG/HTML chart renderers for the dashboard. User-visible copy is resolved through tr/trf at render time.
@@ -133,10 +133,10 @@ export function pieChart(
   i18n: ChartI18n = {},
 ): string {
   const { tr } = chartCopy(i18n);
-  const recordsLabel = tr("dynamic.records", "records");
+  const recordsLabel = tr("dynamic.records");
   const total = entries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
   if (!total)
-    return `<div class="dash-chart-empty">${esc(title)} · ${esc(tr("dashboard.no_records_loaded", "no records loaded"))}</div>`;
+    return `<div class="dash-chart-empty">${esc(title)} · ${esc(tr("dashboard.no_records_loaded"))}</div>`;
   const cx = 90,
     cy = 90,
     r = 64,
@@ -161,9 +161,9 @@ export function barChart(
   { valueLabel, tr: trFn }: { valueLabel?: string } & ChartI18n = {},
 ): string {
   const { tr } = chartCopy({ tr: trFn });
-  const resolvedValueLabel = valueLabel ?? tr("dashboard.average_characters", "Average characters");
+  const resolvedValueLabel = valueLabel ?? tr("dashboard.average_characters");
   if (!series.length) return emptyChart(title, { tr });
-  const recordsLabel = tr("dynamic.records", "records");
+  const recordsLabel = tr("dynamic.records");
   const max = Math.max(1, ...series.map((item) => Number(item.value) || 0));
   return `<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(resolvedValueLabel)}</span></div></div><div class="dash-bars">${series
     .map((item) => {
@@ -175,5 +175,5 @@ export function barChart(
 
 export function statList(title: string, items: Array<[string, number]>, i18n: ChartI18n = {}): string {
   const { tr, trf } = chartCopy(i18n);
-  return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value, count], index) => `<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="${esc(trf("dashboard.search_for_value", "Search the corpus for {value}", { value }))}"><span>${index + 1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("") || `<div class="note" style="padding:12px">${esc(tr("runtime.no_data", "No data"))}</div>`}</div></section>`;
+  return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value, count], index) => `<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="${esc(trf("dashboard.search_for_value", { value }))}"><span>${index + 1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("") || `<div class="note" style="padding:12px">${esc(tr("runtime.no_data"))}</div>`}</div></section>`;
 }

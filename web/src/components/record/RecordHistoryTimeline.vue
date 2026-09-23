@@ -28,8 +28,8 @@ function fieldLabel(key: string) {
   <section class="record-history-timeline" aria-labelledby="recordHistoryHeading">
     <header>
       <div>
-        <p>{{ i18n.t("record.audit_trail", "Audit trail") }}</p>
-        <h3 id="recordHistoryHeading">{{ i18n.t("record.change_history", "Change history") }}</h3>
+        <p>{{ i18n.t("record.audit_trail") }}</p>
+        <h3 id="recordHistoryHeading">{{ i18n.t("record.change_history") }}</h3>
       </div>
       <span>{{ props.total }}</span>
     </header>
@@ -48,7 +48,7 @@ function fieldLabel(key: string) {
       </li>
     </ol>
     <div v-else class="history-empty">
-      {{ i18n.t("record.no_history", "No tracked record changes yet.") }}
+      {{ i18n.t("record.no_history") }}
     </div>
     <button
       v-if="props.canOpen && props.total"
@@ -56,7 +56,7 @@ function fieldLabel(key: string) {
       type="button"
       @click="emit('open')"
     >
-      <AppIcon name="history" />{{ i18n.t("record.open_history", "Open history & undo") }}
+      <AppIcon name="history" />{{ i18n.t("record.open_history") }}
     </button>
   </section>
 </template>

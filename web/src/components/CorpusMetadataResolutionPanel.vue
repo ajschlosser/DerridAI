@@ -207,8 +207,8 @@ function calibrated(field: string) {
 }
 function displayValue(field: string) {
   const value = props.record[field];
-  if (value === true) return i18n.t("ui.yes", "Yes");
-  if (value === false) return i18n.t("ui.no", "No");
+  if (value === true) return i18n.t("ui.yes");
+  if (value === false) return i18n.t("ui.no");
   if (Array.isArray(value)) return value.join(", ") || "—";
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
@@ -218,13 +218,10 @@ function displayValue(field: string) {
   <section class="metadata-review" aria-labelledby="metadata-review-title">
     <header class="metadata-head">
       <div>
-        <h3 id="metadata-review-title">{{ i18n.t("pdf_corpus.metadata_tab", "Metadata") }}</h3>
+        <h3 id="metadata-review-title">{{ i18n.t("pdf_corpus.metadata_tab") }}</h3>
         <p>
           {{
-            i18n.t(
-              "pdf_corpus.metadata_streamlined_help",
-              "LLM suggestions are prefilled when valid. Deterministic rules resolve obvious relationships; review the remaining exceptions and save only what needs your judgment.",
-            )
+            i18n.t("pdf_corpus.metadata_streamlined_help")
           }}
         </p>
       </div>
@@ -235,12 +232,12 @@ function displayValue(field: string) {
         "
         >{{
           enrichmentPending
-            ? i18n.t("pdf_corpus.metadata_enrichment_pending", "LLM enrichment pending")
+            ? i18n.t("pdf_corpus.metadata_enrichment_pending")
             : attentionFields.length
-              ? i18n.tf("pdf_corpus.metadata_decisions_count", "{count} decision(s)", {
+              ? i18n.tf("pdf_corpus.metadata_decisions_count", {
                   count: attentionFields.length,
                 })
-              : i18n.t("pdf_corpus.metadata_ready", "Ready")
+              : i18n.t("pdf_corpus.metadata_ready")
         }}</span
       >
     </header>
@@ -251,24 +248,18 @@ function displayValue(field: string) {
     />
     <p v-if="enrichmentPending" class="enrichment-note" role="status">
       {{
-        i18n.t(
-          "pdf_corpus.metadata_enrichment_pending_help",
-          "This record is editable now, but its background LLM metadata has not settled yet. Confidence and suggestions will appear as each metadata family completes.",
-        )
+        i18n.t("pdf_corpus.metadata_enrichment_pending_help")
       }}
     </p>
     <div v-if="llmSuggestionCount" class="suggestion-toolbar">
       <div>
         <b>{{
-          i18n.tf("pdf_corpus.llm_suggestions_ready", "{count} LLM suggestion(s) ready", {
+          i18n.tf("pdf_corpus.llm_suggestions_ready", {
             count: llmSuggestionCount,
           })
         }}</b
         ><span>{{
-          i18n.t(
-            "pdf_corpus.llm_suggestions_ready_help",
-            "Suggestions are already filled into their controls. Confirm them individually or save all current suggestions at once.",
-          )
+          i18n.t("pdf_corpus.llm_suggestions_ready_help")
         }}</span>
       </div>
       <button
@@ -277,7 +268,7 @@ function displayValue(field: string) {
         :disabled="busy"
         @click="emit('resolveMany', llmSuggestions)"
       >
-        {{ i18n.t("pdf_corpus.accept_all_suggestions", "Save all suggestions") }}
+        {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
       </button>
     </div>
 
@@ -285,7 +276,7 @@ function displayValue(field: string) {
       v-if="attentionFields.length"
       class="metadata-grid"
       role="list"
-      :aria-label="i18n.t('pdf_corpus.metadata_needs_review', 'Metadata needing review')"
+      :aria-label="i18n.t('pdf_corpus.metadata_needs_review')"
     >
       <div v-for="field in attentionFields" :key="field" class="metadata-list-item" role="listitem">
         <CorpusMetadataFieldEditor
@@ -314,7 +305,7 @@ function displayValue(field: string) {
     </div>
     <details v-if="settledFields.length" class="settled-metadata">
       <summary>
-        {{ i18n.t("pdf_corpus.populated_metadata", "Populated metadata") }}
+        {{ i18n.t("pdf_corpus.populated_metadata") }}
         <span>{{ settledFields.length }}</span>
       </summary>
       <div class="metadata-grid" role="list">
@@ -346,15 +337,12 @@ function displayValue(field: string) {
 
     <details v-if="addableFields.length" class="settled-metadata add-metadata">
       <summary>
-        {{ i18n.t("pdf_corpus.add_metadata_section", "Add more details") }}
+        {{ i18n.t("pdf_corpus.add_metadata_section") }}
         <span>{{ addableFields.length }}</span>
       </summary>
       <p class="add-metadata-help">
         {{
-          i18n.t(
-            "pdf_corpus.add_metadata_help",
-            "These fields are empty on this record. Fill in any that apply, such as a quoted speaker.",
-          )
+          i18n.t("pdf_corpus.add_metadata_help")
         }}
       </p>
       <div class="metadata-grid" role="list">
@@ -382,15 +370,12 @@ function displayValue(field: string) {
 
     <details v-if="inheritedFields.length" class="inherited-metadata">
       <summary>
-        {{ i18n.t("pdf_corpus.inherited_metadata_section", "Inherited document metadata") }}
+        {{ i18n.t("pdf_corpus.inherited_metadata_section") }}
         <span>{{ inheritedFields.length }}</span>
       </summary>
       <p>
         {{
-          i18n.t(
-            "pdf_corpus.inherited_metadata_help",
-            "These values come from the document manifest. Override only when this record legitimately differs from the document default.",
-          )
+          i18n.t("pdf_corpus.inherited_metadata_help")
         }}
       </p>
       <div class="inherited-grid" role="list">
@@ -409,7 +394,7 @@ function displayValue(field: string) {
           </div>
           <span>{{ displayValue(field) }}</span
           ><button type="button" class="link-button" @click="emit('source', field)">
-            {{ i18n.t("pdf_corpus.view_evidence", "Evidence") }}
+            {{ i18n.t("pdf_corpus.view_evidence") }}
           </button>
         </article>
       </div>

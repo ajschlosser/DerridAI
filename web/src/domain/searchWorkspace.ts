@@ -212,7 +212,7 @@ export function createSearchWorkspace(deps: Deps) {
       record: cloneAuditValue(record),
       db_status: {
         kind: "exists",
-        label: tr("search.db_in_database", "In DB"),
+        label: tr("search.db_in_database"),
         title: state.activeStore,
       },
       selected: false,
@@ -419,10 +419,7 @@ export function createSearchWorkspace(deps: Deps) {
       if (Object.keys(safe).length !== Object.keys(previous).length) {
         state.dbSearchWhere = safe;
         toast(
-          tr(
-            "search.contains_filter_removed",
-            "Contains metadata filters are available only in Filters only mode and were removed.",
-          ),
+          tr("search.contains_filter_removed"),
           { tone: "info" },
         );
       }
@@ -587,7 +584,7 @@ export function createSearchWorkspace(deps: Deps) {
       : "similarity";
     const query = String(state.globalSearch || "").trim();
     if (method !== "filter" && !query) {
-      if (!silent) toast(tr("search.enter_query", "Enter a search query first."), { tone: "warn" });
+      if (!silent) toast(tr("search.enter_query"), { tone: "warn" });
       return getSearchWorkspaceSnapshot({ refresh: false, autoRun: false });
     }
     state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(state.dbSearchFetchK) || 100));
@@ -616,7 +613,7 @@ export function createSearchWorkspace(deps: Deps) {
     } catch (error) {
       state.storeSearchResults = [];
       if (!silent)
-        toast(`${tr("research.search_failed", "Search failed")}: ${(error as Error).message}`, {
+        toast(`${tr("research.search_failed")}: ${(error as Error).message}`, {
           tone: "danger",
         });
     } finally {
@@ -698,7 +695,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (action === "bulk")
       return openBulkFieldEditor({
         rows: items,
-        title: tr("search.bulk_edit_selected", "Bulk edit selected records"),
+        title: tr("search.bulk_edit_selected"),
       });
   }
   function getSearchShareHref() {

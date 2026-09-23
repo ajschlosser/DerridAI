@@ -24,13 +24,13 @@ const informational=computed<Informational[]>(()=>last.value?.informational??[])
 const visible=computed(()=>added.value.length+replaced.value.length+disputes.value.length+informational.value.length>0);
 const label=(field:string)=>i18n.t(`record.${field}`,field.replaceAll("_"," "));
 const candidatesFor=(item:Dispute):Candidate[]=>item.candidates?.length?item.candidates:[{value:item.existing,source:"current"},{value:item.proposed,source:"proposed"}];
-function show(value:unknown):string{if(value===true)return i18n.t("ui.yes","Yes");if(value===false)return i18n.t("ui.no","No");if(Array.isArray(value))return value.join(", ")||"—";return value===null||value===undefined||value===""?"—":String(value)}
-function candidateMeta(candidate:Candidate):string{const parts:string[]=[];if(candidate.source==="current")parts.push(i18n.t("pdf_corpus.change_current_value","Current value"));else if(candidate.model)parts.push(String(candidate.model));else if(candidate.source==="llm")parts.push(i18n.t("pdf_corpus.ownership.llm","LLM source"));else if(candidate.source)parts.push(String(candidate.source));if(candidate.pass)parts.push(i18n.tf("pdf_corpus.enrichment_pass_number","pass {pass}",{pass:candidate.pass}));if(typeof candidate.confidence==="number")parts.push(`${Math.round(candidate.confidence*100)}%`);return parts.join(" · ")}
-function actionLabel(candidate:Candidate):string{return candidate.source==="current"?i18n.t("pdf_corpus.change_keep_current","Keep current"):i18n.t("pdf_corpus.change_use_value","Use this value")}
+function show(value:unknown):string{if(value===true)return i18n.t("ui.yes");if(value===false)return i18n.t("ui.no");if(Array.isArray(value))return value.join(", ")||"—";return value===null||value===undefined||value===""?"—":String(value)}
+function candidateMeta(candidate:Candidate):string{const parts:string[]=[];if(candidate.source==="current")parts.push(i18n.t("pdf_corpus.change_current_value"));else if(candidate.model)parts.push(String(candidate.model));else if(candidate.source==="llm")parts.push(i18n.t("pdf_corpus.ownership.llm"));else if(candidate.source)parts.push(String(candidate.source));if(candidate.pass)parts.push(i18n.tf("pdf_corpus.enrichment_pass_number", {pass:candidate.pass}));if(typeof candidate.confidence==="number")parts.push(`${Math.round(candidate.confidence*100)}%`);return parts.join(" · ")}
+function actionLabel(candidate:Candidate):string{return candidate.source==="current"?i18n.t("pdf_corpus.change_keep_current"):i18n.t("pdf_corpus.change_use_value")}
 function informationalLabel(item:Informational):string{
-  if(item.kind==="protected_suggestion")return i18n.t("pdf_corpus.enrichment_protected_suggestion","Protected value retained");
-  if(item.kind==="duplicate")return i18n.t("pdf_corpus.enrichment_duplicate","Duplicate candidate");
-  return i18n.t("pdf_corpus.enrichment_agreement","No new supported value");
+  if(item.kind==="protected_suggestion")return i18n.t("pdf_corpus.enrichment_protected_suggestion");
+  if(item.kind==="duplicate")return i18n.t("pdf_corpus.enrichment_duplicate");
+  return i18n.t("pdf_corpus.enrichment_agreement");
 }
 function showInformational(item:Informational):string{
   const field=label(String(item.field||""));
@@ -41,11 +41,11 @@ function showInformational(item:Informational):string{
 
 <template>
 <section v-if="visible" class="enrichment-changes" aria-labelledby="enrichment-changes-title">
-<header><h4 id="enrichment-changes-title">{{i18n.t("pdf_corpus.enrichment_changes_title","Changed by enrichment")}}</h4><p>{{i18n.t("pdf_corpus.enrichment_changes_help","Unresolved candidates preserve model, pass, and confidence provenance until you decide the field.")}}</p></header>
+<header><h4 id="enrichment-changes-title">{{i18n.t("pdf_corpus.enrichment_changes_title")}}</h4><p>{{i18n.t("pdf_corpus.enrichment_changes_help")}}</p></header>
 <ul>
-<li v-for="field in added" :key="`a-${field}`" data-kind="added"><span class="kind">{{i18n.t("pdf_corpus.change_added","Added")}}</span><span class="what"><b>{{label(field)}}</b>: {{show(record[field])}}</span></li>
-<li v-for="item in replaced" :key="`r-${item.field}`" data-kind="replaced"><span class="kind">{{i18n.t("pdf_corpus.change_replaced","Replaced")}}</span><span class="what"><b>{{label(item.field)}}</b>: <s>{{show(item.previous)}}</s> → {{show(item.value)}}</span><button type="button" class="btn small" :disabled="busy" @click="emit('resolve',item.field,item.previous)">{{i18n.t("pdf_corpus.change_restore","Restore previous")}}</button></li>
-<li v-for="item in disputes" :key="`d-${item.field}`" data-kind="disputed"><span class="kind">{{i18n.t("pdf_corpus.change_disputed","Disagreement")}}</span><span class="what"><b>{{label(item.field)}}</b></span><div class="candidate-list"><article v-for="(candidate,index) in candidatesFor(item)" :key="candidate.candidate_id||`${item.field}-${index}`" class="candidate" :title="candidate.run_id||undefined"><div class="candidate-copy"><strong>{{show(candidate.value)}}</strong><small v-if="candidateMeta(candidate)">{{candidateMeta(candidate)}}</small></div><button type="button" class="btn small" :disabled="busy" @click="emit('resolve',item.field,candidate.value)">{{actionLabel(candidate)}}</button></article></div></li>
+<li v-for="field in added" :key="`a-${field}`" data-kind="added"><span class="kind">{{i18n.t("pdf_corpus.change_added")}}</span><span class="what"><b>{{label(field)}}</b>: {{show(record[field])}}</span></li>
+<li v-for="item in replaced" :key="`r-${item.field}`" data-kind="replaced"><span class="kind">{{i18n.t("pdf_corpus.change_replaced")}}</span><span class="what"><b>{{label(item.field)}}</b>: <s>{{show(item.previous)}}</s> → {{show(item.value)}}</span><button type="button" class="btn small" :disabled="busy" @click="emit('resolve',item.field,item.previous)">{{i18n.t("pdf_corpus.change_restore")}}</button></li>
+<li v-for="item in disputes" :key="`d-${item.field}`" data-kind="disputed"><span class="kind">{{i18n.t("pdf_corpus.change_disputed")}}</span><span class="what"><b>{{label(item.field)}}</b></span><div class="candidate-list"><article v-for="(candidate,index) in candidatesFor(item)" :key="candidate.candidate_id||`${item.field}-${index}`" class="candidate" :title="candidate.run_id||undefined"><div class="candidate-copy"><strong>{{show(candidate.value)}}</strong><small v-if="candidateMeta(candidate)">{{candidateMeta(candidate)}}</small></div><button type="button" class="btn small" :disabled="busy" @click="emit('resolve',item.field,candidate.value)">{{actionLabel(candidate)}}</button></article></div></li>
 <li v-for="(item,index) in informational" :key="`i-${item.field}-${index}`" data-kind="informational"><span class="kind">{{informationalLabel(item)}}</span><span class="what"><b>{{showInformational(item)}}</b><small v-if="item.model||item.pass||item.confidence!==undefined">{{[item.model,item.pass?`pass ${item.pass}`:null,typeof item.confidence==='number'?`${Math.round(item.confidence*100)}%`:null].filter(Boolean).join(' · ')}}</small><small>{{item.reason}}</small></span></li>
 </ul>
 </section>

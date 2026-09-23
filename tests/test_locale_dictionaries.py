@@ -98,6 +98,15 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
     assert used - set(french) == set()
 
 
+def test_frontend_english_defaults_match_builtin_en_us():
+    """web/src/i18n/enUsDefaults.json is the exported EN_US dictionary."""
+    import json
+
+    english = _translation_dicts()["DEFAULT_EN_US"]
+    exported = json.loads((ROOT / "web/src/i18n/enUsDefaults.json").read_text(encoding="utf-8"))
+    assert exported == english
+
+
 
 
 def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(tmp_path, monkeypatch):

@@ -198,10 +198,7 @@ async function runHandsFree() {
     handsFreeOpen.value = false;
     startPolling();
     setMessage(
-      i18n.t(
-        "pdf_corpus.hands_free_started",
-        "Hands-free run started. The report appears here when it finishes.",
-      ),
+      i18n.t("pdf_corpus.hands_free_started"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -349,15 +346,15 @@ const metadataFamilyOptions = computed(
     })) || [
       {
         key: "discourse",
-        label: i18n.t("pdf_corpus.metadata_family.discourse", "Discourse / attribution"),
+        label: i18n.t("pdf_corpus.metadata_family.discourse"),
       },
       {
         key: "quotation",
-        label: i18n.t("pdf_corpus.metadata_family.quotation", "Quotation relations"),
+        label: i18n.t("pdf_corpus.metadata_family.quotation"),
       },
       {
         key: "indexing",
-        label: i18n.t("pdf_corpus.metadata_family.indexing", "Semantic indexing"),
+        label: i18n.t("pdf_corpus.metadata_family.indexing"),
       },
     ],
 );
@@ -599,58 +596,49 @@ const { reviewGridEl, queueSplitter, inspectorSplitter, reviewHeightSplitter } =
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
 function mergeUnavailable(direction: "previous" | "next"): string | undefined {
   if (busy.value !== "")
-    return i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.");
+    return i18n.t("pdf_corpus.reason.busy");
   if (structuralReviewLocked.value)
-    return i18n.t(
-      "pdf_corpus.reason.structure_locked",
-      "Merging and slicing wait until record topology is ready.",
-    );
+    return i18n.t("pdf_corpus.reason.structure_locked");
   if (direction === "previous" && !canMergePrevious.value)
-    return i18n.t("pdf_corpus.reason.no_previous", "There is no previous record to combine with.");
+    return i18n.t("pdf_corpus.reason.no_previous");
   if (direction === "next" && !canMergeNext.value)
-    return i18n.t("pdf_corpus.reason.no_next", "There is no next record to combine with.");
+    return i18n.t("pdf_corpus.reason.no_next");
   return undefined;
 }
 function sliceUnavailable(): string | undefined {
   if (busy.value !== "")
-    return i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.");
+    return i18n.t("pdf_corpus.reason.busy");
   if (editingText.value)
-    return i18n.t("pdf_corpus.reason.finish_text_edit", "Finish or cancel the text edit first.");
+    return i18n.t("pdf_corpus.reason.finish_text_edit");
   if (metadataEditorDirty.value)
-    return i18n.t(
-      "pdf_corpus.reason.finish_metadata_edit",
-      "Save or discard the metadata changes first.",
-    );
+    return i18n.t("pdf_corpus.reason.finish_metadata_edit");
   if (!canMergePrevious.value && !canMergeNext.value)
-    return i18n.t(
-      "pdf_corpus.reason.no_neighbour",
-      "Slicing needs a neighbouring record to move text into.",
-    );
+    return i18n.t("pdf_corpus.reason.no_neighbour");
   return undefined;
 }
 const recordActionItems = computed<CorpusActionMenuItem[]>(() => [
   {
     id: "previous",
-    label: i18n.t("pdf_corpus.combine_previous", "Combine with previous record"),
+    label: i18n.t("pdf_corpus.combine_previous"),
     reason: mergeUnavailable("previous"),
   },
   {
     id: "next",
-    label: i18n.t("pdf_corpus.combine_next", "Combine with next record"),
+    label: i18n.t("pdf_corpus.combine_next"),
     reason: mergeUnavailable("next"),
   },
   {
     id: "slice",
-    label: i18n.t("pdf_corpus.slice_record", "Slice record"),
+    label: i18n.t("pdf_corpus.slice_record"),
     reason: sliceUnavailable(),
   },
-  { id: "preview", label: i18n.t("pdf_corpus.preview_jsonl", "Preview JSONL") },
+  { id: "preview", label: i18n.t("pdf_corpus.preview_jsonl") },
   {
     id: "requeue",
-    label: i18n.t("pdf_corpus.requeue_metadata", "Send back through current LLM run"),
+    label: i18n.t("pdf_corpus.requeue_metadata"),
     reason:
       busy.value !== ""
-        ? i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.")
+        ? i18n.t("pdf_corpus.reason.busy")
         : undefined,
   },
 ]);
@@ -664,37 +652,31 @@ function runRecordAction(id: string) {
 const bulkActionItems = computed<CorpusActionMenuItem[]>(() => {
   const rejectReason =
     busy.value !== ""
-      ? i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.")
+      ? i18n.t("pdf_corpus.reason.busy")
       : reviewLocked.value
-        ? i18n.t(
-            "pdf_corpus.reason.review_locked",
-            "Review is unavailable while the build is running.",
-          )
+        ? i18n.t("pdf_corpus.reason.review_locked")
         : selectedReviewCount.value === 0
-          ? i18n.t("pdf_corpus.reason.select_records_first", "Select one or more records first.")
+          ? i18n.t("pdf_corpus.reason.select_records_first")
           : undefined;
   return [
     {
       id: "edit",
-      label: i18n.t("pdf_corpus.bulk_edit_metadata", "Bulk edit metadata"),
+      label: i18n.t("pdf_corpus.bulk_edit_metadata"),
       reason: busy.value !== "" ? rejectReason : reviewLocked.value ? rejectReason : undefined,
     },
     {
       id: "hands-free",
-      label: i18n.t("pdf_corpus.run_hands_free", "Run hands-free…"),
+      label: i18n.t("pdf_corpus.run_hands_free"),
       reason:
         busy.value !== ""
-          ? i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.")
+          ? i18n.t("pdf_corpus.reason.busy")
           : reviewLocked.value
-            ? i18n.t(
-                "pdf_corpus.reason.review_locked",
-                "Review is unavailable while the build is running.",
-              )
+            ? i18n.t("pdf_corpus.reason.review_locked")
             : undefined,
     },
     {
       id: "reject",
-      label: i18n.tf("pdf_corpus.reject_selected_count", "Reject selected ({count})", {
+      label: i18n.tf("pdf_corpus.reject_selected_count", {
         count: selectedReviewCount.value,
       }),
       reason: rejectReason,
@@ -757,10 +739,7 @@ const transientNetworkError = computed(() =>
 );
 const displayError = computed(() =>
   transientNetworkError.value
-    ? i18n.t(
-        "pdf_corpus.status_refresh_failed",
-        "Status refresh failed. The build may still be running; DerridAI will retry automatically.",
-      )
+    ? i18n.t("pdf_corpus.status_refresh_failed")
     : error.value,
 );
 const activeProviderProfileLabel = computed<string>(() => {
@@ -877,7 +856,7 @@ const selectedRecordActivitySummary = computed(() => {
   const llm = Number(record.activity?.llm_review_count || 0);
   const passes = Number(record.activity?.enrichment_pass_count || 0);
   return views + human + llm + passes > 0
-    ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", "Viewed {views} · human reviews {human} · LLM reviews {llm} · enrichment passes {passes}", { views, human, llm, passes })}`
+    ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { views, human, llm, passes })}`
     : "";
 });
 const selectedProfileModel = computed(() => String(selectedProfile.value?.model || ""));
@@ -913,29 +892,29 @@ const selectedProviderLabel = computed(
 const selectedStructureSummary = computed(() => {
   const plan = selectedAsset.value?.document_layout;
   if (!plan)
-    return i18n.t("pdf_corpus.readiness.structure_unset", "Automatic defaults; review recommended");
+    return i18n.t("pdf_corpus.readiness.structure_unset");
   const parts: string[] = [];
   parts.push(
     plan.page_layout === "two_up"
-      ? i18n.t("pdf_corpus.two_up_layout", "2 printed pages per PDF page")
-      : i18n.t("pdf_corpus.single_page_layout", "1 printed page per PDF page"),
+      ? i18n.t("pdf_corpus.two_up_layout")
+      : i18n.t("pdf_corpus.single_page_layout"),
   );
   if (plan.main_text_pdf_start) {
     const printed = plan.main_text_printed_start
-      ? i18n.tf("pdf_corpus.readiness.printed_anchor", " → printed p. {page}", {
+      ? i18n.tf("pdf_corpus.readiness.printed_anchor", {
           page: plan.main_text_printed_start,
         })
       : "";
     parts.push(
-      i18n.tf("pdf_corpus.readiness.main_start", "Main text PDF {page}{printed}", {
+      i18n.tf("pdf_corpus.readiness.main_start", {
         page: plan.main_text_pdf_start,
         printed,
       }),
     );
-  } else parts.push(i18n.t("pdf_corpus.readiness.main_start_unset", "Main-text start not set"));
+  } else parts.push(i18n.t("pdf_corpus.readiness.main_start_unset"));
   if (plan.bibliography_pdf_start)
     parts.push(
-      i18n.tf("pdf_corpus.readiness.bibliography_start", "Bibliography PDF {page}", {
+      i18n.tf("pdf_corpus.readiness.bibliography_start", {
         page: plan.bibliography_pdf_start,
       }),
     );
@@ -948,14 +927,11 @@ const setupWarnings = computed(() => {
     !selectedAsset.value.document_layout?.main_text_pdf_start
   )
     warnings.push(
-      i18n.t(
-        "pdf_corpus.readiness.review_structure",
-        "Review document structure before building so printed-page and region defaults are explicit.",
-      ),
+      i18n.t("pdf_corpus.readiness.review_structure"),
     );
   if (selectedProviderId.value && selectedProfileActiveBuildCount.value)
     warnings.push(
-      i18n.tf("pdf_corpus.profile_active_builds", "{count} active on this profile", {
+      i18n.tf("pdf_corpus.profile_active_builds", {
         count: selectedProfileActiveBuildCount.value,
       }),
     );
@@ -1088,7 +1064,7 @@ function formatDate(value?: string | null) {
   }
 }
 function statusLabel(build: CorpusBuild) {
-  if (build.publication) return i18n.t("pdf_corpus.status.published_snapshot", "published");
+  if (build.publication) return i18n.t("pdf_corpus.status.published_snapshot");
   return i18n.t(
     `pdf_corpus.status.${String(build.status || "unknown")}`,
     String(build.status || "unknown").replace(/_/g, " "),
@@ -1298,11 +1274,7 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
     syncBuildInRail(currentBuild.value);
     const profile = providerProfiles.value.find((item) => item.id === profileId);
     setMessage(
-      i18n.tf(
-        "pdf_corpus.profile_model_switched",
-        "New metadata tasks will use {profile} / {model}. In-flight requests continue unchanged.",
-        { profile: profile?.name || profileId, model: modelOverride || profile?.model || "—" },
-      ),
+      i18n.tf("pdf_corpus.profile_model_switched", { profile: profile?.name || profileId, model: modelOverride || profile?.model || "—" }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1774,11 +1746,7 @@ async function upload(file?: File | null) {
     selectedAssetId.value = asset.asset_id;
     maybeOpenIngestWarning(asset);
     setMessage(
-      i18n.tf(
-        "pdf_corpus.source_ingested",
-        "Source ingested: {pages} pages · {blocks} source blocks · OCR on {ocr} pages.",
-        { pages: asset.page_count, blocks: asset.block_count, ocr: asset.ocr_pages || 0 },
-      ),
+      i18n.tf("pdf_corpus.source_ingested", { pages: asset.page_count, blocks: asset.block_count, ocr: asset.ocr_pages || 0 }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1813,7 +1781,7 @@ async function searchGutenberg() {
   try {
     const result = await pdfCorpusApi.searchGutenberg(query);
     gutenbergHits.value = result.items || [];
-    if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty", "No Project Gutenberg texts matched that search."));
+    if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty"));
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
@@ -1841,10 +1809,7 @@ async function savePageLabels(labels: Record<number, string | null>) {
     const asset = await pdfCorpusApi.updatePageLabels(selectedAssetId.value, labels);
     assets.value = assets.value.map((item) => (item.asset_id === asset.asset_id ? asset : item));
     setMessage(
-      i18n.t(
-        "pdf_corpus.page_mapping_saved",
-        "Printed-page overrides saved. New corpus builds will use the corrected labels.",
-      ),
+      i18n.t("pdf_corpus.page_mapping_saved"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1869,11 +1834,7 @@ async function saveDocumentLayout(plan: DocumentLayoutPlan) {
       String(page.printed_page_label_source || "").includes("override"),
     ).length;
     setMessage(
-      i18n.tf(
-        "pdf_corpus.document_structure_saved_impact",
-        "Document structure saved. {mapped} of {total} PDF pages are mapped; {exceptions} mapping exception(s). Deterministic page, region, and thread metadata will be used by new builds.",
-        { mapped, total: asset.page_count, exceptions },
-      ),
+      i18n.tf("pdf_corpus.document_structure_saved_impact", { mapped, total: asset.page_count, exceptions }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1886,10 +1847,7 @@ async function useCurrentPdf() {
   const file = runtime.state.pdf.file as File | null;
   if (!file) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.open_pdf_first",
-        "Open a PDF in Explorer first, or choose a source PDF here.",
-      ),
+      i18n.t("pdf_corpus.open_pdf_first"),
       "error",
     );
     return;
@@ -1899,10 +1857,7 @@ async function useCurrentPdf() {
 async function startBuild() {
   if (!selectedAsset.value) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.choose_pdf_before_build",
-        "Choose or load a source PDF before starting a corpus build.",
-      ),
+      i18n.t("pdf_corpus.choose_pdf_before_build"),
       "error",
     );
     return;
@@ -1932,10 +1887,7 @@ async function startBuild() {
     await refreshBuilds();
     startPolling();
     setMessage(
-      i18n.t(
-        "pdf_corpus.build_started",
-        "Corpus build started. Progress and completed checkpoints are persisted server-side.",
-      ),
+      i18n.t("pdf_corpus.build_started"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1947,10 +1899,7 @@ async function resumeBuild() {
   if (!currentBuild.value) return;
   if (buildRunning.value) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.already_running",
-        "This build is already running. Its live status is shown below.",
-      ),
+      i18n.t("pdf_corpus.already_running"),
     );
     return;
   }
@@ -1964,7 +1913,7 @@ async function resumeBuild() {
     registerBuildOperation(currentBuild.value);
     startPolling();
     setMessage(
-      i18n.t("pdf_corpus.build_resumed", "Build resumed from its last completed checkpoint."),
+      i18n.t("pdf_corpus.build_resumed"),
     );
   } catch (exc) {
     const message = exc instanceof Error ? exc.message : String(exc);
@@ -1972,10 +1921,7 @@ async function resumeBuild() {
       await refreshBuild();
       if (currentBuild.value) registerBuildOperation(currentBuild.value);
       setMessage(
-        i18n.t(
-          "pdf_corpus.already_running",
-          "This build is already running. Its live status is shown below.",
-        ),
+        i18n.t("pdf_corpus.already_running"),
       );
     } else setMessage(message, "error");
   } finally {
@@ -1990,10 +1936,7 @@ async function retryIncompleteMetadata() {
   );
   if (fields < 1) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.no_retryable_metadata",
-        "No automatically retryable metadata remains. Open the metadata issue queue for human resolution.",
-      ),
+      i18n.t("pdf_corpus.no_retryable_metadata"),
     );
     return;
   }
@@ -2007,11 +1950,7 @@ async function retryIncompleteMetadata() {
     registerBuildOperation(currentBuild.value);
     startPolling();
     setMessage(
-      i18n.tf(
-        "pdf_corpus.metadata_retry_start_fields",
-        "Retrying {fields} unresolved field(s) across {records} record(s). Topology and completed metadata are preserved.",
-        { fields, records: recordsCount },
-      ),
+      i18n.tf("pdf_corpus.metadata_retry_start_fields", { fields, records: recordsCount }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2077,11 +2016,7 @@ async function restoreAllRejected() {
     await nextTick();
     await refreshRecords(true);
     setMessage(
-      i18n.tf(
-        "pdf_corpus.restored_rejected_count",
-        "Restored {count} rejected record(s) to review.",
-        { count: result.changed },
-      ),
+      i18n.tf("pdf_corpus.restored_rejected_count", { count: result.changed }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2101,10 +2036,7 @@ async function confirmManifest() {
     registerBuildOperation(currentBuild.value);
     startPolling();
     setMessage(
-      i18n.t(
-        "pdf_corpus.manifest_confirmed",
-        "Document manifest confirmed. Semantic segmentation has started.",
-      ),
+      i18n.t("pdf_corpus.manifest_confirmed"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2186,10 +2118,7 @@ async function navigateToQueueRecord(recordId: string) {
 async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
   if (reviewLocked.value) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.review_preparing_help",
-        "Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book.",
-      ),
+      i18n.t("pdf_corpus.review_preparing_help"),
     );
     return;
   }
@@ -2210,7 +2139,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
       selectedRecord.value = updated;
       await refreshBuild();
       await refreshRecords(false, id);
-      setMessage(i18n.t("pdf_corpus.reopened_notice", "Record reopened for review."));
+      setMessage(i18n.t("pdf_corpus.reopened_notice"));
     } else {
       const result = await pdfCorpusApi.reviewDecision(
         currentBuild.value.build_id,
@@ -2230,10 +2159,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
           reviewInspectorTab.value = "source";
           reviewQueue.value = "source";
           setMessage(
-            i18n.t(
-              "pdf_corpus.accept_blocked_source",
-              "This record has a source-extraction problem. Inspect the source, repair/rebuild, or reject the proposal.",
-            ),
+            i18n.t("pdf_corpus.accept_blocked_source"),
             "error",
           );
         } else {
@@ -2242,11 +2168,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
             .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
             .join(", ");
           setMessage(
-            i18n.tf(
-              "pdf_corpus.accept_blocked_metadata",
-              "Confirm the required metadata before accepting this record: {fields}.",
-              { fields },
-            ),
+            i18n.tf("pdf_corpus.accept_blocked_metadata", { fields }),
           );
           await nextTick();
           focusFirstMetadataBlocker();
@@ -2279,8 +2201,8 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
         }
         setMessage(
           disposition === "accepted"
-            ? i18n.t("pdf_corpus.accepted_notice", "Record accepted. Advanced to the next record.")
-            : i18n.t("pdf_corpus.rejected_notice", "Record rejected. Advanced to the next record."),
+            ? i18n.t("pdf_corpus.accepted_notice")
+            : i18n.t("pdf_corpus.rejected_notice"),
         );
       }
     }
@@ -2296,10 +2218,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
 async function attemptAccept() {
   if (reviewLocked.value) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.review_preparing_help",
-        "Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book.",
-      ),
+      i18n.t("pdf_corpus.review_preparing_help"),
     );
     return;
   }
@@ -2332,27 +2251,20 @@ async function skipRecord() {
 async function acceptCleanRecords() {
   if (reviewLocked.value) {
     setMessage(
-      i18n.t(
-        "pdf_corpus.review_preparing_help",
-        "Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book.",
-      ),
+      i18n.t("pdf_corpus.review_preparing_help"),
     );
     return;
   }
   if (!currentBuild.value) return;
   const clean = readyCount.value;
   if (clean < 1) {
-    setMessage(i18n.t("pdf_corpus.no_clean_records", "No clean records are waiting for approval."));
+    setMessage(i18n.t("pdf_corpus.no_clean_records"));
     return;
   }
   const viewport = captureReviewViewport();
   if (
     !window.confirm(
-      i18n.tf(
-        "pdf_corpus.accept_clean_confirm",
-        "Accept {count} clean record(s)? Records with metadata, topology, or source problems will remain for review.",
-        { count: clean },
-      ),
+      i18n.tf("pdf_corpus.accept_clean_confirm", { count: clean }),
     )
   )
     return;
@@ -2371,15 +2283,8 @@ async function acceptCleanRecords() {
     await restoreReviewViewport(viewport, { record: true, inspector: true });
     bulkActionFeedback.value =
       result.changed > 0
-        ? i18n.tf(
-            "pdf_corpus.accept_clean_done",
-            "Accepted {count} clean record(s). Only exceptions remain.",
-            { count: result.changed },
-          )
-        : i18n.t(
-            "pdf_corpus.accept_clean_none_changed",
-            "No records changed. The remaining records need review or were already dispositioned.",
-          );
+        ? i18n.tf("pdf_corpus.accept_clean_done", { count: result.changed })
+        : i18n.t("pdf_corpus.accept_clean_none_changed");
     setMessage(bulkActionFeedback.value);
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2393,17 +2298,17 @@ async function bulkDisposition(disposition: "accepted" | "rejected") {
   const recordIds = Array.from(selectedReviewIds.value);
   const count = recordIds.length;
   if (!count) {
-    setMessage(i18n.t("pdf_corpus.select_records_first", "Select one or more records first."));
+    setMessage(i18n.t("pdf_corpus.select_records_first"));
     return;
   }
   const viewport = captureReviewViewport();
   const verb =
     disposition === "accepted"
-      ? i18n.t("pdf_corpus.accept_selected", "Accept selected")
-      : i18n.t("pdf_corpus.reject_selected", "Reject selected");
+      ? i18n.t("pdf_corpus.accept_selected")
+      : i18n.t("pdf_corpus.reject_selected");
   if (
     !window.confirm(
-      i18n.tf("pdf_corpus.bulk_confirm", "{action} {count} record(s) in the current queue?", {
+      i18n.tf("pdf_corpus.bulk_confirm", {
         action: verb,
         count,
       }),
@@ -2433,12 +2338,8 @@ async function bulkDisposition(disposition: "accepted" | "rejected") {
     }
     await restoreReviewViewport(viewport, { record: true, inspector: true });
     bulkActionFeedback.value = result.blocked_metadata
-      ? i18n.tf(
-          "pdf_corpus.bulk_done_metadata_blocked",
-          "Accepted {count} eligible record(s); {blocked} record(s) still require metadata decisions and are now shown in the metadata queue.",
-          { count: result.changed, blocked: result.blocked_metadata },
-        )
-      : i18n.tf("pdf_corpus.bulk_done", "Updated {count} record(s).", { count: result.changed });
+      ? i18n.tf("pdf_corpus.bulk_done_metadata_blocked", { count: result.changed, blocked: result.blocked_metadata })
+      : i18n.tf("pdf_corpus.bulk_done", { count: result.changed });
     setMessage(bulkActionFeedback.value);
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2457,7 +2358,7 @@ async function undoReview() {
     await refreshBuild();
     await refreshRecords(true, result.selected_record_id || "");
     await restoreReviewViewport(viewport, { record: true });
-    setMessage(i18n.t("pdf_corpus.undo_done", "The last review change was undone."));
+    setMessage(i18n.t("pdf_corpus.undo_done"));
   } catch (exc) {
     await restoreReviewViewport(viewport);
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2474,7 +2375,7 @@ async function redoReview() {
     await refreshBuild();
     await refreshRecords(true, result.selected_record_id || "");
     await restoreReviewViewport(viewport, { record: true });
-    setMessage(i18n.t("pdf_corpus.redo_done", "The last undone review change was restored."));
+    setMessage(i18n.t("pdf_corpus.redo_done"));
   } catch (exc) {
     await restoreReviewViewport(viewport);
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2495,12 +2396,8 @@ async function reanalyzeDocument() {
     if (result.filled.length) await refreshRecords(true);
     setMessage(
       result.filled.length
-        ? i18n.tf(
-            "pdf_corpus.reanalyze_filled",
-            "The model filled {count} missing document detail(s): {fields}.",
-            { count: result.filled.length, fields: result.filled.join(", ") },
-          )
-        : i18n.t("pdf_corpus.reanalyze_nothing", "The model found nothing new to add."),
+        ? i18n.tf("pdf_corpus.reanalyze_filled", { count: result.filled.length, fields: result.filled.join(", ") })
+        : i18n.t("pdf_corpus.reanalyze_nothing"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2520,10 +2417,7 @@ async function saveManifest(changes: Record<string, unknown>) {
     await refreshBuilds();
     await refreshRecords(true);
     setMessage(
-      i18n.t(
-        "pdf_corpus.manifest_saved",
-        "Document manifest saved. Inherited record metadata and citations were regenerated for review.",
-      ),
+      i18n.t("pdf_corpus.manifest_saved"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2561,14 +2455,8 @@ async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
     await restoreReviewViewport(viewport, { record: true });
     setMessage(
       resolveIssues
-        ? i18n.t(
-            "pdf_corpus.text_saved_resolved",
-            "Reviewed text saved and the record-level source issue was marked resolved. Rerun metadata if the correction affects interpretation.",
-          )
-        : i18n.t(
-            "pdf_corpus.text_saved",
-            "Reviewed text saved. The immutable extracted text remains available in Source.",
-          ),
+        ? i18n.t("pdf_corpus.text_saved_resolved")
+        : i18n.t("pdf_corpus.text_saved"),
     );
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2604,7 +2492,7 @@ async function saveMetadata() {
     changes = JSON.parse(metadataDraft.value);
   } catch {
     setMessage(
-      i18n.t("pdf_corpus.metadata_invalid", "Metadata must be a valid JSON object."),
+      i18n.t("pdf_corpus.metadata_invalid"),
       "error",
     );
     return;
@@ -2629,10 +2517,7 @@ async function saveMetadata() {
     await refreshRecords(false, row.record_id);
     await restoreReviewViewport(viewport);
     setMessage(
-      i18n.t(
-        "pdf_corpus.metadata_saved",
-        "Metadata saved. Source-bound text and provenance were not modified.",
-      ),
+      i18n.t("pdf_corpus.metadata_saved"),
     );
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2658,7 +2543,7 @@ async function toggleEvidenceBlock(blockId: string) {
       Array.from(ids),
       existing?.confidence ?? 1,
       existing?.reason ||
-        i18n.t("pdf_corpus.human_evidence_reason", "Human-reviewed evidence binding."),
+        i18n.t("pdf_corpus.human_evidence_reason"),
       Number(selectedRecord.value.record_revision || 1),
     );
     selectedRecord.value = row;
@@ -2667,10 +2552,7 @@ async function toggleEvidenceBlock(blockId: string) {
     await refreshRecords(false, row.record_id);
     await restoreReviewViewport(viewport);
     setMessage(
-      i18n.t(
-        "pdf_corpus.evidence_saved",
-        "Evidence binding saved. The record remains open for review.",
-      ),
+      i18n.t("pdf_corpus.evidence_saved"),
     );
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2695,11 +2577,7 @@ async function merge(direction: "previous" | "next") {
     await refreshRecords(false, row.record_id);
     await restoreReviewViewport(viewport, { record: true });
     setMessage(
-      i18n.tf(
-        "pdf_corpus.merged",
-        "Merged with {direction} record; the merged boundary now requires review.",
-        { direction: i18n.t(`pdf_corpus.${direction}`, direction) },
-      ),
+      i18n.tf("pdf_corpus.merged", { direction: i18n.t(`pdf_corpus.${direction}`, direction) }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2723,10 +2601,7 @@ async function split(afterBlockId: string) {
     await refreshRecords(false, result.records[0]?.record_id || id);
     await restoreReviewViewport(viewport, { record: true });
     setMessage(
-      i18n.t(
-        "pdf_corpus.split_done",
-        "Record split at the selected semantic source boundary. Both records require review.",
-      ),
+      i18n.t("pdf_corpus.split_done"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2757,10 +2632,7 @@ async function sliceRecord(
     await refreshRecords(false, result.record.record_id);
     await restoreReviewViewport(viewport, { record: true });
     setMessage(
-      i18n.t(
-        "pdf_corpus.slice_done",
-        "Boundary adjusted. Both neighboring records were reopened for review and affected metadata was marked stale.",
-      ),
+      i18n.t("pdf_corpus.slice_done"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2779,7 +2651,7 @@ async function requeueCurrentRecord() {
         .find((id) => Boolean(id) && availableProfileIds.has(id)) ||
       providerProfiles.value[0]?.id ||
       "";
-    if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile", "No available LLM provider profile is configured."));
+    if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile"));
     await pdfCorpusApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
@@ -2790,10 +2662,7 @@ async function requeueCurrentRecord() {
     );
     await refreshBuild();
     setMessage(
-      i18n.t(
-        "pdf_corpus.requeue_requested",
-        "Record queued at the front of the current enrichment run; its review feedback will inform later records.",
-      ),
+      i18n.t("pdf_corpus.requeue_requested"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -2826,7 +2695,7 @@ async function adjudicateBoundary(
     await restoreReviewViewport(viewport, { record: true });
     const decision = String(result.decision?.decision || "uncertain");
     setMessage(
-      i18n.tf("pdf_corpus.boundary_check_done", "Boundary second-reader result: {decision}.", {
+      i18n.tf("pdf_corpus.boundary_check_done", {
         decision: i18n.t(`pdf_corpus.boundary_llm.${decision}`, decision),
       }),
     );
@@ -2867,20 +2736,13 @@ async function resolveMetadataField(field: string, value: unknown) {
       // longer contains it. The reviewer should make one final record-level
       // decision instead of hunting for the same record in another queue.
       setMessage(
-        i18n.t(
-          "pdf_corpus.metadata_resolved_ready",
-          "Metadata confirmed. Review the record, then choose Accept & next or Reject & next.",
-        ),
+        i18n.t("pdf_corpus.metadata_resolved_ready"),
       );
       await nextTick();
       acceptButtonEl.value?.focus({ preventScroll: true });
     } else {
       setMessage(
-        i18n.tf(
-          "pdf_corpus.metadata_field_confirmed",
-          "Confirmed {field}. {count} metadata decision(s) remain for this record.",
-          { field: i18n.t(`record.${field}`, field.replace(/_/g, " ")), count: remaining.length },
-        ),
+        i18n.tf("pdf_corpus.metadata_field_confirmed", { field: i18n.t(`record.${field}`, field.replace(/_/g, " ")), count: remaining.length }),
       );
     }
     await restoreReviewViewport(viewport, { inspector: true });
@@ -2915,11 +2777,7 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
     metadataEditorDirty.value = false;
     await restoreReviewViewport(viewport, { inspector: true });
     setMessage(
-      i18n.tf(
-        "pdf_corpus.llm_suggestions_saved",
-        "Saved {count} LLM suggestion(s) as human-confirmed metadata.",
-        { count: Object.keys(changes).length },
-      ),
+      i18n.tf("pdf_corpus.llm_suggestions_saved", { count: Object.keys(changes).length }),
     );
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -2959,10 +2817,7 @@ async function resolveMetadataNoValue(field: string) {
     if (idx >= 0) records.value.splice(idx, 1, result.record);
     metadataEditorDirty.value = false;
     setMessage(
-      i18n.t(
-        "pdf_corpus.no_supported_value_confirmed",
-        "Confirmed that no supported value applies to this field.",
-      ),
+      i18n.t("pdf_corpus.no_supported_value_confirmed"),
     );
     await restoreReviewViewport(viewport, { inspector: true });
   } catch (exc) {
@@ -3000,10 +2855,7 @@ async function runMetadataEnrichment(payload: {
     registerBuildOperation(currentBuild.value);
     startPolling();
     setMessage(
-      i18n.t(
-        "pdf_corpus.metadata_enrichment_started",
-        "Metadata enrichment pass started. Accepted records will reopen only when new or disputed metadata needs review.",
-      ),
+      i18n.t("pdf_corpus.metadata_enrichment_started"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3030,10 +2882,7 @@ async function resetEditorialMemory() {
   try {
     editorialMemory.value = await pdfCorpusApi.resetEditorialMemory(currentBuild.value.build_id);
     setMessage(
-      i18n.t(
-        "pdf_corpus.editorial_memory_reset_done",
-        "Editorial memory reset. Existing human decisions remain authoritative, but only later decisions will guide future LLM calls.",
-      ),
+      i18n.t("pdf_corpus.editorial_memory_reset_done"),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3165,10 +3014,7 @@ function applyLlmTouchup(text: string) {
   editingText.value = true;
   llmTouchupOpen.value = false;
   setMessage(
-    i18n.t(
-      "pdf_corpus.llm_touchup_applied",
-      "LLM touch-up applied to the local draft. Review it, then save to make it authoritative.",
-    ),
+    i18n.t("pdf_corpus.llm_touchup_applied"),
   );
 }
 function handleMetadataDirty(value: boolean) {
@@ -3209,20 +3055,13 @@ async function rerunMetadata() {
     reviewInspectorTab.value = "metadata";
     setMessage(
       metadataRerunFamily.value === "all"
-        ? i18n.t(
-            "pdf_corpus.metadata_rerun",
-            "Interpretive metadata rerun against the current reviewed record text.",
-          )
-        : i18n.tf(
-            "pdf_corpus.metadata_family_rerun",
-            "{family} metadata rerun against the current reviewed record text.",
-            {
+        ? i18n.t("pdf_corpus.metadata_rerun")
+        : i18n.tf("pdf_corpus.metadata_family_rerun", {
               family: i18n.t(
                 `pdf_corpus.metadata_family.${metadataRerunFamily.value}`,
                 metadataRerunFamily.value,
               ),
-            },
-          ),
+            }),
     );
   } catch (exc) {
     await restoreReviewViewport(viewport);
@@ -3240,12 +3079,8 @@ async function publish(options: { download?: boolean; automatic?: boolean } = {}
     await refreshBuilds();
     setMessage(
       options.automatic
-        ? i18n.tf(
-            "pdf_corpus.auto_published",
-            "Review complete. Published {count} records automatically.",
-            { count: result.record_count },
-          )
-        : i18n.tf("pdf_corpus.published", "Published {count} records · SHA-256 {hash}…", {
+        ? i18n.tf("pdf_corpus.auto_published", { count: result.record_count })
+        : i18n.tf("pdf_corpus.published", {
             count: result.record_count,
             hash: result.sha256.slice(0, 12),
           }),
@@ -3276,7 +3111,7 @@ async function applyBulkMetadata(payload: {
     await refreshBuild();
     await refreshRecords(false, selectedRecordId.value);
     setMessage(
-      i18n.tf("pdf_corpus.bulk_metadata_applied", "Updated metadata on {count} record(s).", {
+      i18n.tf("pdf_corpus.bulk_metadata_applied", {
         count: result.changed,
       }),
     );
@@ -3305,10 +3140,7 @@ async function cancelBuild() {
   if (!currentBuild.value) return;
   await pdfCorpusApi.cancel(currentBuild.value.build_id);
   setMessage(
-    i18n.t(
-      "pdf_corpus.cancel_requested",
-      "Cancellation requested. The segmented workspace remains editable, and you can start another build after cancellation settles.",
-    ),
+    i18n.t("pdf_corpus.cancel_requested"),
   );
   startPolling();
 }
@@ -3319,10 +3151,7 @@ async function settleMetadata() {
     currentBuild.value = await pdfCorpusApi.settleMetadata(currentBuild.value.build_id);
     syncBuildInRail(currentBuild.value);
     setMessage(
-      i18n.t(
-        "pdf_corpus.settle_requested_notice",
-        "Remaining automatic metadata tasks will settle as review exceptions after any active request reaches its deadline.",
-      ),
+      i18n.t("pdf_corpus.settle_requested_notice"),
     );
     startPolling();
   } catch (exc) {
@@ -3560,16 +3389,13 @@ onBeforeUnmount(() => {
   <section class="corpus-builder" :aria-labelledby="'pdf-corpus-builder-title'">
     <header class="builder-header">
       <div>
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow", "Corpus Builder") }}</span>
+        <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
         <h1 id="pdf-corpus-builder-title">
-          {{ i18n.t("pdf_corpus.title", "Build auditable records from source PDFs") }}
+          {{ i18n.t("pdf_corpus.title") }}
         </h1>
         <p>
           {{
-            i18n.t(
-              "pdf_corpus.subtitle",
-              "Deterministic extraction and provenance come first. Targeted LLM enrichment is optional, measurable, and used only where it can add scholarly value.",
-            )
+            i18n.t("pdf_corpus.subtitle")
           }}
         </p>
       </div>
@@ -3597,8 +3423,8 @@ onBeforeUnmount(() => {
         >
           {{
             buildRunning
-              ? i18n.t("pdf_corpus.start_concurrent_build", "Start another build")
-              : i18n.t("pdf_corpus.start_new_build", "Start new build")
+              ? i18n.t("pdf_corpus.start_concurrent_build")
+              : i18n.t("pdf_corpus.start_new_build")
           }}
         </button>
       </div>
@@ -3621,7 +3447,7 @@ onBeforeUnmount(() => {
         ><button
           type="button"
           class="message-dismiss"
-          :aria-label="i18n.t('ui.dismiss', 'Dismiss')"
+          :aria-label="i18n.t('ui.dismiss')"
           @click="error = ''"
         >
           ×
@@ -3658,7 +3484,7 @@ onBeforeUnmount(() => {
       :aria-labelledby="'pdf-corpus-config-title'"
     >
       <h2 id="pdf-corpus-config-title" class="sr-only">
-        {{ i18n.t("pdf_corpus.build_configuration", "Build configuration") }}
+        {{ i18n.t("pdf_corpus.build_configuration") }}
       </h2>
 
       <section class="setup-section setup-source-section" aria-labelledby="pdf-corpus-source-title">
@@ -3667,14 +3493,11 @@ onBeforeUnmount(() => {
             <span class="setup-step">A</span>
             <div>
               <h3 id="pdf-corpus-source-title">
-                {{ i18n.t("pdf_corpus.source_setup_title", "Source document") }}
+                {{ i18n.t("pdf_corpus.source_setup_title") }}
               </h3>
               <p>
                 {{
-                  i18n.t(
-                    "pdf_corpus.source_setup_help",
-                    "Choose a PDF, text, rich text, Word, image, or audio file, or add the PDF currently open in Explorer. URLs and Project Gutenberg texts load into the same source spans.",
-                  )
+                  i18n.t("pdf_corpus.source_setup_help")
                 }}
               </p>
             </div>
@@ -3697,24 +3520,21 @@ onBeforeUnmount(() => {
           @import-gutenberg="importGutenberg"
         />
         <div v-if="selectedAsset" class="source-facts">
-          <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages", "pages") }}</span
+          <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages") }}</span
           ><span
             >{{ selectedAsset.block_count }}
-            {{ i18n.t("pdf_corpus.source_units", "source units") }}</span
+            {{ i18n.t("pdf_corpus.source_units") }}</span
           ><span
-            >{{ selectedAsset.ocr_pages }} {{ i18n.t("pdf_corpus.ocr_pages", "OCR page(s)") }}</span
+            >{{ selectedAsset.ocr_pages }} {{ i18n.t("pdf_corpus.ocr_pages") }}</span
           ><span v-if="selectedAsset.metadata?.author"
-            ><b>{{ i18n.t("pdf_corpus.pdf_author", "PDF author") }}</b
+            ><b>{{ i18n.t("pdf_corpus.pdf_author") }}</b
             >: {{ String(selectedAsset.metadata.author) }}</span
           ><span>SHA-256 {{ selectedAsset.sha256.slice(0, 16) }}…</span
           ><span>{{ formatDate(selectedAsset.created_at) }}</span>
         </div>
         <p v-if="selectedAsset" class="source-facts-help">
           {{
-            i18n.t(
-              "pdf_corpus.source_facts_help",
-              "Blocks are extracted text layout units, not records. OCR page(s) counts pages where OCR was used; zero means the PDF text layer was used directly. An embedded PDF author is a deterministic candidate and remains reviewable in the document manifest.",
-            )
+            i18n.t("pdf_corpus.source_facts_help")
           }}
         </p>
       </section>
@@ -3728,14 +3548,11 @@ onBeforeUnmount(() => {
           <span class="setup-step">B</span>
           <div>
             <h3 id="pdf-corpus-structure-phase-title">
-              {{ i18n.t("pdf_corpus.document_structure", "Document structure & pagination") }}
+              {{ i18n.t("pdf_corpus.document_structure") }}
             </h3>
             <p>
               {{
-                i18n.t(
-                  "pdf_corpus.structure_before_build_help",
-                  "Set physical-to-printed page rules before record construction so deterministic pagination, regions, and threads have an explicit source of truth.",
-                )
+                i18n.t("pdf_corpus.structure_before_build_help")
               }}
             </p>
           </div>
@@ -3757,14 +3574,14 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">C</span
           ><span
-            ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title", "LLM & enrichment") }}</b
+            ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
             ><small
               >{{ selectedProviderLabel
               }}<template v-if="selectedProfileModel"> · {{ selectedProfileModel }}</template> ·
               {{
                 enrichmentMode === "deep"
-                  ? i18n.t("pdf_corpus.enrichment_deep", "Deep scholarly enrichment")
-                  : i18n.t("pdf_corpus.enrichment_fast", "Fast corpus build")
+                  ? i18n.t("pdf_corpus.enrichment_deep")
+                  : i18n.t("pdf_corpus.enrichment_fast")
               }}</small
             ></span
           >
@@ -3775,29 +3592,23 @@ onBeforeUnmount(() => {
               v-model="selectedProviderId"
               :profiles="providerProfiles"
               :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
-              :label="i18n.t('pdf_corpus.provider_profile', 'Primary LLM provider')"
+              :label="i18n.t('pdf_corpus.provider_profile')"
               :help="
-                i18n.t(
-                  'pdf_corpus.provider_profile_help',
-                  'Use a centrally managed provider profile. Its model and generation defaults remain reusable across DerridAI workflows.',
-                )
+                i18n.t('pdf_corpus.provider_profile_help')
               "
               :empty-title="
-                i18n.t('pdf_corpus.no_provider_profiles', 'No LLM provider profiles are configured')
+                i18n.t('pdf_corpus.no_provider_profiles')
               "
               :empty-help="
-                i18n.t(
-                  'pdf_corpus.no_provider_profiles_help',
-                  'Create a provider profile or use the manual compatibility settings below.',
-                )
+                i18n.t('pdf_corpus.no_provider_profiles_help')
               "
-              :manage-label="i18n.t('pdf_corpus.manage_providers', 'Manage provider profiles')"
-              :model-not-set-label="i18n.t('pdf_corpus.model_not_set', 'model not set')"
-              :default-label="i18n.t('ui.default', 'Default')"
+              :manage-label="i18n.t('pdf_corpus.manage_providers')"
+              :model-not-set-label="i18n.t('pdf_corpus.model_not_set')"
+              :default-label="i18n.t('ui.default')"
               :concurrent-label="
-                i18n.t('pdf_corpus.concurrent_requests', 'max concurrent request(s)')
+                i18n.t('pdf_corpus.concurrent_requests')
               "
-              :context-label="i18n.t('providers.context_tokens', 'context tokens')"
+              :context-label="i18n.t('providers.context_tokens')"
               @manage="manageProviders"
             />
             <label
@@ -3805,12 +3616,9 @@ onBeforeUnmount(() => {
               class="escalation-field"
               for="pdf-corpus-review-provider"
               ><span
-                ><b>{{ i18n.t("pdf_corpus.escalation_provider", "Escalation provider") }}</b
+                ><b>{{ i18n.t("pdf_corpus.escalation_provider") }}</b
                 ><small>{{
-                  i18n.t(
-                    "pdf_corpus.escalation_provider_help",
-                    "Optional fallback used only after the primary provider exhausts structured-output retries.",
-                  )
+                  i18n.t("pdf_corpus.escalation_provider_help")
                 }}</small></span
               ><select
                 id="pdf-corpus-review-provider"
@@ -3819,10 +3627,7 @@ onBeforeUnmount(() => {
               >
                 <option value="">
                   {{
-                    i18n.t(
-                      "pdf_corpus.no_escalation_provider",
-                      "None — keep failures for human review",
-                    )
+                    i18n.t("pdf_corpus.no_escalation_provider")
                   }}
                 </option>
                 <option
@@ -3832,7 +3637,7 @@ onBeforeUnmount(() => {
                   :disabled="profile.id === selectedProviderId"
                 >
                   {{ profile.name || profile.id }} ·
-                  {{ profile.model || i18n.t("pdf_corpus.model_not_set", "model not set") }}
+                  {{ profile.model || i18n.t("pdf_corpus.model_not_set") }}
                 </option>
               </select></label
             >
@@ -3840,87 +3645,63 @@ onBeforeUnmount(() => {
           <section class="enrichment-strategy" aria-labelledby="pdf-corpus-enrichment-mode-title">
             <div class="setup-card-heading">
               <b id="pdf-corpus-enrichment-mode-title">{{
-                i18n.t("pdf_corpus.enrichment_strategy", "Enrichment strategy")
+                i18n.t("pdf_corpus.enrichment_strategy")
               }}</b
               ><small>{{
-                i18n.t(
-                  "pdf_corpus.enrichment_strategy_help",
-                  "Fast mode routes only genuinely useful metadata questions to the LLM. Deep mode runs broader attribution, quotation, and indexing analysis.",
-                )
+                i18n.t("pdf_corpus.enrichment_strategy_help")
               }}</small>
             </div>
             <div
               class="mode-options"
               role="radiogroup"
-              :aria-label="i18n.t('pdf_corpus.enrichment_strategy', 'Enrichment strategy')"
+              :aria-label="i18n.t('pdf_corpus.enrichment_strategy')"
             >
               <label
                 ><input v-model="enrichmentMode" type="radio" value="fast" /><span
-                  ><b>{{ i18n.t("pdf_corpus.enrichment_fast", "Fast corpus build") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.enrichment_fast") }}</b
                   ><small>{{
-                    i18n.t(
-                      "pdf_corpus.enrichment_fast_help",
-                      "Deterministic metadata first; quotation analysis only when signaled; semantic indexing off unless enabled below.",
-                    )
+                    i18n.t("pdf_corpus.enrichment_fast_help")
                   }}</small></span
                 ></label
               ><label
                 ><input v-model="enrichmentMode" type="radio" value="deep" /><span
-                  ><b>{{ i18n.t("pdf_corpus.enrichment_deep", "Deep scholarly enrichment") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.enrichment_deep") }}</b
                   ><small>{{
-                    i18n.t(
-                      "pdf_corpus.enrichment_deep_help",
-                      "Runs discourse, quotation, and semantic indexing more broadly. Slower and intended for deliberate enrichment work.",
-                    )
+                    i18n.t("pdf_corpus.enrichment_deep_help")
                   }}</small></span
                 ></label
               >
             </div>
             <div v-if="enrichmentMode === 'deep'" class="included-feature">
-              <b>{{ i18n.t("pdf_corpus.semantic_indexing", "Semantic indexing") }}</b
+              <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
               ><span>{{
-                i18n.t("pdf_corpus.semantic_indexing_included", "Included in Deep enrichment")
+                i18n.t("pdf_corpus.semantic_indexing_included")
               }}</span>
             </div>
             <label v-else class="semantic-index-toggle"
               ><input v-model="semanticIndexing" type="checkbox" /><span
-                ><b>{{ i18n.t("pdf_corpus.semantic_indexing", "Semantic indexing") }}</b
+                ><b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
                 ><small>{{
-                  i18n.t(
-                    "pdf_corpus.semantic_indexing_help",
-                    "Generate topics, concepts, persons, and referenced works. Deep mode always includes indexing.",
-                  )
+                  i18n.t("pdf_corpus.semantic_indexing_help")
                 }}</small></span
               ></label
             >
             <label class="semantic-index-toggle"
               ><input v-model="autoCleanText" type="checkbox" /><span
                 ><b>{{
-                  i18n.t(
-                    "pdf_corpus.auto_clean_all_records",
-                    "Clean all record text before enrichment",
-                  )
+                  i18n.t("pdf_corpus.auto_clean_all_records")
                 }}</b
                 ><small>{{
-                  i18n.t(
-                    "pdf_corpus.auto_clean_all_records_help",
-                    "Recommended. Removes repeated headers and page numbers, repairs prose line wrapping, trims blank-line noise and obvious OCR artifacts while preserving immutable extracted text for audit.",
-                  )
+                  i18n.t("pdf_corpus.auto_clean_all_records_help")
                 }}</small></span
               ></label
             ><label class="semantic-index-toggle"
               ><input v-model="llmTouchupDuringEnrichment" type="checkbox" /><span
                 ><b>{{
-                  i18n.t(
-                    "pdf_corpus.llm_touchup_during_enrichment",
-                    "Use LLM to touch-up text as part of enrichment",
-                  )
+                  i18n.t("pdf_corpus.llm_touchup_during_enrichment")
                 }}</b
                 ><small>{{
-                  i18n.t(
-                    "pdf_corpus.llm_touchup_during_enrichment_help",
-                    "Proposes conservative corrections for errata, diacritics, formatting, quotations, and line breaks. Nothing becomes authoritative until you review and save the proposal.",
-                  )
+                  i18n.t("pdf_corpus.llm_touchup_during_enrichment_help")
                 }}</small></span
               ></label
             >
@@ -3939,45 +3720,42 @@ onBeforeUnmount(() => {
             @toggle="advancedOpen = ($event.currentTarget as HTMLDetailsElement).open"
           >
             <summary>
-              {{ i18n.t("pdf_corpus.manual_provider", "Manual provider compatibility settings") }}
+              {{ i18n.t("pdf_corpus.manual_provider") }}
             </summary>
             <p class="help">
               {{
-                i18n.t(
-                  "pdf_corpus.manual_provider_help",
-                  "Used only when no provider profile is selected. Provider profiles are recommended because credentials remain server-owned and resumable builds can reuse the same configuration.",
-                )
+                i18n.t("pdf_corpus.manual_provider_help")
               }}
             </p>
             <div class="advanced-grid">
               <label for="pdf-corpus-provider">{{
-                i18n.t("pdf_corpus.provider", "Provider")
+                i18n.t("pdf_corpus.provider")
               }}</label
               ><select id="pdf-corpus-provider" v-model="manualProvider" class="control">
                 <option value="ollama">Ollama</option>
                 <option value="openai">
-                  {{ i18n.t("pdf_corpus.openai_compatible", "OpenAI-compatible") }}
+                  {{ i18n.t("pdf_corpus.openai_compatible") }}
                 </option></select
-              ><label for="pdf-corpus-model">{{ i18n.t("pdf_corpus.model", "Model") }}</label
+              ><label for="pdf-corpus-model">{{ i18n.t("pdf_corpus.model") }}</label
               ><input
                 id="pdf-corpus-model"
                 v-model="manualModel"
                 class="control"
-                :placeholder="i18n.t('pdf_corpus.provider_default', 'Provider default')"
-              /><label for="pdf-corpus-url">{{ i18n.t("pdf_corpus.base_url", "Base URL") }}</label
+                :placeholder="i18n.t('pdf_corpus.provider_default')"
+              /><label for="pdf-corpus-url">{{ i18n.t("pdf_corpus.base_url") }}</label
               ><input
                 id="pdf-corpus-url"
                 v-model="manualBaseUrl"
                 class="control"
-                :placeholder="i18n.t('pdf_corpus.provider_default', 'Provider default')"
-              /><label for="pdf-corpus-key">{{ i18n.t("pdf_corpus.api_key", "API key") }}</label
+                :placeholder="i18n.t('pdf_corpus.provider_default')"
+              /><label for="pdf-corpus-key">{{ i18n.t("pdf_corpus.api_key") }}</label
               ><input
                 id="pdf-corpus-key"
                 v-model="manualApiKey"
                 class="control"
                 type="password"
                 autocomplete="off"
-                :placeholder="i18n.t('pdf_corpus.not_persisted', 'Not persisted in build manifest')"
+                :placeholder="i18n.t('pdf_corpus.not_persisted')"
               />
             </div>
           </details>
@@ -3988,9 +3766,9 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">D</span
           ><span
-            ><b>{{ i18n.t("pdf_corpus.record_construction", "Record construction") }}</b
+            ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b
             ><small>{{
-              i18n.tf("pdf_corpus.readiness.sizing", "{target} ± {tolerance} characters", {
+              i18n.tf("pdf_corpus.readiness.sizing", {
                 target: recordSizing.preferred_record_chars.toLocaleString(),
                 tolerance: recordSizing.record_length_tolerance.toLocaleString(),
               })
@@ -4005,13 +3783,13 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">E</span
           ><span
-            ><b>{{ i18n.t("schemas.title", "Metadata schema") }}</b
+            ><b>{{ i18n.t("schemas.title") }}</b
             ><small
-              >{{ chosenSchema?.name || i18n.t("schemas.builtin", "Built in")
+              >{{ chosenSchema?.name || i18n.t("schemas.builtin")
               }}<template v-if="chosenSchema">
                 ·
                 {{
-                  i18n.tf("schemas.field_count", "{count} fields", {
+                  i18n.tf("schemas.field_count", {
                     count: chosenSchema.field_count,
                   })
                 }}</template
@@ -4021,22 +3799,19 @@ onBeforeUnmount(() => {
         </summary>
         <div class="setup-disclosure-body schema-choice">
           <label class="schema-choice-field"
-            ><span>{{ i18n.t("schemas.choose", "Metadata schema") }}</span>
+            ><span>{{ i18n.t("schemas.choose") }}</span>
             <select v-model="schemaId" class="control" :disabled="busy !== ''">
               <option v-for="item in schemaChoices" :key="item.id" :value="item.id">
                 {{ item.name
-                }}{{ item.builtin ? ` (${i18n.t("schemas.builtin", "Built in")})` : "" }}
+                }}{{ item.builtin ? ` (${i18n.t("schemas.builtin")})` : "" }}
               </option>
             </select>
             <small>{{
-              i18n.t(
-                "schemas.choose_help",
-                "The metadata fields on every record and what the model looks for in each. The build keeps its own copy.",
-              )
+              i18n.t("schemas.choose_help")
             }}</small></label
           >
           <button type="button" class="btn small" @click="schemaEditorOpen = true">
-            {{ i18n.t("schemas.manage", "Manage schemas…") }}
+            {{ i18n.t("schemas.manage") }}
           </button>
         </div>
       </details>
@@ -4045,12 +3820,9 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">F</span
           ><span
-            ><b>{{ i18n.t("pdf_corpus.run_guidance_title", "Run-specific field guidance") }}</b
+            ><b>{{ i18n.t("pdf_corpus.run_guidance_title") }}</b
             ><small>{{
-              i18n.t(
-                "pdf_corpus.run_guidance_summary",
-                "Optional prompts and phrases for this build",
-              )
+              i18n.t("pdf_corpus.run_guidance_summary")
             }}</small></span
           >
         </summary>
@@ -4067,14 +3839,11 @@ onBeforeUnmount(() => {
         <summary>
           <span class="setup-step">G</span
           ><span
-            ><b>{{ i18n.t("pdf_corpus.hands_free_title", "Hands-free mode") }}</b
+            ><b>{{ i18n.t("pdf_corpus.hands_free_title") }}</b
             ><small>{{
               handsFree.enabled
-                ? i18n.t(
-                    "pdf_corpus.hands_free_on",
-                    "On: the build settles itself, then reports what is left",
-                  )
-                : i18n.t("pdf_corpus.hands_free_off", "Off: you review every record")
+                ? i18n.t("pdf_corpus.hands_free_on")
+                : i18n.t("pdf_corpus.hands_free_off")
             }}</small></span
           >
         </summary>
@@ -4087,12 +3856,9 @@ onBeforeUnmount(() => {
         <div class="setup-section-inline-head">
           <span class="setup-step">H</span
           ><span
-            ><b>{{ i18n.t("pdf_corpus.advanced_execution", "Advanced execution") }}</b
+            ><b>{{ i18n.t("pdf_corpus.advanced_execution") }}</b
             ><small>{{
-              i18n.t(
-                "pdf_corpus.advanced_execution_help",
-                "Provider generation parameters, concurrency, stage budgets, and deadlines.",
-              )
+              i18n.t("pdf_corpus.advanced_execution_help")
             }}</small></span
           >
         </div>
@@ -4131,16 +3897,16 @@ onBeforeUnmount(() => {
       />
     </section>
     <details v-if="currentBuild && !showBuildConfiguration" class="active-build-settings">
-      <summary>{{ i18n.t("pdf_corpus.build_settings_summary", "Build settings") }}</summary>
+      <summary>{{ i18n.t("pdf_corpus.build_settings_summary") }}</summary>
       <div>
         <span>{{ currentBuild.source_filename }}</span
         ><span
-          >{{ i18n.t("pdf_corpus.provider_profile", "Provider profile") }}:
+          >{{ i18n.t("pdf_corpus.provider_profile") }}:
           {{ activeProviderProfileLabel }}</span
-        ><span>{{ i18n.t("pdf_corpus.model", "Model") }}: {{ activeModelLabel }}</span>
+        ><span>{{ i18n.t("pdf_corpus.model") }}: {{ activeModelLabel }}</span>
         <details v-if="activeRunGuidance.length" class="active-guidance-summary">
           <summary>
-            {{ i18n.t("pdf_corpus.run_guidance_title", "Run-specific field guidance") }}
+            {{ i18n.t("pdf_corpus.run_guidance_title") }}
           </summary>
           <ul>
             <li v-for="item in activeRunGuidance" :key="item.field">
@@ -4174,18 +3940,18 @@ onBeforeUnmount(() => {
       <aside
         v-if="!showReviewWorkspace || finishPhase"
         class="build-rail"
-        :aria-label="i18n.t('pdf_corpus.builds', 'Corpus builds')"
+        :aria-label="i18n.t('pdf_corpus.builds')"
       >
         <div class="rail-title">
           <div>
-            <b>{{ i18n.t("pdf_corpus.builds", "Corpus builds") }}</b
-            ><span>{{ buildsTotal }} {{ i18n.t("pdf_corpus.total", "total") }}</span>
+            <b>{{ i18n.t("pdf_corpus.builds") }}</b
+            ><span>{{ buildsTotal }} {{ i18n.t("pdf_corpus.total") }}</span>
           </div>
           <button
             type="button"
             class="icon-button"
-            :title="i18n.t('pdf_corpus.refresh_builds', 'Refresh builds')"
-            :aria-label="i18n.t('pdf_corpus.refresh_builds', 'Refresh builds')"
+            :title="i18n.t('pdf_corpus.refresh_builds')"
+            :aria-label="i18n.t('pdf_corpus.refresh_builds')"
             @click="refreshBuilds"
           >
             ↻
@@ -4205,13 +3971,13 @@ onBeforeUnmount(() => {
             ><b>{{ build.source_filename }}</b
             ><small>{{ statusLabel(build) }} · {{ Math.round((build.progress || 0) * 100) }}%</small
             ><small
-              >{{ build.record_count || 0 }} {{ i18n.t("pdf_corpus.records", "records") }} ·
+              >{{ build.record_count || 0 }} {{ i18n.t("pdf_corpus.records") }} ·
               {{ formatDate(build.created_at) }}</small
             ></span
           >
         </button>
         <div v-if="!builds.length" class="rail-empty">
-          {{ i18n.t("pdf_corpus.no_builds", "No builds yet.") }}
+          {{ i18n.t("pdf_corpus.no_builds") }}
         </div>
       </aside>
 
@@ -4229,7 +3995,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="summary-actions">
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">
-                {{ i18n.t("pdf_corpus.cancel", "Cancel") }}
+                {{ i18n.t("pdf_corpus.cancel") }}
               </button>
               <button
                 v-if="canResume"
@@ -4238,13 +4004,13 @@ onBeforeUnmount(() => {
                 @click="resumeBuild"
                 :disabled="busy !== ''"
               >
-                {{ i18n.t("pdf_corpus.resume", "Resume from checkpoint") }}
+                {{ i18n.t("pdf_corpus.resume") }}
               </button>
               <a
                 v-if="currentBuild.publication"
                 class="btn primary"
                 :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)"
-                >{{ i18n.t("pdf_corpus.download_jsonl", "Download JSONL") }}</a
+                >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
               >
             </div>
           </div>
@@ -4297,7 +4063,7 @@ onBeforeUnmount(() => {
           />
           <details v-if="!showReviewWorkspace || finishPhase" class="technical-details">
             <summary>
-              {{ i18n.t("pdf_corpus.technical_details", "Technical build details") }}
+              {{ i18n.t("pdf_corpus.technical_details") }}
             </summary>
             <CorpusBuildProgress
               :status="currentBuild.publication ? 'published' : currentBuild.status"
@@ -4340,14 +4106,11 @@ onBeforeUnmount(() => {
           >
             <div>
               <h3 id="manifest-review-title">
-                {{ i18n.t("pdf_corpus.manifest_review_required", "Review document structure") }}
+                {{ i18n.t("pdf_corpus.manifest_review_required") }}
               </h3>
               <p>
                 {{
-                  i18n.t(
-                    "pdf_corpus.manifest_review_required_help",
-                    "Confirm the detected work-level metadata and printed-page mapping before DerridAI lets those values propagate into semantic segmentation and generated records.",
-                  )
+                  i18n.t("pdf_corpus.manifest_review_required_help")
                 }}
               </p>
             </div>
@@ -4357,7 +4120,7 @@ onBeforeUnmount(() => {
               @click="confirmManifest"
               :disabled="busy !== '' || !contextSafe"
             >
-              {{ i18n.t("pdf_corpus.confirm_manifest_continue", "Confirm document & continue") }}
+              {{ i18n.t("pdf_corpus.confirm_manifest_continue") }}
             </button>
           </section>
           <section
@@ -4369,14 +4132,11 @@ onBeforeUnmount(() => {
             <span class="guidance-icon" aria-hidden="true">↻</span>
             <div>
               <h3>
-                {{ i18n.t("pdf_corpus.retry_in_progress", "Retrying unresolved segmentation") }}
+                {{ i18n.t("pdf_corpus.retry_in_progress") }}
               </h3>
               <p>
                 {{
-                  i18n.t(
-                    "pdf_corpus.retry_in_progress_help",
-                    "DerridAI has resumed from the last safe checkpoint. The retry action is locked while this run is active; watch the stage and progress here or on Home.",
-                  )
+                  i18n.t("pdf_corpus.retry_in_progress_help")
                 }}
               </p>
             </div>
@@ -4393,22 +4153,16 @@ onBeforeUnmount(() => {
             <span class="guidance-icon" aria-hidden="true">!</span>
             <div>
               <h3>
-                {{ i18n.t("pdf_corpus.build_stopped_title", "Build stopped before completion") }}
+                {{ i18n.t("pdf_corpus.build_stopped_title") }}
               </h3>
               <p>
                 {{
                   currentBuild.error ||
-                  i18n.t(
-                    "pdf_corpus.build_stopped_help",
-                    "Completed checkpoints were preserved. Review the provider and execution settings above, then resume from the last safe checkpoint.",
-                  )
+                  i18n.t("pdf_corpus.build_stopped_help")
                 }}
               </p>
               <small>{{
-                i18n.t(
-                  "pdf_corpus.build_stopped_checkpoint",
-                  "Resuming does not restart completed stages or discard validated records.",
-                )
+                i18n.t("pdf_corpus.build_stopped_checkpoint")
               }}</small>
             </div>
           </section>
@@ -4421,22 +4175,19 @@ onBeforeUnmount(() => {
             <div>
               <h3 id="segmentation-review-title">
                 {{
-                  i18n.t("pdf_corpus.segmentation_review_title", "Localized segmentation review")
+                  i18n.t("pdf_corpus.segmentation_review_title")
                 }}
               </h3>
               <p>
                 {{
-                  i18n.t(
-                    "pdf_corpus.segmentation_review_help",
-                    "The corpus was constructed successfully. A small number of boundary decisions may still need review; these are boundary-level questions and do not mark the neighboring records as failed. Metadata enrichment continues normally.",
-                  )
+                  i18n.t("pdf_corpus.segmentation_review_help")
                 }}
               </p>
             </div>
             <details v-if="currentBuild.segmentation_unresolved_regions?.length">
               <summary>
                 {{
-                  i18n.tf("pdf_corpus.unresolved_count", "{count} boundary decision(s) to review", {
+                  i18n.tf("pdf_corpus.unresolved_count", {
                     count: currentBuild.segmentation_unresolved_regions.length,
                   })
                 }}
@@ -4471,8 +4222,8 @@ onBeforeUnmount(() => {
             :open="awaitingManifestReview"
           >
             <summary>
-              {{ i18n.t("pdf_corpus.document_manifest", "Document manifest") }} ·
-              {{ i18n.t("pdf_corpus.revision", "revision") }}
+              {{ i18n.t("pdf_corpus.document_manifest") }} ·
+              {{ i18n.t("pdf_corpus.revision") }}
               {{ currentBuild.manifest_revision || 1 }}
             </summary>
             <DocumentManifestEditor
@@ -4487,10 +4238,10 @@ onBeforeUnmount(() => {
             ><span>{{
               currentBuild.model ||
               selectedProfileModel ||
-              i18n.t("pdf_corpus.provider_default", "Provider default")
+              i18n.t("pdf_corpus.provider_default")
             }}</span
             ><span
-              >{{ i18n.t("schemas.version", "Schema version") }} v{{
+              >{{ i18n.t("schemas.version") }} v{{
                 currentBuild.metadata_schema_version || "—"
               }}</span
             ><span>{{ currentBuild.segmentation_prompt_version }}</span>
@@ -4562,7 +4313,7 @@ onBeforeUnmount(() => {
           <div ref="reviewFrameEl" class="review-frame">
             <section
               class="review-toolbar"
-              :aria-label="i18n.t('pdf_corpus.review_controls', 'Record review controls')"
+              :aria-label="i18n.t('pdf_corpus.review_controls')"
             >
               <CorpusReviewQueueTabs
                 v-if="currentBuild"
@@ -4580,18 +4331,18 @@ onBeforeUnmount(() => {
                 :disabled="busy !== ''"
               />
               <label class="sr-only" for="pdf-corpus-record-search">{{
-                i18n.t("pdf_corpus.search_records", "Search generated records")
+                i18n.t("pdf_corpus.search_records")
               }}</label
               ><input
                 id="pdf-corpus-record-search"
                 v-model="recordQuery"
                 class="control"
-                :placeholder="i18n.t('pdf_corpus.search_records', 'Search generated records')"
+                :placeholder="i18n.t('pdf_corpus.search_records')"
               />
               <div
                 class="workspace-switcher"
                 role="group"
-                :aria-label="i18n.t('pdf_corpus.review_workspace', 'Review workspace')"
+                :aria-label="i18n.t('pdf_corpus.review_workspace')"
               >
                 <button
                   type="button"
@@ -4599,25 +4350,25 @@ onBeforeUnmount(() => {
                   :aria-pressed="reviewWorkspaceMode === 'record'"
                   @click="setReviewWorkspaceMode('record')"
                 >
-                  {{ i18n.t("pdf_corpus.workspace.record", "Record") }}</button
+                  {{ i18n.t("pdf_corpus.workspace.record") }}</button
                 ><button
                   type="button"
                   class="btn small"
                   :aria-pressed="reviewWorkspaceMode === 'metadata'"
-                  :aria-label="i18n.t('pdf_corpus.workspace.metadata', 'Metadata workspace')"
+                  :aria-label="i18n.t('pdf_corpus.workspace.metadata')"
                   :disabled="!selectedRecord"
                   @click="setReviewWorkspaceMode('metadata')"
                 >
-                  {{ i18n.t("pdf_corpus.workspace.metadata_short", "Metadata") }}</button
+                  {{ i18n.t("pdf_corpus.workspace.metadata_short") }}</button
                 ><button
                   type="button"
                   class="btn small"
                   :aria-pressed="reviewWorkspaceMode === 'source'"
-                  :aria-label="i18n.t('pdf_corpus.workspace.source', 'Source workspace')"
+                  :aria-label="i18n.t('pdf_corpus.workspace.source')"
                   :disabled="!selectedRecord"
                   @click="setReviewWorkspaceMode('source')"
                 >
-                  {{ i18n.t("pdf_corpus.workspace.source_short", "Source") }}
+                  {{ i18n.t("pdf_corpus.workspace.source_short") }}
                 </button>
               </div>
               <div class="review-bulk">
@@ -4628,12 +4379,12 @@ onBeforeUnmount(() => {
                   :disabled="busy !== '' || readyCount === 0"
                 >
                   {{
-                    i18n.tf("pdf_corpus.accept_clean", "Accept clean ({count})", {
+                    i18n.tf("pdf_corpus.accept_clean", {
                       count: readyCount,
                     })
                   }}</button
                 ><CorpusActionMenu
-                  :label="i18n.t('pdf_corpus.bulk_actions', 'Bulk actions')"
+                  :label="i18n.t('pdf_corpus.bulk_actions')"
                   :items="bulkActionItems"
                   :disabled="busy !== ''"
                   placement="bottom"
@@ -4668,7 +4419,7 @@ onBeforeUnmount(() => {
                   @click="previousPage"
                   :disabled="recordOffset === 0"
                 >
-                  {{ i18n.t("ui.previous", "Previous") }}</button
+                  {{ i18n.t("ui.previous") }}</button
                 ><span>{{ pageNumber }} / {{ pageCount }}</span
                 ><button
                   type="button"
@@ -4676,7 +4427,7 @@ onBeforeUnmount(() => {
                   @click="nextPage"
                   :disabled="recordOffset + pageSize >= recordTotal"
                 >
-                  {{ i18n.t("ui.next", "Next") }}
+                  {{ i18n.t("ui.next") }}
                 </button>
               </div>
             </section>
@@ -4705,14 +4456,14 @@ onBeforeUnmount(() => {
               >
                 <div class="pane-head">
                   <b id="pdf-corpus-records-pane">{{
-                    i18n.t("pdf_corpus.review_queue", "Review queue")
+                    i18n.t("pdf_corpus.review_queue")
                   }}</b
                   ><button
                     type="button"
                     class="link-button queue-toggle"
                     @click="reviewQueueCollapsed = true"
                   >
-                    {{ i18n.t("pdf_corpus.hide_queue", "Hide queue") }}</button
+                    {{ i18n.t("pdf_corpus.hide_queue") }}</button
                   ><label class="select-visible"
                     ><input
                       type="checkbox"
@@ -4720,7 +4471,7 @@ onBeforeUnmount(() => {
                       :disabled="!records.length || busy !== ''"
                       @change="toggleVisibleSelection(($event.target as HTMLInputElement).checked)"
                     /><span>{{
-                      i18n.t("pdf_corpus.select_visible", "Select visible")
+                      i18n.t("pdf_corpus.select_visible")
                     }}</span></label
                   ><span>{{ recordTotal }}</span>
                 </div>
@@ -4730,7 +4481,7 @@ onBeforeUnmount(() => {
                       type="checkbox"
                       :checked="selectedReviewIds.has(record.record_id)"
                       :aria-label="
-                        i18n.tf('pdf_corpus.select_record_id', 'Select {record}', {
+                        i18n.tf('pdf_corpus.select_record_id', {
                           record: record.record_id,
                         })
                       "
@@ -4741,7 +4492,7 @@ onBeforeUnmount(() => {
                         )
                       "
                     /><span class="sr-only">{{
-                      i18n.tf("pdf_corpus.select_record_id", "Select {record}", {
+                      i18n.tf("pdf_corpus.select_record_id", {
                         record: record.record_id,
                       })
                     }}</span></label
@@ -4762,11 +4513,11 @@ onBeforeUnmount(() => {
                     <span class="record-row-main"
                       ><b>{{ record.record_id }}</b
                       ><small
-                        >{{ i18n.t("pdf_corpus.pages", "pp.") }} {{ record.page_start }}–{{
+                        >{{ i18n.t("pdf_corpus.pages") }} {{ record.page_start }}–{{
                           record.page_end
                         }}
                         · {{ record.text_length.toLocaleString() }}
-                        {{ i18n.t("pdf_corpus.characters", "chars") }}</small
+                        {{ i18n.t("pdf_corpus.characters") }}</small
                       ><span class="record-row-status" :data-state="recordState(record)">{{
                         recordStateLabel(record)
                       }}</span
@@ -4782,7 +4533,7 @@ onBeforeUnmount(() => {
                     type="button"
                     class="record-source-warn"
                     :aria-label="
-                      i18n.t('pdf_corpus.source_warning_icon', 'Source extraction warning')
+                      i18n.t('pdf_corpus.source_warning_icon')
                     "
                     @click.stop="openRecordSourceWarning(record)"
                   >
@@ -4790,10 +4541,10 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
                 <div v-if="recordsLoading && !reviewHydrated" class="rail-empty" role="status">
-                  {{ i18n.t("pdf_corpus.loading_records", "Loading generated records…") }}
+                  {{ i18n.t("pdf_corpus.loading_records") }}
                 </div>
                 <div v-else-if="!records.length" class="rail-empty">
-                  {{ i18n.t("pdf_corpus.no_records_filter", "No records match this queue.") }}
+                  {{ i18n.t("pdf_corpus.no_records_filter") }}
                   <button
                     type="button"
                     class="btn small"
@@ -4802,7 +4553,7 @@ onBeforeUnmount(() => {
                       recordQuery = '';
                     "
                   >
-                    {{ i18n.t("pdf_corpus.show_all_records", "Show all records") }}
+                    {{ i18n.t("pdf_corpus.show_all_records") }}
                   </button>
                 </div>
               </nav>
@@ -4813,7 +4564,7 @@ onBeforeUnmount(() => {
                 role="separator"
                 tabindex="0"
                 aria-orientation="vertical"
-                :aria-label="i18n.t('pdf_corpus.resize_queue', 'Resize review queue')"
+                :aria-label="i18n.t('pdf_corpus.resize_queue')"
                 v-bind="queueSplitter.aria()"
                 @pointerdown="queueSplitter.onPointerDown"
                 @keydown="queueSplitter.onKeydown"
@@ -4835,17 +4586,17 @@ onBeforeUnmount(() => {
                         class="link-button queue-toggle"
                         @click="reviewQueueCollapsed = false"
                       >
-                        {{ i18n.t("pdf_corpus.show_queue", "Show queue") }}</button
+                        {{ i18n.t("pdf_corpus.show_queue") }}</button
                       ><span class="eyebrow">{{
-                        i18n.t("pdf_corpus.proposed_record", "Proposed record")
+                        i18n.t("pdf_corpus.proposed_record")
                       }}</span>
                       <h3 id="review-record-title">{{ selectedRecord.record_id }}</h3>
                       <p>
-                        {{ i18n.t("pdf_corpus.pages", "pp.") }} {{ selectedRecord.page_start }}–{{
+                        {{ i18n.t("pdf_corpus.pages") }} {{ selectedRecord.page_start }}–{{
                           selectedRecord.page_end
                         }}
                         · {{ selectedRecord.text_length.toLocaleString() }}
-                        {{ i18n.t("pdf_corpus.characters", "chars")
+                        {{ i18n.t("pdf_corpus.characters")
                         }}{{ selectedRecordActivitySummary }}
                       </p>
                     </div>
@@ -4853,7 +4604,7 @@ onBeforeUnmount(() => {
                       <div
                         class="decision-history"
                         role="group"
-                        :aria-label="i18n.t('pdf_corpus.record_history', 'Review history')"
+                        :aria-label="i18n.t('pdf_corpus.record_history')"
                       >
                         <button
                           type="button"
@@ -4862,7 +4613,7 @@ onBeforeUnmount(() => {
                           :disabled="busy !== ''"
                         >
                           <AppIcon name="history" /><span class="btn-text">{{
-                            i18n.t("pdf_corpus.undo", "Undo")
+                            i18n.t("pdf_corpus.undo")
                           }}</span></button
                         ><button
                           type="button"
@@ -4871,12 +4622,12 @@ onBeforeUnmount(() => {
                           :disabled="busy !== ''"
                         >
                           <AppIcon name="history" class="flip-inline" /><span class="btn-text">{{
-                            i18n.t("pdf_corpus.redo", "Redo")
+                            i18n.t("pdf_corpus.redo")
                           }}</span>
                         </button>
                       </div>
                       <button type="button" class="btn small" @click="openFocusView">
-                        {{ i18n.t("pdf_corpus.focus_view", "Focus view") }}
+                        {{ i18n.t("pdf_corpus.focus_view") }}
                       </button>
                     </div>
                   </header>
@@ -4886,16 +4637,10 @@ onBeforeUnmount(() => {
                     role="status"
                   >
                     <b>{{
-                      i18n.t(
-                        "pdf_corpus.llm_touchup_proposal_available",
-                        "LLM text touch-up proposal available",
-                      )
+                      i18n.t("pdf_corpus.llm_touchup_proposal_available")
                     }}</b
                     ><span>{{
-                      i18n.t(
-                        "pdf_corpus.llm_touchup_proposal_help",
-                        "Review the proposed corrections before saving; the current reviewed text is unchanged.",
-                      )
+                      i18n.t("pdf_corpus.llm_touchup_proposal_help")
                     }}</span
                     ><button
                       type="button"
@@ -4903,7 +4648,7 @@ onBeforeUnmount(() => {
                       @click="beginTextEdit(true)"
                       :disabled="busy !== '' || reviewLocked"
                     >
-                      {{ i18n.t("pdf_corpus.review_touchup_proposal", "Review proposal") }}
+                      {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
                     </button>
                   </aside>
                   <aside
@@ -4919,7 +4664,7 @@ onBeforeUnmount(() => {
                         ? recordIssueKinds(selectedRecord)
                             .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
                             .join(" · ")
-                        : i18n.t("pdf_corpus.why_review", "Why review")
+                        : i18n.t("pdf_corpus.why_review")
                     }}</b
                     ><span>{{ selectedRecord.review_reason }}</span>
                   </aside>
@@ -4927,16 +4672,16 @@ onBeforeUnmount(() => {
                     <header>
                       <div>
                         <b id="reviewed-record-text-title">{{
-                          i18n.t("pdf_corpus.reviewed_record_text", "Reviewed record text")
+                          i18n.t("pdf_corpus.reviewed_record_text")
                         }}</b
                         ><span
                           v-if="selectedRecord.text_review_status === 'human_corrected'"
                           class="human-corrected"
-                          >{{ i18n.t("pdf_corpus.human_corrected", "Human corrected") }}</span
+                          >{{ i18n.t("pdf_corpus.human_corrected") }}</span
                         ><span
                           v-else-if="selectedRecord.text_review_status === 'human_reviewed'"
                           class="human-corrected"
-                          >{{ i18n.t("pdf_corpus.human_reviewed", "Human reviewed") }}</span
+                          >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
                         >
                       </div>
                       <div class="record-text-head-actions">
@@ -4947,7 +4692,7 @@ onBeforeUnmount(() => {
                           @click="textCleanupOpen = true"
                           :disabled="busy !== '' || reviewLocked"
                         >
-                          {{ i18n.t("pdf_corpus.clean_text", "Clean text") }}</button
+                          {{ i18n.t("pdf_corpus.clean_text") }}</button
                         ><button
                           v-if="editingText"
                           type="button"
@@ -4955,7 +4700,7 @@ onBeforeUnmount(() => {
                           @click="llmTouchupOpen = true"
                           :disabled="busy !== '' || reviewLocked"
                         >
-                          {{ i18n.t("pdf_corpus.llm_touchup", "LLM touch-up") }}</button
+                          {{ i18n.t("pdf_corpus.llm_touchup") }}</button
                         ><button
                           v-if="
                             !editingText &&
@@ -4967,7 +4712,7 @@ onBeforeUnmount(() => {
                           @click="markTextReviewed"
                           :disabled="busy !== '' || reviewLocked"
                         >
-                          {{ i18n.t("pdf_corpus.mark_text_reviewed", "Mark reviewed") }}</button
+                          {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</button
                         ><button
                           type="button"
                           class="btn small"
@@ -4976,8 +4721,8 @@ onBeforeUnmount(() => {
                         >
                           {{
                             editingText
-                              ? i18n.t("ui.cancel", "Cancel")
-                              : i18n.t("pdf_corpus.edit_text", "Edit text")
+                              ? i18n.t("ui.cancel")
+                              : i18n.t("pdf_corpus.edit_text")
                           }}
                         </button>
                       </div>
@@ -4987,7 +4732,7 @@ onBeforeUnmount(() => {
                       v-model="textDraft"
                       class="record-text-editor"
                       :aria-label="
-                        i18n.t('pdf_corpus.reviewed_record_text', 'Reviewed record text')
+                        i18n.t('pdf_corpus.reviewed_record_text')
                       "
                     ></textarea>
                     <div v-else class="record-primary-text">{{ selectedRecord.text }}</div>
@@ -4997,17 +4742,14 @@ onBeforeUnmount(() => {
                       role="status"
                     >
                       {{
-                        i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+                        i18n.tf("pdf_corpus.text_noise.score", {
                           score: Math.round(Number(selectedRecord.text_noise.score)),
                         })
                       }}
                       <span v-if="selectedRecord.text_noise.unusable">
                         ·
                         {{
-                          i18n.t(
-                            "pdf_corpus.text_noise.unusable",
-                            "This record is above the unusable-noise threshold.",
-                          )
+                          i18n.t("pdf_corpus.text_noise.unusable")
                         }}
                       </span>
                     </p>
@@ -5019,10 +4761,7 @@ onBeforeUnmount(() => {
                         v-if="selectedRecord.source_quality_issues?.length"
                         class="resolve-source-check"
                         ><input v-model="resolveSourceOnTextSave" type="checkbox" /><span>{{
-                          i18n.t(
-                            "pdf_corpus.resolve_source_with_correction",
-                            "Mark this record-level source issue resolved by the reviewed correction",
-                          )
+                          i18n.t("pdf_corpus.resolve_source_with_correction")
                         }}</span></label
                       >
                     </div>
@@ -5035,34 +4774,24 @@ onBeforeUnmount(() => {
                       role="status"
                     >
                       <b>{{
-                        i18n.t(
-                          "pdf_corpus.metadata_decision_required",
-                          "Metadata decision required",
-                        )
+                        i18n.t("pdf_corpus.metadata_decision_required")
                       }}</b>
                       {{
-                        i18n.tf(
-                          "pdf_corpus.resolve_metadata_before_accept_fields",
-                          "Confirm {fields} before accepting this record.",
-                          { fields: selectedMetadataBlockingLabel },
-                        )
+                        i18n.tf("pdf_corpus.resolve_metadata_before_accept_fields", { fields: selectedMetadataBlockingLabel })
                       }}
                     </p>
                     <div
                       v-if="editingText"
                       class="decision-bar text-edit-bar"
                       role="group"
-                      :aria-label="i18n.t('pdf_corpus.edit_text', 'Edit text')"
+                      :aria-label="i18n.t('pdf_corpus.edit_text')"
                     >
                       <span class="text-save-hint">{{
-                        i18n.t(
-                          "pdf_corpus.text_save_hint",
-                          "Saving confirms that you reviewed this record text.",
-                        )
+                        i18n.t("pdf_corpus.text_save_hint")
                       }}</span>
                       <div class="decision-actions">
                         <button type="button" class="btn small" @click="cancelTextEdit">
-                          {{ i18n.t("ui.cancel", "Cancel") }}
+                          {{ i18n.t("ui.cancel") }}
                         </button>
                         <button
                           type="button"
@@ -5072,8 +4801,8 @@ onBeforeUnmount(() => {
                         >
                           {{
                             busy === "text"
-                              ? i18n.t("ui.saving", "Saving…")
-                              : i18n.t("pdf_corpus.save_and_mark_reviewed", "Save & mark reviewed")
+                              ? i18n.t("ui.saving")
+                              : i18n.t("pdf_corpus.save_and_mark_reviewed")
                           }}
                         </button>
                       </div>
@@ -5082,12 +4811,12 @@ onBeforeUnmount(() => {
                       v-else
                       class="decision-bar"
                       role="group"
-                      :aria-label="i18n.t('pdf_corpus.record_decision', 'Record decision')"
+                      :aria-label="i18n.t('pdf_corpus.record_decision')"
                     >
                       <CorpusActionMenu
-                        :label="i18n.t('pdf_corpus.more_actions', 'More actions')"
+                        :label="i18n.t('pdf_corpus.more_actions')"
                         :menu-label="
-                          i18n.t('pdf_corpus.more_record_actions', 'More record actions')
+                          i18n.t('pdf_corpus.more_record_actions')
                         "
                         :items="recordActionItems"
                         :disabled="busy !== ''"
@@ -5101,7 +4830,7 @@ onBeforeUnmount(() => {
                           @click="skipRecord"
                           :disabled="busy !== ''"
                         >
-                          {{ i18n.t("pdf_corpus.skip", "Skip") }}
+                          {{ i18n.t("pdf_corpus.skip") }}
                         </button>
                         <button
                           type="button"
@@ -5109,7 +4838,7 @@ onBeforeUnmount(() => {
                           @click="rejectRecord"
                           :disabled="busy !== ''"
                         >
-                          {{ i18n.t("pdf_corpus.reject_next", "Reject & next") }}
+                          {{ i18n.t("pdf_corpus.reject_next") }}
                         </button>
                         <button
                           ref="acceptButtonEl"
@@ -5123,8 +4852,8 @@ onBeforeUnmount(() => {
                         >
                           {{
                             selectedRecord.accepted
-                              ? i18n.t("pdf_corpus.reopen", "Reopen")
-                              : i18n.t("pdf_corpus.accept_next", "Accept & next")
+                              ? i18n.t("pdf_corpus.reopen")
+                              : i18n.t("pdf_corpus.accept_next")
                           }}
                         </button>
                       </div>
@@ -5133,10 +4862,7 @@ onBeforeUnmount(() => {
                 </template>
                 <div v-else class="inspector-empty">
                   {{
-                    i18n.t(
-                      "pdf_corpus.select_record",
-                      "Select a generated record to inspect its source binding and metadata.",
-                    )
+                    i18n.t("pdf_corpus.select_record")
                   }}
                 </div>
               </article>
@@ -5148,7 +4874,7 @@ onBeforeUnmount(() => {
                 role="separator"
                 tabindex="0"
                 aria-orientation="vertical"
-                :aria-label="i18n.t('pdf_corpus.resize_inspector', 'Resize review details')"
+                :aria-label="i18n.t('pdf_corpus.resize_inspector')"
                 v-bind="inspectorSplitter.aria()"
                 @pointerdown="inspectorSplitter.onPointerDown"
                 @keydown="inspectorSplitter.onKeydown"
@@ -5157,43 +4883,37 @@ onBeforeUnmount(() => {
               <aside
                 ref="reviewInspectorEl"
                 class="review-inspector"
-                :aria-label="i18n.t('pdf_corpus.review_details', 'Review details')"
+                :aria-label="i18n.t('pdf_corpus.review_details')"
               >
                 <div v-if="reviewWorkspaceMode !== 'record'" class="detail-workspace-head">
                   <div>
                     <span class="eyebrow">{{
-                      i18n.t("pdf_corpus.review_workspace", "Review workspace")
+                      i18n.t("pdf_corpus.review_workspace")
                     }}</span>
                     <h3>
                       {{
                         reviewWorkspaceMode === "metadata"
-                          ? i18n.t("pdf_corpus.workspace.metadata", "Metadata workspace")
-                          : i18n.t("pdf_corpus.workspace.source", "Source workspace")
+                          ? i18n.t("pdf_corpus.workspace.metadata")
+                          : i18n.t("pdf_corpus.workspace.source")
                       }}
                     </h3>
                     <p>
                       {{
                         reviewWorkspaceMode === "metadata"
-                          ? i18n.t(
-                              "pdf_corpus.workspace.metadata_help",
-                              "Resolve attribution, discourse, and indexing metadata with evidence and provenance visible.",
-                            )
-                          : i18n.t(
-                              "pdf_corpus.workspace.source_help",
-                              "Inspect the source page, immutable extraction, boundary decisions, and transcription tools at full working width.",
-                            )
+                          ? i18n.t("pdf_corpus.workspace.metadata_help")
+                          : i18n.t("pdf_corpus.workspace.source_help")
                       }}
                     </p>
                   </div>
                   <button type="button" class="btn small" @click="setReviewWorkspaceMode('record')">
-                    {{ i18n.t("pdf_corpus.workspace.back_record", "Back to record") }}
+                    {{ i18n.t("pdf_corpus.workspace.back_record") }}
                   </button>
                 </div>
                 <div
                   v-show="reviewWorkspaceMode === 'record'"
                   class="review-inspector-tabs"
                   role="tablist"
-                  :aria-label="i18n.t('pdf_corpus.review_detail_views', 'Review detail views')"
+                  :aria-label="i18n.t('pdf_corpus.review_detail_views')"
                 >
                   <button
                     id="review-tab-metadata"
@@ -5206,7 +4926,7 @@ onBeforeUnmount(() => {
                     @keydown="reviewInspectorKeydown"
                     @click="reviewInspectorTab = 'metadata'"
                   >
-                    {{ i18n.t("pdf_corpus.metadata_tab", "Metadata")
+                    {{ i18n.t("pdf_corpus.metadata_tab")
                     }}<span v-if="selectedMetadataBlockingFields.length">{{
                       selectedMetadataBlockingFields.length
                     }}</span>
@@ -5222,7 +4942,7 @@ onBeforeUnmount(() => {
                     @keydown="reviewInspectorKeydown"
                     @click="reviewInspectorTab = 'evidence'"
                   >
-                    {{ i18n.t("pdf_corpus.evidence_tab", "Evidence") }}
+                    {{ i18n.t("pdf_corpus.evidence_tab") }}
                   </button>
                   <button
                     id="review-tab-source"
@@ -5235,7 +4955,7 @@ onBeforeUnmount(() => {
                     @keydown="reviewInspectorKeydown"
                     @click="reviewInspectorTab = 'source'"
                   >
-                    {{ i18n.t("pdf_corpus.source_tab", "Source") }}
+                    {{ i18n.t("pdf_corpus.source_tab") }}
                   </button>
                 </div>
                 <section
@@ -5269,16 +4989,10 @@ onBeforeUnmount(() => {
                   <section v-if="currentBuild?.manifest" class="document-metadata-launch">
                     <div>
                       <b>{{
-                        i18n.t(
-                          "pdf_corpus.document_metadata_defaults",
-                          "Document metadata defaults",
-                        )
+                        i18n.t("pdf_corpus.document_metadata_defaults")
                       }}</b
                       ><span>{{
-                        i18n.t(
-                          "pdf_corpus.document_metadata_defaults_help",
-                          "Edit inherited bibliographic defaults in a dedicated workspace. Record-level overrides remain untouched.",
-                        )
+                        i18n.t("pdf_corpus.document_metadata_defaults_help")
                       }}</span>
                     </div>
                     <button
@@ -5287,19 +5001,16 @@ onBeforeUnmount(() => {
                       :disabled="busy !== ''"
                       @click="documentMetadataOpen = true"
                     >
-                      {{ i18n.t("pdf_corpus.edit_document_metadata", "Edit document metadata") }}
+                      {{ i18n.t("pdf_corpus.edit_document_metadata") }}
                     </button>
                   </section>
                   <details class="record-data">
                     <summary>
-                      {{ i18n.t("pdf_corpus.advanced_metadata", "Advanced metadata") }}
+                      {{ i18n.t("pdf_corpus.advanced_metadata") }}
                     </summary>
                     <p class="help">
                       {{
-                        i18n.t(
-                          "pdf_corpus.metadata_help",
-                          "Typed controls above are preferred. This advanced editor is for supported interpretive metadata only; source-bound fields remain protected.",
-                        )
+                        i18n.t("pdf_corpus.metadata_help")
                       }}
                     </p>
                     <LlmExecutionControl
@@ -5308,15 +5019,12 @@ onBeforeUnmount(() => {
                       :profiles="providerProfiles"
                       :disabled="busy !== ''"
                       :task="
-                        i18n.t(
-                          'pdf_corpus.metadata_rerun_provider_help',
-                          'Rerun only this Record with the selected LLM profile. Existing human-confirmed values remain authoritative.',
-                        )
+                        i18n.t('pdf_corpus.metadata_rerun_provider_help')
                       "
                       @update:model-value="(value) => (llmActionProviderId = value)"
                       @update:model-override="(value) => (llmActionModel = value)"
                     /><label class="sr-only" for="pdf-corpus-metadata">{{
-                      i18n.t("pdf_corpus.interpretive_metadata", "Interpretive metadata")
+                      i18n.t("pdf_corpus.interpretive_metadata")
                     }}</label
                     ><textarea
                       id="pdf-corpus-metadata"
@@ -5332,12 +5040,12 @@ onBeforeUnmount(() => {
                         @click="saveMetadata"
                         :disabled="busy !== ''"
                       >
-                        {{ i18n.t("pdf_corpus.save_metadata", "Save metadata") }}</button
+                        {{ i18n.t("pdf_corpus.save_metadata") }}</button
                       ><label class="rerun-family"
-                        ><span>{{ i18n.t("pdf_corpus.rerun_family", "Rerun family") }}</span
+                        ><span>{{ i18n.t("pdf_corpus.rerun_family") }}</span
                         ><select v-model="metadataRerunFamily" class="control small">
                           <option value="all">
-                            {{ i18n.t("pdf_corpus.metadata_family.all", "All metadata families") }}
+                            {{ i18n.t("pdf_corpus.metadata_family.all") }}
                           </option>
                           <option
                             v-for="family in metadataFamilyOptions"
@@ -5351,38 +5059,29 @@ onBeforeUnmount(() => {
                         type="button"
                         class="btn small"
                         :title="
-                          i18n.t(
-                            'pdf_corpus.rerun_metadata_help',
-                            'Re-evaluate only this Record using the selected metadata family.',
-                          )
+                          i18n.t('pdf_corpus.rerun_metadata_help')
                         "
                         @click="rerunMetadata()"
                         :disabled="busy !== ''"
                       >
-                        {{ i18n.t("pdf_corpus.rerun_metadata", "Rerun this Record") }}</button
+                        {{ i18n.t("pdf_corpus.rerun_metadata") }}</button
                       ><button
                         type="button"
                         class="btn small soft"
                         :title="
-                          i18n.t(
-                            'pdf_corpus.requeue_metadata_help',
-                            'Put this record at the front of the active enrichment run and include your review decisions as feedback.',
-                          )
+                          i18n.t('pdf_corpus.requeue_metadata_help')
                         "
                         @click="requeueCurrentRecord"
                         :disabled="busy !== ''"
                       >
                         {{
-                          i18n.t("pdf_corpus.requeue_metadata", "Send back through current LLM run")
+                          i18n.t("pdf_corpus.requeue_metadata")
                         }}</button
                       ><button
                         type="button"
                         class="btn small"
                         :title="
-                          i18n.t(
-                            'pdf_corpus.metadata_enrichment_again_help',
-                            'Run a multi-Record enrichment pass with scope, family, and pass options.',
-                          )
+                          i18n.t('pdf_corpus.metadata_enrichment_again_help')
                         "
                         @click="
                           llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
@@ -5391,10 +5090,7 @@ onBeforeUnmount(() => {
                         :disabled="busy !== ''"
                       >
                         {{
-                          i18n.t(
-                            "pdf_corpus.metadata_enrichment_again",
-                            "Run enrichment across Records",
-                          )
+                          i18n.t("pdf_corpus.metadata_enrichment_again")
                         }}
                       </button>
                     </div>
@@ -5414,10 +5110,7 @@ onBeforeUnmount(() => {
                 >
                   <p class="inspector-help">
                     {{
-                      i18n.t(
-                        "pdf_corpus.evidence_review_help",
-                        "Select a metadata field to inspect or adjust its source-block evidence.",
-                      )
+                      i18n.t("pdf_corpus.evidence_review_help")
                     }}
                   </p>
                   <FieldEvidenceList
@@ -5447,8 +5140,8 @@ onBeforeUnmount(() => {
                       >
                         {{
                           evidenceBlockIds.has(block.block_id)
-                            ? i18n.t("pdf_corpus.remove_evidence", "Remove as evidence")
-                            : i18n.t("pdf_corpus.add_evidence", "Add as evidence")
+                            ? i18n.t("pdf_corpus.remove_evidence")
+                            : i18n.t("pdf_corpus.add_evidence")
                         }}
                         · {{ selectedEvidenceField }}
                       </button>
@@ -5484,7 +5177,7 @@ onBeforeUnmount(() => {
                   />
                   <details class="source-tool-section">
                     <summary>
-                      {{ i18n.t("pdf_corpus.boundary_second_reader", "Boundary second reader") }}
+                      {{ i18n.t("pdf_corpus.boundary_second_reader") }}
                     </summary>
                     <CorpusBoundaryAdjudication
                       :record="selectedRecord"
@@ -5522,14 +5215,11 @@ onBeforeUnmount(() => {
                   </details>
                   <details class="source-tool-section">
                     <summary>
-                      {{ i18n.t("pdf_corpus.extracted_source_text", "Immutable extracted source") }}
+                      {{ i18n.t("pdf_corpus.extracted_source_text") }}
                     </summary>
                     <p class="inspector-help">
                       {{
-                        i18n.t(
-                          "pdf_corpus.extracted_source_text_help",
-                          "This is the audit reference produced by PDF extraction. Human corrections change the reviewed record text, never these source blocks.",
-                        )
+                        i18n.t("pdf_corpus.extracted_source_text_help")
                       }}
                     </p>
                     <pre
@@ -5559,8 +5249,8 @@ onBeforeUnmount(() => {
                         >
                           {{
                             evidenceBlockIds.has(block.block_id)
-                              ? i18n.t("pdf_corpus.remove_evidence", "Remove as evidence")
-                              : i18n.t("pdf_corpus.add_evidence", "Add as evidence")
+                              ? i18n.t("pdf_corpus.remove_evidence")
+                              : i18n.t("pdf_corpus.add_evidence")
                           }}
                           · {{ selectedEvidenceField }}</button
                         ><button
@@ -5570,24 +5260,21 @@ onBeforeUnmount(() => {
                           @click="split(block.block_id)"
                           :disabled="busy !== ''"
                         >
-                          {{ i18n.t("pdf_corpus.split_after", "Split after this block") }}
+                          {{ i18n.t("pdf_corpus.split_after") }}
                         </button>
                       </article>
                     </div>
                   </details>
                   <details class="source-tool-section">
                     <summary>
-                      {{ i18n.t("pdf_corpus.revision_history", "Revision history") }}
+                      {{ i18n.t("pdf_corpus.revision_history") }}
                     </summary>
                     <CorpusRevisionHistory :record="selectedRecord" />
                   </details>
                 </section>
                 <div v-else class="inspector-empty">
                   {{
-                    i18n.t(
-                      "pdf_corpus.select_record",
-                      "Select a generated record to inspect its source binding and metadata.",
-                    )
+                    i18n.t("pdf_corpus.select_record")
                   }}
                 </div>
               </aside>
@@ -5598,7 +5285,7 @@ onBeforeUnmount(() => {
               role="separator"
               tabindex="0"
               aria-orientation="horizontal"
-              :aria-label="i18n.t('pdf_corpus.resize_review_height', 'Resize record review area')"
+              :aria-label="i18n.t('pdf_corpus.resize_review_height')"
               v-bind="reviewHeightSplitter.aria()"
               @pointerdown="reviewHeightSplitter.onPointerDown"
               @keydown="reviewHeightSplitter.onKeydown"
@@ -5608,13 +5295,10 @@ onBeforeUnmount(() => {
         </template>
 
         <section v-else class="builder-empty">
-          <h2>{{ i18n.t("pdf_corpus.no_selected_build", "No corpus build selected") }}</h2>
+          <h2>{{ i18n.t("pdf_corpus.no_selected_build") }}</h2>
           <p>
             {{
-              i18n.t(
-                "pdf_corpus.no_selected_build_help",
-                "Persist a PDF source and start a semantic corpus build, or choose a historical build from the rail.",
-              )
+              i18n.t("pdf_corpus.no_selected_build_help")
             }}
           </p>
         </section>
@@ -5652,10 +5336,7 @@ onBeforeUnmount(() => {
           textDraft = value;
           textCleanupOpen = false;
           setMessage(
-            i18n.t(
-              'pdf_corpus.cleanup_applied_draft',
-              'Cleanup applied to the reviewed-text draft. Save to persist it.',
-            ),
+            i18n.t('pdf_corpus.cleanup_applied_draft'),
           );
         }
       "
@@ -5755,14 +5436,11 @@ onBeforeUnmount(() => {
     <UiDialog
       v-if="schemaEditorOpen"
       size="xlarge"
-      :title="i18n.t('schemas.manage_title', 'Metadata schemas')"
+      :title="i18n.t('schemas.manage_title')"
       :description="
-        i18n.t(
-          'schemas.manage_help',
-          'Define the fields on JSONL records, their allowed values and the instructions the model is given. Changing a schema does not change builds already made.',
-        )
+        i18n.t('schemas.manage_help')
       "
-      :close-label="i18n.t('ui.close', 'Close')"
+      :close-label="i18n.t('ui.close')"
       @close="schemaEditorOpen = false"
     >
       <MetadataSchemaEditor
@@ -5779,22 +5457,19 @@ onBeforeUnmount(() => {
     <UiDialog
       v-if="handsFreeOpen"
       size="medium"
-      :title="i18n.t('pdf_corpus.run_hands_free_title', 'Run hands-free')"
+      :title="i18n.t('pdf_corpus.run_hands_free_title')"
       :description="
-        i18n.t(
-          'pdf_corpus.run_hands_free_help',
-          'Settle this build with the rules below, without reviewing each record.',
-        )
+        i18n.t('pdf_corpus.run_hands_free_help')
       "
-      :close-label="i18n.t('ui.close', 'Close')"
+      :close-label="i18n.t('ui.close')"
       @close="handsFreeOpen = false"
     >
       <CorpusHandsFreeSettings v-model="handsFree" :disabled="busy !== ''" :show-enable="false" />
       <template #footer
         ><button type="button" class="btn" @click="handsFreeOpen = false">
-          {{ i18n.t("ui.cancel", "Cancel") }}</button
+          {{ i18n.t("ui.cancel") }}</button
         ><button type="button" class="btn primary" :disabled="busy !== ''" @click="runHandsFree">
-          {{ i18n.t("pdf_corpus.run_hands_free_action", "Run hands-free") }}
+          {{ i18n.t("pdf_corpus.run_hands_free_action") }}
         </button></template
       >
     </UiDialog>

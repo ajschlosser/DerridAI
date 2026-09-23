@@ -65,20 +65,14 @@ const canConfigureResearch = computed(() =>
 const canGrade = computed(() => auth.isAdmin);
 const runDisabledReason = computed(() => {
   if (!workspace.value?.can_run || !auth.can("rag.run"))
-    return i18n.t("permissions.rag_denied", "Your role cannot run Research pipelines.");
-  if (!prompt.value.trim()) return i18n.t("research.prompt_required", "Enter a research question.");
+    return i18n.t("permissions.rag_denied");
+  if (!prompt.value.trim()) return i18n.t("research.prompt_required");
   if (!profiles.value.length)
-    return i18n.t("research.no_profile_configured", "No Research LLM profile is available.");
+    return i18n.t("research.no_profile_configured");
   if (preset.value === "evidence" && !selectedEvidence.value.length)
-    return i18n.t(
-      "research.evidence_required",
-      "Select at least one evidence record for evidence-only research.",
-    );
+    return i18n.t("research.evidence_required");
   if (preset.value !== "evidence" && !config.value?.source_collection && !stores.value.length)
-    return i18n.t(
-      "research.database_required",
-      "A corpus database or selected evidence is required.",
-    );
+    return i18n.t("research.database_required");
   return "";
 });
 const canRun = computed(() => !runDisabledReason.value);
@@ -362,7 +356,7 @@ async function cancelJob(job: ResearchJob) {
 async function removeJob(job: ResearchJob) {
   if (
     !window.confirm(
-      i18n.t("research.remove_run_confirm", "Remove this retained Research run and its result?"),
+      i18n.t("research.remove_run_confirm"),
     )
   )
     return;
@@ -382,7 +376,7 @@ function loadHistory(item: Record<string, unknown>) {
   prompt.value = String(item.prompt || "");
   instructions.value = String(item.instructions || "");
   persistDraft();
-  runtime.notifyToast(i18n.t("research.question_restored", "Recent question restored"), {
+  runtime.notifyToast(i18n.t("research.question_restored"), {
     tone: "success",
   });
 }
@@ -408,9 +402,9 @@ function clearEvidence() {
 async function copyAnswer() {
   try {
     await navigator.clipboard.writeText(activeResult.value?.answer || "");
-    runtime.notifyToast(i18n.t("research.answer_copied", "Answer copied"), { tone: "success" });
+    runtime.notifyToast(i18n.t("research.answer_copied"), { tone: "success" });
   } catch {
-    runtime.notifyToast(i18n.t("research.clipboard_failed", "Could not access the clipboard"), {
+    runtime.notifyToast(i18n.t("research.clipboard_failed"), {
       tone: "danger",
     });
   }
@@ -445,7 +439,7 @@ function prepareRerun() {
   model.value = profileModel(profile || null);
   generation.value = profileGeneration(profile || null);
   activeJob.value = null;
-  runtime.notifyToast(i18n.t("research.rerun_loaded", "Run parameters loaded into the composer"), {
+  runtime.notifyToast(i18n.t("research.rerun_loaded"), {
     tone: "success",
   });
   void nextTick(() => document.querySelector<HTMLTextAreaElement>("#researchQuestion")?.focus());
@@ -457,7 +451,7 @@ async function discoverModels() {
       config.value.provider_profile_id,
     )) as string[];
     runtime.notifyToast(
-      `${discoveredModels.value.length} ${i18n.t("research.models_found", "models found")}`,
+      `${discoveredModels.value.length} ${i18n.t("research.models_found")}`,
       { tone: "success" },
     );
   } catch (error) {
@@ -473,7 +467,7 @@ function applySettings(payload: {
   generation.value = { ...payload.generation };
   model.value = payload.model || profileModel(selectedProfile.value);
   preset.value = "custom";
-  runtime.notifyToast(i18n.t("research.settings_applied", "Research settings applied"), {
+  runtime.notifyToast(i18n.t("research.settings_applied"), {
     tone: "success",
   });
 }
@@ -500,40 +494,31 @@ onBeforeUnmount(() => {
   <main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
     <div v-if="loading && !workspace" class="research-loading" role="status">
       <span class="spinner"></span
-      >{{ i18n.t("research.loading_workspace", "Loading Research workspace…") }}
+      >{{ i18n.t("research.loading_workspace") }}
     </div>
     <AccessibleEmptyState
       v-else-if="noDatabase"
       icon="database"
-      :title="i18n.t('research.empty_state_title', 'Research needs a corpus database')"
+      :title="i18n.t('research.empty_state_title')"
       :description="
         canCreateDatabase
-          ? i18n.t(
-              'research.empty_state_help',
-              'Create a vector collection from your loaded works, then return here to ask evidence-grounded questions.',
-            )
-          : i18n.t(
-              'research.empty_state_denied',
-              'Ask an administrator to configure a corpus database or grant you access.',
-            )
+          ? i18n.t('research.empty_state_help')
+          : i18n.t('research.empty_state_denied')
       "
       :action-label="
-        canCreateDatabase ? i18n.t('research.empty_state_action', 'Create a collection') : ''
+        canCreateDatabase ? i18n.t('research.empty_state_action') : ''
       "
       @action="runtime.openDatabaseCreationFromResearch?.()"
     />
     <template v-else-if="workspace && config">
       <UiPageHeader
-        :kicker="i18n.t('research.page_kicker', 'Evidence-grounded inquiry')"
-        :title="i18n.t('research.page_title', 'Research workspace')"
+        :kicker="i18n.t('research.page_kicker')"
+        :title="i18n.t('research.page_title')"
         title-id="research-page-title"
         :description="
-          i18n.t(
-            'research.page_subtitle',
-            'Ask the corpus, inspect the evidence, and keep provenance attached to the answer.',
-          )
+          i18n.t('research.page_subtitle')
         "
-        :actions-label="i18n.t('research.page_state', 'Research workspace status')"
+        :actions-label="i18n.t('research.page_state')"
       >
         <template #actions>
           <div class="research-page-state">
@@ -550,7 +535,7 @@ onBeforeUnmount(() => {
               }}</span
             ><span
               >{{ selectedEvidence.length }}
-              {{ i18n.t("rag.selected_evidence", "selected evidence") }}</span
+              {{ i18n.t("rag.selected_evidence") }}</span
             >
           </div>
         </template>

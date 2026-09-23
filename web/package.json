@@ -14,6 +14,7 @@
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
     "test:frontend": "npm run typecheck && npm run test:unit && npm run build && npm run build-storybook && npm run test:e2e",
+    "i18n:defaults": "node ../scripts/export-en-us-defaults.mjs",
     "lint": "eslint src --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -17,13 +17,13 @@ const items=computed(()=>[
   {key:"pdf_corpus.absolute_safety_splits",fallback:"Absolute safety splits",value:Number(props.absoluteSafetySplits||0)},
   {key:"pdf_corpus.boundary_review_required",fallback:"Review-required boundaries",value:Number(props.reviewCount||0)},
 ]);
-const description=computed(()=>i18n.t("pdf_corpus.segmentation_telemetry_help","Most transitions are resolved deterministically. LLM work is limited to a small ambiguous subset; uncertainty, omission, and classifier failure resolve conservatively to KEEP."));
+const description=computed(()=>i18n.t("pdf_corpus.segmentation_telemetry_help"));
 </script>
 
 <template>
   <section class="segmentation-telemetry" :aria-labelledby="headingId" :aria-describedby="helpId">
     <div class="telemetry-heading">
-      <h3 :id="headingId">{{i18n.t('pdf_corpus.segmentation_telemetry','Segmentation decisions')}}</h3>
+      <h3 :id="headingId">{{i18n.t('pdf_corpus.segmentation_telemetry')}}</h3>
       <span :id="helpId">{{description}}</span>
     </div>
     <dl>
@@ -35,8 +35,8 @@ const description=computed(()=>i18n.t("pdf_corpus.segmentation_telemetry_help","
       </template>
     </dl>
     <p v-if="Number(props.budgetSkipped||0)>0 || Number(props.classifierFailures||0)>0" class="telemetry-note">
-      <span v-if="Number(props.budgetSkipped||0)>0">{{i18n.tf('pdf_corpus.boundary_budget_skipped','{count} lower-value candidate(s) resolved to KEEP by the LLM budget.',{count:Number(props.budgetSkipped||0)})}}</span>
-      <span v-if="Number(props.classifierFailures||0)>0">{{i18n.tf('pdf_corpus.boundary_failures_kept','{count} classifier failure(s) resolved to KEEP.',{count:Number(props.classifierFailures||0)})}}</span>
+      <span v-if="Number(props.budgetSkipped||0)>0">{{i18n.tf('pdf_corpus.boundary_budget_skipped', {count:Number(props.budgetSkipped||0)})}}</span>
+      <span v-if="Number(props.classifierFailures||0)>0">{{i18n.tf('pdf_corpus.boundary_failures_kept', {count:Number(props.classifierFailures||0)})}}</span>
     </p>
   </section>
 </template>

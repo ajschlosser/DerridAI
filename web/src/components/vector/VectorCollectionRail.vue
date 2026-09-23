@@ -25,24 +25,24 @@ function statusOf(store: VectorCollection) {
   <aside class="card vector-collection-sidebar">
     <div class="vector-collection-head">
       <div>
-        <b>{{ i18n.t("vector.collections", "Collections") }}</b>
-        <span>{{ props.collections.length.toLocaleString(i18n.locale) }} {{ i18n.t("vector.collections", "collections") }}</span>
+        <b>{{ i18n.t("vector.collections") }}</b>
+        <span>{{ props.collections.length.toLocaleString(i18n.locale) }} {{ i18n.t("vector.collections") }}</span>
       </div>
-      <UiButton icon="refresh" icon-only size="small" :label="i18n.t('ui.refresh', 'Refresh')" @click="emit('refresh')" />
+      <UiButton icon="refresh" icon-only size="small" :label="i18n.t('ui.refresh')" @click="emit('refresh')" />
     </div>
     <div class="vector-rail-actions">
-      <label class="sr-only" for="vector-collection-filter">{{ i18n.t("vector.filter_collections", "Search collections") }}</label>
+      <label class="sr-only" for="vector-collection-filter">{{ i18n.t("vector.filter_collections") }}</label>
       <input
         id="vector-collection-filter"
         class="control"
         :value="props.filter"
-        :placeholder="i18n.t('vector.filter_collections', 'Search collections…')"
+        :placeholder="i18n.t('vector.filter_collections')"
         autocomplete="off"
         @input="emit('update:filter', ($event.target as HTMLInputElement).value)"
       >
-      <UiButton :label="i18n.t('vector.new_collection_short', 'New')" icon="plus" variant="primary" @click="emit('create')" />
+      <UiButton :label="i18n.t('vector.new_collection_short')" icon="plus" variant="primary" @click="emit('create')" />
     </div>
-    <div class="vector-collection-list" role="listbox" :aria-label="i18n.t('vector.collections', 'Collections')">
+    <div class="vector-collection-list" role="listbox" :aria-label="i18n.t('vector.collections')">
       <button
         v-for="store in props.collections"
         :key="store.name"
@@ -60,7 +60,7 @@ function statusOf(store: VectorCollection) {
         </span>
         <span aria-hidden="true">›</span>
       </button>
-      <div v-if="!props.collections.length" class="vector-rail-empty">{{ i18n.t("vector.no_collection_matches", "No collections match this search.") }}</div>
+      <div v-if="!props.collections.length" class="vector-rail-empty">{{ i18n.t("vector.no_collection_matches") }}</div>
     </div>
   </aside>
 </template>

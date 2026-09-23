@@ -18,33 +18,27 @@ const props = withDefaults(
 const emit = defineEmits<{ share: []; columns: []; import: [] }>();
 const i18n = useI18nStore();
 const copyLinkHelp = computed(() =>
-  i18n.t(
-    "records.copy_view_link_help",
-    "Copies a link that reopens this table exactly as shown: file name, search, column filters, sort, page and columns. Records stay on this device, so whoever opens the link must choose the same JSONL file.",
-  ),
+  i18n.t("records.copy_view_link_help"),
 );
 </script>
 <template>
   <UiPageHeader
     class="records-hero"
-    :kicker="i18n.t('section.corpus', 'Corpus')"
-    :title="i18n.t('nav.records', 'Records')"
+    :kicker="i18n.t('section.corpus')"
+    :title="i18n.t('nav.records')"
     :description="
-      i18n.t(
-        'records.page_help',
-        'Review loaded JSONL records, keep provenance visible, and act on a precise selection without crowding the table.',
-      )
+      i18n.t('records.page_help')
     "
     title-id="records-page-title"
-    :actions-label="i18n.t('records.view_actions', 'Records view actions')"
+    :actions-label="i18n.t('records.view_actions')"
   >
     <template #actions>
       <div class="records-hero-actions">
         <button type="button" class="btn" @click="emit('import')">
-          <AppIcon name="upload" />{{ i18n.t("records.choose_jsonl", "Choose JSONL files") }}
+          <AppIcon name="upload" />{{ i18n.t("records.choose_jsonl") }}
         </button>
         <button type="button" class="btn" @click="emit('columns')">
-          <AppIcon name="list" />{{ i18n.t("records.columns", "Columns") }}
+          <AppIcon name="list" />{{ i18n.t("records.columns") }}
         </button>
         <button
           type="button"
@@ -52,7 +46,7 @@ const copyLinkHelp = computed(() =>
           aria-describedby="records-copy-link-help"
           @click="emit('share')"
         >
-          <AppIcon name="copy" />{{ i18n.t("records.copy_view_link", "Copy view link") }}
+          <AppIcon name="copy" />{{ i18n.t("records.copy_view_link") }}
         </button>
         <span id="records-copy-link-help" class="sr-only">{{ copyLinkHelp }}</span>
       </div>
@@ -60,25 +54,25 @@ const copyLinkHelp = computed(() =>
     <template #meta>
       <ul
         class="records-stats"
-        :aria-label="i18n.t('records.workspace_stats', 'Workspace statistics')"
+        :aria-label="i18n.t('records.workspace_stats')"
       >
         <li>
-          <b>{{ props.fileName || i18n.t("records.no_file", "No file") }}</b
-          ><span>{{ i18n.t("records.active_tab", "Active file") }}</span>
+          <b>{{ props.fileName || i18n.t("records.no_file") }}</b
+          ><span>{{ i18n.t("records.active_tab") }}</span>
         </li>
         <li>
           <b
             >{{ props.matched.toLocaleString(i18n.locale) }} /
             {{ props.total.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("records.visible_of_loaded", "Visible of loaded") }}</span>
+          ><span>{{ i18n.t("records.visible_of_loaded") }}</span>
         </li>
         <li>
           <b>{{ props.flagged.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("records.needs_review_count", "Need review") }}</span>
+          ><span>{{ i18n.t("records.needs_review_count") }}</span>
         </li>
         <li>
           <b>{{ props.selected.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("search.selected_records", "selected records") }}</span>
+          ><span>{{ i18n.t("search.selected_records") }}</span>
         </li>
       </ul>
     </template>

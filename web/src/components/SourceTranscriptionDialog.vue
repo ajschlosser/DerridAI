@@ -38,40 +38,37 @@ function move(delta: number) {
   <UiDialog
     :open="open"
     size="xlarge"
-    :title="i18n.t('pdf_corpus.source_transcription_title', 'Source viewer & manual transcription')"
+    :title="i18n.t('pdf_corpus.source_transcription_title')"
     :description="
-      i18n.t(
-        'pdf_corpus.source_transcription_help',
-        'Inspect the rendered PDF/OCR source at full size while correcting the reviewed record text. Source extraction remains immutable.',
-      )
+      i18n.t('pdf_corpus.source_transcription_help')
     "
     @close="emit('close')"
   >
     <div class="source-toolbar">
       <div>
-        <b>{{ i18n.tf("pdf_corpus.pdf_page", "PDF page {page}", { page }) }}</b
+        <b>{{ i18n.tf("pdf_corpus.pdf_page", { page }) }}</b
         ><span v-if="printedPage !== null && printedPage !== undefined">
           ·
           {{
-            i18n.tf("pdf_corpus.printed_page_value", "printed p. {page}", { page: printedPage })
+            i18n.tf("pdf_corpus.printed_page_value", { page: printedPage })
           }}</span
         >
       </div>
       <div>
         <UiButton
-          :label="i18n.t('ui.previous', 'Previous')"
+          :label="i18n.t('ui.previous')"
           :disabled="page <= 1"
           @click="move(-1)"
         /><span aria-live="polite">{{ page }} / {{ pageCount }}</span
         ><UiButton
-          :label="i18n.t('ui.next', 'Next')"
+          :label="i18n.t('ui.next')"
           :disabled="page >= pageCount"
           @click="move(1)"
         />
       </div>
     </div>
     <div class="transcription-grid">
-      <section class="source-pane" :aria-label="i18n.t('pdf_corpus.source_pdf', 'Source PDF')">
+      <section class="source-pane" :aria-label="i18n.t('pdf_corpus.source_pdf')">
         <PdfEvidenceViewer
           :pdf-url="pdfUrl"
           :page="page"
@@ -84,12 +81,12 @@ function move(delta: number) {
       </section>
       <section class="transcription-pane">
         <label
-          ><span>{{ i18n.t("pdf_corpus.reviewed_record_text", "Reviewed record text") }}</span
+          ><span>{{ i18n.t("pdf_corpus.reviewed_record_text") }}</span
           ><textarea v-model="draft" :disabled="busy"></textarea>
         </label>
         <details>
           <summary>
-            {{ i18n.t("pdf_corpus.extracted_source_blocks", "Extracted source blocks") }}
+            {{ i18n.t("pdf_corpus.extracted_source_blocks") }}
           </summary>
           <article v-for="block in blocks" :key="block.block_id">
             <b>{{ block.block_id }}</b>
@@ -97,10 +94,7 @@ function move(delta: number) {
           </article>
           <p v-if="!blocks.length">
             {{
-              i18n.t(
-                "pdf_corpus.source_loading_or_unavailable",
-                "Source blocks are loading or unavailable.",
-              )
+              i18n.t("pdf_corpus.source_loading_or_unavailable")
             }}
           </p>
         </details>
@@ -108,16 +102,13 @@ function move(delta: number) {
     </div>
     <template #footer
       ><span>{{
-        i18n.t(
-          "pdf_corpus.manual_transcription_source_preserved",
-          "Saving changes updates reviewed text only; the PDF and extracted source remain unchanged.",
-        )
+        i18n.t("pdf_corpus.manual_transcription_source_preserved")
       }}</span>
       <div class="footer-actions">
-        <UiButton :label="i18n.t('ui.cancel', 'Cancel')" @click="emit('close')" /><UiButton
+        <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
           variant="primary"
           :disabled="busy || !draft.trim()"
-          :label="i18n.t('pdf_corpus.save_transcription', 'Save transcription')"
+          :label="i18n.t('pdf_corpus.save_transcription')"
           @click="emit('saveText', draft)"
         /></div
     ></template>

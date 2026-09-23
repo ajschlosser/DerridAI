@@ -256,7 +256,7 @@ export function createRecordsWorkspace(deps: Deps) {
       return Promise.resolve(
         canUse("editLocalRecords")
           ? openOcrCleanupDialog()
-          : toast("Your role does not have permission to edit records."),
+          : toast(tr("runtime.toast.cannot_edit_records")),
       );
     if (!f) return Promise.resolve();
     if (name === "reviewSelected") return Promise.resolve(openTouchup(selectedReviewItems()));
@@ -266,7 +266,7 @@ export function createRecordsWorkspace(deps: Deps) {
       return Promise.resolve(
         openBulkFieldEditor({
           rows: selectedReviewItems(),
-          title: tr("search.bulk_edit_selected", "Bulk edit selected records"),
+          title: tr("search.bulk_edit_selected"),
         }),
       );
     if (name === "upsertSelected") return upsertRows(rowsFromReviewSelection(), "selected records");

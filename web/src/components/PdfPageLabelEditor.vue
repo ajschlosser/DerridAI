@@ -21,20 +21,20 @@ function next(){if(offset.value+pageSize<props.pages.length)offset.value+=pageSi
 </script>
 
 <template>
-  <section class="page-label-editor" :aria-label="i18n.t('pdf_corpus.page_mapping','Printed-page mapping')">
-    <header><div><b>{{i18n.t('pdf_corpus.page_mapping','Printed-page mapping')}}</b><p>{{i18n.t('pdf_corpus.page_mapping_help','Physical PDF pages never change. Correct only the scholarly printed-page label when the PDF label or detected folio is wrong.')}}</p></div><button type="button" class="btn small" :disabled="disabled||dirty.size===0" @click="save">{{i18n.tf('pdf_corpus.save_page_overrides','Save {count} override(s)',{count:dirty.size})}}</button></header>
-    <div class="page-table" role="table" :aria-label="i18n.t('pdf_corpus.page_mapping','Printed-page mapping')">
-      <div class="page-row page-head" role="row"><span role="columnheader">{{i18n.t('pdf_corpus.physical_pdf_page','Physical PDF page')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.printed_label','Printed label')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.label_source','Source')}}</span></div>
+  <section class="page-label-editor" :aria-label="i18n.t('pdf_corpus.page_mapping')">
+    <header><div><b>{{i18n.t('pdf_corpus.page_mapping')}}</b><p>{{i18n.t('pdf_corpus.page_mapping_help')}}</p></div><button type="button" class="btn small" :disabled="disabled||dirty.size===0" @click="save">{{i18n.tf('pdf_corpus.save_page_overrides', {count:dirty.size})}}</button></header>
+    <div class="page-table" role="table" :aria-label="i18n.t('pdf_corpus.page_mapping')">
+      <div class="page-row page-head" role="row"><span role="columnheader">{{i18n.t('pdf_corpus.physical_pdf_page')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.printed_label')}}</span><span role="columnheader">{{i18n.t('pdf_corpus.label_source')}}</span></div>
       <div v-for="page in visible" :key="page.pdf_page" class="page-row" role="row">
         <span role="cell">{{page.pdf_page}}</span>
         <span role="cell">
-          <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{i18n.tf('pdf_corpus.printed_label_for_page','Printed label for physical PDF page {page}',{page:page.pdf_page})}}</label>
+          <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{i18n.tf('pdf_corpus.printed_label_for_page', {page:page.pdf_page})}}</label>
           <input :id="`pdf-label-${page.pdf_page}`" class="control compact" :value="draft[page.pdf_page]||''" :disabled="disabled" @input="update(page.pdf_page,($event.target as HTMLInputElement).value)">
         </span>
-        <span role="cell"><span class="source-pill">{{page.printed_page_label_source||i18n.t('pdf_corpus.unknown','unknown')}}</span></span>
+        <span role="cell"><span class="source-pill">{{page.printed_page_label_source||i18n.t('pdf_corpus.unknown')}}</span></span>
       </div>
     </div>
-    <footer><button type="button" class="btn small" @click="previous" :disabled="offset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="next" :disabled="offset+pageSize>=pages.length">{{i18n.t('ui.next','Next')}}</button></footer>
+    <footer><button type="button" class="btn small" @click="previous" :disabled="offset===0">{{i18n.t('ui.previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="next" :disabled="offset+pageSize>=pages.length">{{i18n.t('ui.next')}}</button></footer>
   </section>
 </template>
 

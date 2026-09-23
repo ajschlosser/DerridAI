@@ -21,15 +21,15 @@ function dateLabel(value?: string | null) {
   <section class="record-annotations-panel" aria-labelledby="recordAnnotationsHeading">
     <header>
       <div>
-        <p>{{ i18n.t("annotations.record_notes", "Annotations") }}</p>
+        <p>{{ i18n.t("annotations.record_notes") }}</p>
         <h3 id="recordAnnotationsHeading">
-          {{ i18n.t("annotations.record_annotations", "Record annotations") }}
+          {{ i18n.t("annotations.record_annotations") }}
         </h3>
       </div>
       <div class="annotation-header-actions">
         <span>{{ props.annotations.length }}</span
         ><button v-if="props.canAdd" type="button" @click="emit('add')">
-          + {{ i18n.t("annotations.add_note", "Add note") }}
+          + {{ i18n.t("annotations.add_note") }}
         </button>
       </div>
     </header>
@@ -47,19 +47,16 @@ function dateLabel(value?: string | null) {
         <footer>
           <strong>{{ annotation.author }}</strong
           ><button v-if="annotation.removable" type="button" @click="emit('remove', annotation.id)">
-            {{ i18n.t("ui.remove", "Remove") }}
+            {{ i18n.t("ui.remove") }}
           </button>
         </footer>
       </article>
     </div>
     <div v-else class="annotation-empty">
-      <strong>{{ i18n.t("annotations.none_record", "No annotations on this record yet") }}</strong>
+      <strong>{{ i18n.t("annotations.none_record") }}</strong>
       <p>
         {{
-          i18n.t(
-            "annotations.none_record_help",
-            "Select text in the reading pane to attach a note or tags.",
-          )
+          i18n.t("annotations.none_record_help")
         }}
       </p>
     </div>

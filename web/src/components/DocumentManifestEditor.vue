@@ -21,17 +21,17 @@ const startInference=computed<StartInference|null>(()=>{
 type FieldDef={key:string;label:string;type?:"text"|"number"|"textarea";wide?:boolean;hint?:string};
 type GroupDef={key:string;title:string;description:string;fields:FieldDef[]};
 const groups=computed<GroupDef[]>(()=>[
-  {key:"identity",title:i18n.t('pdf_corpus.manifest_identity_group','Work identity'),description:i18n.t('pdf_corpus.manifest_identity_help','Identify the work and the people responsible for this edition.'),fields:[
-    {key:"title",label:i18n.t('pdf_corpus.manifest_title','Title')},{key:"short_title",label:i18n.t('pdf_corpus.manifest_short_title','Short title')},{key:"original_title",label:i18n.t('pdf_corpus.manifest_original_title','Original title')},{key:"document_author",label:i18n.t('pdf_corpus.manifest_author','Document author')},{key:"translator",label:i18n.t('pdf_corpus.manifest_translator','Translator')},{key:"document_type",label:i18n.t('pdf_corpus.manifest_type','Document type')}
+  {key:"identity",title:i18n.t('pdf_corpus.manifest_identity_group'),description:i18n.t('pdf_corpus.manifest_identity_help'),fields:[
+    {key:"title",label:i18n.t('pdf_corpus.manifest_title')},{key:"short_title",label:i18n.t('pdf_corpus.manifest_short_title')},{key:"original_title",label:i18n.t('pdf_corpus.manifest_original_title')},{key:"document_author",label:i18n.t('pdf_corpus.manifest_author')},{key:"translator",label:i18n.t('pdf_corpus.manifest_translator')},{key:"document_type",label:i18n.t('pdf_corpus.manifest_type')}
   ]},
-  {key:"publication",title:i18n.t('pdf_corpus.manifest_publication_group','Publication'),description:i18n.t('pdf_corpus.manifest_publication_help','Edition-level bibliographic details used by inherited record metadata and citations.'),fields:[
-    {key:"publisher",label:i18n.t('pdf_corpus.manifest_publisher','Publisher')},{key:"publication_place",label:i18n.t('pdf_corpus.manifest_place','Publication place')},{key:"publication_year",label:i18n.t('pdf_corpus.manifest_year','Publication year'),type:"number"},{key:"edition",label:i18n.t('pdf_corpus.manifest_edition','Edition')},{key:"isbn",label:i18n.t('pdf_corpus.manifest_isbn','ISBN')}
+  {key:"publication",title:i18n.t('pdf_corpus.manifest_publication_group'),description:i18n.t('pdf_corpus.manifest_publication_help'),fields:[
+    {key:"publisher",label:i18n.t('pdf_corpus.manifest_publisher')},{key:"publication_place",label:i18n.t('pdf_corpus.manifest_place')},{key:"publication_year",label:i18n.t('pdf_corpus.manifest_year'),type:"number"},{key:"edition",label:i18n.t('pdf_corpus.manifest_edition')},{key:"isbn",label:i18n.t('pdf_corpus.manifest_isbn')}
   ]},
-  {key:"language",title:i18n.t('pdf_corpus.manifest_language_group','Language and translation'),description:i18n.t('pdf_corpus.manifest_language_help','Language facts inform citation, translation, and corpus metadata.'),fields:[
-    {key:"language",label:i18n.t('pdf_corpus.manifest_language','Document language')},{key:"original_language",label:i18n.t('pdf_corpus.manifest_original_language','Original language')}
+  {key:"language",title:i18n.t('pdf_corpus.manifest_language_group'),description:i18n.t('pdf_corpus.manifest_language_help'),fields:[
+    {key:"language",label:i18n.t('pdf_corpus.manifest_language')},{key:"original_language",label:i18n.t('pdf_corpus.manifest_original_language')}
   ]},
-  {key:"structure",title:i18n.t('pdf_corpus.manifest_structure_group','Document structure'),description:i18n.t('pdf_corpus.manifest_structure_help','Physical PDF page bounds help distinguish main text from front and back matter.'),fields:[
-    {key:"main_text_start_page",label:i18n.t('pdf_corpus.manifest_main_start','Main text starts on physical PDF page'),type:"number"},{key:"main_text_end_page",label:i18n.t('pdf_corpus.manifest_main_end','Main text ends on physical PDF page'),type:"number"},{key:"notes",label:i18n.t('pdf_corpus.manifest_notes','Source-supported notes'),type:"textarea",wide:true}
+  {key:"structure",title:i18n.t('pdf_corpus.manifest_structure_group'),description:i18n.t('pdf_corpus.manifest_structure_help'),fields:[
+    {key:"main_text_start_page",label:i18n.t('pdf_corpus.manifest_main_start'),type:"number"},{key:"main_text_end_page",label:i18n.t('pdf_corpus.manifest_main_end'),type:"number"},{key:"notes",label:i18n.t('pdf_corpus.manifest_notes'),type:"textarea",wide:true}
   ]}
 ]);
 const fieldKeys=computed(()=>groups.value.flatMap(group=>group.fields.map(field=>field.key)));
@@ -69,30 +69,30 @@ function reset(){for(const field of fieldKeys.value)draft[field]=baseline[field]
 </script>
 
 <template>
-  <form class="manifest-editor" :aria-label="i18n.t('pdf_corpus.document_manifest','Document manifest')" @submit.prevent="save">
+  <form class="manifest-editor" :aria-label="i18n.t('pdf_corpus.document_manifest')" @submit.prevent="save">
     <section class="manifest-impact" aria-labelledby="manifest-impact-title">
-      <div><span class="eyebrow">{{i18n.t('pdf_corpus.document_defaults','Document defaults')}}</span><h3 id="manifest-impact-title">{{i18n.t('pdf_corpus.document_defaults_title','One edit, inherited consistently')}}</h3><p>{{i18n.t('pdf_corpus.manifest_help','These values are inherited deterministically by records. Saving regenerates inherited metadata and citations while preserving explicit record overrides.')}}</p></div>
-      <div class="manifest-impact-side"><UiButton :label="i18n.t('pdf_corpus.reanalyze_document','Analyse the document again')" :disabled="props.disabled" :title="i18n.t('pdf_corpus.reanalyze_document_help','Ask the model for the document details again. Only fields that are still empty are filled; nothing you entered is changed.')" @click="emit('reanalyze')"/>
-      <UiStatusBadge v-if="props.affectedRecords>0" tone="info" :label="i18n.tf('pdf_corpus.document_defaults_records','{count} records inherit document defaults',{count:props.affectedRecords})" :show-dot="false"/></div>
+      <div><span class="eyebrow">{{i18n.t('pdf_corpus.document_defaults')}}</span><h3 id="manifest-impact-title">{{i18n.t('pdf_corpus.document_defaults_title')}}</h3><p>{{i18n.t('pdf_corpus.manifest_help')}}</p></div>
+      <div class="manifest-impact-side"><UiButton :label="i18n.t('pdf_corpus.reanalyze_document')" :disabled="props.disabled" :title="i18n.t('pdf_corpus.reanalyze_document_help')" @click="emit('reanalyze')"/>
+      <UiStatusBadge v-if="props.affectedRecords>0" tone="info" :label="i18n.tf('pdf_corpus.document_defaults_records', {count:props.affectedRecords})" :show-dot="false"/></div>
     </section>
 
     <MetadataFormSection v-for="group in groups" :key="group.key" :title="group.title" :description="group.description">
         <UiField v-for="field in group.fields" :key="field.key" :wide="field.wide" :label="field.label" :hint="field.hint||''">
           <textarea v-if="field.type==='textarea'" v-model="draft[field.key]" class="control" rows="4" :disabled="props.disabled"></textarea>
           <input v-else v-model="draft[field.key]" class="control" :type="field.type==='number'?'number':'text'" :inputmode="field.type==='number'?'numeric':undefined" :min="field.type==='number'?1:undefined" :disabled="props.disabled">
-          <p v-if="serverChanged[field.key]!==undefined" class="manifest-server-change" role="status"><span>{{i18n.tf('pdf_corpus.manifest_changed_elsewhere','This value changed elsewhere to “{value}”. Your edit is kept.',{value:serverChanged[field.key]||i18n.t('pdf_corpus.manifest_empty_value','(empty)')})}}</span> <button type="button" class="manifest-use-server" :disabled="props.disabled" @click="useServerValue(field.key)">{{i18n.t('pdf_corpus.manifest_use_server_value','Use that value')}}</button></p>
+          <p v-if="serverChanged[field.key]!==undefined" class="manifest-server-change" role="status"><span>{{i18n.tf('pdf_corpus.manifest_changed_elsewhere', {value:serverChanged[field.key]||i18n.t('pdf_corpus.manifest_empty_value','(empty)')})}}</span> <button type="button" class="manifest-use-server" :disabled="props.disabled" @click="useServerValue(field.key)">{{i18n.t('pdf_corpus.manifest_use_server_value')}}</button></p>
           <div v-if="field.key==='main_text_start_page'&&startInference" class="manifest-inference" role="note">
-            <b>{{i18n.tf('pdf_corpus.manifest_start_inferred','Suggested automatically ({percent}% confident). Check the clues:',{percent:Math.round(startInference.confidence*100)})}}</b>
+            <b>{{i18n.tf('pdf_corpus.manifest_start_inferred', {percent:Math.round(startInference.confidence*100)})}}</b>
             <ul><li v-for="clue in startInference.clues" :key="clue.kind">{{clue.detail}}</li></ul>
           </div>
         </UiField>
-        <UiField v-if="group.key==='language'" :label="i18n.t('pdf_corpus.manifest_translation','Translation status')">
-          <select v-model="translationDraft" class="control" :disabled="props.disabled"><option value="">{{i18n.t('pdf_corpus.manifest_unknown','Unknown')}}</option><option value="yes">{{i18n.t('ui.yes','Yes')}}</option><option value="no">{{i18n.t('ui.no','No')}}</option></select>
+        <UiField v-if="group.key==='language'" :label="i18n.t('pdf_corpus.manifest_translation')">
+          <select v-model="translationDraft" class="control" :disabled="props.disabled"><option value="">{{i18n.t('pdf_corpus.manifest_unknown')}}</option><option value="yes">{{i18n.t('ui.yes')}}</option><option value="no">{{i18n.t('ui.no')}}</option></select>
         </UiField>
     </MetadataFormSection>
 
-    <MetadataFormFooter sticky :summary="dirty?i18n.tf('pdf_corpus.manifest_changes_count','{count} unsaved change(s)',{count:changedCount}):i18n.t('pdf_corpus.manifest_no_changes','No unsaved changes')" :detail="dirty&&props.affectedRecords?i18n.tf('pdf_corpus.manifest_propagation_preview','Saving updates inherited values for up to {count} records and reopens the records whose inherited values change; explicit record overrides remain unchanged.',{count:props.affectedRecords}):''">
-      <UiButton :label="i18n.t('ui.reset','Reset')" :disabled="props.disabled||!dirty" @click="reset"/><UiButton type="submit" variant="primary" :label="i18n.t('pdf_corpus.save_manifest_changes','Save document changes')" :disabled="props.disabled||!dirty"/>
+    <MetadataFormFooter sticky :summary="dirty?i18n.tf('pdf_corpus.manifest_changes_count', {count:changedCount}):i18n.t('pdf_corpus.manifest_no_changes')" :detail="dirty&&props.affectedRecords?i18n.tf('pdf_corpus.manifest_propagation_preview', {count:props.affectedRecords}):''">
+      <UiButton :label="i18n.t('ui.reset')" :disabled="props.disabled||!dirty" @click="reset"/><UiButton type="submit" variant="primary" :label="i18n.t('pdf_corpus.save_manifest_changes')" :disabled="props.disabled||!dirty"/>
     </MetadataFormFooter>
   </form>
 </template>

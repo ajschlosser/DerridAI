@@ -17,12 +17,12 @@ const i18n = useI18nStore();
   <div class="shell-sidebar-footer">
     <div class="shell-mini-status">
       <template v-if="props.isAdmin">
-        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.totalLoaded.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records', 'records') }}</span>
-        <span v-if="props.corpusStoreCount">{{ props.corpusStoreCount }} {{ i18n.t('ui.corpus_dbs', 'corpus DBs') }}</span>
+        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.totalLoaded.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records') }}</span>
+        <span v-if="props.corpusStoreCount">{{ props.corpusStoreCount }} {{ i18n.t('ui.corpus_dbs') }}</span>
       </template>
       <template v-else>
-        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.activeStore || i18n.t('research.none_selected', 'No database selected') }}</span>
-        <span>{{ props.dbRecords.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records', 'records') }} · {{ props.selectedEvidenceCount }} {{ i18n.t('dynamic.selected_evidence', 'selected evidence') }}</span>
+        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.activeStore || i18n.t('research.none_selected') }}</span>
+        <span>{{ props.dbRecords.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records') }} · {{ props.selectedEvidenceCount }} {{ i18n.t('dynamic.selected_evidence') }}</span>
       </template>
     </div>
   </div>

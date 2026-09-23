@@ -18,14 +18,11 @@ const i18n = useI18nStore();
   <UiDialog
     v-if="open"
     size="large"
-    :title="i18n.t('pdf_corpus.source_issue_title', 'Source extraction issue')"
+    :title="i18n.t('pdf_corpus.source_issue_title')"
     :description="
-      i18n.t(
-        'pdf_corpus.source_warning_ingest_help',
-        'Extraction quality was scored when this PDF was loaded. Review the findings, then continue; the warning stays on affected records as an icon.',
-      )
+      i18n.t('pdf_corpus.source_warning_ingest_help')
     "
-    :close-label="i18n.t('ui.close', 'Close')"
+    :close-label="i18n.t('ui.close')"
     @close="emit('close')"
   >
     <div class="quality-dialog">
@@ -33,10 +30,7 @@ const i18n = useI18nStore();
         <AppIcon name="warning" />
         <p>
           {{
-            i18n.tf(
-              "pdf_corpus.source_warning_ingest_summary",
-              "{unusable} of {pages} page(s) look unusable · median noise {median}% · threshold {threshold}%",
-              {
+            i18n.tf("pdf_corpus.source_warning_ingest_summary", {
                 unusable: Number(extractionNoise.unusable_page_count || 0),
                 pages: Number(extractionNoise.page_count || 0),
                 median:
@@ -44,8 +38,7 @@ const i18n = useI18nStore();
                     ? "—"
                     : Math.round(Number(extractionNoise.median_noise)),
                 threshold: Math.round(Number(extractionNoise.threshold || 45)),
-              },
-            )
+              })
           }}
         </p>
       </div>
@@ -59,7 +52,7 @@ const i18n = useI18nStore();
     </div>
     <template #footer>
       <button type="button" class="btn primary" @click="emit('close')">
-        {{ i18n.t("pdf_corpus.source_warning_acknowledge", "Continue with this source") }}
+        {{ i18n.t("pdf_corpus.source_warning_acknowledge") }}
       </button>
     </template>
   </UiDialog>

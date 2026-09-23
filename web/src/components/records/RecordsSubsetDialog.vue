@@ -105,8 +105,8 @@ function suggestions(field: string) {
 }
 const createBlocker = computed(() => {
   if (!expression.value.length)
-    return i18n.t("subset.need_condition", "Add at least one condition.");
-  if (!matchCount.value) return i18n.t("subset.no_matches", "No records match the filter.");
+    return i18n.t("subset.need_condition");
+  if (!matchCount.value) return i18n.t("subset.no_matches");
   return "";
 });
 
@@ -135,10 +135,10 @@ function removeGroupRule(group: DraftItem & { type: "group" }, ruleId: number) {
 function sourceLabel(item: SubsetSource) {
   const count = item.count.toLocaleString(i18n.locale);
   if (item.id === "active")
-    return i18n.tf("subset.source_active", "Active file · {name}", { name: item.name });
+    return i18n.tf("subset.source_active", { name: item.name });
   if (item.id === "all")
-    return i18n.tf("subset.source_all", "All loaded files · {count} records", { count });
-  return i18n.tf("subset.source_file", "Only {name} · {count} records", { name: item.name, count });
+    return i18n.tf("subset.source_all", { count });
+  return i18n.tf("subset.source_file", { name: item.name, count });
 }
 
 // ── Saved filter profiles ─────────────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ function saveProfile() {
       ?.id || "";
   savingProfile.value = false;
   notify(
-    i18n.tf("subset.profile_saved", "Saved filter profile “{name}”.", { name: trimmed }),
+    i18n.tf("subset.profile_saved", { name: trimmed }),
     "success",
   );
 }
@@ -195,7 +195,7 @@ function deleteProfile() {
   saveSubsetProfiles(profiles.value);
   profileId.value = "";
   notify(
-    i18n.tf("subset.profile_deleted", "Deleted filter profile “{name}”.", { name: profile.name }),
+    i18n.tf("subset.profile_deleted", { name: profile.name }),
     "info",
   );
 }
@@ -245,35 +245,23 @@ async function importProfiles(event: Event) {
     saveSubsetProfiles(result.profiles);
     profiles.value = result.profiles;
     const parts = [
-      i18n.tf(
-        "subset.profiles_imported",
-        "Imported filter profiles: {added} added, {replaced} replaced",
-        {
+      i18n.tf("subset.profiles_imported", {
           added: result.added.toLocaleString(i18n.locale),
           replaced: result.replaced.toLocaleString(i18n.locale),
-        },
-      ),
+        }),
     ];
     if (skipped)
       parts.push(
-        i18n.tf(
-          "subset.profiles_import_skipped",
-          "Skipped because a condition could not be read: {count}",
-          {
+        i18n.tf("subset.profiles_import_skipped", {
             count: skipped.toLocaleString(i18n.locale),
-          },
-        ),
+          }),
       );
     if (result.dropped)
       parts.push(
-        i18n.tf(
-          "subset.profiles_import_dropped",
-          "Not kept because the limit is {limit} profiles: {count}",
-          {
+        i18n.tf("subset.profiles_import_dropped", {
             count: result.dropped.toLocaleString(i18n.locale),
             limit: SUBSET_PROFILES_LIMIT,
-          },
-        ),
+          }),
       );
     notify(parts.join(" · "), skipped || result.dropped ? "warning" : "success");
   } catch (error) {
@@ -281,7 +269,7 @@ async function importProfiles(event: Event) {
     notify(
       known
         ? i18n.t(known[0], known[1])
-        : i18n.tf("subset.import_failed", "Could not import filter profiles: {error}", {
+        : i18n.tf("subset.import_failed", {
             error: error instanceof Error ? error.message : String(error),
           }),
       "danger",
@@ -339,22 +327,19 @@ defineExpose({ open, close, finish });
   <UiDialog
     :open="isOpen"
     size="xlarge"
-    :title="i18n.t('runtime.help.create_jsonl_subset', 'Create JSONL subset')"
+    :title="i18n.t('runtime.help.create_jsonl_subset')"
     :description="
-      i18n.t(
-        'subset.dialog_help',
-        'Create a new local JSONL file from the records that match a filter. The source file is not changed, and each record keeps its record ID.',
-      )
+      i18n.t('subset.dialog_help')
     "
-    :close-label="i18n.t('common.close', 'Close')"
+    :close-label="i18n.t('common.close')"
     @close="close"
   >
     <div class="subset">
       <section class="subset-card" :aria-labelledby="`${id}-output`">
-        <h3 :id="`${id}-output`">{{ i18n.t("subset.source_output", "Source and output") }}</h3>
+        <h3 :id="`${id}-output`">{{ i18n.t("subset.source_output") }}</h3>
         <div class="subset-grid">
           <label class="subset-field">
-            <span>{{ i18n.t("subset.source", "Source") }}</span>
+            <span>{{ i18n.t("subset.source") }}</span>
             <select v-model="source" class="control" @change="suggestionCache.clear()">
               <option v-for="item in sources" :key="item.id" :value="item.id">
                 {{ sourceLabel(item) }}
@@ -362,21 +347,18 @@ defineExpose({ open, close, finish });
             </select>
           </label>
           <label class="subset-field">
-            <span>{{ i18n.t("subset.file_name", "New file name") }}</span>
+            <span>{{ i18n.t("subset.file_name") }}</span>
             <input v-model="name" class="control" autocomplete="off" />
           </label>
         </div>
         <div class="subset-check">
           <label>
             <input v-model="caseSensitive" type="checkbox" :aria-describedby="`${id}-case-help`" />
-            <span>{{ i18n.t("runtime.case_sensitive", "Case-sensitive") }}</span>
+            <span>{{ i18n.t("runtime.case_sensitive") }}</span>
           </label>
           <p :id="`${id}-case-help`" class="subset-help">
             {{
-              i18n.t(
-                "subset.case_sensitive_help",
-                "Off: capitals are ignored, so “derrida” also matches “Derrida” and “DERRIDA”. On: the value must match letter for letter, including capitals. Applies to equals, contains, array and regular-expression conditions.",
-              )
+              i18n.t("subset.case_sensitive_help")
             }}
           </p>
         </div>
@@ -384,25 +366,22 @@ defineExpose({ open, close, finish });
 
       <section class="subset-card" :aria-labelledby="`${id}-profiles`">
         <h3 :id="`${id}-profiles`">
-          {{ i18n.t("subset.saved_profiles", "Saved filter profiles") }}
+          {{ i18n.t("subset.saved_profiles") }}
         </h3>
         <p class="subset-help">
           {{
-            i18n.t(
-              "subset.profiles_help",
-              "Reuse common filters, such as one language or records needing review. Profiles are kept in this browser; export them to move or share them as a JSON file. Importing replaces profiles with the same name and adds the rest.",
-            )
+            i18n.t("subset.profiles_help")
           }}
         </p>
         <div class="subset-row">
           <label class="subset-field subset-grow">
-            <span class="sr-only">{{ i18n.t("subset.saved_profile", "Saved profile") }}</span>
+            <span class="sr-only">{{ i18n.t("subset.saved_profile") }}</span>
             <select
               class="control"
               :value="profileId"
               @change="chooseProfile(($event.target as HTMLSelectElement).value)"
             >
-              <option value="">{{ i18n.t("subset.no_saved_profile", "No saved profile") }}</option>
+              <option value="">{{ i18n.t("subset.no_saved_profile") }}</option>
               <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
                 {{ profile.name }}
               </option>
@@ -414,16 +393,16 @@ defineExpose({ open, close, finish });
             :disabled="!expression.length"
             @click="startSavingProfile"
           >
-            {{ i18n.t("subset.save_profile", "Save current…") }}
+            {{ i18n.t("subset.save_profile") }}
           </button>
           <button type="button" class="btn danger" :disabled="!profileId" @click="deleteProfile">
-            {{ i18n.t("common.delete", "Delete") }}
+            {{ i18n.t("common.delete") }}
           </button>
           <button type="button" class="btn" :disabled="!profiles.length" @click="exportProfiles">
-            {{ i18n.t("subset.export_profiles", "Export all profiles") }}
+            {{ i18n.t("subset.export_profiles") }}
           </button>
           <button type="button" class="btn" @click="importInput?.click()">
-            {{ i18n.t("subset.import_profiles", "Import profiles") }}
+            {{ i18n.t("subset.import_profiles") }}
           </button>
           <input
             ref="importInput"
@@ -435,26 +414,23 @@ defineExpose({ open, close, finish });
         </div>
         <form v-if="savingProfile" class="subset-row" @submit.prevent="saveProfile">
           <label class="subset-field subset-grow">
-            <span>{{ i18n.t("subset.profile_name", "Profile name") }}</span>
+            <span>{{ i18n.t("subset.profile_name") }}</span>
             <input v-model="profileName" class="control" autocomplete="off" required />
           </label>
           <button type="submit" class="btn primary" :disabled="!profileName.trim()">
-            {{ i18n.t("subset.save_profile_confirm", "Save profile") }}
+            {{ i18n.t("subset.save_profile_confirm") }}
           </button>
           <button type="button" class="btn" @click="savingProfile = false">
-            {{ i18n.t("common.cancel", "Cancel") }}
+            {{ i18n.t("common.cancel") }}
           </button>
         </form>
       </section>
 
       <section class="subset-card" :aria-labelledby="`${id}-filter`">
-        <h3 :id="`${id}-filter`">{{ i18n.t("subset.filter", "Filter") }}</h3>
+        <h3 :id="`${id}-filter`">{{ i18n.t("subset.filter") }}</h3>
         <p class="subset-help">
           {{
-            i18n.t(
-              "subset.filter_help",
-              "Conditions are combined in order; AND binds before OR. A group is evaluated as one condition, like parentheses.",
-            )
+            i18n.t("subset.filter_help")
           }}
         </p>
         <ol class="subset-items">
@@ -464,16 +440,16 @@ defineExpose({ open, close, finish });
               v-model="item.join"
               class="control subset-join"
               :aria-label="
-                i18n.tf('subset.join_label', 'How item {n} joins the previous one', {
+                i18n.tf('subset.join_label', {
                   n: index + 1,
                 })
               "
             >
-              <option value="AND">{{ i18n.t("subset.and", "AND") }}</option>
-              <option value="OR">{{ i18n.t("subset.or", "OR") }}</option>
+              <option value="AND">{{ i18n.t("subset.and") }}</option>
+              <option value="OR">{{ i18n.t("subset.or") }}</option>
             </select>
             <span v-else class="subset-join subset-where">{{
-              i18n.t("subset.where", "Where")
+              i18n.t("subset.where")
             }}</span>
 
             <SubsetCondition
@@ -483,23 +459,23 @@ defineExpose({ open, close, finish });
               v-model:value="item.rule.value"
               :fields="fields"
               :suggestions="suggestions(item.rule.field)"
-              :position="i18n.tf('subset.item_position', 'item {n}', { n: index + 1 })"
+              :position="i18n.tf('subset.item_position', { n: index + 1 })"
               @remove="removeItem(item.id)"
             />
 
             <fieldset v-else class="subset-group">
               <legend>
-                {{ i18n.tf("subset.group_legend", "Group (item {n})", { n: index + 1 }) }}
+                {{ i18n.tf("subset.group_legend", { n: index + 1 }) }}
               </legend>
               <div class="subset-row">
                 <label class="subset-field">
-                  <span>{{ i18n.t("subset.group_mode", "Match") }}</span>
+                  <span>{{ i18n.t("subset.group_mode") }}</span>
                   <select v-model="item.mode" class="control">
                     <option value="OR">
-                      {{ i18n.t("subset.match_any", "Any condition (OR)") }}
+                      {{ i18n.t("subset.match_any") }}
                     </option>
                     <option value="AND">
-                      {{ i18n.t("subset.match_all", "All conditions (AND)") }}
+                      {{ i18n.t("subset.match_all") }}
                     </option>
                   </select>
                 </label>
@@ -512,10 +488,10 @@ defineExpose({ open, close, finish });
                     )
                   "
                 >
-                  {{ i18n.t("subset.add_condition", "Add condition") }}
+                  {{ i18n.t("subset.add_condition") }}
                 </button>
                 <button type="button" class="btn danger" @click="removeItem(item.id)">
-                  {{ i18n.t("subset.remove_group", "Remove group") }}
+                  {{ i18n.t("subset.remove_group") }}
                 </button>
               </div>
               <ul class="subset-group-rules">
@@ -527,7 +503,7 @@ defineExpose({ open, close, finish });
                     :fields="fields"
                     :suggestions="suggestions(rule.field)"
                     :position="
-                      i18n.tf('subset.group_condition_position', 'condition {m} of item {n}', {
+                      i18n.tf('subset.group_condition_position', {
                         m: ruleIndex + 1,
                         n: index + 1,
                       })
@@ -541,24 +517,24 @@ defineExpose({ open, close, finish });
         </ol>
         <div class="subset-row">
           <button type="button" class="btn" @click="addRule">
-            {{ i18n.t("subset.add_condition", "Add condition") }}
+            {{ i18n.t("subset.add_condition") }}
           </button>
           <button type="button" class="btn" @click="addGroup">
-            {{ i18n.t("subset.add_group", "Add group") }}
+            {{ i18n.t("subset.add_group") }}
           </button>
           <p class="subset-count" role="status" aria-live="polite">
             {{
               expression.length
-                ? i18n.tf("subset.match_count", "{matched} of {total} source records match", {
+                ? i18n.tf("subset.match_count", {
                     matched: matchCount.toLocaleString(i18n.locale),
                     total: sourceRecords.length.toLocaleString(i18n.locale),
                   })
-                : i18n.t("subset.need_condition", "Add at least one condition.")
+                : i18n.t("subset.need_condition")
             }}
           </p>
         </div>
         <p v-if="expressionText" class="subset-expression">
-          <strong>{{ i18n.t("subset.expression", "Expression") }}</strong>
+          <strong>{{ i18n.t("subset.expression") }}</strong>
           <code>{{ expressionText }}</code>
         </p>
       </section>
@@ -569,7 +545,7 @@ defineExpose({ open, close, finish });
       <span v-else></span>
       <div class="subset-actions">
         <button type="button" class="btn" @click="close">
-          {{ i18n.t("common.cancel", "Cancel") }}
+          {{ i18n.t("common.cancel") }}
         </button>
         <button
           type="button"
@@ -578,7 +554,7 @@ defineExpose({ open, close, finish });
           :aria-describedby="createBlocker ? `${id}-blocker` : undefined"
           @click="create(true)"
         >
-          {{ i18n.t("subset.create_download", "Create and download") }}
+          {{ i18n.t("subset.create_download") }}
         </button>
         <button
           type="button"
@@ -587,7 +563,7 @@ defineExpose({ open, close, finish });
           :aria-describedby="createBlocker ? `${id}-blocker` : undefined"
           @click="create(false)"
         >
-          {{ i18n.t("subset.create_file", "Create subset file") }}
+          {{ i18n.t("subset.create_file") }}
         </button>
       </div>
     </template>

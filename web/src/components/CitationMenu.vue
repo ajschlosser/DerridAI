@@ -19,7 +19,7 @@ const button = ref<HTMLButtonElement | null>(null);
 const popover = ref<HTMLElement | null>(null);
 const expanded = ref(false);
 const id = `citation-${useId().replaceAll(":", "-")}`;
-const menuLabel = computed(() => props.label || i18n.t("ui.get_citation", "Get Citation"));
+const menuLabel = computed(() => props.label || i18n.t("ui.get_citation"));
 const buttonClass = computed(() => (props.compact ? "btn tiny" : "btn"));
 const VIEWPORT_PADDING = 8;
 const GAP = 5;
@@ -123,7 +123,7 @@ function choose(kind: "inline" | "full") {
         :class="buttonClass"
         @click="choose('inline')"
       >
-        {{ i18n.t("ui.inline", "Inline") }}
+        {{ i18n.t("ui.inline") }}
       </button>
       <button
         type="button"
@@ -132,7 +132,7 @@ function choose(kind: "inline" | "full") {
         :class="buttonClass"
         @click="choose('full')"
       >
-        {{ i18n.t("ui.full", "Full") }}
+        {{ i18n.t("ui.full") }}
       </button>
     </div>
   </span>

@@ -49,11 +49,11 @@ const statusText = computed(() =>
 const time = (seconds: number) => formatDuration(seconds, locale.value);
 
 const progressText = computed(() => {
-  if (props.view.status === "queued") return i18n.t("operations.panel.waiting", "Waiting to start");
+  if (props.view.status === "queued") return i18n.t("operations.panel.waiting");
   const parts = [props.view.progressLabel];
   const eta = etaSeconds(props.view, props.now);
   if (eta !== null)
-    parts.push(i18n.tf("operations.panel.eta", "About {time} left", { time: time(eta) }));
+    parts.push(i18n.tf("operations.panel.eta", { time: time(eta) }));
   return parts.filter(Boolean).join(" · ");
 });
 const timingText = computed(() => {
@@ -61,14 +61,14 @@ const timingText = computed(() => {
   if (active.value) {
     return v.status === "queued"
       ? ""
-      : i18n.tf("operations.panel.elapsed", "Running for {time}", {
+      : i18n.tf("operations.panel.elapsed", {
           time: time(elapsedSeconds(v, props.now)),
         });
   }
   const parts: string[] = [];
   if (v.startedAt && v.finishedAt)
     parts.push(
-      i18n.tf("operations.panel.took", "Took {time}", { time: time(elapsedSeconds(v, props.now)) }),
+      i18n.tf("operations.panel.took", { time: time(elapsedSeconds(v, props.now)) }),
     );
   return parts.join(" · ");
 });
@@ -83,32 +83,32 @@ const whenText = computed(() => {
   const when = relativeTime(whenIso.value, props.now, locale.value);
   if (!when) return "";
   if (props.view.status === "queued")
-    return i18n.tf("operations.panel.queued_at", "Queued {when}", { when });
+    return i18n.tf("operations.panel.queued_at", { when });
   return active.value
-    ? i18n.tf("operations.panel.started", "Started {when}", { when })
-    : i18n.tf("operations.panel.finished", "Finished {when}", { when });
+    ? i18n.tf("operations.panel.started", { when })
+    : i18n.tf("operations.panel.finished", { when });
 });
 
 const resultLabel = computed(() => {
   const kind = props.view.result?.kind;
-  if (kind === "build") return i18n.t("operations.panel.action_open_build", "Open corpus build");
-  if (kind === "review") return i18n.t("operations.panel.action_review", "Review results");
+  if (kind === "build") return i18n.t("operations.panel.action_open_build");
+  if (kind === "review") return i18n.t("operations.panel.action_review");
   if (kind === "review-partial")
-    return i18n.t("operations.panel.action_review_partial", "Review available results");
-  return i18n.t("operations.panel.action_open_result", "Open result");
+    return i18n.t("operations.panel.action_review_partial");
+  return i18n.t("operations.panel.action_open_result");
 });
 const resultAria = computed(() => {
   const name = props.view.label;
   const kind = props.view.result?.kind;
   if (kind === "build")
-    return i18n.tf("operations.panel.open_build_for", "Open corpus build: {name}", { name });
+    return i18n.tf("operations.panel.open_build_for", { name });
   if (kind === "review")
-    return i18n.tf("operations.panel.review_for", "Review results of {name}", { name });
+    return i18n.tf("operations.panel.review_for", { name });
   if (kind === "review-partial")
-    return i18n.tf("operations.panel.review_partial_for", "Review available results of {name}", {
+    return i18n.tf("operations.panel.review_partial_for", {
       name,
     });
-  return i18n.tf("operations.panel.open_result_for", "Open result of {name}", { name });
+  return i18n.tf("operations.panel.open_result_for", { name });
 });
 </script>
 
@@ -165,7 +165,7 @@ const resultAria = computed(() => {
           :aria-valuenow="determinate ? percent : undefined"
           :aria-valuetext="progressText"
           :aria-label="
-            i18n.tf('operations.panel.progress_for', 'Progress of {name}', { name: view.label })
+            i18n.tf('operations.panel.progress_for', { name: view.label })
           "
         >
           <span
@@ -177,7 +177,7 @@ const resultAria = computed(() => {
       </div>
 
       <p v-if="view.error" class="ops-error">
-        <strong>{{ i18n.t("operations.panel.error_heading", "What went wrong") }}</strong>
+        <strong>{{ i18n.t("operations.panel.error_heading") }}</strong>
         <span>{{ view.error }}</span>
       </p>
 
@@ -191,7 +191,7 @@ const resultAria = computed(() => {
         <span v-if="timingText">{{ timingText }}</span
         ><span v-if="timingText && view.owner" class="sr-only">. </span>
         <span v-if="view.owner">{{
-          i18n.tf("operations.panel.by", "by {name}", { name: view.owner })
+          i18n.tf("operations.panel.by", { name: view.owner })
         }}</span>
       </p>
 
@@ -219,33 +219,33 @@ const resultAria = computed(() => {
         class="ops-btn"
         :class="{ 'is-primary': !view.result && !active }"
         :aria-label="
-          i18n.tf('operations.panel.details_for', 'Details for {name}', { name: view.label })
+          i18n.tf('operations.panel.details_for', { name: view.label })
         "
         :data-primary="!view.result ? '' : undefined"
         @click="emit('details', view.id)"
       >
-        {{ i18n.t("operations.panel.action_details", "Details") }}
+        {{ i18n.t("operations.panel.action_details") }}
       </button>
       <button v-if="active && view.cancelRequested" type="button" class="ops-btn" disabled>
-        {{ i18n.t("operations.panel.action_cancelling", "Cancelling…") }}
+        {{ i18n.t("operations.panel.action_cancelling") }}
       </button>
       <button
         v-else-if="active"
         type="button"
         class="ops-btn is-danger"
-        :aria-label="i18n.tf('operations.panel.cancel_for', 'Cancel {name}', { name: view.label })"
+        :aria-label="i18n.tf('operations.panel.cancel_for', { name: view.label })"
         @click="emit('cancel', view.id)"
       >
-        {{ i18n.t("operations.panel.action_cancel", "Cancel") }}
+        {{ i18n.t("operations.panel.action_cancel") }}
       </button>
       <button
         v-else
         type="button"
         class="ops-btn is-quiet"
-        :aria-label="i18n.tf('operations.panel.remove_for', 'Remove {name}', { name: view.label })"
+        :aria-label="i18n.tf('operations.panel.remove_for', { name: view.label })"
         @click="emit('remove', view.id)"
       >
-        {{ i18n.t("operations.panel.action_remove", "Remove") }}
+        {{ i18n.t("operations.panel.action_remove") }}
       </button>
     </div>
   </li>

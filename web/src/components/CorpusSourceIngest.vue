@@ -42,11 +42,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 
-const illegibilityText = computed(() => i18n.tf(
-  "pdf_corpus.source_illegibility_value",
-  "{value} out of 100. Higher values OCR more of the source.",
-  { value: props.illegibility },
-));
+const illegibilityText = computed(() => i18n.tf("pdf_corpus.source_illegibility_value", { value: props.illegibility }));
 
 function mediaKind(kind?: string) {
   if (!kind) return "";
@@ -54,7 +50,7 @@ function mediaKind(kind?: string) {
 }
 
 function unset() {
-  return i18n.t("pdf_corpus.metadata_unset", "Not detected");
+  return i18n.t("pdf_corpus.metadata_unset");
 }
 
 function formatDate(value?: string | null) {
@@ -79,7 +75,7 @@ function onFile(event: Event) {
 }
 
 function importLabel(hit: GutenbergHit) {
-  return i18n.tf("pdf_corpus.import_gutenberg_hit", "Load {title} by {author}", {
+  return i18n.tf("pdf_corpus.import_gutenberg_hit", {
     title: hit.title,
     author: hit.author || unset(),
   });
@@ -90,22 +86,22 @@ function importLabel(hit: GutenbergHit) {
   <div class="source-ingest" :aria-busy="busy ? 'true' : undefined">
     <div class="source-setup-grid">
       <label for="pdf-corpus-source">
-        <span>{{ i18n.t("pdf_corpus.source_asset", "Source asset") }}</span>
+        <span>{{ i18n.t("pdf_corpus.source_asset") }}</span>
         <select id="pdf-corpus-source" class="control" :value="assetId" :disabled="disabled" @change="emit('update:assetId', ($event.target as HTMLSelectElement).value)">
-          <option value="">{{ i18n.t("pdf_corpus.choose_persisted_pdf", "Choose a saved source…") }}</option>
-          <option v-for="asset in assets" :key="asset.asset_id" :value="asset.asset_id">{{ asset.filename }} · {{ asset.page_count }} {{ i18n.t("pdf_corpus.pages", "pages") }} · {{ asset.block_count }} {{ i18n.t("pdf_corpus.blocks", "blocks") }}</option>
+          <option value="">{{ i18n.t("pdf_corpus.choose_persisted_pdf") }}</option>
+          <option v-for="asset in assets" :key="asset.asset_id" :value="asset.asset_id">{{ asset.filename }} · {{ asset.page_count }} {{ i18n.t("pdf_corpus.pages") }} · {{ asset.block_count }} {{ i18n.t("pdf_corpus.blocks") }}</option>
         </select>
       </label>
       <div class="ingest-actions">
         <label class="illegibility-field" for="source-illegibility">
-          <span>{{ i18n.t("pdf_corpus.source_illegibility", "Source illegibility") }} <b>{{ illegibility }}</b></span>
+          <span>{{ i18n.t("pdf_corpus.source_illegibility") }} <b>{{ illegibility }}</b></span>
           <input id="source-illegibility" :value="illegibility" type="range" min="0" max="100" step="1" :disabled="disabled" :aria-valuetext="illegibilityText" aria-describedby="source-illegibility-help" @input="onIllegibility">
-          <small id="source-illegibility-help">{{ i18n.t("pdf_corpus.source_illegibility_help", "Set this before choosing a file. Higher values OCR more aggressively when the source is hard to read.") }}</small>
+          <small id="source-illegibility-help">{{ i18n.t("pdf_corpus.source_illegibility_help") }}</small>
         </label>
         <div class="source-actions">
-          <button type="button" class="btn" :disabled="disabled" @click="emit('useCurrent')">{{ i18n.t("pdf_corpus.use_current_pdf", "Use current Explorer PDF") }}</button>
-          <button type="button" class="btn source-choose" :disabled="disabled" @click="uploadInput?.click()">{{ busy === "upload" ? i18n.t("pdf_corpus.extracting", "Extracting…") : i18n.t("pdf_corpus.choose_pdf", "Choose source PDF") }}</button>
-          <input ref="uploadInput" class="sr-only" tabindex="-1" type="file" :accept="SOURCE_ACCEPT" :aria-label="i18n.t('pdf_corpus.choose_pdf', 'Choose source PDF')" @change="onFile">
+          <button type="button" class="btn" :disabled="disabled" @click="emit('useCurrent')">{{ i18n.t("pdf_corpus.use_current_pdf") }}</button>
+          <button type="button" class="btn source-choose" :disabled="disabled" @click="uploadInput?.click()">{{ busy === "upload" ? i18n.t("pdf_corpus.extracting") : i18n.t("pdf_corpus.choose_pdf") }}</button>
+          <input ref="uploadInput" class="sr-only" tabindex="-1" type="file" :accept="SOURCE_ACCEPT" :aria-label="i18n.t('pdf_corpus.choose_pdf')" @change="onFile">
         </div>
       </div>
     </div>
@@ -113,19 +109,19 @@ function importLabel(hit: GutenbergHit) {
     <div class="alternate-sources">
       <form class="url-source" @submit.prevent="emit('loadUrl')">
         <label for="pdf-corpus-source-url">
-          <span>{{ i18n.t("pdf_corpus.source_url", "Source URL") }}</span>
-          <input id="pdf-corpus-source-url" class="control" type="url" inputmode="url" :value="sourceUrl" :placeholder="i18n.t('pdf_corpus.url_placeholder', 'https://')" :disabled="disabled" @input="emit('update:sourceUrl', ($event.target as HTMLInputElement).value)">
+          <span>{{ i18n.t("pdf_corpus.source_url") }}</span>
+          <input id="pdf-corpus-source-url" class="control" type="url" inputmode="url" :value="sourceUrl" :placeholder="i18n.t('pdf_corpus.url_placeholder')" :disabled="disabled" @input="emit('update:sourceUrl', ($event.target as HTMLInputElement).value)">
         </label>
-        <button type="submit" class="btn" :disabled="disabled || !sourceUrl.trim()">{{ i18n.t("pdf_corpus.load_url", "Load URL") }}</button>
+        <button type="submit" class="btn" :disabled="disabled || !sourceUrl.trim()">{{ i18n.t("pdf_corpus.load_url") }}</button>
       </form>
       <form class="gutenberg-source" @submit.prevent="emit('searchGutenberg')">
         <label for="pdf-corpus-gutenberg">
-          <span>{{ i18n.t("pdf_corpus.gutenberg_search", "Search Project Gutenberg") }}</span>
-          <input id="pdf-corpus-gutenberg" class="control" type="search" :value="gutenbergQuery" :placeholder="i18n.t('pdf_corpus.gutenberg_query', 'Title or author')" :disabled="disabled" @input="emit('update:gutenbergQuery', ($event.target as HTMLInputElement).value)">
+          <span>{{ i18n.t("pdf_corpus.gutenberg_search") }}</span>
+          <input id="pdf-corpus-gutenberg" class="control" type="search" :value="gutenbergQuery" :placeholder="i18n.t('pdf_corpus.gutenberg_query')" :disabled="disabled" @input="emit('update:gutenbergQuery', ($event.target as HTMLInputElement).value)">
         </label>
-        <button type="submit" class="btn" :disabled="disabled || !gutenbergQuery.trim()">{{ busy === "gutenberg" ? i18n.t("pdf_corpus.extracting", "Extracting…") : i18n.t("pdf_corpus.gutenberg_search", "Search Project Gutenberg") }}</button>
+        <button type="submit" class="btn" :disabled="disabled || !gutenbergQuery.trim()">{{ busy === "gutenberg" ? i18n.t("pdf_corpus.extracting") : i18n.t("pdf_corpus.gutenberg_search") }}</button>
       </form>
-      <ul v-if="hits.length" class="gutenberg-hits" :aria-label="i18n.t('pdf_corpus.gutenberg_results', 'Project Gutenberg results')">
+      <ul v-if="hits.length" class="gutenberg-hits" :aria-label="i18n.t('pdf_corpus.gutenberg_results')">
         <li v-for="hit in hits" :key="hit.etext_id">
           <button type="button" class="btn" :disabled="disabled" :aria-label="importLabel(hit)" @click="emit('importGutenberg', hit.etext_id)">
             <span>{{ hit.title }}</span>
@@ -136,14 +132,14 @@ function importLabel(hit: GutenbergHit) {
     </div>
 
     <dl v-if="selectedAsset" class="source-facts">
-      <div v-if="selectedAsset.media_kind"><dt>{{ i18n.t("pdf_corpus.media_kind", "Source type") }}</dt><dd>{{ mediaKind(selectedAsset.media_kind) }}</dd></div>
-      <div><dt>{{ i18n.t("pdf_corpus.pages", "pages") }}</dt><dd>{{ selectedAsset.page_count }}</dd></div>
-      <div><dt>{{ i18n.t("pdf_corpus.blocks", "blocks") }}</dt><dd>{{ selectedAsset.block_count }}</dd></div>
-      <div><dt>{{ i18n.t("pdf_corpus.ocr_pages", "OCR page(s)") }}</dt><dd>{{ selectedAsset.ocr_pages }}</dd></div>
+      <div v-if="selectedAsset.media_kind"><dt>{{ i18n.t("pdf_corpus.media_kind") }}</dt><dd>{{ mediaKind(selectedAsset.media_kind) }}</dd></div>
+      <div><dt>{{ i18n.t("pdf_corpus.pages") }}</dt><dd>{{ selectedAsset.page_count }}</dd></div>
+      <div><dt>{{ i18n.t("pdf_corpus.blocks") }}</dt><dd>{{ selectedAsset.block_count }}</dd></div>
+      <div><dt>{{ i18n.t("pdf_corpus.ocr_pages") }}</dt><dd>{{ selectedAsset.ocr_pages }}</dd></div>
       <div><dt>SHA-256</dt><dd>{{ selectedAsset.sha256.slice(0, 16) }}…</dd></div>
-      <div><dt>{{ i18n.t("pdf_corpus.loaded", "Loaded") }}</dt><dd>{{ formatDate(selectedAsset.created_at) }}</dd></div>
+      <div><dt>{{ i18n.t("pdf_corpus.loaded") }}</dt><dd>{{ formatDate(selectedAsset.created_at) }}</dd></div>
       <div v-if="selectedAsset.deterministic_checked_at">
-        <dt>{{ i18n.t("pdf_corpus.deterministic_check", "Deterministic check") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.deterministic_check") }}</dt>
         <dd>{{ selectedAsset.initial_metadata?.title || unset() }} · {{ selectedAsset.initial_metadata?.document_author || unset() }} · {{ selectedAsset.initial_metadata?.speaker || unset() }}</dd>
       </div>
     </dl>

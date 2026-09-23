@@ -50,8 +50,8 @@ function sharedLimit(profile: ProviderProfile) {
 }
 function statusText(profile: ProviderProfile) {
   const status = statuses.value[profile.id];
-  if (status?.available) return i18n.tf("providers.ready_models", "Ready - {count} models", { count: Number(status.models?.length || 0) });
-  return status?.error || warmups.value[profile.id]?.message || i18n.t("providers.not_verified", "Not verified");
+  if (status?.available) return i18n.tf("providers.ready_models", { count: Number(status.models?.length || 0) });
+  return status?.error || warmups.value[profile.id]?.message || i18n.t("providers.not_verified");
 }
 function copyProfiles() { return JSON.parse(JSON.stringify(profiles.value)) as ProviderProfile[]; }
 function setBusy(id: string, value = "") { busy.value = {...busy.value, [id]: value}; }
@@ -64,7 +64,7 @@ async function save() {
     await runtime.syncResearcherProviderProfiles?.();
     refresh();
     expanded.value = Object.fromEntries(profiles.value.map((profile) => [profile.id, false]));
-    runtime.notifyToast?.(i18n.t("providers.saved", "Provider profiles saved."), { tone: "success" });
+    runtime.notifyToast?.(i18n.t("providers.saved"), { tone: "success" });
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { saving.value = false; }
 }
@@ -76,11 +76,11 @@ function add(type: "ollama" | "openai") {
 }
 function applyBulk(ids: string[], values: Record<string, unknown>) {
   profiles.value = applyProfileFieldValues(profiles.value, ids, values);
-  runtime.notifyToast?.(i18n.t("providers.bulk_applied", "Values copied to the selected profiles. Save provider profiles to persist."), { tone: "info" });
+  runtime.notifyToast?.(i18n.t("providers.bulk_applied"), { tone: "info" });
   for (const id of ids) expanded.value = { ...expanded.value, [id]: true };
 }
 async function remove(profile: ProviderProfile) {
-  if (!window.confirm(i18n.tf("providers.remove_confirm", "Remove provider profile {name}?", { name: profile.name || profile.id }))) return;
+  if (!window.confirm(i18n.tf("providers.remove_confirm", { name: profile.name || profile.id }))) return;
   try { runtime.removeProviderProfileForUi?.(profile.id); refresh(); } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
 }
 function makeDefault(profile: ProviderProfile) { runtime.setDefaultProviderProfileForUi?.(profile.id); refresh(); }
@@ -99,70 +99,67 @@ onMounted(() => { refresh(); loading.value = false; });
 <template>
   <main class="vue-native-page providers-page" aria-labelledby="providers-page-title">
     <UiPageHeader
-      :kicker="i18n.t('section.system', 'System')"
-      :title="i18n.t('providers.title', 'LLM Providers')"
+      :kicker="i18n.t('section.system')"
+      :title="i18n.t('providers.title')"
       title-id="providers-page-title"
       :description="
-        i18n.t(
-          'providers.description',
-          'Configure reusable endpoints, models, credentials, and access for every LLM workflow.',
-        )
+        i18n.t('providers.description')
       "
-      :actions-label="i18n.t('providers.page_actions', 'Provider actions')"
+      :actions-label="i18n.t('providers.page_actions')"
     >
       <template #actions>
         <button class="btn" type="button" @click="add('ollama')">
-          + {{ i18n.t("providers.add_ollama", "Add Ollama") }}
+          + {{ i18n.t("providers.add_ollama") }}
         </button>
         <button class="btn primary" type="button" @click="add('openai')">
-          + {{ i18n.t("providers.add_openai", "Add OpenAI-compatible") }}
+          + {{ i18n.t("providers.add_openai") }}
         </button>
       </template>
     </UiPageHeader>
-    <label class="provider-warm-option"><input type="checkbox" :checked="warmOnStart" @change="setWarmOnStart(($event.target as HTMLInputElement).checked)"><span><b>{{ i18n.t("providers.warm_on_start", "Load the default model when the app opens") }}</b><small>{{ i18n.t("providers.warm_on_start_help", "Off by default. Loading a model takes memory and time and evicts the one in use, so it is loaded when you first use it. Turn this on if you always start with the default model and want it ready.") }}</small></span></label>
+    <label class="provider-warm-option"><input type="checkbox" :checked="warmOnStart" @change="setWarmOnStart(($event.target as HTMLInputElement).checked)"><span><b>{{ i18n.t("providers.warm_on_start") }}</b><small>{{ i18n.t("providers.warm_on_start_help") }}</small></span></label>
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
     <section class="providers-overview" aria-labelledby="providers-overview-title">
-      <div><p class="eyebrow">{{ i18n.t("providers.registry", "Provider registry") }}</p><h2 id="providers-overview-title">{{ i18n.t("providers.registry_title", "Model access at a glance") }}</h2><p>{{ i18n.t("providers.registry_help", "Profiles are shared across corpus enrichment, review, translation, and Research. Credentials remain in the provider workspace.") }}</p></div>
-      <dl class="providers-stats"><div><dt>{{ i18n.t("providers.profiles", "Profiles") }}</dt><dd>{{ profiles.length }}</dd></div><div><dt>Ollama</dt><dd>{{ counts.ollama }}</dd></div><div><dt>OpenAI-compatible</dt><dd>{{ counts.openai }}</dd></div><div><dt>{{ i18n.t("providers.default", "Default") }}</dt><dd class="default-stat">{{ profiles.find(profile => profile.id === defaultId)?.name || "-" }}</dd></div></dl>
+      <div><p class="eyebrow">{{ i18n.t("providers.registry") }}</p><h2 id="providers-overview-title">{{ i18n.t("providers.registry_title") }}</h2><p>{{ i18n.t("providers.registry_help") }}</p></div>
+      <dl class="providers-stats"><div><dt>{{ i18n.t("providers.profiles") }}</dt><dd>{{ profiles.length }}</dd></div><div><dt>Ollama</dt><dd>{{ counts.ollama }}</dd></div><div><dt>OpenAI-compatible</dt><dd>{{ counts.openai }}</dd></div><div><dt>{{ i18n.t("providers.default") }}</dt><dd class="default-stat">{{ profiles.find(profile => profile.id === defaultId)?.name || "-" }}</dd></div></dl>
     </section>
-    <section v-if="loading" class="card" aria-live="polite">{{ i18n.t("ui.loading", "Loading...") }}</section>
+    <section v-if="loading" class="card" aria-live="polite">{{ i18n.t("ui.loading") }}</section>
     <section v-else class="provider-list" aria-label="Provider profiles">
       <article v-for="profile in profiles" :key="profile.id" class="provider-workspace-card" :class="[profile.type, {default: profile.id === defaultId}]">
         <header class="provider-card-header">
           <div class="provider-card-identity">
-            <div class="provider-name-row"><span class="provider-type">{{ profile.type === 'ollama' ? 'OLLAMA' : 'OPENAI-COMPATIBLE' }}</span><input class="control provider-name" :aria-label="i18n.t('providers.profile_name', 'Profile name')" :value="profile.name" @input="update(profile, 'name', ($event.target as HTMLInputElement).value)"></div>
+            <div class="provider-name-row"><span class="provider-type">{{ profile.type === 'ollama' ? 'OLLAMA' : 'OPENAI-COMPATIBLE' }}</span><input class="control provider-name" :aria-label="i18n.t('providers.profile_name')" :value="profile.name" @input="update(profile, 'name', ($event.target as HTMLInputElement).value)"></div>
             <p class="provider-status" :class="{ready: statuses[profile.id]?.available, error: !statuses[profile.id]?.available && !!statuses[profile.id]?.error}"><span aria-hidden="true"></span>{{ statusText(profile) }}</p>
           </div>
-          <div class="provider-card-actions"><span v-if="profile.id === defaultId" class="status-tag">{{ i18n.t("providers.default", "Default") }}</span><button v-else class="btn small" type="button" @click="makeDefault(profile)">{{ i18n.t("providers.set_default", "Set default") }}</button><button class="btn small" type="button" :aria-expanded="isExpanded(profile.id)" @click="toggleExpanded(profile.id)">{{ isExpanded(profile.id) ? i18n.t("providers.collapse", "Collapse") : i18n.t("providers.expand", "Expand") }}</button><button class="btn small danger" type="button" :disabled="profiles.length <= 1" @click="remove(profile)">{{ i18n.t("ui.remove", "Remove") }}</button></div>
+          <div class="provider-card-actions"><span v-if="profile.id === defaultId" class="status-tag">{{ i18n.t("providers.default") }}</span><button v-else class="btn small" type="button" @click="makeDefault(profile)">{{ i18n.t("providers.set_default") }}</button><button class="btn small" type="button" :aria-expanded="isExpanded(profile.id)" @click="toggleExpanded(profile.id)">{{ isExpanded(profile.id) ? i18n.t("providers.collapse") : i18n.t("providers.expand") }}</button><button class="btn small danger" type="button" :disabled="profiles.length <= 1" @click="remove(profile)">{{ i18n.t("ui.remove") }}</button></div>
         </header>
         <div v-show="isExpanded(profile.id)" class="provider-card-body">
         <div class="provider-field-group">
-          <p class="provider-group-title">{{ i18n.t("providers.group_connection", "Connection") }}</p>
+          <p class="provider-group-title">{{ i18n.t("providers.group_connection") }}</p>
           <div class="provider-fields">
-            <label class="field field-wide"><span>{{ i18n.t("providers.endpoint", "Endpoint") }}</span><input class="control" :value="profile.base_url" @input="update(profile, 'base_url', ($event.target as HTMLInputElement).value)"></label>
-            <ProviderModelPicker :profile-name="profile.name || profile.id" :model-value="profile.type === 'openai' && profile.model_mode === 'auto' ? 'auto' : String(profile.model || '')" :models="statuses[profile.id]?.models || []" :kind="profile.type === 'openai' ? String(profile.model_kind || 'any') : 'any'" :disabled="profile.type === 'openai' && profile.model_mode === 'auto'" :busy="busy[profile.id] === 'test'" :placeholder="profile.type === 'ollama' ? i18n.t('providers.model_placeholder_ollama', 'Type or choose an installed model') : i18n.t('providers.model_placeholder_openai', 'Type or choose a model ID')" @update:model-value="update(profile, 'model', $event)" @discover="run(profile, 'test')" />
-            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_mode", "Model mode") }}</span><select class="control" :value="profile.model_mode || 'auto'" @change="update(profile, 'model_mode', ($event.target as HTMLSelectElement).value)"><option value="auto">{{ i18n.t("providers.mode_auto", "Auto router") }}</option><option value="discovered">{{ i18n.t("providers.mode_discovered", "Discovered") }}</option><option value="manual">{{ i18n.t("providers.mode_manual", "Manual") }}</option></select><small>{{ i18n.t("providers.model_mode_help", "Auto lets the endpoint choose. Discovered and Manual use the model named here.") }}</small></label>
-            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_kind", "Model kind") }}</span><select class="control" :value="profile.model_kind || 'any'" @change="update(profile, 'model_kind', ($event.target as HTMLSelectElement).value)"><option v-for="kind in MODEL_KINDS" :key="kind" :value="kind">{{ i18n.t(`providers.kind_${kind}`, kind) }}</option></select><small>{{ i18n.t("providers.model_kind_help", "Narrows the model list by name; it does not change what the endpoint offers.") }}</small></label>
+            <label class="field field-wide"><span>{{ i18n.t("providers.endpoint") }}</span><input class="control" :value="profile.base_url" @input="update(profile, 'base_url', ($event.target as HTMLInputElement).value)"></label>
+            <ProviderModelPicker :profile-name="profile.name || profile.id" :model-value="profile.type === 'openai' && profile.model_mode === 'auto' ? 'auto' : String(profile.model || '')" :models="statuses[profile.id]?.models || []" :kind="profile.type === 'openai' ? String(profile.model_kind || 'any') : 'any'" :disabled="profile.type === 'openai' && profile.model_mode === 'auto'" :busy="busy[profile.id] === 'test'" :placeholder="profile.type === 'ollama' ? i18n.t('providers.model_placeholder_ollama') : i18n.t('providers.model_placeholder_openai')" @update:model-value="update(profile, 'model', $event)" @discover="run(profile, 'test')" />
+            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_mode") }}</span><select class="control" :value="profile.model_mode || 'auto'" @change="update(profile, 'model_mode', ($event.target as HTMLSelectElement).value)"><option value="auto">{{ i18n.t("providers.mode_auto") }}</option><option value="discovered">{{ i18n.t("providers.mode_discovered") }}</option><option value="manual">{{ i18n.t("providers.mode_manual") }}</option></select><small>{{ i18n.t("providers.model_mode_help") }}</small></label>
+            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.model_kind") }}</span><select class="control" :value="profile.model_kind || 'any'" @change="update(profile, 'model_kind', ($event.target as HTMLSelectElement).value)"><option v-for="kind in MODEL_KINDS" :key="kind" :value="kind">{{ i18n.t(`providers.kind_${kind}`, kind) }}</option></select><small>{{ i18n.t("providers.model_kind_help") }}</small></label>
           </div>
         </div>
         <div class="provider-field-group">
-          <p class="provider-group-title">{{ i18n.t("providers.group_capacity", "Capacity") }}</p>
+          <p class="provider-group-title">{{ i18n.t("providers.group_capacity") }}</p>
           <div class="provider-fields">
-            <label class="field"><span>{{ i18n.t("providers.concurrency", "Max concurrent requests") }}</span><input class="control" type="number" min="1" max="64" :value="sharedLimit(profile)" @input="update(profile, 'max_concurrent_requests', Math.max(1, Math.min(64, numeric(($event.target as HTMLInputElement).value, 1))))"><small>{{ profile.type === 'ollama' && endpointPeers(profile).length > 1 ? i18n.t("providers.shared_endpoint", "Shared Ollama endpoint uses the lowest profile limit.") : i18n.t("providers.concurrency_help", "Background jobs respect this cap.") }}</small></label>
-            <label class="field"><span>{{ i18n.t("providers.context", "Context tokens") }}</span><input class="control" type="number" min="512" :value="profile.num_ctx || 16384" @input="update(profile, 'num_ctx', numeric(($event.target as HTMLInputElement).value, 16384))"></label>
-            <label class="field"><span>{{ i18n.t("providers.max_output", "Max output tokens") }}</span><input class="control" type="number" min="16" :value="profile.num_predict || 4096" @input="update(profile, 'num_predict', numeric(($event.target as HTMLInputElement).value, 4096))"></label>
+            <label class="field"><span>{{ i18n.t("providers.concurrency") }}</span><input class="control" type="number" min="1" max="64" :value="sharedLimit(profile)" @input="update(profile, 'max_concurrent_requests', Math.max(1, Math.min(64, numeric(($event.target as HTMLInputElement).value, 1))))"><small>{{ profile.type === 'ollama' && endpointPeers(profile).length > 1 ? i18n.t("providers.shared_endpoint") : i18n.t("providers.concurrency_help") }}</small></label>
+            <label class="field"><span>{{ i18n.t("providers.context") }}</span><input class="control" type="number" min="512" :value="profile.num_ctx || 16384" @input="update(profile, 'num_ctx', numeric(($event.target as HTMLInputElement).value, 16384))"></label>
+            <label class="field"><span>{{ i18n.t("providers.max_output") }}</span><input class="control" type="number" min="16" :value="profile.num_predict || 4096" @input="update(profile, 'num_predict', numeric(($event.target as HTMLInputElement).value, 4096))"></label>
           </div>
         </div>
         <div class="provider-field-group">
-          <p class="provider-group-title">{{ i18n.t("providers.group_access", "Access") }}</p>
+          <p class="provider-group-title">{{ i18n.t("providers.group_access") }}</p>
           <div class="provider-fields">
-            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.api_key", "API key") }}</span><span class="provider-secret-field"><input class="control" :type="revealedKeys[profile.id] ? 'text' : 'password'" autocomplete="off" :value="profile.api_key" @input="update(profile, 'api_key', ($event.target as HTMLInputElement).value)"><button type="button" class="btn small provider-secret-toggle" :aria-label="revealedKeys[profile.id] ? i18n.t('providers.hide_api_key', 'Hide API key') : i18n.t('providers.show_api_key', 'Show API key')" @click="toggleKeyVisibility(profile.id)">{{ revealedKeys[profile.id] ? i18n.t("providers.hide", "Hide") : i18n.t("providers.show", "Show") }}</button></span></label>
-            <label class="provider-access"><input type="checkbox" :checked="Boolean(profile.researcher_enabled)" @change="update(profile, 'researcher_enabled', ($event.target as HTMLInputElement).checked)"><span><b>{{ i18n.t("providers.researcher_access", "Researcher access") }}</b><small>{{ i18n.t("providers.researcher_access_help", "Allow researcher accounts to use this profile without exposing provider administration.") }}</small></span></label>
+            <label v-if="profile.type === 'openai'" class="field"><span>{{ i18n.t("providers.api_key") }}</span><span class="provider-secret-field"><input class="control" :type="revealedKeys[profile.id] ? 'text' : 'password'" autocomplete="off" :value="profile.api_key" @input="update(profile, 'api_key', ($event.target as HTMLInputElement).value)"><button type="button" class="btn small provider-secret-toggle" :aria-label="revealedKeys[profile.id] ? i18n.t('providers.hide_api_key') : i18n.t('providers.show_api_key')" @click="toggleKeyVisibility(profile.id)">{{ revealedKeys[profile.id] ? i18n.t("providers.hide") : i18n.t("providers.show") }}</button></span></label>
+            <label class="provider-access"><input type="checkbox" :checked="Boolean(profile.researcher_enabled)" @change="update(profile, 'researcher_enabled', ($event.target as HTMLInputElement).checked)"><span><b>{{ i18n.t("providers.researcher_access") }}</b><small>{{ i18n.t("providers.researcher_access_help") }}</small></span></label>
           </div>
         </div>
-        <details class="provider-advanced"><summary>{{ i18n.t("providers.advanced", "Generation defaults and advanced parameters") }}</summary>
+        <details class="provider-advanced"><summary>{{ i18n.t("providers.advanced") }}</summary>
           <div class="provider-field-group">
-            <p class="provider-group-title">{{ i18n.t("providers.group_sampling", "Sampling") }}</p>
+            <p class="provider-group-title">{{ i18n.t("providers.group_sampling") }}</p>
             <div class="provider-fields advanced-fields">
               <label class="field"><span>Temperature</span><input class="control" type="number" min="0" max="2" step="0.01" :value="profile.temperature ?? 0" @input="update(profile, 'temperature', numeric(($event.target as HTMLInputElement).value, 0))"></label>
               <label class="field"><span>Top P</span><input class="control" type="number" min="0" max="1" step="0.01" :value="profile.top_p ?? 1" @input="update(profile, 'top_p', numeric(($event.target as HTMLInputElement).value, 1))"></label>
@@ -171,25 +168,25 @@ onMounted(() => { refresh(); loading.value = false; });
             </div>
           </div>
           <div v-if="profile.type === 'ollama'" class="provider-field-group">
-            <p class="provider-group-title">{{ i18n.t("providers.group_lifecycle", "Lifecycle") }}</p>
+            <p class="provider-group-title">{{ i18n.t("providers.group_lifecycle") }}</p>
             <div class="provider-fields advanced-fields">
               <label class="field"><span>Think</span><select class="control" :value="String(profile.think ?? 'false')" @change="update(profile, 'think', ($event.target as HTMLSelectElement).value)"><option value="false">Off</option><option value="true">On</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
               <label class="field"><span>Keep alive</span><input class="control" :value="profile.keep_alive || '10m'" @input="update(profile, 'keep_alive', ($event.target as HTMLInputElement).value)"></label>
             </div>
           </div>
           <div class="provider-field-group">
-            <p class="provider-group-title">{{ i18n.t("providers.group_raw", "Raw overrides") }}</p>
+            <p class="provider-group-title">{{ i18n.t("providers.group_raw") }}</p>
             <div class="provider-fields advanced-fields">
-              <label class="field field-wide"><span>{{ i18n.t("providers.extra_options", "Advanced options JSON") }}</span><textarea class="control provider-json" rows="5" spellcheck="false" :value="String(profile.extra_options || '{}')" @input="update(profile, 'extra_options', ($event.target as HTMLTextAreaElement).value)"></textarea></label>
+              <label class="field field-wide"><span>{{ i18n.t("providers.extra_options") }}</span><textarea class="control provider-json" rows="5" spellcheck="false" :value="String(profile.extra_options || '{}')" @input="update(profile, 'extra_options', ($event.target as HTMLTextAreaElement).value)"></textarea></label>
             </div>
           </div>
         </details>
-        <footer class="provider-card-footer"><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'test')">{{ busy[profile.id] === 'test' ? i18n.t("providers.testing", "Testing...") : i18n.t("providers.test", "Test / discover models") }}</button><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'warm')">{{ busy[profile.id] === 'warm' ? i18n.t("providers.warming", "Warming...") : i18n.t("providers.warm", "Warm independently") }}</button></footer>
+        <footer class="provider-card-footer"><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'test')">{{ busy[profile.id] === 'test' ? i18n.t("providers.testing") : i18n.t("providers.test") }}</button><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'warm')">{{ busy[profile.id] === 'warm' ? i18n.t("providers.warming") : i18n.t("providers.warm") }}</button></footer>
         </div>
       </article>
     </section>
     <ProviderBulkApply v-if="!loading && profiles.length" :profiles="profiles" @apply="applyBulk" />
-    <div class="providers-save"><button class="btn primary" type="button" :disabled="saving || !profiles.length" @click="save">{{ saving ? i18n.t("ui.saving", "Saving...") : i18n.t("ui.save", "Save provider profiles") }}</button></div>
+    <div class="providers-save"><button class="btn primary" type="button" :disabled="saving || !profiles.length" @click="save">{{ saving ? i18n.t("ui.saving") : i18n.t("ui.save") }}</button></div>
   </main>
 </template>
 

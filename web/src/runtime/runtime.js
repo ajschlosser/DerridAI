@@ -391,6 +391,8 @@ const {backupContainsCredentials,downloadFullBackup,restoreFullBackup}=createBac
   providerProfiles:(...args)=>providerProfiles(...args),
   serializableFile:(...args)=>serializableFile(...args),
   toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
   workspacePrefs:(...args)=>workspacePrefs(...args),
 });
 const {openSharedAnnotationRecord,dashboardTotals,dashboardWorkspaceRecordTarget,dashboardRecordPreview}=createDashboardRenderer({
@@ -476,6 +478,8 @@ const {warmupProviderProfile,warmupConfiguredLlm,importFiles,closeFile,checkHeal
   stableJsonlFileIdentity:(...args)=>stableJsonlFileIdentity(...args),
   syncUrl:(...args)=>syncUrl(...args),
   toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
   updateSystemCard:(...args)=>updateSystemCard(...args),
 });
 const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdfMetadata,openPdfExplorerWorkspace,openLoadedPdfPage,linkedPdfRows,linkPdfPage,unlinkPdfLink,unlinkAllPdfLinks}=createPdfLinking({
@@ -529,6 +533,8 @@ const {applyRecordChanges,clearRecordUpdates,clearAllUpdates,historyVersionChang
   sameValue:(...args)=>sameValue(...args),
   shell:(...args)=>shell(...args),
   toast:(...args)=>toast(...args),
+  tr:(...args)=>tr(...args),
+  trf:(...args)=>trf(...args),
   uid:(...args)=>uid(...args),
 });
 const {reviewKey,reviewItemFromKey,selectedReviewItems,copyCitation,workspaceEvidenceKey,dbEvidenceKey,selectedEvidenceEntries,evidenceIsSelected,setEvidence,workspaceDbEvidenceTarget,workspaceEvidenceSelectionKey,toggleWorkspaceEvidence,toggleDbEvidence,clearSelectedEvidence,selectedEvidencePayload,setReviewSelected,clearReviewSelection}=createEvidenceSelection({
@@ -729,7 +735,7 @@ function currentContext(){
   if(state.view==="record"&&r) return {kicker:r.record_id||"Record", title:r.work||"Record", meta:f?.name||""};
   const map={
     home:["Overview","Dashboard","Workspace, vector stores, review activity, and corpus statistics"],
-    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} ${tr("dynamic.records","records")}`:"Open a JSONL file"],
+    list:["Corpus",f?.name||"Records",f?`${f.records.length.toLocaleString()} ${tr("dynamic.records")}`:"Open a JSONL file"],
     works:["Corpus","Works","Cross-file work overview"],
     global:["Corpus","Global Search","Search and filter every loaded record"],
     annotations:["Corpus","Annotations","Review annotations by work or in recent-activity order"],
@@ -933,7 +939,7 @@ function decorateDisabledControls(root=document){
     else if(id==="breadcrumbforward")reason="There is no forward navigation location.";
     else if(id==="loadraghistory")reason="Choose a previous RAG question first.";
     else if(id==="applyjobselected"||id==="applyselectedchanges")reason="Select at least one proposed change first.";
-    else if(id==="nukeeverything")reason=tr("config.nuke.type_to_enable_help",'Type "NUKE" exactly to enable this destructive action.');
+    else if(id==="nukeeverything")reason=tr("config.nuke.type_to_enable_help");
     else if(id==="linkpdf")reason="The current PDF page is already linked to this record.";
     else if(id==="runsearch")reason="Semantic search is unavailable for precomputed-only collections.";
     else if(["ragmodel","toolmodel","touchmodel"].includes(id))reason="The provider is configured to choose the model automatically.";
@@ -1399,12 +1405,12 @@ function searchByMetadata(field,value,{contains=false}={}){
 function workflowProviderSelectHtml(selectedId){
   const profiles=providerProfiles();
   const selected=providerProfile(selectedId)||profiles[0]||null;
-  if(!profiles.length)return `<div class="workflow-provider-empty"><b>${esc(tr("language.no_provider_profiles","No LLM provider profiles are configured"))}</b><p>${esc(tr("language.no_provider_profiles_help","Create a provider profile first, then return here."))}</p></div>`;
-  return `<label class="workflow-field workflow-provider-select-field"><span>${esc(tr("works.provider_profile","Provider profile"))}</span><select class="control workflow-provider-select" id="workMetadataProvider">${profiles.map(profile=>`<option value="${esc(profile.id)}" ${profile.id===selected?.id?"selected":""}>${esc(providerDisplayName(profile))} · ${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set","model not set"))}${profile.id===state.appConfig.default_provider_profile?` · ${esc(tr("ui.default","Default"))}`:""}</option>`).join("")}</select><small>${esc(tr("works.provider_profile_help","Uses the same configured provider profiles as Research, PDF tools, and LLM review."))}</small></label><div class="workflow-provider-summary" id="workMetadataProviderSummary">${workflowProviderSummaryHtml(selected)}</div>`;
+  if(!profiles.length)return `<div class="workflow-provider-empty"><b>${esc(tr("language.no_provider_profiles"))}</b><p>${esc(tr("language.no_provider_profiles_help"))}</p></div>`;
+  return `<label class="workflow-field workflow-provider-select-field"><span>${esc(tr("works.provider_profile"))}</span><select class="control workflow-provider-select" id="workMetadataProvider">${profiles.map(profile=>`<option value="${esc(profile.id)}" ${profile.id===selected?.id?"selected":""}>${esc(providerDisplayName(profile))} · ${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set"))}${profile.id===state.appConfig.default_provider_profile?` · ${esc(tr("ui.default"))}`:""}</option>`).join("")}</select><small>${esc(tr("works.provider_profile_help"))}</small></label><div class="workflow-provider-summary" id="workMetadataProviderSummary">${workflowProviderSummaryHtml(selected)}</div>`;
 }
 function workflowProviderSummaryHtml(profile){
   if(!profile)return "";
-  return `<span class="workflow-provider-mark">${profile.type==="ollama"?"O":"AI"}</span><span><b>${esc(providerDisplayName(profile))}</b><small>${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set","model not set"))}</small><small>${Number(profile.max_concurrent_requests??1)} ${esc(tr("works.concurrent_requests","max concurrent request(s)"))}</small></span>${profile.id===state.appConfig.default_provider_profile?`<span class="provider-default-chip">${esc(tr("ui.default","Default"))}</span>`:""}`;
+  return `<span class="workflow-provider-mark">${profile.type==="ollama"?"O":"AI"}</span><span><b>${esc(providerDisplayName(profile))}</b><small>${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set"))}</small><small>${Number(profile.max_concurrent_requests??1)} ${esc(tr("works.concurrent_requests"))}</small></span>${profile.id===state.appConfig.default_provider_profile?`<span class="provider-default-chip">${esc(tr("ui.default"))}</span>`:""}`;
 }
 
 function parseProposedMetadataValue(raw,original){
@@ -1481,7 +1487,7 @@ function cleanText(text){
   return {text:s,changed:s!==before};
 }
 function cleanRecord(f,i){
-  const c=cleanText(f.records[i].text);if(!c.changed)return toast("No supported ligatures or artifacts found");
+  const c=cleanText(f.records[i].text);if(!c.changed)return toast(tr("runtime.toast.no_ligatures"));
   const changed=applyRecordChanges(f,i,{text:c.text},{source:"ocr_cleanup"});
   shell();renderView();toast(`${changed} tracked change${changed===1?"":"s"} applied`);
 }
@@ -1516,7 +1522,7 @@ function parseEditor(el){if(el.dataset.type==="boolean")return el.checked;if(el.
 
 function exportMenu(){
   const dialog=document.createElement("dialog");
-  dialog.innerHTML=`<div class="dh"><h2 style="margin:0;font-size:16px">${esc(tr("export.title","Export JSONL"))}</h2><button class="btn" data-close>${esc(tr("ui.close","Close"))}</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">${esc(tr("export.current","Current file"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed","Changed files"))}</button><button class="btn" data-export="all">${esc(tr("export.all","All files separately"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate","Aggregate JSONL"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate","Changed + aggregate"))}</button></div></div>`;
+  dialog.innerHTML=`<div class="dh"><h2 style="margin:0;font-size:16px">${esc(tr("export.title"))}</h2><button class="btn" data-close>${esc(tr("ui.close"))}</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">${esc(tr("export.current"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed"))}</button><button class="btn" data-export="all">${esc(tr("export.all"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate"))}</button></div></div>`;
   document.body.appendChild(dialog);showAppModal(dialog);dialog.querySelector("[data-close]").onclick=()=>{dialog.close();dialog.remove()};
   dialog.querySelectorAll("[data-export]").forEach(button=>button.onclick=()=>{doExport(button.dataset.export);dialog.close();dialog.remove()});
 }
@@ -1577,21 +1583,21 @@ function rankPdfLinkCandidates(rawText){
 }
 async function cleanPdfPageWithLlm(){
   try{
-    const raw_text=await currentPdfPageText();if(!raw_text.trim())return toast("No extractable text was found on this page");
+    const raw_text=await currentPdfPageText();if(!raw_text.trim())return toast(tr("runtime.toast.no_page_text"));
     openLlmTaskLauncher({task:"pdf_clean_text",title:"Clean PDF page text",description:`${state.pdf.title||state.pdf.name} · page ${state.pdf.page}`,payload:{mode:"clean_text",raw_text,pdf_file:state.pdf.name||null,pdf_title:state.pdf.title||null,pdf_author:state.pdf.author||null,pdf_page:state.pdf.page,candidates:[]},onForegroundResult:async result=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${result.model||"model"} · page ${state.pdf.page}`;state.pdf.extractError="";window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"))}});
   }catch(error){toast(`Could not prepare LLM cleanup: ${error.message}`)}
 }
 async function draftPdfPageWithLlm(){
   try{
-    const raw_text=await currentPdfPageText();if(!raw_text.trim())return toast("No extractable text was found on this page");
+    const raw_text=await currentPdfPageText();if(!raw_text.trim())return toast(tr("runtime.toast.no_page_text"));
     openLlmTaskLauncher({task:"pdf_draft_record",title:"Create draft record from PDF page",description:`${state.pdf.title||state.pdf.name} · page ${state.pdf.page}`,payload:{mode:"draft_record",raw_text,pdf_file:state.pdf.name||null,pdf_title:state.pdf.title||null,pdf_author:state.pdf.author||null,pdf_page:state.pdf.page,candidates:[]},onForegroundResult:async result=>openPdfDraftRecord(result.record||{})});
   }catch(error){toast(`Could not prepare draft generation: ${error.message}`)}
 }
 async function linkPdfPageWithLlm(){
-  if(!state.files.length)return toast("Load JSONL records before asking the LLM to match this PDF page.");
+  if(!state.files.length)return toast(tr("runtime.toast.load_before_pdf_match"));
   try{
     const raw_text=await currentPdfPageText(),candidates=rankPdfLinkCandidates(raw_text);
-    if(!candidates.length)return toast("No candidate records are loaded");
+    if(!candidates.length)return toast(tr("runtime.toast.no_candidate_records"));
     openLlmTaskLauncher({task:"pdf_link_record",title:"Link PDF page to record",description:`${state.pdf.title||state.pdf.name} · page ${state.pdf.page} · ${candidates.length} pre-ranked candidates`,payload:{mode:"link_record",raw_text,pdf_file:state.pdf.name||null,pdf_title:state.pdf.title||null,pdf_author:state.pdf.author||null,pdf_page:state.pdf.page,candidates},onForegroundResult:async result=>applyPdfLinkMatch(result.match||{})});
   }catch(error){toast(`Could not prepare LLM record matching: ${error.message}`)}
 }
@@ -1692,7 +1698,7 @@ async function loadStorePage(){
   if(state.storePage>maxPage){state.storePage=maxPage;return loadStorePage()}
 }
 async function exportStoreJsonl({store=state.activeStore,work=null,downloadFile=false,loadTab=false}={}){
-  if(!store)return toast("Select a Chroma collection first");
+  if(!store)return toast(tr("records.toast.select_collection"));
   const params=new URLSearchParams();
   if(work)params.set("work",work);
   const op=showOperationProgress(`Exporting ${store}`,1);
@@ -1887,7 +1893,7 @@ function getShellSnapshot(){
 function getNavItems(){
   return viewConfig.filter(item=>canAccessPage(item.id)).map(item=>({
     ...item,
-    label:item.id==="home"?tr("nav.home","Home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search","Corpus search"):translatedNavLabel(item)),
+    label:item.id==="home"?tr("nav.home"):(isResearcher()&&item.id==="vector"?tr("research.corpus_search"):translatedNavLabel(item)),
     section:translatedSectionLabel(item.section),
     disabledReason:viewDisabledReason(item.id),
   }));
@@ -1907,16 +1913,16 @@ function activateFile(fileId){
     renderView();
   }else navigateTo("list",{fileId});
 }
-function triggerImport(fileList){return canUse("manageCorpus")?importFiles(fileList):toast("Your role does not have permission to load corpus files.")}
-function triggerMerge(){return canUse("manageCorpus")?openMergeDialog():toast("Your role does not have permission to merge corpus files.")}
-function triggerBulkEdit(){return canUse("editLocalRecords")?openBulkFieldEditor():toast("Your role does not have permission to edit records.")}
-function triggerOcrClean(){return canUse("editLocalRecords")?openOcrCleanupDialog():toast("Your role does not have permission to edit records.")}
-function triggerReviewFlagged(){return canUse("editLocalRecords")?openTouchup(needsReviewItems()):toast("Your role does not have permission to review records.")}
-function triggerAutoImproveFlagged(){return canUse("editLocalRecords")?openTouchup(needsReviewItems(),"auto"):toast("Your role does not have permission to modify records.")}
-function triggerUpsertQueue(){return canUse("manageCorpus")?openUpsertQueue():toast("Your role does not have permission to manage corpus databases.")}
+function triggerImport(fileList){return canUse("manageCorpus")?importFiles(fileList):toast(tr("runtime.toast.cannot_load_files"))}
+function triggerMerge(){return canUse("manageCorpus")?openMergeDialog():toast(tr("runtime.toast.cannot_merge_files"))}
+function triggerBulkEdit(){return canUse("editLocalRecords")?openBulkFieldEditor():toast(tr("runtime.toast.cannot_edit_records"))}
+function triggerOcrClean(){return canUse("editLocalRecords")?openOcrCleanupDialog():toast(tr("runtime.toast.cannot_edit_records"))}
+function triggerReviewFlagged(){return canUse("editLocalRecords")?openTouchup(needsReviewItems()):toast(tr("runtime.toast.cannot_review_records"))}
+function triggerAutoImproveFlagged(){return canUse("editLocalRecords")?openTouchup(needsReviewItems(),"auto"):toast(tr("runtime.toast.cannot_modify_records"))}
+function triggerUpsertQueue(){return canUse("manageCorpus")?openUpsertQueue():toast(tr("runtime.toast.cannot_manage_dbs"))}
 function triggerOperations(){return navigateTo("home")}
-function triggerExport(){return canUse("manageCorpus")?exportMenu():toast("Your role does not have permission to export corpus data.")}
-function triggerEdit(){return canUse("editLocalRecords")?openEditor():toast("Your role does not have permission to edit records.")}
+function triggerExport(){return canUse("manageCorpus")?exportMenu():toast(tr("runtime.toast.cannot_export"))}
+function triggerEdit(){return canUse("editLocalRecords")?openEditor():toast(tr("runtime.toast.cannot_edit_records"))}
 function triggerBack(){return goBack()}
 function triggerForward(){return goForward()}
 /**
@@ -1960,7 +1966,7 @@ document.addEventListener("click",event=>{
     event.stopPropagation();
     const item=reviewItemFromKey(loadedButton.dataset.copyRowKey);
     if(item)copyJsonToClipboard(item.file.records[item.index],item.record.record_id||"record");
-    else toast("The source record is no longer loaded");
+    else toast(tr("runtime.toast.source_record_gone"));
     return;
   }
   const citeButton=event.target.closest("[data-cite-row-key]");
@@ -1977,7 +1983,7 @@ document.addEventListener("click",event=>{
     const result=(state.storeSearchResults||[]).find(item=>String(item.id||item.record?._chroma_id||item.record?.record_id||"")===id);
     const record=result?.record||(state.storeRecords||[]).find(item=>String(item._chroma_id||item.record_id||"")===id);
     if(record)copyCitation(record,dbCite.dataset.adminDbCite||dbCite.dataset.rCite||"inline");
-    else toast("Citation source is no longer available",{tone:"warn"});
+    else toast(tr("runtime.toast.citation_source_gone"),{tone:"warn"});
     return;
   }
   const evidenceButton=event.target.closest("[data-toggle-workspace-evidence]");
@@ -2047,7 +2053,7 @@ async function filterResearcherInputElement(target){
   filtered=filtered.replace(/ {2,}/g," ");
   if(target.isContentEditable)target.textContent=filtered;else target.value=filtered;
   target.dispatchEvent(new Event("change",{bubbles:true}));
-  const now=Date.now();if(now-researcherPolicyToastAt>1200){researcherPolicyToastAt=now;toast(tr("content_filter.warning","That language is not permitted for researcher accounts. The flagged term was removed."),{tone:"warn"})}
+  const now=Date.now();if(now-researcherPolicyToastAt>1200){researcherPolicyToastAt=now;toast(tr("content_filter.warning"),{tone:"warn"})}
 }
 document.addEventListener("input",event=>{void filterResearcherInputElement(event.target)},true);
 

@@ -173,11 +173,8 @@ export function createWorksWorkspace(deps: Deps) {
       citationLabel: label("full_citation"),
       populateDisabledReason: "",
       syncAllDisabledReason:
-        noDbReason || tr("works.select_collection", "Select a corpus collection first."),
-      corpusManageDeniedReason: tr(
-        "permissions.corpus_manage_denied",
-        "Your role cannot load corpus files.",
-      ),
+        noDbReason || tr("works.select_collection"),
+      corpusManageDeniedReason: tr("permissions.corpus_manage_denied"),
       hasProviderProfiles: providerProfiles().length > 0,
       shared: Boolean(new URLSearchParams(location.search).get("file")),
       error: "",
@@ -267,11 +264,8 @@ export function createWorksWorkspace(deps: Deps) {
       totalWorks: map.size,
       totalRecords,
       populateDisabledReason: hasProfiles
-        ? tr("works.no_works_to_populate", "No works are available to populate.")
-        : tr(
-            "works.no_provider_profiles_help",
-            "Create an LLM provider profile before populating work metadata.",
-          ),
+        ? tr("works.no_works_to_populate")
+        : tr("works.no_provider_profiles_help"),
       capabilities: {
         canManageCorpus: canUse("manageCorpus"),
         canSync: hasCorpusDb(),
@@ -308,7 +302,7 @@ export function createWorksWorkspace(deps: Deps) {
   }
   async function syncAllWorks() {
     const rows = [...workIndex().values()].flatMap((item) => item.rows);
-    return upsertRows(rows, tr("works.all_records_label", "records across all works"));
+    return upsertRows(rows, tr("works.all_records_label"));
   }
   function searchWorkRecords(work: Any, { needsReview = false } = {}) {
     state.globalSearchMode = "traditional";

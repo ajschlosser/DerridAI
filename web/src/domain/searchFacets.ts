@@ -55,20 +55,20 @@ export function createSearchFacets(deps: Deps) {
   function searchFacetDisplay(field: string, value: string) {
     if (field === "needs_review")
       return value === "true"
-        ? tr("search.needs_review", "Needs review")
-        : tr("search.reviewed", "Reviewed");
+        ? tr("search.needs_review")
+        : tr("search.reviewed");
     if (field === "__db_status") {
       const labelsByKind: Record<string, string> = {
-        synced: tr("search.db_synced", "Synced"),
-        changed: tr("search.db_pending", "Pending"),
-        exists: tr("search.db_in_database", "In DB"),
-        absent: tr("search.db_not_in_database", "Not in DB"),
-        unknown: tr("search.db_unknown", "Unknown"),
-        none: tr("search.db_none", "No database"),
+        synced: tr("search.db_synced"),
+        changed: tr("search.db_pending"),
+        exists: tr("search.db_in_database"),
+        absent: tr("search.db_not_in_database"),
+        unknown: tr("search.db_unknown"),
+        none: tr("search.db_none"),
       };
       return labelsByKind[value] || value;
     }
-    return value || tr("ui.none", "None");
+    return value || tr("ui.none");
   }
   function searchFacetMatches(
     record: Loose,
@@ -193,8 +193,8 @@ export function createSearchFacets(deps: Deps) {
         field_label: label(field),
         op: contains ? "has" : "eq",
         op_label: contains
-          ? tr("search.operator_has", "contains")
-          : tr("search.operator_eq", "equals"),
+          ? tr("search.operator_has")
+          : tr("search.operator_eq"),
         value: String(contains ? value.$contains : (value ?? "")),
       };
     });
@@ -234,11 +234,11 @@ export function createSearchFacets(deps: Deps) {
       if (reasons.length >= 3) break;
     }
     if (database && method === "similarity")
-      reasons.unshift(tr("search.semantic_match", "Semantic similarity"));
+      reasons.unshift(tr("search.semantic_match"));
     if (database && method === "mmr")
-      reasons.unshift(tr("search.mmr_match", "Semantic relevance + diversity"));
+      reasons.unshift(tr("search.mmr_match"));
     if (database && method === "filter")
-      reasons.unshift(tr("search.filter_match", "Metadata filter match"));
+      reasons.unshift(tr("search.filter_match"));
     if (
       !database &&
       terms.length &&
@@ -246,7 +246,7 @@ export function createSearchFacets(deps: Deps) {
         .toLocaleLowerCase()
         .includes(terms[0])
     )
-      reasons.unshift(tr("search.text_match", "Text match"));
+      reasons.unshift(tr("search.text_match"));
     return [...new Set(reasons)].slice(0, 4);
   }
   function rowMatchesListFilters(row: Loose, filters: Loose[]) {

@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it } from "vitest";
 import { createOperationsPanelBridge } from "../../src/domain/operationsPanelBridge";
+import { englishDefault } from "../../src/i18n/englishDefault";
 
 function presenters(locale: "en" | "fr") {
   const tr = (key: string, fallback = "") =>
@@ -8,14 +9,21 @@ function presenters(locale: "en" | "fr") {
       ? "Activité du pipeline RAG"
       : locale === "fr" && key === "rag.empty"
         ? "Aucune opération RAG pour le moment. Lancez-en une ci-dessous."
-        : fallback || key;
-  const trf = (key: string, fallback: string, values: Record<string, unknown> = {}) =>
-    Object.entries(values).reduce(
-      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+        : fallback || englishDefault(key) || key;
+  const trf = (key: string, fallback: string | Record<string, unknown> = "", values: Record<string, unknown> = {}) => {
+    if (fallback && typeof fallback === "object") {
+      values = fallback;
+      fallback = "";
+    }
+    const template =
       locale === "fr" && key === "rag.activity_summary"
         ? "{active} en cours · {finished} résultat(s) passé(s) · l’étape, le modèle, les paramètres et le temps se mettent à jour automatiquement"
-        : fallback,
+        : fallback || englishDefault(key) || key;
+    return Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      String(template),
     );
+  };
   return createOperationsPanelBridge({
     state: { jobs: [], stores: [], appConfig: {}, health: {} },
     api: () => ({}),

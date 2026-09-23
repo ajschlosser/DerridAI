@@ -327,15 +327,11 @@ export function createRecordDialogs(deps: Deps) {
       const target = currentRows();
       const rawValues = target.slice(0, 300).map((row: Any) => row.record?.[field]);
       const values = [...new Set(rawValues.map((value: Any) => JSON.stringify(value)))];
-      dialog.querySelector("#bulkFieldHint").textContent = trf(
-        "records.bulk.hint",
-        "{targets} target records · {values} distinct current value(s){sampled}",
-        {
+      dialog.querySelector("#bulkFieldHint").textContent = trf("records.bulk.hint", {
           targets: target.length.toLocaleString(),
           values: values.length,
           sampled: values.length > 8 ? tr("records.bulk.sampled", " (sampled)") : "",
-        },
-      );
+        });
       const input = dialog.querySelector("#bulkFieldValue");
       if (values.length === 1 && (lastHintField !== field || !input.value.trim())) {
         const only = rawValues[0];
@@ -369,7 +365,7 @@ export function createRecordDialogs(deps: Deps) {
           title: copy.bulkTitle,
           message: copy.bulkMessage(field, changing.length.toLocaleString()),
           confirmLabel: copy.bulkConfirm,
-          cancelLabel: tr("common.cancel", "Cancel"),
+          cancelLabel: tr("common.cancel"),
         }))
       )
         return;
@@ -451,7 +447,7 @@ export function createRecordDialogs(deps: Deps) {
               title: copy.ocrTitle,
               message: copy.ocrMessage(rows.length.toLocaleString()),
               confirmLabel: copy.ocrConfirm,
-              cancelLabel: tr("common.cancel", "Cancel"),
+              cancelLabel: tr("common.cancel"),
             })
           )
             cleanRows(rows);
@@ -477,7 +473,7 @@ export function createRecordDialogs(deps: Deps) {
     const other = Object.keys(r).filter((k) => !used.has(k) && k !== "updates");
     if (other.length)
       groups.push(
-        `<section class="editor-section"><h3>${esc(tr("record.group_other", "Other fields"))}</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
+        `<section class="editor-section"><h3>${esc(tr("record.group_other"))}</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
       );
     dialog.innerHTML = recordEditorHtml(
       { subtitle: `${r.record_id || ""} · ${r.work || f.name}`, groups: groups.join("") },
@@ -523,7 +519,7 @@ export function createRecordDialogs(deps: Deps) {
   }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
-    if (!chromaId) return toast(tr("record.no_storage_id", "This Chroma record has no storage ID"));
+    if (!chromaId) return toast(tr("record.no_storage_id"));
     const dialog = document.createElement("dialog");
     const editable = Object.keys(record).filter(
       (k) =>
@@ -623,25 +619,25 @@ export function createRecordDialogs(deps: Deps) {
       const diffs = changed
         .map(
           (field: Any) =>
-            `<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>${esc(tr("records.history.changed", "changed"))}</span></summary><div class="history-diff-values"><div><small>${esc(tr("records.history.previous", "Previous"))}</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>${esc(tr("records.history.this_version", "This version"))}</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`,
+            `<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>${esc(tr("records.history.changed"))}</span></summary><div class="history-diff-values"><div><small>${esc(tr("records.history.previous"))}</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>${esc(tr("records.history.this_version"))}</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`,
         )
         .join("");
       dialog.innerHTML = recordHistoryDialogHtml(
         {
           recordId:
             file.records[index]?.record_id ||
-            trf("dashboard.record_n", "Record {n}", { n: index + 1 }),
+            trf("dashboard.record_n", { n: index + 1 }),
           changeSets: versions.length - 1,
           olderDisabled: cursor <= 0,
           newerDisabled: cursor >= currentIndex,
           versionLabel: version.label,
           isCurrent,
-          versionMeta: `${version.timestamp ? formatTimestamp(version.timestamp) : tr("records.history.before_edits", "Before tracked edits")}${version.source ? ` · ${version.source}` : ""}${version.model ? ` · ${version.model}` : ""}`,
+          versionMeta: `${version.timestamp ? formatTimestamp(version.timestamp) : tr("records.history.before_edits")}${version.source ? ` · ${version.source}` : ""}${version.model ? ` · ${version.model}` : ""}`,
           changed,
           words: text.trim() ? text.trim().split(/\s+/).length : 0,
           chars: text.length.toLocaleString(),
           diffs,
-          work: version.record.work || tr("records.history.untitled", "Untitled work"),
+          work: version.record.work || tr("records.history.untitled"),
           authorYear: `${version.record.document_author || ""} · ${version.record.year || ""}`,
           preview: `${text.slice(0, 5000)}${text.length > 5000 ? "…" : ""}`,
           restoreOriginalDisabled: cursor === 0 && isCurrent,
@@ -676,7 +672,7 @@ export function createRecordDialogs(deps: Deps) {
             title: copy.restoreOriginalTitle,
             message: copy.restoreOriginalMessage,
             confirmLabel: copy.restoreOriginalConfirm,
-            cancelLabel: tr("common.cancel", "Cancel"),
+            cancelLabel: tr("common.cancel"),
           }))
         )
           return;
@@ -717,9 +713,9 @@ export function createRecordDialogs(deps: Deps) {
 
     const render = () => {
       const currentRows = pendingUpsertRows();
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes", "Unsynced local changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records", "records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
+      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
     <div class="db">
-      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what", "What is this list?"))}</b><p>${esc(tr("vector.unsynced_changes_help", "These are browser-workspace records that changed since their last confirmed sync, plus records DerridAI has confirmed are missing from the selected collection. Removing an item suppresses only its current version; a later change queues it again."))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all", "Select all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection", "Clear selection"))}</button>` : ""}</div>
+      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what"))}</b><p>${esc(tr("vector.unsynced_changes_help"))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection"))}</button>` : ""}</div>
       <div class="upsert-queue-list">${
         currentRows
           .map((row: Any) => {
@@ -729,16 +725,16 @@ export function createRecordDialogs(deps: Deps) {
             return `<section class="upsert-queue-card">
           <div class="upsert-queue-head">
             <label class="upsert-queue-item"><input type="checkbox" data-upsert-key="${esc(key)}" checked><span><b>${esc(row.record.record_id || `Record ${row.index + 1}`)}</b><small>${esc(row.record.work || row.file.name)} · ${esc(row.file.name)}</small></span><span class="db-status ${info.kind}"><i></i>${esc(info.label)}</span></label>
-            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">${esc(trf("records.upsert.review_n", "Review {count} change(s)", { count: changes.length }))}</button><button class="btn small danger" data-remove-queue="${esc(key)}">${esc(tr("records.upsert.remove", "Remove from queue"))}</button></div>
+            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">${esc(trf("records.upsert.review_n", { count: changes.length }))}</button><button class="btn small danger" data-remove-queue="${esc(key)}">${esc(tr("records.upsert.remove"))}</button></div>
           </div>
-          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual", "manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values", "Values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
+          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
         </section>`;
           })
           .join("") ||
-        `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes", "No confirmed unsynced local changes."))}</div>`
+        `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
       }</div>
     </div>
-      <div class="da"><button class="btn" data-close>${esc(tr("common.close", "Close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected", "Sync selected"))}</button>` : ""}</div>`;
+      <div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected"))}</button>` : ""}</div>`;
 
       const close = () => {
         dialog.close();

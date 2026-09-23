@@ -37,13 +37,13 @@ function valueRequired(op: string) {
   <section class="search-rule-builder" aria-labelledby="search-rule-builder-title">
     <header class="search-rule-builder-head">
       <div>
-        <p class="section-label">{{ i18n.t("search.advanced_filters", "Advanced filters") }}</p>
+        <p class="section-label">{{ i18n.t("search.advanced_filters") }}</p>
         <h2 id="search-rule-builder-title">
-          {{ i18n.t("search.filter_match_all", "Match all of these conditions") }}
+          {{ i18n.t("search.filter_match_all") }}
         </h2>
       </div>
       <label class="search-rule-schema">
-        <span>{{ i18n.t("search.filter_schema", "Metadata schema") }}</span>
+        <span>{{ i18n.t("search.filter_schema") }}</span>
         <select
           class="control"
           :value="schemaId"
@@ -53,7 +53,7 @@ function valueRequired(op: string) {
             {{ schema.name
             }}{{
               schema.id === associatedSchemaId
-                ? ` · ${i18n.t("search.filter_schema_associated", "associated")}`
+                ? ` · ${i18n.t("search.filter_schema_associated")}`
                 : ""
             }}
           </option>
@@ -62,16 +62,13 @@ function valueRequired(op: string) {
     </header>
     <p class="search-rule-help">
       {{
-        i18n.t(
-          "search.advanced_filter_help",
-          "Use field-level conditions when the facet sidebar is not specific enough.",
-        )
+        i18n.t("search.advanced_filter_help")
       }}
     </p>
     <ol class="search-rule-list">
       <li v-for="(filter, index) in filters" :key="filter.id" class="search-rule-row is-applied">
         <span class="search-rule-join">{{
-          index === 0 ? i18n.t("search.filter_where", "Where") : i18n.t("search.filter_and", "And")
+          index === 0 ? i18n.t("search.filter_where") : i18n.t("search.filter_and")
         }}</span>
         <span class="search-rule-token">{{ filter.field_label }}</span>
         <span class="search-rule-token is-muted">{{ filter.op_label }}</span>
@@ -80,7 +77,7 @@ function valueRequired(op: string) {
           type="button"
           class="btn search-rule-remove"
           :aria-label="
-            i18n.tf('search.remove_condition_named', 'Remove condition {field} {op} {value}', {
+            i18n.tf('search.remove_condition_named', {
               field: filter.field_label,
               op: filter.op_label,
               value: filter.value,
@@ -94,11 +91,11 @@ function valueRequired(op: string) {
       <li class="search-rule-row is-compose">
         <span class="search-rule-join">{{
           filters.length
-            ? i18n.t("search.filter_and", "And")
-            : i18n.t("search.filter_where", "Where")
+            ? i18n.t("search.filter_and")
+            : i18n.t("search.filter_where")
         }}</span>
         <label>
-          <span class="sr-only">{{ i18n.t("search.field", "Field") }}</span>
+          <span class="sr-only">{{ i18n.t("search.field") }}</span>
           <select
             class="control"
             :value="field"
@@ -113,7 +110,7 @@ function valueRequired(op: string) {
           </select>
         </label>
         <label>
-          <span class="sr-only">{{ i18n.t("search.condition", "Condition") }}</span>
+          <span class="sr-only">{{ i18n.t("search.condition") }}</span>
           <select
             class="control"
             :value="op"
@@ -125,13 +122,13 @@ function valueRequired(op: string) {
           </select>
         </label>
         <label>
-          <span class="sr-only">{{ i18n.t("search.value", "Value") }}</span>
+          <span class="sr-only">{{ i18n.t("search.value") }}</span>
           <input
             class="control"
             :value="value"
             :list="`search-suggestions-${field}`"
             :disabled="!valueRequired(op)"
-            :placeholder="i18n.t('search.filter_value_placeholder', 'Type or choose a value…')"
+            :placeholder="i18n.t('search.filter_value_placeholder')"
             @input="emit('update:value', ($event.target as HTMLInputElement).value)"
             @keydown.enter.prevent="emit('add')"
           />
@@ -145,7 +142,7 @@ function valueRequired(op: string) {
           :disabled="valueRequired(op) && !value.trim()"
           @click="emit('add')"
         >
-          <AppIcon name="plus" />{{ i18n.t("research.add_filter", "Add filter") }}
+          <AppIcon name="plus" />{{ i18n.t("research.add_filter") }}
         </button>
       </li>
     </ol>

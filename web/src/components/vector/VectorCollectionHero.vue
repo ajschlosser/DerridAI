@@ -22,25 +22,25 @@ const statusTone = computed(() => status.value === "ready" ? "success" : status.
 const providerLabel = computed(() => {
   const provider = props.collection.embedding_provider || "chroma";
   if (provider === "ollama") return `Ollama · ${props.collection.embedding_model || ""}`.trim();
-  if (provider === "precomputed") return i18n.t("vector.provider_precomputed", "Precomputed");
-  return i18n.t("vector.provider_chroma", "Chroma default");
+  if (provider === "precomputed") return i18n.t("vector.provider_precomputed");
+  return i18n.t("vector.provider_chroma");
 });
 const syncLabel = computed(() => props.pendingCount
-  ? i18n.tf("vector.unsynced_changes_count", "{count} unsynced local changes", {count: Number(props.pendingCount).toLocaleString(i18n.locale)})
-  : i18n.t("vector.sync", "Sync"));
+  ? i18n.tf("vector.unsynced_changes_count", {count: Number(props.pendingCount).toLocaleString(i18n.locale)})
+  : i18n.t("vector.sync"));
 </script>
 <template>
   <section class="card vector-collection-hero vector-collection-hero-v037">
     <div class="vector-hero-copy">
       <div class="vector-hero-kicker">
-        <span class="section-label">{{ i18n.t("vector.collection", "Collection") }}</span>
+        <span class="section-label">{{ i18n.t("vector.collection") }}</span>
         <UiStatusBadge :label="status.replaceAll('_', ' ')" :tone="statusTone" />
-        <UiStatusBadge v-if="collection.protected" :label="i18n.t('vector.protected', 'Protected')" tone="warning" />
+        <UiStatusBadge v-if="collection.protected" :label="i18n.t('vector.protected')" tone="warning" />
       </div>
       <h2>{{ collection.name }}</h2>
       <p v-if="collection.description" class="vector-collection-description">{{ collection.description }}</p>
       <div class="vector-collection-contract">
-        <span><b>{{ Number(collection.count || 0).toLocaleString(i18n.locale) }}</b> {{ i18n.t("dynamic.records", "records") }}</span>
+        <span><b>{{ Number(collection.count || 0).toLocaleString(i18n.locale) }}</b> {{ i18n.t("dynamic.records") }}</span>
         <span>{{ collection.retrieval_mode || "semantic" }}</span>
         <span>{{ providerLabel }}</span>
         <span v-if="collection.embedding_dimension">{{ Number(collection.embedding_dimension).toLocaleString(i18n.locale) }}d</span>
@@ -48,10 +48,10 @@ const syncLabel = computed(() => props.pendingCount
         <span v-if="collection.language_codes?.length">{{ collection.language_codes.join(", ") }}</span>
       </div>
       <div class="vector-collection-provenance">
-        <span v-if="collection.source_label || collection.source_kind">{{ i18n.t("vector.source", "Source") }}: <b>{{ collection.source_label || collection.source_kind }}</b></span>
-        <span v-if="collection.last_synced_at">{{ i18n.t("vector.last_synced", "Last synced") }}: <b>{{ new Date(collection.last_synced_at).toLocaleString(i18n.locale) }}</b></span>
-        <span v-else>{{ i18n.t("vector.never_synced", "Not yet synced") }}</span>
-        <span v-if="collection.build_id" :title="collection.build_id">{{ i18n.t("vector.build", "Build") }}: <code>{{ collection.build_id.slice(-12) }}</code></span>
+        <span v-if="collection.source_label || collection.source_kind">{{ i18n.t("vector.source") }}: <b>{{ collection.source_label || collection.source_kind }}</b></span>
+        <span v-if="collection.last_synced_at">{{ i18n.t("vector.last_synced") }}: <b>{{ new Date(collection.last_synced_at).toLocaleString(i18n.locale) }}</b></span>
+        <span v-else>{{ i18n.t("vector.never_synced") }}</span>
+        <span v-if="collection.build_id" :title="collection.build_id">{{ i18n.t("vector.build") }}: <code>{{ collection.build_id.slice(-12) }}</code></span>
       </div>
     </div>
     <div class="tools vector-hero-actions">
@@ -60,19 +60,19 @@ const syncLabel = computed(() => props.pendingCount
         icon="database"
         variant="soft"
         :disabled="!pendingCount"
-        :disabled-reason="i18n.t('vector.no_unsynced_changes_help', 'DerridAI has not found any loaded workspace records that changed since their last sync or are confirmed missing from this collection.')"
+        :disabled-reason="i18n.t('vector.no_unsynced_changes_help')"
         @click="emit('sync')"
       />
-      <UiButton :label="i18n.t('vector.test_retrieval', 'Test retrieval')" icon="search" @click="emit('retrieval')" />
+      <UiButton :label="i18n.t('vector.test_retrieval')" icon="search" @click="emit('retrieval')" />
       <details class="vector-hero-menu">
-        <summary class="btn">{{ i18n.t("ui.more_actions", "More actions") }}</summary>
+        <summary class="btn">{{ i18n.t("ui.more_actions") }}</summary>
         <div class="vector-hero-menu-popover">
-          <UiButton :label="collection.protected ? i18n.t('vector.disable_protection', 'Disable protection') : i18n.t('vector.enable_protection', 'Enable protection')" :icon="collection.protected ? 'unlock' : 'lock'" @click="emit('protection')" />
+          <UiButton :label="collection.protected ? i18n.t('vector.disable_protection') : i18n.t('vector.enable_protection')" :icon="collection.protected ? 'unlock' : 'lock'" @click="emit('protection')" />
           <UiButton
-            :label="i18n.t('vector.delete_collection', 'Delete collection')"
+            :label="i18n.t('vector.delete_collection')"
             variant="danger"
             :disabled="Boolean(collection.protected)"
-            :disabled-reason="i18n.t('vector.disable_protection_before_delete', 'Disable deletion protection before deleting this collection.')"
+            :disabled-reason="i18n.t('vector.disable_protection_before_delete')"
             @click="emit('delete')"
           />
         </div>

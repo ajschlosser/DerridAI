@@ -54,7 +54,7 @@ function validate(): boolean {
   pathError.value = "";
   if (mode.value !== "http") {
     if (path.value.trim()) return true;
-    pathError.value = i18n.t("vector.enter_storage_path", "Enter a Chroma storage path");
+    pathError.value = i18n.t("vector.enter_storage_path");
     return false;
   }
   try {
@@ -62,8 +62,8 @@ function validate(): boolean {
     return true;
   } catch (error) {
     urlError.value = error instanceof Error && error.message === "url-credentials"
-      ? i18n.t("vector.chroma_url_credentials", "Do not put credentials in the URL. Use the access token field.")
-      : i18n.t("vector.chroma_url_help", "Enter an absolute http(s) Chroma URL.");
+      ? i18n.t("vector.chroma_url_credentials")
+      : i18n.t("vector.chroma_url_help");
     return false;
   }
 }
@@ -72,54 +72,54 @@ function apply() { if (validate()) emit("apply", body.value); }
 </script>
 <template>
   <form class="vector-backend-panel" @submit.prevent="apply">
-    <p>{{ i18n.t("vector.connection_help", "Choose local persistent storage, the Chroma container DerridAI provides, or a server you already run. Switching backends does not migrate collections.") }}</p>
+    <p>{{ i18n.t("vector.connection_help") }}</p>
     <fieldset class="vector-mode-choice">
-      <legend>{{ i18n.t("vector.connection_mode", "Storage backend") }}</legend>
+      <legend>{{ i18n.t("vector.connection_mode") }}</legend>
       <label :class="{selected: mode==='embedded'}">
         <input type="radio" :name="modeGroup" value="embedded" v-model="mode">
-        <span><b>{{ i18n.t("vector.connection_mode_embedded", "Local filesystem") }}</b><small>{{ i18n.t("vector.connection_mode_embedded_help", "Embedded Chroma on the host-mounted data directory.") }}</small></span>
+        <span><b>{{ i18n.t("vector.connection_mode_embedded") }}</b><small>{{ i18n.t("vector.connection_mode_embedded_help") }}</small></span>
       </label>
       <label :class="{selected: mode==='http'}">
         <input type="radio" :name="modeGroup" value="http" v-model="mode">
-        <span><b>{{ i18n.t("vector.connection_mode_http", "Running Chroma server") }}</b><small>{{ i18n.t("vector.connection_mode_http_help", "Connect over HTTP to the compose chroma service or a host-run server.") }}</small></span>
+        <span><b>{{ i18n.t("vector.connection_mode_http") }}</b><small>{{ i18n.t("vector.connection_mode_http_help") }}</small></span>
       </label>
     </fieldset>
     <template v-if="mode==='embedded'">
-    <UiField :label="i18n.t('vector.container_path', 'Container path')" :hint="i18n.t('vector.container_path_help', 'Path inside the DerridAI API container, inside the mounted data root.')">
+    <UiField :label="i18n.t('vector.container_path')" :hint="i18n.t('vector.container_path_help')">
       <input id="chroma-path" class="control" v-model="path" spellcheck="false" autocomplete="off" :aria-invalid="pathError ? 'true' : undefined">
     </UiField>
     <p v-if="pathError" class="vector-field-error" role="alert">{{ pathError }}</p>
     </template>
     <template v-else>
-      <UiField :label="i18n.t('vector.chroma_url', 'Chroma server URL')" :hint="i18n.t('vector.chroma_url_help', 'Absolute http(s) origin, for example http://chroma:8000.')">
+      <UiField :label="i18n.t('vector.chroma_url')" :hint="i18n.t('vector.chroma_url_help')">
         <input id="chroma-url" class="control" v-model="url" spellcheck="false" inputmode="url" autocomplete="off" :aria-invalid="urlError ? 'true' : undefined">
       </UiField>
       <p v-if="urlError" class="vector-field-error" role="alert">{{ urlError }}</p>
-      <p class="note">{{ i18n.t("vector.compose_profile_help", "Start the bundled service with docker compose --profile chroma up -d, then use http://chroma:8000 from the API container.") }}</p>
-      <UiField :label="i18n.t('vector.chroma_token', 'Access token')" :hint="health?.token_configured ? i18n.t('vector.chroma_token_kept', 'A token is already configured. Leave this field blank to keep it.') : i18n.t('vector.chroma_token_help', 'Optional Bearer token.')">
+      <p class="note">{{ i18n.t("vector.compose_profile_help") }}</p>
+      <UiField :label="i18n.t('vector.chroma_token')" :hint="health?.token_configured ? i18n.t('vector.chroma_token_kept') : i18n.t('vector.chroma_token_help')">
         <input id="chroma-token" class="control" v-model="token" type="password" autocomplete="off">
       </UiField>
       <div class="vector-tenant-grid">
-        <UiField :label="i18n.t('vector.chroma_tenant', 'Tenant')" :hint="i18n.t('vector.chroma_tenant_help', 'Leave the default unless this server is shared.')">
+        <UiField :label="i18n.t('vector.chroma_tenant')" :hint="i18n.t('vector.chroma_tenant_help')">
           <input class="control" v-model="tenant" autocomplete="off">
         </UiField>
-        <UiField :label="i18n.t('vector.chroma_database', 'Database')" :hint="i18n.t('vector.chroma_database_help', 'Leave the default unless this server is shared.')">
+        <UiField :label="i18n.t('vector.chroma_database')" :hint="i18n.t('vector.chroma_database_help')">
           <input class="control" v-model="database" autocomplete="off">
         </UiField>
       </div>
     </template>
     <div class="info warn" role="note">
-      <b>{{ i18n.t("vector.connection_switch_caution", "Changing backend does not move existing collections.") }}</b>
-      <span>{{ i18n.t("vector.connection_switch_caution_help", "DerridAI will use the selected backend immediately. Collections stay where they are until you rebuild or restore them.") }}</span>
+      <b>{{ i18n.t("vector.connection_switch_caution") }}</b>
+      <span>{{ i18n.t("vector.connection_switch_caution_help") }}</span>
     </div>
     <div v-if="probeResult" class="info" :class="{warn: !probeResult.available}" role="status">
-      <b>{{ probeResult.available ? i18n.t("vector.connection_ok", "Chroma is reachable") : i18n.t("vector.health_unavailable", "Chroma unavailable") }}</b>
+      <b>{{ probeResult.available ? i18n.t("vector.connection_ok") : i18n.t("vector.health_unavailable") }}</b>
       <span>{{ probeResult.identity }}{{ probeResult.error ? ` · ${probeResult.error}` : "" }}</span>
     </div>
     <p v-if="error" class="vector-field-error" role="alert">{{ error }}</p>
     <div class="vector-backend-actions">
-      <UiButton type="button" :label="probing ? i18n.t('vector.connection_probing', 'Testing connection…') : i18n.t('vector.connection_probe', 'Test connection')" :disabled="probing || applying" @click="probe" />
-      <UiButton type="submit" variant="primary" :label="i18n.t('vector.connection_apply', 'Apply connection')" :disabled="probing || applying" />
+      <UiButton type="button" :label="probing ? i18n.t('vector.connection_probing') : i18n.t('vector.connection_probe')" :disabled="probing || applying" @click="probe" />
+      <UiButton type="submit" variant="primary" :label="i18n.t('vector.connection_apply')" :disabled="probing || applying" />
     </div>
   </form>
 </template>

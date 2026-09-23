@@ -68,11 +68,7 @@ function openLibrary(question = "") {
 async function clearCache() {
   const approved = await runtime.openMessageModal({
     title: t("runtime.help.clear_rag_response_cache", "Clear RAG response cache?"),
-    message: i18n.tf(
-      "runtime.help.clear_rag_response_cache_message",
-      "Delete all {count} cached RAG responses and saved grades? Corpus vector databases are not affected.",
-      { count: count.value.toLocaleString() },
-    ),
+    message: i18n.tf("runtime.help.clear_rag_response_cache_message", { count: count.value.toLocaleString() }),
     tone: "danger",
     confirmLabel: t("common.clear", "Clear response cache"),
     cancelLabel: t("common.cancel", "Cancel"),
@@ -85,11 +81,7 @@ async function clearCache() {
     runtime.notifyToast(t("runtime.response_cache_cleared", "Response cache cleared"));
   } catch (cause) {
     runtime.notifyToast(
-      i18n.tf(
-        "runtime.help.could_not_clear_response_cache",
-        "Could not clear response cache: {error}",
-        { error: cause instanceof Error ? cause.message : String(cause) },
-      ),
+      i18n.tf("runtime.help.could_not_clear_response_cache", { error: cause instanceof Error ? cause.message : String(cause) }),
       { tone: "danger" },
     );
   }

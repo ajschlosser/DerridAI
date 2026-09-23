@@ -16,7 +16,7 @@ function onToggle(event: Event) {
 <template>
   <details class="shell-more-tools" :open="open" @toggle="onToggle">
     <summary :aria-expanded="open">
-      <span>{{ i18n.t('nav.more_tools', 'More tools') }}</span>
+      <span>{{ i18n.t('nav.more_tools') }}</span>
       <AppIcon name="chevron-down" aria-hidden="true" />
     </summary>
     <div class="shell-more-tools-list">

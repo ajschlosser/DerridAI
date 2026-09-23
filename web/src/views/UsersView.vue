@@ -66,7 +66,7 @@ async function createUser() {
       roles.value.find((item) => item.id === "researcher")?.id ||
       roles.value[0]?.id ||
       "researcher";
-    notify(i18n.t("users.created_toast", "User created."), "success");
+    notify(i18n.t("users.created_toast"), "success");
   } catch (exc) {
     error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
@@ -78,7 +78,7 @@ async function changeRole(user: AuthUser, nextRole: UserRole) {
   try {
     const result = await authApi.updateUser(user.id, { role: nextRole });
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
-    notify(i18n.t("users.role_saved_toast", "Role updated."), "success");
+    notify(i18n.t("users.role_saved_toast"), "success");
   } catch (exc) {
     error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
@@ -90,8 +90,8 @@ async function toggleActive(user: AuthUser) {
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
     notify(
       user.active
-        ? i18n.t("users.disabled_toast", "User disabled.")
-        : i18n.t("users.enabled_toast", "User enabled."),
+        ? i18n.t("users.disabled_toast")
+        : i18n.t("users.enabled_toast"),
       "success",
     );
   } catch (exc) {
@@ -131,8 +131,8 @@ async function applyDialog() {
     const completedMode = dialogMode.value;
     notify(
       completedMode === "password"
-        ? i18n.t("users.password_saved_toast", "Password reset.")
-        : i18n.t("users.deleted_toast", "User deleted."),
+        ? i18n.t("users.password_saved_toast")
+        : i18n.t("users.deleted_toast"),
       "success",
     );
   } catch (exc) {
@@ -152,33 +152,27 @@ onMounted(refresh);
 <template>
   <main class="vue-native-page users-page">
     <UiPageHeader
-      :kicker="i18n.t('section.system', 'System')"
-      :title="i18n.t('users.title', 'Users')"
+      :kicker="i18n.t('section.system')"
+      :title="i18n.t('users.title')"
       :description="
-        i18n.t(
-          'users.description',
-          'Create accounts, assign roles, and manage sign-in access. Configure what each role can do on the separate Roles & permissions page.',
-        )
+        i18n.t('users.description')
       "
     />
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
     <section class="card user-create-card" :aria-busy="!dataCurrent">
       <div class="cardhead">
         <div>
-          <b>{{ i18n.t("users.create", "Create user") }}</b>
+          <b>{{ i18n.t("users.create") }}</b>
           <div class="note">
             {{
-              i18n.t(
-                "users.create_help",
-                "Researcher is the default non-admin role. Additional roles can be created on Roles & permissions.",
-              )
+              i18n.t("users.create_help")
             }}
           </div>
         </div>
       </div>
       <form class="user-create-grid" @submit.prevent="createUser">
         <div class="field">
-          <label for="new-username">{{ i18n.t("users.username", "Username") }}</label>
+          <label for="new-username">{{ i18n.t("users.username") }}</label>
           <input
             id="new-username"
             v-model="username"
@@ -190,7 +184,7 @@ onMounted(refresh);
         </div>
         <div class="field">
           <label for="new-user-password">{{
-            i18n.t("users.temporary_password", "Temporary password")
+            i18n.t("users.temporary_password")
           }}</label>
           <input
             id="new-user-password"
@@ -203,7 +197,7 @@ onMounted(refresh);
           />
         </div>
         <div class="field">
-          <label for="new-user-role">{{ i18n.t("users.role", "Role") }}</label>
+          <label for="new-user-role">{{ i18n.t("users.role") }}</label>
           <select
             id="new-user-role"
             v-model="role"
@@ -223,7 +217,7 @@ onMounted(refresh);
         </div>
         <button class="btn primary" :disabled="!dataCurrent || createBusy">
           {{
-            createBusy ? i18n.t("ui.loading", "Creating…") : i18n.t("users.create", "Create user")
+            createBusy ? i18n.t("ui.loading") : i18n.t("users.create")
           }}
         </button>
       </form>
@@ -231,7 +225,7 @@ onMounted(refresh);
     <section class="card users-table-card">
       <div class="cardhead">
         <div>
-          <b id="users-accounts-title">{{ i18n.t("users.accounts", "Accounts") }}</b>
+          <b id="users-accounts-title">{{ i18n.t("users.accounts") }}</b>
           <div class="note">
             {{
               i18n.tf(
@@ -245,27 +239,27 @@ onMounted(refresh);
           </div>
         </div>
         <button class="btn small" type="button" :disabled="loading" @click="refresh">
-          {{ i18n.t("users.refresh", "Refresh") }}
+          {{ i18n.t("users.refresh") }}
         </button>
       </div>
       <div v-if="loading && !dataCurrent" class="users-loading" role="status">
-        {{ i18n.t("users.loading", "Loading users…") }}
+        {{ i18n.t("users.loading") }}
       </div>
       <AccessibleEmptyState
         v-else-if="error && !users.length"
         icon="users"
         icon-tone="neutral"
-        :title="i18n.t('users.title', 'Users')"
+        :title="i18n.t('users.title')"
         :description="error"
-        :action-label="i18n.t('ui.retry', 'Retry')"
+        :action-label="i18n.t('ui.retry')"
         @action="refresh"
       />
       <AccessibleEmptyState
         v-else-if="!users.length && !error"
         icon="users"
         icon-tone="neutral"
-        :title="i18n.t('users.empty_title', 'No user accounts yet')"
-        :description="i18n.t('users.empty_description', 'Create an account above to get started.')"
+        :title="i18n.t('users.empty_title')"
+        :description="i18n.t('users.empty_description')"
       />
       <div v-else class="user-list" role="list" aria-labelledby="users-accounts-title">
         <UserAccountRow
@@ -286,18 +280,15 @@ onMounted(refresh);
     <section class="card user-role-link-card">
       <div class="cardhead">
         <div>
-          <b>{{ i18n.t("roles.title", "Roles & permissions") }}</b>
+          <b>{{ i18n.t("roles.title") }}</b>
           <div class="note">
             {{
-              i18n.t(
-                "roles.users_link_help",
-                "Role capabilities are configured centrally and enforced by both navigation and API permissions.",
-              )
+              i18n.t("roles.users_link_help")
             }}
           </div>
         </div>
         <button class="btn" type="button" @click="openRoles">
-          {{ i18n.t("roles.manage", "Manage permissions") }}
+          {{ i18n.t("roles.manage") }}
         </button>
       </div>
     </section>
@@ -313,8 +304,8 @@ onMounted(refresh);
           <h2 id="user-admin-dialog-title" class="dialog-title">
             {{
               dialogMode === "password"
-                ? i18n.t("users.reset_password", "Reset password")
-                : i18n.t("users.delete", "Delete user")
+                ? i18n.t("users.reset_password")
+                : i18n.t("users.delete")
             }}
           </h2>
           <div class="dialog-subtitle">{{ dialogUser?.username }}</div>
@@ -322,7 +313,7 @@ onMounted(refresh);
         <button
           class="btn icon-only"
           type="button"
-          :aria-label="i18n.t('common.close', 'Close')"
+          :aria-label="i18n.t('common.close')"
           :disabled="dialogBusy"
           @click="closeDialog"
         >
@@ -333,7 +324,7 @@ onMounted(refresh);
         <template v-if="dialogMode === 'password'"
           ><div class="field">
             <label for="reset-user-password">{{
-              i18n.t("users.new_password", "New password")
+              i18n.t("users.new_password")
             }}</label>
             <input
               id="reset-user-password"
@@ -344,21 +335,18 @@ onMounted(refresh);
               autocomplete="new-password"
               autofocus
             />
-            <div class="note">{{ i18n.t("users.password_help", "Minimum 6 characters.") }}</div>
+            <div class="note">{{ i18n.t("users.password_help") }}</div>
           </div></template
         >
         <div v-else class="info error">
           {{
-            i18n.t(
-              "users.delete_help",
-              "This removes the account and all of its active sessions. Existing RAG job data is not deleted automatically.",
-            )
+            i18n.t("users.delete_help")
           }}
         </div>
       </div>
       <div class="da">
         <button class="btn" type="button" :disabled="dialogBusy" @click="closeDialog">
-          {{ i18n.t("ui.cancel", "Cancel") }}</button
+          {{ i18n.t("ui.cancel") }}</button
         ><button
           class="btn"
           :class="dialogMode === 'delete' ? 'danger' : 'primary'"
@@ -368,10 +356,10 @@ onMounted(refresh);
         >
           {{
             dialogBusy
-              ? i18n.t("ui.working", "Working…")
+              ? i18n.t("ui.working")
               : dialogMode === "delete"
-                ? i18n.t("users.delete", "Delete user")
-                : i18n.t("ui.set_password", "Set password")
+                ? i18n.t("users.delete")
+                : i18n.t("ui.set_password")
           }}
         </button>
       </div>

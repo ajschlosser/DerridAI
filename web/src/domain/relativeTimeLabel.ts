@@ -18,9 +18,9 @@ export function relativeTimeLabel(
   { tr, trf, locale }: { tr: Tr; trf: Trf; locale?: string },
 ): string {
   const date = new Date((value as string | number | Date) || 0);
-  if (!Number.isFinite(date.getTime())) return tr("time.recently", "Recently");
+  if (!Number.isFinite(date.getTime())) return tr("time.recently");
   const seconds = Math.max(0, Math.round((nowMs - date.getTime()) / 1000));
-  if (seconds < 60) return tr("time.just_now", "just now");
+  if (seconds < 60) return tr("time.just_now");
   const count = (unit: keyof typeof FALLBACKS, n: number) => {
     const one = n === 1;
     return trf(`time.${unit}_ago_${one ? "one" : "other"}`, FALLBACKS[unit][one ? 0 : 1], {

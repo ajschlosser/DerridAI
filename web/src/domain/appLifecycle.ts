@@ -35,6 +35,8 @@ type Helper =
   | "stableJsonlFileIdentity"
   | "syncUrl"
   | "toast"
+  | "tr"
+  | "trf"
   | "updateSystemCard";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -65,6 +67,8 @@ export function createAppLifecycle(deps: Deps) {
     stableJsonlFileIdentity,
     syncUrl,
     toast,
+    tr,
+    trf,
     updateSystemCard,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
@@ -140,7 +144,7 @@ export function createAppLifecycle(deps: Deps) {
     return warmupProviderProfile(state.appConfig.default_provider_profile);
   }
   async function importFiles(fileList: Any) {
-    if (isResearcher()) return toast("Researcher accounts cannot load or edit corpus files.");
+    if (isResearcher()) return toast(tr("runtime.toast.researcher_cannot_load"));
     const shareParams = new URLSearchParams(location.search);
     const requestedFileId = shareParams.get("file");
     const requestedUrlState = shareParams.get("ts");
@@ -185,7 +189,11 @@ export function createAppLifecycle(deps: Deps) {
     shell();
     renderView();
     syncUrl({ replace: true });
-    toast(`Loaded ${total} records${errors ? ` · ${errors} parse issues` : ""}`);
+    toast(
+      errors
+        ? trf("dynamic.loaded_records_issues", { count: total, issues: errors })
+        : trf("dynamic.loaded_records", { count: total }),
+    );
   }
   async function closeFile(id: Any) {
     const f = state.files.find((x: Any) => x.id === id);
@@ -193,11 +201,11 @@ export function createAppLifecycle(deps: Deps) {
     if (
       f.dirty.size &&
       !(await openMessageModal({
-        title: "Close modified JSONL?",
-        message: `${f.name} has modified records. Close anyway?`,
+        title: tr("files.close_modified_title"),
+        message: trf("files.close_modified_message", { name: f.name }),
         tone: "danger",
-        confirmLabel: "Close file",
-        cancelLabel: "Keep open",
+        confirmLabel: tr("ui.close_file"),
+        cancelLabel: tr("files.keep_open"),
       }))
     )
       return;

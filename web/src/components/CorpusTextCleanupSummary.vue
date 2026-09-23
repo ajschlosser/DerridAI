@@ -10,13 +10,13 @@ const changed=computed(()=>Number(props.summary?.records_changed||0));
 </script>
 
 <template>
-  <section v-if="summary" class="cleanup-summary" :aria-label="i18n.t('pdf_corpus.automatic_text_cleanup','Automatic text cleanup')">
+  <section v-if="summary" class="cleanup-summary" :aria-label="i18n.t('pdf_corpus.automatic_text_cleanup')">
     <div class="cleanup-copy">
-      <b>{{i18n.t('pdf_corpus.automatic_text_cleanup','Automatic text cleanup')}}</b>
-      <span v-if="enabled">{{i18n.tf('pdf_corpus.cleanup_pre_enrichment_summary','Cleaned {records} record(s) before metadata enrichment · {changes} change(s) · {removed} repeated/noise line(s) removed.',{records:changed,changes:Number(summary.changes||0),removed:Number(summary.removed_lines||0)})}}</span>
-      <span v-else>{{i18n.t('pdf_corpus.cleanup_disabled_summary','Automatic cleanup was disabled for this build. Record-level cleanup remains available during review.')}}</span>
+      <b>{{i18n.t('pdf_corpus.automatic_text_cleanup')}}</b>
+      <span v-if="enabled">{{i18n.tf('pdf_corpus.cleanup_pre_enrichment_summary', {records:changed,changes:Number(summary.changes||0),removed:Number(summary.removed_lines||0)})}}</span>
+      <span v-else>{{i18n.t('pdf_corpus.cleanup_disabled_summary')}}</span>
     </div>
-    <UiStatusBadge :tone="enabled&&changed>0?'success':'neutral'" :label="enabled?i18n.t('pdf_corpus.cleanup_applied','Cleanup applied'):i18n.t('pdf_corpus.cleanup_not_applied','Not applied')" />
+    <UiStatusBadge :tone="enabled&&changed>0?'success':'neutral'" :label="enabled?i18n.t('pdf_corpus.cleanup_applied'):i18n.t('pdf_corpus.cleanup_not_applied')" />
   </section>
 </template>
 

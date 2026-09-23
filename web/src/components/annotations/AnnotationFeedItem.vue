@@ -29,7 +29,7 @@ function dateLabel(value: string | null) {
     <button
       class="annotation-open-record"
       type="button"
-      :title="i18n.t('annotations.open_record', 'Open record')"
+      :title="i18n.t('annotations.open_record')"
       @click="emit('open', props.annotation)"
     >
       <span aria-hidden="true">↗</span>
@@ -54,7 +54,7 @@ function dateLabel(value: string | null) {
       :disabled="props.removing"
       @click="emit('remove', props.annotation)"
     >
-      {{ props.removing ? i18n.t("ui.removing", "Removing…") : i18n.t("ui.remove", "Remove") }}
+      {{ props.removing ? i18n.t("ui.removing") : i18n.t("ui.remove") }}
     </button>
   </article>
 </template>

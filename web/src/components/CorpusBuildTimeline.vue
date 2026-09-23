@@ -9,7 +9,7 @@ function when(value?:string){if(!value)return "—";try{return new Intl.DateTime
 </script>
 <template>
   <details v-if="events.length" class="timeline">
-    <summary>{{i18n.t('pdf_corpus.build_timeline','Build timeline')}} <span>{{events.length}}</span></summary>
+    <summary>{{i18n.t('pdf_corpus.build_timeline')}} <span>{{events.length}}</span></summary>
     <ol><li v-for="(event,index) in events" :key="`${event.at}-${index}`"><span class="dot" aria-hidden="true"></span><div><b>{{i18n.t(`pdf_corpus.stage.${event.stage}`,String(event.stage||event.status||'').replace(/_/g,' '))}}</b><small>{{when(event.at)}} · {{Math.round(Number(event.progress||0)*100)}}%</small></div></li></ol>
   </details>
 </template>

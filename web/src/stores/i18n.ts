@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
+import { englishDefault } from "../i18n/englishDefault";
 import * as runtime from "../runtime/runtimeBridge";
 
 let languageEventBridgeInstalled = false;
@@ -45,12 +46,21 @@ export const useI18nStore = defineStore("i18n", () => {
       || baseDictionary.value[key]
       || (commonKey ? baseDictionary.value[commonKey] : undefined)
       || fallback
+      || englishDefault(key)
       || key;
   }
 
-  function tf(key: string, fallback: string, values: Record<string, string | number> = {}) {
+  function tf(
+    key: string,
+    fallbackOrValues?: string | Record<string, string | number>,
+    values?: Record<string, string | number>,
+  ) {
+    let fallback: string | undefined;
+    let vars = values || {};
+    if (fallbackOrValues && typeof fallbackOrValues === "object") vars = fallbackOrValues;
+    else if (typeof fallbackOrValues === "string") fallback = fallbackOrValues;
     let text = String(t(key, fallback));
-    for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
+    for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
     return text;
   }
 

@@ -188,31 +188,31 @@ onBeforeUnmount(async () => {
   <section
     ref="shell"
     class="pdf-evidence-viewer"
-    :aria-label="i18n.t('pdf_corpus.source_pdf', 'Source PDF')"
+    :aria-label="i18n.t('pdf_corpus.source_pdf')"
   >
     <div
       v-if="zoomable"
       class="viewer-controls"
       role="group"
-      :aria-label="i18n.t('pdf_corpus.pdf_zoom_controls', 'PDF zoom controls')"
+      :aria-label="i18n.t('pdf_corpus.pdf_zoom_controls')"
     >
       <button type="button" class="btn small" :disabled="zoom <= 1" @click="setZoom(zoom - 0.25)">
-        {{ i18n.t("pdf_corpus.zoom_out", "Zoom out") }}
+        {{ i18n.t("pdf_corpus.zoom_out") }}
       </button>
       <span aria-live="polite">{{ Math.round(zoom * 100) }}%</span>
       <button type="button" class="btn small" :disabled="zoom >= 2.5" @click="setZoom(zoom + 0.25)">
-        {{ i18n.t("pdf_corpus.zoom_in", "Zoom in") }}
+        {{ i18n.t("pdf_corpus.zoom_in") }}
       </button>
       <button type="button" class="btn small" :disabled="zoom === 1" @click="setZoom(1)">
-        {{ i18n.t("pdf_corpus.zoom_reset", "Reset zoom") }}
+        {{ i18n.t("pdf_corpus.zoom_reset") }}
       </button>
     </div>
     <div v-if="loading" class="viewer-state" role="status" aria-live="polite">
-      {{ i18n.t("pdf_corpus.pdf_loading", "Rendering source page…") }}
+      {{ i18n.t("pdf_corpus.pdf_loading") }}
     </div>
     <div v-if="error" class="viewer-state error" role="alert">
       {{
-        i18n.tf("pdf_corpus.pdf_render_error", "Could not render the source page: {error}", {
+        i18n.tf("pdf_corpus.pdf_render_error", {
           error,
         })
       }}
@@ -220,7 +220,7 @@ onBeforeUnmount(async () => {
     <div class="page-stage" :class="{ zoomed: zoom > 1 }" :aria-busy="loading ? 'true' : 'false'">
       <canvas
         ref="canvas"
-        :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', 'PDF page {page}', { page })"
+        :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"
       ></canvas>
       <div class="block-overlay" aria-hidden="true">
         <span
@@ -234,11 +234,7 @@ onBeforeUnmount(async () => {
     </div>
     <p class="viewer-caption">
       {{
-        i18n.tf(
-          "pdf_corpus.pdf_highlight_help",
-          "Page {page}. Highlighted boxes show the source blocks bound to the selected evidence field.",
-          { page },
-        )
+        i18n.tf("pdf_corpus.pdf_highlight_help", { page })
       }}
     </p>
   </section>

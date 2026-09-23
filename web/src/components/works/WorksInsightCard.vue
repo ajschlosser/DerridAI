@@ -43,12 +43,9 @@ function percent(value: number) {
     <h3>{{ props.insight.heading }}</h3>
     <template v-if="props.insight.type === 'pie'">
       <p v-if="!total" class="work-insight-empty">
-        <b>{{ i18n.t("works.no_indexed_values", "No populated metadata values yet.") }}</b>
+        <b>{{ i18n.t("works.no_indexed_values") }}</b>
         <span>{{
-          i18n.t(
-            "works.no_indexed_values_help",
-            "This card counts non-empty values from loaded records. Enrich or edit records to fill this field.",
-          )
+          i18n.t("works.no_indexed_values_help")
         }}</span>
       </p>
       <div v-else class="work-insight-pie-layout">
@@ -81,12 +78,9 @@ function percent(value: number) {
     </template>
     <ol v-else>
       <li v-if="!props.insight.values.length" class="work-insight-empty">
-        <b>{{ i18n.t("works.no_indexed_values", "No populated metadata values yet.") }}</b>
+        <b>{{ i18n.t("works.no_indexed_values") }}</b>
         <span>{{
-          i18n.t(
-            "works.no_indexed_values_help",
-            "This card counts non-empty values from loaded records. Enrich or edit records to fill this field.",
-          )
+          i18n.t("works.no_indexed_values_help")
         }}</span>
       </li>
       <li v-for="item in props.insight.values" :key="item.key">
