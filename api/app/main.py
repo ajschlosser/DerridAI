@@ -43,6 +43,11 @@ from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
+from .metadata_adjudication_cache import (
+    clear as clear_adjudication_cache,
+    remember as remember_adjudication,
+    suggestions as adjudication_suggestions,
+)
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
@@ -72,8 +77,8 @@ from .models import (
     PdfCorpusEvidencePatch,
     PdfCorpusManifestPatch,
     PdfCorpusMetadataCacheClear,
-    PdfCorpusMetadataDecisionBatch,
     PdfCorpusMetadataDecision,
+    PdfCorpusMetadataDecisionBatch,
     PdfCorpusProviderSwitch,
     PdfCorpusPublishRequest,
     PdfCorpusRecordAccept,
@@ -125,11 +130,6 @@ from .source_media import (
     fetch_source_url,
     load_gutenberg_etext,
     search_project_gutenberg,
-)
-from .metadata_adjudication_cache import (
-    clear as clear_adjudication_cache,
-    remember as remember_adjudication,
-    suggestions as adjudication_suggestions,
 )
 from .system_store import normalize_locale_code, system_store
 
