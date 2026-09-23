@@ -45,8 +45,8 @@ from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
 from .metadata_adjudication_cache import (
     clear as clear_adjudication_cache,
-    remember as remember_adjudication,
     suggestions as adjudication_suggestions,
+    remember as remember_adjudication,
 )
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore

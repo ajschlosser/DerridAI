@@ -43,6 +43,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
+from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
@@ -53,7 +54,6 @@ from .metadata_schema import (
 )
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
-from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 
 
 class MetadataEnrichmentExecutionMixin:
