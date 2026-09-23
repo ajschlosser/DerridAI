@@ -571,15 +571,16 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
     prefix = re.sub(r"[^a-z0-9]+", "-", Path(asset["filename"]).stem.casefold()).strip("-")[:28] or "pdf"
     for index, group in enumerate(groups, 1):
         text = "\n\n".join(block["text"].strip() for block in group if block.get("text", "").strip())
-        pages = sorted({int(block["page"]) for block in group})
-        page_start, page_end = _scholarly_page_range(group)
+        audio = asset.get("media_kind") == "audio" or any(block.get("locator_kind") == "time" for block in group)
+        pages = [] if audio else sorted({int(block["page"]) for block in group})
+        page_start, page_end = (None, None) if audio else _scholarly_page_range(group)
         last_id = group[-1]["block_id"]
         boundary = boundary_map.get(last_id)
         layout_regions = [str(block.get("deterministic_region_type") or "") for block in group if block.get("deterministic_region_type")]
         layout_region = layout_regions[0] if layout_regions and len(set(layout_regions)) == 1 else None
         thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
         speakers = [str(block.get("speaker") or "").strip() for block in group if str(block.get("speaker") or "").strip()]
-        uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 else None
+        uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
         field_status: dict[str, Any] = {}
         if layout_region:
             field_status["region_type"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
@@ -594,10 +595,15 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
             if block.get("start") is not None:
                 span["start"] = block.get("start")
                 span["end"] = block.get("end")
+            if audio:
+                for key in ("page", "printed_page_label", "bbox"):
+                    span.pop(key, None)
+                span["locator_kind"] = "time"
             source_spans.append(span)
         records.append({
             "record_id": f"{prefix}-{index:05d}",
             "record_revision": 1,
+            **({"media_kind": "audio", "source_extracted_text": text} if audio else {}),
             "text": text,
             "text_length": len(text),
             "page_start": page_start,

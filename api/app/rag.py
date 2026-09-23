@@ -408,6 +408,16 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
         pages = str(page_start)
     else:
         pages = f"{page_start}-{page_end}"
+    timed_spans = [span for span in record.get("source_spans") or []
+                   if span.get("locator_kind") == "time"]
+    if timed_spans:
+        from .source_audio import _timestamp_label
+
+        pages = "; ".join(
+            _timestamp_label(float(span["start"]), float(span["end"]))
+            + (f" [{span['speaker']}]" if span.get("speaker") else "")
+            for span in timed_spans
+        )
     inline = f"{last} {year}{': ' + pages if pages else ''}".strip()
 
     parts = author.split()

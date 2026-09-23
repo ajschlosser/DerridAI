@@ -1973,7 +1973,11 @@ async def create_pdf_asset(
     if source_illegibility < 0 or source_illegibility > 100:
         raise HTTPException(status_code=422, detail="source_illegibility must be between 0 and 100")
     try:
+        from .source_safety import MAX_SOURCE_BYTES
+
         max_bytes = settings.pdf_max_upload_mb * 1024 * 1024
+        if not str(file.filename or "").lower().endswith(".pdf") and file.content_type != "application/pdf":
+            max_bytes = min(max_bytes, MAX_SOURCE_BYTES)
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -1984,7 +1988,7 @@ async def create_pdf_asset(
             if total > max_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"PDF exceeds the {settings.pdf_max_upload_mb} MB upload limit",
+                    detail=f"Source exceeds the {max_bytes // (1024 * 1024)} MiB upload limit",
                 )
             chunks.append(chunk)
         data = b"".join(chunks)

@@ -670,6 +670,9 @@ def extract_source_document(data: bytes, *, filename: str, ocr_mode: str = 'auto
 
 
 def _image_bytes_to_pdf(data: bytes, filename: str) -> bytes:
+    from .source_safety import validate_image
+
+    validate_image(data)
     filetype = "png" if data.startswith(b"\x89PNG") or str(filename).lower().endswith(".png") else "jpeg"
     try:
         image = fitz.open(stream=data, filetype=filetype)
@@ -717,14 +720,18 @@ class PdfCorpusRepository:
             media_type_for,
         )
         from .source_quality import page_source_quality_report
+        from .source_safety import check_size, executable_version, extraction_provenance
 
+        check_size(data, settings.pdf_max_upload_mb * 1024 * 1024)
         illegibility = clamp_illegibility(source_illegibility)
         kind = detect_media_kind(filename, data, content_type)
         digest = hashlib.sha256(data).hexdigest()
         # Default PDF uploads keep the historical content-addressed id.
         identity = digest
         if kind != "pdf" or ocr_mode != "auto" or illegibility:
-            identity = hashlib.sha256(f"{digest}|{kind}|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
+            identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
+        if catalog_metadata and catalog_metadata.get("gutenberg_id"):
+            identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
         asset_id = f"pdf-{identity[:24]}"
         suffix = ".pdf" if kind == "pdf" else content_suffix_for(kind, filename)
         meta_path = self.asset_meta_path(asset_id)
@@ -747,6 +754,10 @@ class PdfCorpusRepository:
                     blocks=blocks, catalog=catalog_metadata,
                 )
             checked_at = iso_now()
+            provenance = extraction_provenance(str(extracted.get("extractor") or kind))
+            if extracted.get("ocr_pages"):
+                provenance["tools"]["tesseract"] = executable_version("tesseract")
+                provenance["ocr_languages"] = ocr_languages
             meta = {
                 "asset_id": asset_id,
                 "sha256": digest,
@@ -757,6 +768,8 @@ class PdfCorpusRepository:
                 "source_illegibility": illegibility,
                 "source_quality": page_source_quality_report(blocks, extracted.get("pages") or []),
                 "deterministic_checked_at": checked_at,
+                "extraction_provenance": provenance,
+                "catalog_metadata": dict(catalog_metadata or {}),
                 **({} if not source_url else {"source_url": source_url}),
                 **extracted,
             }
@@ -815,6 +828,8 @@ class PdfCorpusRepository:
 
     def _with_start_inference(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Assets extracted before the inference existed get it the first time they are read, and keep it."""
+        if meta.get("media_kind", "pdf") not in {"pdf", "image"}:
+            return meta
         if "main_text_start_inference" in meta or not meta.get("asset_id"):
             return meta
         asset_id = str(meta["asset_id"])
@@ -877,6 +892,8 @@ class PdfCorpusRepository:
         """
         with self._lock:
             asset = self.get_asset(asset_id)
+            if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
+                raise ValueError("Page layout is unavailable for this source format.")
             normalized = {int(page): (str(label).strip() if label is not None else None) for page, label in labels.items()}
             valid_pages = {int(item.get("pdf_page") or 0) for item in asset.get("pages") or []}
             invalid = sorted(page for page in normalized if page not in valid_pages)
@@ -918,6 +935,8 @@ class PdfCorpusRepository:
         """
         with self._lock:
             asset = self.get_asset(asset_id)
+            if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
+                raise ValueError("Page layout is unavailable for this source format.")
             page_count = int(asset.get("page_count") or 0)
             layout = str(plan.get("page_layout") or "single")
             if layout not in {"single", "two_up"}:
@@ -1661,6 +1680,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 result["main_text_end_page"] = None
             if isinstance(bibliography_start, int) and bibliography_start > 1:
                 result["main_text_end_page"] = bibliography_start - 1
+        if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
+            result["main_text_start_page"] = None
+            result["main_text_end_page"] = None
+            result.pop("main_text_start_inference", None)
         result["pdf_metadata"] = metadata
         result["source_asset_id"] = asset["asset_id"]
         result["sampled_block_ids"] = [block["block_id"] for block in chosen]

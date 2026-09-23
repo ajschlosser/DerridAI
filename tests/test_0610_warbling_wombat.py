@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import sys
+import types
 import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -10,6 +11,11 @@ import fitz
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
+
+try:
+    import chromadb  # noqa: F401
+except ImportError:
+    sys.modules["chromadb"] = types.SimpleNamespace()
 
 from app import corpus_builder as cb
 from app import corpus_segmentation as segmentation
@@ -148,10 +154,9 @@ def test_high_confidence_ingest_metadata_overrides_blank_manifest_fields():
 
 
 def test_gutenberg_search_and_import(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(gutenberg, "_pygutenberg_client", lambda: object())
-    monkeypatch.setattr(gutenberg, "_search_with_client", lambda client, query: [{
+    monkeypatch.setattr(gutenberg, "_gutendex_search", lambda query, limit: gutenberg._coerce_gutenberg_results([{
         "id": 1342, "title": "Pride and Prejudice", "authors": [{"name": "Austen, Jane"}], "languages": ["en"],
-    }])
+    }]))
     hits = sm.search_project_gutenberg("austen")
     assert hits[0]["etext_id"] == 1342
     assert hits[0]["author"] == "Jane Austen"

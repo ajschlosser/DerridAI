@@ -1,16 +1,18 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Project Gutenberg search and plain-text loading via pygutenberg, then Gutendex."""
+"""Bounded Gutenberg catalog lookup and exact-edition plain-text acquisition."""
+
 from __future__ import annotations
 
-import importlib
+import hashlib
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 import httpx
 
-from .source_text import decode_plain_text
+from .source_safety import MAX_SOURCE_BYTES
 
 
 def normalize_gutenberg_hit(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -52,110 +54,25 @@ def human_author_name(name: str) -> str:
     return cleaned
 
 
-def _pygutenberg_client() -> Any | None:
-    for module_name in ("pygutenberg", "gutenberg"):
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError:
-            continue
-        factory = getattr(module, "GutenbergAPI", None) or getattr(module, "Gutenberg", None)
-        if callable(factory):
-            try:
-                return factory()
-            except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-                continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-        if any(callable(getattr(module, name, None)) for name in ("search", "search_books", "get_book_text")):
-            return module
-    return None
-
-
 def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]]:
-    """Search Project Gutenberg through pygutenberg, then the Gutendex API it wraps.
-
-    Installed packages expose `search`, `search_books`, or only a Gutendex base
-    URL. An empty or failed client result falls through to the public catalog
-    so a missing method does not hide texts that can still be loaded.
-    """
+    """Return catalog candidates without choosing or substituting an edition."""
     text = str(query or "").strip()
     if not text:
         return []
     limit = max(1, min(30, int(limit)))
-    client = _pygutenberg_client()
-    raw = _search_with_client(client, text) if client is not None else None
-    hits = _coerce_gutenberg_results(raw)
-    if not hits:
-        hits = _gutendex_search(text, limit)
-    return hits[:limit]
+    return _gutendex_search(text, limit)
 
 
 def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     etext_id = int(etext_id)
     if etext_id < 1:
         raise ValueError("Choose a Project Gutenberg text.")
-    client = _pygutenberg_client()
-    text = _text_with_client(client, etext_id) if client is not None else ""
-    meta = _metadata_with_client(client, etext_id) if client is not None else {}
-    catalog = _catalog_from_any(meta, etext_id)
-    if not str(text or "").strip() or not catalog.get("title"):
-        remote_text, remote_catalog = _gutendex_etext(etext_id)
-        text = text or remote_text
-        catalog = {**remote_catalog, **{key: value for key, value in catalog.items() if value}}
-    if not str(text or "").strip():
+    # Use one bounded catalog/download path for imports. Optional clients cannot
+    # reliably expose the selected URL, encoding, timeout, or response identity.
+    text, catalog = _gutendex_etext(etext_id)
+    if not text.strip():
         raise ValueError(f"Project Gutenberg text {etext_id} has no plain-text file.")
-    catalog.setdefault("gutenberg_id", etext_id)
-    catalog.setdefault("publisher", "Project Gutenberg")
-    catalog.setdefault("document_type", "book")
-    return str(text), catalog
-
-
-def _search_with_client(client: Any, query: str) -> Any:
-    for name in ("search", "search_books", "find", "query"):
-        fn = getattr(client, name, None)
-        if not callable(fn):
-            continue
-        try:
-            return fn(query)
-        except TypeError:
-            try:
-                return fn(search=query)
-            except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-                continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-        except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-            continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-    base = getattr(client, "instance_url", None) or getattr(client, "base_url", None)
-    if base:
-        return _gutendex_search(query, 12, base=str(base).rstrip("/"))
-    return None
-
-
-def _text_with_client(client: Any, etext_id: int) -> str:
-    for name in ("get_book_text", "get_text", "load_etext", "text"):
-        fn = getattr(client, name, None)
-        if not callable(fn):
-            continue
-        try:
-            value = fn(etext_id)
-        except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-            continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-        if isinstance(value, bytes):
-            return decode_plain_text(value)
-        if isinstance(value, str):
-            return value
-    return ""
-
-
-def _metadata_with_client(client: Any, etext_id: int) -> dict[str, Any]:
-    for name in ("get_book_metadata", "get_metadata", "metadata"):
-        fn = getattr(client, name, None)
-        if not callable(fn):
-            continue
-        try:
-            value = fn(etext_id)
-        except Exception:  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-            continue  # noqa: S112 - optional Gutenberg clients are probed; failure falls through
-        if isinstance(value, dict):
-            return value
-    return {}
+    return text, catalog
 
 
 def _coerce_gutenberg_results(raw: Any) -> list[dict[str, Any]]:
@@ -173,7 +90,15 @@ def _coerce_gutenberg_results(raw: Any) -> list[dict[str, Any]]:
 
 
 def _catalog_from_any(meta: dict[str, Any], etext_id: int) -> dict[str, Any]:
-    hit = normalize_gutenberg_hit({**meta, "id": meta.get("id") or etext_id}) or {"etext_id": etext_id, "title": "", "author": "", "language": ""}
+    selected_id = meta.get("id") or meta.get("etext_id") or meta.get("gutenberg_id")
+    if selected_id is None or int(selected_id) != etext_id:
+        raise ValueError("Gutenberg returned a different or unidentified edition.")
+    hit = normalize_gutenberg_hit({**meta, "id": selected_id}) or {
+        "etext_id": etext_id,
+        "title": "",
+        "author": "",
+        "language": "",
+    }
     return {
         "gutenberg_id": etext_id,
         "title": hit.get("title") or str(meta.get("title") or ""),
@@ -184,37 +109,87 @@ def _catalog_from_any(meta: dict[str, Any], etext_id: int) -> dict[str, Any]:
     }
 
 
-def _gutendex_search(query: str, limit: int, base: str = "https://gutendex.com") -> list[dict[str, Any]]:
-    response = httpx.get(f"{base}/books", params={"search": query}, timeout=30.0, follow_redirects=True)
+def _gutendex_search(
+    query: str, limit: int, base: str = "https://gutendex.com"
+) -> list[dict[str, Any]]:
+    response = httpx.get(
+        f"{base}/books", params={"search": query}, timeout=30.0, follow_redirects=True
+    )
     response.raise_for_status()
     payload = response.json()
     return _coerce_gutenberg_results(payload)[:limit]
 
 
 def _gutendex_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
-    response = httpx.get(f"https://gutendex.com/books/{int(etext_id)}", timeout=30.0, follow_redirects=True)
+    response = httpx.get(
+        f"https://gutendex.com/books/{int(etext_id)}",
+        timeout=30.0,
+        follow_redirects=False,
+    )
     response.raise_for_status()
     payload = response.json()
-    catalog = _catalog_from_any(payload if isinstance(payload, dict) else {}, etext_id)
-    formats = payload.get("formats") if isinstance(payload, dict) else {}
-    url = ""
-    if isinstance(formats, dict):
-        for key, value in formats.items():
-            if "text/plain" in str(key) and isinstance(value, str):
-                url = value
-                break
-    if not url:
-        url = f"https://www.gutenberg.org/files/{etext_id}/{etext_id}-0.txt"
-    text_response = httpx.get(url, timeout=60.0, follow_redirects=True)
-    text_response.raise_for_status()
-    return text_response.text, catalog
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid Gutenberg metadata.")
+    catalog = _catalog_from_any(payload, etext_id)
+    if not catalog.get("title"):
+        raise ValueError("Gutenberg edition metadata lacks a title.")
+    formats = payload.get("formats") or {}
+    choices = sorted(
+        (key, value)
+        for key, value in formats.items()
+        if str(key).split(";", 1)[0] == "text/plain" and isinstance(value, str)
+    )
+    if not choices:
+        raise ValueError("Selected Gutenberg edition has no plain-text file.")
+    mime, url = next(
+        (item for item in choices if "utf-8" in item[0].lower()), choices[0]
+    )
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in {
+        "www.gutenberg.org",
+        "gutenberg.org",
+    }:
+        raise ValueError("Unsupported Gutenberg source URL.")
+    if not re.search(rf"/(?:ebooks|files|epub)/{etext_id}(?:[/.]|$)", parsed.path):
+        raise ValueError("Gutenberg file URL does not identify the selected edition.")
+    # Do not follow a redirect or guess a filename: either could change the source.
+    chunks = []
+    size = 0
+    with httpx.stream("GET", url, timeout=60.0, follow_redirects=False) as download:
+        download.raise_for_status()
+        for chunk in download.iter_bytes():
+            size += len(chunk)
+            if size > MAX_SOURCE_BYTES:
+                raise ValueError("Gutenberg text exceeds ingestion size limit.")
+            chunks.append(chunk)
+    data = b"".join(chunks)
+    match = re.search(r"charset=([^; ]+)", mime, re.I)
+    encoding = match.group(1).strip('"') if match else "utf-8-sig"
+    try:
+        text = data.decode(encoding)
+    except (LookupError, UnicodeDecodeError) as exc:
+        raise ValueError("Gutenberg text encoding could not be verified.") from exc
+    catalog.update(
+        {
+            "source_url": url,
+            "catalog_url": str(response.url),
+            "edition": f"Project Gutenberg eBook #{etext_id}",
+            "source_sha256": hashlib.sha256(data).hexdigest(),
+            "encoding": encoding,
+            "retrieved_at": datetime.now(UTC).isoformat(),
+            "catalog_record": payload,
+        }
+    )
+    return text, catalog
 
 
 def fetch_source_url(url: str, *, max_bytes: int) -> tuple[bytes, str, str]:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("Source URL must be an http(s) address.")
-    with httpx.stream("GET", parsed.geturl(), timeout=45.0, follow_redirects=True) as response:
+    with httpx.stream(
+        "GET", parsed.geturl(), timeout=45.0, follow_redirects=True
+    ) as response:
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
         chunks: list[bytes] = []
@@ -227,5 +202,11 @@ def fetch_source_url(url: str, *, max_bytes: int) -> tuple[bytes, str, str]:
     name = unquote(Path(parsed.path).name) or "source"
     if "." not in name:
         kind = content_type.split(";", 1)[0].lower()
-        name += ".html" if "html" in kind else ".txt" if kind.startswith("text/") else ".bin"
+        name += (
+            ".html"
+            if "html" in kind
+            else ".txt"
+            if kind.startswith("text/")
+            else ".bin"
+        )
     return b"".join(chunks), name, content_type

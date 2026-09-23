@@ -9,9 +9,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from .source_safety import check_size, safe_xml, validate_docx, validate_rtf
+
 MANIFEST_FIELDS = (
     "title", "document_author", "speaker", "language", "publisher",
-    "publication_year", "document_type", "translator",
+    "publication_year", "document_type", "translator", "edition",
 )
 _LABEL_FIELDS = {
     "title": {"title", "titre"},
@@ -196,6 +198,7 @@ def infer_initial_metadata(
         values["speakers"] = speakers
 
     catalog = catalog or {}
+    put("edition", catalog.get("edition"), "gutenberg_catalog", 0.99)
     put("title", catalog.get("title"), "gutenberg_catalog", 0.99)
     put("document_author", catalog.get("document_author") or catalog.get("author"), "gutenberg_catalog", 0.99)
     put("language", catalog.get("language"), "gutenberg_catalog", 0.95)
@@ -301,6 +304,7 @@ def _looks_like_text(data: bytes) -> bool:
 
 
 def rtf_to_text(data: bytes) -> tuple[str, dict[str, str]]:
+    validate_rtf(data)
     raw = data.decode("latin-1", errors="replace")
     embedded: dict[str, str] = {}
     author = re.search(r"\{\\author\s+([^{}]*)\}", raw, re.I)
@@ -322,31 +326,30 @@ def _rtf_plain(value: str) -> str:
 
 
 def docx_to_text(data: bytes) -> tuple[str, dict[str, str]]:
+    check_size(data)
     try:
-        package = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile as exc:
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            validate_docx(package)
+            if "word/document.xml" not in package.namelist():
+                raise ValueError("The Word document has no document body.")
+            embedded = {}
+            if "docProps/core.xml" in package.namelist():
+                core = safe_xml(package.read("docProps/core.xml"))
+                mapping = {"title": "title", "creator": "author", "subject": "subject", "language": "language"}
+                for node in core.iter():
+                    key = mapping.get(node.tag.rsplit("}", 1)[-1])
+                    if key and node.text:
+                        embedded[key] = node.text
+            document = safe_xml(package.read("word/document.xml"))
+            ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+            paragraphs = []
+            for paragraph in document.iter(ns + "p"):
+                text = "".join(node.text or "" for node in paragraph.iter(ns + "t"))
+                if text.strip():
+                    paragraphs.append(text.strip())
+            return "\n\n".join(paragraphs), embedded
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as exc:
         raise ValueError("The Word document could not be opened.") from exc
-    embedded: dict[str, str] = {}
-    if "docProps/core.xml" in package.namelist():
-        core = package.read("docProps/core.xml").decode("utf-8", errors="replace")
-        embedded["title"] = _office_text(core, "title")
-        embedded["author"] = _office_text(core, "creator")
-        embedded["subject"] = _office_text(core, "subject")
-        embedded["language"] = _office_text(core, "language")
-    if "word/document.xml" not in package.namelist():
-        raise ValueError("The Word document has no document body.")
-    document = package.read("word/document.xml").decode("utf-8", errors="replace")
-    paragraphs = [re.sub(r"\s+", " ", "".join(parts)).strip() for parts in re.findall(r"<w:p\b[^>]*>(.*?)</w:p>", document, re.S)]
-    paragraphs = [re.sub(r"<[^>]+>", "", paragraph).strip() for paragraph in paragraphs]
-    paragraphs = [paragraph for paragraph in paragraphs if paragraph]
-    return "\n\n".join(paragraphs), {key: value for key, value in embedded.items() if value}
-
-
-def _office_text(xml: str, local: str) -> str:
-    match = re.search(rf"<(?:[\w-]+:)?{re.escape(local)}\b[^>]*>(.*?)</(?:[\w-]+:)?{re.escape(local)}>", xml, re.S)
-    if not match:
-        return ""
-    return re.sub(r"<[^>]+>", "", match.group(1)).strip()
 
 
 def ole_doc_to_text(data: bytes) -> tuple[str, dict[str, str]]:
