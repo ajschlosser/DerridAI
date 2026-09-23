@@ -15,6 +15,7 @@ import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelH
 import { formatDuration } from "../domain/operationsPanel";
 import { cloneAuditValue, compareValues, computeRecordFingerprint, sameValue, sortRows } from "../domain/recordValues";
 import { compressUrlState, decompressUrlState } from "../domain/urlState";
+import { formatTimestamp, localRecordKey, toggleSort } from "../domain/recordTableHelpers";
 import { countOccurrences, flattenValueList, parseJsonl, valueMatches } from "../domain/recordQuery";
 import { DB_NAME, createWorkspaceDb, deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
 import { finiteResearchNumber, normalizedResearchConfig, researchEvidenceForUi, researchJobForUi, researchProfileForUi, sanitizeResearchGeneration } from "../domain/researchPayloads";
@@ -1177,11 +1178,6 @@ function ragEvidenceRecordPayload(record){
 }
 
 
-function formatTimestamp(value){
-  if(!value)return "";
-  const date=new Date(value);
-  return Number.isNaN(date.getTime())?String(value):date.toLocaleString();
-}
 
 
 function isResponseCacheStore(store){
@@ -1215,7 +1211,6 @@ function pages(r){
   return r.page_end!=null && r.page_end!==r.page_start ? `${display(r.page_start)}–${display(r.page_end)}` : display(r.page_start);
 }
 
-function toggleSort(sort,key){if(sort.key===key)sort.dir*=-1;else{sort.key=key;sort.dir=1}}
 
 function pageInfo(total,page){
   const pages=Math.max(1,Math.ceil(total/state.pageSize));
@@ -1229,7 +1224,6 @@ function recordFingerprint(record){
   if(record&&typeof record==="object")recordFingerprintCache.set(record,value);
   return value;
 }
-function localRecordKey(file,index){return `${file.id}::${index}`}
 function storeReceipt(store,file,index){return state.upsertState?.[store]?.[localRecordKey(file,index)]||null}
 function candidateChromaIds(file,index,record){
   const ids=[];
