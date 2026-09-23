@@ -2556,30 +2556,31 @@ async function sliceRecord(
   } finally {
     busy.value = "";
   }
-  async function requeueCurrentRecord() {
-    if (!currentBuild.value || !selectedRecord.value) return;
-    busy.value = "record";
-    try {
-      await pdfCorpusApi.requeueMetadata(
-        currentBuild.value.build_id,
-        selectedRecord.value.record_id,
-        {
-          provider_profile_id: llmActionProviderId.value || selectedProviderId.value,
-          model: llmActionModel.value || undefined,
-        },
-      );
-      await refreshBuild();
-      setMessage(
-        i18n.t(
-          "pdf_corpus.requeue_requested",
-          "Record queued at the front of the current enrichment run; its review feedback will inform later records.",
-        ),
-      );
-    } catch (exc) {
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-    } finally {
-      busy.value = "";
-    }
+}
+
+async function requeueCurrentRecord() {
+  if (!currentBuild.value || !selectedRecord.value) return;
+  busy.value = "record";
+  try {
+    await pdfCorpusApi.requeueMetadata(
+      currentBuild.value.build_id,
+      selectedRecord.value.record_id,
+      {
+        provider_profile_id: llmActionProviderId.value || selectedProviderId.value,
+        model: llmActionModel.value || undefined,
+      },
+    );
+    await refreshBuild();
+    setMessage(
+      i18n.t(
+        "pdf_corpus.requeue_requested",
+        "Record queued at the front of the current enrichment run; its review feedback will inform later records.",
+      ),
+    );
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
   }
 }
 async function adjudicateBoundary(
