@@ -262,7 +262,17 @@ watch(
             {{ i18n.t("pdf_corpus.characters", "chars") }}</span
           ><span class="state-pill" :data-state="state">{{
             i18n.t(`pdf_corpus.disposition.${state}`, state)
-          }}</span>
+          }}</span
+          ><span
+            v-if="record.text_noise?.score != null"
+            class="state-pill"
+            :data-state="record.text_noise.unusable ? 'rejected' : 'pending'"
+            >{{
+              i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+                score: Math.round(Number(record.text_noise.score)),
+              })
+            }}</span
+          >
         </div>
       </div>
       <button ref="closeButton" class="btn" type="button" @click="emit('close')">

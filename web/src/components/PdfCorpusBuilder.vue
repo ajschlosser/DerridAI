@@ -55,6 +55,7 @@ import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
 import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
+import CorpusTextNoiseSettings from "./CorpusTextNoiseSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
 import { metadataSchemasApi, type SchemaSummary } from "../api/metadataSchemas";
 import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
@@ -298,6 +299,8 @@ const enrichmentMode = ref<"fast" | "deep">("fast");
 const semanticIndexing = ref(true);
 const autoCleanText = ref(true);
 const llmTouchupDuringEnrichment = ref(false);
+const noiseUnusableThreshold = ref(45);
+const llmAssessTextNoise = ref(false);
 const metadataRerunFamily = ref("all");
 const metadataFamilyOptions = computed(
   () =>
@@ -375,6 +378,10 @@ function restoreBuilderDraft() {
     if (typeof draft.autoCleanText === "boolean") autoCleanText.value = draft.autoCleanText;
     if (typeof draft.llmTouchupDuringEnrichment === "boolean")
       llmTouchupDuringEnrichment.value = draft.llmTouchupDuringEnrichment;
+    if (Number.isFinite(Number(draft.noiseUnusableThreshold)))
+      noiseUnusableThreshold.value = Math.max(0, Math.min(100, Number(draft.noiseUnusableThreshold)));
+    if (typeof draft.llmAssessTextNoise === "boolean")
+      llmAssessTextNoise.value = draft.llmAssessTextNoise;
   } catch {
     /* ignore stale browser drafts */
   }
@@ -398,6 +405,8 @@ function persistBuilderDraft() {
         semanticIndexing: semanticIndexing.value,
         autoCleanText: autoCleanText.value,
         llmTouchupDuringEnrichment: llmTouchupDuringEnrichment.value,
+        noiseUnusableThreshold: noiseUnusableThreshold.value,
+        llmAssessTextNoise: llmAssessTextNoise.value,
       }),
     );
   } catch {
@@ -953,6 +962,8 @@ const providerPayload = computed<Record<string, unknown>>(() => {
     payload.semantic_indexing = semanticIndexing.value;
     payload.auto_clean_text = autoCleanText.value;
     payload.llm_touchup_during_enrichment = llmTouchupDuringEnrichment.value;
+    payload.noise_unusable_threshold = noiseUnusableThreshold.value;
+    payload.llm_assess_text_noise = llmAssessTextNoise.value;
     payload.text_cleanup_rules = [
       "page_numbers",
       "repeated_short_lines",
@@ -993,6 +1004,8 @@ const providerPayload = computed<Record<string, unknown>>(() => {
     semantic_indexing: semanticIndexing.value,
     auto_clean_text: autoCleanText.value,
     llm_touchup_during_enrichment: llmTouchupDuringEnrichment.value,
+    noise_unusable_threshold: noiseUnusableThreshold.value,
+    llm_assess_text_noise: llmAssessTextNoise.value,
     text_cleanup_rules: [
       "page_numbers",
       "repeated_short_lines",
@@ -3314,6 +3327,8 @@ watch(
     semanticIndexing,
     autoCleanText,
     llmTouchupDuringEnrichment,
+    noiseUnusableThreshold,
+    llmAssessTextNoise,
   ],
   persistBuilderDraft,
   { deep: true },
@@ -3755,6 +3770,13 @@ onBeforeUnmount(() => {
                 }}</small></span
               ></label
             >
+            <CorpusTextNoiseSettings
+              :threshold="noiseUnusableThreshold"
+              :llm-assist="llmAssessTextNoise"
+              :disabled="busy !== ''"
+              @update:threshold="noiseUnusableThreshold = $event"
+              @update:llm-assist="llmAssessTextNoise = $event"
+            />
           </section>
           <details
             v-if="!selectedProviderId"

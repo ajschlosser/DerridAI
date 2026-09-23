@@ -97,6 +97,17 @@ from .corpus_metadata import (
 from .corpus_pipeline import BuildScope
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .corpus_review_mutations import requeue_record_metadata
+from .text_noise import (
+    DEFAULT_NOISE_THRESHOLD,
+    TEXT_NOISE_LLM_PROMPT,
+    TEXT_NOISE_PROMPT_VERSION,
+    TextNoiseLlmResult,
+    annotate_records as annotate_text_noise,
+    fuse_record_noise,
+    median_score as median_text_noise,
+    threshold_from_records as record_noise_threshold,
+    should_ask_llm,
+)
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     HUMAN_OWNED_STATUSES,
@@ -5020,6 +5031,144 @@ CURRENT REVIEWED RECORD TEXT:
             }]
         return []
 
+    def _llm_text_noise_pass(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        request: dict[str, Any],
+        threshold: float,
+    ) -> None:
+        """Optional second reader: may only raise the deterministic noise score."""
+        for record in records:
+            current = record.get("text_noise") if isinstance(record.get("text_noise"), dict) else {}
+            try:
+                det = float(current.get("deterministic_score") or current.get("score") or 0)
+            except (TypeError, ValueError):
+                det = 0.0
+            if not should_ask_llm(det):
+                continue
+            excerpt = str(record.get("text") or "")[:500]
+            try:
+                parsed = self._chat_json(
+                    request,
+                    f"{TEXT_NOISE_LLM_PROMPT}\n\nTEXT:\n{excerpt}",
+                    response_model=TextNoiseLlmResult,
+                    max_tokens=256,
+                    schema_name="derridai_text_noise",
+                    build_id=build_id,
+                )
+            except Exception as exc:  # noqa: BLE001 - a noise pass must not abort the build
+                self._append_warning(
+                    build_id,
+                    f"{record.get('record_id')}: text-noise LLM pass failed ({exc}); deterministic score kept.",
+                )
+                continue
+            record["text_noise"] = fuse_record_noise(
+                current,
+                None,
+                llm_score=parsed.get("noise"),
+                llm_confidence=parsed.get("confidence"),
+                threshold=threshold,
+            )
+            noise = record["text_noise"]
+            noise["prompt_version"] = TEXT_NOISE_PROMPT_VERSION
+            if parsed.get("reason"):
+                noise["llm_reason"] = str(parsed.get("reason") or "")[:500]
+
+    def _apply_source_illegibility(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        request: dict[str, Any],
+        source_quality: dict[str, Any],
+        pages: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        """Score illegibility, flag source problems, and compute the 10% trash ratio.
+
+        Runs after record construction and deterministic cleanup, before metadata
+        enrichment, so garbled OCR is not sent to discourse/quotation/indexing.
+        """
+        try:
+            threshold = float(request.get("noise_unusable_threshold"))
+        except (TypeError, ValueError):
+            threshold = float(DEFAULT_NOISE_THRESHOLD)
+        threshold = max(0.0, min(100.0, threshold))
+        annotate_text_noise(records, pages=pages, threshold=threshold)
+        if request.get("llm_assess_text_noise"):
+            self._llm_text_noise_pass(build_id, records, request, threshold)
+        blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
+        for record in records:
+            record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
+            affected = sorted(record_pages & blocking_pages)
+            issues = list(record.get("source_quality_issues") or [])
+            if affected:
+                page_findings = [item for item in (source_quality.get("issues") or []) if int(item.get("page") or 0) in affected]
+                issues.append({
+                    "code": "source_quality_blocking", "severity": "blocking", "pages": affected,
+                    "message": "The PDF text layer contains replacement or control characters on one or more pages.",
+                    "page_findings": page_findings,
+                })
+            glyph_issues = self._record_extraction_quality_issues(record)
+            for item in glyph_issues:
+                item.setdefault("severity", "blocking")
+            issues.extend(glyph_issues)
+            noise = record.get("text_noise") if isinstance(record.get("text_noise"), dict) else {}
+            if glyph_issues:
+                noise["score"] = max(float(noise.get("score") or 0), 88.0)
+                noise["unusable"] = float(noise["score"]) >= threshold
+                reasons = list(noise.get("reasons") or [])
+                if "fragmented_glyph_layout" not in reasons:
+                    reasons.append("fragmented_glyph_layout")
+                noise["reasons"] = reasons
+                record["text_noise"] = noise
+            pages_list = sorted(record_pages)
+            if noise.get("unusable"):
+                reasons = list(noise.get("reasons") or [])
+                if "low_raster_quality" in reasons:
+                    issues.append({
+                        "code": "low_raster_quality",
+                        "severity": "blocking",
+                        "pages": pages_list,
+                        "message": "Embedded page image resolution is too low to trust as a scholarly scan.",
+                    })
+                if "high_text_noise" in reasons or float(noise.get("score") or 0) >= threshold:
+                    issues.append({
+                        "code": "illegible_text",
+                        "severity": "blocking",
+                        "pages": pages_list,
+                        "message": "Extracted text does not look like words in a writing system.",
+                        "noise": noise.get("score"),
+                    })
+            # Deduplicate by code so a re-run does not stack identical findings.
+            seen: set[str] = set()
+            unique: list[dict[str, Any]] = []
+            for item in issues:
+                code = str(item.get("code") or "")
+                if code in seen:
+                    continue
+                seen.add(code)
+                unique.append(item)
+            if unique:
+                record["source_quality_issues"] = unique
+                record["needs_review"] = True
+                record["review_reason"] = (
+                    "Source extraction issue: inspect the affected source, correct the reviewed "
+                    "record text when appropriate, or rebuild/re-extract the source before acceptance."
+                )
+        self.repo.save_records(build_id, records)
+        trash_quality = self._trash_quality_report(records, source_quality)
+        current_build = self.repo.get_build(build_id)
+        current_build["trash_quality"] = trash_quality
+        self.repo.save_build(current_build)
+        if trash_quality["exceeds_threshold"]:
+            self._append_warning(
+                build_id,
+                f"{trash_quality['trash_record_count']} of {trash_quality['record_count']} records "
+                f"({round(float(trash_quality['trash_ratio']) * 100, 1)}%) appear unusable. "
+                "Review the source quality before continuing enrichment.",
+            )
+        return trash_quality
+
     @staticmethod
     def _source_quality_report(blocks: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Detect extraction problems before asking an LLM to interpret damaged text.
@@ -5119,6 +5268,14 @@ CURRENT REVIEWED RECORD TEXT:
                 reasons.append("low_alphabetic_density")
             if lines and micro / max(1, len(lines)) >= 0.65:
                 reasons.append("micro_line_fragmentation")
+            noise = record.get("text_noise") if isinstance(record.get("text_noise"), dict) else {}
+            try:
+                noise_score = float(noise.get("score"))
+            except (TypeError, ValueError):
+                noise_score = None
+            threshold = float(noise.get("threshold") if noise.get("threshold") is not None else DEFAULT_NOISE_THRESHOLD)
+            if noise_score is not None and noise_score >= threshold:
+                reasons.append("high_text_noise")
             if reasons:
                 trash.append({
                     "record_id": str(record.get("record_id") or ""),
@@ -5142,6 +5299,8 @@ CURRENT REVIEWED RECORD TEXT:
             "exceeds_threshold": bool((total and ratio > 0.10) or image_only_page_ratio > 0.10),
             "deterministic": True,
             "records": trash[:500],
+            "median_noise": median_text_noise(records),
+            "noise_unusable_threshold": record_noise_threshold(records),
         }
 
     @staticmethod
@@ -5468,38 +5627,9 @@ CURRENT REVIEWED RECORD TEXT:
             # Persist deterministic records before any metadata call. A provider
             # failure can therefore never discard successful segmentation work.
             self.repo.save_records(build_id, records)
-        blocking_pages = set(int(value) for value in (source_quality.get("blocking_pages") or []))
-        for record in records:
-            record_pages = set(int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int))
-            affected = sorted(record_pages & blocking_pages)
-            issues = []
-            if affected:
-                page_findings = [item for item in (source_quality.get("issues") or []) if int(item.get("page") or 0) in affected]
-                issues.append({
-                    "code": "source_quality_blocking", "severity": "blocking", "pages": affected,
-                    "message": "The PDF text layer contains replacement or control characters on one or more pages.",
-                    "page_findings": page_findings,
-                })
-            glyph_issues = self._record_extraction_quality_issues(record)
-            for item in glyph_issues:
-                item.setdefault("severity", "blocking")
-            issues.extend(glyph_issues)
-            if issues:
-                record["source_quality_issues"] = issues
-                record["needs_review"] = True
-                record["review_reason"] = "Source extraction issue: inspect the affected source, correct the reviewed record text when appropriate, or rebuild/re-extract the source before acceptance."
-        self.repo.save_records(build_id, records)
-        trash_quality = self._trash_quality_report(records, scope.source_quality)
-        current_build = self.repo.get_build(build_id)
-        current_build["trash_quality"] = trash_quality
-        self.repo.save_build(current_build)
-        if trash_quality["exceeds_threshold"]:
-            self._append_warning(
-                build_id,
-                f"{trash_quality['trash_record_count']} of {trash_quality['record_count']} records "
-                f"({round(float(trash_quality['trash_ratio']) * 100, 1)}%) appear unusable. "
-                "Review the source quality before continuing enrichment.",
-            )
+        trash_quality = self._apply_source_illegibility(
+            build_id, records, request, source_quality, asset.get("pages") or [],
+        )
         self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")), trash_quality=trash_quality)
 
         return records

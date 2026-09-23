@@ -519,6 +519,8 @@ class PdfCorpusBuildCreate(BaseModel):
     autonomous: PdfCorpusAutonomy | None = None
     auto_clean_text: bool = True
     llm_touchup_during_enrichment: bool = False
+    noise_unusable_threshold: float = Field(default=45, ge=0, le=100)
+    llm_assess_text_noise: bool = False
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False

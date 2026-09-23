@@ -91,6 +91,7 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "text_revision_history",
         "source_quality_issues",
         "resolved_source_quality_issues",
+        "text_noise",
         "inline_citation",
         "full_citation",
         "text_length",
