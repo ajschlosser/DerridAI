@@ -37,6 +37,8 @@ const props = defineProps<{
   providerProfiles?: ProviderProfile[];
   llmProviderProfileId?: string;
   llmModelOverride?: string;
+  justProcessedRecordId?: string;
+  nextRecordId?: string;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -62,6 +64,7 @@ const emit = defineEmits<{
   metadataDirty: [dirty: boolean];
   previewJsonl: [];
   llmTouchup: [text: string];
+  navigateRecord: [recordId: string];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLElement | null>(null);
@@ -340,6 +343,46 @@ watch(
             </button>
           </div>
         </div>
+        <p
+          v-if="record.text_noise?.score != null"
+          class="record-noise-summary"
+          role="status"
+        >
+          {{
+            i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+              score: Math.round(Number(record.text_noise.score)),
+            })
+          }}
+          <span v-if="record.text_noise.unusable">
+            ·
+            {{
+              i18n.t(
+                "pdf_corpus.text_noise.unusable",
+                "This record is above the unusable-noise threshold.",
+              )
+            }}
+          </span>
+        </p>
+        <nav class="queue-context" aria-label="Review queue context">
+          <span v-if="justProcessedRecordId">
+            {{ i18n.t("pdf_corpus.just_processed", "Just processed") }}
+            <button type="button" class="text-link" @click="emit('navigateRecord', justProcessedRecordId)">
+              {{ justProcessedRecordId }}
+            </button>
+          </span>
+          <span>
+            {{ i18n.t("pdf_corpus.current_record", "Current") }}
+            <button type="button" class="text-link" @click="emit('navigateRecord', record.record_id)">
+              {{ record.record_id }}
+            </button>
+          </span>
+          <span v-if="nextRecordId">
+            {{ i18n.t("pdf_corpus.next_record_in_queue", "Next") }}
+            <button type="button" class="text-link" @click="emit('navigateRecord', nextRecordId)">
+              {{ nextRecordId }}
+            </button>
+          </span>
+        </nav>
         <div
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
           class="touchup-proposal"
@@ -834,6 +877,33 @@ watch(
 .focus-record-heading h3 {
   margin: 3px 0 0;
   font-size: 1rem;
+}
+.record-noise-summary {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.queue-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.queue-context > span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link, var(--accent));
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
 }
 .heading-actions {
   display: flex;

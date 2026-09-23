@@ -1219,7 +1219,7 @@ class PdfCorpusRepository:
             }
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
-        queue_records: list[dict[str, Any]] = []
+        count_records: list[dict[str, Any]] = []
         metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
         total = 0
         topology_count = 0
@@ -1228,7 +1228,6 @@ class PdfCorpusRepository:
                 if not line.strip():
                     continue
                 record = _migrate_status_vocabulary(json.loads(line))
-                queue_records.append(record)
                 for field, value in record.items():
                     if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                         continue
@@ -1253,6 +1252,7 @@ class PdfCorpusRepository:
                     continue
                 if q and q not in line.casefold():
                     continue
+                count_records.append(record)
                 if total >= offset and len(items) < limit:
                     record["topology_index"] = topology_index
                     PdfCorpusBuildManager._decorate_review_state(record)
@@ -1266,7 +1266,10 @@ class PdfCorpusRepository:
             "total": total,
             "offset": offset,
             "limit": limit,
-            "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records),
+            # Queue tabs are global across the active text search, not limited
+            # to the currently selected queue; otherwise switching tabs makes
+            # the other tab counts appear to disappear.
+            "queue_counts": PdfCorpusBuildManager._queue_counts(count_records),
             "metadata_values": {
                 field: sorted(values, key=str.casefold)
                 for field, values in metadata_values.items()
