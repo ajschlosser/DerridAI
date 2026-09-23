@@ -2821,13 +2821,14 @@ async function requeueCurrentRecord() {
       providerProfiles.value[0]?.id ||
       "";
     if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile", "No available LLM provider profile is configured."));
+    const actionPayload = directProfilePayloadWithModel(profileId, llmActionModel.value) || {
+      provider_profile_id: profileId,
+      model: llmActionModel.value || undefined,
+    };
     await pdfCorpusApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
-      {
-        provider_profile_id: profileId,
-        model: llmActionModel.value || undefined,
-      },
+      actionPayload,
     );
     await refreshBuild();
     setMessage(
