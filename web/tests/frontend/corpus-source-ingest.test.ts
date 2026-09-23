@@ -3,19 +3,28 @@ import { describe, expect, it } from "vitest";
 import CorpusSourceIngest from "../../src/components/CorpusSourceIngest.vue";
 
 describe("Corpus source ingest", () => {
-  it("places the illegibility slider before choose source PDF and keeps both keyboard-labeled", () => {
+  it("places the OCR strategy radios before choose source PDF", () => {
     const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
-    const slider = wrapper.get("#source-illegibility");
+    const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
     const choose = wrapper.get("button.source-choose");
-    expect(slider.attributes("aria-valuetext")).toContain("0");
-    expect(slider.attributes("aria-describedby")).toBe("source-illegibility-help");
+    expect(radios).toHaveLength(3);
+    expect(radios[0].element.checked).toBe(true);
+    expect(wrapper.text()).toContain("Use embedded text when available");
     expect(choose.text()).toContain("Choose source file");
     const following = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(slider.element.compareDocumentPosition(choose.element) & following).toBe(following);
+    expect(radios[0].element.compareDocumentPosition(choose.element) & following).toBe(following);
     expect(wrapper.get('input[type="file"]').attributes("tabindex")).toBe("-1");
   });
 
-  it("emits a URL load and a Gutenberg selection without leaving the slider behind the file control", async () => {
+  it("emits the selected OCR strategy as a numeric compatibility value", async () => {
+    const wrapper = mount(CorpusSourceIngest);
+    await wrapper.find('input[value="difficult"]').setValue(true);
+    expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([50]);
+    await wrapper.find('input[value="always"]').setValue(true);
+    expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([100]);
+  });
+
+  it("emits a URL load and a Gutenberg selection", async () => {
     const wrapper = mount(CorpusSourceIngest, {
       props: {
         sourceUrl: "",
@@ -43,12 +52,12 @@ describe("Corpus source ingest", () => {
 it("offers audio controls without OCR or Explorer actions", async () => {
   const wrapper = mount(CorpusSourceIngest);
   await wrapper.get("#source-format").setValue("audio");
-  expect(wrapper.find("#source-illegibility").exists()).toBe(false);
+  expect(wrapper.find('input[name="source-ocr-strategy"]').exists()).toBe(false);
   expect(wrapper.text()).not.toContain("Use current Explorer PDF");
   expect(wrapper.get('input[type="file"]').attributes("accept")).toContain(".wav");
   expect(wrapper.text()).toContain("timed speaker spans");
   await wrapper.get("#source-format").setValue("image");
-  expect(wrapper.find("#source-illegibility").exists()).toBe(true);
+  expect(wrapper.find('input[name="source-ocr-strategy"]').exists()).toBe(true);
 });
 
 it("distinguishes Gutenberg editions in selection controls", () => {

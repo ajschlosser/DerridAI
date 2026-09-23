@@ -435,6 +435,11 @@ playback with timed speaker spans. Audio citations use time ranges and available
 speaker labels, never synthetic page numbers. Correcting a transcript creates a
 record revision and retains the original transcription.
 
+For PDF and image sources, choose an OCR strategy before selecting the source:
+use embedded text when available, prefer OCR for difficult scans, or always OCR.
+The difficult-scan choice uses the existing intermediate OCR threshold; always
+OCR forces OCR for every page.
+
 Ingestion rejects malformed or unsupported files and embedded Word/RTF active
 content; it never runs document macros, fields, or linked objects. Non-PDF files
 are limited to 32 MiB (RTF to 8 MiB), Word archives to 2,048 entries and 64 MiB

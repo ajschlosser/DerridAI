@@ -63,13 +63,11 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 
-const illegibilityText = computed(() =>
-  i18n.tf(
-    "pdf_corpus.source_illegibility_value",
-    "{value} out of 100. Higher values OCR more of the source.",
-    { value: props.illegibility },
-  ),
-);
+const ocrStrategy = computed(() => {
+  if (props.illegibility >= 99.9) return "always";
+  if (props.illegibility > 0) return "difficult";
+  return "embedded";
+});
 
 function mediaKind(kind?: string) {
   if (!kind) return "";
@@ -92,9 +90,8 @@ function formatDate(value?: string | null) {
   }
 }
 
-function onIllegibility(event: Event) {
-  const next = Number((event.target as HTMLInputElement).value);
-  emit("update:illegibility", Number.isFinite(next) ? next : 0);
+function onOcrStrategy(strategy: string) {
+  emit("update:illegibility", strategy === "always" ? 100 : strategy === "difficult" ? 50 : 0);
 }
 
 function onFile(event: Event) {
@@ -157,30 +154,45 @@ function importLabel(hit: GutenbergHit) {
             )
           }}
         </p>
-        <label v-if="hasPages(chosenKind)" class="illegibility-field" for="source-illegibility">
-          <span
-            >{{ i18n.t("pdf_corpus.source_illegibility", "Source illegibility") }}
-            <b>{{ illegibility }}</b></span
-          >
-          <input
-            id="source-illegibility"
-            :value="illegibility"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            :disabled="disabled"
-            :aria-valuetext="illegibilityText"
-            aria-describedby="source-illegibility-help"
-            @input="onIllegibility"
-          />
+        <fieldset v-if="hasPages(chosenKind)" class="illegibility-field" :disabled="disabled">
+          <legend>{{ i18n.t("pdf_corpus.source_illegibility", "OCR strategy") }}</legend>
           <small id="source-illegibility-help">{{
             i18n.t(
               "pdf_corpus.source_illegibility_help",
-              "Set this before choosing a file. Higher values OCR more aggressively when the source is hard to read.",
+              "Choose this before selecting a source. The setting controls how aggressively pages are sent through OCR.",
             )
           }}</small>
-        </label>
+          <label>
+            <input
+              name="source-ocr-strategy"
+              type="radio"
+              value="embedded"
+              :checked="ocrStrategy === 'embedded'"
+              @change="onOcrStrategy('embedded')"
+            />
+            {{ i18n.t("pdf_corpus.source_ocr_embedded", "Use embedded text when available") }}
+          </label>
+          <label>
+            <input
+              name="source-ocr-strategy"
+              type="radio"
+              value="difficult"
+              :checked="ocrStrategy === 'difficult'"
+              @change="onOcrStrategy('difficult')"
+            />
+            {{ i18n.t("pdf_corpus.source_ocr_difficult", "Prefer OCR for difficult scans") }}
+          </label>
+          <label>
+            <input
+              name="source-ocr-strategy"
+              type="radio"
+              value="always"
+              :checked="ocrStrategy === 'always'"
+              @change="onOcrStrategy('always')"
+            />
+            {{ i18n.t("pdf_corpus.source_ocr_always", "Always OCR") }}
+          </label>
+        </fieldset>
         <div class="source-actions">
           <button
             v-if="chosenKind === 'pdf'"
@@ -341,9 +353,21 @@ function importLabel(hit: GutenbergHit) {
   color: var(--muted);
   line-height: 1.4;
 }
-.illegibility-field input[type="range"] {
-  inline-size: 100%;
-  min-block-size: 24px;
+.illegibility-field {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+}
+.illegibility-field label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.illegibility-field input[type="radio"] {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
 }
 .source-actions,
 .alternate-sources {
