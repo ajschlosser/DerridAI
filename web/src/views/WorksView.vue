@@ -7,6 +7,7 @@ import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -27,8 +28,15 @@ const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
 );
 const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revealed.value));
-const showSkeleton = computed(() => Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0));
-const showAddCard = computed(() => Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)));
+const sourceFileCount = computed(
+  () => new Set((snapshot.value?.works || []).flatMap((work) => work.files || [])).size,
+);
+const showSkeleton = computed(() =>
+  Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
+);
+const showAddCard = computed(() =>
+  Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
+);
 const loadingTitle = computed(() => i18n.t("works.loading", "Loading works"));
 const loadingDetail = computed(() =>
   auth.isResearcher
@@ -106,14 +114,20 @@ watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
   reload();
 });
-watch(() => shell.snapshot.activeStore, () => {
-  if (loading.value || !snapshot.value) return;
-  reload();
-});
-watch(() => i18n.locale, () => {
-  if (loading.value || !snapshot.value) return;
-  reload();
-});
+watch(
+  () => shell.snapshot.activeStore,
+  () => {
+    if (loading.value || !snapshot.value) return;
+    reload();
+  },
+);
+watch(
+  () => i18n.locale,
+  () => {
+    if (loading.value || !snapshot.value) return;
+    reload();
+  },
+);
 watch(visibleWorks, decorate);
 
 onMounted(() => {
@@ -133,7 +147,9 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         </div>
       </div>
       <div class="progressive-loading" role="status" aria-live="polite">
-        <div class="progressive-loading-head"><span class="spinner small-spinner"></span><b>Loading cards</b></div>
+        <div class="progressive-loading-head">
+          <span class="spinner small-spinner"></span><b>Loading cards</b>
+        </div>
         <div class="progressive-skeleton-grid">
           <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
           <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
@@ -147,9 +163,31 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     <section v-else-if="snapshot?.mode === 'admin' && !snapshot.available" class="empty">
       <div class="drop">
         <div class="drop-icon"><AppIcon name="upload" aria-hidden="true" /></div>
-        <h1>{{ snapshot.shared ? i18n.t("records.open_shared_workspace", "Open the shared corpus workspace") : i18n.t("records.open_workspace", "Open a corpus workspace") }}</h1>
-        <p>{{ snapshot.shared ? i18n.t("records.shared_workspace_help", "This link preserves the table state and filters, while JSONL contents remain browser-local. Choose the same JSONL file to restore this shared view.") : i18n.t("records.open_workspace_help", "Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in its own tab and can be edited, compared, searched, exported, or sent to the corpus database.") }}</p>
-        <button id="choose" type="button" class="btn primary" @click="works.chooseJsonl()"><AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl", "Choose JSONL files") }}</button>
+        <h1>
+          {{
+            snapshot.shared
+              ? i18n.t("records.open_shared_workspace", "Open the shared corpus workspace")
+              : i18n.t("records.open_workspace", "Open a corpus workspace")
+          }}
+        </h1>
+        <p>
+          {{
+            snapshot.shared
+              ? i18n.t(
+                  "records.shared_workspace_help",
+                  "This link preserves the table state and filters, while JSONL contents remain browser-local. Choose the same JSONL file to restore this shared view.",
+                )
+              : i18n.t(
+                  "records.open_workspace_help",
+                  "Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in its own tab and can be edited, compared, searched, exported, or sent to the corpus database.",
+                )
+          }}
+        </p>
+        <button id="choose" type="button" class="btn primary" @click="works.chooseJsonl()">
+          <AppIcon name="upload" aria-hidden="true" />{{
+            i18n.t("records.choose_jsonl", "Choose JSONL files")
+          }}
+        </button>
       </div>
     </section>
 
@@ -161,29 +199,27 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     </section>
 
     <template v-else-if="snapshot?.mode === 'admin' && snapshot.available">
-      <section class="card works-database-context">
-        <div>
-          <span class="section-label">{{ i18n.t("works.database_context", "Works synchronization database") }}</span>
-          <b>{{ snapshot.activeStore || i18n.t("research.none_selected", "No database selected") }}</b>
-          <small>{{ i18n.t("works.database_context_help", "Sync status and Sync actions on this page refer to the selected corpus database. Changing it does not change your loaded JSONL files.") }}</small>
-        </div>
-        <label class="field">
-          <span>{{ i18n.t("research.corpus_database", "Corpus database") }}</span>
-          <select
-            id="worksStore"
-            class="control compact-select"
-            :value="snapshot.activeStore"
-            :disabled="!snapshot.stores.length"
-            :data-disabled-reason="snapshot.stores.length ? undefined : snapshot.dbUnavailableReason"
-            :title="snapshot.stores.length ? undefined : snapshot.dbUnavailableReason"
-            @change="changeStore(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-if="!snapshot.stores.length" value="">{{ snapshot.storesEmptyLabel }}</option>
-            <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">{{ store.name }} ({{ store.count }})</option>
-          </select>
-          <small>{{ snapshot.activeStore ? `${snapshot.activeStoreCount.toLocaleString(i18n.locale)} ${i18n.t("dynamic.records", "records")}` : snapshot.dbUnavailableReason }}</small>
-        </label>
-      </section>
+      <WorksWorkspaceHeader
+        :stores="snapshot.stores"
+        :active-store="snapshot.activeStore"
+        :active-store-count="snapshot.activeStoreCount"
+        :total-works="snapshot.totalWorks"
+        :total-records="snapshot.totalRecords"
+        :source-file-count="sourceFileCount"
+        :stores-empty-label="snapshot.storesEmptyLabel"
+        :db-unavailable-reason="snapshot.dbUnavailableReason"
+        :can-manage-corpus="snapshot.capabilities.canManageCorpus"
+        :can-populate="snapshot.capabilities.canPopulate"
+        :can-sync-all="snapshot.capabilities.canSyncAll"
+        :corpus-manage-denied-reason="snapshot.corpusManageDeniedReason"
+        :populate-disabled-reason="snapshot.populateDisabledReason"
+        :sync-all-disabled-reason="snapshot.syncAllDisabledReason"
+        @change-store="changeStore"
+        @choose-jsonl="works.chooseJsonl()"
+        @separate="works.separateWorks()"
+        @populate-all="works.populateAll()"
+        @sync-all="works.syncAll()"
+      />
 
       <WorksOverviewCard
         v-if="snapshot.selected"
@@ -200,37 +236,47 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
 
       <div class="toolbar works-toolbar aligned-toolbar">
         <div class="search">
-          <input id="worksSearch" :value="query" :placeholder="i18n.t('works.filter_title', 'Filter works by title')" @input="applyQuery(($event.target as HTMLInputElement).value)">
+          <input
+            id="worksSearch"
+            :value="query"
+            :placeholder="i18n.t('works.filter_title', 'Filter works by title')"
+            @input="applyQuery(($event.target as HTMLInputElement).value)"
+          />
         </div>
         <div class="tools">
-          <button id="separateWorks" type="button" class="btn small" @click="works.separateWorks()"><AppIcon name="filter" aria-hidden="true" />{{ i18n.t("works.separate_jsonl", "Separate works") }}</button>
-          <button
-            id="populateAllWorks"
-            type="button"
-            class="btn small soft"
-            :disabled="!snapshot.capabilities.canPopulate"
-            :data-disabled-reason="snapshot.capabilities.canPopulate ? undefined : snapshot.populateDisabledReason"
-            :title="snapshot.capabilities.canPopulate ? undefined : snapshot.populateDisabledReason"
-            @click="works.populateAll()"
-          ><AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata", "Populate all metadata with LLM") }}</button>
-          <button
-            id="syncAllWorks"
-            type="button"
-            class="btn small primary"
-            :disabled="!snapshot.capabilities.canSyncAll"
-            :data-disabled-reason="snapshot.capabilities.canSyncAll ? undefined : snapshot.syncAllDisabledReason"
-            :title="snapshot.capabilities.canSyncAll ? undefined : snapshot.syncAllDisabledReason"
-            @click="works.syncAll()"
-          ><AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all", "Sync all works") }}</button>
-          <span class="note">{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("works.shown", "shown") }} · {{ snapshot.totalWorks.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.works", "works") }} · {{ snapshot.totalRecords.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</span>
+          <span class="note"
+            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
+            {{ i18n.t("works.shown", "shown") }} ·
+            {{ snapshot.totalWorks.toLocaleString(i18n.locale) }}
+            {{ i18n.t("dynamic.works", "works") }} ·
+            {{ snapshot.totalRecords.toLocaleString(i18n.locale) }}
+            {{ i18n.t("dynamic.records", "records") }}</span
+          >
         </div>
       </div>
 
-      <section id="worksGrid" class="works works-library-grid" :aria-label="i18n.t('nav.works', 'Works')">
+      <section
+        id="worksGrid"
+        class="works works-library-grid"
+        :aria-label="i18n.t('nav.works', 'Works')"
+      >
         <div v-if="showSkeleton" class="progressive-loading" role="status" aria-live="polite">
-          <div class="progressive-loading-head"><span class="spinner small-spinner"></span><b>{{ i18n.tf("works.loading_cards", "Loading {count} work cards", {count: snapshot.works.length.toLocaleString(i18n.locale)}) }}</b></div>
+          <div class="progressive-loading-head">
+            <span class="spinner small-spinner"></span
+            ><b>{{
+              i18n.tf("works.loading_cards", "Loading {count} work cards", {
+                count: snapshot.works.length.toLocaleString(i18n.locale),
+              })
+            }}</b>
+          </div>
           <div class="progressive-skeleton-grid">
-            <div v-for="index in Math.min(4, snapshot.works.length)" :key="index" class="progressive-skeleton-card"><i></i><i></i><i></i></div>
+            <div
+              v-for="index in Math.min(4, snapshot.works.length)"
+              :key="index"
+              class="progressive-skeleton-card"
+            >
+              <i></i><i></i><i></i>
+            </div>
           </div>
         </div>
         <WorksLibraryCard
@@ -257,14 +303,23 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           type="button"
           class="work-add-jsonl-card"
           :disabled="!snapshot.capabilities.canManageCorpus"
-          :data-disabled-reason="snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason"
-          :title="snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason"
+          :data-disabled-reason="
+            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
+          "
+          :title="
+            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
+          "
           @click="works.chooseJsonl()"
         >
           <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
           <span>
             <b>{{ i18n.t("works.add_jsonl", "Add a JSONL file") }}</b>
-            <small>{{ i18n.t("works.add_jsonl_help", "Open another corpus source and add its works to this workspace.") }}</small>
+            <small>{{
+              i18n.t(
+                "works.add_jsonl_help",
+                "Open another corpus source and add its works to this workspace.",
+              )
+            }}</small>
           </span>
         </button>
       </section>
@@ -294,13 +349,28 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
 
       <div class="toolbar works-toolbar">
         <div class="search">
-          <input id="worksSearch" :value="query" :placeholder="i18n.t('research.filter_works', 'Filter works by title')" @input="applyQuery(($event.target as HTMLInputElement).value)">
+          <input
+            id="worksSearch"
+            :value="query"
+            :placeholder="i18n.t('research.filter_works', 'Filter works by title')"
+            @input="applyQuery(($event.target as HTMLInputElement).value)"
+          />
         </div>
         <div class="tools">
-          <select id="researchWorksStore" class="control" :value="snapshot.activeStore" @change="changeStore(($event.target as HTMLSelectElement).value)">
-            <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">{{ store.name }}</option>
+          <select
+            id="researchWorksStore"
+            class="control"
+            :value="snapshot.activeStore"
+            @change="changeStore(($event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
+              {{ store.name }}
+            </option>
           </select>
-          <span class="note">{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.works", "works") }}</span>
+          <span class="note"
+            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
+            {{ i18n.t("dynamic.works", "works") }}</span
+          >
         </div>
       </div>
 
@@ -310,20 +380,25 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           :key="work.work"
           type="button"
           class="researcher-work-menu-card"
-          :class="{active: snapshot.selectedWork === work.work}"
+          :class="{ active: snapshot.selectedWork === work.work }"
           :data-research-work="work.work"
           @click="selectWork(work.work)"
         >
-          <img v-if="work.cover" class="researcher-work-cover" :src="work.cover" alt="">
+          <img v-if="work.cover" class="researcher-work-cover" :src="work.cover" alt="" />
           <span v-else class="work-book-icon"><AppIcon name="books" aria-hidden="true" /></span>
           <span>
             <b>{{ work.work }}</b>
             <small>{{ work.subtitle }}</small>
-            <small>{{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</small>
+            <small
+              >{{ work.count.toLocaleString(i18n.locale) }}
+              {{ i18n.t("dynamic.records", "records") }}</small
+            >
           </span>
           <span class="work-menu-arrow">›</span>
         </button>
-        <div v-if="!snapshot.works.length" class="llm-empty">{{ i18n.t("research.no_works", "No works are available.") }}</div>
+        <div v-if="!snapshot.works.length" class="llm-empty">
+          {{ i18n.t("research.no_works", "No works are available.") }}
+        </div>
       </section>
     </template>
   </main>
