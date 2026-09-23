@@ -41,8 +41,9 @@ function update(field: string, patch: Partial<RunGuidanceEntry>) {
 function updateTerms(field: string, value: string) {
   const terms = value
     .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean)
+    // Keep the edit buffer lossless so a trailing space does not disappear
+    // while a multi-word phrase is being typed. Submission trims each term.
+    .filter((item) => item.trim())
     .slice(0, 40);
   update(field, { look_for: terms });
 }

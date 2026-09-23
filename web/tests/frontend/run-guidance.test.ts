@@ -31,4 +31,22 @@ describe("Corpus run guidance", () => {
       },
     });
   });
+
+  it("keeps spaces in a phrase while it is being typed", async () => {
+    const wrapper = mount(CorpusRunGuidance, {
+      props: {
+        fields: [{ name: "persons", label: "People", group: "indexing" }],
+        modelValue: {},
+      },
+    });
+
+    await wrapper.findAll("textarea")[1].setValue("First ");
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
+      persons: {
+        instructions: "",
+        look_for: ["First "],
+      },
+    });
+  });
 });
