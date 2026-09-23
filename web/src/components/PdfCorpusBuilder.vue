@@ -175,7 +175,7 @@ async function loadSchemaChoices() {
     await loadSelectedSchema(schemaId.value);
   }
 }
-watch(schemaId, (id, previous) => {
+watch(schemaId, (id) => {
   void loadSelectedSchema(id);
 });
 const chosenSchema = computed(() => schemaChoices.value.find((item) => item.id === schemaId.value));
