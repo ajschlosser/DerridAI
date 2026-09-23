@@ -16,7 +16,14 @@ describe("ProviderProfileSelect availability", () => {
       props: {
         modelValue: "missing",
         profiles: [
-          { id: "missing", name: "Missing", type: "ollama", model: "gone", available: false },
+          {
+            id: "missing",
+            name: "Missing",
+            type: "ollama",
+            model: "gone",
+            available: false,
+            availability_error: 'Configured model "gone" was not found.',
+          },
           { id: "ready", name: "Ready", type: "ollama", model: "present", available: true },
         ],
       },
@@ -25,6 +32,8 @@ describe("ProviderProfileSelect availability", () => {
     expect(options).toHaveLength(2);
     expect(options[0].attributes("disabled")).toBeDefined();
     expect(options[1].attributes("disabled")).toBeUndefined();
+    expect(wrapper.get(".provider-unavailable").text()).toContain("Unavailable");
+    expect(wrapper.get(".provider-unavailable").text()).toContain("gone");
     wrapper.unmount();
   });
 });

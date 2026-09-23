@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   manageLabel?: string;
   modelNotSetLabel?: string;
   defaultLabel?: string;
+  unavailableLabel?: string;
   concurrentLabel?: string;
   contextLabel?: string;
 }>(), {
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<{
   manageLabel: "Manage provider profiles",
   modelNotSetLabel: "model not set",
   defaultLabel: "Default",
+  unavailableLabel: "Unavailable",
   concurrentLabel: "max concurrent request(s)",
   contextLabel: "context tokens",
 });
@@ -74,6 +76,10 @@ function contextWindow(profile: ProviderProfile){const raw=Number(profile.num_ct
           <span v-if="contextWindow(selected)" class="provider-stat"><b>{{ contextWindow(selected).toLocaleString() }}</b><small>{{ props.contextLabel }}</small></span>
         </span>
       </div>
+      <p v-if="selected?.available === false" class="provider-unavailable" role="status">
+        <b>{{ props.unavailableLabel }}</b>
+        <span>{{ selected.availability_error || props.unavailableLabel }}</span>
+      </p>
     </template>
 
     <div v-else class="provider-empty-state">
@@ -91,6 +97,7 @@ function contextWindow(profile: ProviderProfile){const raw=Number(profile.num_ct
 .provider-summary-card{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:11px;align-items:center;padding:10px 11px;border:1px solid color-mix(in srgb,var(--accent,#355f52) 16%,var(--line,#e2e8f0));border-radius:10px;background:var(--accent-soft,#eef6f2)}.provider-logo{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:#17233b;color:var(--accent-on);font-size:.8125rem;font-weight:850;letter-spacing:.02em}.provider-summary-copy{display:grid;gap:2px;min-width:0}.provider-summary-title{display:flex;align-items:center;gap:7px;min-width:0}.provider-summary-title b{font-size:.8125rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.provider-summary-copy small{font-size:.8125rem;color:var(--muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.provider-default-chip{padding:2px 6px;border-radius:999px;background:var(--card);border:1px solid color-mix(in srgb,var(--accent,#355f52) 25%,var(--line,#e2e8f0));font-size:.8125rem;color: var(--accent-fg);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
 .provider-stat-group{display:flex;align-items:stretch;gap:7px}.provider-stat{min-width:76px;display:grid;align-content:center;gap:1px;padding:6px 8px;border:1px solid color-mix(in srgb,var(--card) 85%,transparent);border-radius:8px;background:color-mix(in srgb,var(--card) 68%,transparent);text-align:right}.provider-stat b{font-size:.8125rem}.provider-stat small{font-size:.8125rem;color:var(--muted,#64748b);line-height:1.25}
 .provider-empty-state{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border:1px dashed var(--line,#d6dee8);border-radius:10px;background:var(--soft,#f8fafc)}.provider-empty-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:9px;background:var(--soft);color:var(--text-2);font-size:.8125rem;font-weight:850}.provider-empty-state>span:last-child{display:grid;gap:3px}.provider-empty-state b{font-size:.8125rem}.provider-empty-state p{margin:0;font-size:.8125rem;line-height:1.45;color:var(--muted,#64748b)}
+.provider-unavailable{display:grid;gap:2px;margin:0;padding:8px 10px;border:1px solid var(--warning-line,#d9a441);border-radius:8px;background:var(--warning-soft,#fff8e6);color:var(--text,#17233b);font-size:.8125rem;line-height:1.4}.provider-unavailable span{color:var(--muted,#64748b);overflow-wrap:anywhere}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* The card lives in columns of many widths (a dialog, a settings column), so it stacks by the width
    it is given, not by the viewport. */
