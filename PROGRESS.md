@@ -13,20 +13,25 @@ permanent record; keep only what a fresh session needs to pick up work safely.
   (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
   audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
   small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
-- **`api/app/corpus_builder.py`: 5,300 lines**, down from 8,236 when this effort started (36% removed so far). Six
-  of the ~7 planned clusters are extracted: publication/touchup (`corpus_publication.py`), most of the record-quality
-  cluster (`corpus_record_quality.py`; `validate_records` deliberately deferred, see below), segmentation
-  (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`), human review's stateful mutation
-  methods (`corpus_review_actions.py`, a `ReviewActionsMixin`), and enrichment reruns (`corpus_enrichment_reruns.py`,
-  an `EnrichmentRerunsMixin`); plus three cross-cutting sets of pure helpers found by scanning the whole file's
-  decorator list rather than any one planned cluster: LLM request/response handling (`corpus_llm_helpers.py`),
-  reviewer-facing blind-review helpers (`corpus_reviewer_helpers.py`; `_refresh_workflow_fields` deferred alongside
-  it for the same `CORPUS_PROFILES`/`PROFILE_VERSION` circular-import reason as `validate_records`), and
-  enrichment/editorial bookkeeping (`corpus_enrichment_helpers.py`). `PdfCorpusBuildManager` now inherits from both
-  mixins (`class PdfCorpusBuildManager(ReviewActionsMixin, EnrichmentRerunsMixin):`) -- see "The mixin technique"
-  below for why two of the seven clusters used a different extraction pattern than the rest. Build lifecycle/
-  provider session management and the smaller supporting clusters (operations/job tracking, schema/profile
-  resolution, editorial memory, manifest patching) are not started.
+- **`api/app/corpus_builder.py`: 4,855 lines**, down from 8,236 when this effort started (41% removed so far). All
+  seven originally-planned clusters are now extracted: publication/touchup (`corpus_publication.py`), most of the
+  record-quality cluster (`corpus_record_quality.py`; `validate_records` deliberately deferred, see below),
+  segmentation (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`), human review's
+  stateful mutation methods (`corpus_review_actions.py`, a `ReviewActionsMixin`), enrichment reruns
+  (`corpus_enrichment_reruns.py`, an `EnrichmentRerunsMixin`), and build lifecycle/provider session management
+  (`corpus_build_lifecycle.py`, a `BuildLifecycleMixin`; `create`/`preview_schema_group` deferred alongside it for
+  the same circular-import reason); plus three cross-cutting sets of pure helpers found by scanning the whole
+  file's decorator list rather than any one planned cluster: LLM request/response handling
+  (`corpus_llm_helpers.py`), reviewer-facing blind-review helpers (`corpus_reviewer_helpers.py`;
+  `_refresh_workflow_fields` deferred alongside it for the same `CORPUS_PROFILES`/`PROFILE_VERSION`
+  circular-import reason as `validate_records`), and enrichment/editorial bookkeeping
+  (`corpus_enrichment_helpers.py`). `PdfCorpusBuildManager` now inherits from three mixins
+  (`class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentRerunsMixin):`) -- see "The mixin
+  technique" below, **including its `TYPE_CHECKING`-guard requirement, which is not optional**: an earlier version
+  of this extraction shipped without it and silently broke `rerun_metadata_enrichment` (see "Concluded, do not
+  re-open" below). The smaller supporting clusters (operations/job tracking, schema/profile resolution, editorial
+  memory, manifest patching) are not started; what remains of `corpus_builder.py` is now mostly these plus
+  `PdfCorpusRepository` (the separate, lower-level class in the same file) and the four deferred methods.
 - **Release:** 0.70.0 "Amesbury" is tagged (`v0.70.0`) and current. See `docs/notes/0.70.0.md`.
 - **Assertion-status vocabulary** matches `SPECIFICATION.md` exactly (`model_inferred`, `confirmed_absent`); a
   lazy read-time migration in `corpus_builder.py`'s `PdfCorpusRepository` upgrades any build/record/checkpoint still
@@ -54,30 +59,40 @@ permanent record; keep only what a fresh session needs to pick up work safely.
   spec exactly, with a lazy migration for existing persisted data (see `_migrate_status_vocabulary` in
   `corpus_builder.py`, next to `_json_read`). Confirmed neither string ever appeared inside a prompt sent to a
   model, so no prompt-contract version bump was needed.
+- **`create` and `preview_schema_group` (in `corpus_builder.py`) were deliberately not moved** into
+  `BuildLifecycleMixin` with the rest of their originally-planned cluster. `create` uses `CORPUS_PROFILES`/
+  `PROFILE_VERSION`/`SCHEMA_VERSION`/etc. (module-level constants defined in `corpus_builder.py` itself);
+  `preview_schema_group` uses `build_group_prompt`/`response_model_for`/`SchemaNotFound` in a way still entangled
+  with the same area. Same circular-import shape as `validate_records`/`_refresh_workflow_fields`; not decided
+  whether to resolve by moving the constants or accepting these stay as manager methods.
+- **A mixin stub shadowed a real method at runtime and broke it silently** (`rerun_metadata_enrichment`, caught by
+  the full pytest suite, not by mypy or ruff) when `BuildLifecycleMixin` was first written without wrapping its
+  stub block in `if TYPE_CHECKING:`. Fixed, and the same guard retrofitted onto the two earlier mixins, which had
+  the identical latent risk. See "The mixin technique" below -- **the `TYPE_CHECKING` guard is mandatory for any
+  mixin's stub block, not an optional style choice.**
 
 ## Next steps
 
-1. **Backend, cluster "build lifecycle / provider session management":** `switch_provider_profile`, `create`,
-   `resume`, `confirm_manifest`, second-opinion handling, recheck scheduling, transport retry, LLM call logging,
-   `llm_activity`, autonomous-run start/settle. The last of the seven originally-planned clusters. Expect it to be
-   another mixin candidate, not a pure-function one -- grep the decorator list first (see "How to find the next pure
-   cluster" below), but do not be surprised if it is entirely stateful like the review-actions and enrichment-reruns
-   clusters were.
-2. **Backend, smaller supporting clusters:** operations/job tracking, schema/profile resolution, editorial memory,
-   manifest patching (~150-250 lines each) -- likely become shared helper modules or further mixins rather than
-   domain modules, since the clusters above depend on them.
-3. **`PdfCorpusBuilder.vue`'s composables/CSS extraction has a real blocker: no test coverage exists for this file at
+1. **All seven originally-planned `corpus_builder.py` clusters are done.** What's left is `PdfCorpusRepository`
+   (the separate, lower-level class in the same file -- not yet surveyed for its own decomposition potential), the
+   four deferred methods (`validate_records`, `_refresh_workflow_fields`, `create`, `preview_schema_group` -- see
+   "Concluded, do not re-open"), and whatever smaller supporting groupings remain: operations/job tracking,
+   schema/profile resolution, editorial memory, manifest patching (~150-250 lines each) -- likely become shared
+   helper modules or further mixins. Grep the decorator list first (see "How to find the next pure cluster" below)
+   before assuming a grouping is mechanical; do not be surprised if it is entirely stateful, and if it is, follow
+   "The mixin technique" including its `TYPE_CHECKING` guard.
+2. **`PdfCorpusBuilder.vue`'s composables/CSS extraction has a real blocker: no test coverage exists for this file at
    all** (no `.stories.ts`, no dedicated Vitest file, not in the 131-scenario DOM baseline) -- confirmed by checking
    before starting, not assumed. Every other decomposition in this effort had a full test suite to verify "no
    behavior change" against; this one does not. **Do not start a large-scale extraction here without first adding
    characterization coverage** (at minimum a `.stories.ts` and/or a baseline scenario exercising its main paths), or
    accept and disclose the higher risk explicitly before touching it. This is why backend work (which has full
    coverage) took priority once the safe frontend wins ran out.
-4. **Frontend:** skim `runtime.js` top to bottom for any remaining pure helper still sitting next to
+3. **Frontend:** skim `runtime.js` top to bottom for any remaining pure helper still sitting next to
    state-coupled code (the same way `recordTableHelpers.ts` was found -- see "How to find the next pure cluster").
    Most of what's left is small glue (`tr`, `trf`, `shell()`, `setShellRefreshHook`, `getShellSnapshot`,
    `translatedNavLabel`/`translatedSectionLabel`, `currentContext`) or DOM/render-coupled code that stays.
-5. **Section C/D from the original runtime.js plan, still not started:** turn the `*Workspace` factories into
+4. **Section C/D from the original runtime.js plan, still not started:** turn the `*Workspace` factories into
    composables reading Pinia stores instead of polling `runtime.get*Snapshot()` (per view, only where a probe shows
    stale/wrong behavior); CSS unification per `docs/STYLE_AUDIT.md`.
 
@@ -120,10 +135,24 @@ plain attributes the mixin never assigns (`repo: Any`, `_lock: Any` -- typed `An
 since e.g. `PdfCorpusRepository` is defined in `corpus_builder.py` itself and importing it back would be circular),
 and one-line method stubs with real signatures and a `...` body for every other `self.*` member the mixin's methods
 call (`def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]: ...`),
-mirroring how an ABC declares an abstract method. `PdfCorpusBuildManager`'s own real method definitions always take
-precedence over a mixin's stub in the MRO (a class's own methods are checked before any base class's), so this is
-safe at both type-check time and runtime. Get each stub's exact signature by grepping the real method's `def` line
-in `corpus_builder.py` rather than guessing.
+mirroring how an ABC declares an abstract method. Get each stub's exact signature by grepping the real method's
+`def` line in `corpus_builder.py` rather than guessing.
+
+**Wrap the entire stub block in `if TYPE_CHECKING:`. This is not optional.** An unguarded `def name(self): ...` is
+a real, empty method at runtime, not just a type-checker hint. `PdfCorpusBuildManager`'s own directly-defined
+methods always take precedence over any base class's, so a stub is harmless *as long as the real implementation
+stays directly on `PdfCorpusBuildManager` itself* -- but the moment that real implementation moves to a **second**
+mixin, Python's left-to-right MRO means whichever mixin is listed first in
+`class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentRerunsMixin):` wins for any name
+both mixins mention, real implementation or not. This is exactly what happened building
+`BuildLifecycleMixin`: it stubs `rerun_metadata_enrichment` (because its own methods call it), but the *real*
+`rerun_metadata_enrichment` lives in `EnrichmentRerunsMixin`, listed after it -- so the stub silently won, and
+calling it did nothing instead of running. No import error, no mypy error; only the full pytest suite caught it (7
+failures, `full backend suite` in the Verification section is not optional for a mixin commit). `TYPE_CHECKING` is
+always `False` at runtime, so a guarded stub block never creates real attributes and can never shadow anything,
+while mypy (which evaluates `TYPE_CHECKING` as `True`) sees the same signatures either way. Guard every mixin's
+stub block this way, including ones that look safe today -- correctness that depends on inheritance order is
+fragile the moment a fourth mixin is added.
 
 Any decorator the moved methods use (this effort found `_serialize_record_mutation`, a `@wraps`-based lock
 decorator used by 20+ methods across multiple clusters) moves into whichever mixin module needs it, with
