@@ -153,6 +153,7 @@ from .corpus_reviewer_helpers import (
 from .corpus_reviewer_helpers import (
     _operation_from_build as _operation_from_build,
 )
+from .corpus_schema_profile import SchemaProfileMixin
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _apply_manifest_metadata,
@@ -183,11 +184,8 @@ from .enrichment_ledger import (
     CORRECTED,
     PROPOSED,
     REJECTED,
-    RESUMED,
-    SUSPENDED,
     EnrichmentLedger,
 )
-from .enrichment_metrics import compute as compute_enrichment_metrics
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
 from .metadata_schema import (
@@ -1437,7 +1435,7 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
 }
 
 
-class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin):
+class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin):
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
@@ -1538,34 +1536,9 @@ CURRENT REVIEWED RECORD TEXT:
         return {**out, "ran": True, "answer": result, "seconds": round(time.monotonic() - started, 1)}
 
 
-    def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema:
-        """The schema a build was started with. It is a copy stored on the build, so editing or deleting the saved one changes nothing."""
-        build_id = str(build.get("build_id") or "")
-        cached = self._schema_cache.get(build_id)
-        if cached is not None:
-            return cached
-        raw = build.get("schema")
-        schema = MetadataSchema.model_validate(raw) if isinstance(raw, dict) and raw else default_schema()
-        if build_id:
-            self._schema_cache[build_id] = schema
-        return schema
-
-    def _allowed_fields(self, build_id: str) -> set[str]:
-        """Every field a model or a person may set on a record of this build: the fixed ones plus its schema's."""
-        return _allowed_for(self._schema_for(build_id))
-
-
-    def _editable_fields(self, build_id: str) -> set[str]:
-        """Fields a person may edit: the fixed editable ones, minus the default schema's, plus this build's schema's."""
-        return (HUMAN_EDITABLE_METADATA_FIELDS - {f.name for f in default_schema().fields}) | set(self._schema_for(build_id).field_names())
-
     def _edit_model(self, build_id: str) -> type[BaseModel]:
         return edit_model(self._schema_for(build_id), RecordMetadataModel)
 
-    def _schema_for(self, build_id: str) -> MetadataSchema:
-        if not build_id:
-            return default_schema()
-        return self._schema_of_build(self.repo.get_build(build_id))
 
     def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]:
         """The build's profile, with the fields a person must review taken from its schema."""
@@ -1575,31 +1548,6 @@ CURRENT REVIEWED RECORD TEXT:
 
     def _profile_for(self, build_id: str) -> dict[str, Any]:
         return self._profile_of_build(self.repo.get_build(build_id))
-
-    def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None:
-        """Log the moment autofill is switched off or back on for a model and field, once, not on every value."""
-        with self._lock:
-            was = (model, field) in self._suspended
-            if suspended == was:
-                return
-            (self._suspended.add if suspended else self._suspended.discard)((model, field))
-        self._ledger.append(SUSPENDED if suspended else RESUMED, model=model, field=field, build_id=build_id, run_id=run_id, reviews=reviews, accepted=accepted)
-
-    def enrichment_metrics(self, build_id: str = "", run_id: str = "", arm: str = "", group_by: str = "") -> dict[str, Any]:
-        """The ten enrichment measures for the whole ledger, one build, or one run."""
-        records = self.repo.load_records(build_id) if build_id else None
-        return {
-            **compute_enrichment_metrics(self._ledger.events(), records, build_id=build_id, run_id=run_id, arm=arm, group_by=group_by),
-            "concurrency": {"limit": max(1, int(settings.enrichment_max_concurrent_runs)), "working": self.active_enrichment_runs()},
-        }
-
-    def active_enrichment_runs(self) -> int:
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        return sum(1 for b in listing["items"] if b.get("status") in {"queued", "running"} and b.get("stage") == "metadata_enrichment_rerun")
-
-    def active_count(self) -> int:
-        listing = self.repo.list_builds(offset=0, limit=10000)
-        return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
 
 
     def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]:
