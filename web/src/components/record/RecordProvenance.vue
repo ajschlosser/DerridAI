@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 
-const props = defineProps<{ record: Record<string, unknown> }>();
+const props = defineProps<{ record: Record<string, unknown>; fields?: string[] }>();
 const emit = defineEmits<{ search: [field: string, value: string] }>();
 const i18n = useI18nStore();
 const nodes = computed(() =>
@@ -19,18 +19,20 @@ const nodes = computed(() =>
     (item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== "",
   ),
 );
-const supporting = computed(() =>
-  [
-    ["discourse_role", i18n.t("field.discourse_role", "Discourse role")],
-    ["proposition_status", i18n.t("field.proposition_status", "Proposition status")],
-    ["claim_scope", i18n.t("field.claim_scope", "Claim scope")],
-    ["semantic_function", i18n.t("field.semantic_function", "Semantic function")],
-  ]
-    .map(([key, label]) => ({ key, label, value: props.record[key] }))
+const supporting = computed(() => {
+  const keys = props.fields?.length
+    ? props.fields.filter((key) => !["speaker", "position_holder", "stance", "target"].includes(key))
+    : ["discourse_role", "proposition_status", "claim_scope", "semantic_function"];
+  return keys
+    .map((key) => ({
+      key,
+      label: i18n.t(`field.${key}`, key.replaceAll("_", " ")),
+      value: props.record[key],
+    }))
     .filter(
       (item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== "",
-    ),
-);
+    );
+});
 </script>
 
 <template>

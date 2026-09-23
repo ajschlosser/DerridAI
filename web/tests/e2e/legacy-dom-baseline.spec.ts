@@ -897,8 +897,8 @@ const scenarios: Scenario[] = [
     nav: "Search",
     load: true,
     steps: async (page) => {
-      await page.locator("summary", { hasText: "Sort:" }).click();
-      await page.getByRole("button", { name: "Page Start" }).first().click();
+      await page.getByRole("button", { name: /^Sort:/ }).click();
+      await page.getByRole("menuitemradio", { name: "Page Start" }).click();
       await page.waitForTimeout(900);
     },
   },

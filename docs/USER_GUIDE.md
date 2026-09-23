@@ -215,7 +215,9 @@ Provider profiles can be added/removed without overwriting other endpoints.
 - advanced OpenAI-compatible options JSON
 - model discovery/test and warmup
 
-One provider profile is designated as the default, but run dialogs can switch profiles before launch. Dashboard LLM readiness reports every configured profile rather than only the most recently used endpoint.
+One provider profile is designated as the default, but run dialogs can switch profiles before launch. **Save provider profiles** stays locked at the bottom of the page and writes every profile at once. Cards can be collapsed after that save so the registry is easier to scan. Use **Set fields across profiles** to copy context tokens, output limits, sampling, and other shared parameters onto every profile or a selection, then save.
+
+Dashboard LLM readiness reports every configured profile rather than only the most recently used endpoint.
 
 Model-kind filters remain a UI discovery aid; the backend still sends a standard OpenAI-compatible `model` identifier.
 
@@ -240,7 +242,7 @@ Persistence is browser-origin-specific.
 
 **Records** is a Vue-native workspace at **Tools → Records**. The table keeps DB status, work, pages, review flags, and extracted text, with citation and evidence actions that stay fully labeled. Text search, column filters, page size, collection choice, and bulk LLM/upsert actions remain; overflow tools sit in **More** so the primary scan line stays clear. Loaded JSONL files appear in a local-file rail on this page, with origin (imported, subset, merge, split by work, or from a collection) and whether the file has been edited since it was loaded. Administrators open, merge, subset, export, and close files from that rail, or from the empty state. Researcher accounts do not use this page.
 
-- **Columns** chooses, orders and sizes the table's columns. Each shown column has a width as a percentage of the table; the widths always total 100%, so widening one column narrows the others in proportion (no column goes below 5%). **Even widths** splits the space equally, and **Reset defaults** restores the default columns and widths. Search uses the same column dialog for choosing and ordering columns.
+- **Columns** chooses, orders and sizes the table's columns. Each shown column has a width as a percentage of the table; the widths always total 100%, so widening one column narrows the others in proportion (no column goes below 5%). **Even widths** splits the space equally, and **Reset defaults** restores the default columns and widths. Search uses the same column dialog for choosing and ordering columns, including loaded-record results. Advanced Search filters list fields from the metadata schema associated with the selected corpus, or from a schema you choose if none is associated.
 - **Comfortable** rows show the full extracted text. **Compact** rows are tighter, narrow the text column, and show the text on one line; where it is cut off, **Expand** shows the rest of that row's text.
 - **Get Citation** copies an inline or full citation. The notification quotes exactly what was copied. The menu closes on a choice, on Escape, or on a click elsewhere.
 - **Copy view link** copies a link that reopens this table as shown: file name, search, column filters, sort, page and columns. JSONL records stay in this browser, so whoever opens the link is asked for the same file. The notification shows the copied link.
@@ -258,6 +260,8 @@ Saved filter profiles are kept in this browser. **Save current…** names the fi
 Users can merge all loaded JSONL files or any subset. Selected source files are replaced in the workspace by the merged file; unselected files remain. Source files on disk are not deleted.
 
 ## Record audit history
+
+The record inspector **Configure fields** control sets which fields appear in Overview, Provenance, and Indexing, their order, and category headings. The layout is stored in this browser.
 
 Record changes use the flat `updates` array.
 

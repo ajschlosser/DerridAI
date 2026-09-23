@@ -103,30 +103,36 @@
 </div>
 <p>Use field-level conditions when the facet sidebar is not specific enough.</p>
 </div>
+<label class="search-filter-schema">
+<span>Metadata schema</span>
+<select class="control" value="default">
+</select>
+<small>Filter fields come from the schema associated with this corpus. Choose another saved schema if none is associated.</small>
+</label>
 <div class="search-filter-builder-grid">
 <label>
 <span>Field</span>
 <select class="control">
-<option value="concepts">Concepts</option>
-<option value="discourse_role">Discourse role</option>
+<option value="work">Work</option>
 <option value="document_author">Document author</option>
+<option value="year">Year</option>
 <option value="document_language">Document language</option>
-<option value="needs_review">Needs review</option>
 <option value="original_language">Original language</option>
+<option value="speaker">Speaker</option>
+<option value="quoted_speaker">Quoted speaker</option>
+<option value="position_holder">Position holder</option>
+<option value="target">Target</option>
+<option value="discourse_role">Discourse role</option>
+<option value="proposition_status">Proposition status</option>
+<option value="stance">Stance</option>
+<option value="topics">Topics</option>
+<option value="concepts">Concepts</option>
+<option value="persons">Persons</option>
+<option value="needs_review">Needs review</option>
 <option value="page_end">Page end</option>
 <option value="page_start">Page start</option>
-<option value="persons">Persons</option>
-<option value="position_holder">Position holder</option>
-<option value="proposition_status">Proposition status</option>
-<option value="quoted_speaker">Quoted speaker</option>
 <option value="record_id">Record ID</option>
 <option value="review_reason">Review reason</option>
-<option value="speaker">Speaker</option>
-<option value="stance">Stance</option>
-<option value="target">Target</option>
-<option value="topics">Topics</option>
-<option value="work">Work</option>
-<option value="year">Year</option>
 </select>
 </label>
 <label>
@@ -295,20 +301,25 @@
 <h2 id="search-results-title">2 results</h2>
 </div>
 <div class="search-results-controls">
-<details class="search-sort-menu">
-<summary class="btn">Sort: Sort <span aria-hidden="true">⌄</span>
-</summary>
-<div class="search-sort-popover">
-<button type="button" class="">Work</button>
-<button type="button" class="">Page Start</button>
-<button type="button" class="">Record ID</button>
+<div class="ui-menu search-sort-menu" data-placement="bottom" data-align="end">
+<button type="button" class="ui-menu-trigger" aria-haspopup="menu" aria-expanded="false">
+<span class="ui-menu-label">Sort: Sort</span>
+<span class="ui-menu-caret" aria-hidden="true">
+</span>
+</button>
 </div>
-</details>
 <div class="search-layout-switcher" role="group" aria-label="Result layout">
 <button type="button" class="btn tiny active" aria-pressed="true">Compact table</button>
 <button type="button" class="btn tiny" aria-pressed="false">Comfortable table</button>
 <button type="button" class="btn tiny" aria-pressed="false">Cards</button>
 </div>
+<button type="button" class="btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>Columns</button>
 <label class="search-page-size">
 <span class="sr-only">Results per page</span>
 <select class="control" value="100">
@@ -371,9 +382,9 @@
 <button type="button" class="btn tiny">Open</button>
 <button type="button" class="btn tiny">Evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-4" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-4">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-5">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-4" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
@@ -405,9 +416,9 @@
 <button type="button" class="btn tiny">Open</button>
 <button type="button" class="btn tiny">Evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-5">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-6" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-6">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<div id="citation-v-6" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
