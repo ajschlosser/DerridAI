@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from .system_store import system_store
@@ -48,7 +49,9 @@ def remember(
     prior_values = list(prior.get("prior_values") or [])
     values = value if cardinality == "list" else [value]
     for item in values:
-        if item is None or item in prior_values:
+        if item is None:
+            continue
+        if any(_value_key(item) == _value_key(previous) for previous in prior_values):
             continue
         prior_values.append(item)
     payload = {
@@ -60,6 +63,10 @@ def remember(
     system_store.put_adjudication_cache(
         key, record_id, field, cardinality, digest, payload
     )
+
+
+def _value_key(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def suggestions(

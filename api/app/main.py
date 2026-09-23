@@ -2445,7 +2445,16 @@ def decide_pdf_corpus_record_metadata_batch(
         )
         build = pdf_corpus_repository.get_build(build_id)
         records = pdf_corpus_repository.load_records(build_id)
-        record = next(row for row in records if str(row.get("record_id") or "") == record_id)
+        record = next(
+            (
+                row
+                for row in records
+                if str(row.get("record_id") or "") == record_id
+            ),
+            None,
+        )
+        if record is None:
+            raise KeyError(record_id)
         for field, value in body.changes.items():
             remember_adjudication(
                 record_id=record_id,
@@ -2506,7 +2515,12 @@ def clear_pdf_corpus_metadata_cache(
             for row in pdf_corpus_repository.load_records(build_id)
         ):
             raise KeyError(record_id)
-        return {"cleared": clear_adjudication_cache(record_id=record_id, field=body.field if body else None)}
+        return {
+            "cleared": clear_adjudication_cache(
+                record_id=record_id,
+                field=body.field if body else None,
+            )
+        }
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
 
