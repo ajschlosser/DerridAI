@@ -51,10 +51,74 @@ predecessor had just finished extracting. Deliberately avoided all four for this
 master mid-session; merged master in twice (see commits), resolving DOM-baseline-snapshot conflicts by re-normalizing the
 `theirs` content rather than picking a side, and re-verified the full suite both times.
 
+## Session 8 status (branch `claude/runtime-refactor-21`)
+
+Removed the dead `responseCacheRenderer` wiring left from session 7 (confirmed still unreachable, `runtime.js` was
+quiet by the time this session started). Then took on the dashboard, the larger of the two remaining legacy views.
+
+**`DashboardView.vue` is now a real Vue component**, not a host for an HTML-string renderer: same markup, ids, classes
+and behavior as `domain/dashboardRenderer.ts`'s old `renderDashboard`, built as a real template. It calls the SAME
+underlying domain functions (`dashboardTotals`, `dashboardRecordPreview`, `pieShareSeries`, `workInsightMetrics`,
+`dashboardMetricBody`, ...) via new `runtime.js` exports, rather than reimplementing any of that logic -- only the
+markup-building and DOM-wiring layer changed. The metric-carousel chart body stays `v-html`'d (it is already a pure
+markup generator, `dashboardMetricBody`, the same pattern `AppIcon` itself uses for SVGs); every other element is a
+real template node with real bindings.
+
+**Two hazards found and fixed, both real, both would have caused live bugs if missed:**
+1. `renderView()` still dispatched to the legacy `renderDashboard` for `state.view==="home"`, and two other call sites
+   (in `appLifecycle.ts`, `workDialogs.ts`) called it directly after provider warm-up / work-metadata actions. Left in
+   place, any of these firing while `DashboardView.vue` is mounted would have overwritten Vue's own `#main` with the
+   old HTML string -- exactly the class of bug the response-cache session already worked around by removing that
+   renderer's dispatch. Removed all three call sites; the two that existed to keep the dashboard's own content fresh
+   after an action now dispatch a `derridai:dashboard-refresh` window event instead, which the new view listens for --
+   matching the `derridai:navigate-native` / `derridai:pdf-builder` bridge pattern already used elsewhere for exactly
+   this legacy-code-talks-to-a-specific-Vue-component situation.
+2. The old renderer was re-invoked fresh on every navigation to the dashboard, so it always reflected the latest
+   corpus/job state. A Vue component that mounts once does not get that for free -- the dashboard would have gone
+   stale after a file import or job progress while it stayed the open view (caught by the `home-with-jobs` /
+   `jobs-*` baseline scenarios, which import a file first: works count and job cards showed 0/stale until this was
+   added). Fixed with a `watch` on `corpusState.version`/`activeFileId` and the jobs store's `version`, the same
+   pattern `useRecordsWorkspace` already established for the same reason.
+
+**Small pre-existing issues surfaced by using the runtime's real types/exports directly, fixed as pure fixes (no
+behavior change), each because it broke this page's own baseline until fixed:**
+- `navigation.ts`'s `navigateTo()` had no type annotation on its options parameter; TS inferred `fileId`/`index` as
+  exactly `null` from their default values. Harmless while every caller went through the untyped `Fn` dependency
+  alias; broke as soon as something called the real exported function directly. Type-only fix.
+- `AppIcon.vue` had no "chart" icon; added it, copied verbatim from `domain/html.ts`'s `icon()`.
+- **Found but deliberately not touched:** `AppIcon.vue`'s "gear" path has drifted one coordinate from
+  `domain/html.ts`'s "gear" (`l.1.1` vs `l.1-.1`), and that drift is already baked into two other currently-passing
+  baseline snapshots (`SearchView`, `ResearchComposer`, both already use `AppIcon name="gear"`). Fixing `AppIcon`
+  would break those two unrelated scenarios. Used `domain/html.ts`'s `icon()` directly (via `v-html`) for the
+  dashboard's three gear icons instead, matching the dashboard's own existing correct baseline. Whoever eventually
+  reconciles this should fix `AppIcon.vue`'s gear path AND re-record those two snapshots together, in one commit.
+- A Vue `:style` binding (even given a plain string) always goes through Vue's own CSSStyleDeclaration-based patching,
+  which normalizes serialization (`width:0%` becomes `width: 0%;`) -- there is no way to get byte-identical `style=`
+  output from any `:style` binding. This is not new: the existing baseline already had both formats coexisting
+  (`<col style="width: 240px;">` from a browser/JS-set style next to `<em style="width:100%">` from a hand-built HTML
+  string). Accepted this for the one corpus-builds progress-bar span, re-recorded that one snapshot, and confirmed the
+  only diff was this formatting.
+
+**A real mistake made and caught this session, noted here so it is not repeated:** a `npx prettier --write` call
+during cleanup included `runtime.js` in its file list by accident, fully reformatting the entire file (a 4,700-line
+diff, all noise). Caught before committing by noticing the line count jump; reverted with `git checkout HEAD --
+runtime.js` and the small logical edits (the export additions, the three dispatch removals) were redone by hand with
+targeted string edits, never touching Prettier on that file. **`runtime.js` must never appear in a `prettier --write`
+file list, even in a batch command with other files that should be formatted.**
+
+`runtime.js`: 2,399 lines (barely moved -- this tranche only added exports and removed dead dispatch code; the
+dashboard's own ~650 lines of markup-building logic left the file with the earlier `dashboardRenderer.ts` extraction,
+not this session).
+
+**Conflict avoidance:** checked `gh pr list` and `git branch -r --sort=-committerdate` before starting; PR #100 (Corpus
+Builder cleanup) and the language-dictionary-ux branch had no overlap with anything touched here. Master moved twice
+during this session (through PR #101, then PR #102/#103); merged both times, no conflicts either time, full suite
+re-verified both times.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
-Vue-facing API; 10,472 lines at the start, **2,376 now**) toward modern Vue patterns.
+Vue-facing API; 10,472 lines at the start, **2,399 now**) toward modern Vue patterns.
 
 - **No functionality changes or loss. No layout, UI or UX changes.** Rendered markup and computed styles stay identical.
 - A behavior change is allowed only to fix an obvious bug, and only after checking: probe the current behavior, add a test that
@@ -176,22 +240,26 @@ Procedure per cluster (about 10 minutes each), from `web/`:
 5. Afterwards `python3 ../scripts/runtime-refactor/dead_functions.py` removes top-level functions nothing references (run it only
    after deleting a caller; it deliberately ignores the `export {}` block).
 
-### B. Replace the three legacy views with Vue (risky; one view per commit)
+### B. Replace the remaining legacy views with Vue (risky; one view per commit) -- PDF Explorer is the only one left
 
-Order: response cache (smallest), then the dashboard, then the PDF Explorer.
+Response cache (session 7) and the dashboard (session 8) are both done: real Vue templates, no more `v-html`d whole-page
+strings, no more `renderResponseCache`/`renderDashboard` dispatch in `runtime.js`. **Only the PDF Explorer is left.**
 
 - Build a Vue component that produces the same DOM as the current renderer (class names, element order, ids used by tests), route
-  it in `router/index.ts` instead of `RuntimeSurface`, and delete the renderer factory. Move that view's runtime-only CSS from
-  `style.css` into the component's `<style scoped>` in the same commit (see `docs/STYLE_AUDIT.md` and `style_move.py`).
-- The baseline must stay **unchanged**: the `home-*`, `styles-home-*`, `response-cache-*` and `pdf-explorer-*` scenarios. The harness
-  already strips `data-v-*` and normalizes whitespace and comments; do not re-record snapshots to make a change pass.
-- Dashboard: it fetches through the runtime (`refreshStores`, `refreshServerAnnotations`, `dashboardRecordPreview`), shows jobs via
-  `renderOperationsPanel` and `mountOperationsPanelHost`, and a corpus builds card. Read from the existing Pinia stores
-  (`useJobsStore`, `useCorpusStore`) and the runtime exports; the operations panel is already a Vue component mounted by
-  `runtime/operationsPanelHost.ts`.
+  it in `router/index.ts` instead of `RuntimeSurface`, and delete the renderer factory's dispatch (see the dashboard's own
+  session-8 note above for the two hazards this creates: a stray `renderView()`/direct call clobbering the new component's
+  `#main`, and the new component going stale because nothing re-invokes it on navigation the way the old renderer was).
+  Move that view's runtime-only CSS from `style.css` into the component's `<style scoped>` in the same commit (see
+  `docs/STYLE_AUDIT.md` and `style_move.py`).
+- The baseline must stay **unchanged**: the `pdf-explorer-*` and `styles-pdf-explorer-*` scenarios. Re-run the "insignificant
+  whitespace/comments" normalization sanity check from session 7 if any scenario's snapshot needs re-recording (confirm the
+  tag-stripped text is byte-identical, not just that the test now passes) -- do not otherwise re-record snapshots to make a
+  change pass.
 - PDF Explorer: uses PDF.js (`state.pdf.doc`), a canvas render token, text extraction (`extractPdfPageSmart` with an API fallback),
   record linking and LLM helpers. Keep the DOM ids (`pdfInput`, `openPdf`, `pdfPrev`, `pdfNext`, `pdfPageInput`, `extractPage`,
-  `linkCurrentPdf`, ...): the baseline scenarios drive them.
+  `linkCurrentPdf`, ...): the baseline scenarios drive them. This is the largest and riskiest of the three (canvas rendering,
+  PDF.js async state) -- read `domain/pdfExplorerRenderer.ts` end to end before starting, the same way the dashboard's
+  `domain/dashboardRenderer.ts` was read end to end first.
 - When the last legacy view is gone: delete `RuntimeSurface.vue`, `translateLegacyDom`, the MutationObserver, the collapsible
   enhancer, `legacyCompat.js`, unused `runtimeBridge.ts` exports, and shrink the `export {}` block.
 
