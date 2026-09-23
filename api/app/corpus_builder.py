@@ -5208,7 +5208,7 @@ CURRENT REVIEWED RECORD TEXT:
         extraction_noise: dict[str, Any] | None = None
         if asset_id:
             try:
-                extraction_noise = self.get_asset(asset_id).get("extraction_noise")
+                extraction_noise = self.repo.get_asset(asset_id).get("extraction_noise")
             except Exception:  # noqa: BLE001
                 extraction_noise = None
         page_rows = {
