@@ -6981,7 +6981,7 @@ CURRENT REVIEWED RECORD TEXT:
         immutable extraction is retained on both records; this operation edits the
         reviewed corpus layer and records an atomic two-record revision.
         """
-        if direction not in {"previous", "next", "keep"}:
+        if direction not in {"previous", "next", "keep", "new"}:
             raise ValueError("Slice direction must be previous or next.")
         records = self.repo.load_records(build_id)
         index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
@@ -6991,7 +6991,8 @@ CURRENT REVIEWED RECORD TEXT:
         self._assert_human_review_available(build_id, target, structural=False)
         self._assert_record_revision(target, expected_revision)
         text = str(target.get("text") or "")
-        if direction == "keep":
+        create_new = direction == "new"
+        if direction in {"keep", "new"}:
             if index == 0 or index == len(records) - 1:
                 raise ValueError("Keeping a selected chunk requires both neighboring records.")
             if keep_end is None or offset >= keep_end or keep_end > len(text):
@@ -7040,7 +7041,24 @@ CURRENT REVIEWED RECORD TEXT:
             target["text"] = retained
         now = iso_now()
         transaction_id = f"slice-{uuid.uuid4().hex[:12]}"
-        affected_rows = (target, *neighbors)
+        if create_new:
+            new_record = json.loads(json.dumps(target))
+            new_record["record_id"] = f"{record_id}-split-{uuid.uuid4().hex[:10]}"
+            new_record["text"] = retained
+            new_record["text_length"] = len(retained)
+            new_record["record_revision"] = 1
+            new_record["review_events"] = []
+            new_record["slice_lineage"] = {
+                "transaction_id": transaction_id,
+                "source_record_id": record_id,
+                "role": "created",
+                "at": now,
+            }
+            target["text"] = prefix
+            records.insert(index + 1, new_record)
+            affected_rows = (target, new_record, following)
+        else:
+            affected_rows = (target, *neighbors)
         for row in affected_rows:
             if "source_extracted_text" not in row:
                 row["source_extracted_text"] = original_texts.get(str(row.get("record_id")), str(row.get("text") or ""))
@@ -7598,6 +7616,9 @@ CURRENT REVIEWED RECORD TEXT:
         profile = self._profile_of_build(build)
         snapshot = self.repo.load_records(build_id)
         indices = self._enrichment_pass_indices(snapshot, scope, [str(value) for value in request.get("record_ids") or []])
+        priority = [str(value) for value in build.get("metadata_priority_record_ids") or []]
+        priority_indices = [index for value in priority for index, row in enumerate(snapshot) if str(row.get("record_id") or "") == value and index in indices]
+        indices = priority_indices + [index for index in indices if index not in priority_indices]
         max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
         pass_schema = self._schema_for(build_id)
@@ -7777,6 +7798,25 @@ CURRENT REVIEWED RECORD TEXT:
         target = next((record for record in records if record.get("record_id") == record_id), None)
         if target is None:
             raise KeyError(record_id)
+        if build.get("status") == "running" and str(build.get("stage") or "").startswith("metadata_enrichment"):
+            priority = [str(value) for value in build.get("metadata_priority_record_ids") or [] if str(value) != record_id]
+            build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
+            feedback = list(build.get("metadata_review_feedback") or [])
+            feedback.append({
+                "record_id": record_id,
+                "at": iso_now(),
+                "source": "human_requeue",
+                "human_decisions": list(target.get("metadata_decisions") or [])[-20:],
+                "metadata": {
+                    key: target.get(key)
+                    for fields in self._schema_for(build_id).family_fields().values()
+                    for key in fields
+                    if key in target
+                },
+            })
+            build["metadata_review_feedback"] = feedback[-100:]
+            self.repo.save_build(build)
+            return build
         requested_families = request.get("families")
         rerun_groups = self._schema_for(build_id).family_fields()
         families = [str(value) for value in requested_families or [] if str(value) in rerun_groups]

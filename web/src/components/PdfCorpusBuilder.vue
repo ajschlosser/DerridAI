@@ -2525,7 +2525,7 @@ async function split(afterBlockId: string) {
   }
 }
 async function sliceRecord(
-  direction: "previous" | "next" | "keep",
+  direction: "previous" | "next" | "keep" | "new",
   offset: number,
   keepEnd?: number,
 ) {
@@ -2550,6 +2550,32 @@ async function sliceRecord(
       i18n.t(
         "pdf_corpus.slice_done",
         "Boundary adjusted. Both neighboring records were reopened for review and affected metadata was marked stale.",
+      ),
+    );
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
+  }
+}
+
+async function requeueCurrentRecord() {
+  if (!currentBuild.value || !selectedRecord.value) return;
+  busy.value = "record";
+  try {
+    await pdfCorpusApi.requeueMetadata(
+      currentBuild.value.build_id,
+      selectedRecord.value.record_id,
+      {
+        provider_profile_id: llmActionProviderId.value || selectedProviderId.value,
+        model: llmActionModel.value || undefined,
+      },
+    );
+    await refreshBuild();
+    setMessage(
+      i18n.t(
+        "pdf_corpus.requeue_requested",
+        "Record queued at the front of the current enrichment run; its review feedback will inform later records.",
       ),
     );
   } catch (exc) {
@@ -5460,6 +5486,7 @@ onBeforeUnmount(() => {
         @history-forward="focusHistoryMove(1)"
         @previous-record="focusQueueMove(-1)"
         @next-record="focusQueueMove(1)"
+        @requeue-metadata="requeueCurrentRecord"
         @save-text="saveTextFromFocus"
         @resolve-metadata="resolveMetadataField"
         @confirm-no-metadata-value="resolveMetadataNoValue"

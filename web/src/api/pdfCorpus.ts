@@ -878,7 +878,7 @@ export const pdfCorpusApi = {
   sliceRecord: (
     buildId: string,
     recordId: string,
-    direction: "previous" | "next" | "keep",
+    direction: "previous" | "next" | "keep" | "new",
     offset: number,
     expectedRevision?: number,
     keepEnd?: number,
@@ -901,6 +901,11 @@ export const pdfCorpusApi = {
           expected_revision: expectedRevision,
         }),
       },
+    ),
+  requeueMetadata: (buildId: string, recordId: string, payload: Record<string, unknown>) =>
+    apiRequest<CorpusBuild>(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/rerun-metadata`,
+      { method: "POST", body: JSON.stringify(payload) },
     ),
   adjudicateBoundary: (
     buildId: string,

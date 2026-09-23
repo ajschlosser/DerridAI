@@ -601,7 +601,7 @@ class PdfCorpusRecordSplit(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 class PdfCorpusRecordSlice(BaseModel):
-    direction: Literal["previous", "next", "keep"]
+    direction: Literal["previous", "next", "keep", "new"]
     offset: int = Field(ge=1, le=500000)
     keep_end: int | None = Field(default=None, ge=2, le=500000)
     expected_revision: int | None = Field(default=None, ge=1)

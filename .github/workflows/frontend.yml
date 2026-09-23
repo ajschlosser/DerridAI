@@ -1,6 +1,7 @@
 name: DerridAI quality gates
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "api/**"
