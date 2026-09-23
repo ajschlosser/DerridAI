@@ -671,6 +671,10 @@ class PdfCorpusTextTouchupRequest(BaseModel):
     text: str | None = Field(default=None, min_length=1, max_length=500000)
 
 
+class PdfCorpusTextTouchupProposalStatus(BaseModel):
+    status: Literal["pending_review", "dismissed"]
+
+
 class PdfCorpusPublishRequest(BaseModel):
     require_acceptance: bool = True
 

@@ -68,6 +68,20 @@ import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
+type MetadataPatchState = {
+  record: CorpusRecord;
+  build: CorpusBuild;
+  queue_counts?: CorpusBuild["review_queue_counts"];
+};
+
+function isMetadataPatchState(
+  result: CorpusRecord | MetadataPatchState,
+): result is MetadataPatchState {
+  if (!result || typeof result !== "object") return false;
+  const candidate = result as { record?: unknown; build?: unknown };
+  return Boolean(candidate.record && candidate.build);
+}
+
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
@@ -249,9 +263,22 @@ const llmTouchupResult = ref<{
   proposed_text: string;
   changes: string[];
   warnings: string[];
+  provider: string;
   model: string;
+  proposal_id?: string;
+  run_id?: string;
+  created_at?: string;
+  status?: string;
   no_change: boolean;
-}>({ source_text: "", proposed_text: "", changes: [], warnings: [], model: "", no_change: false });
+}>({
+  source_text: "",
+  proposed_text: "",
+  changes: [],
+  warnings: [],
+  provider: "",
+  model: "",
+  no_change: false,
+});
 const llmTouchupError = ref("");
 const metadataEditorDirty = ref(false);
 const editorialMemoryOpen = ref(false);
@@ -662,8 +689,8 @@ const llmActionConcurrentLoad = computed(() => {
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const llmContribution = computed(() => currentBuild.value?.llm_contribution || {});
@@ -738,8 +765,11 @@ const discourseRoles = computed(() =>
     : [],
 );
 const metadataHumanValues = ref<Record<string, Set<string>>>({});
+const metadataObservedValues = ref<Record<string, string[]>>({});
 const metadataKnownValues = computed<Record<string, string[]>>(() => {
   const out: Record<string, Set<string>> = {};
+  for (const [field, values] of Object.entries(metadataObservedValues.value))
+    for (const value of values) (out[field] ??= new Set()).add(value);
   for (const row of records.value) {
     for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
       const values = Array.isArray(value) ? value : [value];
@@ -762,7 +792,7 @@ const metadataKnownValues = computed<Record<string, string[]>>(() => {
 const selectedMetadataBlocked = computed(() =>
   Boolean(
     (selectedRecord.value?.metadata_review_fields || []).length ||
-      (selectedRecord.value?.metadata_incomplete_fields || []).length,
+    (selectedRecord.value?.metadata_incomplete_fields || []).length,
   ),
 );
 const selectedMetadataBlockingFields = computed(() =>
@@ -1332,6 +1362,7 @@ async function refreshRecords(reset = false, preferredId = "") {
   if (reset) recordOffset.value = 0;
   if (!selectedBuildId.value) {
     records.value = [];
+    metadataObservedValues.value = {};
     recordTotal.value = 0;
     selectedRecord.value = null;
     reviewHydrated.value = false;
@@ -1350,6 +1381,7 @@ async function refreshRecords(reset = false, preferredId = "") {
       offset: number;
       limit: number;
       queue_counts?: CorpusBuild["review_queue_counts"];
+      metadata_values?: Record<string, string[]>;
     } = { items: [], total: 0, offset: recordOffset.value, limit: pageSize };
     // Record persistence can become visible a fraction after build.json on a refresh.
     // Hydrate independently of form interaction and retry the read while the build
@@ -1375,6 +1407,7 @@ async function refreshRecords(reset = false, preferredId = "") {
     if (requestId !== recordRequestSerial) return;
     if (result.queue_counts && currentBuild.value)
       currentBuild.value = { ...currentBuild.value, review_queue_counts: result.queue_counts };
+    metadataObservedValues.value = result.metadata_values || {};
     records.value = result.items;
     recordTotal.value = result.total;
     reviewHydrated.value = true;
@@ -1384,8 +1417,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
+      selectedRecordId.value === wanted &&
+      (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -2402,12 +2435,13 @@ async function saveMetadata() {
   }
   busy.value = "record";
   try {
-    const row = await pdfCorpusApi.patchMetadata(
+    const result = await pdfCorpusApi.patchMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       changes,
       Number(selectedRecord.value.record_revision || 1),
     );
+    const row = isMetadataPatchState(result) ? result.record : result;
     selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
     try {
@@ -2682,18 +2716,20 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   const viewport = captureReviewViewport();
   busy.value = "metadata-suggestions";
   try {
-    const row = await pdfCorpusApi.patchMetadata(
+    const result = await pdfCorpusApi.patchMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       changes,
       Number(selectedRecord.value.record_revision || 1),
+      true,
     );
+    const row = isMetadataPatchState(result) ? result.record : result;
+    if (isMetadataPatchState(result)) currentBuild.value = result.build;
     selectedRecord.value = row;
     const idx = records.value.findIndex((item) => item.record_id === row.record_id);
     if (idx >= 0) records.value.splice(idx, 1, row);
     metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
     metadataEditorDirty.value = false;
-    await refreshBuild();
     await restoreReviewViewport(viewport, { inspector: true });
     setMessage(
       i18n.tf(
@@ -2849,11 +2885,16 @@ function openLlmTouchup(text: string) {
   editingText.value = true;
   llmTouchupError.value = "";
   llmTouchupResult.value = {
-    source_text: "",
-    proposed_text: "",
-    changes: [],
-    warnings: [],
-    model: "",
+    source_text: selectedRecord.value?.text_touchup_proposal?.source_text || "",
+    proposed_text: selectedRecord.value?.text_touchup_proposal?.proposed_text || "",
+    changes: selectedRecord.value?.text_touchup_proposal?.changes || [],
+    warnings: selectedRecord.value?.text_touchup_proposal?.warnings || [],
+    provider: selectedRecord.value?.text_touchup_proposal?.provider || "",
+    model: selectedRecord.value?.text_touchup_proposal?.model || "",
+    proposal_id: selectedRecord.value?.text_touchup_proposal?.proposal_id,
+    run_id: selectedRecord.value?.text_touchup_proposal?.run_id,
+    created_at: selectedRecord.value?.text_touchup_proposal?.created_at,
+    status: selectedRecord.value?.text_touchup_proposal?.status,
     no_change: false,
   };
   llmActionProviderId.value =
@@ -2887,12 +2928,51 @@ async function runLlmTouchup(
       proposed_text: result.proposed_text,
       changes: result.changes || [],
       warnings: result.warnings || [],
+      provider: result.provider || "",
       model: result.model || "",
+      proposal_id: result.proposal_id,
+      run_id: result.run_id,
+      created_at: result.created_at,
+      status: "pending_review",
       no_change: Boolean(result.no_change),
+    };
+    selectedRecord.value = {
+      ...selectedRecord.value,
+      text_touchup_proposal: {
+        status: "pending_review",
+        proposal_id: result.proposal_id,
+        run_id: result.run_id,
+        source_text: result.source_text,
+        proposed_text: result.proposed_text,
+        changes: result.changes || [],
+        warnings: result.warnings || [],
+        provider: result.provider || "",
+        model: result.model || "",
+        created_at: result.created_at,
+      },
     };
   } catch (exc) {
     llmTouchupError.value = exc instanceof Error ? exc.message : String(exc);
     setMessage(llmTouchupError.value, "error");
+  } finally {
+    busy.value = "";
+  }
+}
+async function dismissLlmTouchup() {
+  if (!currentBuild.value || !selectedRecord.value || !llmTouchupResult.value.proposal_id) return;
+  busy.value = "text-touchup-dismiss";
+  try {
+    const updated = await pdfCorpusApi.setTouchupProposalStatus(
+      currentBuild.value.build_id,
+      selectedRecord.value.record_id,
+      "dismissed",
+    );
+    selectedRecord.value = updated;
+    const index = records.value.findIndex((row) => row.record_id === updated.record_id);
+    if (index >= 0) records.value.splice(index, 1, updated);
+    llmTouchupOpen.value = false;
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
     busy.value = "";
   }
@@ -4362,6 +4442,7 @@ onBeforeUnmount(() => {
                 v-if="bulkMetadataOpen"
                 :schema="currentBuild?.schema"
                 :records="records"
+                :known-values="metadataKnownValues"
                 :region-types="regionTypes"
                 :discourse-roles="discourseRoles"
                 :selected-count="selectedReviewCount"
@@ -4939,7 +5020,7 @@ onBeforeUnmount(() => {
                     :record="selectedRecord"
                     :region-types="regionTypes"
                     :discourse-roles="discourseRoles"
-                    :busy="busy !== ''"
+                    :busy="busy !== '' && busy !== 'metadata-field'"
                     :saving-field="metadataSavingField"
                     :saved-field="metadataSavedField"
                     :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
@@ -5143,6 +5224,7 @@ onBeforeUnmount(() => {
                     :page-height="selectedPageMeta?.height || 0"
                     :blocks="selectedPageBlocks"
                     :evidence-block-ids="evidenceIdsArray"
+                    :zoomable="reviewWorkspaceMode === 'source'"
                     :can-previous="selectedPdfPageIndex > 0"
                     :can-next="selectedPdfPageIndex < recordPdfPages.length - 1"
                     @previous="previousSourcePage"
@@ -5167,12 +5249,12 @@ onBeforeUnmount(() => {
                           providerProfiles.find(
                             (p) => p.id === (llmActionProviderId || selectedProviderId),
                           )?.type === 'ollama' &&
-                            llmActionConcurrentLoad + 1 >
-                              Number(
-                                providerProfiles.find(
-                                  (p) => p.id === (llmActionProviderId || selectedProviderId),
-                                )?.max_concurrent_requests || 1,
-                              ),
+                          llmActionConcurrentLoad + 1 >
+                            Number(
+                              providerProfiles.find(
+                                (p) => p.id === (llmActionProviderId || selectedProviderId),
+                              )?.max_concurrent_requests || 1,
+                            ),
                         )
                       "
                       :active-requests="llmActionConcurrentLoad"
@@ -5203,8 +5285,7 @@ onBeforeUnmount(() => {
                     <pre
                       v-if="selectedRecord.source_extracted_text"
                       class="original-extraction-snapshot"
-                      >{{ selectedRecord.source_extracted_text }}</pre
-                    >
+                      >{{ selectedRecord.source_extracted_text }}</pre>
                     <div class="source-blocks">
                       <article
                         v-for="(block, index) in visibleBlocks"
@@ -5338,7 +5419,12 @@ onBeforeUnmount(() => {
       :proposed-text="llmTouchupResult.proposed_text"
       :changes="llmTouchupResult.changes"
       :warnings="llmTouchupResult.warnings"
+      :provider="llmTouchupResult.provider"
       :model="llmTouchupResult.model"
+      :proposal-id="llmTouchupResult.proposal_id"
+      :run-id="llmTouchupResult.run_id"
+      :proposal-created-at="llmTouchupResult.created_at"
+      :proposal-status="llmTouchupResult.status"
       :no-change="llmTouchupResult.no_change"
       :error="llmTouchupError"
       :busy="busy === 'text-touchup'"
@@ -5348,11 +5434,11 @@ onBeforeUnmount(() => {
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
@@ -5367,6 +5453,7 @@ onBeforeUnmount(() => {
       @close="llmTouchupOpen = false"
       @run="runLlmTouchup"
       @apply="applyLlmTouchup"
+      @dismiss="dismissLlmTouchup"
     />
     <SourceTranscriptionDialog
       v-if="selectedRecord && selectedAsset"

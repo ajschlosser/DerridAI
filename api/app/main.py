@@ -81,6 +81,7 @@ from .models import (
     PdfCorpusReviewDecision,
     PdfCorpusSecondOpinion,
     PdfCorpusTextTouchupRequest,
+    PdfCorpusTextTouchupProposalStatus,
     PdfDocumentLayoutPatch,
     PdfLlmRequest,
     PdfPageLabelsPatch,
@@ -2274,9 +2275,19 @@ def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun) -> dict[s
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata")
-def patch_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusRecordPatch) -> dict[str, Any]:
+def patch_pdf_corpus_record_metadata(
+    build_id: str, record_id: str, body: PdfCorpusRecordPatch, include_state: bool = False
+) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes, body.expected_revision)
+        record = pdf_corpus_builds.patch_metadata(build_id, record_id, body.changes, body.expected_revision)
+        if include_state:
+            records = pdf_corpus_builds.repo.load_records(build_id)
+            return {
+                "record": record,
+                "build": pdf_corpus_builds.repo.get_build(build_id),
+                "queue_counts": pdf_corpus_builds._queue_counts(records),
+            }
+        return record
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -2500,7 +2511,21 @@ def touchup_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpu
         payload = _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
         instructions = str(payload.pop("instructions", "") or "")
         text_override = payload.pop("text", None)
-        return pdf_corpus_builds.touchup_record_text(build_id, record_id, payload, instructions, text_override)
+        result = pdf_corpus_builds.touchup_record_text(build_id, record_id, payload, instructions, text_override)
+        pdf_corpus_builds.save_text_touchup_proposal(build_id, record_id, result)
+        return result
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup-proposal")
+def set_pdf_corpus_text_touchup_proposal_status(build_id: str, record_id: str, body: PdfCorpusTextTouchupProposalStatus) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.set_text_touchup_proposal_status(
+            build_id, record_id, body.status
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

@@ -206,7 +206,51 @@ def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(
     assert updated["metadata_stage_status"]["indexing"] == "complete"
 
 
-def test_document_manifest_refresh_preserves_explicit_record_override(tmp_path: Path):
+def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_path: Path):
+    repo, build = install_review_build(tmp_path, {"text": "First record"})
+    records = [
+        repo.load_records(build["build_id"])[0],
+        {"record_id": "r2", "text": "Second record", "record_revision": 1},
+        {"record_id": "r3", "text": "Third record", "record_revision": 1},
+    ]
+    repo.save_records(build["build_id"], records)
+    active = repo.get_build(build["build_id"])
+    active.update({"status": "running", "stage": "metadata_enrichment"})
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    first = manager.rerun_metadata(build["build_id"], "r2", {})
+    assert first["metadata_priority_record_ids"] == ["r2"]
+    second = manager.rerun_metadata(build["build_id"], "r1", {})
+    assert second["metadata_priority_record_ids"] == ["r1", "r2"]
+    assert second["metadata_review_feedback"][-1]["source"] == "human_requeue"
+
+
+def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Reviewed text.",
+            "source_extracted_text": "Immutable source text.",
+            "needs_review": True,
+            "metadata_needs_attention": True,
+            "metadata_attention_reasons": ["An LLM text touch-up proposal is available for review."],
+            "text_touchup_proposal": {
+                "proposal_id": "touchup-1",
+                "status": "pending_review",
+                "source_text": "Immutable source text.",
+                "proposed_text": "Suggested text.",
+            },
+        },
+    )
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    updated = manager.set_text_touchup_proposal_status(build["build_id"], "r1", "dismissed")
+    assert updated["text"] == "Reviewed text."
+    assert updated["source_extracted_text"] == "Immutable source text."
+    assert updated["text_touchup_proposal"]["status"] == "dismissed"
+
+
+def test_document_manifest_refresh_preserves_explicit_record_override(tmp_path:Path):
     """Editing the document manifest does not overwrite a record-level human override."""
     record = {
         "text": "Primary text.",

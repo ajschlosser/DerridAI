@@ -1146,10 +1146,18 @@ class PdfCorpusRepository:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
         if not path.exists():
-            return {"items": [], "total": 0, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts([])}
+            return {
+                "items": [],
+                "total": 0,
+                "offset": offset,
+                "limit": limit,
+                "queue_counts": PdfCorpusBuildManager._queue_counts([]),
+                "metadata_values": {},
+            }
         q = query.casefold().strip()
         items: list[dict[str, Any]] = []
         queue_records: list[dict[str, Any]] = []
+        metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
         total = 0
         topology_count = 0
         with path.open("r", encoding="utf-8") as handle:
@@ -1158,6 +1166,15 @@ class PdfCorpusRepository:
                     continue
                 record = json.loads(line)
                 queue_records.append(record)
+                for field, value in record.items():
+                    if field not in metadata_values and not isinstance(value, (str, list, tuple)):
+                        continue
+                    metadata_values.setdefault(field, set())
+                    value = record.get(field)
+                    values = value if isinstance(value, list) else [value]
+                    for item in values:
+                        if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                            metadata_values[field].add(item.strip())
                 topology_index = topology_count
                 topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
@@ -1181,7 +1198,18 @@ class PdfCorpusRepository:
                 total += 1
         for record in items:
             record["topology_count"] = topology_count
-        return {"items": items, "total": total, "offset": offset, "limit": limit, "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records)}
+        return {
+            "items": items,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records),
+            "metadata_values": {
+                field: sorted(values, key=str.casefold)
+                for field, values in metadata_values.items()
+                if values
+            },
+        }
 
     def publication_path(self, publication_id: str) -> Path:
         return self.root / "publications" / f"{publication_id}.jsonl"
@@ -4183,6 +4211,8 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                         text_override=current_text,
                     )
                     record["text_touchup_proposal"] = {
+                        "proposal_id": f"touchup-{uuid.uuid4().hex[:12]}",
+                        "run_id": str(request.get("run_id") or f"touchup-run-{uuid.uuid4().hex[:12]}"),
                         "status": "pending_review",
                         "source_text": proposal["source_text"],
                         "proposed_text": proposal["proposed_text"],
@@ -4201,6 +4231,8 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                     raise
                 except Exception as exc:
                     record["text_touchup_proposal"] = {
+                        "proposal_id": f"touchup-{uuid.uuid4().hex[:12]}",
+                        "run_id": str(request.get("run_id") or f"touchup-run-{uuid.uuid4().hex[:12]}"),
                         "status": "failed",
                         "warnings": [f"LLM text touch-up failed: {exc}"],
                         "created_at": iso_now(),
@@ -7924,6 +7956,8 @@ SOURCE_TEXT:
         provider, model, _, _, _ = self._llm_config(active_request)
         return {
             "record_id": record_id,
+            "proposal_id": f"touchup-{uuid.uuid4().hex[:12]}",
+            "run_id": str(request.get("run_id") or f"touchup-run-{uuid.uuid4().hex[:12]}"),
             "source_text": current_text,
             "proposed_text": proposed,
             "no_change": no_change,
@@ -7931,7 +7965,67 @@ SOURCE_TEXT:
             "warnings": list(result.get("warnings") or []),
             "provider": provider,
             "model": model,
+            "created_at": iso_now(),
         }
+
+    @_serialize_record_mutation
+    def set_text_touchup_proposal_status(self, build_id: str, record_id: str, status: str) -> dict[str, Any]:
+        if status not in {"pending_review", "dismissed"}:
+            raise ValueError("Proposal status must be pending_review or dismissed.")
+        records = self.repo.load_records(build_id)
+        record = next((row for row in records if row.get("record_id") == record_id), None)
+        if record is None:
+            raise KeyError(record_id)
+        proposal = record.get("text_touchup_proposal")
+        if not isinstance(proposal, dict) or not proposal.get("proposed_text"):
+            raise ValueError("This record has no text touch-up proposal.")
+        proposal["status"] = status
+        proposal["updated_at"] = iso_now()
+        record["text_touchup_proposal"] = proposal
+        if status == "dismissed":
+            reasons = [
+                reason
+                for reason in record.get("metadata_attention_reasons") or []
+                if "text touch-up proposal" not in str(reason).casefold()
+            ]
+            record["metadata_attention_reasons"] = reasons
+            if not record.get("metadata_review_fields") and not record.get("metadata_incomplete_fields"):
+                record["metadata_needs_attention"] = False
+                record["needs_review"] = bool(record.get("source_quality_issues"))
+        else:
+            record["metadata_needs_attention"] = True
+            record["needs_review"] = True
+        self._rewrite_and_validate(build_id, records)
+        return next(
+            row for row in self.repo.load_records(build_id)
+            if row.get("record_id") == record_id
+        )
+
+    @_serialize_record_mutation
+    def save_text_touchup_proposal(self, build_id: str, record_id: str, proposal: dict[str, Any]) -> dict[str, Any]:
+        records = self.repo.load_records(build_id)
+        record = next((row for row in records if row.get("record_id") == record_id), None)
+        if record is None:
+            raise KeyError(record_id)
+        record["text_touchup_proposal"] = {
+            "proposal_id": str(proposal.get("proposal_id") or f"touchup-{uuid.uuid4().hex[:12]}"),
+            "run_id": str(proposal.get("run_id") or ""),
+            "status": "pending_review",
+            "source_text": str(proposal.get("source_text") or ""),
+            "proposed_text": str(proposal.get("proposed_text") or ""),
+            "changes": list(proposal.get("changes") or []),
+            "warnings": list(proposal.get("warnings") or []),
+            "provider": str(proposal.get("provider") or ""),
+            "model": str(proposal.get("model") or ""),
+            "created_at": iso_now(),
+        }
+        record["needs_review"] = True
+        record["metadata_needs_attention"] = True
+        reasons = list(record.get("metadata_attention_reasons") or [])
+        reasons.append("An LLM text touch-up proposal is available for review; reviewed text remains unchanged until approved.")
+        record["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+        self._rewrite_and_validate(build_id, records)
+        return next(row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id)
 
     @_serialize_record_mutation
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:

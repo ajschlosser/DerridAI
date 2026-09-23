@@ -567,6 +567,8 @@ export interface CorpusRecord {
   source_extracted_text?: string;
   text_review_status?: "human_corrected" | string;
   text_touchup_proposal?: {
+    proposal_id?: string;
+    run_id?: string;
     status?: string;
     source_text?: string;
     proposed_text?: string;
@@ -576,6 +578,7 @@ export interface CorpusRecord {
     model?: string;
     created_at?: string;
     no_change?: boolean;
+    updated_at?: string;
   };
   text_reviewed_at?: string;
   text_revision_history?: Array<{
@@ -717,6 +720,7 @@ export const pdfCorpusApi = {
       offset: number;
       limit: number;
       queue_counts?: CorpusBuild["review_queue_counts"];
+      metadata_values?: Record<string, string[]>;
     }>(
       `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewQueue && reviewQueue !== "all" ? `&review_queue=${encodeURIComponent(reviewQueue)}` : ""}${query ? `&query=${encodeURIComponent(query)}` : ""}`,
     ),
@@ -945,9 +949,17 @@ export const pdfCorpusApi = {
     recordId: string,
     changes: Record<string, unknown>,
     expectedRevision?: number,
+    includeState = false,
   ) =>
-    apiRequest<CorpusRecord>(
-      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata`,
+    apiRequest<
+      | CorpusRecord
+      | {
+          record: CorpusRecord;
+          build: CorpusBuild;
+          queue_counts?: CorpusBuild["review_queue_counts"];
+        }
+    >(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata${includeState ? "?include_state=true" : ""}`,
       { method: "PATCH", body: JSON.stringify({ changes, expected_revision: expectedRevision }) },
     ),
   patchEvidence: (
@@ -1052,10 +1064,22 @@ export const pdfCorpusApi = {
       warnings: string[];
       provider: string;
       model: string;
+      proposal_id?: string;
+      run_id?: string;
+      created_at?: string;
       no_change?: boolean;
     }>(
       `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/text-touchup`,
       { method: "POST", body: JSON.stringify(payload) },
+    ),
+  setTouchupProposalStatus: (
+    buildId: string,
+    recordId: string,
+    status: "pending_review" | "dismissed",
+  ) =>
+    apiRequest<CorpusRecord>(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/text-touchup-proposal`,
+      { method: "PATCH", body: JSON.stringify({ status }) },
     ),
   confirmManifest: (buildId: string, payload: Record<string, unknown>) =>
     apiRequest<CorpusBuild>(
