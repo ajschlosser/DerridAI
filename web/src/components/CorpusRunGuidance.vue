@@ -175,6 +175,7 @@ async function importGuidance(event: Event) {
         type="file"
         accept="application/json,.json"
         class="sr-only"
+        :aria-label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
         :disabled="disabled"
         @change="importGuidance"
       />
