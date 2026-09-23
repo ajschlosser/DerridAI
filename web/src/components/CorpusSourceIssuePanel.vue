@@ -6,7 +6,7 @@ const emit=defineEmits<{editText:[];openSource:[]}>();
 const i18n=useI18nStore();
 const rows=computed(()=>props.issues||[]);
 function pages(issue:Record<string,unknown>){return Array.isArray(issue.pages)&&issue.pages.length?issue.pages.join(', '):'—'}
-function label(issue:Record<string,unknown>){const code=String(issue.code||'source_quality');return i18n.t(`pdf_corpus.source_issue.${code}`,code==='fragmented_glyph_layout'?'Fragmented text layout':code==='source_quality_blocking'?'Damaged PDF text layer':'Source extraction issue')}
+function label(issue:Record<string,unknown>){const code=String(issue.code||'source_quality');return i18n.t(`pdf_corpus.source_issue.${code}`,code==='fragmented_glyph_layout'?'Fragmented text layout':code==='source_quality_blocking'?'Damaged PDF text layer':code==='illegible_text'?'Illegible extracted text':code==='low_raster_quality'?'Pixelated source scan':'Source extraction issue')}
 </script>
 <template>
   <section v-if="rows.length" class="source-issues" :data-resolved="resolved?'true':'false'" role="note" :aria-label="resolved?i18n.t('pdf_corpus.source_issue_resolved','Resolved source issue'):i18n.t('pdf_corpus.source_issue_title','Source extraction issue')">

@@ -18,6 +18,7 @@ from typing import Any
 import fitz
 
 from .main_text_start import infer_main_text_start
+from .raster_quality import assess_page_raster
 
 
 def safe_filename(value: str) -> str:
@@ -167,7 +168,7 @@ def extract_source_document(
                 ocr_pages += 1
             if warning:
                 warnings.append(warning)
-            pages.append({
+            page_meta = {
                 "pdf_page": page_index + 1,
                 "printed_page_label": printed_label,
                 "printed_page_label_source": label_source,
@@ -176,7 +177,11 @@ def extract_source_document(
                 "block_ids": [unit["block_id"] for unit in page_units],
                 "extraction_method": source,
                 "image_count": image_count,
-            })
+            }
+            raster = assess_page_raster(page)
+            if raster:
+                page_meta["raster"] = raster
+            pages.append(page_meta)
             units.extend(page_units)
 
         offsets: Counter[int] = Counter()

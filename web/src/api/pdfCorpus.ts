@@ -341,6 +341,8 @@ export interface CorpusBuild {
     deterministic?: boolean;
     unusable_page_count?: number;
     unusable_page_ratio?: number;
+    median_noise?: number | null;
+    noise_unusable_threshold?: number;
   };
   source_quality?: {
     valid_for_enrichment?: boolean;
@@ -562,7 +564,18 @@ export interface CorpusRecord {
     message?: string;
     micro_line_ratio?: number;
     page_findings?: Array<Record<string, unknown>>;
+    noise?: number;
   }>;
+  text_noise?: {
+    score?: number;
+    deterministic_score?: number;
+    raster_score?: number | null;
+    llm_score?: number | null;
+    threshold?: number;
+    unusable?: boolean;
+    reasons?: string[];
+    method?: string;
+  };
   resolved_source_quality_issues?: Array<Record<string, unknown>>;
   source_extracted_text?: string;
   text_review_status?: "human_corrected" | string;
