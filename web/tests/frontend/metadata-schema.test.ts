@@ -63,7 +63,7 @@ describe("the review panel follows the build's schema", () => {
     record_id: "r1",
     text: "t",
     mood: "calm",
-    metadata_field_status: { mood: { status: "llm_inferred", method: "llm" } },
+    metadata_field_status: { mood: { status: "model_inferred", method: "llm" } },
     metadata_incomplete_fields: [],
     metadata_review_fields: [],
   };

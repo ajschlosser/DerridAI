@@ -88,7 +88,7 @@ def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_re
     result is discarded (its stage becomes "skipped") and the human target stays.
     """
     live={'record_id':'r1','text':'reviewed','speaker':'Human','human_touched_fields':['speaker'],'metadata_field_status':{'speaker':{'status':'human_confirmed'}},'metadata_stage_status':{},'metadata_execution_ledger':{}}
-    worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'llm_inferred'},'target':{'status':'llm_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
+    worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'model_inferred'},'target':{'status':'model_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
     merged=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(live,worker)
     assert merged['speaker']=='Human'
     assert merged['target']=='Kant'

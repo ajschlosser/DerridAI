@@ -769,6 +769,28 @@ def _json_read(path: Path, default: Any = None) -> Any:
         return default
 
 
+# 2026: renamed to match the DERRIDAI Core Specification's assertion-status vocabulary
+# (llm_inferred -> model_inferred, human_confirmed_absent -> confirmed_absent). Builds and
+# records written before the rename still have the old values on disk; normalize them the
+# first time they are read, in place, the same way _with_start_inference backfills a field
+# that did not exist yet.
+_STATUS_VOCABULARY_MIGRATIONS = {"llm_inferred": "model_inferred", "human_confirmed_absent": "confirmed_absent"}
+_STATUS_BEARING_KEYS = {"status", "source"}
+
+
+def _migrate_status_vocabulary(value: Any) -> Any:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in _STATUS_BEARING_KEYS and isinstance(item, str) and item in _STATUS_VOCABULARY_MIGRATIONS:
+                value[key] = _STATUS_VOCABULARY_MIGRATIONS[item]
+            else:
+                _migrate_status_vocabulary(item)
+    elif isinstance(value, list):
+        for item in value:
+            _migrate_status_vocabulary(item)
+    return value
+
+
 def _normalize_text(value: str) -> str:
     """Normalize whitespace without destroying non-ASCII scholarly text.
 
@@ -1060,7 +1082,8 @@ class PdfCorpusRepository:
 
     def load_checkpoint(self, build_id: str, name: str, default: Any = None) -> Any:
         self.get_build(build_id)
-        return _json_read(self.build_checkpoint_path(build_id, name), default)
+        payload = _json_read(self.build_checkpoint_path(build_id, name), default)
+        return _migrate_status_vocabulary(payload) if payload is not default else payload
 
     def create_build(self, payload: dict[str, Any]) -> dict[str, Any]:
         build_id = f"build-{uuid.uuid4().hex[:16]}"
@@ -1092,14 +1115,14 @@ class PdfCorpusRepository:
         build = _json_read(self.build_path(build_id))
         if not isinstance(build, dict):
             raise KeyError(build_id)
-        return build
+        return _migrate_status_vocabulary(build)
 
     def list_builds(self, *, offset: int = 0, limit: int = 50, asset_id: str | None = None) -> dict[str, Any]:
         items: list[dict[str, Any]] = []
         for path in (self.root / "builds").glob("build-*/build.json"):
             build = _json_read(path)
             if isinstance(build, dict) and (not asset_id or build.get("asset_id") == asset_id):
-                items.append(build)
+                items.append(_migrate_status_vocabulary(build))
         items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
         total = len(items)
         return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
@@ -1138,7 +1161,7 @@ class PdfCorpusRepository:
             return []
         with self._lock:
             with path.open("r", encoding="utf-8") as handle:
-                return [json.loads(line) for line in handle if line.strip()]
+                return [_migrate_status_vocabulary(json.loads(line)) for line in handle if line.strip()]
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
@@ -1165,7 +1188,7 @@ class PdfCorpusRepository:
             for line in handle:
                 if not line.strip():
                     continue
-                record = json.loads(line)
+                record = _migrate_status_vocabulary(json.loads(line))
                 queue_records.append(record)
                 for field, value in record.items():
                     if field not in metadata_values and not isinstance(value, (str, list, tuple)):
@@ -2166,7 +2189,7 @@ CURRENT REVIEWED RECORD TEXT:
         info = prior_status or {}
         method = str(info.get("method") or "")
         state = str(info.get("status") or "")
-        if "llm" not in method and state != "llm_inferred":
+        if "llm" not in method and state != "model_inferred":
             return
         if info.get("blind") and info.get("model") and record is not None:
             sealed = self._ledger.sealed_value(build_id, str(record.get("record_id") or ""), field)
@@ -4574,7 +4597,7 @@ CURRENT REVIEWED RECORD TEXT:
             filled_confidence = decision["confidence"] or 0.0
             self._ledger.append(AUTOFILLED, model=model, field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=run_id, confidence=filled_confidence, self_reported=confidence, audit=audit, **conditions)
             return {
-                "status": "llm_inferred", "method": "llm", "model": model, "confidence": filled_confidence,
+                "status": "model_inferred", "method": "llm", "model": model, "confidence": filled_confidence,
                 "self_reported_confidence": confidence, "auto_populated": True, "autofilled": True, "audit_sample": audit,
                 "proposed_value": value, "reason_code": "resolved",
                 "reason": f"Filled in automatically at {round(filled_confidence * 100)}% confidence, with cited evidence.",
@@ -4851,7 +4874,7 @@ CURRENT REVIEWED RECORD TEXT:
             if field not in required_metadata_fields and value in (None, "", []) and outcome == "no_supported_value":
                 if confidence is not None and confidence > minimum and not needs_human:
                     field_status[field] = {
-                        "status": "llm_inferred", "method": "llm", "confidence": confidence,
+                        "status": "model_inferred", "method": "llm", "confidence": confidence,
                         "auto_populated": False, "autofilled": False, "value_source": "llm",
                         "verification_status": "auto_resolved", "proposed_value": None,
                         "reason_code": "no_supported_value", "reason": reason or "Model found no supported value for this field.",
@@ -4932,7 +4955,7 @@ CURRENT REVIEWED RECORD TEXT:
         for field in sorted(llm_populated_fields):
             proposed_status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
             shown[field] = record.get(field)
-            if conditions["blind"] and proposed_status.get("method") == "llm" and proposed_status.get("status") in {"llm_inferred", "unresolved"}:
+            if conditions["blind"] and proposed_status.get("method") == "llm" and proposed_status.get("status") in {"model_inferred", "unresolved"}:
                 # Blind review: the model's value is sealed in the ledger and the reviewer sees an empty field.
                 record[field] = [] if isinstance(shown[field], list) else None
                 field_status[field] = proposed_status = {
@@ -4975,7 +4998,7 @@ CURRENT REVIEWED RECORD TEXT:
             status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             required_discourse = [field for field in required_metadata_fields if field in schema.family_fields()[CORE_GROUP]]
             human_or_deterministic = all(
-                isinstance(status_map.get(field), dict) and str(status_map[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic", "inherited", "llm_inferred"}
+                isinstance(status_map.get(field), dict) and str(status_map[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic", "inherited", "model_inferred"}
                 for field in required_discourse
             ) if required_discourse else True
             discourse_ok = obvious_apparatus or human_or_deterministic
@@ -5227,8 +5250,8 @@ CURRENT REVIEWED RECORD TEXT:
                 if field.startswith("__"):
                     continue
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
-                if str(info.get("status") or "") == "llm_inferred":
-                    human_ownership_errors.append({"record_id": record_id, "reason": f"{field} is human-touched but still marked llm_inferred"})
+                if str(info.get("status") or "") == "model_inferred":
+                    human_ownership_errors.append({"record_id": record_id, "reason": f"{field} is human-touched but still marked model_inferred"})
 
             evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
             valid_ids = set(ids)
@@ -5792,7 +5815,7 @@ CURRENT REVIEWED RECORD TEXT:
         for field in required:
             info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
             state = str(info.get("status") or "")
-            if state == "human_confirmed_absent":
+            if state == "confirmed_absent":
                 continue
             if cls._metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
                 incomplete.append(field)
@@ -6069,7 +6092,7 @@ CURRENT REVIEWED RECORD TEXT:
                 state = str(info.get("status") or "")
                 if state == "inherited": contribution["inherited_fields"] += 1
                 elif state == "deterministic": contribution["deterministic_fields"] += 1
-                elif state == "llm_inferred": contribution["llm_fields_usable"] += 1
+                elif state == "model_inferred": contribution["llm_fields_usable"] += 1
                 elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
                     contribution["llm_fields_review"] += 1
                     if info.get("proposed_value") not in (None, "", []):
@@ -6487,7 +6510,7 @@ CURRENT REVIEWED RECORD TEXT:
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in self._schema_for(build_id).review_fields():
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                if info and info.get("status") == "llm_inferred":
+                if info and info.get("status") == "model_inferred":
                     if info.get("model"):
                         self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=target.get(field), new_value=target.get(field), **(info.get("conditions") or {}))
                     info["status"] = "human_confirmed"
@@ -6550,7 +6573,7 @@ CURRENT REVIEWED RECORD TEXT:
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in self._schema_for(build_id).review_fields():
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                if info and info.get("status") == "llm_inferred":
+                if info and info.get("status") == "model_inferred":
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
             target["metadata_reviewed_at"] = iso_now()
@@ -6616,7 +6639,7 @@ CURRENT REVIEWED RECORD TEXT:
                 status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 for field in self._schema_for(build_id).review_fields():
                     info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                    if info and info.get("status") == "llm_inferred":
+                    if info and info.get("status") == "model_inferred":
                         info["status"] = "human_confirmed"
                         info["method"] = "human_review_of_llm_proposal"
                 record["metadata_reviewed_at"] = iso_now()
@@ -6922,8 +6945,8 @@ CURRENT REVIEWED RECORD TEXT:
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
             self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
             target[field] = None
-            target.setdefault("metadata_field_status", {})[field] = {"status":"human_confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
-            target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"human_confirmed_absent"})
+            target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
+            target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
             target["metadata_reviewed_at"] = iso_now(); self._mark_human_touch(target,[field])
             profile = self._profile_for(build_id)
@@ -7882,7 +7905,7 @@ CURRENT REVIEWED RECORD TEXT:
                 info = status_map.get(key) if isinstance(status_map.get(key), dict) else {}
                 if str(info.get("status") or "") in {"human_confirmed", "human_override", "inherited", "deterministic"}:
                     continue
-                if str(info.get("method") or "").startswith("llm") or str(info.get("status") or "") in {"llm_inferred", "unresolved", "invalid"}:
+                if str(info.get("method") or "").startswith("llm") or str(info.get("status") or "") in {"model_inferred", "unresolved", "invalid"}:
                     target.pop(key, None)
                     status_map.pop(key, None)
             target.setdefault("metadata_stage_status", {}).pop(family, None)

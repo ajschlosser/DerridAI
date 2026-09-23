@@ -32,7 +32,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     await wrapper.setProps({
       value: "affirm",
       status: {
-        status: "llm_inferred",
+        status: "model_inferred",
         method: "llm",
         confidence: 0.91,
         auto_populated: true,
@@ -55,7 +55,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         options: stanceOptions,
         open: true,
         status: {
-          status: "llm_inferred",
+          status: "model_inferred",
           method: "llm",
           confidence: 0.92,
           auto_populated: true,
@@ -101,7 +101,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         control: "multi-combobox",
         options: ["cities of refuge", "cities of refuge", "hospitality", "cities of refuge"],
         open: true,
-        status: { status: "llm_inferred", method: "llm", confidence: 0.82, auto_populated: true },
+        status: { status: "model_inferred", method: "llm", confidence: 0.82, auto_populated: true },
       },
     });
 
@@ -162,7 +162,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         control: "multi-combobox",
         options: ["cities of refuge", "hospitality", "cosmopolitanism"],
         open: true,
-        status: { status: "llm_inferred", method: "llm", confidence: 0.72, auto_populated: true },
+        status: { status: "model_inferred", method: "llm", confidence: 0.72, auto_populated: true },
       },
     });
     const input = wrapper.get("input");

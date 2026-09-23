@@ -60,7 +60,7 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
     """LLM output fills fields and provenance shows which value came from where.
 
     The prompt must tell the model to choose from closed vocabularies. With a confident
-    reply: region_type and discourse_role are "llm_inferred", primary_text is
+    reply: region_type and discourse_role are "model_inferred", primary_text is
     "deterministic" (derived from region type), and the record is metadata-complete.
     """
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
@@ -82,10 +82,10 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
     assert record["discourse_role"]=="analysis"
     assert record["metadata_complete"] is True
     assert record["metadata_incomplete_fields"]==[]
-    assert record["metadata_field_status"]["region_type"]["status"]=="llm_inferred"
+    assert record["metadata_field_status"]["region_type"]["status"]=="model_inferred"
     assert record["metadata_field_status"]["primary_text"]["status"]=="deterministic"
     assert record["metadata_field_status"]["primary_text"]["method"]=="region_type_consistency"
-    assert record["metadata_field_status"]["discourse_role"]["status"]=="llm_inferred"
+    assert record["metadata_field_status"]["discourse_role"]["status"]=="model_inferred"
 
 
 def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeypatch):

@@ -180,7 +180,7 @@ export const CORPUS_RECORDS = Array.from({ length: 60 }, (_, i) => {
       unresolved.map((f, k) => [
         f,
         {
-          status: "llm_inferred",
+          status: "model_inferred",
           method: "llm",
           confidence: [0.95, 0.85, 0.7][k],
           reason: "Suggested from the surrounding argument; confirm it against the text.",

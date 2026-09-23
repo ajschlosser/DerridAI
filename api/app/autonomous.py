@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 # Statuses a person set. The policy never overrides them.
-HUMAN_STATUSES = {"human_confirmed", "human_override", "human_confirmed_absent"}
+HUMAN_STATUSES = {"human_confirmed", "human_override", "confirmed_absent"}
 # Why a field is waiting on a person, when a model proposed something for it.
 PROPOSAL_REASONS = {"low_confidence", "ambiguous", "llm_disagreement", "deterministic_llm_disagreement", "evidence_failed", "confidence_missing", "no_value_returned"}
 
@@ -86,7 +86,7 @@ def settle_record(record: dict[str, Any], policy: Policy) -> dict[str, Any]:
         record[field] = proposed
         pct = f"{round(confidence * 100)}%" if confidence is not None else "unreported"
         statuses[field] = {
-            "status": "llm_inferred", "method": "autonomous_policy", "autonomous": True, "confidence": confidence,
+            "status": "model_inferred", "method": "autonomous_policy", "autonomous": True, "confidence": confidence,
             "auto_populated": True, "proposed_value": proposed, "reason_code": "resolved",
             "reason": f"Taken automatically in hands-free mode (model confidence {pct}); no person reviewed it.",
         }
