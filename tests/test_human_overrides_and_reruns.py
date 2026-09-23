@@ -219,11 +219,12 @@ def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_pat
     repo.save_build(active)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
 
-    first = manager.rerun_metadata(build["build_id"], "r2", {})
-    assert first["metadata_priority_record_ids"] == ["r2"]
-    second = manager.rerun_metadata(build["build_id"], "r1", {})
-    assert second["metadata_priority_record_ids"] == ["r1", "r2"]
-    assert second["metadata_review_feedback"][-1]["source"] == "human_requeue"
+    manager.rerun_metadata(build["build_id"], "r2", {})
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == ["r2"]
+    manager.rerun_metadata(build["build_id"], "r1", {})
+    updated = repo.get_build(build["build_id"])
+    assert updated["metadata_priority_record_ids"] == ["r1", "r2"]
+    assert updated["metadata_review_feedback"][-1]["source"] == "human_requeue"
 
 
 def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):

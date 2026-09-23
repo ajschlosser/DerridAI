@@ -134,6 +134,7 @@ from .metadata_schema import (
     response_model_for,
 )
 from .metadata_schema_store import SchemaNotFound, SchemaStore
+from .metadata_values import is_placeholder
 from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 from .reviewer_context import current_reviewer

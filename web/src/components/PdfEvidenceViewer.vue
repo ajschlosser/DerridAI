@@ -60,7 +60,6 @@ async function cancelRender() {
     }
   }
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 async function destroyDocument() {
   documentGeneration += 1;
   renderGeneration += 1;
@@ -74,11 +73,15 @@ async function destroyDocument() {
   if (task) {
     try {
       await task.destroy?.();
-    } catch {}
+    } catch (exc) {
+      void exc;
+    }
   } else if (doc) {
     try {
       await doc.destroy?.();
-    } catch {}
+    } catch (exc) {
+      void exc;
+    }
   }
 }
 async function loadDocument() {
