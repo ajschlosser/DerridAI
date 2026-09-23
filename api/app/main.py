@@ -54,6 +54,7 @@ from .models import (
     ChromaPathUpdate,
     DeriveLanguageStoresRequest,
     EmbeddingPreflightRequest,
+    GutenbergImport,
     LanguageContentPolicyUpdate,
     LanguageDictionaryUpdate,
     LanguageInstallRequest,
@@ -88,6 +89,7 @@ from .models import (
     PdfDocumentLayoutPatch,
     PdfLlmRequest,
     PdfPageLabelsPatch,
+    PdfSourceUrlImport,
     RAGConcurrencyUpdate,
     RAGGradeRequest,
     RAGRunRequest,
@@ -117,6 +119,11 @@ from .researcher_view import (
     summarize_record,
 )
 from .reviewer_context import current_reviewer, reviewer_id
+from .source_media import (
+    fetch_source_url,
+    load_gutenberg_etext,
+    search_project_gutenberg,
+)
 from .system_store import normalize_locale_code, system_store
 
 logger = logging.getLogger(__name__)
@@ -1930,9 +1937,12 @@ async def create_pdf_asset(
     file: UploadFile = File(...),
     ocr_mode: str = Form(default="auto"),
     ocr_languages: str = Form(default="eng+fra+deu"),
+    source_illegibility: float = Form(default=0),
 ) -> dict[str, Any]:
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
+    if source_illegibility < 0 or source_illegibility > 100:
+        raise HTTPException(status_code=422, detail="source_illegibility must be between 0 and 100")
     try:
         max_bytes = settings.pdf_max_upload_mb * 1024 * 1024
         chunks: list[bytes] = []
@@ -1954,12 +1964,54 @@ async def create_pdf_asset(
             filename=file.filename or "source.pdf",
             ocr_mode=ocr_mode,
             ocr_languages=ocr_languages or "eng+fra+deu",
+            source_illegibility=source_illegibility,
+            content_type=file.content_type or "",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("PDF asset ingestion failed")
         raise HTTPException(status_code=500, detail=f"PDF asset ingestion failed: {exc}") from exc
+
+
+@app.post("/api/pdf/assets/url")
+def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
+    try:
+        data, filename, content_type = fetch_source_url(body.url, max_bytes=settings.pdf_max_upload_mb * 1024 * 1024)
+        return pdf_corpus_repository.save_asset(
+            data, filename=filename, source_illegibility=body.source_illegibility,
+            content_type=content_type, source_url=body.url,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("URL source ingestion failed")
+        raise HTTPException(status_code=500, detail=f"URL source ingestion failed: {exc}") from exc
+
+
+@app.get("/api/pdf/gutenberg/search")
+def search_gutenberg_texts(q: str = Query(default="", max_length=200), limit: int = Query(default=12, ge=1, le=30)) -> dict[str, Any]:
+    try:
+        return {"items": search_project_gutenberg(q, limit)}
+    except Exception as exc:
+        logger.exception("Project Gutenberg search failed")
+        raise HTTPException(status_code=502, detail=f"Project Gutenberg search failed: {exc}") from exc
+
+
+@app.post("/api/pdf/gutenberg/import")
+def import_gutenberg_text(body: GutenbergImport) -> dict[str, Any]:
+    try:
+        text, catalog = load_gutenberg_etext(body.etext_id)
+        return pdf_corpus_repository.save_asset(
+            text.encode("utf-8"), filename=f"{catalog.get('title') or body.etext_id}.txt",
+            source_illegibility=body.source_illegibility, content_type="text/plain",
+            catalog_metadata=catalog, source_url=f"https://www.gutenberg.org/ebooks/{body.etext_id}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Project Gutenberg import failed")
+        raise HTTPException(status_code=502, detail=f"Project Gutenberg import failed: {exc}") from exc
 
 
 @app.get("/api/pdf/assets")
@@ -2001,8 +2053,10 @@ def patch_pdf_asset_document_layout(asset_id: str, body: PdfDocumentLayoutPatch)
 def get_pdf_asset_content(asset_id: str) -> FileResponse:
     try:
         asset = pdf_corpus_repository.get_asset(asset_id)
-        path = pdf_corpus_repository.asset_pdf_path(asset_id)
-        return FileResponse(path, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{asset.get("filename") or "source.pdf"}"'})
+        suffix = str(asset.get("content_suffix") or ".pdf")
+        path = pdf_corpus_repository.asset_content_path(asset_id, suffix)
+        media_type = str(asset.get("media_type") or "application/pdf").split(";", 1)[0]
+        return FileResponse(path, media_type=media_type, headers={"Content-Disposition": f'inline; filename="{asset.get("filename") or "source"}"'})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
 

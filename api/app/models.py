@@ -398,6 +398,16 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PdfSourceUrlImport(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    source_illegibility: float = Field(default=0, ge=0, le=100)
+
+
+class GutenbergImport(BaseModel):
+    etext_id: int = Field(ge=1)
+    source_illegibility: float = Field(default=0, ge=0, le=100)
+
+
 class PdfDocumentLayoutPatch(BaseModel):
     page_layout: Literal["single", "two_up"] = "single"
     reading_order: Literal["left_to_right", "right_to_left"] = "left_to_right"
