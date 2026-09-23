@@ -65,10 +65,10 @@ def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
             "profile_id": cb.PROFILE_VERSION, "source_sha256": "abc",
         },
     }
-    assert cb.PdfCorpusBuildManager._validate_publication_record(public) == []
+    assert cb.validate_publication_record(public) == []
     assert "東京" in json.dumps(public, ensure_ascii=False)
     public["region_type"] = "invented"
-    assert any("region_type" in error for error in cb.PdfCorpusBuildManager._validate_publication_record(public))
+    assert any("region_type" in error for error in cb.validate_publication_record(public))
 
 
 

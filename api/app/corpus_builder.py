@@ -95,7 +95,13 @@ from .corpus_metadata import (
     apply_metadata_constraints as apply_metadata_constraints,
 )
 from .corpus_pipeline import BuildScope
-from .corpus_publication import serialize_public_record, validate_publication_record
+from .corpus_publication import (
+    build_text_touchup_prompt,
+    publication_blocker,
+    publishable_records,
+    serialize_public_record,
+    validate_publication_record,
+)
 from .corpus_review_mutations import requeue_record_metadata
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
@@ -7927,24 +7933,14 @@ CURRENT REVIEWED RECORD TEXT:
         self._rewrite_and_validate(build_id, records)
         return target
 
-    @staticmethod
-    def _validate_publication_record(record: dict[str, Any]) -> list[str]:
-        return validate_publication_record(record)
-
-    def _serialize_public_record(self, build: dict[str, Any], record: dict[str, Any], publication_id: str, created_at: str) -> dict[str, Any]:
-        return serialize_public_record(record)
-
     def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
-        build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
         self._present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
-        preview_id = f"preview-{build_id.removeprefix('build-')}"
-        created_at = iso_now()
-        public = self._serialize_public_record(build, record, preview_id, created_at)
-        errors = self._validate_publication_record(public)
+        public = serialize_public_record(record)
+        errors = validate_publication_record(public)
         unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
         return {
             "record": public,
@@ -7964,24 +7960,7 @@ CURRENT REVIEWED RECORD TEXT:
             raise ValueError("Record text is empty.")
         _ = self.repo.get_build(build_id).get("request") or {}
         active_request = self._interactive_llm_request(build_id, request or None)
-        prompt = f"""You are performing a conservative scholarly text touch-up on OCR/PDF extracted text.
-
-RULES:
-- Preserve wording, meaning, quotations, terminology, paragraph order, and authorial style.
-- Do NOT paraphrase, summarize, modernize, translate, or add content.
-- Correct only obvious OCR artifacts, broken words, spacing, punctuation, accidental line wrapping, duplicated running headers/footers/page numbers, and clear textual errata caused by extraction.
-- Preserve poetry, verse, block quotations, lists, footnotes, and deliberate typographic/orthographic oddities unless the artifact is unambiguous.
-- When uncertain, leave the source text unchanged and mention the uncertainty in warnings.
-- Return the COMPLETE touched-up text.
-- In the JSON text field, return ONLY the corrected passage text. Do not add Markdown fences, triple-hyphen separators, SOURCE_TEXT labels, quotation wrappers, or commentary around the passage.
-
-Optional reviewer instruction: {instructions or 'None'}
-
-SOURCE_TEXT:
-<SOURCE_TEXT>
-{current_text}
-</SOURCE_TEXT>
-"""
+        prompt = build_text_touchup_prompt(current_text, instructions)
         result = self._chat_json(active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=min(8192, max(2048, len(current_text)//3)), schema_name="record_text_touchup", attempts=2, build_id=build_id)
         proposed = _sanitize_touchup_output(str(result.get("text") or ""), current_text)
         if not proposed:
@@ -8067,49 +8046,27 @@ SOURCE_TEXT:
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)
-        readiness = build.get("publication_readiness") if isinstance(build.get("publication_readiness"), dict) else {}
-        readiness_blockers = readiness.get("blockers") if isinstance(readiness.get("blockers"), list) else []
-        missing_document = [item for item in readiness_blockers if isinstance(item, dict) and item.get("code") == "required_document_metadata"]
-        if missing_document:
-            fields = ", ".join(str(value) for value in (missing_document[0].get("fields") or []))
-            raise ValueError(f"Publication is blocked: required document metadata is missing ({fields}).")
-        metadata_total = int(build.get("metadata_total") or 0)
-        metadata_completed = int(build.get("metadata_completed") or 0)
-        if metadata_total and metadata_completed < metadata_total:
-            summary = build.get("metadata_issue_summary") or {}
-            by_field = summary.get("by_field") if isinstance(summary, dict) else {}
-            detail = ", ".join(f"{field}: {count}" for field, count in sorted((by_field or {}).items()))
-            suffix = f" Unresolved fields — {detail}." if detail else ""
-            raise ValueError(f"Publication is blocked: metadata is complete for {metadata_completed} of {metadata_total} record(s).{suffix} Resolve the metadata issue queue before publishing.")
-        if not validation.get("valid"):
-            raise ValueError("Publication is blocked until source coverage and text-fidelity validation pass.")
-        publishable_records = [record for record in records if str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "pending")) != "rejected" and not record.get("rejected")]
-        if not publishable_records:
-            raise ValueError("Publication is unavailable because every record is rejected. Restore at least one record or discard this build.")
-        unresolved = [record for record in publishable_records if record.get("needs_review")]
-        if unresolved:
-            raise ValueError(f"Publication is blocked: {len(unresolved)} publishable record(s) still need review.")
-        if require_acceptance:
-            unaccepted = [record for record in publishable_records if not record.get("accepted")]
-            if unaccepted:
-                raise ValueError(f"Publication is blocked: {len(unaccepted)} publishable record(s) have not been accepted.")
+        publishable = publishable_records(records)
+        blocker = publication_blocker(build, publishable, validation, require_acceptance=require_acceptance)
+        if blocker:
+            raise ValueError(blocker)
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
         path = self.repo.publication_path(publication_id)
         hasher = hashlib.sha256()
         with path.open("wb") as handle:
-            for record in publishable_records:
+            for record in publishable:
                 # Use the same serializer as the per-record JSONL preview so the
                 # reviewer sees the exact eventual public record shape.
-                public = self._serialize_public_record(build, record, publication_id, created_at)
-                schema_errors = self._validate_publication_record(public)
+                public = serialize_public_record(record)
+                schema_errors = validate_publication_record(public)
                 if schema_errors:
                     joined = "; ".join(schema_errors[:8])
                     raise ValueError(f"Publication schema validation failed for {public.get('record_id') or 'unknown record'}: {joined}")
                 line = (json.dumps(public, ensure_ascii=False) + "\n").encode("utf-8")
                 hasher.update(line)
                 handle.write(line)
-        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(publishable_records), "excluded_rejected_count": len(records) - len(publishable_records), "created_at": created_at}
+        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(publishable), "excluded_rejected_count": len(records) - len(publishable), "created_at": created_at}
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is
         # an immutable snapshot of a ready build, not a new build-processing state.
