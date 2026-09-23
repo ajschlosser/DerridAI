@@ -62,7 +62,7 @@ def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: 
 
     for page, title in outline:
         if 1 <= page <= page_count and (_FIRST_CHAPTER.match(title) or _NUMBERED_FIRST.match(title)):
-            clues.append({"page": page, "kind": "outline_first_chapter", "detail": f"Bookmark “{title.strip()}” points to PDF page {page}."})
+            clues.append({"page": page, "kind": "outline_first_chapter", "detail": f'Bookmark "{title.strip()}" points to PDF page {page}.'})
             break
 
     entries = [(p, t) for p, t in outline if 1 <= p <= page_count]
@@ -71,7 +71,7 @@ def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: 
         # The first bookmark after the front matter, skipping an introduction (which may or may not be main text).
         after = next(((p, t) for p, t in entries[last_front + 1 :] if not _INTRO.match(t) and p > entries[last_front][0]), None)
         if after is not None:
-            clues.append({"page": after[0], "kind": "outline_after_front_matter", "detail": f"Bookmark “{after[1].strip()}” is the first after the front matter (PDF page {after[0]})."})
+            clues.append({"page": after[0], "kind": "outline_after_front_matter", "detail": f'Bookmark "{after[1].strip()}" is the first after the front matter (PDF page {after[0]}.'})
 
     for page in sorted(pages):
         if page in contents_pages:
@@ -82,7 +82,7 @@ def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: 
         if hit is None and len(head) >= 2 and re.match(r"^\s*(?:chapter|chapitre)\s*$", head[0], re.I) and _BARE_FIRST.match(head[1]):
             hit = f"{head[0]} {head[1]}"
         if hit:
-            clues.append({"page": page, "kind": "first_chapter_heading", "detail": f"“{hit[:60]}” appears as a heading on PDF page {page}."})
+            clues.append({"page": page, "kind": "first_chapter_heading", "detail": f'"{hit[:60]}" appears as a heading on PDF page {page}.'})
             break
 
     first_arabic = next((p for p in sorted(labels) if str(labels[p] or "") == "1"), None)
@@ -101,7 +101,7 @@ def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: 
         following = next((p for p in sorted(pages) if p > run_end and p not in contents_pages and not _FRONT_HEADING.match(pages[p][0])
                           and any(_looks_like_heading(x) for x in pages[p][:2])), None)
         if following:
-            clues.append({"page": following, "kind": "front_matter_ends", "detail": f"Front matter ({', '.join(pages[p][0][:24] for p in front[:3])}) ends before PDF page {following}."})
+            clues.append({"page": following, "kind": "front_matter_ends", "detail": f'Front matter ({", ".join(pages[p][0][:24] for p in front[:3])}) ends before PDF page {following}.'})
     return clues
 
 
