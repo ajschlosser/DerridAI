@@ -1,124 +1,108 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import DashboardView from "../views/DashboardView.vue";
-import RecordsView from "../views/RecordsView.vue";
-import WorksView from "../views/WorksView.vue";
-import ResearchView from "../views/ResearchView.vue";
-import SearchView from "../views/SearchView.vue";
-import RecordView from "../views/RecordView.vue";
-import ResponseFaqView from "../views/ResponseFaqView.vue";
-import ResponseCacheView from "../views/ResponseCacheView.vue";
-import PdfWorkspaceView from "../views/PdfWorkspaceView.vue";
-import VectorStoresView from "../views/VectorStoresView.vue";
-import CompareView from "../views/CompareView.vue";
-import SettingsView from "../views/SettingsView.vue";
-import UsersView from "../views/UsersView.vue";
-import LanguagesView from "../views/LanguagesView.vue";
-import RolesView from "../views/RolesView.vue";
-import ProvidersView from "../views/ProvidersView.vue";
-import AnnotationsView from "../views/AnnotationsView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
-    component: DashboardView,
+    component: () => import("../views/DashboardView.vue"),
     meta: { view: "home", capability: "page.dashboard" },
   },
   {
     path: "/records",
     name: "list",
-    component: RecordsView,
+    component: () => import("../views/RecordsView.vue"),
     meta: { view: "list", capability: "page.records", adminOnly: true, vueNative: true },
   },
   {
     path: "/record",
     name: "record",
-    component: RecordView,
+    component: () => import("../views/RecordView.vue"),
     meta: { view: "record", capability: "page.record", vueNative: true },
   },
   {
     path: "/works",
     name: "works",
-    component: WorksView,
+    component: () => import("../views/WorksView.vue"),
     meta: { view: "works", capability: "page.works", vueNative: true },
   },
   {
     path: "/search",
     name: "global",
-    component: SearchView,
+    component: () => import("../views/SearchView.vue"),
     meta: { view: "global", capability: "page.search", vueNative: true },
   },
   {
     path: "/annotations",
     name: "annotations",
-    component: AnnotationsView,
+    component: () => import("../views/AnnotationsView.vue"),
     meta: { view: "annotations", capability: "page.annotations", vueNative: true },
   },
   {
     path: "/pdf",
     name: "pdf",
-    component: PdfWorkspaceView,
+    component: () => import("../views/PdfWorkspaceView.vue"),
     meta: { view: "pdf", capability: "page.pdf", adminOnly: true },
   },
   {
     path: "/compare",
     name: "compare",
-    component: CompareView,
+    component: () => import("../views/CompareView.vue"),
     meta: { view: "compare", capability: "page.compare", vueNative: true },
   },
   {
     path: "/databases",
     name: "vector",
-    component: VectorStoresView,
+    component: () => import("../views/VectorStoresView.vue"),
     meta: { view: "vector", capability: "page.vector", vueNative: true },
   },
   {
     path: "/rag",
     name: "rag",
-    component: ResearchView,
+    component: () => import("../views/ResearchView.vue"),
     meta: { view: "rag", capability: "page.research" },
   },
   {
     path: "/faq",
     name: "faq",
-    component: ResponseFaqView,
+    component: () => import("../views/ResponseFaqView.vue"),
     meta: { view: "faq", capability: "page.faq", adminOnly: true, vueNative: true },
   },
   {
     path: "/response-cache",
     name: "responsecache",
-    component: ResponseCacheView,
+    component: () => import("../views/ResponseCacheView.vue"),
     meta: { view: "responsecache", capability: "page.response_cache", adminOnly: true },
   },
   {
     path: "/providers",
     name: "providers",
-    component: ProvidersView,
+    component: () => import("../views/ProvidersView.vue"),
     meta: { view: "providers", capability: "page.providers", adminOnly: true, vueNative: true },
   },
   {
     path: "/settings",
     name: "config",
-    component: SettingsView,
+    component: () => import("../views/SettingsView.vue"),
     meta: { view: "config", capability: "page.settings", vueNative: true },
   },
   {
     path: "/users",
     name: "users",
-    component: UsersView,
+    component: () => import("../views/UsersView.vue"),
     meta: { capability: "page.users", adminOnly: true, vueNative: true },
   },
   {
     path: "/roles",
     name: "roles",
-    component: RolesView,
+    component: () => import("../views/RolesView.vue"),
     meta: { capability: "page.roles", adminOnly: true, vueNative: true },
   },
   {
     path: "/languages",
     name: "languages",
-    component: LanguagesView,
+    component: () => import("../views/LanguagesView.vue"),
     meta: { capability: "page.languages", adminOnly: true, vueNative: true },
   },
   { path: "/:pathMatch(.*)*", redirect: "/" },
