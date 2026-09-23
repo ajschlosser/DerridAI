@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import io
+import sys
 import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
-import sys
 
 import fitz
 
@@ -53,10 +53,10 @@ def test_locale_keys_for_generic_sources_match():
 def test_text_load_runs_deterministic_metadata_immediately(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path)
     source = (
-        "Title: Of Hospitality\n"
-        "Author: Jacques Derrida\n\n"
-        "The law of hospitality remains unconditional.\n"
-    ).encode()
+        b"Title: Of Hospitality\n"
+        b"Author: Jacques Derrida\n\n"
+        b"The law of hospitality remains unconditional.\n"
+    )
     asset = repo.save_asset(source, filename="hospitality.txt")
     assert asset["media_kind"] == "text"
     assert asset["deterministic_checked_at"]
@@ -82,10 +82,10 @@ def test_word_rtf_and_html_metadata(tmp_path: Path):
     assert rich["initial_metadata"]["document_author"] == "Jacques Derrida"
 
     html = (
-        "<html><head><title>Of Hospitality</title>"
-        '<meta name="author" content="Jacques Derrida"></head>'
-        "<body><p>The threshold remains open.</p></body></html>"
-    ).encode()
+        b"<html><head><title>Of Hospitality</title>"
+        b'<meta name="author" content="Jacques Derrida"></head>'
+        b"<body><p>The threshold remains open.</p></body></html>"
+    )
     page = repo.save_asset(html, filename="hospitality.html", content_type="text/html")
     assert page["media_kind"] == "html"
     assert page["initial_metadata"]["document_author"] == "Jacques Derrida"

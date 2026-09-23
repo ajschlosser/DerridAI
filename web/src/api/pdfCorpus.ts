@@ -20,7 +20,6 @@ export interface PdfAsset {
   source_illegibility?: number;
   deterministic_checked_at?: string;
   initial_metadata?: { title?: string; document_author?: string; speaker?: string; speakers?: string[]; language?: string; [key: string]: unknown };
-  source_quality?: { valid_for_enrichment?: boolean; blocking_page_count?: number };
   document_layout?: DocumentLayoutPlan;
   document_layout_revision?: number;
   pages?: Array<{
