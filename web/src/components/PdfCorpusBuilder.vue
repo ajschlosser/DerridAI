@@ -689,8 +689,8 @@ const llmActionConcurrentLoad = computed(() => {
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     selectedAsset.value &&
-    contextSafe.value &&
-    (selectedProviderId.value || !activeBuildCount.value),
+      contextSafe.value &&
+      (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const llmContribution = computed(() => currentBuild.value?.llm_contribution || {});
@@ -792,7 +792,7 @@ const metadataKnownValues = computed<Record<string, string[]>>(() => {
 const selectedMetadataBlocked = computed(() =>
   Boolean(
     (selectedRecord.value?.metadata_review_fields || []).length ||
-    (selectedRecord.value?.metadata_incomplete_fields || []).length,
+      (selectedRecord.value?.metadata_incomplete_fields || []).length,
   ),
 );
 const selectedMetadataBlockingFields = computed(() =>
@@ -1417,8 +1417,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-      selectedRecordId.value === wanted &&
-      (editingText.value || metadataEditorDirty.value),
+        selectedRecordId.value === wanted &&
+        (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -3129,6 +3129,17 @@ async function cancelBuild() {
   );
   startPolling();
 }
+async function pauseBuild() {
+  if (!currentBuild.value) return;
+  await pdfCorpusApi.pause(currentBuild.value.build_id);
+  setMessage(
+    i18n.t(
+      "pdf_corpus.pause_requested",
+      "Pause requested. The build will resume safely from its last checkpoint.",
+    ),
+  );
+  startPolling();
+}
 async function settleMetadata() {
   if (!currentBuild.value) return;
   busy.value = "settle";
@@ -4018,6 +4029,9 @@ onBeforeUnmount(() => {
               <p>{{ currentBuild.build_id }}</p>
             </div>
             <div class="summary-actions">
+              <button v-if="buildRunning" type="button" class="btn" @click="pauseBuild">
+                {{ i18n.t("pdf_corpus.pause", "Pause") }}
+              </button>
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">
                 {{ i18n.t("pdf_corpus.cancel", "Cancel") }}
               </button>
@@ -5249,12 +5263,12 @@ onBeforeUnmount(() => {
                           providerProfiles.find(
                             (p) => p.id === (llmActionProviderId || selectedProviderId),
                           )?.type === 'ollama' &&
-                          llmActionConcurrentLoad + 1 >
-                            Number(
-                              providerProfiles.find(
-                                (p) => p.id === (llmActionProviderId || selectedProviderId),
-                              )?.max_concurrent_requests || 1,
-                            ),
+                            llmActionConcurrentLoad + 1 >
+                              Number(
+                                providerProfiles.find(
+                                  (p) => p.id === (llmActionProviderId || selectedProviderId),
+                                )?.max_concurrent_requests || 1,
+                              ),
                         )
                       "
                       :active-requests="llmActionConcurrentLoad"
@@ -5285,7 +5299,8 @@ onBeforeUnmount(() => {
                     <pre
                       v-if="selectedRecord.source_extracted_text"
                       class="original-extraction-snapshot"
-                      >{{ selectedRecord.source_extracted_text }}</pre>
+                      >{{ selectedRecord.source_extracted_text }}</pre
+                    >
                     <div class="source-blocks">
                       <article
                         v-for="(block, index) in visibleBlocks"
@@ -5434,11 +5449,11 @@ onBeforeUnmount(() => {
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-          llmActionConcurrentLoad + 1 >
-            Number(
-              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
-                1,
-            ),
+            llmActionConcurrentLoad + 1 >
+              Number(
+                providerProfiles.find((p) => p.id === llmActionProviderId)
+                  ?.max_concurrent_requests || 1,
+              ),
         )
       "
       :active-requests="llmActionConcurrentLoad"

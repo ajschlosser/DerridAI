@@ -85,10 +85,20 @@ function duplicate() {
 async function save() {
   const schema = draft.value;
   if (!schema) return;
+  const payload = {
+    ...schema,
+    fields: schema.fields.filter((field) => field.name.trim()),
+    groups: schema.groups.map((group) => ({
+      ...group,
+      key: group.key.trim(),
+      label: group.label.trim(),
+      intro: group.intro.trim(),
+    })),
+  };
   const saved = await guarded(() =>
     isNew.value
-      ? metadataSchemasApi.create(schema)
-      : metadataSchemasApi.update(selectedId.value, schema),
+      ? metadataSchemasApi.create(payload)
+      : metadataSchemasApi.update(selectedId.value, payload),
   );
   if (!saved) return;
   notice.value = t("saved", "Schema saved.");

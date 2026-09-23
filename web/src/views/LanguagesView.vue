@@ -75,6 +75,27 @@ const allKeys = computed(() => {
   ]);
   return [...keys].sort((a, b) => a.localeCompare(b));
 });
+const templateTokens = computed(() => {
+  const tokens = new Set<string>();
+  for (const value of Object.values(referenceDictionary.value)) {
+    for (const match of value.matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g)) tokens.add(match[1]);
+  }
+  return [...tokens].sort().map((token) => ({
+    token: `{${token}}`,
+    resolvesTo:
+      token === "count"
+        ? i18n.t("language.template_count", "a localized count")
+        : token === "holder"
+          ? i18n.t("language.template_holder", "the configured copyright holder")
+          : token === "year"
+            ? i18n.t("language.template_year", "the current copyright year")
+            : i18n.tf(
+                "language.template_runtime",
+                "the value supplied by the calling screen ({name})",
+                { name: token },
+              ),
+  }));
+});
 const categories = computed(() => {
   const counts = new Map<string, number>();
   for (const key of allKeys.value) {
@@ -1661,6 +1682,25 @@ onUnmounted(() => {
                 )
               }}
             </p>
+          </details>
+          <details class="language-advanced-key">
+            <summary>{{ i18n.t("language.template_reference", "Template placeholders") }}</summary>
+            <p>
+              {{
+                i18n.t(
+                  "language.template_reference_help",
+                  "These placeholders are discovered from the canonical dictionary and resolved by the screen that renders each message.",
+                )
+              }}
+            </p>
+            <dl class="language-template-list">
+              <template v-for="item in templateTokens" :key="item.token">
+                <dt>
+                  <code>{{ item.token }}</code>
+                </dt>
+                <dd>{{ item.resolvesTo }}</dd>
+              </template>
+            </dl>
           </details>
         </template>
       </section>

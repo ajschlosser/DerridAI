@@ -1085,6 +1085,16 @@ class PdfCorpusRepository:
         _json_write(self.build_path(build_id), build)
         return build
 
+    def pause(self, build_id: str) -> dict[str, Any]:
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            with self._lock:
+                self._paused.add(build_id)
+                self._cancel.add(build_id)
+            build["pause_requested"] = True
+            self.repo.save_build(build)
+        return build
+
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
 
@@ -1268,6 +1278,7 @@ class PdfCorpusBuildManager:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
         self._cancel: set[str] = set()
+        self._paused: set[str] = set()
         # Resolved provider requests may contain server-owned credentials and must
         # never be serialized into build.json. Keep the current execution contract
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
@@ -1478,6 +1489,7 @@ class PdfCorpusBuildManager:
         build["operation_hidden"] = False
         with self._lock:
             self._cancel.discard(build_id)
+            self._paused.discard(build_id)
 
         # If the previous attempt reached a topology guard (for example, a long
         # book returned valid-but-empty boundary arrays), successful-window caches
@@ -5298,7 +5310,8 @@ CURRENT REVIEWED RECORD TEXT:
             if AutonomousPolicy.from_request(request).enabled:
                 self.run_autonomous(build_id, request)
         except InterruptedError as exc:
-            self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
+            paused = build_id in self._paused
+            self._update(build_id, status="paused" if paused else "cancelled", stage="paused" if paused else "cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False, pause_requested=False)
         except Exception as exc:
             # Checkpoints intentionally survive a failed stage. The user can repair
             # provider configuration and resume instead of restarting a long book.

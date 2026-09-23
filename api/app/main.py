@@ -2254,6 +2254,14 @@ def cancel_pdf_corpus_build(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@app.post("/api/pdf/corpus-builds/{build_id}/pause")
+def pause_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.pause(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
 @app.post("/api/pdf/corpus-builds/{build_id}/settle-metadata")
 def settle_pdf_corpus_metadata(build_id: str) -> dict[str, Any]:
     try:

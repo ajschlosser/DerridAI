@@ -478,7 +478,12 @@ export interface CorpusRecord {
     string,
     {
       status?:
-        "deterministic" | "llm_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
+        | "deterministic"
+        | "llm_inferred"
+        | "human_confirmed"
+        | "unresolved"
+        | "invalid"
+        | string;
       method?: string;
       confidence?: number | null;
       reason?: string;
@@ -1099,6 +1104,10 @@ export const pdfCorpusApi = {
     apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/resume`, {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  pause: (buildId: string) =>
+    apiRequest<CorpusBuild>(`/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/pause`, {
+      method: "POST",
     }),
   publish: (buildId: string) =>
     apiRequest<{
