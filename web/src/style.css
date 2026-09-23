@@ -4560,3 +4560,10 @@ html[data-color-scheme="dark"][data-contrast="more"]{
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
 }
+
+/* Works overview: give the cover enough scale to identify the edition while
+   keeping it as a compact accent beside the work's metadata and actions. */
+.work-overview-card{grid-template-columns:148px minmax(0,1fr)!important;gap:20px!important;padding:20px!important;align-items:start}
+.work-overview-card .work-overview-cover{width:132px!important;height:194px!important;justify-self:center;box-shadow:var(--shadow-md,0 10px 24px rgba(15,23,42,.16))}
+@media(max-width:760px){.work-overview-card{grid-template-columns:112px minmax(0,1fr)!important;gap:16px!important}.work-overview-card .work-overview-cover{width:100px!important;height:148px!important}}
+@media(max-width:520px){.work-overview-card{grid-template-columns:92px minmax(0,1fr)!important;gap:12px!important;padding:14px!important}.work-overview-card .work-overview-cover{width:82px!important;height:122px!important}.work-overview-heading{grid-template-columns:1fr!important}.work-overview-card .work-overview-metadata,.work-overview-card .work-overview-citation,.work-overview-card .work-overview-actions{grid-column:1/-1}}

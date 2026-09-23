@@ -509,11 +509,17 @@ export interface CorpusRecord {
       reviewed_at?: string;
     }
   >;
+  metadata_guidance_matches?: Record<string, Array<{ term: string; occurrences: number }>>;
   metadata_field_status?: Record<
     string,
     {
       status?:
-        "deterministic" | "model_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
+        | "deterministic"
+        | "model_inferred"
+        | "human_confirmed"
+        | "unresolved"
+        | "invalid"
+        | string;
       method?: string;
       confidence?: number | null;
       reason?: string;

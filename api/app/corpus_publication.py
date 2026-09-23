@@ -73,6 +73,7 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "boundary_suspicion",
         "metadata_field_status",
         "metadata_evidence",
+        "metadata_guidance_matches",
         "metadata_decisions",
         "metadata_stage_status",
         "metadata_execution_ledger",
