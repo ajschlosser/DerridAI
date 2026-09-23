@@ -29,6 +29,24 @@ from .autonomous import Policy as AutonomousPolicy
 from .autonomous import may_accept, settle_record
 from .config import APP_VERSION, settings
 from .corpus_enrichment_feedback import enrichment_informational_event
+from .corpus_enrichment_helpers import (
+    _editorial_tokens,
+    _mark_human_touch,
+    _metadata_family_states,
+    _prepend_metadata_priority,
+)
+from .corpus_enrichment_helpers import (
+    _enrichment_pass_indices as _enrichment_pass_indices,
+)
+from .corpus_enrichment_helpers import (
+    _initial_enrichment_operation as _initial_enrichment_operation,
+)
+from .corpus_enrichment_helpers import (
+    _merge_enrichment_snapshot as _merge_enrichment_snapshot,
+)
+from .corpus_enrichment_helpers import (
+    _semantic_atoms as _semantic_atoms,
+)
 from .corpus_extraction import (
     extract_source_document as _extract_source_document,
 )
@@ -2615,72 +2633,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         return manifest
 
 
-    @staticmethod
-    def _semantic_atoms(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Reconstruct stable semantic atoms from noisy PDF layout blocks.
-
-        PyMuPDF blocks are provenance units, not reliable discourse units. Many
-        PDFs emit one block per visual line. We conservatively join adjacent tiny
-        body blocks on the same physical page while preserving the last original
-        block ID as the transition anchor and retaining every source block ID.
-        """
-        atoms: list[dict[str, Any]] = []
-        pending: list[dict[str, Any]] = []
-
-        def flush() -> None:
-            nonlocal pending
-            if not pending:
-                return
-            last = pending[-1]
-            text_parts = [str(item.get("text") or "").strip() for item in pending if str(item.get("text") or "").strip()]
-            atom = dict(last)
-            atom["text"] = " ".join(text_parts)
-            atom["source_block_ids"] = [str(item.get("block_id") or "") for item in pending]
-            atom["atom_first_block_id"] = str(pending[0].get("block_id") or "")
-            atom["atom_last_block_id"] = str(last.get("block_id") or "")
-            # Keep the last real source block ID so a boundary remains directly
-            # applicable to deterministic record construction.
-            atom["block_id"] = str(last.get("block_id") or "")
-            atoms.append(atom)
-            pending = []
-
-        for block in blocks:
-            text = str(block.get("text") or "").strip()
-            if not text:
-                continue
-            block_type = str(block.get("type") or "body")
-            if block_type not in {"body", "paragraph", "text"}:
-                flush()
-                atom = dict(block)
-                atom["source_block_ids"] = [str(block.get("block_id") or "")]
-                atom["atom_first_block_id"] = atom["atom_last_block_id"] = str(block.get("block_id") or "")
-                atoms.append(atom)
-                continue
-            if not pending:
-                pending = [block]
-                continue
-            prev = pending[-1]
-            same_page = int(prev.get("page") or 0) == int(block.get("page") or 0)
-            pending_chars = sum(len(str(item.get("text") or "")) for item in pending)
-            prev_text = str(prev.get("text") or "").rstrip()
-            # Join line-like fragments, but stop at likely paragraph endings,
-            # headings, quotations, list starts, or a healthy paragraph size.
-            likely_continuation = (
-                same_page
-                and pending_chars < 1400
-                and (len(prev_text) < 180 or not re.search(r'[.!?][”"\']?$', prev_text))
-                and not re.match(r'^\s*(?:[-•*]|\d+[.)])\s+', text)
-                and not (len(text) < 90 and text.isupper())
-            )
-            if likely_continuation:
-                pending.append(block)
-            else:
-                flush()
-                pending = [block]
-        flush()
-        return atoms
-
-
     def _compact_segment_prompt(self, window: list[dict[str, Any]], manifest: dict[str, Any]) -> str:
         block_text = "\n\n".join(
             f"[{b['block_id']} | PDF p.{b['page']} | {b['type']}]\n{b['text']}"
@@ -4427,7 +4379,7 @@ CURRENT REVIEWED RECORD TEXT:
             )
         source_quality = page_source_quality_report(source_blocks, asset.get("pages") or [])
         self._update(build_id, source_quality=source_quality)
-        semantic_blocks = self._semantic_atoms(source_blocks)
+        semantic_blocks = _semantic_atoms(source_blocks)
         if len(semantic_blocks) < 2:
             semantic_blocks = source_blocks
         self._update(
@@ -4547,16 +4499,6 @@ CURRENT REVIEWED RECORD TEXT:
 
         return records
 
-    @staticmethod
-    def _metadata_family_states(rows: list[dict[str, Any]]) -> list[str]:
-        metadata_families = ("discourse", "quotation", "indexing")
-        states: list[str] = []
-        for row in rows:
-            row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
-            for family in metadata_families:
-                fallback = "complete" if row.get("metadata_complete") else "queued"
-                states.append(str(row_status.get(family) or fallback))
-        return states
 
     def _persist_build_metadata_stage(
         self, build_id: str, metadata_task_total: int, snapshot: dict[str, Any],
@@ -4572,7 +4514,7 @@ CURRENT REVIEWED RECORD TEXT:
                 return
             copy = json.loads(json.dumps(snapshot))
             copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
-            live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], copy, self._allowed_fields(build_id))
+            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], copy, self._allowed_fields(build_id))
             self.repo.save_records(build_id, live_records)
             states: list[str] = []
             active: list[dict[str, Any]] = []
@@ -4645,7 +4587,7 @@ CURRENT REVIEWED RECORD TEXT:
         # skipped families settle immediately and do not consume provider time.
         metadata_task_total = len(records) * len(metadata_families)
 
-        initial_states = self._metadata_family_states(records)
+        initial_states = _metadata_family_states(records)
         self._update(
             build_id, metadata_tasks_total=metadata_task_total,
             metadata_tasks_completed=sum(1 for value in initial_states if value == "complete"),
@@ -4734,7 +4676,7 @@ CURRENT REVIEWED RECORD TEXT:
                         if live_index is None:
                             live_records = records
                         else:
-                            live_records[live_index] = self._merge_enrichment_snapshot(live_records[live_index], records[index], self._allowed_fields(build_id))
+                            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], records[index], self._allowed_fields(build_id))
                         records = live_records
                         self.repo.save_records(build_id, records)
                     self._update(
@@ -4760,7 +4702,7 @@ CURRENT REVIEWED RECORD TEXT:
             prioritized_request = dict(request)
             prioritized_request["_priority_record_ids"] = priority_ids
             return self._schedule_build_enrichment(build_id, prioritized_request, manifest, settled_records)
-        settled_states = self._metadata_family_states(settled_records)
+        settled_states = _metadata_family_states(settled_records)
         self._update(
             build_id,
             metadata_tasks_total=metadata_task_total,
@@ -4796,7 +4738,7 @@ CURRENT REVIEWED RECORD TEXT:
         if str(existing_op.get("state") or "") in {"queued", "running"}:
             operation = existing_op
         else:
-            operation = self._initial_enrichment_operation(
+            operation = _initial_enrichment_operation(
                 build_id, records, started_at=str(current.get("metadata_started_at") or "") or None,
             )
         self._update(
@@ -5121,28 +5063,6 @@ CURRENT REVIEWED RECORD TEXT:
             build = self.repo.get_build(build_id)
         return build
 
-    @staticmethod
-    def _mark_human_touch(record: dict[str, Any], fields: list[str] | set[str] | tuple[str, ...]) -> None:
-        touched = [str(value) for value in (record.get("human_touched_fields") or []) if str(value)]
-        for field in fields:
-            field_name = str(field)
-            if field_name and field_name not in touched:
-                touched.append(field_name)
-        record["human_touched_fields"] = touched
-        record["human_touched_at"] = iso_now()
-        record["human_touched_revision"] = int(record.get("record_revision") or 1) + 1
-        activity = dict(record.get("activity") or {})
-        activity["human_review_count"] = int(activity.get("human_review_count") or 0) + 1
-        activity["last_human_reviewed_at"] = record["human_touched_at"]
-        record["activity"] = activity
-
-    @staticmethod
-    def _editorial_tokens(value: str) -> set[str]:
-        stop = {"the", "and", "for", "that", "this", "with", "from", "into", "dans", "les", "des", "une", "pour", "que", "qui", "sur", "est", "pas", "aux"}
-        return {
-            token for token in re.findall(r"[\wÀ-ÖØ-öø-ÿ]{3,}", str(value or "").casefold(), flags=re.UNICODE)
-            if token not in stop
-        }
 
     def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
@@ -5192,10 +5112,10 @@ CURRENT REVIEWED RECORD TEXT:
                 conventions[field] = {"value": ranked[0][0], "confirmed_records": ranked[0][1]}
 
         current_text = str((current_record or {}).get("text") or "")
-        current_tokens = self._editorial_tokens(current_text)
+        current_tokens = _editorial_tokens(current_text)
         by_field: dict[str, list[dict[str, Any]]] = {}
         for row, field, value in eligible:
-            row_tokens = self._editorial_tokens(str(row.get("text") or ""))
+            row_tokens = _editorial_tokens(str(row.get("text") or ""))
             union = current_tokens | row_tokens
             similarity = (len(current_tokens & row_tokens) / len(union)) if union else 0.0
             # Region agreement is a useful but non-authoritative tie breaker.
@@ -5246,55 +5166,6 @@ CURRENT REVIEWED RECORD TEXT:
             self.repo.save_build(build)
         return self.editorial_memory(build_id)
 
-    @classmethod
-    def _merge_enrichment_snapshot(cls, live: dict[str, Any], worker: dict[str, Any], allowed_fields: set[str] | None = None) -> dict[str, Any]:
-        """Merge automatic enrichment into current human state without overwriting it."""
-        merged = json.loads(json.dumps(live))
-        live_status = live.get("metadata_field_status") if isinstance(live.get("metadata_field_status"), dict) else {}
-        worker_status = worker.get("metadata_field_status") if isinstance(worker.get("metadata_field_status"), dict) else {}
-        touched_markers = set(str(v) for v in (live.get("human_touched_fields") or []))
-        text_was_touched = "__text__" in touched_markers
-        record_frozen_by_review = "__review__" in touched_markers
-        automatic_merge_blocked = (text_was_touched or record_frozen_by_review) and not live.get("metadata_requeue_requested")
-        for field in (allowed_fields if allowed_fields is not None else ALLOWED_METADATA_FIELDS):
-            if field in MANIFEST_INHERITED_FIELDS:
-                continue
-            info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-            if str(info.get("status") or "") in {"human_confirmed", "human_override"}:
-                continue
-            if not automatic_merge_blocked and field in worker:
-                merged[field] = worker[field]
-            if not automatic_merge_blocked and field in worker_status:
-                merged.setdefault("metadata_field_status", {})[field] = worker_status[field]
-        if not automatic_merge_blocked:
-            worker_evidence = worker.get("metadata_evidence") if isinstance(worker.get("metadata_evidence"), dict) else {}
-            live_evidence = merged.setdefault("metadata_evidence", {})
-            for field, info in worker_evidence.items():
-                status = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-                if str(status.get("status") or "") not in {"human_confirmed", "human_override"}:
-                    live_evidence[field] = info
-        for key in (
-            "metadata_stage_status", "metadata_execution_ledger", "metadata_incomplete_fields",
-            "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
-            "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
-            "semantic_classification_confidence", "attribution_confidence", "editorial_memory_used",
-            "text_touchup_proposal",
-        ):
-            if key in worker:
-                merged[key] = worker[key]
-        if automatic_merge_blocked:
-            status = merged.setdefault("metadata_stage_status", {})
-            ledger = merged.setdefault("metadata_execution_ledger", {})
-            reason = "Human edited reviewed text before automatic enrichment settled." if text_was_touched else "Human completed record review before automatic enrichment settled."
-            if not live.get("metadata_requeue_requested"):
-                for family in ("discourse", "quotation", "indexing"):
-                    status[family] = "skipped"
-                    ledger[family] = {"state": "skipped", "finished_at": iso_now(), "error": reason}
-            else:
-                merged["metadata_enrichment_state"] = "queued"
-                merged["metadata_complete"] = False
-                merged["metadata_enrichment_finished"] = False
-        return merged
 
     def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -5375,7 +5246,7 @@ CURRENT REVIEWED RECORD TEXT:
         else:
             target["needs_review"] = True
             target["review_reason"] = str(reason or target.get("review_reason") or "Pending human review.")
-        self._mark_human_touch(target, ["__review__"])
+        _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         return target
@@ -5428,7 +5299,7 @@ CURRENT REVIEWED RECORD TEXT:
         target["rejected"] = disposition == "rejected"
         target["needs_review"] = False
         target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
-        self._mark_human_touch(target, ["__review__"])
+        _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
         # Prefer the next *pending* record in the active review queue.  `all` is
@@ -5495,7 +5366,7 @@ CURRENT REVIEWED RECORD TEXT:
             # Bulk review is still a human decision. Freeze later automatic
             # enrichment from overwriting the reviewed record exactly as the
             # single-record review path does.
-            self._mark_human_touch(record, ["__review__"])
+            _mark_human_touch(record, ["__review__"])
             if disposition == "accepted":
                 record["needs_review"] = False; record["review_reason"] = ""
             elif disposition == "rejected":
@@ -5567,7 +5438,7 @@ CURRENT REVIEWED RECORD TEXT:
             target["text_review_status"] = "human_reviewed"
             target["text_reviewed_at"] = iso_now()
             target["text_review_source"] = "human"
-            self._mark_human_touch(target, ["__text_reviewed__"])
+            _mark_human_touch(target, ["__text_reviewed__"])
             review_events = list(target.get("review_events") or [])
             review_events.append({"at": iso_now(), "event": "text_reviewed", "changed": False})
             target["review_events"] = review_events[-100:]
@@ -5592,7 +5463,7 @@ CURRENT REVIEWED RECORD TEXT:
         target["text_review_status"] = "human_corrected"
         target["text_reviewed_at"] = iso_now()
         target["text_review_source"] = "human"
-        self._mark_human_touch(target, ["__text__"])
+        _mark_human_touch(target, ["__text__"])
         # Any text correction invalidates a prior record-level acceptance. The
         # reviewer may accept again after deciding whether selective metadata
         # reruns are warranted; automatic metadata is never silently treated as
@@ -5677,7 +5548,7 @@ CURRENT REVIEWED RECORD TEXT:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
-        self._mark_human_touch(target, [key for key in changes if key not in skipped])
+        _mark_human_touch(target, [key for key in changes if key not in skipped])
         profile = self._profile_for(build_id)
         self._reopen_due_rechecks(build_id, records, target, profile)
         _sync_record_metadata_state(target, profile)
@@ -5745,7 +5616,7 @@ CURRENT REVIEWED RECORD TEXT:
                 decisions.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
             record["metadata_decisions"] = decisions[-100:]
             record["metadata_reviewed_at"] = iso_now()
-            self._mark_human_touch(record, list(changes))
+            _mark_human_touch(record, list(changes))
             record["record_revision"] = int(record.get("record_revision") or 1) + 1
             _sync_record_metadata_state(record, profile)
             inline, full = _citation_strings(record)
@@ -5794,7 +5665,7 @@ CURRENT REVIEWED RECORD TEXT:
             target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
-            target["metadata_reviewed_at"] = iso_now(); self._mark_human_touch(target,[field])
+            target["metadata_reviewed_at"] = iso_now(); _mark_human_touch(target,[field])
             profile = self._profile_for(build_id)
             _sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
             self._rewrite_and_validate(build_id, records)
@@ -5996,7 +5867,7 @@ CURRENT REVIEWED RECORD TEXT:
             })
             row["slice_lineage"] = lineage
             row["record_revision"] = int(row.get("record_revision") or 1) + 1
-            self._mark_human_touch(row, ["__text__", "__boundary__"])
+            _mark_human_touch(row, ["__text__", "__boundary__"])
             events = list(row.get("review_events") or [])
             events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id, "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows]})
             row["review_events"] = events[-100:]
@@ -6076,7 +5947,7 @@ CURRENT REVIEWED RECORD TEXT:
         self._rewrite_and_validate(build_id, records)
         with self._lock:
             build = self.repo.get_build(build_id)
-            self._prepend_metadata_priority(build, str(merged.get("record_id") or ""))
+            _prepend_metadata_priority(build, str(merged.get("record_id") or ""))
             self.repo.save_build(build)
         return merged
 
@@ -6113,24 +5984,6 @@ CURRENT REVIEWED RECORD TEXT:
         self._rewrite_and_validate(build_id, records)
         return {"records": pieces}
 
-    @staticmethod
-    def _initial_enrichment_operation(build_id: str, records: list[dict[str, Any]], *, started_at: str | None = None) -> dict[str, Any]:
-        """Describe the book-scale first pass so the review workspace can start another immediately."""
-        total = len(records)
-        return {
-            "operation_id": f"metadata-enrichment-initial-{str(build_id)[:12]}",
-            "kind": "metadata_enrichment",
-            "state": "completed",
-            "started_at": started_at,
-            "finished_at": iso_now(),
-            "records_total": total,
-            "records_processed": total,
-            "passes_requested": 1,
-            "passes_completed": 1,
-            "current_pass": 1,
-            "converged": False,
-            "pass_results": [{"pass": 1, "records_processed": total}],
-        }
 
     def retry_incomplete_metadata(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Retry only automatically-retryable metadata issues.
@@ -6254,19 +6107,6 @@ CURRENT REVIEWED RECORD TEXT:
             self._refresh_workflow_fields(build)
             self.repo.save_build(build)
 
-    @staticmethod
-    def _enrichment_pass_indices(records: list[dict[str, Any]], scope: str, record_ids: list[str] | None = None) -> list[int]:
-        """Records a pass should visit. Evaluated per pass: reviewers keep working between passes."""
-        indices = []
-        selected = {str(value) for value in (record_ids or []) if str(value)}
-        for index, record in enumerate(records):
-            if selected and str(record.get("record_id") or "") not in selected:
-                continue
-            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-            if disposition == "rejected" or (scope == "accepted" and disposition != "accepted") or (scope == "pending" and disposition != "pending"):
-                continue
-            indices.append(index)
-        return indices
 
     def rerun_metadata_enrichment(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Start one enrichment pass, or a chain of up to ``passes`` passes.
@@ -6289,7 +6129,7 @@ CURRENT REVIEWED RECORD TEXT:
         record_ids = [str(value) for value in request.get("record_ids") or [] if str(value)]
         if scope == "selected" and not record_ids:
             raise ValueError("Select at least one record for selected-record enrichment.")
-        indices = self._enrichment_pass_indices(self.repo.load_records(build_id), scope, record_ids)
+        indices = _enrichment_pass_indices(self.repo.load_records(build_id), scope, record_ids)
         if not indices:
             raise ValueError("No records match the selected metadata enrichment scope.")
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
@@ -6529,7 +6369,7 @@ CURRENT REVIEWED RECORD TEXT:
         manifest = build.get("manifest") or {}
         profile = self._profile_of_build(build)
         snapshot = self.repo.load_records(build_id)
-        indices = self._enrichment_pass_indices(snapshot, scope, [str(value) for value in request.get("record_ids") or []])
+        indices = _enrichment_pass_indices(snapshot, scope, [str(value) for value in request.get("record_ids") or []])
         priority = [str(value) for value in build.get("metadata_priority_record_ids") or []]
         priority_indices = [index for value in priority for index, row in enumerate(snapshot) if str(row.get("record_id") or "") == value and index in indices]
         indices = priority_indices + [index for index in indices if index not in priority_indices]
@@ -6705,17 +6545,6 @@ CURRENT REVIEWED RECORD TEXT:
             self._cancel.discard(build_id)
             self.repo.save_build(build)
 
-    @staticmethod
-    def _prepend_metadata_priority(build: dict[str, Any], record_id: str) -> None:
-        """Put a changed record ahead of ordinary enrichment work."""
-        if not record_id:
-            return
-        priority = [
-            str(value)
-            for value in build.get("metadata_priority_record_ids") or []
-            if str(value) != record_id
-        ]
-        build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
 
     @_serialize_record_mutation
     def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -6735,7 +6564,7 @@ CURRENT REVIEWED RECORD TEXT:
             or "metadata_priority_record_ids" in build
         )
         if metadata_active:
-            self._prepend_metadata_priority(build, record_id)
+            _prepend_metadata_priority(build, record_id)
             feedback = list(build.get("metadata_review_feedback") or [])
             feedback.append({
                 "record_id": record_id,

@@ -34,7 +34,7 @@ def test_enrichment_scope_can_target_explicit_records() -> None:
         {"record_id": "r2", "review_disposition": "accepted"},
         {"record_id": "r3", "review_disposition": "pending"},
     ]
-    assert cb.PdfCorpusBuildManager._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
+    assert cb._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
 
 
 def test_trash_quality_ratio_is_deterministic() -> None:
@@ -358,7 +358,7 @@ def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path
 
 
 def test_initial_enrichment_operation_marks_the_first_pass_complete():
-    op = cb.PdfCorpusBuildManager._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
+    op = cb._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
     assert op["kind"] == "metadata_enrichment"
     assert op["state"] == "completed"
     assert op["passes_completed"] == 1
