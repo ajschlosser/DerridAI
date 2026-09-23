@@ -117,6 +117,18 @@ class SQLiteRepositoryBase:
                     ON jobs(job_type, created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_jobs_status
                     ON jobs(status, updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS metadata_adjudication_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    record_id TEXT NOT NULL,
+                    field TEXT NOT NULL,
+                    cardinality TEXT NOT NULL,
+                    text_hash TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_metadata_adjudication_cache_record
+                    ON metadata_adjudication_cache(record_id, field, updated_at DESC);
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
@@ -320,6 +332,85 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 )
             conn.commit()
             return bool(cursor.rowcount)
+
+    def get_adjudication_cache(self, cache_key: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM metadata_adjudication_cache WHERE cache_key=?",
+                (str(cache_key),),
+            ).fetchone()
+        value = _json_loads(row["payload_json"], None) if row else None
+        return value if isinstance(value, dict) else None
+
+    def put_adjudication_cache(
+        self,
+        cache_key: str,
+        record_id: str,
+        field: str,
+        cardinality: str,
+        text_hash: str,
+        payload: dict[str, Any],
+    ) -> None:
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO metadata_adjudication_cache
+                    (cache_key,record_id,field,cardinality,text_hash,payload_json,updated_at)
+                VALUES(?,?,?,?,?,?,?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                    payload_json=excluded.payload_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    str(cache_key),
+                    str(record_id),
+                    str(field),
+                    str(cardinality),
+                    str(text_hash),
+                    _json_dumps(payload),
+                    now,
+                ),
+            )
+            conn.commit()
+
+    def clear_adjudication_cache(
+        self,
+        *,
+        record_id: str | None = None,
+        field: str | None = None,
+    ) -> int:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if record_id:
+            clauses.append("record_id=?")
+            params.append(str(record_id))
+        if field:
+            clauses.append("field=?")
+            params.append(str(field))
+        statement = "DELETE FROM metadata_adjudication_cache"
+        if clauses:
+            statement += " WHERE " + " AND ".join(clauses)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(statement, params)
+            conn.commit()
+            return int(cursor.rowcount)
+
+    def prune_adjudication_cache(self, max_entries: int = 5000) -> int:
+        limit = max(100, int(max_entries))
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM metadata_adjudication_cache
+                WHERE cache_key NOT IN (
+                    SELECT cache_key FROM metadata_adjudication_cache
+                    ORDER BY updated_at DESC LIMIT ?
+                )
+                """,
+                (limit,),
+            )
+            conn.commit()
+            return int(cursor.rowcount)
 
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:

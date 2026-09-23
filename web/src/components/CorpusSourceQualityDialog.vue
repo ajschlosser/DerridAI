@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { ExtractionNoise } from "../domain/sourceQuality";
 import UiDialog from "./ui/UiDialog.vue";
@@ -11,8 +12,9 @@ defineProps<{
   extractionNoise?: ExtractionNoise | null;
   issues?: Array<Record<string, unknown>>;
 }>();
-const emit = defineEmits<{ close: []; editText: []; openSource: [] }>();
+const emit = defineEmits<{ close: [dontShowAgain?: boolean]; editText: []; openSource: [] }>();
 const i18n = useI18nStore();
+const dontShowAgain = ref(false);
 </script>
 <template>
   <UiDialog
@@ -58,7 +60,13 @@ const i18n = useI18nStore();
       />
     </div>
     <template #footer>
-      <button type="button" class="btn primary" @click="emit('close')">
+      <label class="dont-show-again">
+        <input v-model="dontShowAgain" type="checkbox" />
+        <span>{{
+          i18n.t("pdf_corpus.source_warning_dont_show_again", "Don't show this message again")
+        }}</span>
+      </label>
+      <button type="button" class="btn primary" @click="emit('close', dontShowAgain)">
         {{ i18n.t("pdf_corpus.source_warning_acknowledge", "Continue with this source") }}
       </button>
     </template>
@@ -89,5 +97,12 @@ const i18n = useI18nStore();
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+.dont-show-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-end: auto;
+  font-size: 0.8125rem;
 }
 </style>

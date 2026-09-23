@@ -114,6 +114,34 @@ class SystemStore:
         with self._lock:
             return self.repository.delete_annotation(annotation_id, user_id=user_id, admin=admin)
 
+    def get_adjudication_cache(self, cache_key: str) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_adjudication_cache(cache_key)
+
+    def put_adjudication_cache(
+        self,
+        cache_key: str,
+        record_id: str,
+        field: str,
+        cardinality: str,
+        text_hash: str,
+        payload: dict[str, Any],
+    ) -> None:
+        with self._lock:
+            self.repository.put_adjudication_cache(
+                cache_key, record_id, field, cardinality, text_hash, payload
+            )
+            self.repository.prune_adjudication_cache()
+
+    def clear_adjudication_cache(
+        self,
+        *,
+        record_id: str | None = None,
+        field: str | None = None,
+    ) -> int:
+        with self._lock:
+            return self.repository.clear_adjudication_cache(record_id=record_id, field=field)
+
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             profiles = copy.deepcopy(self.repository.list_provider_profiles())

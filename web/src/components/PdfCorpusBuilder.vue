@@ -1717,12 +1717,37 @@ function selectRecord(record: CorpusRecord) {
     editingText.value = Boolean(saved && saved !== String(record.text || ""));
   }
   resolveSourceOnTextSave.value = Boolean(record.source_quality_issues?.length);
+  void loadAdjudicationSuggestions(record);
   const fallback = JSON.stringify(recordMetadata(record), null, 2);
   try {
     metadataDraft.value =
       localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || fallback;
   } catch {
     metadataDraft.value = fallback;
+  }
+
+  async function loadAdjudicationSuggestions(record: CorpusRecord) {
+    const fields = (currentBuild.value?.schema?.fields || []).map((field) => field.name);
+    const results = await Promise.all(
+      fields.map(async (field) => {
+        try {
+          return [field, await pdfCorpusApi.metadataCache(
+            currentBuild.value?.build_id || "",
+            record.record_id,
+            field,
+          )] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const item of results) {
+      const values = item?.[1]?.suggestions?.prior_values;
+      if (!Array.isArray(values)) continue;
+      for (const value of values) {
+        if (typeof value === "string" && value.trim()) rememberMetadataValues(item[0], value);
+      }
+    }
   }
   void refreshBlocks();
   if (selectedBuildId.value && !sameRecord)
@@ -2925,15 +2950,14 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   const viewport = captureReviewViewport();
   busy.value = "metadata-suggestions";
   try {
-    const result = await pdfCorpusApi.patchMetadata(
+    const result = await pdfCorpusApi.metadataDecisionBatch(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       changes,
       Number(selectedRecord.value.record_revision || 1),
-      true,
     );
-    const row = isMetadataPatchState(result) ? result.record : result;
-    if (isMetadataPatchState(result)) currentBuild.value = result.build;
+    const row = result.record;
+    currentBuild.value = result.build;
     selectedRecord.value = row;
     const idx = records.value.findIndex((item) => item.record_id === row.record_id);
     if (idx >= 0) records.value.splice(idx, 1, row);
@@ -2997,6 +3021,31 @@ async function resolveMetadataNoValue(field: string) {
   } finally {
     busy.value = "";
     metadataSavingField.value = "";
+  }
+
+  async function clearMetadataSuggestionCache() {
+    if (
+      !window.confirm(
+        i18n.t(
+          "pdf_corpus.clear_metadata_cache_confirm",
+          "Clear remembered metadata suggestions? This will not change reviewed records or their history.",
+        ),
+      )
+    )
+      return;
+    busy.value = "metadata-cache";
+    try {
+      const result = await pdfCorpusApi.clearAllMetadataCache();
+      setMessage(
+        i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
+          count: result.cleared,
+        }),
+      );
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
   }
 }
 async function runMetadataEnrichment(payload: {
@@ -5289,6 +5338,14 @@ onBeforeUnmount(() => {
                     @source="showMetadataSource"
                     @dirty="handleMetadataDirty"
                   />
+                  <button
+                    type="button"
+                    class="btn small metadata-cache-clear"
+                    :disabled="busy !== ''"
+                    @click="clearMetadataSuggestionCache"
+                  >
+                    {{ i18n.t("pdf_corpus.clear_metadata_cache", "Clear remembered suggestions") }}
+                  </button>
                   <section v-if="currentBuild?.manifest" class="document-metadata-launch">
                     <div>
                       <b>{{
