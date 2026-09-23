@@ -404,6 +404,76 @@ earlier session (phased: composable extraction, then CSS distribution, then temp
 PR conflict that has since merged and quieted down -- it does not need re-planning, just a green light to start,
 independently of the backend plan above (different files, no shared risk).
 
+## Session 14 status (branch `claude/runtime-refactor-26`) -- cluster 1 (segmentation) extracted; v0.70.0 tagged
+
+**Cut the 0.70.0 "Amesbury" release** on the previous branch: bumped `APP_VERSION`/`web/package.json`/
+`web/index.html`/`README.md`, regenerated `package-lock.json` via `npm install --package-lock-only` (never hand-edit
+it), wrote `docs/notes/0.70.0.md` -- honestly scoped, since the version jump crossed ~280 commits and 48 PRs from
+multiple contributors, to a per-theme summary sourced from merge-commit/branch names rather than fabricated
+implementation detail for work this session did not do. CI's `backend-types` (mypy) job caught a real error local
+verification had missed (`X.get(k) if isinstance(X.get(k), Y) else Z` calls `.get()` twice; mypy does not carry
+the first call's `isinstance` narrowing to the second, syntactically identical call) -- fixed with intermediate
+variables. Re-recorded 6 baseline snapshots whose only diff was the app-build-info version string. After the merge,
+tagged the exact commit on `master` whose `APP_VERSION` reads `0.70.0` as `v0.70.0` and pushed the tag (the tag was
+deliberately not created on the feature-branch commit, since a squash or different merge strategy could have made
+that SHA never actually land on `master` -- always tag the post-merge commit).
+
+**Extracted cluster 1, segmentation** (~1,200 lines, 19 methods) into `corpus_segmentation.py`. All 19 were already
+`@staticmethod`/`@classmethod` with zero `self` dependency beyond calling each other -- found by grepping decorators
+across the cluster's line range, which is a fast way to locate purely-mechanical extraction candidates in any large
+class before attempting a harder cluster. Used the `ast` module (not manual line-counting or regex) to find exact
+method boundaries and strip `self`/`cls` from each signature precisely, including two methods with multi-line
+parameter lists that a naive single-line regex missed on the first attempt (`_best_record_sizing_boundary`,
+`_normalize_topology` -- caught by inspecting the actual extracted output before wiring it in, not by assuming the
+regex was correct). Also moved `_normalize_text`, a pure module-level helper `corpus_builder.py` already had and
+used both inside and outside this cluster, into the new module -- keeping it in `corpus_builder.py` would have
+needed a circular import back from `corpus_segmentation.py`.
+
+**Two genuinely dead methods found and left alone:** `_segmentation_windows` and `_best_safety_boundary` have no
+callers anywhere in the codebase, not even in tests -- confirmed by grepping the whole repo, not just
+`corpus_builder.py`. Preserved them in `corpus_segmentation.py` rather than deleting (dead-code removal is a
+separate decision from decomposition, not bundled here); `corpus_builder.py` simply does not import them, and ruff's
+`F401` unused-import check is what actually surfaced this finding -- worth remembering as a technique for the
+remaining clusters: after wiring up an extraction's imports, run ruff and treat every `F401` as a "is this really
+called from here" question, not just an import to delete blindly.
+
+**A real gotcha worth recording for the metadata/review clusters still to come:** four tests monkeypatched
+`_deterministic_boundary_candidates` as an *instance method*
+(`monkeypatch.setattr(manager, "_deterministic_boundary_candidates", fake)`), which silently stops working once the
+method becomes a bare imported function -- Python resolves `self._name(...)` via the instance/class at call time,
+but a bare `_name(...)` inside `corpus_builder.py` resolves against `corpus_builder`'s own module globals at call
+time instead. The fix is `monkeypatch.setattr(cb, "_deterministic_boundary_candidates", fake)` (patching the
+*module* attribute), which does correctly intercept the call, since Python's global-name lookup happens at each
+call, not at import time -- but this is easy to miss, since the test still "monkeypatches something" without
+erroring until the assertion inside actually fails. **Grep every cluster's target names for
+`monkeypatch.setattr(manager,` / `monkeypatch.setattr(self,` in `tests/` before extracting, not after.** One test
+(`test_straddling_record.py`) also called `PdfCorpusBuildManager._apply_manifest_metadata` under a different import
+alias (`from app.corpus_builder import PdfCorpusBuildManager as M`) that the first pass of call-site updates missed
+entirely -- grepping only for `cb.PdfCorpusBuildManager.` is not sufficient; grep for the bare method name across
+`tests/` too.
+
+`corpus_builder.py`: 8,236 -> 7,514 lines. Confirmed no behavior change: full backend suite (443 tests, unchanged),
+mypy, ruff (added a `corpus_segmentation.py` per-file ignore for `E701`/`E702` matching the existing
+`corpus_builder.py` entry -- same dense legacy style, moved verbatim, not reformatted), and `compileall` all pass
+clean.
+
+**A 22-scenario legacy-DOM-baseline failure found and confirmed unrelated, not fixed:** running the full baseline
+after this change showed 22 failing Search/Records/Works/Annotations scenarios. Confirmed these are pre-existing
+drift, not caused by this session: zero `web/` files were touched this session, the baseline harness drives a
+*mocked* backend (`mock-backend.ts`), never the real Python API, so a backend-only change cannot affect it, and the
+affected scenarios are unrelated in kind to segmentation. Most likely cause: PR #118 ("record review navigation")
+and/or #110 ("search advanced filters"), both merged into `master` since the baseline was last verified green, add
+UI that was never re-recorded against this harness. **Whoever next touches `RecordsView`/`SearchView`/`WorksView`/
+`AnnotationsView` should run the full baseline first and re-record whatever it finds, in its own commit, before
+adding anything else** -- this is now a known, not-yet-fixed gap, separate from and predating this session's
+backend work.
+
+**Conflict avoidance:** checked `gh pr list` before starting; two open PRs (#120, #121) touch `corpus_builder.py`
+and `corpus_publication.py`, but their diffs are confirmed non-overlapping with the segmentation cluster's line
+range (#120 touches `_prepare_metadata_tasks`/`_construct_build_topology`/`create`, part of clusters 2 and 4;
+#121 touches `_apply_source_illegibility`/asset loading, cluster 2 and `PdfCorpusRepository`). Re-based onto fresh
+`master` as `claude/runtime-refactor-26` before starting, same pattern as every prior session in this range.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the

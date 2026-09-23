@@ -254,7 +254,7 @@ def test_reconciliation_failure_is_an_explicit_topology_blocker(monkeypatch, tmp
     blocks = _blocks(12)
     build = _build(repo, blocks=len(blocks))
 
-    monkeypatch.setattr(manager, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["quotation_frame_change"], "candidate_score": .5, "source": "test", "index": 5, "protected": False}])
+    monkeypatch.setattr(cb, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["quotation_frame_change"], "candidate_score": .5, "source": "test", "index": 5, "protected": False}])
     monkeypatch.setattr(manager, "_segment_candidate_batch", lambda *args, **kwargs: ({}, "truncated"))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries == []

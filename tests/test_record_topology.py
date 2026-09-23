@@ -55,12 +55,12 @@ def test_normalizer_targets_preferred_range_without_removing_semantic_boundary()
     """
     blocks=[block(i,330) for i in range(18)]
     semantic={"after_block_id":"b8","decision":"split","confidence":1.0,"source":"semantic","semantic_boundary":True}
-    boundaries,reviews,metrics=cb.PdfCorpusBuildManager._normalize_topology(blocks,[semantic],POLICY)
+    boundaries,reviews,metrics=cb._normalize_topology(blocks,[semantic],POLICY)
     ids={b["after_block_id"] for b in boundaries}
     assert "b8" in ids
     assert reviews==[]
     assert metrics["size_optimized_splits"]>=1
-    records=cb.PdfCorpusBuildManager._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
+    records=cb._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
     assert max(r["text_length"] for r in records)<=POLICY["long_record_chars"]
     assert all(sum(1 for r in records if bid in r["source_block_ids"])==1 for bid in [b["block_id"] for b in blocks])
 
@@ -77,7 +77,7 @@ def test_coherent_exception_is_allowed_when_no_good_target_seam():
     ]
     # The only target seam is attribution-protected, so the unit may remain a
     # coherent exception below the long-record limit rather than forcing a cut.
-    boundaries,reviews,metrics=cb.PdfCorpusBuildManager._normalize_topology(blocks,[],POLICY)
+    boundaries,reviews,metrics=cb._normalize_topology(blocks,[],POLICY)
     assert boundaries==[]
     assert reviews==[]
     assert metrics["absolute_safety_splits"]==0
@@ -95,7 +95,7 @@ def test_topology_validator_detects_gap_overlap_order_and_size():
         {"record_id":"r1","text":"x"*1700,"text_length":1700,"source_block_ids":["b0","b1"]},
         {"record_id":"r2","text":"x"*6200,"text_length":6200,"source_block_ids":["b1","b3"]},
     ]
-    report=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
+    report=cb._topology_sanity(records,POLICY,blocks)
     codes={f["code"] for f in report["findings"]}
     assert report["valid"] is False
     assert "topology.over_absolute_limit" in codes
@@ -110,9 +110,9 @@ def test_quality_report_exposes_distribution_and_conservation():
     """
     blocks=[block(i,300) for i in range(6)]
     boundaries=[{"after_block_id":"b2"}]
-    records=cb.PdfCorpusBuildManager._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
-    validation=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
-    quality=cb.PdfCorpusBuildManager._topology_quality_report(records,blocks,POLICY,validation)
+    records=cb._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
+    validation=cb._topology_sanity(records,POLICY,blocks)
+    quality=cb._topology_quality_report(records,blocks,POLICY,validation)
     assert quality["source_coverage"]==1.0
     assert quality["source_conservation_valid"] is True
     assert quality["p10_record_chars"]>0
@@ -131,9 +131,9 @@ def test_acceptance_fixture_invariants():
     fixture=json.loads((ROOT/"tests/fixtures/corpus_builder/topology_cases.json").read_text(encoding="utf-8"))
     for case in fixture["cases"]:
         blocks=case["blocks"]
-        boundaries,reviews,_=cb.PdfCorpusBuildManager._normalize_topology(blocks,case.get("semantic_boundaries",[]),POLICY)
-        records=cb.PdfCorpusBuildManager._construct_records({"filename":f"{case['id']}.pdf","asset_id":case["id"]},blocks,boundaries)
-        validation=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
+        boundaries,reviews,_=cb._normalize_topology(blocks,case.get("semantic_boundaries",[]),POLICY)
+        records=cb._construct_records({"filename":f"{case['id']}.pdf","asset_id":case["id"]},blocks,boundaries)
+        validation=cb._topology_sanity(records,POLICY,blocks)
         assert validation["valid"],case["id"]
         assert not reviews,case["id"]
         assert len({bid for r in records for bid in r["source_block_ids"]})==len(blocks)

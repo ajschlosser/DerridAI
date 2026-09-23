@@ -124,12 +124,12 @@ def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_over
     """
     record = {"metadata_field_status": {}, "pdf_pages": [10]}
     manifest = {"title": "Document title", "document_author": "Jacques Derrida", "main_text_start_page": 5, "main_text_end_page": 20}
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(record, manifest)
+    cb._apply_manifest_metadata(record, manifest)
     assert record["document_author"] == "Jacques Derrida"
     assert record["metadata_field_status"]["document_author"]["status"] == "inherited"
     record["document_author"] = "Different record author"
     record["metadata_field_status"]["document_author"] = {"status": "human_override", "method": "human_record_override"}
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(record, {**manifest, "document_author": "Changed manifest author"})
+    cb._apply_manifest_metadata(record, {**manifest, "document_author": "Changed manifest author"})
     assert record["document_author"] == "Different record author"
 
 
