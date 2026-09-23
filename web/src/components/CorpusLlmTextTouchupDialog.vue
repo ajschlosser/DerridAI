@@ -5,6 +5,7 @@ import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useI18nStore } from "../stores/i18n";
+import { llmDiffSides, llmDiffSummary } from "../domain/reviewPresentation";
 const props = defineProps<{
   open: boolean;
   sourceText: string;
@@ -40,6 +41,14 @@ const i18n = useI18nStore();
 const instructions = ref("");
 const draft = ref("");
 const operationMessage = ref("");
+const textDiff = computed(() => {
+  if (!props.proposedText || props.proposedText === props.sourceText) return null;
+  return llmDiffSides("text", props.sourceText, props.proposedText);
+});
+const diffSummary = computed(() => {
+  if (!props.proposedText || props.proposedText === props.sourceText) return null;
+  return llmDiffSummary(props.sourceText, props.proposedText);
+});
 const redundant = computed(() => {
   const text = instructions.value.toLowerCase().replace(/[^a-z0-9 ]/g, " ");
   if (text.trim().length < 8) return false;
@@ -212,12 +221,32 @@ function run() {
       </section>
       <section>
         <h3>{{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}</h3>
-        <textarea
-          v-model="draft"
-          :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"
-        ></textarea>
+        <div v-if="textDiff" class="touchup-diff" aria-live="polite">
+          <div class="touchup-diff-label">
+            {{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}
+          </div>
+          <div class="touchup-diff-columns">
+            <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
+            <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
+          </div>
+        </div>
+        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"></textarea>
       </section>
     </div>
+    <p v-if="diffSummary" class="touchup-change-summary" role="status">
+      {{
+        i18n.tf(
+          "pdf_corpus.llm_touchup_change_summary",
+          "This proposal removes {removed} words and adds {added} words ({before} before, {after} after). Removed text is marked in red; added text is marked in green.",
+          {
+            removed: diffSummary.removed,
+            added: diffSummary.added,
+            before: diffSummary.before,
+            after: diffSummary.after,
+          },
+        )
+      }}
+    </p>
     <div v-if="!noChange && (changes?.length || warnings?.length)" class="touchup-notes">
       <section v-if="changes?.length">
         <h3>{{ i18n.t("pdf_corpus.llm_touchup_changes", "Reported changes") }}</h3>
@@ -341,6 +370,39 @@ function run() {
   resize: vertical;
   background: var(--card);
   color: var(--text);
+}
+.touchup-diff {
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.touchup-diff-label {
+  padding: 7px 10px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.touchup-diff-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.touchup-diff-columns pre {
+  height: 180px;
+  border: 0;
+  border-radius: 0;
+  background: var(--card);
+  font-size: 13px;
+}
+.touchup-diff-columns pre + pre {
+  border-left: 1px solid var(--line);
+}
+.touchup-change-summary {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 .touchup-notes {
   display: grid;

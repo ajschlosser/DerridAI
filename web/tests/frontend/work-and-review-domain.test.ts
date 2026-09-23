@@ -50,6 +50,12 @@ describe("review presentation", () => {
   it("builds diff sides and pretty JSON", () => {
     expect(review.reviewDiffSides("a b c", "a x c")).toMatchSnapshot();
     expect(review.llmDiffSides("topics", ["a"], ["a", "b"])).toMatchSnapshot();
+    expect(review.llmDiffSummary("Keep this wording.", "Keep this exact wording.")).toEqual({
+      removed: 0,
+      added: 1,
+      before: 3,
+      after: 4,
+    });
     expect(review.jsonPretty({ a: 1 })).toMatchSnapshot();
   });
   it("renders a RAG answer as escaped paragraphs", () => {
