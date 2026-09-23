@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
+from app.source_quality import assess_extracted_source
 from app.models import PdfCorpusBuildCreate
 from app.raster_quality import noise_from_effective_dpi
 from app.text_noise import (
@@ -78,6 +79,20 @@ def test_low_embedded_dpi_is_noisy_high_dpi_is_clean() -> None:
 
 
 def test_build_request_defaults_keep_noise_tuning_off_the_llm() -> None:
+    assert PdfCorpusBuildCreate(asset_id="a").llm_assess_text_noise is False
+    assert PdfCorpusBuildCreate(asset_id="a").noise_unusable_threshold == DEFAULT_NOISE_THRESHOLD
+
+
+def test_extracted_source_is_scored_before_a_build() -> None:
+    """Page noise is available as soon as blocks exist, without constructing records."""
+    report = assess_extracted_source(
+        [{"page": 1, "text": GARBLED, "extraction_method": "ocr"}],
+        [{"pdf_page": 1, "image_count": 0}],
+    )
+    noise = report["extraction_noise"]
+    assert noise["unusable_page_count"] == 1
+    assert noise["exceeds_threshold"] is True
+    assert noise["deterministic"] is True
     request = PdfCorpusBuildCreate(asset_id="pdf-test")
     assert request.noise_unusable_threshold == 45
     assert request.llm_assess_text_noise is False

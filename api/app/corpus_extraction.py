@@ -19,6 +19,7 @@ import fitz
 
 from .main_text_start import infer_main_text_start
 from .raster_quality import assess_page_raster
+from .source_quality import assess_extracted_source
 
 
 def safe_filename(value: str) -> str:
@@ -237,6 +238,7 @@ def extract_source_document(
             outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
         except Exception:  # noqa: BLE001 - a broken outline removes one clue
             outline = []
+        quality = assess_extracted_source(units, pages)
         return {
             "main_text_start_inference": infer_main_text_start(units, pages, outline),
             "outline": [{"page": page, "title": title} for page, title in outline[:400]],
@@ -251,6 +253,7 @@ def extract_source_document(
             "ocr_pages": ocr_pages,
             "warnings": warnings,
             "extractor": "pymupdf-layout-v2",
+            **quality,
         }
     finally:
         doc.close()
