@@ -115,6 +115,87 @@ Builder cleanup) and the language-dictionary-ux branch had no overlap with anyth
 during this session (through PR #101, then PR #102/#103); merged both times, no conflicts either time, full suite
 re-verified both times.
 
+## Session 9 status (branch `claude/runtime-refactor-22`)
+
+Converted the last legacy view, PDF Explorer. **`PdfExplorerSurface.vue` is now a real Vue component**, same markup,
+ids, classes and behavior as `domain/pdfExplorerRenderer.ts`'s old `renderPdf`, calling the same underlying domain
+functions (`linkedPdfRows`, `allLinkedRowsForLoadedPdf`, `renderPdfCanvas`, `extractPdfPageSmart`, `loadPdfMetadata`,
+`persistCurrentPdfAsset`, ...) via new `runtime.js` exports rather than reimplementing them. Removed the `renderPdf`
+dispatch from `renderView()` and its two remaining direct-call sites (`jobDialogs.ts`, `pdfLinking.ts`), replaced by
+the same `window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"))` bridge pattern the dashboard
+established, and removed the now-dead `nextTick`/`runtime.renderView()` call from `PdfWorkspaceView.vue`'s
+`setMode()` (the surface now owns its own render on mount and refresh).
+
+**A new, generalizable reactivity gotcha found here (did not come up in the dashboard, which never read `state.pdf.*`
+inside a `computed`):** `runtime.state` is a plain, non-reactive object except for the specific fields Pinia binds.
+A `computed()` whose getter reads `state.pdf.*` directly registers no tracked dependency and caches its first-ever
+value forever -- it does not re-run even when something else re-renders the component. This silently broke "Extract
+current page": the text was set into `state.pdf.text` correctly, but the `.pdftext` div kept showing the "no text
+extracted" fallback. A plain `{{ state.pdf.text }}` template read would have worked (no caching), and so does a ref
+explicitly reassigned inside `refresh()` -- only a `computed()` reading the raw field is broken. Fixed by mirroring
+`state.pdf.text`/`search`/`relatedSearch` into plain `ref()`s set every `refresh()`, with setter functions that write
+both the ref and `state.pdf.*` (some legacy code, e.g. `persistCurrentPdfAsset`, still reads `state.pdf.*` directly
+for IndexedDB persistence, so the write-through has to stay). **Any future runtime-to-Vue conversion that wants a
+`computed()` over `state.*` should mirror the field into a ref first; do not read `state.*` inside a `computed`
+getter.**
+
+**A genuine legacy race condition found and fixed as a disclosed, checked-first bug fix (not a redesign):**
+`enhanceCollapsibles(root)` (adds the collapse/expand affordance to over-tall cards) was, in the legacy code, only
+ever called from `renderView()`'s `requestAnimationFrame`-deferred hook -- never from the in-page action handlers
+(rotate, extract, next-page) that called `renderPdf()` directly and skipped it. Whether a tall card got the
+affordance therefore depended on exactly when that rAF fired relative to an unrelated, not-awaited canvas-paint
+promise -- confirmed non-deterministic by testing (the same baseline-recording helper produced flipping results
+across otherwise-identical runs). Checked the legacy source first per policy (nothing else reads or depends on the
+inconsistency) and made it deterministic: `enhanceCollapsibles` now runs unconditionally on every `refresh()`. This
+changed three snapshots (`pdf-explorer-extract`, `pdf-explorer-next-page`, `pdf-explorer-rotate`) to consistently show
+the affordance; re-recorded after confirming the only diffs were the added `data-collapsible-ready`/toggle markup.
+
+**Other fixes, each because it broke this page's own baseline until fixed, no behavior change beyond formatting/UI
+consistency:**
+- `pdfSearch`/`pdfRelatedSearch`/`pdfRecordSearch` switched from `v-model` to `:value.attr` + manual `@input`
+  (same technique the dashboard's search box already used) -- Vue's property-based `v-model` binding does not always
+  produce a literal `value=""` HTML attribute for an initially empty string.
+- The record-search autocomplete's "No matching records" empty state rendered even when the dropdown was closed
+  (`suggestions` was `[]` for both "closed" and "open, zero matches"); wrapped the whole suggestions/empty block in
+  `<template v-if="suggestionsOpen">`. This was a real, if minor, logic bug in the new component, caught before
+  ship by the a11y/keyboard e2e coverage, not present in the legacy renderer.
+- Multiple `v-text`/no-whitespace-continuation fixes for stray spaces Vue's template whitespace-condensing mode
+  introduces around multi-line button/paragraph text (same class of fix as sessions 7-8).
+- `AppIcon.vue`'s "copy" and "close" paths have also drifted from `domain/html.ts` (in addition to the already-known
+  "gear" drift from session 8); other passing baseline scenarios depend on the current drifted values, so `AppIcon`
+  was again left alone and the exact legacy SVG markup for "gear"/"copy"/"close" was inlined locally in this
+  component instead (same reasoning as session 8's gear fix). Whoever eventually reconciles `AppIcon.vue` with
+  `domain/html.ts` should fix all three paths and re-record every affected snapshot together, in one commit.
+- `pdf-explorer-link-page`'s `class="btn small "` / `class="copy-record-mini "` (trailing space from legacy's string
+  interpolation) versus Vue's `:class="{soft: cond}"` cleanly omitting the class when false: accepted as the same
+  harmless formatting difference already established for `:style` output in session 8, re-recorded that one snapshot
+  after confirming it was the only diff.
+- I initially wrapped the "no text extracted" hint in `i18n.t("pdf.no_text_hint", ...)`, but the legacy renderer
+  never localized this string (`domain/pdfExplorerRenderer.ts:169` is a hardcoded literal) -- adding a new key here
+  would have been scope creep beyond decomposition, and `tests/test_locale_dictionaries.py` caught the missing key
+  immediately. Reverted to the same hardcoded literal, matching legacy exactly.
+- New buttons carrying `data-copy-row-key`/`data-cite-row-key`/`data-toggle-workspace-evidence` need no `@click`
+  handler of their own: `runtime.js` already has one global delegated `document.addEventListener("click", ...)`
+  handler for these attributes (not per-view). Adding a component-local handler would double-fire.
+
+`runtime.js`: still 2,399 lines (this tranche only added exports and removed the `renderPdf` dispatch/lambdas; the
+~500 lines of PDF Explorer markup-building logic left the file earlier with the `pdfExplorerRenderer.ts` extraction).
+
+**Every remaining legacy view is now gone.** The next session should do the "when the last legacy view is gone"
+cleanup listed in section B below (delete `RuntimeSurface.vue` if it has zero remaining consumers, `translateLegacyDom`,
+the collapsible `MutationObserver`, `legacyCompat.js`, unused `runtimeBridge.ts` exports, shrink the `export {}` block)
+before starting anything else, since it is now unblocked and was deferred at every one of the last several sessions.
+
+**Conflict avoidance and branch note:** checked `gh pr list`/branches before continuing from the previous session's
+summary; found PR #107 (the branch this work continued on, `claude/runtime-refactor-21`) and PR #104 (Corpus Builder,
+`ajschlosser-record-review-enrichment`) had both already merged into `master` mid-session, so `claude/runtime-refactor-21`
+had zero unique commits left. Re-based this tranche onto fresh `master` as a new branch, `claude/runtime-refactor-22`,
+rather than building further on an already-merged branch; verified none of the touched files (`runtime.js`,
+`jobDialogs.ts`, `pdfLinking.ts`, `PdfWorkspaceView.vue`, `PdfExplorerSurface.vue`) had changed on `master` beyond
+what this branch already had before re-pointing. Full verification suite (typecheck, lint, 508 unit tests, production
+build, Storybook build, 131-scenario baseline, 287-test e2e suite, 429 backend tests) re-run clean against `master`
+before commit.
+
 ## Goal and hard requirements (from the owner)
 
 Decompose `web/src/runtime/runtime.js` (a legacy runtime: one mutable `state`, imperative HTML-string renderers, services and the
@@ -240,28 +321,18 @@ Procedure per cluster (about 10 minutes each), from `web/`:
 5. Afterwards `python3 ../scripts/runtime-refactor/dead_functions.py` removes top-level functions nothing references (run it only
    after deleting a caller; it deliberately ignores the `export {}` block).
 
-### B. Replace the remaining legacy views with Vue (risky; one view per commit) -- PDF Explorer is the only one left
+### B. Replace the remaining legacy views with Vue -- DONE; do the cleanup below next
 
-Response cache (session 7) and the dashboard (session 8) are both done: real Vue templates, no more `v-html`d whole-page
-strings, no more `renderResponseCache`/`renderDashboard` dispatch in `runtime.js`. **Only the PDF Explorer is left.**
+Response cache (session 7), the dashboard (session 8), and PDF Explorer (session 9) are all done: real Vue templates,
+no more `v-html`d whole-page strings, no more `renderResponseCache`/`renderDashboard`/`renderPdf` dispatch in
+`runtime.js`. **No legacy views are left.**
 
-- Build a Vue component that produces the same DOM as the current renderer (class names, element order, ids used by tests), route
-  it in `router/index.ts` instead of `RuntimeSurface`, and delete the renderer factory's dispatch (see the dashboard's own
-  session-8 note above for the two hazards this creates: a stray `renderView()`/direct call clobbering the new component's
-  `#main`, and the new component going stale because nothing re-invokes it on navigation the way the old renderer was).
-  Move that view's runtime-only CSS from `style.css` into the component's `<style scoped>` in the same commit (see
-  `docs/STYLE_AUDIT.md` and `style_move.py`).
-- The baseline must stay **unchanged**: the `pdf-explorer-*` and `styles-pdf-explorer-*` scenarios. Re-run the "insignificant
-  whitespace/comments" normalization sanity check from session 7 if any scenario's snapshot needs re-recording (confirm the
-  tag-stripped text is byte-identical, not just that the test now passes) -- do not otherwise re-record snapshots to make a
-  change pass.
-- PDF Explorer: uses PDF.js (`state.pdf.doc`), a canvas render token, text extraction (`extractPdfPageSmart` with an API fallback),
-  record linking and LLM helpers. Keep the DOM ids (`pdfInput`, `openPdf`, `pdfPrev`, `pdfNext`, `pdfPageInput`, `extractPage`,
-  `linkCurrentPdf`, ...): the baseline scenarios drive them. This is the largest and riskiest of the three (canvas rendering,
-  PDF.js async state) -- read `domain/pdfExplorerRenderer.ts` end to end before starting, the same way the dashboard's
-  `domain/dashboardRenderer.ts` was read end to end first.
-- When the last legacy view is gone: delete `RuntimeSurface.vue`, `translateLegacyDom`, the MutationObserver, the collapsible
-  enhancer, `legacyCompat.js`, unused `runtimeBridge.ts` exports, and shrink the `export {}` block.
+- **Next session should start here.** Confirm `RuntimeSurface.vue` has zero remaining consumers (`grep -rn
+  "RuntimeSurface" web/src`), then delete it along with `translateLegacyDom`, the collapsible `MutationObserver`,
+  `legacyCompat.js`, and any `runtimeBridge.ts` exports nothing imports anymore. Shrink `runtime.js`'s `export {}`
+  block to match (re-run the duplicate-export check: `sed -n '/^export {/,/^};/p' src/runtime/runtime.js | sort |
+  uniq -d`). Re-run the full verification suite after, since this removes code other views may still transitively
+  import.
 
 ### C. State and services to Vue idioms
 

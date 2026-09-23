@@ -485,7 +485,6 @@ const {pdfDisplayTitle,loadedPdfPagesForRecord,allLinkedRowsForLoadedPdf,loadPdf
   normalizePdfLinkChanges:(...args)=>normalizePdfLinkChanges(...args),
   openMessageModal:(...args)=>openMessageModal(...args),
   pdfLinks:(...args)=>pdfLinks(...args),
-  renderPdf:(...args)=>renderPdf(...args),
   renderView:(...args)=>renderView(...args),
   shell:(...args)=>shell(...args),
   toast:(...args)=>toast(...args),
@@ -612,7 +611,6 @@ const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openL
   refreshJobs:(...args)=>refreshJobs(...args),
   refreshRagProgressPanel:(...args)=>refreshRagProgressPanel(...args),
   refreshStores:(...args)=>refreshStores(...args),
-  renderPdf:(...args)=>renderPdf(...args),
   renderView:(...args)=>renderView(...args),
   reviewDiffSides:(...args)=>reviewDiffSides(...args),
   reviewItemFromKey:(...args)=>reviewItemFromKey(...args),
@@ -630,7 +628,7 @@ const {openJobDetails,openJobResults,openRagResult,openReviewRecordPreview,openL
   getUrlSyncHook:()=>getUrlSyncHook(),
   warmupProviderProfile:(...args)=>warmupProviderProfile(...args),
 });
-const {renderPdf,renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfPageSmart,extractPdfAllSmart}=createPdfExplorerRenderer({
+const {renderPdfCanvas,extractPdfPageBrowser,extractPdfApi,extractPdfPageSmart,extractPdfAllSmart}=createPdfExplorerRenderer({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   activeFile:(...args)=>activeFile(...args),
@@ -1412,9 +1410,7 @@ function renderView(){
   if(state.view!=="home")unmountOperationsPanel();
   if(!canAccessPage(state.view))state.view="home";
   syncUrl({replace:true});
-  let result;
-  if(state.view==="pdf") result=renderPdf(main);
-  else result=null;
+  const result=null;
   Promise.resolve(result).finally(()=>requestAnimationFrame(()=>{enhanceCollapsibles(main);decorateDisabledControls(main);translateLegacyDom(main)}));
   return result;
 }
@@ -1613,7 +1609,7 @@ function rankPdfLinkCandidates(rawText){
 async function cleanPdfPageWithLlm(){
   try{
     const raw_text=await currentPdfPageText();if(!raw_text.trim())return toast("No extractable text was found on this page");
-    openLlmTaskLauncher({task:"pdf_clean_text",title:"Clean PDF page text",description:`${state.pdf.title||state.pdf.name} · page ${state.pdf.page}`,payload:{mode:"clean_text",raw_text,pdf_file:state.pdf.name||null,pdf_title:state.pdf.title||null,pdf_author:state.pdf.author||null,pdf_page:state.pdf.page,candidates:[]},onForegroundResult:async result=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${result.model||"model"} · page ${state.pdf.page}`;state.pdf.extractError="";renderPdf(document.querySelector("#main"))}});
+    openLlmTaskLauncher({task:"pdf_clean_text",title:"Clean PDF page text",description:`${state.pdf.title||state.pdf.name} · page ${state.pdf.page}`,payload:{mode:"clean_text",raw_text,pdf_file:state.pdf.name||null,pdf_title:state.pdf.title||null,pdf_author:state.pdf.author||null,pdf_page:state.pdf.page,candidates:[]},onForegroundResult:async result=>{state.pdf.text=result.text||"";state.pdf.extractionSource=`LLM cleanup · ${result.model||"model"} · page ${state.pdf.page}`;state.pdf.extractError="";window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"))}});
   }catch(error){toast(`Could not prepare LLM cleanup: ${error.message}`)}
 }
 async function draftPdfPageWithLlm(){
@@ -2249,6 +2245,33 @@ export {
   responseCacheStore,
   enhanceCollapsibles,
   dashboardTotals,
+  activeFile,
+  allLinkedRowsForLoadedPdf,
+  cleanPdfPageWithLlm,
+  draftPdfPageWithLlm,
+  evidenceIsSelected,
+  linkPdfPage,
+  linkPdfPageWithLlm,
+  linkedPdfRows,
+  loadPdfMetadata,
+  loadedPdfPagesForRecord,
+  pages,
+  pdfDisplayTitle,
+  persistCurrentPdfAsset,
+  recordOptionForKey,
+  recordOptionLabel,
+  reviewKey,
+  searchRecordOptions,
+  selectedIndex,
+  selectedRecord,
+  shell,
+  toast,
+  tr,
+  unlinkPdfLink,
+  workspaceEvidenceSelectionKey,
+  renderPdfCanvas,
+  extractPdfPageSmart,
+  extractPdfAllSmart,
   dashboardRecordPreview,
   dashboardWorkspaceRecordTarget,
   openSharedAnnotationRecord,
