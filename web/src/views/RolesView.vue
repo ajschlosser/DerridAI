@@ -14,6 +14,7 @@ import { useI18nStore } from "../stores/i18n";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
 import RoleSelector, { type RoleChoice } from "../components/RoleSelector.vue";
+import { localizedAuthError } from "../domain/authErrors";
 import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
@@ -104,6 +105,16 @@ function displayName(item: RoleDefinition) {
   return item.name;
 }
 
+function displayDescription(item: RoleDefinition) {
+  if (item.id === "admin") {
+    return i18n.t("roles.admin_description", item.description);
+  }
+  if (item.id === "researcher") {
+    return i18n.t("roles.researcher_description", item.description);
+  }
+  return item.description;
+}
+
 function assignedLabel(count: number) {
   if (count === 0) return i18n.t("roles.assigned_none", "No accounts use this role.");
   if (count === 1)
@@ -144,7 +155,7 @@ async function refresh(preferred?: string) {
       "researcher";
     applyRole(roles.value.some((item) => item.id === next) ? next : fallback);
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     loading.value = false;
   }
@@ -178,7 +189,7 @@ async function save() {
     notify(i18n.t("roles.saved", "Role permissions saved."), "success");
     return true;
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
     return false;
   } finally {
     saving.value = false;
@@ -218,7 +229,7 @@ async function createRole() {
     announce(i18n.t("roles.created", "Role created."));
     notify(i18n.t("roles.created", "Role created."), "success");
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     creating.value = false;
   }
@@ -259,7 +270,7 @@ async function deleteSelected() {
     notify(i18n.t("roles.deleted", "Role deleted."), "success");
     await refresh("researcher");
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     deleting.value = false;
   }
@@ -411,7 +422,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 :tone="role.locked ? 'warning' : role.builtin ? 'info' : 'success'"
               />
             </div>
-            <p class="role-editor-copy">{{ role.description }}</p>
+            <p class="role-editor-copy">{{ displayDescription(role) }}</p>
             <p class="note">{{ assignedLabel(assignedCount) }}</p>
           </div>
           <div class="role-editor-tools">

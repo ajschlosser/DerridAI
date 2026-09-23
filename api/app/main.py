@@ -374,7 +374,11 @@ def auth_login(body: AuthLoginRequest, response: Response) -> dict[str, Any]:
     user = auth_store.authenticate(body.username, body.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-    token = auth_store.create_session(user.id)
+    try:
+        token = auth_store.create_session(user.id, expected_updated_at=user.updated_at)
+    except ValueError as exc:
+        # Hide whether the account was disabled or changed during this login.
+        raise HTTPException(status_code=401, detail="Invalid username or password.") from exc
     _session_cookie(response, token)
     return {"user": user.public()}
 
