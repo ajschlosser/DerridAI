@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { assetHasExtractionWarning, recordHasSourceWarning } from "../../src/domain/sourceQuality";
+import {
+  assetHasExtractionWarning,
+  firstRecordWithSourceWarning,
+  recordHasSourceWarning,
+} from "../../src/domain/sourceQuality";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
 
 describe("source extraction warning placement", () => {
@@ -14,6 +18,13 @@ describe("source extraction warning placement", () => {
   it("flags records that still carry source issues", () => {
     expect(recordHasSourceWarning({ source_quality_issues: [{ code: "illegible_text" }] })).toBe(true);
     expect(recordHasSourceWarning({ source_quality_issues: [] })).toBe(false);
+  });
+
+  it("finds the first source-problem record after run hydration", () => {
+    const clean = { record_id: "clean", source_quality_issues: [] };
+    const problem = { record_id: "problem", source_quality_issues: [{ code: "illegible_text" }] };
+    expect(firstRecordWithSourceWarning([clean, problem])).toBe(problem);
+    expect(firstRecordWithSourceWarning([clean])).toBeUndefined();
   });
 
   it("puts the source warning on an icon control instead of an inline banner", async () => {
