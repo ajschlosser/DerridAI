@@ -155,3 +155,12 @@ export function defaultFilterSchemaId() {
 export function chosenFilterSchemaId(options: { store: string; associatedId?: string }) {
   return loadFilterSchemaOverride(options.store) || options.associatedId || DEFAULT_SCHEMA_ID;
 }
+
+const NUMERIC_FILTER_FIELDS = new Set(["page_start", "page_end", "year", "publication_year", "text_length", "extraction_quality", "attribution_confidence", "semantic_classification_confidence"]);
+const COLLECTION_FILTER_FIELDS = new Set(["topics", "concepts", "persons", "works_referenced", "institutions_referenced", "locations_referenced", "events_referenced", "groups_referenced", "languages_referenced", "document_language", "quoted_speaker", "quotation_chain"]);
+
+export function filterOpsForField(field: string): [string, string][] {
+  if (NUMERIC_FILTER_FIELDS.has(field)) return [["eq", "equals"], ["neq", "not equal"], ["gte", "greater than or equal"], ["lte", "less than or equal"], ["empty", "is empty"], ["notempty", "is not empty"]];
+  if (COLLECTION_FILTER_FIELDS.has(field)) return [["has", "contains"], ["nhas", "does not contain"], ["eq", "equals exactly"], ["neq", "does not equal"], ["empty", "is empty"], ["notempty", "is not empty"]];
+  return [["eq", "equals"], ["neq", "not equal"], ["has", "contains"], ["nhas", "does not contain"], ["empty", "is empty"], ["notempty", "is not empty"]];
+}
