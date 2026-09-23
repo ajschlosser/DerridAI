@@ -3674,37 +3674,10 @@ body{font-size:0.9375rem;line-height:1.55}
 
 /* 0.36.10 — In Search of Lost Time: native corpus Search workspace */
 .search-native-page{
-  width:min(1640px,calc(100% - 34px));
-  margin:18px auto 56px;
   display:grid;
-  gap:16px;
 }
 
-.search-workspace-header{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  gap:18px 24px;
-  padding:22px 24px 16px;
-  border:1px solid var(--line);
-  border-radius:18px;
-  background:linear-gradient(135deg,var(--panel),var(--panel-2));
-  box-shadow:var(--shadow-sm);
-}
-.search-workspace-heading{max-width:780px}
-.search-workspace-heading h1{margin:4px 0 6px;font-family:Georgia,serif;font-size:clamp(1.75rem,3vw,2.4375rem);font-weight:620;letter-spacing:-.025em;line-height:1.02}
-.search-workspace-heading p{margin:0;max-width:72ch;color:var(--muted);font-size:0.8125rem;line-height:1.55}
-.search-workspace-actions{display:flex;align-items:flex-start;justify-content:flex-end;gap:7px;flex-wrap:wrap}
-.search-workspace-actions .btn svg,.search-workspace-stats svg,.search-scope-switch svg,.search-options>summary svg,.search-mobile-filter-button svg,.search-add-filter svg{width:16px;height:16px}
-.search-scope-row{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:14px;border-top:1px solid var(--line)}
-.search-scope-switch{display:inline-grid;grid-template-columns:repeat(2,minmax(160px,1fr));gap:4px;padding:4px;border:1px solid var(--line);border-radius:13px;background:var(--panel-2)}
-.search-scope-switch button{min-height:46px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;border:0;border-radius:9px;padding:7px 11px;background:transparent;color:var(--muted);text-align:left}
-.search-scope-switch button span{font-size:.8125rem;font-weight:760;color:inherit}
-.search-scope-switch button small{min-width:28px;padding:2px 6px;border-radius:999px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:.8125rem;font-weight:800;text-align:center}
-.search-scope-switch button:hover:not(:disabled){background:color-mix(in srgb,var(--card) 72%,transparent);color:var(--text)}
-.search-scope-switch button.active{background:var(--panel);color: var(--accent-fg);box-shadow:0 1px 4px color-mix(in srgb,var(--text) 8%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent)}
-.search-scope-switch button:disabled{opacity:.5;cursor:not-allowed}
-.search-workspace-stats{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8125rem;font-weight:650}
-.search-workspace-stats span{display:inline-flex;align-items:center;gap:6px}
+.search-options>summary svg,.search-mobile-filter-button svg,.search-add-filter svg{width:16px;height:16px}
 
 .search-command-surface{
   position:relative;
@@ -3879,9 +3852,9 @@ body{font-size:0.9375rem;line-height:1.55}
 
 .search-native-page :is(button,input,select,textarea,summary,[tabindex]):focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 32%,transparent);outline-offset:2px}
 @media(max-width:1050px){
-  .search-workspace-header{grid-template-columns:1fr}.search-workspace-actions{justify-content:flex-start}.search-scope-row{align-items:flex-start;flex-direction:column}.search-database-context{align-items:flex-start;flex-direction:column}.search-explorer-grid{grid-template-columns:1fr}.search-mobile-filter-button{display:inline-flex;justify-self:start}.search-facet-scrim{display:block;position:fixed;inset:0;z-index:54;border:0;background:rgba(20,26,23,.32)}.search-facet-shell{position:fixed;z-index:55;left:0;top:0;width:min(340px,90vw);height:100dvh;max-height:none;border-radius:0 16px 16px 0;transform:translateX(-105%);transition:transform .18s ease;box-shadow:var(--shadow-md)}.search-facet-shell.open{transform:translateX(0)}.search-facet-close{position:sticky;top:8px;z-index:3;margin:8px 8px -42px auto;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:1.25rem}.search-facets{padding-top:18px}.search-add-filter{align-self:end}.search-results-toolbar{align-items:flex-start;flex-direction:column}.search-results-controls{width:100%;justify-content:flex-start}}
+  .search-database-context{align-items:flex-start;flex-direction:column}.search-explorer-grid{grid-template-columns:1fr}.search-mobile-filter-button{display:inline-flex;justify-self:start}.search-facet-scrim{display:block;position:fixed;inset:0;z-index:54;border:0;background:rgba(20,26,23,.32)}.search-facet-shell{position:fixed;z-index:55;left:0;top:0;width:min(340px,90vw);height:100dvh;max-height:none;border-radius:0 16px 16px 0;transform:translateX(-105%);transition:transform .18s ease;box-shadow:var(--shadow-md)}.search-facet-shell.open{transform:translateX(0)}.search-facet-close{position:sticky;top:8px;z-index:3;margin:8px 8px -42px auto;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:1.25rem}.search-facets{padding-top:18px}.search-add-filter{align-self:end}.search-results-toolbar{align-items:flex-start;flex-direction:column}.search-results-controls{width:100%;justify-content:flex-start}}
 @media(max-width:720px){
-  .search-workspace-header{padding:18px 15px 14px}.search-workspace-actions{width:100%}.search-workspace-actions .btn{flex:1 1 auto;justify-content:center}.search-scope-switch{width:100%;grid-template-columns:1fr}.search-scope-switch button{grid-template-columns:auto 1fr auto}.search-command-row{grid-template-columns:1fr;padding:12px}.search-database-context{padding:12px 12px 0}.search-database-context label{width:100%;min-width:0}.search-active-filters{padding:0 12px 12px}.search-method-picker{grid-template-columns:1fr}.search-mmr-controls{grid-template-columns:1fr}.search-options-heading{align-items:flex-start;flex-direction:column}.search-selection-bar{top:72px;align-items:flex-start;flex-direction:column}.search-selection-actions{width:100%;justify-content:flex-start}.search-results-controls{display:grid;grid-template-columns:1fr 1fr;width:100%}.search-layout-switcher{grid-column:1/-1}.search-layout-switcher .btn{flex:1}.search-sort-menu>summary,.search-results-controls>.btn,.search-page-size .control{width:100%;justify-content:center}.search-sort-popover{left:0;right:auto}.search-result-cards{padding:8px}.search-result-card>footer{align-items:flex-start;flex-direction:column}.search-record-actions{width:100%}.search-record-actions>.btn{flex:1}.search-config-dialog{width:calc(100vw - 16px);max-height:90vh}.search-config-dialog .db{max-height:calc(90vh - 130px)}}
+  .search-command-row{grid-template-columns:1fr;padding:12px}.search-database-context{padding:12px 12px 0}.search-database-context label{width:100%;min-width:0}.search-active-filters{padding:0 12px 12px}.search-method-picker{grid-template-columns:1fr}.search-mmr-controls{grid-template-columns:1fr}.search-options-heading{align-items:flex-start;flex-direction:column}.search-selection-bar{top:72px;align-items:flex-start;flex-direction:column}.search-selection-actions{width:100%;justify-content:flex-start}.search-results-controls{display:grid;grid-template-columns:1fr 1fr;width:100%}.search-layout-switcher{grid-column:1/-1}.search-layout-switcher .btn{flex:1}.search-sort-menu>summary,.search-results-controls>.btn,.search-page-size .control{width:100%;justify-content:center}.search-sort-popover{left:0;right:auto}.search-result-cards{padding:8px}.search-result-card>footer{align-items:flex-start;flex-direction:column}.search-record-actions{width:100%}.search-record-actions>.btn{flex:1}.search-config-dialog{width:calc(100vw - 16px);max-height:90vh}.search-config-dialog .db{max-height:calc(90vh - 130px)}}
 @media(prefers-reduced-motion:reduce){.search-native-page *{scroll-behavior:auto!important;transition-duration:0.001ms!important;animation-duration:0.001ms!important}}
 
 /* 0.36.11 — Peekaboo: stable loaded-record Search layout and Works CTA. */
