@@ -2,10 +2,9 @@
 import { useId } from "vue";
 import { useI18nStore } from "../stores/i18n";
 
-const props = withDefaults(
-  defineProps<{ threshold: number; llmAssist: boolean; disabled?: boolean }>(),
-  { disabled: false },
-);
+withDefaults(defineProps<{ threshold: number; llmAssist: boolean; disabled?: boolean }>(), {
+  disabled: false,
+});
 const emit = defineEmits<{ "update:threshold": [value: number]; "update:llmAssist": [value: boolean] }>();
 const i18n = useI18nStore();
 const id = useId();

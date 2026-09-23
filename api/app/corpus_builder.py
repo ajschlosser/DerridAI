@@ -97,17 +97,6 @@ from .corpus_metadata import (
 from .corpus_pipeline import BuildScope
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .corpus_review_mutations import requeue_record_metadata
-from .text_noise import (
-    DEFAULT_NOISE_THRESHOLD,
-    TEXT_NOISE_LLM_PROMPT,
-    TEXT_NOISE_PROMPT_VERSION,
-    TextNoiseLlmResult,
-    annotate_records as annotate_text_noise,
-    fuse_record_noise,
-    median_score as median_text_noise,
-    threshold_from_records as record_noise_threshold,
-    should_ask_llm,
-)
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     HUMAN_OWNED_STATUSES,
@@ -150,6 +139,23 @@ from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, _extract_json, chat_complete
 from .reviewer_context import current_reviewer
 from .sentence_boundaries import snap_boundaries_to_sentences
+from .text_noise import (
+    DEFAULT_NOISE_THRESHOLD,
+    TEXT_NOISE_LLM_PROMPT,
+    TEXT_NOISE_PROMPT_VERSION,
+    TextNoiseLlmResult,
+    fuse_record_noise,
+    should_ask_llm,
+)
+from .text_noise import (
+    annotate_records as annotate_text_noise,
+)
+from .text_noise import (
+    median_score as median_text_noise,
+)
+from .text_noise import (
+    threshold_from_records as record_noise_threshold,
+)
 
 SCHEMA_VERSION = "pdf-corpus-v3"
 SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
