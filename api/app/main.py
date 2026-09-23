@@ -2440,7 +2440,7 @@ def decide_pdf_corpus_record_metadata_batch(
     body: PdfCorpusMetadataDecisionBatch,
 ) -> dict[str, Any]:
     try:
-        result = pdf_corpus_builds.patch_metadata(
+        pdf_corpus_builds.patch_metadata(
             build_id, record_id, body.changes, body.expected_revision
         )
         build = pdf_corpus_repository.get_build(build_id)
