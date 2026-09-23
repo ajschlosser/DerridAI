@@ -478,12 +478,7 @@ export interface CorpusRecord {
     string,
     {
       status?:
-        | "deterministic"
-        | "llm_inferred"
-        | "human_confirmed"
-        | "unresolved"
-        | "invalid"
-        | string;
+        "deterministic" | "llm_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
       method?: string;
       confidence?: number | null;
       reason?: string;
@@ -580,6 +575,7 @@ export interface CorpusRecord {
     provider?: string;
     model?: string;
     created_at?: string;
+    no_change?: boolean;
   };
   text_reviewed_at?: string;
   text_revision_history?: Array<{
@@ -1056,6 +1052,7 @@ export const pdfCorpusApi = {
       warnings: string[];
       provider: string;
       model: string;
+      no_change?: boolean;
     }>(
       `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/text-touchup`,
       { method: "POST", body: JSON.stringify(payload) },
