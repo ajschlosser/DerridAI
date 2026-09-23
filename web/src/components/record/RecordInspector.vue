@@ -6,7 +6,16 @@ import RecordIndexTerms from "./RecordIndexTerms.vue";
 import RecordAnnotations from "./RecordAnnotations.vue";
 import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
+import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
+import {
+  loadInspectorLayout,
+  saveInspectorLayout,
+  defaultInspectorLayout,
+  groupInspectorRows,
+  type InspectorLayout,
+  type InspectorLayoutRow,
+} from "../../domain/inspectorLayout";
 
 const props = defineProps<{ snapshot: RecordWorkspaceSnapshot }>();
 const emit = defineEmits<{
@@ -23,6 +32,8 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const tab = ref("overview");
+const layout = ref<InspectorLayout>(loadInspectorLayout());
+const layoutEditor = ref<{ open: () => void } | null>(null);
 const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
   ["overview", i18n.t("record.tab_overview", "Overview")],
@@ -32,22 +43,30 @@ const tabs = computed(() => [
   ["annotations", i18n.t("record.tab_annotations", "Annotations")],
   ["history", i18n.t("record.tab_history", "History")],
 ]);
-const overviewFields = [
-  "document_author",
-  "edition",
-  "year",
-  "publication_year",
-  "publisher",
-  "translator",
-  "document_language",
-  "original_language",
-  "region_type",
-  "region_author",
-  "__pages",
-  "primary_text",
-  "needs_review",
-  "review_reason",
-];
+const overviewSections = computed(() => groupInspectorRows(layout.value.overview));
+const indexingFields = computed(() =>
+  layout.value.indexing.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+);
+const provenanceFields = computed(() =>
+  layout.value.provenance.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+);
+function applyLayout(next: InspectorLayout) {
+  layout.value = next;
+  saveInspectorLayout(next);
+}
+function resetLayout() {
+  const next = defaultInspectorLayout();
+  layout.value = next;
+  saveInspectorLayout(next);
+}
+function headingText(label: string) {
+  if (label === "Record context") return i18n.t("record.record_context", "Record context");
+  if (label === "Quotation provenance") return i18n.t("record.quotation_provenance", "Quotation provenance");
+  if (label === "Attribution") return i18n.t("record.attribution", "Attribution");
+  if (label === "Discourse") return i18n.t("record.discourse", "Discourse");
+  if (label === "Research index") return i18n.t("record.indexing_kicker", "Research index");
+  return label;
+}
 const pageSpan = computed(() => {
   const a = record.value.page_start ?? record.value.page;
   const b = record.value.page_end;
@@ -56,15 +75,6 @@ const pageSpan = computed(() => {
     ? `${a}–${b}`
     : String(a);
 });
-const quoteFields = [
-  "is_direct_quote",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
-  "quoted_addressee",
-  "quoted_referent",
-];
 function present(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
@@ -94,14 +104,6 @@ function values(key: string) {
   if (value === null || value === undefined || value === "") return [];
   return [String(value)];
 }
-const hasQuoteMeta = computed(() =>
-  quoteFields.some(
-    (key) =>
-      record.value[key] !== null &&
-      record.value[key] !== undefined &&
-      String(record.value[key]).trim() !== "",
-  ),
-);
 function tabId(key: string) {
   return `recordInspectorTab-${key}`;
 }
@@ -179,36 +181,25 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         <div class="inspector-section-head">
           <p>{{ i18n.t("record.record_context", "Record context") }}</p>
           <h2>{{ i18n.t("record.overview", "Overview") }}</h2>
+          <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
+            {{ i18n.t("record.configure_fields", "Configure fields") }}
+          </button>
         </div>
-        <dl class="record-meta-list">
-          <div v-for="key in overviewFields" :key="key">
-            <dt>{{ fieldLabel(key) }}</dt>
-            <dd>
-              <template v-if="key === '__pages'"
-                ><span class="record-page-value">{{ pageSpan }}</span></template
-              ><button
-                v-else-if="searchable(key, record[key])"
-                type="button"
-                @click="emit('search', key, String(record[key]))"
-              >
-                {{ present(record[key]) }}</button
-              ><span v-else>{{ present(record[key]) }}</span>
-            </dd>
-          </div>
-        </dl>
-        <section v-if="hasQuoteMeta" class="quoted-meta">
-          <h3>{{ i18n.t("record.quotation_provenance", "Quotation provenance") }}</h3>
+        <section v-for="(section, index) in overviewSections" :key="`${section.heading || 'fields'}-${index}`" class="inspector-field-group">
+          <h3 v-if="section.heading">{{ headingText(section.heading) }}</h3>
           <dl class="record-meta-list">
-            <div v-for="key in quoteFields" :key="key">
-              <dt>{{ fieldLabel(key) }}</dt>
+            <div v-for="field in section.fields" :key="field">
+              <dt>{{ fieldLabel(field) }}</dt>
               <dd>
-                <button
-                  v-if="searchable(key, record[key])"
+                <template v-if="field === '__pages'"
+                  ><span class="record-page-value">{{ pageSpan }}</span></template
+                ><button
+                  v-else-if="searchable(field, record[field])"
                   type="button"
-                  @click="emit('search', key, String(record[key]))"
+                  @click="emit('search', field, String(record[field]))"
                 >
-                  {{ present(record[key]) }}</button
-                ><span v-else>{{ present(record[key]) }}</span>
+                  {{ present(record[field]) }}</button
+                ><span v-else>{{ present(record[field]) }}</span>
               </dd>
             </div>
           </dl>
@@ -229,6 +220,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         v-else-if="tab === 'provenance'"
         :id="panelId('provenance')"
         :record="record"
+        :fields="provenanceFields"
         role="tabpanel"
         :aria-labelledby="tabId('provenance')"
         @search="(field, value) => emit('search', field, value)"
@@ -243,9 +235,12 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         <div class="inspector-section-head">
           <p>{{ i18n.t("record.indexing_kicker", "Research index") }}</p>
           <h2>{{ i18n.t("record.indexing", "Indexing") }}</h2>
+          <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
+            {{ i18n.t("record.configure_fields", "Configure fields") }}
+          </button>
         </div>
         <RecordIndexTerms
-          v-for="key in ['topics', 'concepts', 'persons', 'works_referenced']"
+          v-for="key in indexingFields"
           :key="key"
           :title="fieldLabel(key)"
           :field="key"
@@ -292,6 +287,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         @open="emit('openHistory')"
       />
     </div>
+    <InspectorLayoutEditor ref="layoutEditor" :layout="layout" @apply="applyLayout" @reset="resetLayout" />
   </aside>
 </template>
 <style scoped>
@@ -355,6 +351,27 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
   background: var(--soft);
   font-size: 0.8125rem;
 }
+.record-layout-button {
+  grid-column: 1 / -1;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.inspector-field-group {
+  display: grid;
+  gap: 8px;
+}
+.inspector-field-group h3 {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
 .record-inspector-body {
   min-height: 0;
   overflow-x: hidden;
@@ -371,6 +388,12 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 .record-page-value {
   font-variant-numeric: tabular-nums;
 }
+.inspector-section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
 .inspector-section-head p {
   margin: 0;
   color: var(--muted);
@@ -381,8 +404,13 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 }
 .inspector-section-head h2 {
   margin: 2px 0 0;
+  grid-column: 1;
   color: var(--text-2);
   font-size: 1.0625rem;
+}
+.inspector-section-head .record-layout-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 .record-meta-list {
   display: grid;

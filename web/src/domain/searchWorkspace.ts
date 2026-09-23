@@ -339,7 +339,12 @@ export function createSearchWorkspace(deps: Deps) {
       fetch_k: Math.max(1, Number(state.dbSearchFetchK) || 100),
       lambda_mult: Math.max(0, Math.min(1, Number(state.dbSearchLambda ?? 0.7))),
       advanced_open: Boolean(state.globalAdvancedOpen),
-      stores: stores.map((store: Any) => ({ name: store.name, count: Number(store.count || 0) })),
+      stores: stores.map((store: Any) => ({
+        name: store.name,
+        count: Number(store.count || 0),
+        filter_fields: Array.isArray(store.filter_fields) ? store.filter_fields.map(String) : [],
+        schema_id: String(store.schema_id || store.metadata?.schema_id || ""),
+      })),
       active_store: state.activeStore || "",
       has_database: stores.length > 0,
       has_loaded_records: allRows().length > 0,
@@ -474,17 +479,14 @@ export function createSearchWorkspace(deps: Deps) {
             (state.storeSearchResults || []).map((item: Any) => ({ record: item.record || {} })),
             ["__db_status"],
           );
-    if (scope === "loaded") {
-      // Loaded-record Search has one stable table contract: DB status, Work,
-      // Page Start, Needs Review, Extracted Text, followed by Actions.
-      state.tableColumns.global = SEARCH_LOADED_COLUMNS.filter((key) => available.includes(key));
-    } else {
-      state.tableColumns.global = [...new Set((columns || []).map(String))].filter((key) =>
-        available.includes(key),
-      );
-      if (!state.tableColumns.global.length)
-        state.tableColumns.global = TABLE_DEFAULTS.global.filter((key) => available.includes(key));
-    }
+    const requested = [...new Set((columns || []).map(String))].filter((key) =>
+      available.includes(key),
+    );
+    const fallback =
+      scope === "loaded" ? SEARCH_LOADED_COLUMNS : TABLE_DEFAULTS.global;
+    state.tableColumns.global = requested.length
+      ? requested
+      : fallback.filter((key) => available.includes(key));
     persistPrefs();
     syncUrl({ replace: true });
   }

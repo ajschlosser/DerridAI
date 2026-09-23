@@ -5,6 +5,8 @@ export type SearchMethod = "similarity" | "mmr" | "filter";
 export interface SearchStoreOption {
   name: string;
   count: number;
+  filter_fields?: string[];
+  schema_id?: string;
 }
 
 export interface SearchColumnOption {

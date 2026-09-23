@@ -5,8 +5,10 @@ import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
 import ProviderModelPicker from "../components/ProviderModelPicker.vue";
+import ProviderBulkApply from "../components/providers/ProviderBulkApply.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import { MODEL_KINDS, type DiscoveredModel } from "../domain/providerModels";
+import { applyProfileFieldValues } from "../domain/providerBulkFields";
 
 type ProviderStatus = { available?: boolean; models?: DiscoveredModel[]; error?: string };
 type ProviderWarmup = { message?: string };
@@ -20,6 +22,7 @@ const saving = ref(false);
 const error = ref("");
 const busy = ref<Record<string, string>>({});
 const revealedKeys = ref<Record<string, boolean>>({});
+const expanded = ref<Record<string, boolean>>({});
 function toggleKeyVisibility(id: string) { revealedKeys.value = {...revealedKeys.value, [id]: !revealedKeys.value[id]}; }
 const warmOnStart = ref(false);
 function setWarmOnStart(value: boolean) { warmOnStart.value = Boolean(runtime.setWarmOnStartForUi?.(value)); }
@@ -28,7 +31,6 @@ const counts = computed(() => ({
   openai: profiles.value.filter(profile => profile.type === "openai").length,
 }));
 
-function copyProfiles() { return JSON.parse(JSON.stringify(profiles.value)) as ProviderProfile[]; }
 function refresh() {
   profiles.value = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
   statuses.value = (runtime.getProviderStatusesForUi?.() || {}) as Record<string, ProviderStatus>;
@@ -51,18 +53,32 @@ function statusText(profile: ProviderProfile) {
   if (status?.available) return i18n.tf("providers.ready_models", "Ready - {count} models", { count: Number(status.models?.length || 0) });
   return status?.error || warmups.value[profile.id]?.message || i18n.t("providers.not_verified", "Not verified");
 }
+function copyProfiles() { return JSON.parse(JSON.stringify(profiles.value)) as ProviderProfile[]; }
 function setBusy(id: string, value = "") { busy.value = {...busy.value, [id]: value}; }
+function isExpanded(id: string) { return expanded.value[id] !== false; }
+function toggleExpanded(id: string) { expanded.value = { ...expanded.value, [id]: !isExpanded(id) }; }
 async function save() {
   saving.value = true; error.value = "";
   try {
     runtime.saveProviderProfilesForUi?.(copyProfiles());
     await runtime.syncResearcherProviderProfiles?.();
     refresh();
+    expanded.value = Object.fromEntries(profiles.value.map((profile) => [profile.id, false]));
     runtime.notifyToast?.(i18n.t("providers.saved", "Provider profiles saved."), { tone: "success" });
   } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
   finally { saving.value = false; }
 }
-function add(type: "ollama" | "openai") { runtime.addProviderProfileForUi?.(type); refresh(); }
+function add(type: "ollama" | "openai") {
+  const created = runtime.addProviderProfileForUi?.(type) as ProviderProfile | undefined;
+  refresh();
+  const id = created?.id || profiles.value.at(-1)?.id;
+  if (id) expanded.value = { ...expanded.value, [id]: true };
+}
+function applyBulk(ids: string[], values: Record<string, unknown>) {
+  profiles.value = applyProfileFieldValues(profiles.value, ids, values);
+  runtime.notifyToast?.(i18n.t("providers.bulk_applied", "Values copied to the selected profiles. Save provider profiles to persist."), { tone: "info" });
+  for (const id of ids) expanded.value = { ...expanded.value, [id]: true };
+}
 async function remove(profile: ProviderProfile) {
   if (!window.confirm(i18n.tf("providers.remove_confirm", "Remove provider profile {name}?", { name: profile.name || profile.id }))) return;
   try { runtime.removeProviderProfileForUi?.(profile.id); refresh(); } catch (exc) { error.value = exc instanceof Error ? exc.message : String(exc); }
@@ -117,8 +133,9 @@ onMounted(() => { refresh(); loading.value = false; });
             <div class="provider-name-row"><span class="provider-type">{{ profile.type === 'ollama' ? 'OLLAMA' : 'OPENAI-COMPATIBLE' }}</span><input class="control provider-name" :aria-label="i18n.t('providers.profile_name', 'Profile name')" :value="profile.name" @input="update(profile, 'name', ($event.target as HTMLInputElement).value)"></div>
             <p class="provider-status" :class="{ready: statuses[profile.id]?.available, error: !statuses[profile.id]?.available && !!statuses[profile.id]?.error}"><span aria-hidden="true"></span>{{ statusText(profile) }}</p>
           </div>
-          <div class="provider-card-actions"><span v-if="profile.id === defaultId" class="status-tag">{{ i18n.t("providers.default", "Default") }}</span><button v-else class="btn small" type="button" @click="makeDefault(profile)">{{ i18n.t("providers.set_default", "Set default") }}</button><button class="btn small danger" type="button" :disabled="profiles.length <= 1" @click="remove(profile)">{{ i18n.t("ui.remove", "Remove") }}</button></div>
+          <div class="provider-card-actions"><span v-if="profile.id === defaultId" class="status-tag">{{ i18n.t("providers.default", "Default") }}</span><button v-else class="btn small" type="button" @click="makeDefault(profile)">{{ i18n.t("providers.set_default", "Set default") }}</button><button class="btn small" type="button" :aria-expanded="isExpanded(profile.id)" @click="toggleExpanded(profile.id)">{{ isExpanded(profile.id) ? i18n.t("providers.collapse", "Collapse") : i18n.t("providers.expand", "Expand") }}</button><button class="btn small danger" type="button" :disabled="profiles.length <= 1" @click="remove(profile)">{{ i18n.t("ui.remove", "Remove") }}</button></div>
         </header>
+        <div v-show="isExpanded(profile.id)" class="provider-card-body">
         <div class="provider-field-group">
           <p class="provider-group-title">{{ i18n.t("providers.group_connection", "Connection") }}</p>
           <div class="provider-fields">
@@ -168,8 +185,10 @@ onMounted(() => { refresh(); loading.value = false; });
           </div>
         </details>
         <footer class="provider-card-footer"><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'test')">{{ busy[profile.id] === 'test' ? i18n.t("providers.testing", "Testing...") : i18n.t("providers.test", "Test / discover models") }}</button><button class="btn small" type="button" :disabled="Boolean(busy[profile.id])" @click="run(profile, 'warm')">{{ busy[profile.id] === 'warm' ? i18n.t("providers.warming", "Warming...") : i18n.t("providers.warm", "Warm independently") }}</button></footer>
+        </div>
       </article>
     </section>
+    <ProviderBulkApply v-if="!loading && profiles.length" :profiles="profiles" @apply="applyBulk" />
     <div class="providers-save"><button class="btn primary" type="button" :disabled="saving || !profiles.length" @click="save">{{ saving ? i18n.t("ui.saving", "Saving...") : i18n.t("ui.save", "Save provider profiles") }}</button></div>
   </main>
 </template>
@@ -179,6 +198,7 @@ onMounted(() => { refresh(); loading.value = false; });
 .providers-overview{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px;padding:14px 20px;border:1px solid var(--line);background:var(--raised);box-shadow:var(--shadow-sm)}.providers-overview>div:first-child{display:flex;align-items:baseline;gap:10px;min-width:0}.providers-overview h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.providers-overview p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.4;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eyebrow,.provider-type{font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-fg)}.eyebrow{flex:none;margin:0}
 .providers-stats{display:flex;gap:18px;margin:0;flex:none}.providers-stats div{display:flex;align-items:baseline;gap:6px;min-width:0}.providers-stats dt{margin:0;font-size:.75rem;color:var(--muted)}.providers-stats dd{margin:0;font-size:1rem;font-weight:800}.providers-stats .default-stat{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
 .provider-list{display:grid;gap:14px}
+.provider-card-body{display:grid;gap:16px}
 .provider-workspace-card{display:grid;gap:16px;padding:20px;border:1px solid var(--line);border-left:3px solid var(--line);background:var(--card);box-shadow:var(--shadow-sm);transition:box-shadow .15s ease,border-color .15s ease}
 .provider-workspace-card:hover{box-shadow:var(--shadow-md,var(--shadow-sm))}
 .provider-workspace-card.ollama{border-left-color:var(--tone-info-border)}.provider-workspace-card.openai{border-left-color:var(--accent)}

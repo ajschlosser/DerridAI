@@ -14,6 +14,16 @@ import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import HighlightedText from "../components/search/HighlightedText.vue";
 import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
 import type { RecentSearchEntry, SavedSearchView, SearchFilter, SearchLayout, SearchMethod, SearchResult, SearchScope, SearchWorkspaceSnapshot } from "../types/search";
+import UiMenu from "../components/ui/UiMenu.vue";
+import { metadataSchemasApi, type MetadataSchema, type SchemaSummary } from "../api/metadataSchemas";
+import {
+  chosenFilterSchemaId,
+  defaultFilterSchemaId,
+  filterOpsForKind,
+  resolveSearchFilterFields,
+  saveFilterSchemaOverride,
+  type SearchFilterFieldOption,
+} from "../domain/searchFilterSchema";
 
 const route=useRoute();
 const i18n=useI18nStore();
@@ -55,11 +65,26 @@ const searchPlaceholder=computed(()=>databaseMode.value?i18n.t("search.database_
 const methodHelp=computed(()=>snapshot.value?.method==="mmr"?i18n.t("search.mmr_help","Balances semantic relevance with diversity across the result set."):snapshot.value?.method==="filter"?i18n.t("search.filter_only_help","Returns records using metadata filters without embedding a text query."):i18n.t("search.similarity_help","Ranks records by semantic similarity to your query."));
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const selectedColumnKeys=computed(()=>snapshot.value?.columns.map(column=>column.key)||[]);
+const schemaSummaries=ref<SchemaSummary[]>([]);
+const schemaCache=ref<Record<string,MetadataSchema>>({});
+const filterSchemaId=ref(defaultFilterSchemaId());
+const associatedSchemaId=computed(()=>snapshot.value?.stores.find(item=>item.name===snapshot.value?.active_store)?.schema_id||defaultFilterSchemaId());
+const schemaFilterFields=computed<SearchFilterFieldOption[]>(()=>{
+  const store=snapshot.value?.stores.find(item=>item.name===snapshot.value?.active_store);
+  const schema=schemaCache.value[filterSchemaId.value]||null;
+  return resolveSearchFilterFields({
+    schema,
+    collectionFields:store?.filter_fields||[],
+    availableFields:snapshot.value?.filter_fields.map(field=>field.key)||[],
+    labels:(key)=>snapshot.value?.filter_fields.find(field=>field.key===key)?.label||key,
+  });
+});
 const sortOptions=computed(()=>{
   const base=[{key:"work",label:i18n.t("field.work","Work")},{key:"page_start",label:i18n.t("field.page_start","Page Start")},{key:"record_id",label:i18n.t("field.record_id","Record ID")}];
   if(databaseMode.value)base.unshift({key:"similarity",label:i18n.t("search.relevance","Relevance")});
   return base;
 });
+const sortMenuItems=computed(()=>sortOptions.value.map(item=>({id:item.key,label:item.label,checked:snapshot.value?.sort.key===item.key})));
 const activeSortLabel=computed(()=>sortOptions.value.find(item=>item.key===snapshot.value?.sort.key)?.label||i18n.t("search.sort","Sort"));
 function sortState(key: string) {
   if (snapshot.value?.sort.key !== key) return "none";
@@ -83,16 +108,14 @@ async function load(options:{refresh?:boolean;autoRun?:boolean}={}){
   try{
     const next=await runtime.getSearchWorkspaceSnapshot({refresh:options.refresh!==false,autoRun:options.autoRun!==false}) as SearchWorkspaceSnapshot;
     snapshot.value=next;query.value=next.query;advancedOpen.value=next.advanced_open;
-    if(!newFilterField.value||!next.filter_fields.some(field=>field.key===newFilterField.value))newFilterField.value=next.filter_fields[0]?.key||"work";
     shell.sync();
     const mustCreateDatabase=!next.has_database&&(next.scope==="database"||!next.has_loaded_records);
-    // With nothing to search anywhere, explain that in place instead of
-    // toasting and opening an unrelated dialog. A database-scoped search that
-    // still has loaded records keeps the guided redirect.
     noDatabase.value=!next.has_database&&!next.has_loaded_records;
     if(noDatabase.value)return;
     if(mustCreateDatabase&&next.capabilities.can_manage_database&&!redirectedForDatabase){redirectedForDatabase=true;runtime.notifyToast(i18n.t("search.redirect_database","Search needs a corpus database. Opening database creation now."),{tone:"info"});runtime.openDatabaseCreationFromResearch();return}
     redirectedForDatabase=false;
+    await syncFilterSchema(next);
+    if(!newFilterField.value||!schemaFilterFields.value.some(field=>field.key===newFilterField.value))newFilterField.value=schemaFilterFields.value[0]?.key||next.filter_fields[0]?.key||"work";
   }catch(exc){error.value=exc instanceof Error?exc.message:String(exc)}finally{loading.value=false}
 }
 function applyQuery(value:string){
@@ -111,7 +134,7 @@ async function updateMmrOption(key:"fetch_k"|"lambda_mult",value:number){
   runtime.setSearchMmrOptions({[key]:value});
   await load({refresh:false,autoRun:false});
 }
-async function changeScope(next:SearchScope){snapshot.value=await runtime.setSearchScope(next) as SearchWorkspaceSnapshot;if(next==="database"&&!snapshot.value.has_database&&snapshot.value.capabilities.can_manage_database){runtime.openDatabaseCreationFromResearch();return}query.value=snapshot.value.query}
+async function changeScope(next:SearchScope){snapshot.value=await runtime.setSearchScope(next) as SearchWorkspaceSnapshot;await syncFilterSchema(snapshot.value);if(next==="database"&&!snapshot.value.has_database&&snapshot.value.capabilities.can_manage_database){runtime.openDatabaseCreationFromResearch();return}query.value=snapshot.value.query}
 async function changeStore(value:string){runtime.setSearchStore(value);await load({refresh:false,autoRun:false})}
 async function changeMethod(value:SearchMethod){runtime.setSearchMethod(value);await load({refresh:false,autoRun:false})}
 async function changeLayout(value:SearchLayout){runtime.setSearchLayout(value);await load({refresh:false,autoRun:false})}
@@ -128,19 +151,31 @@ async function addAdvancedFilter(){
   runtime.addSearchAdvancedFilter({field:newFilterField.value,op,value:newFilterValue.value});newFilterValue.value="";await load({refresh:false,autoRun:false})
 }
 async function removeAdvancedFilter(filter:SearchFilter){runtime.removeSearchAdvancedFilter(filter.id);await load({refresh:false,autoRun:false})}
+async function loadSchema(id:string){
+  if(!id||schemaCache.value[id])return schemaCache.value[id]||null;
+  try{
+    const schema=await metadataSchemasApi.get(id);
+    schemaCache.value={...schemaCache.value,[id]:schema};
+    return schema;
+  }catch{return null}
+}
+async function syncFilterSchema(next:SearchWorkspaceSnapshot){
+  try{
+    if(!schemaSummaries.value.length)schemaSummaries.value=(await metadataSchemasApi.list()).items||[];
+  }catch{schemaSummaries.value=[]}
+  const store=next.stores.find(item=>item.name===next.active_store);
+  filterSchemaId.value=chosenFilterSchemaId({store:next.active_store||"loaded",associatedId:store?.schema_id});
+  await loadSchema(filterSchemaId.value);
+}
+async function changeFilterSchema(id:string){
+  filterSchemaId.value=id||defaultFilterSchemaId();
+  saveFilterSchemaOverride(snapshot.value?.active_store||"loaded",filterSchemaId.value===defaultFilterSchemaId()?"":filterSchemaId.value);
+  await loadSchema(filterSchemaId.value);
+  if(!schemaFilterFields.value.some(field=>field.key===newFilterField.value))newFilterField.value=schemaFilterFields.value[0]?.key||"work";
+}
 function filterOps(field:string){
-  const numeric=new Set(["page_start","page_end","year","publication_year","text_length","extraction_quality","attribution_confidence","semantic_classification_confidence"]);
-  const collection=new Set(["topics","concepts","persons","works_referenced","institutions_referenced","locations_referenced","events_referenced","groups_referenced","languages_referenced","document_language","quoted_speaker","quotation_chain"]);
-  const base=numeric.has(field)?[["eq","search.operator_eq","equals"],["neq","search.operator_neq","not equal"],["gte","search.operator_gte","at least"],["lte","search.operator_lte","at most"],["empty","search.operator_empty","is empty"],["notempty","search.operator_notempty","is not empty"]]:collection.has(field)?[["has","search.operator_has","contains"],["nhas","search.operator_nhas","does not contain"],["eq","search.operator_eq","equals"],["neq","search.operator_neq","not equal"],["empty","search.operator_empty","is empty"],["notempty","search.operator_notempty","is not empty"]]:[["eq","search.operator_eq","equals"],["neq","search.operator_neq","not equal"],["has","search.operator_has","contains"],["nhas","search.operator_nhas","does not contain"],["empty","search.operator_empty","is empty"],["notempty","search.operator_notempty","is not empty"]];
-  if(databaseMode.value){
-    // Chroma metadata queries accept exact equality. Collection-style `contains`
-    // is handled by the filters-only endpoint, which expands encoded metadata
-    // safely before querying. Never expose an operator here that could produce
-    // an invalid semantic/MMR request.
-    const allowed=snapshot.value?.method==='filter'?['eq','has']:['eq'];
-    return base.filter(([op])=>allowed.includes(op));
-  }
-  return base;
+  const kind=schemaFilterFields.value.find(item=>item.key===field)?.kind||"text";
+  return filterOpsForKind(kind,{database:databaseMode.value,method:snapshot.value?.method});
 }
 function onFilterFieldChange(){const ops=filterOps(newFilterField.value);if(!ops.some(([value])=>value===newFilterOp.value))newFilterOp.value=ops[0]?.[0]||"eq";newFilterValue.value=""}
 function suggestionsFor(field:string){return snapshot.value?.filter_suggestions[field]||[]}
@@ -243,8 +278,9 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
             </div>
             <div class="search-advanced-filter-builder">
               <div class="search-options-heading"><div><span class="section-label">{{i18n.t('search.advanced_filters','Advanced filters')}}</span><h3>{{i18n.t('search.precise_metadata_filter','Precise metadata filter')}}</h3></div><p>{{i18n.t('search.advanced_filter_help','Use field-level conditions when the facet sidebar is not specific enough.')}}</p></div>
+              <label class="search-filter-schema"><span>{{i18n.t('search.filter_schema','Metadata schema')}}</span><select class="control" :value="filterSchemaId" @change="changeFilterSchema(($event.target as HTMLSelectElement).value)"><option v-for="schema in schemaSummaries" :key="schema.id" :value="schema.id">{{schema.name}}{{schema.id===associatedSchemaId?` · ${i18n.t('search.filter_schema_associated','associated')}`:''}}</option></select><small>{{i18n.t('search.filter_schema_help','Filter fields come from the schema associated with this corpus. Choose another saved schema if none is associated.')}}</small></label>
               <div class="search-filter-builder-grid">
-                <label><span>{{i18n.t('search.field','Field')}}</span><select v-model="newFilterField" class="control" @change="onFilterFieldChange"><option v-for="field in snapshot.filter_fields" :key="field.key" :value="field.key">{{field.label}}</option></select></label>
+                <label><span>{{i18n.t('search.field','Field')}}</span><select v-model="newFilterField" class="control" @change="onFilterFieldChange"><option v-for="field in schemaFilterFields" :key="field.key" :value="field.key">{{field.label}}</option></select></label>
                 <label><span>{{i18n.t('search.condition','Condition')}}</span><select v-model="newFilterOp" class="control"><option v-for="[value,key,fallback] in filterOps(newFilterField)" :key="value" :value="value">{{i18n.t(key,fallback)}}</option></select></label>
                 <label><span>{{i18n.t('search.value','Value')}}</span><input v-model="newFilterValue" class="control" :list="`search-suggestions-${newFilterField}`" :disabled="['empty','notempty'].includes(newFilterOp)" :placeholder="i18n.t('search.filter_value_placeholder','Type or choose a value…')" @keydown.enter.prevent="addAdvancedFilter"><datalist :id="`search-suggestions-${newFilterField}`"><option v-for="value in suggestionsFor(newFilterField)" :key="value" :value="value"></option></datalist></label>
                 <button type="button" class="btn search-add-filter" :disabled="!['empty','notempty'].includes(newFilterOp)&&!newFilterValue.trim()" @click="addAdvancedFilter"><AppIcon name="plus"/>{{i18n.t('research.add_filter','Add filter')}}</button>
@@ -265,9 +301,9 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
           <div class="search-results-toolbar">
             <div class="search-results-count"><span class="section-label">{{i18n.t('search.results','Results')}}</span><h2 id="search-results-title">{{resultSummary}}</h2><p v-if="databaseMode&&snapshot.search_has_run">{{i18n.t('search.database_result_note','Semantic result facets refine the returned candidate set; relevance remains tied to the selected ranking method.')}}</p></div>
             <div class="search-results-controls">
-              <details class="search-sort-menu"><summary class="btn">{{i18n.t('search.sort','Sort')}}: {{activeSortLabel}} <span aria-hidden="true">⌄</span></summary><div class="search-sort-popover"><button v-for="item in sortOptions" :key="item.key" type="button" :class="{active:snapshot.sort.key===item.key}" @click="sortBy(item.key)">{{item.label}}<span v-if="snapshot.sort.key===item.key" aria-hidden="true">{{snapshot.sort.dir>0?'↑':'↓'}}</span></button></div></details>
+              <UiMenu class="search-sort-menu" :label="`${i18n.t('search.sort','Sort')}: ${activeSortLabel}`" :items="sortMenuItems" align="end" :menu-label="i18n.t('search.sort','Sort')" @select="sortBy"/>
               <SearchResultLayoutSwitcher :model-value="snapshot.layout" @update:model-value="changeLayout"/>
-              <button v-if="databaseMode&&snapshot.layout!=='cards'" type="button" class="btn" @click="openColumns"><AppIcon name="list"/>{{i18n.t('records.columns','Columns')}}</button>
+              <button type="button" class="btn" @click="openColumns"><AppIcon name="list"/>{{i18n.t('records.columns','Columns')}}</button>
               <label class="search-page-size"><span class="sr-only">{{i18n.t('search.results_per_page','Results per page')}}</span><select class="control" :value="snapshot.page_size" @change="changePageSize(Number(($event.target as HTMLSelectElement).value))"><option v-for="size in [25,50,100,250]" :key="size" :value="size">{{size}} / {{i18n.t('search.page','page')}}</option></select></label>
             </div>
           </div>
@@ -424,6 +460,26 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
   background: var(--blue-soft)!important;
   color: var(--text-2)!important;
   font-weight: 780;
+}
+.search-results-toolbar {
+  position: relative;
+  z-index: 80;
+  overflow: visible;
+}
+.search-sort-menu {
+  position: relative;
+  z-index: 81;
+}
+.search-filter-schema {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  margin-bottom: 12px;
+}
+.search-filter-schema small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 .search-pagination {
   display: flex;
