@@ -254,7 +254,8 @@ describe("RolesView", () => {
   it("keeps role actions locked when account assignments could not be loaded", async () => {
     authApi.listUsers.mockRejectedValueOnce(new Error("Account list unavailable"));
     const { wrapper } = await mountView();
-    expect(wrapper.text()).toContain("Account list unavailable");
+    expect(wrapper.text()).toContain("The request could not be completed. Try again.");
+    expect(wrapper.text()).not.toContain("Account list unavailable");
     const create = wrapper
       .findAll("button")
       .find((button) => button.text().includes("Create role"));
