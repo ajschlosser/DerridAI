@@ -29,8 +29,7 @@ import CorpusSourceIngest from "./CorpusSourceIngest.vue";
 import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
-import CorpusRunGuidance, {
-} from "./CorpusRunGuidance.vue";
+import CorpusRunGuidance from "./CorpusRunGuidance.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 import type { RecordSizingPolicy, ReviewQueue } from "../types/corpus";
@@ -76,10 +75,7 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
-import {
-  firstRecordWithSourceWarning,
-  recordHasSourceWarning,
-} from "../domain/sourceQuality";
+import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -1360,7 +1356,12 @@ async function refreshProviders() {
           };
         }
         const config = directProfilePayload(profile.id);
-        if (!config) return { ...profile, available: false, availability_error: "Provider configuration is unavailable." };
+        if (!config)
+          return {
+            ...profile,
+            available: false,
+            availability_error: "Provider configuration is unavailable.",
+          };
         const status = await systemApi.llmStatus({
           provider: config.provider,
           base_url: config.base_url,
@@ -1402,7 +1403,9 @@ async function refreshProviders() {
     !providerProfiles.value.some((profile) => profile.id === selectedProviderId.value)
   ) {
     selectedProviderId.value =
-      providerProfiles.value.find((profile) => profile.id === defaultId && profile.available !== false)?.id ||
+      providerProfiles.value.find(
+        (profile) => profile.id === defaultId && profile.available !== false,
+      )?.id ||
       providerProfiles.value.find((profile) => profile.available !== false)?.id ||
       "";
   }
@@ -1731,17 +1734,21 @@ function selectRecord(record: CorpusRecord) {
     const results = await Promise.all(
       fields.map(async (field) => {
         try {
-          return [field, await pdfCorpusApi.metadataCache(
-            currentBuild.value?.build_id || "",
-            record.record_id,
+          return [
             field,
-          )] as const;
+            await pdfCorpusApi.metadataCache(
+              currentBuild.value?.build_id || "",
+              record.record_id,
+              field,
+            ),
+          ] as const;
         } catch {
           return null;
         }
       }),
     );
     for (const item of results) {
+      if (!item) continue;
       const values = item?.[1]?.suggestions?.prior_values;
       if (!Array.isArray(values)) continue;
       for (const value of values) {
@@ -3022,30 +3029,29 @@ async function resolveMetadataNoValue(field: string) {
     busy.value = "";
     metadataSavingField.value = "";
   }
-
-  async function clearMetadataSuggestionCache() {
-    if (
-      !window.confirm(
-        i18n.t(
-          "pdf_corpus.clear_metadata_cache_confirm",
-          "Clear remembered metadata suggestions? This will not change reviewed records or their history.",
-        ),
-      )
+}
+async function clearMetadataSuggestionCache() {
+  if (
+    !window.confirm(
+      i18n.t(
+        "pdf_corpus.clear_metadata_cache_confirm",
+        "Clear remembered metadata suggestions? This will not change reviewed records or their history.",
+      ),
     )
-      return;
-    busy.value = "metadata-cache";
-    try {
-      const result = await pdfCorpusApi.clearAllMetadataCache();
-      setMessage(
-        i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
-          count: result.cleared,
-        }),
-      );
-    } catch (exc) {
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-    } finally {
-      busy.value = "";
-    }
+  )
+    return;
+  busy.value = "metadata-cache";
+  try {
+    const result = await pdfCorpusApi.clearAllMetadataCache();
+    setMessage(
+      i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
+        count: result.cleared,
+      }),
+    );
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
   }
 }
 async function runMetadataEnrichment(payload: {

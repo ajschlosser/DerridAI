@@ -55,6 +55,7 @@ function updateTerms(field: string, value: string) {
 
 function editTerms(field: string, value: string) {
   termBuffers.value = { ...termBuffers.value, [field]: value };
+  updateTerms(field, value);
 }
 
 function commitTerms(field: string) {
@@ -109,7 +110,10 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       : payload;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     throw new Error(
-      i18n.t("pdf_corpus.run_guidance_import_invalid", "That file does not contain field guidance."),
+      i18n.t(
+        "pdf_corpus.run_guidance_import_invalid",
+        "That file does not contain field guidance.",
+      ),
     );
   }
   const fields = new Map(props.fields.map((field) => [field.name, field]));
@@ -123,7 +127,8 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
           .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
           .slice(0, 40)
       : [];
-    if (instructions.trim() || lookFor.length) imported[field] = { instructions, look_for: lookFor };
+    if (instructions.trim() || lookFor.length)
+      imported[field] = { instructions, look_for: lookFor };
   }
   if (!Object.keys(imported).length) {
     throw new Error(

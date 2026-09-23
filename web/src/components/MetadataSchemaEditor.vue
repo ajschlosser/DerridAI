@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
@@ -18,16 +19,8 @@ import {
 // Define which metadata fields a corpus record has, what each may hold and what the model is told to look for.
 // Three fields (region type, primary text, discourse role) are the locked core: they are in every schema and are
 // not edited here. A build copies the schema it starts with, so nothing done here changes a build already made.
-type PreviewProfile = {
-  id: string;
-  name?: string;
-  model?: string;
-  type?: string;
-  base_url?: string;
-  api_key?: string;
-};
 const props = withDefaults(
-  defineProps<{ providerProfiles?: PreviewProfile[]; defaultProviderId?: string }>(),
+  defineProps<{ providerProfiles?: ProviderProfile[]; defaultProviderId?: string }>(),
   { providerProfiles: () => [], defaultProviderId: "" },
 );
 const emit = defineEmits<{ saved: [id: string]; changed: [] }>();
@@ -197,7 +190,7 @@ const preview = ref<SchemaPreview | null>(null);
 function previewProvider(profileId: string): Record<string, unknown> {
   const profile = props.providerProfiles.find((item) => item.id === profileId);
   if (!profile) return { provider_profile_id: profileId };
-  const apiKey = profile.api_key?.trim() || "";
+  const apiKey = typeof profile.api_key === "string" ? profile.api_key.trim() : "";
   return {
     provider_profile_id: profile.id,
     provider: profile.type,
@@ -527,7 +520,12 @@ defineExpose({ select, draft });
           :profiles="providerProfiles"
           :default-profile-id="defaultProviderId"
           :label="t('preview_model', 'Provider profile')"
-          :help="t('preview_provider_help', 'Use the same configured profile and credentials as a Corpus Builder run.')"
+          :help="
+            t(
+              'preview_provider_help',
+              'Use the same configured profile and credentials as a Corpus Builder run.',
+            )
+          "
           :manage-label="t('preview_manage_provider', 'Manage provider profiles')"
           @manage="emit('changed')"
         />
