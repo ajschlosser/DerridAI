@@ -1,33 +1,12 @@
 <main class="vue-native-page search-native-page" aria-busy="false" aria-labelledby="search-page-title">
-<header class="search-workspace-header" aria-labelledby="search-page-title">
-<div class="search-scope-switch" role="group" aria-label="Search scope">
-<button type="button" class="active" aria-pressed="true" title="">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M5 7h14M5 12h14M5 17h14">
-</path>
-<path d="M3 7h.01M3 12h.01M3 17h.01">
-</path>
-</svg>
-<span>Loaded records</span>
-<small>3</small>
-</button>
-<button type="button" class="" aria-pressed="false">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3">
-</ellipse>
-<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
-</path>
-</svg>
-<span>Corpus database</span>
-<small>1</small>
-</button>
-</div>
-<div class="search-workspace-heading">
-<span class="section-label">Corpus exploration</span>
+<header class="ui-page-header search-workspace-header" aria-labelledby="search-page-title">
+<div class="ui-page-header-heading">
+<p class="ui-page-header-kicker">Corpus exploration</p>
 <h1 id="search-page-title">Search</h1>
-<p>Explore loaded records or search the corpus database without losing the context of your query, filters, and evidence.</p>
+<p class="ui-page-header-description">Explore loaded records or search the corpus database without losing the context of your query, filters, and evidence.</p>
 </div>
-<div class="search-workspace-actions" aria-label="Search view actions">
+<div class="ui-page-header-actions" role="group" aria-label="Search view actions">
+<div class="search-workspace-actions">
 <button type="button" class="btn">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 3-6.7L3 8">
@@ -48,7 +27,32 @@
 </path>
 </svg>Copy link</button>
 </div>
-<div class="search-workspace-stats" aria-live="polite">
+</div>
+<div class="ui-page-header-meta">
+<div class="search-scope-row">
+<div class="search-scope-switch" role="group" aria-label="Search scope">
+<button type="button" class="active" aria-pressed="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+<span>Loaded records</span>
+<small>3</small>
+</button>
+<button type="button" class="" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>Corpus database</span>
+<small>1</small>
+</button>
+</div>
+<p class="search-workspace-stats" aria-live="polite">
 <span>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
@@ -56,6 +60,8 @@
 <path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
 </path>
 </svg>0 selected evidence</span>
+</p>
+</div>
 </div>
 </header>
 <section class="search-command-surface" aria-label="Search controls">
