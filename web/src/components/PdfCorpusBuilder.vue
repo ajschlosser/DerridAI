@@ -71,7 +71,7 @@ import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
-import { useSplitter } from "../composables/useSplitter";
+import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
@@ -642,7 +642,6 @@ const canMergeNext = computed(() => {
   const globalIndex = recordOffset.value + selectedRecordIndex.value;
   return globalIndex >= 0 && globalIndex < recordTotal.value - 1;
 });
-const reviewGridEl = ref<HTMLElement | null>(null);
 // Review is the point of this screen, so the first time a build's records are ready, bring the workspace to the top.
 let reviewScrolledFor = "";
 watch(
@@ -655,32 +654,8 @@ watch(
   },
 );
 const reviewFrameEl = ref<HTMLElement | null>(null);
-// The queue and the inspector can be resized with the pointer or the keyboard, and are remembered.
-const queueSplitter = useSplitter({
-  key: "derridai.review.queueWidth",
-  min: 224,
-  max: 420,
-  initial: 256,
-  edge: "start",
-  container: () => reviewGridEl.value,
-});
-const inspectorSplitter = useSplitter({
-  key: "derridai.review.inspectorWidth",
-  min: 320,
-  max: 640,
-  initial: 368,
-  edge: "end",
-  container: () => reviewGridEl.value,
-});
-const reviewHeightSplitter = useSplitter({
-  key: "derridai.review.height",
-  min: 420,
-  max: 1200,
-  initial: 680,
-  edge: "start",
-  axis: "vertical",
-  container: () => reviewGridEl.value,
-});
+const { reviewGridEl, queueSplitter, inspectorSplitter, reviewHeightSplitter } =
+  usePdfCorpusPaneSizing();
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
 function mergeUnavailable(direction: "previous" | "next"): string | undefined {
   if (busy.value !== "")

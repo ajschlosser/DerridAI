@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { defineComponent, h, ref } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
+import { usePdfCorpusPaneSizing } from "../../src/composables/usePdfCorpusPaneSizing";
 import { useSplitter } from "../../src/composables/useSplitter";
 
 const items = [
@@ -146,6 +147,45 @@ describe("useSplitter", () => {
       "aria-valuemin": "200",
       "aria-valuemax": "500",
       "aria-valuenow": "300",
+    });
+
+    describe("usePdfCorpusPaneSizing", () => {
+      beforeEach(() => localStorage.clear());
+
+      it("owns the three review pane splitters and their persisted defaults", () => {
+        let sizing!: ReturnType<typeof usePdfCorpusPaneSizing>;
+        const Host = defineComponent({
+          setup() {
+            sizing = usePdfCorpusPaneSizing();
+            return () => h("div", { ref: sizing.reviewGridEl });
+          },
+        });
+        const wrapper = mount(Host);
+
+        expect(sizing.queueSplitter.size.value).toBe(256);
+        expect(sizing.inspectorSplitter.size.value).toBe(368);
+        expect(sizing.reviewHeightSplitter.size.value).toBe(680);
+        expect(sizing.queueSplitter.aria()).toMatchObject({
+          "aria-valuemin": 224,
+          "aria-valuemax": 420,
+        });
+        expect(sizing.inspectorSplitter.aria()).toMatchObject({
+          "aria-valuemin": 320,
+          "aria-valuemax": 640,
+        });
+        expect(sizing.reviewHeightSplitter.aria()).toMatchObject({
+          "aria-valuemin": 420,
+          "aria-valuemax": 1200,
+        });
+
+        sizing.queueSplitter.reset();
+        sizing.inspectorSplitter.reset();
+        sizing.reviewHeightSplitter.reset();
+        expect(localStorage.getItem("derridai.review.queueWidth")).toBe("256");
+        expect(localStorage.getItem("derridai.review.inspectorWidth")).toBe("368");
+        expect(localStorage.getItem("derridai.review.height")).toBe("680");
+        wrapper.unmount();
+      });
     });
   });
 
