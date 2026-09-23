@@ -43,6 +43,7 @@ vi.mock("../../src/api/metadataSchemas", async () => {
 const runtime = vi.hoisted(() => ({
   getProviderProfilesForUi: vi.fn(() => []),
   getProviderRequestConfigForUi: vi.fn(() => null),
+  getDefaultProviderProfileId: vi.fn(() => ""),
   state: { pdf: { file: null } },
 }));
 
