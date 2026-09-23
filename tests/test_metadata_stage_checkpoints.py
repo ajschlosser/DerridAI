@@ -47,7 +47,7 @@ def test_operations_surface_metadata_task_progress():
     4 done + 1 failed + 1 skipped = 6 of 33 settled, 3 active, 24 queued, 2 needing
     review; the stage detail string and running count must reflect that.
     """
-    operation=cb.PdfCorpusBuildManager._operation_from_build({
+    operation=cb._operation_from_build({
         'build_id':'build-test','status':'running','stage':'enriching','progress':0.5,
         'metadata_tasks_total':33,'metadata_tasks_completed':4,'metadata_tasks_failed':1,
         'metadata_tasks_skipped':1,'metadata_tasks_running':3,'metadata_tasks_queued':24,

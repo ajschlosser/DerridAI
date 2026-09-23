@@ -128,6 +128,15 @@ from .corpus_review_state import (
 from .corpus_review_state import (
     _review_issue_codes as _review_issue_codes,
 )
+from .corpus_reviewer_helpers import (
+    _allowed_for,
+    _human_touched,
+    _metadata_issue_type,
+    _operation_from_build,
+    _present_for_reviewer,
+    _scrub_sealed_field,
+    _second_opinion_owed,
+)
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _apply_manifest_metadata,
@@ -1272,7 +1281,7 @@ class PdfCorpusRepository:
                 if total >= offset and len(items) < limit:
                     record["topology_index"] = topology_index
                     _decorate_review_state(record)
-                    PdfCorpusBuildManager._present_for_reviewer(record)
+                    _present_for_reviewer(record)
                     items.append(record)
                 total += 1
         for record in items:
@@ -1609,48 +1618,6 @@ class PdfCorpusBuildManager:
         item["agreed"] = agreed
         return agreed
 
-    @staticmethod
-    def _second_opinion_owed(record: dict[str, Any], field: str) -> dict[str, Any] | None:
-        """The pending second-opinion entry for this field if the current reviewer, not the first, is the one asked."""
-        me = current_reviewer.get()
-        item = (record.get("second_opinion") or {}).get(field)
-        if me and isinstance(item, dict) and not item.get("done") and item.get("first_reviewer") and item["first_reviewer"] != me:
-            return item
-        return None
-
-    @classmethod
-    def _present_for_reviewer(cls, record: dict[str, Any]) -> None:
-        """Hide, from a second reviewer, the answer they are about to independently give.
-
-        Applied where records are served, never before saving: it must not reach storage.
-        """
-        for field in list((record.get("second_opinion") or {}).keys()):
-            if cls._second_opinion_owed(record, field):
-                record[field] = [] if isinstance(record.get(field), list) else None
-                record.setdefault("metadata_field_status", {})[field] = {
-                    "status": "unresolved", "method": "human", "blind": True, "reason_code": "second_opinion", "auto_populated": False, "reason": "",
-                }
-                for entry in record.get("metadata_decisions") or []:
-                    if isinstance(entry, dict) and entry.get("field") == field:
-                        entry["value"] = None  # the decision log holds the first answer too
-                cls._scrub_sealed_field(record, field)
-                # Everything else on the record that repeats the first reviewer's answer for this field.
-                record["llm_rejections"] = [r for r in record.get("llm_rejections") or [] if not (isinstance(r, dict) and r.get("field") == field)]
-                for key in ("recheck_results", "blind_reveals", "recheck_scheduled"):
-                    if isinstance(record.get(key), dict):
-                        record[key].pop(field, None)
-
-    @staticmethod
-    def _scrub_sealed_field(record: dict[str, Any], field: str) -> None:
-        """Remove every copy of a sealed value, and the confidence and reasoning that would give it away, from the record."""
-        evidence = record.get("metadata_evidence")
-        if isinstance(evidence, dict) and isinstance(evidence.get(field), dict):
-            evidence[field] = {"block_ids": evidence[field].get("block_ids") or []}
-        for result in (record.get("metadata_stage_results") or {}).values():
-            if isinstance(result, dict):
-                for section in ("metadata", "field_assessments", "field_evidence"):
-                    if isinstance(result.get(section), dict):
-                        result[section].pop(field, None)
 
     def _experiment_rate(self, build_id: str, key: str) -> float:
         build = self.repo.get_build(build_id)
@@ -1893,7 +1860,7 @@ CURRENT REVIEWED RECORD TEXT:
         filled_total = accepted = 0
         exceptions: list[dict[str, Any]] = []
         for record in records:
-            if str(record.get("review_disposition") or "") in {"accepted", "rejected"} or self._human_touched(record):
+            if str(record.get("review_disposition") or "") in {"accepted", "rejected"} or _human_touched(record):
                 continue  # a person already decided this record
             outcome = settle_record(record, policy)
             filled_total += len(outcome["filled"])
@@ -1914,9 +1881,6 @@ CURRENT REVIEWED RECORD TEXT:
         self._rewrite_and_validate(build_id, records)
         return {"records": len(records), "fields_filled": filled_total, "accepted": accepted, "left_for_review": len(exceptions), "exceptions": exceptions[:200]}
 
-    @staticmethod
-    def _human_touched(record: dict[str, Any]) -> bool:
-        return bool(record.get("human_touched_fields"))
 
     def enrichment_ledger_csv(self) -> str:
         return self._ledger.to_csv()
@@ -1935,12 +1899,8 @@ CURRENT REVIEWED RECORD TEXT:
 
     def _allowed_fields(self, build_id: str) -> set[str]:
         """Every field a model or a person may set on a record of this build: the fixed ones plus its schema's."""
-        return self._allowed_for(self._schema_for(build_id))
+        return _allowed_for(self._schema_for(build_id))
 
-    @staticmethod
-    def _allowed_for(schema: MetadataSchema) -> set[str]:
-        """The fixed fields, minus those the default schema defines, plus this schema's: a schema that leaves a field out cannot have it set."""
-        return (ALLOWED_METADATA_FIELDS - {f.name for f in default_schema().fields}) | set(schema.field_names())
 
     def _editable_fields(self, build_id: str) -> set[str]:
         """Fields a person may edit: the fixed editable ones, minus the default schema's, plus this build's schema's."""
@@ -1988,96 +1948,17 @@ CURRENT REVIEWED RECORD TEXT:
         listing = self.repo.list_builds(offset=0, limit=10000)
         return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
 
-    @staticmethod
-    def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
-        raw_status = str(build.get("status") or "queued")
-        if raw_status in {"queued", "running"}:
-            status = raw_status
-        elif raw_status == "cancelled":
-            status = "cancelled"
-        elif raw_status in {"failed", "interrupted"}:
-            status = "failed"
-        elif raw_status in {"blocked", "awaiting_manifest_review"}:
-            status = "blocked"
-        else:
-            status = "completed"
-        source_total = max(1, int(build.get("source_block_count") or 1))
-        progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
-        unresolved = list(build.get("segmentation_unresolved_regions") or [])
-        metadata_total = int(build.get("metadata_tasks_total") or 0)
-        metadata_completed = int(build.get("metadata_tasks_completed") or 0)
-        metadata_failed = int(build.get("metadata_tasks_failed") or 0)
-        metadata_skipped = int(build.get("metadata_tasks_skipped") or 0)
-        metadata_running = int(build.get("metadata_tasks_running") or 0)
-        metadata_queued = int(build.get("metadata_tasks_queued") or 0)
-        if raw_status in {"queued", "running"} and str(build.get("stage") or "") == "enriching" and metadata_total:
-            settled = metadata_completed + metadata_failed + metadata_skipped
-            metadata_stage_detail = (
-                f"Metadata: {settled}/{metadata_total} settled · "
-                f"{metadata_running} active · {metadata_queued} queued · "
-                f"{metadata_failed + metadata_skipped} review"
-            )
-        else:
-            metadata_stage_detail = None
-        if metadata_stage_detail:
-            operation_stage_detail = metadata_stage_detail
-        elif raw_status in {"queued", "running"} and build.get("retrying_segmentation"):
-            operation_stage_detail = f"Retrying {len(unresolved)} unresolved segmentation region(s)"
-        elif build.get("segmentation_blocked"):
-            operation_stage_detail = f"{len(unresolved)} unresolved segmentation region(s)"
-        else:
-            operation_stage_detail = str(build.get("stage") or raw_status).replace("_", " ")
-        return {
-            "id": str(build.get("build_id") or ""),
-            "type": "pdf_corpus",
-            "kind": "pdf_corpus",
-            "label": f"PDF corpus · {build.get('source_filename') or 'source'}",
-            "status": status,
-            "raw_status": raw_status,
-            "stage": build.get("stage"),
-            "stage_detail": operation_stage_detail,
-            "provider": build.get("provider"),
-            "model": build.get("model"),
-            "provider_profile_id": (build.get("request") or {}).get("provider_profile_id"),
-            "max_concurrent_requests": (build.get("request") or {}).get("max_concurrent_requests", 1),
-            "request": build.get("request") or {},
-            "source_filename": build.get("source_filename"),
-            "build_id": build.get("build_id"),
-            "record_count": int(build.get("record_count") or 0),
-            "review_count": int(build.get("needs_review_count") or 0),
-            "metadata_tasks_total": metadata_total,
-            "metadata_tasks_completed": metadata_completed,
-            "metadata_tasks_failed": metadata_failed,
-            "metadata_tasks_skipped": metadata_skipped,
-            "metadata_tasks_running": metadata_running,
-            "metadata_tasks_queued": metadata_queued,
-            "metadata_started_at": build.get("metadata_started_at"),
-            "metadata_last_progress_at": build.get("metadata_last_progress_at"),
-            "unresolved_regions": len(unresolved),
-            "progress": progress,
-            "total": source_total,
-            "completed": min(source_total, int(round(source_total * progress))),
-            # Localized segmentation uncertainty is review work, not a failed operation.
-            "failed": 1 if raw_status == "failed" else 0,
-            "review_required": len(unresolved),
-            "created_at": build.get("created_at"),
-            "started_at": build.get("started_at"),
-            "finished_at": build.get("finished_at"),
-            "cancel_requested": bool(build.get("cancel_requested")),
-            "fatal_error": build.get("error"),
-            "href": f"/pdf?mode=builder&build={build.get('build_id')}",
-        }
 
     def list_operations(self, limit: int = 200) -> list[dict[str, Any]]:
         listing = self.repo.list_builds(offset=0, limit=max(1, min(1000, limit)))
         return [
-            self._operation_from_build(build)
+            _operation_from_build(build)
             for build in listing["items"]
             if not build.get("operation_hidden")
         ]
 
     def operation(self, build_id: str) -> dict[str, Any]:
-        return self._operation_from_build(self.repo.get_build(build_id))
+        return _operation_from_build(self.repo.get_build(build_id))
 
     def delete(self, build_id: str) -> None:
         """Dismiss a finished build from the global Operations feed.
@@ -2251,28 +2132,6 @@ CURRENT REVIEWED RECORD TEXT:
                 build["llm_confidence_calibration"] = calibration
             self.repo.save_build(build)
 
-    @staticmethod
-    def _metadata_issue_type(status: dict[str, Any] | None, record: dict[str, Any]) -> str:
-        info = status or {}
-        explicit = str(info.get("reason_code") or "").strip()
-        if explicit:
-            return explicit
-        state = str(info.get("status") or "unresolved")
-        reason = str(info.get("reason") or "").casefold()
-        stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
-        if "source quality" in reason or "extraction" in reason:
-            return "source_quality"
-        if state == "invalid":
-            return "invalid_value"
-        if any(value == "needs_review" for value in stage_status.values()) and "model" in reason:
-            return "llm_failed"
-        if "evidence" in reason or "confidence" in reason:
-            return "evidence_failed"
-        if "ambiguous" in reason or "disagree" in reason:
-            return "ambiguous"
-        if not info:
-            return "not_run"
-        return "unresolved"
 
     @classmethod
     def _refresh_workflow_fields(cls, build: dict[str, Any]) -> dict[str, Any]:
@@ -3721,7 +3580,7 @@ CURRENT REVIEWED RECORD TEXT:
         """Bind proposals to source evidence while retaining reviewer-owned values."""
         schema = schema or default_schema()
         # What may be proposed, cited and reviewed comes from the build's schema, not from a fixed list.
-        allowed_fields = self._allowed_for(schema)
+        allowed_fields = _allowed_for(schema)
         attribution_fields = schema.attribution_fields()
         evidence_required_fields = schema.evidence_fields()
         assessment_required_fields = set(CORE_FIELDS) | {field.name for field in schema.fields if field.assess}
@@ -4112,7 +3971,7 @@ CURRENT REVIEWED RECORD TEXT:
                     "status": "unresolved", "method": "llm", "blind": True, "reason_code": "blind_review", "auto_populated": False,
                     "reason": "",
                 }
-                self._scrub_sealed_field(record, field)
+                _scrub_sealed_field(record, field)
             if proposed_status.get("method") == "llm":
                 # Later human decisions on this value are attributed to the model and conditions that produced it.
                 proposed_status.setdefault("model", model)
@@ -5027,7 +4886,7 @@ CURRENT REVIEWED RECORD TEXT:
                 status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
                 if status_info.get("status") == "invalid":
                     invalid_by_field[field] += 1
-                issue_type = self._metadata_issue_type(status_info, record)
+                issue_type = _metadata_issue_type(status_info, record)
                 by_reason[issue_type] += 1
                 retryable = issue_type in retryable_types
                 row = {
@@ -5316,7 +5175,7 @@ CURRENT REVIEWED RECORD TEXT:
             for field, info in statuses.items():
                 if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
                     continue
-                if self._second_opinion_owed(row, field):
+                if _second_opinion_owed(row, field):
                     continue  # a conventions list or example must not tell a second reviewer what the first one answered
                 value = row.get(field)
                 if value in (None, "", []):
@@ -5791,7 +5650,7 @@ CURRENT REVIEWED RECORD TEXT:
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
-            owed = self._second_opinion_owed(target, key)
+            owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
                 self._log_second_opinion(build_id, target, key, value, owed)
@@ -5828,7 +5687,7 @@ CURRENT REVIEWED RECORD TEXT:
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
         _decorate_review_state(persisted)
-        self._present_for_reviewer(persisted)
+        _present_for_reviewer(persisted)
         return persisted
 
     @_serialize_record_mutation
@@ -6289,7 +6148,7 @@ CURRENT REVIEWED RECORD TEXT:
         for index, record in enumerate(records):
             incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
             statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            retry_fields = [field for field in incomplete if self._metadata_issue_type(statuses.get(field) if isinstance(statuses.get(field), dict) else {}, record) in retryable_types]
+            retry_fields = [field for field in incomplete if _metadata_issue_type(statuses.get(field) if isinstance(statuses.get(field), dict) else {}, record) in retryable_types]
             if retry_fields:
                 target_indices.append(index)
                 target_fields[str(record.get("record_id") or index)] = retry_fields
@@ -6934,7 +6793,7 @@ CURRENT REVIEWED RECORD TEXT:
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
-        self._present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
+        _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
         public = serialize_public_record(record)
         errors = validate_publication_record(public)
         unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))

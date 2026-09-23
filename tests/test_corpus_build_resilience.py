@@ -328,7 +328,7 @@ def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(
     assert queued["retrying_segmentation"] is True
     assert queued["segmentation_blocked"] is True  # preserved until the retry resolves it
 
-    operation = manager._operation_from_build(queued)
+    operation = cb._operation_from_build(queued)
     assert operation["status"] == "queued"
     assert operation["raw_status"] == "queued"
     assert operation["stage_detail"] == "Retrying 1 unresolved segmentation region(s)"
