@@ -848,14 +848,6 @@ const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
 const selectedProfile = computed(
   () => providerProfiles.value.find((profile) => profile.id === selectedProviderId.value) || null,
 );
-const selectableProviderProfiles = computed(() =>
-  providerProfiles.value.filter(
-    (profile) =>
-      profile.available !== false ||
-      profile.id === selectedProviderId.value ||
-      profile.id === selectedReviewProviderId.value,
-  ),
-);
 const activeCorpusProfile = computed(
   () =>
     corpusProfiles.value.find(
@@ -1425,17 +1417,17 @@ async function refreshProviders() {
   );
   if (
     activeBuildProfile &&
-    selectableProviderProfiles.value.some((profile) => profile.id === activeBuildProfile)
+    providerProfiles.value.some((profile) => profile.id === activeBuildProfile)
   ) {
     selectedProviderId.value = activeBuildProfile;
   } else if (
     !currentBuild.value ||
     !selectedProviderId.value ||
-    !selectableProviderProfiles.value.some((profile) => profile.id === selectedProviderId.value)
+    !providerProfiles.value.some((profile) => profile.id === selectedProviderId.value)
   ) {
     selectedProviderId.value =
-      selectableProviderProfiles.value.find((profile) => profile.id === defaultId)?.id ||
-      selectableProviderProfiles.value[0]?.id ||
+      providerProfiles.value.find((profile) => profile.id === defaultId && profile.available !== false)?.id ||
+      providerProfiles.value.find((profile) => profile.available !== false)?.id ||
       "";
   }
 }
@@ -3822,7 +3814,7 @@ onBeforeUnmount(() => {
           <div class="provider-area">
             <ProviderProfileSelect
               v-model="selectedProviderId"
-              :profiles="selectableProviderProfiles"
+              :profiles="providerProfiles"
               :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
               :label="i18n.t('pdf_corpus.provider_profile', 'Primary LLM provider')"
               :help="
@@ -4549,7 +4541,7 @@ onBeforeUnmount(() => {
         <template v-if="showReviewWorkspace">
           <CorpusProviderSwitcher
             v-if="currentBuild && providerProfiles.length"
-            :profiles="selectableProviderProfiles"
+            :profiles="providerProfiles"
             :active-profile-id="activeBuildProfileId"
             :active-model="activeModelLabel"
             :history="currentBuild.provider_profile_history || []"
@@ -5354,7 +5346,7 @@ onBeforeUnmount(() => {
                     <LlmExecutionControl
                       :model-value="llmActionProviderId || selectedProviderId"
                       :model-override="llmActionModel"
-                      :profiles="selectableProviderProfiles"
+                      :profiles="providerProfiles"
                       :disabled="busy !== ''"
                       :task="
                         i18n.t(
@@ -5540,7 +5532,7 @@ onBeforeUnmount(() => {
                       :can-previous="canMergePrevious"
                       :can-next="canMergeNext"
                       :busy="busy !== ''"
-                      :profiles="selectableProviderProfiles"
+                      :profiles="providerProfiles"
                       :provider-profile-id="llmActionProviderId || selectedProviderId"
                       :model-override="llmActionModel"
                       :concurrency-risk="
@@ -5740,7 +5732,7 @@ onBeforeUnmount(() => {
       :no-change="llmTouchupResult.no_change"
       :error="llmTouchupError"
       :busy="busy === 'text-touchup'"
-      :profiles="selectableProviderProfiles"
+      :profiles="providerProfiles"
       :provider-profile-id="llmActionProviderId"
       :model-override="llmActionModel"
       :concurrency-risk="
@@ -5815,7 +5807,7 @@ onBeforeUnmount(() => {
       @close="schemaEditorOpen = false"
     >
       <MetadataSchemaEditor
-        :provider-profiles="selectableProviderProfiles"
+        :provider-profiles="providerProfiles"
         :default-provider-id="runtime.getDefaultProviderProfileId?.() || ''"
         @changed="loadSchemaChoices"
         @saved="
@@ -5850,7 +5842,7 @@ onBeforeUnmount(() => {
     <MetadataEnrichmentDialog
       :groups="currentBuild?.schema?.groups?.map((g) => ({ key: g.key, label: g.label }))"
       :open="metadataEnrichmentOpen"
-      :profiles="selectableProviderProfiles"
+      :profiles="providerProfiles"
       :provider-profile-id="llmActionProviderId"
       :model-override="llmActionModel"
       :busy="busy === 'metadata-enrichment'"
@@ -5895,7 +5887,7 @@ onBeforeUnmount(() => {
           selectedRecordIndex >= 0 &&
           (selectedRecordIndex < records.length - 1 || recordOffset + pageSize < recordTotal)
         "
-        :provider-profiles="selectableProviderProfiles"
+        :provider-profiles="providerProfiles"
         :llm-provider-profile-id="llmActionProviderId || selectedProviderId"
         :llm-model-override="llmActionModel"
         @close="focusView = false"

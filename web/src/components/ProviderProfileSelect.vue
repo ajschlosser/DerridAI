@@ -28,7 +28,14 @@ const props = withDefaults(defineProps<{
   contextLabel: "context tokens",
 });
 const emit = defineEmits<{ "update:modelValue": [value: string]; manage: [] }>();
-const selected = computed(() => props.profiles.find(profile => profile.id === props.modelValue) || props.profiles[0] || null);
+const selectableProfiles = computed(() =>
+  props.profiles.filter(
+    profile => profile.available !== false || profile.id === props.modelValue,
+  ),
+);
+const selected = computed(
+  () => props.profiles.find(profile => profile.id === props.modelValue) || selectableProfiles.value[0] || null,
+);
 function providerName(profile: ProviderProfile) { return profile.type === "ollama" ? "Ollama" : "OpenAI-compatible"; }
 function contextWindow(profile: ProviderProfile){const raw=Number(profile.num_ctx||0);return Number.isFinite(raw)&&raw>0?raw:0}
 </script>
@@ -45,7 +52,7 @@ function contextWindow(profile: ProviderProfile){const raw=Number(profile.num_ct
         <span class="sr-only">{{ props.label }}</span>
         <select class="control provider-select" :value="props.modelValue" @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)">
           <option
-            v-for="profile in props.profiles"
+            v-for="profile in selectableProfiles"
             :key="profile.id"
             :value="profile.id"
             :disabled="profile.available === false"
