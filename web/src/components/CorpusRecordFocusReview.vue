@@ -263,10 +263,7 @@ watch(
         <div class="focus-facts">
           <span
             ><b>{{ position }}</b> {{ i18n.t("pdf_corpus.records", "records") }}</span
-          ><span
-            >{{ i18n.t("pdf_corpus.pages", "pp.") }} {{ record.page_start ?? "—" }}–{{
-              record.page_end ?? "—"
-            }}</span
+          ><span>{{ record.inline_citation }}</span
           ><span
             >{{ Number(record.text_length || String(record.text || "").length).toLocaleString() }}
             {{ i18n.t("pdf_corpus.characters", "chars") }}</span
@@ -290,9 +287,15 @@ watch(
           <summary :title="i18n.t('record.keyboard_shortcuts', 'Keyboard shortcuts')">?</summary>
           <div class="focus-shortcuts-popover">
             <strong>{{ i18n.t("record.keyboard_shortcuts", "Keyboard shortcuts") }}</strong>
-            <span><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> {{ i18n.t("record.previous_next", "Previous / next record") }}</span>
+            <span
+              ><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd>
+              {{ i18n.t("record.previous_next", "Previous / next record") }}</span
+            >
             <span><kbd>Esc</kbd> {{ i18n.t("ui.close", "Close") }}</span>
-            <span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> {{ i18n.t("pdf_corpus.save_reviewed_text", "Save reviewed text") }}</span>
+            <span
+              ><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd>
+              {{ i18n.t("pdf_corpus.save_reviewed_text", "Save reviewed text") }}</span
+            >
           </div>
         </details>
         <button ref="closeButton" class="btn" type="button" @click="emit('close')">
@@ -326,8 +329,7 @@ watch(
               :aria-label="i18n.t('pdf_corpus.source_warning_icon', 'Source extraction warning')"
               @click="sourceIssueOpen = true"
             >
-              <AppIcon name="warning" />
-            </button
+              <AppIcon name="warning" /></button
             ><button class="btn" type="button" @click="emit('previewJsonl')" :disabled="busy">
               {{ i18n.t("pdf_corpus.preview_jsonl", "Preview JSONL") }}</button
             ><button
@@ -344,11 +346,7 @@ watch(
             </button>
           </div>
         </div>
-        <p
-          v-if="record.text_noise?.score != null"
-          class="record-noise-summary"
-          role="status"
-        >
+        <p v-if="record.text_noise?.score != null" class="record-noise-summary" role="status">
           {{
             i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
               score: Math.round(Number(record.text_noise.score)),
@@ -770,7 +768,55 @@ watch(
   border-bottom: 1px solid var(--line);
   background: var(--card);
 }
-.focus-head-actions{display:flex;align-items:center;gap:8px;flex:none}.focus-shortcuts{position:relative}.focus-shortcuts summary{list-style:none;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:var(--card);cursor:pointer;font-weight:900}.focus-shortcuts summary::-webkit-details-marker{display:none}.focus-shortcuts-popover{position:absolute;right:0;top:46px;z-index:20;width:270px;display:grid;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--shadow-overlay);font-size:.75rem}.focus-shortcuts-popover span{color:var(--muted)}kbd{border:1px solid var(--line);border-radius:4px;background:var(--soft);padding:1px 4px;font:inherit}
+.focus-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.focus-shortcuts {
+  position: relative;
+}
+.focus-shortcuts summary {
+  list-style: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  cursor: pointer;
+  font-weight: 900;
+}
+.focus-shortcuts summary::-webkit-details-marker {
+  display: none;
+}
+.focus-shortcuts-popover {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  z-index: 20;
+  width: 270px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  font-size: 0.75rem;
+}
+.focus-shortcuts-popover span {
+  color: var(--muted);
+}
+kbd {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--soft);
+  padding: 1px 4px;
+  font: inherit;
+}
 .focus-title-block {
   display: grid;
   gap: 6px;

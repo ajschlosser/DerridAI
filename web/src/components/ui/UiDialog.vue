@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useId, watch } from "vue";
 import UiButton from "./UiButton.vue";
 
@@ -37,7 +38,7 @@ function measureBody() {
 function focusable(): HTMLElement[] {
   if (!panel.value) return [];
   return Array.from(panel.value.querySelectorAll<HTMLElement>(
-    'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,audio[controls],video[controls],[tabindex]:not([tabindex="-1"])'
   )).filter(node => node.offsetParent !== null);
 }
 function requestClose() { if (props.dismissible) emit("close"); }
@@ -52,7 +53,9 @@ function onKeydown(event: KeyboardEvent) {
   const nodes = focusable();
   if (!nodes.length) { event.preventDefault(); heading.value?.focus(); return; }
   const first = nodes[0], last = nodes[nodes.length - 1];
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  // Native media controls and disclosure summaries belong to the same focus loop.
+  if (!panel.value?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+  else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 }
 async function focusDialog() {

@@ -471,6 +471,10 @@ CURRENT REVIEWED RECORD TEXT:
                 raise ValueError("Document metadata becomes editable after segmentation is complete.")
             if {"main_text_start_page", "main_text_end_page"} & set(changes):
                 raise ValueError("Main-text page boundaries are structural and cannot change while background enrichment is running.")
+        if {"main_text_start_page", "main_text_end_page"} & set(changes):
+            asset = self.repo.get_asset(str(build.get("asset_id") or ""))
+            if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
+                raise ValueError("Page boundaries are unavailable for this source format.")
         current_revision = int(build.get("manifest_revision") or 1)
         if expected_revision is not None and int(expected_revision) != current_revision:
             raise ValueError("This document manifest changed after it was opened. Reload it before saving.")
