@@ -11,6 +11,7 @@ import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
+import CorpusReviewQueueContext from "./CorpusReviewQueueContext.vue";
 import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
@@ -363,56 +364,12 @@ watch(
             }}
           </span>
         </p>
-        <nav
-          class="queue-context"
-          :aria-label="i18n.t('pdf_corpus.review_queue_context', 'Review queue context')"
-        >
-          <span v-if="justProcessedRecordId">
-            {{ i18n.t("pdf_corpus.just_processed", "Just processed") }}
-            <button
-              type="button"
-              class="text-link"
-              :aria-label="
-                i18n.tf('pdf_corpus.open_processed_record', 'Open just processed record {record}', {
-                  record: justProcessedRecordId,
-                })
-              "
-              @click="emit('navigateRecord', justProcessedRecordId)"
-            >
-              {{ justProcessedRecordId }}
-            </button>
-          </span>
-          <span>
-            {{ i18n.t("pdf_corpus.current_record", "Current") }}
-            <button
-              type="button"
-              class="text-link"
-              :aria-label="
-                i18n.tf('pdf_corpus.open_current_record', 'Open current record {record}', {
-                  record: record.record_id,
-                })
-              "
-              @click="emit('navigateRecord', record.record_id)"
-            >
-              {{ record.record_id }}
-            </button>
-          </span>
-          <span v-if="nextRecordId">
-            {{ i18n.t("pdf_corpus.next_record_in_queue", "Next") }}
-            <button
-              type="button"
-              class="text-link"
-              :aria-label="
-                i18n.tf('pdf_corpus.open_next_record', 'Open next record {record}', {
-                  record: nextRecordId,
-                })
-              "
-              @click="emit('navigateRecord', nextRecordId)"
-            >
-              {{ nextRecordId }}
-            </button>
-          </span>
-        </nav>
+        <CorpusReviewQueueContext
+          :current-record-id="record.record_id"
+          :just-processed-record-id="justProcessedRecordId"
+          :next-record-id="nextRecordId"
+          @navigate-record="emit('navigateRecord', $event)"
+        />
         <div
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
           class="touchup-proposal"
@@ -912,28 +869,6 @@ watch(
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 0.8125rem;
-}
-.queue-context {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.queue-context > span {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-}
-.text-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--link, var(--accent));
-  text-decoration: underline;
-  cursor: pointer;
-  font: inherit;
 }
 .heading-actions {
   display: flex;
