@@ -29,6 +29,7 @@ ignore = [
 "api/app/corpus_review_actions.py" = ["E701", "E702"]
 "api/app/corpus_reviewer_helpers.py" = ["E701", "E702"]
 "api/app/corpus_segmentation.py" = ["E701", "E702"]
+"api/app/corpus_segmentation_execution.py" = ["E701", "E702"]
 "api/app/llm_tools.py" = ["E701"]
 # Tests import the app after conftest sets storage paths, and keep some
 # compact statements from the same SA-01 pass. Bugbear/Bandit land on

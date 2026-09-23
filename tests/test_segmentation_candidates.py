@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app import corpus_segmentation_execution as cse
 
 
 def _blocks(n=20, chars=180):
@@ -92,7 +93,7 @@ def test_llm_batch_omission_and_failure_default_to_keep(monkeypatch,tmp_path):
     """
     repo,build,manager=_build(tmp_path,12)
     candidate={"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.6,"source":"test","index":5,"protected":False}
-    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:[candidate])
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates",lambda blocks,profile:[candidate])
     monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},"malformed"))
     boundaries=manager._segment(_blocks(12),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
@@ -111,7 +112,7 @@ def test_llm_adjudication_budget_limits_work(monkeypatch,tmp_path):
     repo,build,manager=_build(tmp_path,100)
     candidates=[{"after_block_id":f"b{i}","next_block_id":f"b{i+1}","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":i,"protected":False} for i in range(60)]
     calls=[]
-    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:candidates)
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates",lambda blocks,profile:candidates)
     def batch(batch,*args,**kwargs):
         calls.extend(c["after_block_id"] for c in batch)
         return {},None
@@ -132,7 +133,7 @@ def test_record_sizing_normalizer_adds_retrieval_boundaries_without_review(monke
     """
     repo,build,manager=_build(tmp_path,16)
     blocks=_blocks(16,chars=260)
-    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:[])
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates",lambda blocks,profile:[])
     boundaries=manager._segment(blocks,{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
     assert any(b.get("boundary_kind")=="retrieval_size_optimized" for b in boundaries)
