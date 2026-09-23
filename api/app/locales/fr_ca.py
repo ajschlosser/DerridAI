@@ -5695,4 +5695,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'providers.mirostat': 'Mirostat',
  'providers.mirostat_eta': 'Mirostat eta',
  'providers.mirostat_tau': 'Mirostat tau',
+ 'search.filter_match_all': 'Toutes ces conditions',
+ 'search.filter_where': 'Où',
+ 'search.filter_and': 'Et',
+ 'search.remove_condition_named': 'Retirer la condition {field} {op} {value}',
 }

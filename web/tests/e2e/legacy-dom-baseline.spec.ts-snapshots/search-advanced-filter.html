@@ -95,24 +95,37 @@
 </svg>Search options<span class="badge">1</span>
 </summary>
 <div class="search-options-body">
-<div class="search-advanced-filter-builder">
-<div class="search-options-heading">
+<section class="search-rule-builder" aria-labelledby="search-rule-builder-title">
+<header class="search-rule-builder-head">
 <div>
-<span class="section-label">Advanced filters</span>
-<h3>Precise metadata filter</h3>
+<p class="section-label">Advanced filters</p>
+<h2 id="search-rule-builder-title">Match all of these conditions</h2>
 </div>
-<p>Use field-level conditions when the facet sidebar is not specific enough.</p>
-</div>
-<label class="search-filter-schema">
+<label class="search-rule-schema">
 <span>Metadata schema</span>
 <select class="control" value="default">
 </select>
-<small>Filter fields come from the schema associated with this corpus. Choose another saved schema if none is associated.</small>
 </label>
-<div class="search-filter-builder-grid">
+</header>
+<p class="search-rule-help">Use field-level conditions when the facet sidebar is not specific enough.</p>
+<ol class="search-rule-list">
+<li class="search-rule-row is-applied">
+<span class="search-rule-join">Where</span>
+<span class="search-rule-token">Work</span>
+<span class="search-rule-token is-muted">equals</span>
+<span class="search-rule-token is-value">Of Grammatology</span>
+<button type="button" class="btn search-rule-remove" aria-label="Remove condition Work equals Of Grammatology">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</li>
+<li class="search-rule-row is-compose">
+<span class="search-rule-join">And</span>
 <label>
-<span>Field</span>
-<select class="control">
+<span class="sr-only">Field</span>
+<select class="control" value="work">
 <option value="work">Work</option>
 <option value="document_author">Document author</option>
 <option value="year">Year</option>
@@ -136,8 +149,8 @@
 </select>
 </label>
 <label>
-<span>Condition</span>
-<select class="control">
+<span class="sr-only">Condition</span>
+<select class="control" value="eq">
 <option value="eq">equals</option>
 <option value="neq">not equal</option>
 <option value="has">contains</option>
@@ -147,8 +160,8 @@
 </select>
 </label>
 <label>
-<span>Value</span>
-<input class="control" list="search-suggestions-work" placeholder="Type or choose a value…">
+<span class="sr-only">Value</span>
+<input class="control" list="search-suggestions-work" placeholder="Type or choose a value…" value="">
 <datalist id="search-suggestions-work">
 <option value="Of Grammatology">
 </option>
@@ -156,13 +169,14 @@
 </option>
 </datalist>
 </label>
-<button type="button" class="btn search-add-filter" disabled="">
+<button type="button" class="btn primary search-add-filter" disabled="">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 5v14M5 12h14">
 </path>
 </svg>Add filter</button>
-</div>
-</div>
+</li>
+</ol>
+</section>
 </div>
 </details>
 </section>
@@ -173,7 +187,7 @@
 </path>
 </svg>Filters</button>
 <div class="search-facet-shell">
-<button type="button" class="search-facet-close" aria-label="Close">×</button>
+<button type="button" class="search-facet-close" aria-label="Close"> ×</button>
 <aside class="search-facets" aria-label="Filters">
 <div class="search-facets-head">
 <div>
@@ -438,7 +452,7 @@
 <span class="section-label">Saved views</span>
 <h2 id="search-save-dialog-title">Save view</h2>
 </div>
-<button type="button" class="btn icon-only" aria-label="Close">×</button>
+<button type="button" class="btn icon-only" aria-label="Close"> × </button>
 </div>
 <div class="db">
 <label class="field">
@@ -459,7 +473,7 @@
 <span class="section-label">Exploration history</span>
 <h2 id="search-views-dialog-title">Saved &amp; recent searches</h2>
 </div>
-<button type="button" class="btn icon-only" aria-label="Close">×</button>
+<button type="button" class="btn icon-only" aria-label="Close"> × </button>
 </div>
 <div class="db search-views-body">
 <section>

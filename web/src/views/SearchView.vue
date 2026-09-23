@@ -10,6 +10,7 @@ import CitationMenu from "../components/CitationMenu.vue";
 import SearchResultLayoutSwitcher from "../components/SearchResultLayoutSwitcher.vue";
 import SearchWorkspaceHeader from "../components/search/SearchWorkspaceHeader.vue";
 import SearchFacetPanel from "../components/search/SearchFacetPanel.vue";
+import SearchAdvancedFilters from "../components/search/SearchAdvancedFilters.vue";
 import SearchSelectionBar from "../components/search/SearchSelectionBar.vue";
 import HighlightedText from "../components/search/HighlightedText.vue";
 import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
@@ -24,6 +25,7 @@ import {
   saveFilterSchemaOverride,
   type SearchFilterFieldOption,
 } from "../domain/searchFilterSchema";
+import { forwardVerticalWheelToDocument } from "../composables/forwardVerticalWheelToDocument";
 
 const route=useRoute();
 const i18n=useI18nStore();
@@ -231,7 +233,7 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
 </script>
 
 <template>
-  <main class="vue-native-page search-native-page" :aria-busy="loading" aria-labelledby="search-page-title">
+  <main class="vue-native-page search-native-page" :aria-busy="loading" aria-labelledby="search-page-title" @wheel="forwardVerticalWheelToDocument">
     <div v-if="loading&&!snapshot" class="search-page-loading" role="status"><span class="spinner"></span>{{i18n.t('search.loading','Loading Search workspace…')}}</div>
     <section v-else-if="error" class="search-page-error"><h1>{{i18n.t('search.load_failed','Could not load Search')}}</h1><p>{{error}}</p><button type="button" class="btn" @click="load()">{{i18n.t('ui.retry','Retry')}}</button></section>
     <AccessibleEmptyState v-else-if="noDatabase" icon="database" :title="i18n.t('search.nothing_to_search_title','Search needs something to search')" :description="snapshot?.capabilities.can_manage_database?i18n.t('search.nothing_to_search_help','Open a JSONL workspace or create a corpus collection, then search across your works, metadata, and annotations.'):i18n.t('search.empty_state_denied','Ask an administrator to configure a corpus database or grant you access.')" :action-label="snapshot?.capabilities.can_manage_database?i18n.t('search.empty_state_action','Create a collection'):''" @action="runtime.openDatabaseCreationFromResearch()"/>
@@ -276,16 +278,25 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
               <p class="search-method-help">{{methodHelp}}</p>
               <div v-if="snapshot.method==='mmr'" class="search-mmr-controls"><label><span>{{i18n.t('research.fetch_k_label','MMR candidate pool')}}</span><input class="control" type="number" min="1" max="1000" :value="snapshot.fetch_k" @change="updateMmrOption('fetch_k',Number(($event.target as HTMLInputElement).value))"></label><label><span>{{i18n.t('search.mmr_lambda','Relevance weight (λ)')}}</span><input class="control" type="number" min="0" max="1" step="0.05" :value="snapshot.lambda_mult" @change="updateMmrOption('lambda_mult',Number(($event.target as HTMLInputElement).value))"></label></div>
             </div>
-            <div class="search-advanced-filter-builder">
-              <div class="search-options-heading"><div><span class="section-label">{{i18n.t('search.advanced_filters','Advanced filters')}}</span><h3>{{i18n.t('search.precise_metadata_filter','Precise metadata filter')}}</h3></div><p>{{i18n.t('search.advanced_filter_help','Use field-level conditions when the facet sidebar is not specific enough.')}}</p></div>
-              <label class="search-filter-schema"><span>{{i18n.t('search.filter_schema','Metadata schema')}}</span><select class="control" :value="filterSchemaId" @change="changeFilterSchema(($event.target as HTMLSelectElement).value)"><option v-for="schema in schemaSummaries" :key="schema.id" :value="schema.id">{{schema.name}}{{schema.id===associatedSchemaId?` · ${i18n.t('search.filter_schema_associated','associated')}`:''}}</option></select><small>{{i18n.t('search.filter_schema_help','Filter fields come from the schema associated with this corpus. Choose another saved schema if none is associated.')}}</small></label>
-              <div class="search-filter-builder-grid">
-                <label><span>{{i18n.t('search.field','Field')}}</span><select v-model="newFilterField" class="control" @change="onFilterFieldChange"><option v-for="field in schemaFilterFields" :key="field.key" :value="field.key">{{field.label}}</option></select></label>
-                <label><span>{{i18n.t('search.condition','Condition')}}</span><select v-model="newFilterOp" class="control"><option v-for="[value,key,fallback] in filterOps(newFilterField)" :key="value" :value="value">{{i18n.t(key,fallback)}}</option></select></label>
-                <label><span>{{i18n.t('search.value','Value')}}</span><input v-model="newFilterValue" class="control" :list="`search-suggestions-${newFilterField}`" :disabled="['empty','notempty'].includes(newFilterOp)" :placeholder="i18n.t('search.filter_value_placeholder','Type or choose a value…')" @keydown.enter.prevent="addAdvancedFilter"><datalist :id="`search-suggestions-${newFilterField}`"><option v-for="value in suggestionsFor(newFilterField)" :key="value" :value="value"></option></datalist></label>
-                <button type="button" class="btn search-add-filter" :disabled="!['empty','notempty'].includes(newFilterOp)&&!newFilterValue.trim()" @click="addAdvancedFilter"><AppIcon name="plus"/>{{i18n.t('research.add_filter','Add filter')}}</button>
-              </div>
-            </div>
+            <SearchAdvancedFilters
+              :filters="snapshot.filters"
+              :fields="schemaFilterFields"
+              :schemas="schemaSummaries"
+              :schema-id="filterSchemaId"
+              :associated-schema-id="associatedSchemaId"
+              :field="newFilterField"
+              :op="newFilterOp"
+              :value="newFilterValue"
+              :ops="filterOps(newFilterField)"
+              :suggestions="suggestionsFor(newFilterField)"
+              @update:field="newFilterField=$event"
+              @update:op="newFilterOp=$event"
+              @update:value="newFilterValue=$event"
+              @schema="changeFilterSchema"
+              @field-change="onFilterFieldChange"
+              @add="addAdvancedFilter"
+              @remove="removeAdvancedFilter"
+            />
           </div>
         </details>
       </section>
@@ -469,17 +480,6 @@ onBeforeUnmount(()=>{window.clearTimeout(localSearchTimer);window.clearTimeout(r
 .search-sort-menu {
   position: relative;
   z-index: 81;
-}
-.search-filter-schema {
-  display: grid;
-  gap: 6px;
-  max-width: 420px;
-  margin-bottom: 12px;
-}
-.search-filter-schema small {
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
 }
 .search-pagination {
   display: flex;
