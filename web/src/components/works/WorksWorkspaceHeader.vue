@@ -207,7 +207,7 @@ const i18n = useI18nStore();
 
 .works-header-metrics dt {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -229,7 +229,7 @@ const i18n = useI18nStore();
 
 .works-sync-target > span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
