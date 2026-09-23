@@ -23,6 +23,7 @@ vi.mock("../../src/api/auth", async () => {
 
 import RolesView from "../../src/views/RolesView.vue";
 import { useAuthStore } from "../../src/stores/auth";
+import { useI18nStore } from "../../src/stores/i18n";
 
 const capabilities = [
   {
@@ -74,10 +75,11 @@ const roles = [
   },
 ];
 
-async function mountView() {
+async function mountView(translations: Record<string, string> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().user = { id: 1, username: "admin", role: "admin", capabilities: [] } as never;
+  useI18nStore().dictionary = translations;
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -158,6 +160,20 @@ describe("RolesView", () => {
       roles: roles.filter((item) => item.id !== "reviewer"),
       capabilities,
     });
+  });
+
+  it("localizes built-in role descriptions", async () => {
+    const { wrapper } = await mountView({
+      "roles.admin_description": "Accès administratif entièrement localisé.",
+    });
+    await wrapper
+      .findAll(".role-selector button")
+      .find((button) => button.text().includes("Administrator"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Accès administratif entièrement localisé.");
+    expect(wrapper.text()).not.toContain("Full access.");
   });
 
   it("shows the administrator role as locked full access with every capability checked", async () => {
