@@ -41,7 +41,7 @@ import { compactNumber } from "../domain/numberFormatting";
 import { normalizeResearcherToken } from "../domain/researcherContentFilter";
 import { filterOpsForField } from "../domain/searchFilterSchema";
 import { stripLigaturesAndArtifacts } from "../domain/textCleanup";
-import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
+import { compactRecordHistory, isResponseCacheStore, normalizePdfLinkChanges, pdfLinks, ragEvidenceRecordPayload, recordPayload, touchupRecordPayload, upsertRecordPayload } from "../domain/recordPayloads";
 import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
 import { fullHttpErrorDetail } from "../domain/httpErrors";
 import { parsePastedRecord } from "../domain/pastedRecord";
@@ -1150,43 +1150,6 @@ function serializableFile(file){
 }
 
 
-// 0.30.11 packet discipline: API boundaries receive only fields required by
-// the operation. Audit history is intentionally opt-in because it can dwarf
-// the rest of a record after repeated edits.
-const TOUCHUP_TRANSPORT_CONTEXT_FIELDS=[
-  "record_id","work","document_author","edition","year","page_start","page_end",
-  "region_type","region_author","primary_text","speaker","position_holder","target",
-  "discourse_role","proposition_status","semantic_function","stance","claim_scope",
-  "text","topics","concepts","persons","works_referenced","is_direct_quote",
-  "quoted_speaker","quoted_author","quoted_work","quoted_position_holder",
-  "quoted_addressee","quoted_referent","quotation_chain","inline_citation",
-  "full_citation","needs_review","review_reason"
-];
-const RAG_EVIDENCE_TRANSPORT_FIELDS=[
-  "record_id","canonical_work_id","work","document_author","edition","year",
-  "page_start","page_end","translator","speaker","position_holder","target",
-  "discourse_role","proposition_status","stance","text","topics","concepts",
-  "persons","document_language","document_languages","quoted_speaker",
-  "quoted_author","quoted_work","quoted_position_holder"
-];
-function upsertRecordPayload(record,chromaId=null){
-  const out=recordPayload(record,{includeChromaId:false});
-  if(chromaId)out._chroma_id=chromaId;
-  return out;
-}
-function touchupRecordPayload(record,fields=[]){
-  return recordPayload(record,{fields:[...fields,...TOUCHUP_TRANSPORT_CONTEXT_FIELDS]});
-}
-function ragEvidenceRecordPayload(record){
-  return recordPayload(record,{fields:RAG_EVIDENCE_TRANSPORT_FIELDS});
-}
-
-
-
-
-function isResponseCacheStore(store){
-  return Boolean(store&&(store.name==="_response_cache"||store.storage_name==="derridai_response_cache"||store.metadata?.derridai_system_collection==="response_cache"));
-}
 function recordStores(){
   return state.stores.filter(store=>!isResponseCacheStore(store));
 }

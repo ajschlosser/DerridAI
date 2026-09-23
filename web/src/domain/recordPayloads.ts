@@ -81,3 +81,46 @@ export function normalizePdfLinkChanges(record: Loose, links: Loose[]): Loose {
   if (record.pdf_links !== undefined) changes.pdf_links = null;
   return changes;
 }
+
+// 0.30.11 packet discipline: API boundaries receive only fields required by
+// the operation. Audit history is intentionally opt-in because it can dwarf
+// the rest of a record after repeated edits.
+export const TOUCHUP_TRANSPORT_CONTEXT_FIELDS = [
+  "record_id", "work", "document_author", "edition", "year", "page_start", "page_end",
+  "region_type", "region_author", "primary_text", "speaker", "position_holder", "target",
+  "discourse_role", "proposition_status", "semantic_function", "stance", "claim_scope",
+  "text", "topics", "concepts", "persons", "works_referenced", "is_direct_quote",
+  "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder",
+  "quoted_addressee", "quoted_referent", "quotation_chain", "inline_citation",
+  "full_citation", "needs_review", "review_reason",
+];
+export const RAG_EVIDENCE_TRANSPORT_FIELDS = [
+  "record_id", "canonical_work_id", "work", "document_author", "edition", "year",
+  "page_start", "page_end", "translator", "speaker", "position_holder", "target",
+  "discourse_role", "proposition_status", "stance", "text", "topics", "concepts",
+  "persons", "document_language", "document_languages", "quoted_speaker",
+  "quoted_author", "quoted_work", "quoted_position_holder",
+];
+
+export function upsertRecordPayload(record: unknown, chromaId: string | null = null): Loose {
+  const out = recordPayload(record, { includeChromaId: false });
+  if (chromaId) out._chroma_id = chromaId;
+  return out;
+}
+
+export function touchupRecordPayload(record: unknown, fields: string[] = []): Loose {
+  return recordPayload(record, { fields: [...fields, ...TOUCHUP_TRANSPORT_CONTEXT_FIELDS] });
+}
+
+export function ragEvidenceRecordPayload(record: unknown): Loose {
+  return recordPayload(record, { fields: RAG_EVIDENCE_TRANSPORT_FIELDS });
+}
+
+export function isResponseCacheStore(store: Loose | null | undefined): boolean {
+  return Boolean(
+    store &&
+      (store.name === "_response_cache" ||
+        store.storage_name === "derridai_response_cache" ||
+        store.metadata?.derridai_system_collection === "response_cache"),
+  );
+}
