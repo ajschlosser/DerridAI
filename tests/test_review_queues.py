@@ -92,7 +92,7 @@ def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp
     assert updated["metadata_incomplete_fields"] == []
     assert updated["metadata_review_fields"] == []
     assert updated["metadata_decisions"][-1]["value"] is False
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(updated, {"main_text_start_page":1,"main_text_end_page":2})
+    cb._apply_manifest_metadata(updated, {"main_text_start_page":1,"main_text_end_page":2})
     assert updated["primary_text"] is False
     assert updated["metadata_field_status"]["primary_text"]["status"] == "human_confirmed"
 

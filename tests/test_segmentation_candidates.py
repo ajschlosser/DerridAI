@@ -54,7 +54,7 @@ def test_soft_length_alone_never_creates_candidate():
     topology normalizer, never by asking the LLM.
     """
     blocks=_blocks(40,chars=900)
-    candidates=cb.PdfCorpusBuildManager._deterministic_boundary_candidates(blocks,cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
+    candidates=cb._deterministic_boundary_candidates(blocks,cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
     assert all("soft_length_candidate" not in c.get("signals",[]) for c in candidates)
     assert candidates==[]
 
@@ -67,11 +67,11 @@ def test_heading_start_is_deterministic_split_and_heading_body_is_protected():
     """
     blocks=_blocks(4)
     blocks[1].update(type="heading",text="CHAPTER TWO")
-    candidates=cb.PdfCorpusBuildManager._deterministic_boundary_candidates(blocks,cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
+    candidates=cb._deterministic_boundary_candidates(blocks,cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
     by_after={c["after_block_id"]:c for c in candidates}
-    assert cb.PdfCorpusBuildManager._candidate_route(by_after["b0"],cb.CORPUS_PROFILES[cb.PROFILE_VERSION])=="split"
+    assert cb._candidate_route(by_after["b0"],cb.CORPUS_PROFILES[cb.PROFILE_VERSION])=="split"
     assert by_after["b1"]["protected"] is True
-    assert cb.PdfCorpusBuildManager._candidate_route(by_after["b1"],cb.CORPUS_PROFILES[cb.PROFILE_VERSION])=="keep"
+    assert cb._candidate_route(by_after["b1"],cb.CORPUS_PROFILES[cb.PROFILE_VERSION])=="keep"
 
 
 def test_attribution_lead_to_quote_is_protected():
@@ -81,7 +81,7 @@ def test_attribution_lead_to_quote_is_protected():
     """
     left={"block_id":"a","type":"paragraph","text":"Derrida writes:"}
     right={"block_id":"b","type":"paragraph","text":"“The proposition begins here.”"}
-    assert cb.PdfCorpusBuildManager._is_protected_transition(left,right) is True
+    assert cb._is_protected_transition(left,right) is True
 
 
 def test_llm_batch_omission_and_failure_default_to_keep(monkeypatch,tmp_path):
@@ -92,7 +92,7 @@ def test_llm_batch_omission_and_failure_default_to_keep(monkeypatch,tmp_path):
     """
     repo,build,manager=_build(tmp_path,12)
     candidate={"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.6,"source":"test","index":5,"protected":False}
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[candidate])
+    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:[candidate])
     monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},"malformed"))
     boundaries=manager._segment(_blocks(12),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
@@ -111,7 +111,7 @@ def test_llm_adjudication_budget_limits_work(monkeypatch,tmp_path):
     repo,build,manager=_build(tmp_path,100)
     candidates=[{"after_block_id":f"b{i}","next_block_id":f"b{i+1}","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":i,"protected":False} for i in range(60)]
     calls=[]
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:candidates)
+    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:candidates)
     def batch(batch,*args,**kwargs):
         calls.extend(c["after_block_id"] for c in batch)
         return {},None
@@ -132,7 +132,7 @@ def test_record_sizing_normalizer_adds_retrieval_boundaries_without_review(monke
     """
     repo,build,manager=_build(tmp_path,16)
     blocks=_blocks(16,chars=260)
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[])
+    monkeypatch.setattr(cb, "_deterministic_boundary_candidates",lambda blocks,profile:[])
     boundaries=manager._segment(blocks,{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
     assert any(b.get("boundary_kind")=="retrieval_size_optimized" for b in boundaries)
@@ -144,8 +144,8 @@ def test_record_sizing_normalizer_adds_retrieval_boundaries_without_review(monke
 def test_topology_sanity_catches_absolute_oversize_and_reports_distribution():
     """A 1,800-char record is valid (median reported); a 6,500-char record is not."""
     policy={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
-    ok=cb.PdfCorpusBuildManager._topology_sanity([{"record_id":"r1","text":"x"*1800,"text_length":1800,"source_block_ids":[]}],policy)
-    bad=cb.PdfCorpusBuildManager._topology_sanity([{"record_id":"r1","text":"x"*6500,"text_length":6500,"source_block_ids":[]}],policy)
+    ok=cb._topology_sanity([{"record_id":"r1","text":"x"*1800,"text_length":1800,"source_block_ids":[]}],policy)
+    bad=cb._topology_sanity([{"record_id":"r1","text":"x"*6500,"text_length":6500,"source_block_ids":[]}],policy)
     assert ok["valid"] is True
     assert ok["median_record_chars"]==1800
     assert bad["valid"] is False

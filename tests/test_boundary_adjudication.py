@@ -61,7 +61,7 @@ def test_second_reader_keep_corroboration_clears_only_heuristic_boundary_warning
     left={'boundary_quality_issues':[{'code':'boundary_suspect','edge':'end','reason':'x'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'}
     right={'boundary_quality_issues':[{'code':'boundary_suspect','edge':'start','reason':'x'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'}
     decision={'decision':'keep','confidence':.91,'reason':'Coherent boundary','suggested_after_block_id':'b2'}
-    cb.PdfCorpusBuildManager._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
+    cb._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
     assert left.get('boundary_quality_issues') is None
     assert right.get('boundary_quality_issues') is None
     assert left['boundary_llm_after']['decision']=='keep'
@@ -79,7 +79,7 @@ def test_second_reader_move_is_a_review_recommendation_not_an_automatic_rewrite(
     right={'text':'right','source_block_ids':['b3','b4'],'review_disposition':'pending'}
     before=(left['text'],right['text'])
     decision={'decision':'move_later','confidence':.84,'reason':'Quotation continues.','suggested_after_block_id':'b3'}
-    cb.PdfCorpusBuildManager._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
+    cb._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
     assert (left['text'],right['text'])==before
     assert 'Boundary review required' in left['review_reason']
     assert left['boundary_quality_issues'][-1]['suggested_after_block_id']=='b3'

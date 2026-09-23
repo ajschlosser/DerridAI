@@ -93,7 +93,7 @@ def test_human_document_layout_cannot_be_overwritten_by_manifest_range():
         },
     }
     # Deliberately bad manifest range would classify PDF 9 as front matter.
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(record,{"main_text_start_page":11})
+    cb._apply_manifest_metadata(record,{"main_text_start_page":11})
     assert record["region_type"]=="main_text"
     assert record["primary_text"] is True
     assert record["metadata_field_status"]["region_type"]["method"]=="human_document_layout"
