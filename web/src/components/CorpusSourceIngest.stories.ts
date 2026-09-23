@@ -14,7 +14,11 @@ const asset = {
   metadata: {},
   media_kind: "text",
   deterministic_checked_at: "2026-09-23T08:00:01Z",
-  initial_metadata: { title: "Of Hospitality", document_author: "Jacques Derrida", speaker: "Jacques Derrida" },
+  initial_metadata: {
+    title: "Of Hospitality",
+    document_author: "Jacques Derrida",
+    speaker: "Jacques Derrida",
+  },
 } as PdfAsset;
 
 const hits: GutenbergHit[] = [
@@ -25,7 +29,15 @@ const hits: GutenbergHit[] = [
 const meta = {
   title: "Corpus Builder/Source/Ingest",
   component: CorpusSourceIngest,
-  args: { assets: [asset], assetId: "", illegibility: 20, hits: [], selectedAsset: null, disabled: false, busy: "" },
+  args: {
+    assets: [asset],
+    assetId: "",
+    illegibility: 20,
+    hits: [],
+    selectedAsset: null,
+    disabled: false,
+    busy: "",
+  },
 } satisfies Meta<typeof CorpusSourceIngest>;
 
 export default meta;
@@ -33,8 +45,22 @@ type Story = StoryObj<typeof meta>;
 
 export const BeforeFileSelection: Story = {};
 export const GutenbergResults: Story = { args: { hits, gutenbergQuery: "austen" } };
-export const DeterministicCheck: Story = { args: { assetId: asset.asset_id, selectedAsset: asset, illegibility: 0 } };
+export const DeterministicCheck: Story = {
+  args: { assetId: asset.asset_id, selectedAsset: asset, illegibility: 0 },
+};
 export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
-  args: { assetId: asset.asset_id, selectedAsset: { ...asset, filename: "De l’hospitalité — édition commentée.txt" }, hits, illegibility: 80 },
+  args: {
+    assetId: asset.asset_id,
+    selectedAsset: { ...asset, filename: "De l’hospitalité — édition commentée.txt" },
+    hits,
+    illegibility: 80,
+  },
+};
+
+export const Audio: Story = {
+  args: { selectedAsset: { ...asset, media_kind: "audio", filename: "seminar.mp3" } },
+};
+export const Image: Story = {
+  args: { selectedAsset: { ...asset, media_kind: "image", filename: "scan.png" } },
 };

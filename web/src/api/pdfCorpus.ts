@@ -19,7 +19,14 @@ export interface PdfAsset {
   media_kind?: string;
   source_illegibility?: number;
   deterministic_checked_at?: string;
-  initial_metadata?: { title?: string; document_author?: string; speaker?: string; speakers?: string[]; language?: string; [key: string]: unknown };
+  initial_metadata?: {
+    title?: string;
+    document_author?: string;
+    speaker?: string;
+    speakers?: string[];
+    language?: string;
+    [key: string]: unknown;
+  };
   document_layout?: DocumentLayoutPlan;
   document_layout_revision?: number;
   pages?: Array<{
@@ -499,7 +506,11 @@ export interface CorpusRecord {
   source_spans: Array<{
     source_unit_id?: string;
     block_id?: string;
-    page: number;
+    page?: number;
+    start?: number;
+    end?: number;
+    speaker?: string;
+    locator_kind?: string;
     bbox?: number[];
     extraction_method?: string;
   }>;
@@ -704,6 +715,9 @@ export interface CorpusRecord {
 }
 
 export interface SourceBlock {
+  start?: number;
+  end?: number;
+  locator_kind?: string;
   block_id: string;
   page: number;
   bbox: number[];
@@ -732,11 +746,19 @@ export const pdfCorpusApi = {
     return apiRequest<PdfAsset>("/api/pdf/assets", { method: "POST", body });
   },
   importUrl: (url: string, sourceIllegibility = 0) =>
-    apiRequest<PdfAsset>("/api/pdf/assets/url", { method: "POST", body: JSON.stringify({ url, source_illegibility: sourceIllegibility }) }),
+    apiRequest<PdfAsset>("/api/pdf/assets/url", {
+      method: "POST",
+      body: JSON.stringify({ url, source_illegibility: sourceIllegibility }),
+    }),
   searchGutenberg: (query: string) =>
-    apiRequest<{ items: GutenbergHit[] }>(`/api/pdf/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`),
+    apiRequest<{ items: GutenbergHit[] }>(
+      `/api/pdf/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`,
+    ),
   importGutenberg: (etextId: number, sourceIllegibility = 0) =>
-    apiRequest<PdfAsset>("/api/pdf/gutenberg/import", { method: "POST", body: JSON.stringify({ etext_id: etextId, source_illegibility: sourceIllegibility }) }),
+    apiRequest<PdfAsset>("/api/pdf/gutenberg/import", {
+      method: "POST",
+      body: JSON.stringify({ etext_id: etextId, source_illegibility: sourceIllegibility }),
+    }),
   assetContentUrl: (assetId: string) => `/api/pdf/assets/${encodeURIComponent(assetId)}/content`,
   updatePageLabels: (assetId: string, labels: Record<number, string | null>) =>
     apiRequest<PdfAsset>(`/api/pdf/assets/${encodeURIComponent(assetId)}/page-labels`, {

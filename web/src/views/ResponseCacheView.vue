@@ -135,12 +135,7 @@ onMounted(async () => {
                 t("runtime.help.open_response_library", "Open Response Library")
               }}
             </button>
-            <button
-              v-if="exists"
-              class="btn danger"
-              id="clearResponseCache"
-              @click="clearCache"
-            >
+            <button v-if="exists" class="btn danger" id="clearResponseCache" @click="clearCache">
               {{ t("common.clear", "Clear cache") }}
             </button>
           </div>

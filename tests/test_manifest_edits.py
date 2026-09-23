@@ -27,6 +27,7 @@ from app.config import APP_VERSION
 
 def make(tmp_path: Path, *, status: str = "awaiting_review", stage: str = "review"):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    cb._json_write(repo.asset_meta_path("a"), {"asset_id": "a", "media_kind": "pdf", "main_text_start_inference": {}})
     build = repo.create_build({
         "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 2,
         "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,

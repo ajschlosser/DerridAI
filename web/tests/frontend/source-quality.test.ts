@@ -9,6 +9,7 @@ import {
 import { useCorpusIngestWarning } from "../../src/composables/useCorpusIngestWarning";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
 import ProviderProfileSelect from "../../src/components/ProviderProfileSelect.vue";
+import { useCorpusRunGuidance } from "../../src/composables/useCorpusRunGuidance";
 
 describe("ProviderProfileSelect availability", () => {
   it("does not offer unavailable profiles while retaining the active one for diagnosis", () => {
@@ -49,6 +50,42 @@ describe("useCorpusIngestWarning", () => {
         warning = useCorpusIngestWarning(asset);
         return () => h("div");
       },
+    });
+
+    describe("useCorpusRunGuidance", () => {
+      it("normalizes editable guidance and projects active build guidance", () => {
+        const schema = ref<any>({
+          id: "schema-a",
+          fields: [{ name: "stance", label: "Stance", group: "semantic" }],
+          groups: [{ key: "semantic", label: "Semantic" }],
+        });
+        const build = ref<any>({
+          schema: { fields: [{ name: "stance", label: "Stance" }] },
+          request: {
+            run_guidance: {
+              stance: { instructions: "Focus", look_for: ["support", ""] },
+            },
+          },
+        });
+        let composable!: ReturnType<typeof useCorpusRunGuidance>;
+        const Host = defineComponent({
+          setup() {
+            composable = useCorpusRunGuidance(schema, build, (_, fallback) => fallback);
+            return () => h("div");
+          },
+        });
+        const wrapper = mount(Host);
+        composable.guidance.value = {
+          stance: { instructions: "  assess  ", look_for: [" support ", "", " ".repeat(2)] },
+        };
+        expect(composable.payload()).toEqual({
+          stance: { instructions: "assess", look_for: ["support"] },
+        });
+        expect(composable.active.value).toEqual([
+          { field: "stance", label: "Stance", instructions: "Focus", lookFor: ["support", ""] },
+        ]);
+        wrapper.unmount();
+      });
     });
     const wrapper = mount(Host);
 
