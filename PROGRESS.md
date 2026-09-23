@@ -370,7 +370,34 @@ after -- the same discipline `mk_factory.py`/`extract_factory.sh` enforced for t
 those exact scripts are JS/TS-specific and a Python equivalent does not yet exist (worth writing one if this
 becomes a multi-session effort the way the runtime decomposition was).
 
-**Not started in this session; no `corpus_builder.py` structural changes beyond the vocabulary rename above.**
+## Session 13 status (branch `claude/runtime-refactor-25`, continued) -- cluster 6 (publication/touchup) done
+
+**Cluster 6 extracted.** Moved the pure, stateless parts of `preview_record`, `touchup_record_text`, and `publish`
+out of `PdfCorpusBuildManager` into `corpus_publication.py` as free functions: `build_text_touchup_prompt` (the
+touch-up LLM prompt template, verbatim), `publishable_records` (the accepted/not-rejected filter), and
+`publication_blocker` (every reason `publish()` would refuse, returning the first blocker message or `None`
+instead of raising, so the orchestrating method still raises with the exact same message it always did, in the
+exact same order). Preserved one subtle ordering detail that would have been easy to flatten by accident:
+`publish()` captures `validation` from the build *before* calling `_refresh_workflow_fields`, while the
+readiness/metadata-total checks read the build *after* that refresh -- `publication_blocker` takes both `build`
+(post-refresh) and `validation` (pre-refresh) as separate parameters rather than re-deriving either from a single
+snapshot, so behavior is unchanged. Also deleted the two thin wrapper methods `_validate_publication_record`/
+`_serialize_public_record`, which did nothing but call free functions already imported from `corpus_publication.py`
+(`_serialize_public_record` even silently discarded two of its four arguments) -- call sites now call the free
+functions directly, and the one test (`test_source_quality_and_publication_schema.py`) that called the wrapper
+method directly was updated to call the free function.
+
+`corpus_builder.py`: 8,128 -> 8,085 lines. Confirmed no behavior change: full backend suite (437 tests, unchanged
+count) and the 131-scenario legacy DOM baseline (unchanged, no snapshots touched) both pass. No frontend files
+touched, so the frontend e2e/unit suites were not re-run (nothing in this change is reachable from a frontend test,
+which all run against mocked API responses).
+
+**This establishes the extraction pattern for the remaining clusters**: pure logic (prompt templates, filters,
+validation/blocker-reason chains) moves into a `corpus_*.py` module as a free function; the manager method stays as
+thin orchestration (repo I/O, calls to other manager methods) and calls the free function. The next cluster,
+segmentation, is far larger (~1,200 lines) and more interconnected -- expect it to take multiple extraction passes,
+not one commit, since many of its ~40 methods call each other and share intermediate state that a first read may
+not fully reveal until the extraction is actually attempted.
 
 The parallel plan for `PdfCorpusBuilder.vue`'s composables/CSS extraction was already given to the owner in an
 earlier session (phased: composable extraction, then CSS distribution, then template trim) and deferred only for a
