@@ -71,7 +71,7 @@ def test_a_rejection_is_recorded_and_shown_to_the_next_pass(tmp_path):
 def test_the_concurrency_limit_refuses_an_extra_run(tmp_path, monkeypatch):
     m = manager(tmp_path)
     monkeypatch.setattr(m, "active_enrichment_runs", lambda: 1)
-    monkeypatch.setattr(m, "_validate_execution_budget", lambda request: None)
+    monkeypatch.setattr(cb, "_validate_execution_budget", lambda request: None)
     build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
                                  "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "m", "request": {}})
     build.update(status="awaiting_review")

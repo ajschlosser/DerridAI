@@ -28,11 +28,11 @@ from app import corpus_builder as cb
 
 def test_metadata_stage_timeouts_are_configurable_and_reasonable():
     """Default family timeouts are at most 300 seconds and can be overridden per family."""
-    limits=cb.PdfCorpusBuildManager._stage_timeouts({})
+    limits=cb._stage_timeouts({})
     assert limits['discourse'] <= 300
     assert limits['quotation'] <= 300
     assert limits['indexing'] <= 300
-    custom=cb.PdfCorpusBuildManager._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
+    custom=cb._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
     assert custom['discourse']==90
     assert custom['indexing']==45
 

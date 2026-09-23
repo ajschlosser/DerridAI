@@ -1,7 +1,6 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-import ast
 import difflib
 import hashlib
 import json
@@ -21,7 +20,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import fitz
-import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from . import experiment
@@ -33,6 +31,16 @@ from .config import APP_VERSION, settings
 from .corpus_enrichment_feedback import enrichment_informational_event
 from .corpus_extraction import (
     extract_source_document as _extract_source_document,
+)
+from .corpus_llm_helpers import (
+    _context_window,
+    _generation_options,
+    _is_transport_error,
+    _llm_config,
+    _parse_json_robust,
+    _stage_limits,
+    _stage_timeouts,
+    _validate_execution_budget,
 )
 
 # Compatibility exports: existing callers and integrations retain this interface.
@@ -177,8 +185,8 @@ from .metadata_schema import (
 )
 from .metadata_schema_store import SchemaNotFound, SchemaStore
 from .metadata_values import is_placeholder
-from .models import OllamaTouchupOptions, WorkMetadataRequest, WorkMetadataSeed
-from .rag import _citation_strings, _extract_json, chat_complete
+from .models import WorkMetadataRequest, WorkMetadataSeed
+from .rag import _citation_strings, chat_complete
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches, format_group_guidance
 from .sentence_boundaries import snap_boundaries_to_sentences
@@ -1373,43 +1381,6 @@ class PdfCorpusBuildManager:
                 build["finished_at"] = iso_now()
                 self.repo.save_build(build)
 
-    @staticmethod
-    def _generation_options(request: dict[str, Any]) -> OllamaTouchupOptions:
-        generation = request.get("generation")
-        if isinstance(generation, OllamaTouchupOptions):
-            return generation
-        if isinstance(generation, dict):
-            return OllamaTouchupOptions.model_validate(generation)
-        return OllamaTouchupOptions()
-
-    @classmethod
-    def _context_window(cls, request: dict[str, Any]) -> int | None:
-        try:
-            value = cls._generation_options(request).num_ctx
-            return int(value) if value else None
-        except (TypeError, ValueError, ValidationError):
-            return None
-
-    @classmethod
-    def _validate_execution_budget(cls, request: dict[str, Any]) -> None:
-        """Reject an explicitly impossible segmentation context before work starts.
-
-        Context size is a model execution constraint, never a record-boundary rule.
-        Unknown remote-provider context limits are allowed; explicit local limits
-        must be large enough for the configured source window plus structured
-        output and conservative schema/system overhead.
-        """
-        context = cls._context_window(request)
-        if not context:
-            return
-        limits = cls._stage_limits(request)
-        required = int(limits["segmentation_window_tokens"]) + int(limits["segmentation_num_predict"]) + 1536
-        if context < required:
-            raise ValueError(
-                f"Corpus build context is too small for the configured segmentation turn: "
-                f"num_ctx={context}, approximate minimum={required}. Increase the provider/build context "
-                "or reduce the segmentation input/output budgets."
-            )
 
     def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]:
         if not build_id:
@@ -1487,7 +1458,7 @@ class PdfCorpusBuildManager:
         profile_id = str(request.get("profile_id") or PROFILE_VERSION)
         if profile_id not in CORPUS_PROFILES:
             raise ValueError(f"Unknown corpus profile: {profile_id}")
-        self._validate_execution_budget(request)
+        _validate_execution_budget(request)
         try:
             schema = self._schemas.get(str(request.get("schema_id") or DEFAULT_SCHEMA_ID))
         except SchemaNotFound as exc:
@@ -1533,7 +1504,7 @@ class PdfCorpusBuildManager:
             return build
         if build.get("status") in {"published"}:
             raise ValueError("Published builds are immutable; create a new build instead.")
-        self._validate_execution_budget(request)
+        _validate_execution_budget(request)
 
         # A resume is also the supported way to recover a blocked build with a
         # better model, larger context, or different stage budgets. Persist the
@@ -1741,20 +1712,7 @@ class PdfCorpusBuildManager:
         return True
 
     _TRANSPORT_PAUSES = (3.0, 8.0, 15.0)
-    _TRANSPORT_MARKERS = (
-        "disconnected", "connection reset", "connection refused", "connection aborted", "broken pipe", "errno 97", "errno 104",
-        "errno 111", "temporarily unavailable", "remote end closed", "eof occurred",
-    )
 
-    @classmethod
-    def _is_transport_error(cls, exc: Exception) -> bool:
-        """A dropped connection, not a bad answer or a timeout: worth trying again once the server is ready."""
-        if isinstance(exc, (httpx.TimeoutException, InterruptedError)):
-            return False
-        text = f"{type(exc).__name__} {exc}".casefold()
-        if "timeout" in text or "timed out" in text:
-            return False
-        return isinstance(exc, (httpx.TransportError, ConnectionError, OSError)) or any(marker in text for marker in cls._TRANSPORT_MARKERS)
 
     def _with_transport_retry(self, build_id: str, call: Callable[..., str], **kwargs: Any) -> str:
         """Run a model call, retrying with a growing pause when the connection itself fails.
@@ -1768,7 +1726,7 @@ class PdfCorpusBuildManager:
             try:
                 return call(**kwargs)
             except Exception as exc:  # noqa: BLE001 - classified below; anything else is re-raised untouched
-                if attempt >= len(pauses) or not self._is_transport_error(exc):
+                if attempt >= len(pauses) or not _is_transport_error(exc):
                     raise
                 if build_id:
                     self._increment_metric(build_id, "transport_retries")
@@ -1867,7 +1825,7 @@ CURRENT REVIEWED RECORD TEXT:
             return out
         started = time.monotonic()
         active = self._interactive_llm_request("", request or None)
-        result = self._chat_json(active, prompt, response_model=model_cls, max_tokens=int(self._stage_limits(active).get("indexing_num_predict", 1200)), schema_name=f"derridai_record_{group}", build_id="")
+        result = self._chat_json(active, prompt, response_model=model_cls, max_tokens=int(_stage_limits(active).get("indexing_num_predict", 1200)), schema_name=f"derridai_record_{group}", build_id="")
         return {**out, "ran": True, "answer": result, "seconds": round(time.monotonic() - started, 1)}
 
     def start_autonomous(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -2464,77 +2422,6 @@ CURRENT REVIEWED RECORD TEXT:
             self.repo.save_build(build)
             return build
 
-    @staticmethod
-    def _llm_config(request: dict[str, Any]) -> tuple[str, str, str | None, str | None, OllamaTouchupOptions | None]:
-        provider = str(request.get("provider") or "ollama")
-        model = str(request.get("model") or (settings.openai_compat_model if provider == "openai" else settings.ollama_model))
-        generation = request.get("generation")
-        if isinstance(generation, dict):
-            generation = OllamaTouchupOptions.model_validate(generation)
-        return provider, model, request.get("base_url"), request.get("api_key"), generation
-
-    @staticmethod
-    def _parse_json_robust(raw: str) -> dict[str, Any]:
-        """Parse model JSON conservatively, repairing only syntax-level defects.
-
-        The repair path never fabricates semantic values.  It handles the common
-        local-model failures seen in long corpus runs: Markdown fences, leading
-        prose, trailing commas and a response truncated after a complete object.
-        """
-        value = str(raw or "").strip()
-        if not value:
-            raise ValueError("LLM returned an empty response.")
-        try:
-            return _extract_json(value)
-        except Exception:  # noqa: S110 — strict first pass; recovery below raises if nothing parses.
-            pass
-        value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-        value = re.sub(r"\s*```$", "", value)
-        start = value.find("{")
-        if start < 0:
-            raise ValueError("LLM response did not contain a JSON object.")
-        # Find the last balanced object rather than assuming the final character
-        # is a brace; routed/local providers occasionally append diagnostics.
-        depth = 0
-        in_string = False
-        escaped = False
-        end = -1
-        for idx, char in enumerate(value[start:], start=start):
-            if in_string:
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == '"':
-                    in_string = False
-                continue
-            if char == '"':
-                in_string = True
-            elif char == "{":
-                depth += 1
-            elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    end = idx
-                    break
-        if end < 0:
-            raise ValueError("LLM JSON object was truncated before its closing brace.")
-        candidate = value[start:end + 1]
-        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError as exc:
-            # Some otherwise capable local models occasionally emit a Python-like
-            # object (single quotes / True / False / None) even while JSON mode is
-            # requested. ``literal_eval`` is deliberately limited to literals and
-            # therefore repairs syntax without executing code or inventing values.
-            try:
-                parsed = ast.literal_eval(candidate)
-            except (ValueError, SyntaxError) as literal_exc:
-                raise ValueError(f"LLM returned malformed JSON: {exc.msg} at character {exc.pos}.") from literal_exc
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response JSON was not an object.")
-        return parsed
 
     def _append_warning(self, build_id: str, message: str) -> None:
         with self._lock:
@@ -2581,7 +2468,7 @@ CURRENT REVIEWED RECORD TEXT:
             request_chain.append(("review", reviewer))
         all_failures: list[str] = []
         for chain_index, (role, active_request) in enumerate(request_chain):
-            provider, model, base_url, api_key, generation = self._llm_config(active_request)
+            provider, model, base_url, api_key, generation = _llm_config(active_request)
             if chain_index > 0 and build_id:
                 self._increment_metric(build_id, "escalations")
             failure: Exception | None = None
@@ -2652,7 +2539,7 @@ CURRENT REVIEWED RECORD TEXT:
                             schema_name=schema_name,
                             max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
                             cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                            timeout_seconds=float(self._stage_timeouts(request).get(timeout_key, 240)),
+                            timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
                         )
                     finally:
                         self._note_llm_call_end(build_id, call_token)
@@ -2674,7 +2561,7 @@ CURRENT REVIEWED RECORD TEXT:
                     break
                 diagnostic = str(raw or "")
                 try:
-                    value = self._parse_json_robust(raw)
+                    value = _parse_json_robust(raw)
                     parsed = response_model.model_validate(value)
                     return parsed.model_dump(mode="json")
                 except (ValueError, ValidationError) as exc:
@@ -2709,8 +2596,8 @@ CURRENT REVIEWED RECORD TEXT:
         add_many(blocks[midpoint:midpoint + 30])
         add_many(blocks[-40:])
         chosen = sorted(chosen[:140], key=lambda b: (int(b.get("page") or 0), str(b.get("block_id") or "")))
-        limits = self._stage_limits(request)
-        context = self._context_window(request)
+        limits = _stage_limits(request)
+        context = _context_window(request)
         # Keep manifest analysis representative across the whole book even on
         # smaller local contexts. We reduce the number/size of excerpts rather
         # than truncating the end of a front-loaded prompt.
@@ -2868,53 +2755,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         }
         return manifest
 
-    @staticmethod
-    def _stage_limits(request: dict[str, Any]) -> dict[str, int]:
-        defaults = {
-            "manifest_num_predict": 1800,
-            "segmentation_num_predict": 1200,
-            "reconciliation_num_predict": 1000,
-            "discourse_num_predict": 1600,
-            "quotation_num_predict": 1500,
-            "indexing_num_predict": 1200,
-            "segmentation_window_tokens": 5000,
-        }
-        supplied = request.get("stage_limits")
-        if hasattr(supplied, "model_dump"):
-            supplied = supplied.model_dump()
-        if isinstance(supplied, dict):
-            for key, default in list(defaults.items()):
-                try:
-                    value = int(supplied.get(key, default))
-                except (TypeError, ValueError):
-                    value = default
-                if key == "segmentation_window_tokens":
-                    defaults[key] = max(1024, min(24000, value))
-                else:
-                    defaults[key] = max(256, min(8192, value))
-        return defaults
-
-    @staticmethod
-    def _stage_timeouts(request: dict[str, Any]) -> dict[str, int]:
-        """Per-call read deadlines for long-running corpus LLM stages.
-
-        These are deliberately much shorter than the provider-wide emergency
-        network ceiling so one unhealthy generation cannot monopolize a corpus
-        worker indefinitely. Values remain configurable per build.
-        """
-        defaults = {
-            "manifest": 300, "segmentation": 300, "reconciliation": 240,
-            "discourse": 240, "quotation": 240, "indexing": 180,
-        }
-        supplied = request.get("stage_timeouts")
-        if isinstance(supplied, dict):
-            for key, default in list(defaults.items()):
-                try:
-                    value = int(supplied.get(key, default))
-                except (TypeError, ValueError):
-                    value = default
-                defaults[key] = max(30, min(1800, value))
-        return defaults
 
     @staticmethod
     def _semantic_atoms(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3020,7 +2860,7 @@ RIGHT [{right['block_id']}]:\n{str(right.get('text') or '')[:7000]}
 
 Return only `decision`, `confidence`, and `changes` in the supplied schema.
 """
-        limits = self._stage_limits(request)
+        limits = _stage_limits(request)
         try:
             result = self._chat_json(
                 request,
@@ -3057,7 +2897,7 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
         *,
         depth: int = 0,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        limits = self._stage_limits(request)
+        limits = _stage_limits(request)
         block_ids = {str(block.get("block_id") or "") for block in window}
         try:
             result = self._chat_json(
@@ -3128,7 +2968,7 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
 
 
     def _boundary_cache_fingerprint(self, left: dict[str, Any], right: dict[str, Any], request: dict[str, Any]) -> str:
-        generation = self._generation_options(request)
+        generation = _generation_options(request)
         payload = {
             "prompt": SEGMENTATION_PROMPT_VERSION,
             "left_id": left.get("block_id"), "left_text": left.get("text"),
@@ -3171,7 +3011,7 @@ Document context: {json.dumps(context, ensure_ascii=False)}
 {"\n\n---\n\n".join(items)}
 
 Return one compact decision per transition using its exact left-hand block ID in `after`. Do not return prose or source text."""
-        limits=self._stage_limits(request)
+        limits=_stage_limits(request)
         try:
             result=self._chat_json(request,prompt,response_model=BoundaryBatchResponseModel,max_tokens=min(limits["segmentation_num_predict"],1400),schema_name="derridai_boundary_batch_v6",attempts=2,build_id=build_id)
         except InterruptedError:
@@ -3280,7 +3120,7 @@ RIGHT RECORD START:
 {examples_text}
 
 Return one decision for the exact boundary id. `signals` should contain compact labels such as sentence_continuation, quotation_continuation, heading_attachment, attribution_continuation, argumentative_transition, or coherent_boundary."""
-        limits = self._stage_limits(request)
+        limits = _stage_limits(request)
         try:
             result = self._chat_json(
                 request, prompt, response_model=BoundaryAuditResponseModel,
@@ -3620,7 +3460,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         schema = schema or default_schema()
         allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
         allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
-        limits = self._stage_limits(request)
+        limits = _stage_limits(request)
         neighbor_context = {
             "previous_record_tail": previous_text[-1800:] if previous_text else "",
             "next_record_head": next_text[:1800] if next_text else "",
@@ -3630,7 +3470,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         # Semantic records should already be bounded. This is a context-safety
         # guard, not a segmentation rule: no source text is rewritten or split here.
         source_text = str(record.get("text") or "")
-        context = self._context_window(request)
+        context = _context_window(request)
         largest_metadata_output = max(limits["discourse_num_predict"], limits["quotation_num_predict"], limits["indexing_num_predict"])
         metadata_input_tokens = 9000 if not context else max(1800, min(12000, context - largest_metadata_output - 1800))
         metadata_char_budget = max(7000, metadata_input_tokens * 4)
@@ -3822,7 +3662,7 @@ CURRENT REVIEWED RECORD TEXT:
                 "attempts_allowed": 2,
                 "input_chars": len(prompt),
                 "max_output_tokens": max_tokens,
-                "timeout_seconds": self._stage_timeouts(active_request).get(task_name),
+                "timeout_seconds": _stage_timeouts(active_request).get(task_name),
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
@@ -6455,7 +6295,7 @@ CURRENT REVIEWED RECORD TEXT:
                 target_fields[str(record.get("record_id") or index)] = retry_fields
         if not target_indices:
             raise ValueError("No automatically retryable metadata fields remain. Review the human-resolution queue instead.")
-        self._validate_execution_budget(request)
+        _validate_execution_budget(request)
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build["provider"] = request.get("provider") or build.get("provider") or "ollama"
         build["model"] = request.get("model") or build.get("model")
@@ -6578,7 +6418,7 @@ CURRENT REVIEWED RECORD TEXT:
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
             raise ValueError("Wait for the active corpus operation to finish before starting metadata enrichment.")
-        self._validate_execution_budget(request)
+        _validate_execution_budget(request)
         limit = max(1, int(settings.enrichment_max_concurrent_runs))
         working = self.active_enrichment_runs()
         if working >= limit:
@@ -7122,7 +6962,7 @@ CURRENT REVIEWED RECORD TEXT:
         if not proposed:
             raise ValueError("LLM text touch-up returned empty text.")
         no_change = proposed == current_text
-        provider, model, _, _, _ = self._llm_config(active_request)
+        provider, model, _, _, _ = _llm_config(active_request)
         return {
             "record_id": record_id,
             "proposal_id": f"touchup-{uuid.uuid4().hex[:12]}",
