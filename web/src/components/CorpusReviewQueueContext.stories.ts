@@ -1,4 +1,4 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+// Copyright 2026 Aaron John Schlosser, PhD.
 import type { Meta, StoryObj } from "@storybook/vue3";
 import CorpusReviewQueueContext from "./CorpusReviewQueueContext.vue";
 
