@@ -5413,4 +5413,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'providers.mirostat': 'Mirostat',
  'providers.mirostat_eta': 'Mirostat eta',
  'providers.mirostat_tau': 'Mirostat tau',
+ 'search.filter_match_all': 'Match all of these conditions',
+ 'search.filter_where': 'Where',
+ 'search.filter_and': 'And',
+ 'search.remove_condition_named': 'Remove condition {field} {op} {value}',
 }
