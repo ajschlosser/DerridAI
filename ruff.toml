@@ -20,6 +20,11 @@ ignore = [
 "api/app/bibliography.py" = ["E701"]
 "api/app/chroma_store.py" = ["E701", "E702"]
 "api/app/corpus_builder.py" = ["E701", "E702"]
+"api/app/corpus_llm_helpers.py" = ["E701", "E702"]
+"api/app/corpus_record_quality.py" = ["E701", "E702"]
+"api/app/corpus_review_state.py" = ["E701", "E702"]
+"api/app/corpus_enrichment_helpers.py" = ["E701", "E702"]
+"api/app/corpus_reviewer_helpers.py" = ["E701", "E702"]
 "api/app/corpus_segmentation.py" = ["E701", "E702"]
 "api/app/llm_tools.py" = ["E701"]
 # Tests import the app after conftest sets storage paths, and keep some

@@ -28,11 +28,11 @@ from app import corpus_builder as cb
 
 def test_metadata_stage_timeouts_are_configurable_and_reasonable():
     """Default family timeouts are at most 300 seconds and can be overridden per family."""
-    limits=cb.PdfCorpusBuildManager._stage_timeouts({})
+    limits=cb._stage_timeouts({})
     assert limits['discourse'] <= 300
     assert limits['quotation'] <= 300
     assert limits['indexing'] <= 300
-    custom=cb.PdfCorpusBuildManager._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
+    custom=cb._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
     assert custom['discourse']==90
     assert custom['indexing']==45
 
@@ -47,7 +47,7 @@ def test_operations_surface_metadata_task_progress():
     4 done + 1 failed + 1 skipped = 6 of 33 settled, 3 active, 24 queued, 2 needing
     review; the stage detail string and running count must reflect that.
     """
-    operation=cb.PdfCorpusBuildManager._operation_from_build({
+    operation=cb._operation_from_build({
         'build_id':'build-test','status':'running','stage':'enriching','progress':0.5,
         'metadata_tasks_total':33,'metadata_tasks_completed':4,'metadata_tasks_failed':1,
         'metadata_tasks_skipped':1,'metadata_tasks_running':3,'metadata_tasks_queued':24,

@@ -28,7 +28,7 @@ def test_semantic_atom_reconstruction_preserves_real_boundary_anchor():
         {"block_id":"b2","page":1,"type":"body","text":"continues the same sentence.", "bbox":[0,1,1,2]},
         {"block_id":"b3","page":1,"type":"body","text":"A new paragraph begins here and completes its thought.", "bbox":[0,3,1,4]},
     ]
-    atoms = cb.PdfCorpusBuildManager._semantic_atoms(blocks)
+    atoms = cb._semantic_atoms(blocks)
     assert atoms
     assert atoms[0]["block_id"] in {"b2", "b3"}
     assert atoms[0]["source_block_ids"][0] == "b1"
