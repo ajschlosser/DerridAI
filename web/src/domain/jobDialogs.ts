@@ -802,7 +802,7 @@ export function createJobDialogs(deps: Deps) {
       dialog.remove();
       return openWorkMetadataProposalResult(job);
     }
-    let { body, actions } = llmToolResultBody(task, job, result, { tr, trf, ragGradeHtml });
+    const { body, actions } = llmToolResultBody(task, job, result, { tr, trf, ragGradeHtml });
     dialog.innerHTML = llmToolResultDialogHtml(
       { title: jobLabel(job), job, result, body, actions },
       tr,

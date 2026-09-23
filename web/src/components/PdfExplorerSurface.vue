@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
             ></button>
             <label
               ><span>{{ copy.page }}</span
-              ><input>
+              ><input
                 class="control pdf-page-input"
                 id="pdfPageInput"
                 ref="pageInputEl"
