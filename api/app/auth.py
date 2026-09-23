@@ -338,10 +338,30 @@ class AuthStore:
         return {"deleted_users": deleted_users, "deleted_custom_roles": deleted_roles}
 
     def bootstrap_admin(self, username: str, password: str) -> AuthUser:
-        with self._lock:
-            if not self.bootstrap_required():
+        username = username.strip()
+        if len(username) < 2 or len(username) > 80:
+            raise ValueError("Username must be between 2 and 80 characters.")
+        if len(password) < 6:
+            raise ValueError("Password must contain at least 6 characters.")
+        salt, digest = _hash_password(password)
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            # The empty-database check and first insert must be atomic across
+            # processes as well as threads sharing this AuthStore instance.
+            conn.execute("BEGIN IMMEDIATE")
+            if int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]) != 0:
                 raise ValueError("Initial administrator has already been created.")
-            return self.create_user(username, password, "admin")
+            cursor = conn.execute(
+                "INSERT INTO users(username,password_salt,password_hash,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
+                (username, salt, digest, now, now),
+            )
+            conn.execute(
+                "INSERT INTO user_role_assignments(user_id,role) VALUES(?, 'admin')",
+                (cursor.lastrowid,),
+            )
+            row = conn.execute(self._user_select("WHERE u.id=?"), (cursor.lastrowid,)).fetchone()
+        assert row is not None
+        return self._row_user(row)
 
     def role_ids(self) -> set[str]:
         with self._connect() as conn:
@@ -357,13 +377,14 @@ class AuthStore:
             raise ValueError("Role name must be between 2 and 80 characters.")
         clean_description = " ".join(str(description or "").split()).strip()[:500]
         source = str(clone_from or "researcher")
-        if not self.role_exists(source):
-            raise ValueError("Template role not found.")
         base = re.sub(r"[^a-z0-9]+", "-", clean_name.casefold()).strip("-")[:48] or "role"
         if base in {"admin", "administrator"}:
             base = "role-admin"
         now = _iso_now()
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute("SELECT 1 FROM roles WHERE id=?", (source,)).fetchone() is None:
+                raise ValueError("Template role not found.")
             role_id = base
             suffix = 2
             while conn.execute("SELECT 1 FROM roles WHERE id=?", (role_id,)).fetchone() is not None:
@@ -373,7 +394,16 @@ class AuthStore:
                 "INSERT INTO roles(id,name,description,locked,builtin,created_at,updated_at) VALUES(?,?,?,0,0,?,?)",
                 (role_id, clean_name, clean_description, now, now),
             )
-            source_permissions = set(self.capabilities_for_role(source)) if source != "admin" else set(DEFAULT_RESEARCHER_CAPABILITIES)
+            if source == "admin":
+                source_permissions = set(DEFAULT_RESEARCHER_CAPABILITIES)
+            else:
+                source_permissions = {
+                    str(row[0])
+                    for row in conn.execute(
+                        "SELECT capability FROM role_permissions WHERE role=? AND enabled=1",
+                        (source,),
+                    ).fetchall()
+                }
             source_permissions -= ADMIN_ONLY_CAPABILITIES
             conn.executemany(
                 "INSERT INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
@@ -390,6 +420,7 @@ class AuthStore:
         if role in {"admin", "researcher"}:
             raise ValueError("Built-in roles cannot be deleted.")
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT locked,builtin FROM roles WHERE id=?", (role,)).fetchone()
             if row is None:
                 raise KeyError(role)
@@ -408,12 +439,13 @@ class AuthStore:
             raise ValueError("Username must be between 2 and 80 characters.")
         if len(password) < 6:
             raise ValueError("Password must contain at least 6 characters.")
-        if not self.role_exists(role):
-            raise ValueError("Selected role does not exist.")
         salt, digest = _hash_password(password)
         now = _iso_now()
         try:
             with self._lock, self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                if conn.execute("SELECT 1 FROM roles WHERE id=?", (role,)).fetchone() is None:
+                    raise ValueError("Selected role does not exist.")
                 cursor = conn.execute(
                     "INSERT INTO users(username,password_salt,password_hash,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
                     (username, salt, digest, now, now),
@@ -551,11 +583,21 @@ class AuthStore:
             raise KeyError(user_id)
         return user
 
-    def create_session(self, user_id: int) -> str:
+    def create_session(self, user_id: int, *, expected_updated_at: str | None = None) -> str:
         token = secrets.token_urlsafe(48)
         now = datetime.now(UTC)
         expires = now + timedelta(days=SESSION_DAYS)
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            user = conn.execute(
+                "SELECT active,updated_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+            if user is None or not bool(user["active"]):
+                raise ValueError("Account is no longer active.")
+            if expected_updated_at is not None and str(user["updated_at"]) != expected_updated_at:
+                # A password or account change between password verification
+                # and session creation must not resurrect a revoked login.
+                raise ValueError("Account changed during sign-in.")
             conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now.isoformat(),))
             conn.execute(
                 "INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)",
@@ -592,22 +634,39 @@ class AuthStore:
             return self._row_user(conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone())
 
     def update_user(self, user_id: int, *, role: Role | None = None, active: bool | None = None, password: str | None = None) -> AuthUser:
-        current = self.get_user(user_id)
-        if current is None:
-            raise KeyError(user_id)
-        if role is not None and not self.role_exists(str(role)):
-            raise ValueError("Selected role does not exist.")
         if password is not None and len(password) < 6:
             raise ValueError("Password must contain at least 6 characters.")
-        next_role = str(role or current.role)
-        next_active = current.active if active is None else active
-        if current.role == "admin" and current.active and (next_role != "admin" or not next_active):
-            if self._active_admin_count() <= 1:
-                raise ValueError("At least one active administrator is required.")
+        password_credentials = _hash_password(password) if password is not None else None
         now = _iso_now()
         with self._lock, self._connect() as conn:
-            if password is not None:
-                salt, digest = _hash_password(password)
+            # Serialize the target read, last-admin invariant check, and update
+            # as one database transaction across all workers.
+            conn.execute("BEGIN IMMEDIATE")
+            current_row = conn.execute(
+                self._user_select("WHERE u.id=?"), (user_id,)
+            ).fetchone()
+            current = self._row_user(current_row)
+            if current is None:
+                raise KeyError(user_id)
+            next_role = str(role) if role is not None else current.role
+            if role is not None and conn.execute(
+                "SELECT 1 FROM roles WHERE id=?", (next_role,)
+            ).fetchone() is None:
+                raise ValueError("Selected role does not exist.")
+            next_active = current.active if active is None else active
+            if current.role == "admin" and current.active and (
+                next_role != "admin" or not next_active
+            ):
+                active_admins = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM users u JOIN user_role_assignments a "
+                        "ON a.user_id=u.id WHERE a.role='admin' AND u.active=1"
+                    ).fetchone()[0]
+                )
+                if active_admins <= 1:
+                    raise ValueError("At least one active administrator is required.")
+            if password_credentials is not None:
+                salt, digest = password_credentials
                 conn.execute(
                     "UPDATE users SET active=?, updated_at=?, password_salt=?, password_hash=? WHERE id=?",
                     (int(next_active), now, salt, digest, user_id),
@@ -621,19 +680,34 @@ class AuthStore:
                 "INSERT OR REPLACE INTO user_role_assignments(user_id,role) VALUES(?,?)",
                 (user_id, next_role),
             )
-            if not next_active:
+            if not next_active or password is not None:
                 conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+            if password is not None:
+                conn.execute(
+                    "DELETE FROM login_failures WHERE username_key=?",
+                    (self._login_key(current.username),),
+                )
             row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
         assert row is not None
         return self._row_user(row)
 
     def delete_user(self, user_id: int) -> None:
-        current = self.get_user(user_id)
-        if current is None:
-            raise KeyError(user_id)
-        if current.role == "admin" and current.active and self._active_admin_count() <= 1:
-            raise ValueError("The last active administrator cannot be deleted.")
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            current = self._row_user(
+                conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
+            )
+            if current is None:
+                raise KeyError(user_id)
+            if current.role == "admin" and current.active:
+                active_admins = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM users u JOIN user_role_assignments a "
+                        "ON a.user_id=u.id WHERE a.role='admin' AND u.active=1"
+                    ).fetchone()[0]
+                )
+                if active_admins <= 1:
+                    raise ValueError("The last active administrator cannot be deleted.")
             conn.execute("DELETE FROM users WHERE id=?", (user_id,))
 
     def snapshot_users(self) -> list[dict]:
@@ -810,15 +884,15 @@ class AuthStore:
         role = str(role)
         if role == "admin":
             raise ValueError("Administrator permissions are fixed to full access.")
-        with self._connect() as conn:
-            row = conn.execute("SELECT locked FROM roles WHERE id=?", (role,)).fetchone()
-        if row is None:
-            raise ValueError("Unknown role.")
-        if bool(row["locked"]):
-            raise ValueError("This role's permissions are locked.")
         allowed = {str(item) for item in permissions if str(item) in CAPABILITY_CATALOG}
         allowed -= ADMIN_ONLY_CAPABILITIES
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT locked FROM roles WHERE id=?", (role,)).fetchone()
+            if row is None:
+                raise ValueError("Unknown role.")
+            if bool(row["locked"]):
+                raise ValueError("This role's permissions are locked.")
             conn.executemany(
                 "INSERT OR REPLACE INTO role_permissions(role,capability,enabled) VALUES(?,?,?)",
                 [
@@ -827,11 +901,6 @@ class AuthStore:
                 ],
             )
         return sorted(allowed)
-
-    def _active_admin_count(self) -> int:
-        with self._connect() as conn:
-            return int(conn.execute("SELECT COUNT(*) FROM users u JOIN user_role_assignments a ON a.user_id=u.id WHERE a.role='admin' AND u.active=1").fetchone()[0])
-
 
 auth_store = AuthStore()
 

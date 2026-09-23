@@ -10,6 +10,7 @@ tiny compiled copy of the login route, so no web server is started.
 from __future__ import annotations
 
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -127,6 +128,111 @@ def test_concurrent_failures_across_store_instances_cannot_bypass_lockout(monkey
     assert int(row["failures"]) == 4
     assert row["locked_until"]
     assert stores[0].authenticate("Concurrent", "correct-horse") is None
+
+
+def test_password_reset_revokes_sessions_and_clears_login_lockout(monkeypatch, tmp_path: Path):
+    """A reset password takes effect for existing sessions and clears stale throttles."""
+    import pytest
+
+    configure_auth(monkeypatch, tmp_path, failures=2)
+    store = auth.AuthStore()
+    user = store.create_user("Scholar", "old-password", "researcher")
+    token = store.create_session(user.id)
+    assert store.user_for_session(token) is not None
+    assert store.authenticate("Scholar", "wrong-password") is None
+    assert throttle_row(store, "Scholar") is not None
+    verified_login = store.authenticate("Scholar", "old-password")
+    assert verified_login is not None
+
+    store.update_user(user.id, password="new-password")
+
+    assert store.user_for_session(token) is None
+    assert throttle_row(store, "Scholar") is None
+    with pytest.raises(ValueError, match="Account changed during sign-in"):
+        store.create_session(user.id, expected_updated_at=verified_login.updated_at)
+    assert store.authenticate("Scholar", "old-password") is None
+    assert store.authenticate("Scholar", "new-password") is not None
+
+
+def test_concurrent_bootstrap_creates_exactly_one_initial_administrator(monkeypatch, tmp_path: Path):
+    """Separate app workers cannot both pass the first-account check."""
+    configure_auth(monkeypatch, tmp_path)
+    stores = [auth.AuthStore(), auth.AuthStore()]
+    barrier = threading.Barrier(2)
+
+    def bootstrap(index: int) -> bool:
+        barrier.wait()
+        try:
+            stores[index].bootstrap_admin(f"owner-{index}", "secret-password")
+            return True
+        except ValueError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(bootstrap, range(2)))
+
+    assert sorted(outcomes) == [False, True]
+    assert len(stores[0].list_users()) == 1
+    assert stores[0].list_users()[0].role == "admin"
+
+
+def test_concurrent_admin_updates_preserve_one_active_administrator(monkeypatch, tmp_path: Path):
+    """The last-admin guard is serialized across independent AuthStore instances."""
+    configure_auth(monkeypatch, tmp_path)
+    stores = [auth.AuthStore(), auth.AuthStore()]
+    admins = [stores[0].bootstrap_admin("owner-one", "secret-password")]
+    admins.append(stores[0].create_user("owner-two", "secret-password", "admin"))
+    barrier = threading.Barrier(2)
+
+    def deactivate(index: int) -> bool:
+        barrier.wait()
+        try:
+            stores[index].update_user(admins[index].id, active=False)
+            return True
+        except ValueError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(deactivate, range(2)))
+
+    assert sorted(outcomes) == [False, True]
+    active_admins = [user for user in stores[0].list_users() if user.role == "admin" and user.active]
+    assert len(active_admins) == 1
+
+
+def test_concurrent_admin_delete_and_deactivation_preserve_one_active_administrator(
+    monkeypatch, tmp_path: Path
+):
+    """Delete and deactivate operations share the same serialized last-admin invariant."""
+    configure_auth(monkeypatch, tmp_path)
+    stores = [auth.AuthStore(), auth.AuthStore()]
+    first = stores[0].bootstrap_admin("owner-one", "secret-password")
+    second = stores[0].create_user("owner-two", "secret-password", "admin")
+    barrier = threading.Barrier(2)
+
+    def delete_first() -> bool:
+        barrier.wait()
+        try:
+            stores[0].delete_user(first.id)
+            return True
+        except ValueError:
+            return False
+
+    def deactivate_second() -> bool:
+        barrier.wait()
+        try:
+            stores[1].update_user(second.id, active=False)
+            return True
+        except ValueError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = [pool.submit(delete_first), pool.submit(deactivate_second)]
+        outcomes = [result.result() for result in results]
+
+    assert sorted(outcomes) == [False, True]
+    active_admins = [user for user in stores[0].list_users() if user.role == "admin" and user.active]
+    assert len(active_admins) == 1
 
 
 def test_lockout_remaining_is_reported_identically_for_real_and_unknown_usernames(monkeypatch, tmp_path: Path):

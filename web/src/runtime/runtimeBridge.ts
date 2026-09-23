@@ -46,5 +46,13 @@ export const responseCacheStore = (...args: Parameters<typeof runtime.responseCa
   runtime.responseCacheStore(...args);
 export const enhanceCollapsibles = (...args: Parameters<typeof runtime.enhanceCollapsibles>) =>
   runtime.enhanceCollapsibles(...args);
+export const getResponseFaqPage = (...args: Parameters<typeof runtime.getResponseFaqPage>) =>
+  runtime.getResponseFaqPage(...args);
+export const gradeResponseFaqRecord = (
+  ...args: Parameters<typeof runtime.gradeResponseFaqRecord>
+) => runtime.gradeResponseFaqRecord(...args);
+export const rerunResponseFaqRecord = (
+  ...args: Parameters<typeof runtime.rerunResponseFaqRecord>
+) => runtime.rerunResponseFaqRecord(...args);
 
 export default runtime;

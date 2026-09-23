@@ -23,25 +23,43 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
   (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
   audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
   small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
-- **`api/app/corpus_builder.py`: 4,855 lines**, down from 8,236 when this effort started (41% removed so far). All
-  seven originally-planned clusters are now extracted: publication/touchup (`corpus_publication.py`), most of the
-  record-quality cluster (`corpus_record_quality.py`; `validate_records` deliberately deferred, see below),
-  segmentation (`corpus_segmentation.py`), review-state derivation (`corpus_review_state.py`), human review's
-  stateful mutation methods (`corpus_review_actions.py`, a `ReviewActionsMixin`), enrichment reruns
-  (`corpus_enrichment_reruns.py`, an `EnrichmentRerunsMixin`), and build lifecycle/provider session management
-  (`corpus_build_lifecycle.py`, a `BuildLifecycleMixin`; `create`/`preview_schema_group` deferred alongside it for
-  the same circular-import reason); plus three cross-cutting sets of pure helpers found by scanning the whole
-  file's decorator list rather than any one planned cluster: LLM request/response handling
-  (`corpus_llm_helpers.py`), reviewer-facing blind-review helpers (`corpus_reviewer_helpers.py`;
-  `_refresh_workflow_fields` deferred alongside it for the same `CORPUS_PROFILES`/`PROFILE_VERSION`
-  circular-import reason as `validate_records`), and enrichment/editorial bookkeeping
-  (`corpus_enrichment_helpers.py`). `PdfCorpusBuildManager` now inherits from three mixins
-  (`class PdfCorpusBuildManager(BuildLifecycleMixin, ReviewActionsMixin, EnrichmentRerunsMixin):`) -- see "The mixin
-  technique" below, **including its `TYPE_CHECKING`-guard requirement, which is not optional**: an earlier version
-  of this extraction shipped without it and silently broke `rerun_metadata_enrichment` (see "Concluded, do not
-  re-open" below). The smaller supporting clusters (operations/job tracking, schema/profile resolution, editorial
-  memory, manifest patching) are not started; what remains of `corpus_builder.py` is now mostly these plus
-  `PdfCorpusRepository` (the separate, lower-level class in the same file) and the four deferred methods.
+- **`api/app/corpus_builder.py`: 2,784 lines**, down from 8,236 when this effort started (66.2% removed so far). All
+  seven originally-planned clusters are extracted (publication/touchup, record-quality, segmentation, review-state
+  derivation, human review's stateful mutation methods, enrichment reruns, build lifecycle/provider session
+  management), plus the smaller supporting clusters found after them: operations/job tracking
+  (`corpus_operations.py`, an `OperationsMixin`), editorial memory (`corpus_editorial_memory.py`, an
+  `EditorialMemoryMixin`), and schema/profile resolution (`corpus_schema_profile.py`, a `SchemaProfileMixin`).
+  **The circular-import blocker that deferred nine methods across five sessions is resolved.** `SCHEMA_VERSION`/
+  `SEGMENTATION_PROMPT_VERSION`/`METADATA_PROMPT_VERSION`/`DOCUMENT_PROMPT_VERSION`/`PROFILE_VERSION`,
+  `CORPUS_PROFILES`, and all 27 Pydantic response models (`DocumentManifestModel` through
+  `IndexMetadataResponseModel`) moved verbatim into a new `corpus_models.py` (self-contained: only depends on
+  `pydantic` and `corpus_metadata`'s closed vocabularies). That unblocked `create`, `preview_schema_group`,
+  `_edit_model`, `_profile_of_build`, `_profile_for`, `_refresh_workflow_fields`, `validate_records`,
+  `regenerate_manifest`, and `patch_manifest`, all now moved verbatim into a new `corpus_manifest_workflow.py`
+  (`ManifestWorkflowMixin`). The ten LLM-driven boundary-segmentation execution methods (`_compact_segment_prompt`
+  through `_segment`, the recursive windowed pass, pairwise/batch classification, and boundary adjudication) moved
+  into a new `corpus_segmentation_execution.py` (`BuildSegmentationExecutionMixin`) -- see "Gotchas learned" below
+  for the monkeypatch fix this required in three test files. The four metadata-enrichment execution methods
+  (`_enrich_record`, `_prepare_metadata_tasks`, `_execute_metadata_tasks`, `_reconcile_metadata_results` -- the
+  latter alone ~450 lines, the largest single method in the file) moved into a new
+  `corpus_metadata_enrichment_execution.py` (`MetadataEnrichmentExecutionMixin`). Plus three cross-cutting sets of
+  pure helpers found by scanning the whole file's decorator list rather than any one planned cluster: LLM
+  request/response handling (`corpus_llm_helpers.py`), reviewer-facing blind-review helpers
+  (`corpus_reviewer_helpers.py`), and enrichment/editorial bookkeeping (`corpus_enrichment_helpers.py`).
+  `PdfCorpusBuildManager` now inherits from eight mixins (`class
+  PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestWorkflowMixin, OperationsMixin,
+  ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin, BuildSegmentationExecutionMixin,
+  MetadataEnrichmentExecutionMixin):`) -- see "The mixin technique" below, **including its `TYPE_CHECKING`-guard
+  requirement, which is not optional**: an earlier version of this extraction shipped without it and silently broke
+  `rerun_metadata_enrichment` (see "Concluded, do not re-open" below). What remains of `PdfCorpusBuildManager`
+  itself is mostly build orchestration (`_run`, `_prepare_build_scope`, `_construct_build_topology`,
+  `_persist_build_metadata_stage`, `_schedule_build_enrichment`, `_finalize_build_review`,
+  `_rewrite_and_validate`, `publish`, and related) plus a handful of small standalone methods
+  (`_write_start_page_to_layout`, `preview_record`, `touchup_record_text`,
+  `set_text_touchup_proposal_status`/`save_text_touchup_proposal`). `PdfCorpusRepository` (the separate,
+  lower-level class in the same file, ~540 lines of asset/build/record persistence, no static/classmethods --
+  already a cohesive
+  single-responsibility class) has been surveyed and does not look like a good decomposition candidate on its own.
 - **Release:** 0.70.0 "Amesbury" is tagged (`v0.70.0`) and current. See `docs/notes/0.70.0.md`.
 - **Assertion-status vocabulary** matches `SPECIFICATION.md` exactly (`model_inferred`, `confirmed_absent`); a
   lazy read-time migration in `corpus_builder.py`'s `PdfCorpusRepository` upgrades any build/record/checkpoint still
@@ -59,22 +77,15 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
   yet" empty-state text (`dashboardCharts.ts`/`recordPresenters.ts`) is a hardcoded English literal, never run
   through `tr()`. Fixing it means threading `state`/`tr` through those currently-pure chart functions and every call
   site -- a real, self-contained follow-up, not a quick fix.
-- **`validate_records` (in `corpus_builder.py`, ~140 lines) was deliberately not extracted** with the rest of the
-  record-quality cluster. It depends on `RecordMetadataModel`, a Pydantic model also used by two other manager
-  methods, so extracting it alone would recreate a circular import. Next session on this: either move
-  `RecordMetadataModel` (and its immediate neighborhood) into `corpus_record_quality.py` too, since Pydantic models
-  are usually safe to relocate wholesale, or accept it stays a manager method permanently. Not decided -- a real
-  design choice.
 - **`llm_inferred`/`human_confirmed_absent` vs. spec's `model_inferred`/`confirmed_absent`:** renamed to match the
   spec exactly, with a lazy migration for existing persisted data (see `_migrate_status_vocabulary` in
   `corpus_builder.py`, next to `_json_read`). Confirmed neither string ever appeared inside a prompt sent to a
   model, so no prompt-contract version bump was needed.
-- **`create` and `preview_schema_group` (in `corpus_builder.py`) were deliberately not moved** into
-  `BuildLifecycleMixin` with the rest of their originally-planned cluster. `create` uses `CORPUS_PROFILES`/
-  `PROFILE_VERSION`/`SCHEMA_VERSION`/etc. (module-level constants defined in `corpus_builder.py` itself);
-  `preview_schema_group` uses `build_group_prompt`/`response_model_for`/`SchemaNotFound` in a way still entangled
-  with the same area. Same circular-import shape as `validate_records`/`_refresh_workflow_fields`; not decided
-  whether to resolve by moving the constants or accepting these stay as manager methods.
+- **The `CORPUS_PROFILES`/`PROFILE_VERSION`/response-models circular import that deferred nine methods across five
+  sessions is resolved** by extracting them verbatim into `corpus_models.py` (see "Current state" above). Do not
+  re-open this as an open question -- `create`, `preview_schema_group`, `_edit_model`, `_profile_of_build`,
+  `_profile_for`, `_refresh_workflow_fields`, `validate_records`, `regenerate_manifest`, and `patch_manifest` are
+  all extracted into `corpus_manifest_workflow.py`.
 - **A mixin stub shadowed a real method at runtime and broke it silently** (`rerun_metadata_enrichment`, caught by
   the full pytest suite, not by mypy or ruff) when `BuildLifecycleMixin` was first written without wrapping its
   stub block in `if TYPE_CHECKING:`. Fixed, and the same guard retrofitted onto the two earlier mixins, which had
@@ -83,14 +94,23 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
 
 ## Next steps
 
-1. **All seven originally-planned `corpus_builder.py` clusters are done.** What's left is `PdfCorpusRepository`
-   (the separate, lower-level class in the same file -- not yet surveyed for its own decomposition potential), the
-   four deferred methods (`validate_records`, `_refresh_workflow_fields`, `create`, `preview_schema_group` -- see
-   "Concluded, do not re-open"), and whatever smaller supporting groupings remain: operations/job tracking,
-   schema/profile resolution, editorial memory, manifest patching (~150-250 lines each) -- likely become shared
-   helper modules or further mixins. Grep the decorator list first (see "How to find the next pure cluster" below)
-   before assuming a grouping is mechanical; do not be surprised if it is entirely stateful, and if it is, follow
-   "The mixin technique" including its `TYPE_CHECKING` guard.
+1. **All seven originally-planned `corpus_builder.py` clusters, every method the circular-import blocker had
+   deferred, boundary-segmentation execution, and metadata-enrichment execution are done.**
+   `PdfCorpusRepository` was surveyed and does not look worth decomposing on its own (537 lines, no
+   static/classmethods, already single-responsibility persistence code). What's left in `PdfCorpusBuildManager` is
+   build orchestration (`_run`, `_prepare_build_scope`, `_construct_build_topology`,
+   `_persist_build_metadata_stage`, `_schedule_build_enrichment`, `_finalize_build_review`,
+   `_rewrite_and_validate`, `publish`) -- entirely stateful, zero `@staticmethod`/`@classmethod` candidates, same
+   shape as the two clusters just extracted -- plus a handful of small standalone methods
+   (`_write_start_page_to_layout`, `preview_record`, `touchup_record_text`,
+   `set_text_touchup_proposal_status`/`save_text_touchup_proposal`) that may or may not be worth their own mixin
+   depending on size once the orchestration cluster is out. Follow "The mixin technique" including its
+   `TYPE_CHECKING` guard, and expect the same monkeypatch-module gotcha (see "Gotchas learned"): any test that
+   patches `cb.some_free_function` where `some_free_function` is called bare from inside the *new* mixin module
+   needs to patch that new module instead, not `cb` -- and also check for `cb.some_name` re-exports that quietly
+   depended on a *removed* method still needing that name (see the `APP_VERSION` re-export fix from this round).
+   `metric_stage_of`/`annotate_boundary_suspects`, two pure functions sitting near where the old models block used
+   to be, have not yet been investigated for extraction.
 2. **`PdfCorpusBuilder.vue`'s composables/CSS extraction has a real blocker: no test coverage exists for this file at
    all** (no `.stories.ts`, no dedicated Vitest file, not in the 131-scenario DOM baseline) -- confirmed by checking
    before starting, not assumed. Every other decomposition in this effort had a full test suite to verify "no
@@ -182,6 +202,13 @@ decorator used by 20+ methods across multiple clusters) moves into whichever mix
   import time. **Grep every cluster's target names for `monkeypatch.setattr(manager,` / `monkeypatch.setattr(self,`
   in `tests/` before extracting, not after** -- the test does not error until its assertion fails, so this is easy
   to miss.
+- **`monkeypatch.setattr(cb, "name", fake)` also silently stops working** if a mixin extraction moves the *caller*
+  of `name` (a bare free function, e.g. `_deterministic_boundary_candidates`) into a new module -- the caller now
+  resolves `name` against the new module's own globals, not `corpus_builder`'s. Caught by three tests going from
+  pass to a wrong-value assertion failure (not an error) when `_segment`/`_segment_candidate_batch` moved into
+  `corpus_segmentation_execution.py`. Fix: `monkeypatch.setattr(<new_module>, "name", fake)` and import that module
+  in the test (`from app import corpus_segmentation_execution as cse`) -- run the **full** pytest suite after every
+  mixin extraction, not just `compileall`/`mypy`/`ruff`, since this class of bug produces no import or type error.
 - **A test or another module accessing `PdfCorpusBuildManager._name` or `manager.instance._name` directly** breaks
   the same way once `_name` is a module function, but under a different alias than `cb.PdfCorpusBuildManager.` (seen
   once as `from app.corpus_builder import PdfCorpusBuildManager as M`, once as `pdf_corpus_builds._name(...)` in
