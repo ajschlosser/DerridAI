@@ -16,7 +16,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import settings
 from .corpus_enrichment_feedback import enrichment_informational_event
@@ -42,39 +42,43 @@ from .metadata_schema import MetadataSchema, default_schema
 class EnrichmentRerunsMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
-    See corpus_review_actions.py's identical block for the full explanation. Attributes
-    typed Any (repo, _lock, _executor, _global_learning, _provider_epoch, _cancel) would
-    otherwise need their real classes imported from corpus_builder.py, which is circular.
+    See corpus_review_actions.py's identical block for the full explanation, including why
+    everything below is wrapped in `if TYPE_CHECKING:` (an unguarded stub method is a real,
+    empty method at runtime and can silently shadow another mixin's real implementation
+    depending on base-class order). Attributes typed Any (repo, _lock, _executor,
+    _global_learning, _provider_epoch, _cancel) would otherwise need their real classes
+    imported from corpus_builder.py, which is circular.
     """
 
-    repo: Any
-    _lock: Any
-    _executor: ThreadPoolExecutor
-    _global_learning: Any
-    _provider_epoch: dict[str, int]
-    _cancel: set[str]
+    if TYPE_CHECKING:
+        repo: Any
+        _lock: Any
+        _executor: ThreadPoolExecutor
+        _global_learning: Any
+        _provider_epoch: dict[str, int]
+        _cancel: set[str]
 
-    def active_enrichment_runs(self) -> int: ...
-    def _cancelled(self, build_id: str) -> bool: ...
-    def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
-    def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]: ...
-    def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
-    def _schema_for(self, build_id: str) -> MetadataSchema: ...
-    def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema: ...
-    def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
-    def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
-    def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]: ...
-    def _enrich_record(
-        self,
-        record: dict[str, Any],
-        manifest: dict[str, Any],
-        request: dict[str, Any],
-        *,
-        previous_text: str = "",
-        next_text: str = "",
-        build_id: str = "",
-        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
-    ) -> dict[str, Any]: ...
+        def active_enrichment_runs(self) -> int: ...
+        def _cancelled(self, build_id: str) -> bool: ...
+        def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
+        def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]: ...
+        def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
+        def _schema_for(self, build_id: str) -> MetadataSchema: ...
+        def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema: ...
+        def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
+        def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
+        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]: ...
+        def _enrich_record(
+            self,
+            record: dict[str, Any],
+            manifest: dict[str, Any],
+            request: dict[str, Any],
+            *,
+            previous_text: str = "",
+            next_text: str = "",
+            build_id: str = "",
+            stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+        ) -> dict[str, Any]: ...
 
 
     def retry_incomplete_metadata(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:

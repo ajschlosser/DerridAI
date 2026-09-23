@@ -24,6 +24,7 @@ ignore = [
 "api/app/corpus_record_quality.py" = ["E701", "E702"]
 "api/app/corpus_review_state.py" = ["E701", "E702"]
 "api/app/corpus_enrichment_helpers.py" = ["E701", "E702"]
+"api/app/corpus_build_lifecycle.py" = ["E701", "E702"]
 "api/app/corpus_enrichment_reruns.py" = ["E701", "E702"]
 "api/app/corpus_review_actions.py" = ["E701", "E702"]
 "api/app/corpus_reviewer_helpers.py" = ["E701", "E702"]
