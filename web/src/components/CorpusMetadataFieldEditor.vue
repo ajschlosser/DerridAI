@@ -4,6 +4,7 @@ import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
+import { usableListOptions } from "../domain/metadataValues";
 
 const props = defineProps<{
   field: string;
@@ -40,6 +41,9 @@ const confidence = computed(() =>
 );
 const isLlm = computed(() => String(props.status?.method || "").includes("llm"));
 const isMultiCombobox = computed(() => props.control === "multi-combobox");
+const autocompleteOptions = computed(() =>
+  isMultiCombobox.value ? usableListOptions(props.options || []) : props.options || [],
+);
 const hasValue = (value: unknown) =>
   !(
     value === undefined ||
@@ -299,7 +303,7 @@ const autoResolved = computed(
         <UiCombobox
           v-else-if="control === 'combobox'"
           :model-value="String(draft ?? '')"
-          :options="options || []"
+          :options="autocompleteOptions"
           :label="i18n.t(`record.${field}`, field)"
           @update:model-value="
             (value) => {
@@ -311,7 +315,7 @@ const autoResolved = computed(
         <UiCombobox
           v-else-if="isMultiCombobox"
           :model-value="String(draft ?? '')"
-          :options="options || []"
+          :options="autocompleteOptions"
           :label="i18n.t(`record.${field}`, field)"
           :multiple="true"
           @update:model-value="
@@ -321,29 +325,27 @@ const autoResolved = computed(
             }
           "
         />
-        <input
-          v-else
-          v-model="draft"
-          class="control"
+        <UiCombobox
+          v-else-if="control === 'text' || control === 'number'"
+          :model-value="String(draft ?? '')"
+          :options="autocompleteOptions"
           :type="control === 'number' ? 'number' : 'text'"
-          :list="isMultiCombobox && options?.length ? `${field}-suggestions` : undefined"
-          :aria-label="i18n.t(`record.${field}`, field)"
-          @input="markDirty"
-        /><datalist v-if="isMultiCombobox && options?.length" :id="`${field}-suggestions`">
-          <option
-            v-for="option in [
-              ...new Set((options || []).map((v) => String(v).trim()).filter(Boolean)),
-            ]"
-            :key="option"
-            :value="option"
-          />
-        </datalist>
+          :label="i18n.t(`record.${field}`, field)"
+          @update:model-value="
+            (value) => {
+              draft = value;
+              markDirty();
+            }
+          "
+        />
       </div>
       <div class="editor-actions">
         <button
           type="button"
           class="btn primary"
-          :disabled="busy || draft === '' || draft === undefined || (required && draft === null)"
+          :disabled="
+            busy || saving || draft === '' || draft === undefined || (required && draft === null)
+          "
           @click="save"
         >
           {{

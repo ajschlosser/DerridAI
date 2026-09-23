@@ -1,29 +1,230 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
-const props=withDefaults(defineProps<{modelValue:string;options?:string[];label:string;placeholder?:string;disabled?:boolean;allowCustom?:boolean;multiple?:boolean}>(),{options:()=>[],placeholder:"",disabled:false,allowCustom:true,multiple:false});
-const emit=defineEmits<{"update:modelValue":[value:string];change:[value:string]}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: string;
+    options?: string[];
+    label: string;
+    placeholder?: string;
+    disabled?: boolean;
+    allowCustom?: boolean;
+    multiple?: boolean;
+    type?: "text" | "number";
+  }>(),
+  {
+    options: () => [],
+    placeholder: "",
+    disabled: false,
+    allowCustom: true,
+    multiple: false,
+    type: "text",
+  },
+);
+const emit = defineEmits<{ "update:modelValue": [value: string]; change: [value: string] }>();
 const comboId = useId();
-const open=ref(false);const active=ref(-1);const input=ref<HTMLInputElement|null>(null);const popup=ref({left:0,top:0,width:320,maxHeight:240});
-const unique=computed(()=>Array.from(new Set(props.options.map(v=>String(v).trim()).filter(Boolean))));
-const currentValues=computed(()=>new Set(String(props.modelValue||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean).map(v=>v.toLocaleLowerCase())));
-const filtered=computed(()=>{
-  const raw=String(props.modelValue||'');
-  const q=(props.multiple?raw.split(/[\n,]/).at(-1)||raw:raw).trim().toLocaleLowerCase();
-  return unique.value.filter(v=>{
-    const lower=v.toLocaleLowerCase();
-    if(props.multiple&&currentValues.value.has(lower))return false;
-    return !q||lower.includes(q)||q.includes(lower);
-  }).slice(0,60);
+const open = ref(false);
+const active = ref(-1);
+const input = ref<HTMLInputElement | null>(null);
+const popup = ref({ left: 0, top: 0, width: 320, maxHeight: 240 });
+const unique = computed(() =>
+  Array.from(new Set(props.options.map((v) => String(v).trim()).filter(Boolean))),
+);
+const currentValues = computed(
+  () =>
+    new Set(
+      String(props.modelValue || "")
+        .split(/[\n,]/)
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => v.toLocaleLowerCase()),
+    ),
+);
+const filtered = computed(() => {
+  const raw = String(props.modelValue || "");
+  const q = (props.multiple ? raw.split(/[\n,]/).at(-1) || raw : raw).trim().toLocaleLowerCase();
+  return unique.value
+    .filter((v) => {
+      const lower = v.toLocaleLowerCase();
+      if (props.multiple && currentValues.value.has(lower)) return false;
+      return !q || lower.includes(q) || q.includes(lower);
+    })
+    .slice(0, 60);
 });
-watch(()=>props.modelValue,()=>{active.value=-1});watch(open,value=>{if(value)void nextTick(positionPopup)});
-function appendValue(current:string,value:string){const entries=String(current||'').split(/[\n,]/).map(v=>v.trim()).filter(Boolean);const merged=[...new Set([...entries,value.trim()].filter(Boolean))];return merged.join(', ')}
-function positionPopup(){const el=input.value;if(!el)return;const rect=el.getBoundingClientRect();const margin=8;const viewportWidth=Math.max(320,window.innerWidth);const below=window.innerHeight-rect.bottom;const above=rect.top;const maxHeight=Math.max(120,Math.min(320,(below>=180?below:above)-16));const width=Math.min(Math.max(rect.width,240),viewportWidth-margin*2);const left=Math.min(Math.max(margin,rect.left),Math.max(margin,viewportWidth-width-margin));popup.value={left,top:below>=180?rect.bottom+4:Math.max(margin,rect.top-maxHeight-4),width,maxHeight}}
-function commit(value:string){const next=props.multiple?appendValue(props.modelValue,value):value;emit('update:modelValue',next);emit('change',next);open.value=false;active.value=-1;void nextTick(()=>input.value?.focus())}
-function onInput(event:Event){emit('update:modelValue',(event.target as HTMLInputElement).value);open.value=true;positionPopup()}
-function keydown(event:KeyboardEvent){if(event.key==='ArrowDown'){event.preventDefault();open.value=true;positionPopup();active.value=Math.min(filtered.value.length-1,active.value+1)}else if(event.key==='ArrowUp'){event.preventDefault();open.value=true;positionPopup();active.value=Math.max(0,active.value-1)}else if(event.key==='Enter'&&open.value&&active.value>=0){event.preventDefault();commit(filtered.value[active.value])}else if(event.key==='Escape'){open.value=false;active.value=-1}}
-function blur(){window.setTimeout(()=>{open.value=false;active.value=-1},150)}
-function reposition(){if(open.value)positionPopup()}
-onMounted(()=>{window.addEventListener('resize',reposition);window.addEventListener('scroll',reposition,true)});onBeforeUnmount(()=>{window.removeEventListener('resize',reposition);window.removeEventListener('scroll',reposition,true)});
+watch(
+  () => props.modelValue,
+  () => {
+    active.value = -1;
+  },
+);
+watch(open, (value) => {
+  if (value) void nextTick(positionPopup);
+});
+function appendValue(current: string, value: string) {
+  const entries = String(current || "")
+    .split(/[\n,]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const merged = [...new Set([...entries, value.trim()].filter(Boolean))];
+  return merged.join(", ");
+}
+function positionPopup() {
+  const el = input.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const margin = 8;
+  const viewportWidth = Math.max(320, window.innerWidth);
+  const below = window.innerHeight - rect.bottom;
+  const above = rect.top;
+  const maxHeight = Math.max(120, Math.min(320, (below >= 180 ? below : above) - 16));
+  const width = Math.min(Math.max(rect.width, 240), viewportWidth - margin * 2);
+  const left = Math.min(
+    Math.max(margin, rect.left),
+    Math.max(margin, viewportWidth - width - margin),
+  );
+  popup.value = {
+    left,
+    top: below >= 180 ? rect.bottom + 4 : Math.max(margin, rect.top - maxHeight - 4),
+    width,
+    maxHeight,
+  };
+}
+function commit(value: string) {
+  const next = props.multiple ? appendValue(props.modelValue, value) : value;
+  emit("update:modelValue", next);
+  emit("change", next);
+  open.value = false;
+  active.value = -1;
+  void nextTick(() => input.value?.focus());
+}
+function onInput(event: Event) {
+  emit("update:modelValue", (event.target as HTMLInputElement).value);
+  open.value = true;
+  positionPopup();
+}
+function keydown(event: KeyboardEvent) {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    open.value = true;
+    positionPopup();
+    active.value = Math.min(filtered.value.length - 1, active.value + 1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    open.value = true;
+    positionPopup();
+    active.value = Math.max(0, active.value - 1);
+  } else if (event.key === "Enter" && open.value && active.value >= 0) {
+    event.preventDefault();
+    commit(filtered.value[active.value]);
+  } else if (event.key === "Escape") {
+    open.value = false;
+    active.value = -1;
+  }
+}
+function blur() {
+  window.setTimeout(() => {
+    open.value = false;
+    active.value = -1;
+  }, 150);
+}
+function reposition() {
+  if (open.value) positionPopup();
+}
+onMounted(() => {
+  window.addEventListener("resize", reposition);
+  window.addEventListener("scroll", reposition, true);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", reposition);
+  window.removeEventListener("scroll", reposition, true);
+});
 </script>
-<template><div class="ui-combobox"><input ref="input" class="control" role="combobox" :aria-label="label" aria-autocomplete="list" :aria-expanded="open&&filtered.length>0" :aria-controls="`${comboId}-listbox`" :value="modelValue" :placeholder="placeholder" :disabled="disabled" @input="onInput" @focus="open=true;positionPopup()" @keydown="keydown" @blur="blur"><Teleport to="body"><ul v-if="open&&filtered.length" :id="`${comboId}-listbox`" class="combo-list" role="listbox" :style="{left:`${popup.left}px`,top:`${popup.top}px`,width:`${popup.width}px`,maxHeight:`${popup.maxHeight}px`}"><li v-for="(option,index) in filtered" :key="option" role="option" :aria-selected="option===modelValue" :data-active="index===active?'true':'false'" @mousedown.prevent="commit(option)">{{option}}</li></ul></Teleport></div></template>
-<style scoped>.ui-combobox{min-width:min(320px,100%);flex:1}.control{width:100%;min-height:var(--control-height)}.combo-list{position:fixed;z-index:2147483000;overflow:auto;margin:0;padding:4px;list-style:none;border:1px solid var(--border-strong);border-radius:var(--radius-overlay);background:var(--surface-overlay);color:var(--text-primary);box-shadow:var(--shadow-overlay)}.combo-list li{padding:8px 10px;border-radius:var(--radius-control);cursor:pointer;font-size:.875rem;overflow-wrap:anywhere}.combo-list li:hover,.combo-list li[data-active="true"]{background:var(--surface-hover)}.control:focus-visible{outline:var(--focus-ring-width) solid var(--focus-ring);outline-offset:var(--focus-ring-offset)}</style>
+<template>
+  <div class="ui-combobox">
+    <input
+      ref="input"
+      class="control"
+      :type="type"
+      role="combobox"
+      :aria-label="label"
+      aria-autocomplete="list"
+      :aria-expanded="open && filtered.length > 0"
+      :aria-controls="`${comboId}-listbox`"
+      :value="modelValue"
+      :placeholder="placeholder"
+      :disabled="disabled"
+      @input="onInput"
+      @focus="
+        open = true;
+        positionPopup();
+      "
+      @keydown="keydown"
+      @blur="blur"
+    />
+    <datalist :id="`${comboId}-options`">
+      <option v-for="option in unique" :key="option" :value="option" />
+    </datalist>
+    <Teleport to="body"
+      ><ul
+        v-if="open && filtered.length"
+        :id="`${comboId}-listbox`"
+        class="combo-list"
+        role="listbox"
+        :style="{
+          left: `${popup.left}px`,
+          top: `${popup.top}px`,
+          width: `${popup.width}px`,
+          maxHeight: `${popup.maxHeight}px`,
+        }"
+      >
+        <li
+          v-for="(option, index) in filtered"
+          :key="option"
+          role="option"
+          :aria-selected="option === modelValue"
+          :data-active="index === active ? 'true' : 'false'"
+          @mousedown.prevent="commit(option)"
+        >
+          {{ option }}
+        </li>
+      </ul></Teleport
+    >
+  </div>
+</template>
+<style scoped>
+.ui-combobox {
+  min-width: min(320px, 100%);
+  flex: 1;
+}
+.control {
+  width: 100%;
+  min-height: var(--control-height);
+}
+.combo-list {
+  position: fixed;
+  z-index: 2147483000;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-overlay);
+}
+.combo-list li {
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.combo-list li:hover,
+.combo-list li[data-active="true"] {
+  background: var(--surface-hover);
+}
+.control:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+</style>

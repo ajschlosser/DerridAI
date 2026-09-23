@@ -71,4 +71,14 @@ describe("Corpus Builder focus review interactions",()=>{
     expect(accept.attributes("disabled")).toBeDefined();
     wrapper.unmount();
   });
+
+  it("emits front-of-queue requeue and disables the action while busy",async()=>{
+    const wrapper=mount(CorpusRecordFocusReview,{props:{record},global:{stubs}});
+    const requeue=buttonByText(wrapper,"Send back through current LLM run");
+    await requeue.trigger("click");
+    expect(wrapper.emitted("requeueMetadata")).toHaveLength(1);
+    await wrapper.setProps({busy:true});
+    expect(buttonByText(wrapper,"Send back through current LLM run").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
 });
