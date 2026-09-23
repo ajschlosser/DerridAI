@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiButton from "./ui/UiButton.vue";
 
 export interface RunGuidanceEntry {
   instructions: string;
@@ -53,6 +54,10 @@ function updateTerms(field: string, value: string) {
 
 function termText(field: string) {
   return (props.modelValue[field]?.look_for || []).join("\n");
+}
+
+function openImport() {
+  importInput.value?.click();
 }
 
 function exportGuidance() {
@@ -125,8 +130,9 @@ async function importGuidance(event: Event) {
   <section
     class="run-guidance"
     :aria-label="i18n.t('pdf_corpus.run_guidance_title', 'Run-specific field guidance')"
+    aria-describedby="run-guidance-help"
   >
-    <p class="run-guidance-help">
+    <p id="run-guidance-help" class="run-guidance-help">
       {{
         i18n.t(
           "pdf_corpus.run_guidance_help",
@@ -141,21 +147,37 @@ async function importGuidance(event: Event) {
         })
       }}
     </p>
+    <p class="run-guidance-file-help">
+      {{
+        i18n.t(
+          "pdf_corpus.run_guidance_file_help",
+          "JSON files only. Import merges matching fields into the current draft.",
+        )
+      }}
+    </p>
     <div class="run-guidance-actions">
-      <button type="button" class="btn small" :disabled="disabled" @click="exportGuidance">
-        {{ i18n.t("pdf_corpus.run_guidance_export", "Export guidance") }}
-      </button>
-      <label class="btn small import-button">
-        {{ i18n.t("pdf_corpus.run_guidance_import", "Import guidance") }}
-        <input
-          ref="importInput"
-          type="file"
-          accept="application/json,.json"
-          class="sr-only"
-          :disabled="disabled"
-          @change="importGuidance"
-        />
-      </label>
+      <UiButton
+        size="small"
+        icon="download"
+        :label="i18n.t('pdf_corpus.run_guidance_export', 'Export guidance')"
+        :disabled="disabled"
+        @click="exportGuidance"
+      />
+      <UiButton
+        size="small"
+        icon="upload"
+        :label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
+        :disabled="disabled"
+        @click="openImport"
+      />
+      <input
+        ref="importInput"
+        type="file"
+        accept="application/json,.json"
+        class="sr-only"
+        :disabled="disabled"
+        @change="importGuidance"
+      />
     </div>
     <p v-if="notice" class="run-guidance-notice" role="status">{{ notice }}</p>
     <p v-if="error" class="run-guidance-error" role="alert">{{ error }}</p>
@@ -224,11 +246,16 @@ async function importGuidance(event: Event) {
   min-width: 0;
 }
 .run-guidance-help,
-.run-guidance-count {
+.run-guidance-count,
+.run-guidance-file-help {
   margin: 0;
   color: var(--text-2);
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+.run-guidance-file-help {
+  margin-top: -4px;
+  font-size: 0.75rem;
 }
 .run-guidance-count {
   font-weight: 700;
