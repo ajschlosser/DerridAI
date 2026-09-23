@@ -164,7 +164,7 @@ def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_a
 def test_source_problem_is_not_mislabeled_as_topology():
     """A source-extraction problem is a "source" issue, not a "topology" one."""
     record = {"source_quality_issues": [{"code": "replacement_character", "severity": "minor"}], "review_reason": "Source extraction issue: replacement_character."}
-    codes = cb.PdfCorpusBuildManager._review_issue_codes(record)
+    codes = cb._review_issue_codes(record)
     assert "source" in codes
     assert "topology" not in codes
 

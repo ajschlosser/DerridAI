@@ -36,6 +36,7 @@ from .content_filter import (
 )
 from .content_policy_generation import generate_policy_for_installed_language
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
+from .corpus_review_state import _queue_counts
 from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
@@ -2285,7 +2286,7 @@ def patch_pdf_corpus_record_metadata(
             return {
                 "record": record,
                 "build": pdf_corpus_builds.repo.get_build(build_id),
-                "queue_counts": pdf_corpus_builds._queue_counts(records),
+                "queue_counts": _queue_counts(records),
             }
         return record
     except KeyError as exc:

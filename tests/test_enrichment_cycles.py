@@ -406,7 +406,7 @@ def test_settled_enrichment_reason_is_not_left_as_a_fake_blocker():
         "metadata_review_fields": [],
         "metadata_disputes": [{"field": "stance", "resolved_at": "now"}],
     }
-    cb.PdfCorpusBuildManager._settle_enrichment_review_reason(record)
+    cb._settle_enrichment_review_reason(record)
     assert record["review_reason"] == "Pending human review."
 
 

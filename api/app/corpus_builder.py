@@ -108,6 +108,18 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_review_mutations import requeue_record_metadata
+from .corpus_review_state import (
+    _decorate_review_state,
+    _enforce_review_invariants,
+    _matches_review_queue,
+    _metadata_enrichment_finished,
+    _queue_counts,
+    _settle_enrichment_review_reason,
+    _sync_record_metadata_state,
+)
+from .corpus_review_state import (
+    _review_issue_codes as _review_issue_codes,
+)
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _apply_manifest_metadata,
@@ -1210,7 +1222,7 @@ class PdfCorpusRepository:
                 "total": 0,
                 "offset": offset,
                 "limit": limit,
-                "queue_counts": PdfCorpusBuildManager._queue_counts([]),
+                "queue_counts": _queue_counts([]),
                 "metadata_values": {},
             }
         q = query.casefold().strip()
@@ -1245,13 +1257,13 @@ class PdfCorpusRepository:
                     continue
                 if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
                     continue
-                if review_queue and not PdfCorpusBuildManager._matches_review_queue(record, review_queue):
+                if review_queue and not _matches_review_queue(record, review_queue):
                     continue
                 if q and q not in line.casefold():
                     continue
                 if total >= offset and len(items) < limit:
                     record["topology_index"] = topology_index
-                    PdfCorpusBuildManager._decorate_review_state(record)
+                    _decorate_review_state(record)
                     PdfCorpusBuildManager._present_for_reviewer(record)
                     items.append(record)
                 total += 1
@@ -1262,7 +1274,7 @@ class PdfCorpusRepository:
             "total": total,
             "offset": offset,
             "limit": limit,
-            "queue_counts": PdfCorpusBuildManager._queue_counts(queue_records),
+            "queue_counts": _queue_counts(queue_records),
             "metadata_values": {
                 field: sorted(values, key=str.casefold)
                 for field, values in metadata_values.items()
@@ -1713,7 +1725,7 @@ class PdfCorpusBuildManager:
                 del scheduled[field]
                 record["accepted"] = False
                 record["needs_review"] = True
-                self._sync_record_metadata_state(record, profile)
+                _sync_record_metadata_state(record, profile)
 
     def _score_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any, prior_status: dict[str, Any]) -> bool:
         """If this decision answers a re-check, log whether it matches the first answer and reveal that answer."""
@@ -1927,7 +1939,7 @@ CURRENT REVIEWED RECORD TEXT:
                 continue  # a person already decided this record
             outcome = settle_record(record, policy)
             filled_total += len(outcome["filled"])
-            self._sync_record_metadata_state(record, profile)
+            _sync_record_metadata_state(record, profile)
             ok, reasons = may_accept(record)
             if policy.accept_records and ok:
                 record["review_disposition"] = "accepted"
@@ -4285,7 +4297,7 @@ CURRENT REVIEWED RECORD TEXT:
         else:
             record["metadata_needs_attention"] = False
             record["metadata_attention_reasons"] = []
-        self._sync_record_metadata_state(record, profile)
+        _sync_record_metadata_state(record, profile)
         incomplete_fields = list(record.get("metadata_incomplete_fields") or [])
         review_fields = list(record.get("metadata_review_fields") or [])
         # Optional indexing/quotation failures remain visible but do not make a structurally
@@ -5106,180 +5118,6 @@ CURRENT REVIEWED RECORD TEXT:
             metadata_operation=operation,
         )
 
-    @staticmethod
-    def _metadata_value_missing(field: str, value: Any) -> bool:
-        # Booleans are three-state in review: True, False, None. False is a
-        # deliberate human decision and must never be treated as missing.
-        if field == "primary_text":
-            return value is None
-        return value is None or value == "" or value == []
-
-    @classmethod
-    def _sync_record_metadata_state(cls, record: dict[str, Any], profile: dict[str, Any]) -> None:
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-        required = list(profile.get("required_metadata_fields") or [])
-        reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
-        incomplete: list[str] = []
-        review_fields: list[str] = []
-        for field in required:
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            state = str(info.get("status") or "")
-            if state == "confirmed_absent":
-                continue
-            if cls._metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
-                incomplete.append(field)
-        for field in reviewable:
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if str(info.get("status") or "") in {"unresolved", "invalid"}:
-                review_fields.append(field)
-        record["metadata_incomplete_fields"] = list(dict.fromkeys(incomplete))
-        record["metadata_review_fields"] = list(dict.fromkeys(review_fields))
-        record["metadata_complete"] = not record["metadata_incomplete_fields"] and not record["metadata_review_fields"]
-        record["metadata_needs_attention"] = not record["metadata_complete"]
-        if record["metadata_needs_attention"]:
-            record["metadata_attention_reasons"] = ["Record metadata requires a human decision before acceptance."]
-        else:
-            record["metadata_attention_reasons"] = []
-
-    @staticmethod
-    def _settle_enrichment_review_reason(record: dict[str, Any]) -> None:
-        if str(record.get("review_reason") or "") != "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes.":
-            return
-        unresolved_disputes = any(
-            isinstance(item, dict) and not item.get("resolved_at")
-            for item in (record.get("metadata_disputes") or [])
-        )
-        if record.get("metadata_incomplete_fields") or record.get("metadata_review_fields") or unresolved_disputes:
-            return
-        record["review_reason"] = "Pending human review."
-        record["needs_review"] = True
-
-    @classmethod
-    def _review_issue_codes(cls, record: dict[str, Any]) -> list[str]:
-        issues: list[str] = []
-        if record.get("source_quality_issues"):
-            issues.append("source")
-        if record.get("metadata_incomplete_fields") or record.get("metadata_review_fields"):
-            issues.append("metadata")
-        if record.get("needs_review") and str(record.get("review_reason") or "").strip():
-            reason = str(record.get("review_reason") or "").casefold().strip()
-            # Topology is a distinct exception class. Source/metadata review reasons
-            # must not be flattened into topology merely because they are concrete.
-            if reason not in {"pending human review.", "pending human review"} and any(token in reason for token in ("boundary", "topology", "merge", "split", "segmentation")):
-                issues.append("topology")
-        return list(dict.fromkeys(issues))
-
-    @staticmethod
-    def _metadata_enrichment_finished(record: dict[str, Any]) -> bool:
-        state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
-        # Records produced before the progressive-review marker existed are
-        # considered finished only when they already carry metadata stage output.
-        if not state:
-            return bool(record.get("metadata_stage_status") or record.get("metadata_complete"))
-        return state in {"complete", "failed", "skipped"}
-
-    @classmethod
-    def _matches_review_queue(cls, record: dict[str, Any], queue: str | None) -> bool:
-        if not queue or queue == "all":
-            return True
-        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-        if queue in {"accepted", "rejected"}:
-            return disposition == queue
-        if disposition != "pending":
-            return False
-        codes = cls._review_issue_codes(record)
-        if queue == "ready":
-            return cls._metadata_enrichment_finished(record) and not codes
-        if queue == "issues":
-            return bool(codes)
-        if queue in {"metadata", "topology", "source"}:
-            return queue in codes
-        return True
-
-    @classmethod
-    def _queue_counts(cls, records: list[dict[str, Any]]) -> dict[str, int]:
-        result = {"all": len(records), "ready": 0, "preparing": 0, "issues": 0, "metadata": 0, "topology": 0, "source": 0, "accepted": 0, "rejected": 0, "pending": 0}
-        for record in records:
-            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-            if disposition == "accepted":
-                result["accepted"] += 1
-                continue
-            if disposition == "rejected":
-                result["rejected"] += 1
-                continue
-            result["pending"] += 1
-            if not cls._metadata_enrichment_finished(record):
-                result["preparing"] += 1
-                continue
-            codes = cls._review_issue_codes(record)
-            if not codes:
-                result["ready"] += 1
-            else:
-                result["issues"] += 1
-                for code in ("metadata", "topology", "source"):
-                    if code in codes:
-                        result[code] += 1
-        return result
-
-    @classmethod
-    def _decorate_review_state(cls, record: dict[str, Any]) -> dict[str, Any]:
-        """Attach the one authoritative human-review state consumed by the UI.
-
-        Queue membership is derived rather than independently persisted. This
-        prevents a saved metadata decision from leaving behind a stale review
-        flag that can resurrect the record in a later refresh.
-        """
-        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-        issue_codes = cls._review_issue_codes(record)
-        blocking_fields = list(dict.fromkeys([
-            str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
-        ]))
-        enrichment_finished = cls._metadata_enrichment_finished(record)
-        if disposition in {"accepted", "rejected"}:
-            state = disposition
-        elif not enrichment_finished:
-            state = "preparing"
-        elif "source" in issue_codes:
-            state = "source"
-        elif "metadata" in issue_codes:
-            state = "metadata"
-        elif "topology" in issue_codes:
-            state = "topology"
-        else:
-            state = "ready"
-        record["review_state"] = state
-        record["review_issue_codes"] = issue_codes
-        record["acceptance_blocking_fields"] = blocking_fields
-        record["metadata_enrichment_finished"] = enrichment_finished
-        record["can_accept"] = bool(disposition == "pending" and enrichment_finished and not issue_codes)
-        return record
-
-
-    @classmethod
-    def _enforce_review_invariants(cls, record: dict[str, Any]) -> None:
-        """Keep persisted disposition consistent with authoritative blockers.
-
-        Human approval is the last step for a record.  An accepted record may
-        therefore never simultaneously carry source, metadata, or topology
-        blockers.  If later deterministic validation discovers a blocker, reopen
-        the record instead of letting contradictory state leak into queues or
-        publication readiness.
-        """
-        disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-        if disposition != "accepted":
-            return
-        issues = cls._review_issue_codes(record)
-        if not issues:
-            return
-        record["review_disposition"] = "pending"
-        record["accepted"] = False
-        record["rejected"] = False
-        record["needs_review"] = True
-        labels = ", ".join(issues)
-        record["review_reason"] = f"Record reopened because validation found unresolved {labels} review work."
-        audit = list(record.get("review_events") or [])
-        audit.append({"at": iso_now(), "event": "acceptance_reopened", "issues": issues})
-        record["review_events"] = audit[-100:]
 
     def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
@@ -5312,10 +5150,10 @@ CURRENT REVIEWED RECORD TEXT:
         # Required-metadata completeness is derived from unresolved/review queues.
         # This prevents stale worker booleans from contradicting an empty issue list.
         for record in records:
-            if not (automation_running and not self._metadata_enrichment_finished(record)):
-                self._sync_record_metadata_state(record, profile)
-                self._enforce_review_invariants(record)
-            self._decorate_review_state(record)
+            if not (automation_running and not _metadata_enrichment_finished(record)):
+                _sync_record_metadata_state(record, profile)
+                _enforce_review_invariants(record)
+            _decorate_review_state(record)
         self.repo.save_records(build_id, records)
         # Review counts are derived only after metadata state and review invariants
         # have been synchronized. Otherwise a record reopened by validation could
@@ -5339,7 +5177,7 @@ CURRENT REVIEWED RECORD TEXT:
                 # Rejected records remain recoverable but are outside the publishable
                 # corpus, so their unresolved metadata must not block publication.
                 continue
-            if automation_running and not self._metadata_enrichment_finished(record):
+            if automation_running and not _metadata_enrichment_finished(record):
                 continue
             incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
             statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
@@ -5424,7 +5262,7 @@ CURRENT REVIEWED RECORD TEXT:
             "enrichment_mode": str((build.get("request") or {}).get("enrichment_mode") or "fast"),
             "semantic_indexing": bool((build.get("request") or {}).get("semantic_indexing")),
         }
-        build["review_queue_counts"] = self._queue_counts(records)
+        build["review_queue_counts"] = _queue_counts(records)
         build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
         # Any human/topology edit after publication creates a new unpublished
         # revision. Keep the old publication in history rather than presenting
@@ -5810,7 +5648,7 @@ CURRENT REVIEWED RECORD TEXT:
         current_revision = self._assert_record_revision(target, expected_revision)
         self._push_review_history(build_id, records, action="disposition", selected_record_id=record_id)
         profile = self._profile_for(build_id)
-        self._sync_record_metadata_state(target, profile)
+        _sync_record_metadata_state(target, profile)
         if disposition == "accepted" and target.get("source_quality_issues"):
             raise ValueError("Resolve the source extraction problem before accepting this record.")
         if disposition == "accepted" and (list(target.get("metadata_review_fields") or []) or list(target.get("metadata_incomplete_fields") or [])):
@@ -5859,21 +5697,21 @@ CURRENT REVIEWED RECORD TEXT:
         target = records[index]
         self._assert_human_review_available(build_id, target)
         profile = self._profile_for(build_id)
-        self._sync_record_metadata_state(target, profile)
+        _sync_record_metadata_state(target, profile)
         blocking_fields = list(dict.fromkeys([str(v) for v in (target.get("metadata_review_fields") or []) + (target.get("metadata_incomplete_fields") or [])]))
         if disposition == "accepted" and target.get("source_quality_issues"):
             return {
                 "applied": False, "blocked": True, "blocker": "source_problem",
                 "blocking_fields": [], "record": target, "next_record": None,
                 "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
-                "queue_counts": self._queue_counts(records),
+                "queue_counts": _queue_counts(records),
             }
         if disposition == "accepted" and blocking_fields:
             return {
                 "applied": False, "blocked": True, "blocker": "metadata_decision_required",
                 "blocking_fields": blocking_fields, "record": target, "next_record": None,
                 "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
-                "queue_counts": self._queue_counts(records),
+                "queue_counts": _queue_counts(records),
             }
         self._assert_record_revision(target, expected_revision)
         current_revision = int(target.get("record_revision") or 1)
@@ -5902,12 +5740,12 @@ CURRENT REVIEWED RECORD TEXT:
         def pending(candidate: dict[str, Any]) -> bool:
             return str(candidate.get("review_disposition") or "pending") == "pending"
         if review_queue and review_queue != "all":
-            next_record = next((candidate for candidate in ordered if pending(candidate) and self._matches_review_queue(candidate, review_queue)), None)
+            next_record = next((candidate for candidate in ordered if pending(candidate) and _matches_review_queue(candidate, review_queue)), None)
         else:
             next_record = next((candidate for candidate in ordered if pending(candidate)), None)
         if next_record is None:
             next_record = next((candidate for candidate in ordered if pending(candidate)), None)
-        return {"applied": True, "blocked": False, "record": target, "next_record": next_record, "build": build, "queue_counts": self._queue_counts(records)}
+        return {"applied": True, "blocked": False, "record": target, "next_record": next_record, "build": build, "queue_counts": _queue_counts(records)}
 
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
         return self.set_disposition(build_id, record_id, "accepted" if accepted else "pending", expected_revision=expected_revision)
@@ -5931,10 +5769,10 @@ CURRENT REVIEWED RECORD TEXT:
                 continue
             current_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
             profile = self._profile_for(build_id)
-            self._sync_record_metadata_state(record, profile)
+            _sync_record_metadata_state(record, profile)
             if filter_disposition is not None and current_disposition != filter_disposition:
                 continue
-            if review_queue and not self._matches_review_queue(record, review_queue):
+            if review_queue and not _matches_review_queue(record, review_queue):
                 continue
             if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                 continue
@@ -5968,7 +5806,7 @@ CURRENT REVIEWED RECORD TEXT:
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": self._queue_counts(records)}
+        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": _queue_counts(records)}
 
     @_serialize_record_mutation
     def undo_last_review_edit(self, build_id: str) -> dict[str, Any]:
@@ -6079,7 +5917,7 @@ CURRENT REVIEWED RECORD TEXT:
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
-        self._decorate_review_state(persisted)
+        _decorate_review_state(persisted)
         return persisted
 
     @_serialize_record_mutation
@@ -6143,13 +5981,13 @@ CURRENT REVIEWED RECORD TEXT:
         self._mark_human_touch(target, [key for key in changes if key not in skipped])
         profile = self._profile_for(build_id)
         self._reopen_due_rechecks(build_id, records, target, profile)
-        self._sync_record_metadata_state(target, profile)
-        self._settle_enrichment_review_reason(target)
+        _sync_record_metadata_state(target, profile)
+        _settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
         _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
-        self._decorate_review_state(persisted)
+        _decorate_review_state(persisted)
         self._present_for_reviewer(persisted)
         return persisted
 
@@ -6182,7 +6020,7 @@ CURRENT REVIEWED RECORD TEXT:
             elif apply_to_all:
                 selected = True
             else:
-                selected = self._matches_review_queue(record, review_queue) if review_queue else False
+                selected = _matches_review_queue(record, review_queue) if review_queue else False
             if not selected:
                 continue
             if query_l and query_l not in (str(record.get("record_id") or "") + " " + str(record.get("text") or "")).casefold():
@@ -6210,7 +6048,7 @@ CURRENT REVIEWED RECORD TEXT:
             record["metadata_reviewed_at"] = iso_now()
             self._mark_human_touch(record, list(changes))
             record["record_revision"] = int(record.get("record_revision") or 1) + 1
-            self._sync_record_metadata_state(record, profile)
+            _sync_record_metadata_state(record, profile)
             inline, full = _citation_strings(record)
             record["inline_citation"] = inline; record["full_citation"] = full
             changed_ids.append(str(record.get("record_id") or ""))
@@ -6218,7 +6056,7 @@ CURRENT REVIEWED RECORD TEXT:
             raise ValueError("No records matched the bulk metadata selection.")
         self._rewrite_and_validate(build_id, records)
         persisted = self.repo.load_records(build_id)
-        return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": self._queue_counts(persisted)}
+        return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": _queue_counts(persisted)}
 
     @_serialize_record_mutation
     def record_view(self, build_id: str, record_id: str) -> dict[str, Any]:
@@ -6259,7 +6097,7 @@ CURRENT REVIEWED RECORD TEXT:
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
             target["metadata_reviewed_at"] = iso_now(); self._mark_human_touch(target,[field])
             profile = self._profile_for(build_id)
-            self._sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
+            _sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
             self._rewrite_and_validate(build_id, records)
             record = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
         else:
@@ -6275,13 +6113,13 @@ CURRENT REVIEWED RECORD TEXT:
                     dispute["resolved_value"] = value
                     dispute["resolution_source"] = "human"
             row["metadata_disputes"] = disputes[-100:]
-            self._sync_record_metadata_state(row, self._profile_for(build_id))
-            self._settle_enrichment_review_reason(row)
+            _sync_record_metadata_state(row, self._profile_for(build_id))
+            _settle_enrichment_review_reason(row)
             record = row
             break
         self._rewrite_and_validate(build_id, records)
         for row in records:
-            self._decorate_review_state(row)
+            _decorate_review_state(row)
         build = self.repo.get_build(build_id)
         self._refresh_workflow_fields(build)
         self.repo.save_build(build)
@@ -6292,7 +6130,7 @@ CURRENT REVIEWED RECORD TEXT:
             "applied": True,
             "record": record,
             "build": build,
-            "queue_counts": self._queue_counts(records),
+            "queue_counts": _queue_counts(records),
             "remaining_fields": remaining_fields,
             "ready_for_acceptance": bool(record.get("can_accept")),
             "review_state": str(record.get("review_state") or "ready"),
@@ -6980,7 +6818,7 @@ CURRENT REVIEWED RECORD TEXT:
             live["rejected"] = False
             live["needs_review"] = True
             live["review_reason"] = "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes."
-            self._sync_record_metadata_state(live, profile)
+            _sync_record_metadata_state(live, profile)
         return {"outcome": outcome, "added": len(added), "replaced": len(replaced), "kept": len(kept), "disputed": len(history_disputes)}
 
     def _run_enrichment_pass(
