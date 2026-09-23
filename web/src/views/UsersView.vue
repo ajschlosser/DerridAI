@@ -9,6 +9,7 @@ import { notify } from "../composables/notifications";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UserAccountRow from "../components/UserAccountRow.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import { localizedAuthError } from "../domain/authErrors";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -43,7 +44,7 @@ async function refresh() {
         roles.value[0]?.id ||
         "researcher";
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     loading.value = false;
   }
@@ -67,7 +68,7 @@ async function createUser() {
       "researcher";
     notify(i18n.t("users.created_toast", "User created."), "success");
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     createBusy.value = false;
   }
@@ -79,7 +80,7 @@ async function changeRole(user: AuthUser, nextRole: UserRole) {
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
     notify(i18n.t("users.role_saved_toast", "Role updated."), "success");
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
 }
 async function toggleActive(user: AuthUser) {
@@ -94,7 +95,7 @@ async function toggleActive(user: AuthUser) {
       "success",
     );
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
 }
 function openPasswordModal(user: AuthUser) {
@@ -135,7 +136,7 @@ async function applyDialog() {
       "success",
     );
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     dialogBusy.value = false;
   }
