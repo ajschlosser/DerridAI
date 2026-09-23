@@ -7841,13 +7841,11 @@ CURRENT REVIEWED RECORD TEXT:
             raise KeyError(record_id)
         metadata_operation = build.get("metadata_operation")
         metadata_active = (
-            build.get("status") == "running"
-            and (
-                str(build.get("stage") or "").startswith("metadata_enrichment")
-                or (
-                    isinstance(metadata_operation, dict)
-                    and metadata_operation.get("state") == "running"
-                )
+            str(build.get("stage") or "").startswith("metadata_enrichment")
+            or (
+                build.get("status") == "running"
+                and isinstance(metadata_operation, dict)
+                and metadata_operation.get("state") == "running"
             )
         )
         if metadata_active:
