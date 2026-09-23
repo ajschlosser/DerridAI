@@ -14,9 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
-from app.source_quality import assess_extracted_source
 from app.models import PdfCorpusBuildCreate
 from app.raster_quality import noise_from_effective_dpi
+from app.source_quality import assess_extracted_source
 from app.text_noise import (
     DEFAULT_NOISE_THRESHOLD,
     annotate_records,

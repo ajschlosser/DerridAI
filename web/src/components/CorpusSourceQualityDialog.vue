@@ -6,7 +6,7 @@ import UiDialog from "./ui/UiDialog.vue";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import AppIcon from "./AppIcon.vue";
 
-const props = defineProps<{
+defineProps<{
   open?: boolean;
   extractionNoise?: ExtractionNoise | null;
   issues?: Array<Record<string, unknown>>;
