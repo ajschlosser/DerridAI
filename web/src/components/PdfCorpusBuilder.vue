@@ -666,6 +666,15 @@ const inspectorSplitter = useSplitter({
   edge: "end",
   container: () => reviewGridEl.value,
 });
+const reviewHeightSplitter = useSplitter({
+  key: "derridai.review.height",
+  min: 420,
+  max: 1200,
+  initial: 680,
+  edge: "start",
+  axis: "vertical",
+  container: () => reviewGridEl.value,
+});
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
 function mergeUnavailable(direction: "previous" | "next"): string | undefined {
   if (busy.value !== "")
@@ -4677,6 +4686,7 @@ onBeforeUnmount(() => {
               :style="{
                 '--rw-queue': `${queueSplitter.size.value}px`,
                 '--rw-inspector': `${inspectorSplitter.size.value}px`,
+                height: `${reviewHeightSplitter.size.value}px`,
               }"
               :class="{
                 'queue-collapsed': reviewQueueCollapsed,
@@ -5581,6 +5591,18 @@ onBeforeUnmount(() => {
                 </div>
               </aside>
             </section>
+            <div
+              class="review-height-splitter"
+              data-splitter="review-height"
+              role="separator"
+              tabindex="0"
+              aria-orientation="horizontal"
+              :aria-label="i18n.t('pdf_corpus.resize_review_height', 'Resize record review area')"
+              v-bind="reviewHeightSplitter.aria()"
+              @pointerdown="reviewHeightSplitter.onPointerDown"
+              @keydown="reviewHeightSplitter.onKeydown"
+              @dblclick="reviewHeightSplitter.reset"
+            ></div>
           </div>
         </template>
 
@@ -8174,9 +8196,43 @@ summary:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: -2px;
 }
+.review-height-splitter {
+  position: relative;
+  z-index: 2;
+  height: 0.5rem;
+  cursor: row-resize;
+  touch-action: none;
+  background: var(--card);
+  border-block: 1px solid var(--line);
+}
+.review-height-splitter::before {
+  content: "";
+  position: absolute;
+  inset-block: -0.5rem;
+  inset-inline: 0;
+}
+.review-height-splitter::after {
+  content: "";
+  position: absolute;
+  inset-block: 0.1875rem;
+  inset-inline: calc(50% - 1.5rem);
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.review-height-splitter:hover::after,
+.review-height-splitter:focus-visible::after {
+  background: var(--accent-fg);
+}
+.review-height-splitter:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -2px;
+}
 :global(body.splitter-dragging) {
   cursor: col-resize;
   user-select: none;
+}
+:global(body.splitter-dragging-vertical) {
+  cursor: row-resize;
 }
 /* Wide and medium screens: the frame fills the screen under the top bar. */
 @media (min-width: 800px) and (min-height: 34rem) {
