@@ -548,7 +548,7 @@ defineExpose({ select, draft });
         <template v-if="preview">
           <h4>{{ t("prompt", "Prompt") }}</h4>
           <pre class="preview-out" tabindex="0">{{ preview.prompt }}</pre>
-          <template v-if="preview.ran"
+          <template v-if="preview.answer !== undefined"
             ><h4>
               {{
                 i18n.tf("schemas.answer", "Answer ({seconds} s)", { seconds: preview.seconds ?? 0 })

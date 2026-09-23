@@ -340,7 +340,7 @@ async function load(code = selectedCode.value) {
     current.value = { ...value, flag: flagFor(value.code, value.flag) };
     baseline.value = snapshotCurrent();
     keyQuery.value = "";
-    activeCategory.value = "all";
+    activeCategory.value = categories.value[1]?.id || "all";
     statusFilter.value = "all";
     await loadContentPolicy(code);
   } catch (exc) {
