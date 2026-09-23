@@ -1,15 +1,16 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { englishDefault } from "./englishDefault";
 
-type Tr = (key: string, fallback?: string) => string;
-type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => string;
-type Values = Record<string, unknown>;
+export type Tr = (key: string, fallback?: string) => string;
+export type Values = Record<string, unknown>;
+export type Trf = (key: string, fallbackOrValues?: string | Values, values?: Values) => string;
+type RawTrf = (key: string, fallback: string, values?: Values) => string;
 
 /**
  * Bind tr/trf so call sites pass a key (and interpolations). English comes from
  * enUsDefaults.json, exported from api/app/locales/en_us.py.
  */
-export function bindCopy(tr: Tr, trf: Trf) {
+export function bindCopy(tr: Tr, trf: RawTrf) {
   const t = (key: string, fallback?: string) => tr(key, fallback || englishDefault(key) || key);
   const tf = (key: string, fallbackOrValues?: string | Values, values?: Values) => {
     if (fallbackOrValues && typeof fallbackOrValues === "object") {

@@ -1,22 +1,31 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { esc } from "./html";
+import { englishDefault } from "../i18n/englishDefault";
+import type { Tr, Trf, Values } from "../i18n/bindCopy";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Series = { key: string; label?: string; [extra: string]: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
-type Tr = (key: string, fallback?: string) => string;
-type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => string;
 
 export type ChartI18n = { tr?: Tr; trf?: Trf };
 
+function interpolate(template: string, values: Values = {}) {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    template,
+  );
+}
+
 function chartCopy(i18n: ChartI18n = {}): { tr: Tr; trf: Trf } {
-  const tr: Tr = i18n.tr || ((_key, fallback = "") => fallback);
+  const tr: Tr = i18n.tr || ((key, fallback = "") => fallback || englishDefault(key) || key);
   const trf: Trf =
     i18n.trf ||
-    ((_key, fallback, values = {}) =>
-      Object.entries(values).reduce(
-        (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-        fallback,
-      ));
+    ((key, fallbackOrValues, values = {}) => {
+      let template = "";
+      let vars = values;
+      if (fallbackOrValues && typeof fallbackOrValues === "object") vars = fallbackOrValues;
+      else if (typeof fallbackOrValues === "string") template = fallbackOrValues;
+      return interpolate(template || englishDefault(key) || key, vars);
+    });
   return { tr, trf };
 }
 

@@ -9,7 +9,7 @@ type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-e
 
 interface Deps {
   tr: (key: string, fallback?: string) => string;
-  trf: (key: string, fallback: string, values?: Record<string, unknown>) => string;
+  trf: (key: string, fallbackOrValues?: string | Record<string, unknown>, values?: Record<string, unknown>) => string;
   getLocale: () => string;
   getStores: () => Loose[];
   providerProfiles: () => Loose[];

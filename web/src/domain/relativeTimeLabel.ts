@@ -1,6 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-type Tr = (key: string, fallback: string) => string;
-type Trf = (key: string, fallback: string, values: Record<string, unknown>) => string;
+import type { Tr, Trf } from "../i18n/bindCopy";
 
 const FALLBACKS = {
   minutes: ["{count} minute ago", "{count} minutes ago"],
