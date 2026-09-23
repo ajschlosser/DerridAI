@@ -1660,4 +1660,25 @@ test.describe("views follow the loaded corpus", () => {
     await expect(page.getByText("Loaded 1 records")).toBeVisible();
     await expect(sync).toBeEnabled({ timeout: 5000 });
   });
+
+  // Unlike Records/Compare/Vector Stores before their fix, Search's Loaded records scope
+  // already reflects a file imported while it is open, because its route.fullPath watcher
+  // catches the URL update syncUrl() makes after every import. Locking this in as a
+  // regression guard: a Section-C composable conversion of Search must not regress it.
+  test("Search's loaded-records scope reflects a file imported while it is open", async ({
+    page,
+  }) => {
+    await open(page, { name: "search-import-while-open", nav: "Search", load: true });
+    const loadedScopeButton = page.getByRole("button", { name: /Loaded records/ });
+    await expect(loadedScopeButton).toContainText("3");
+    await page.setInputFiles("#fileInput", {
+      name: "second.jsonl",
+      mimeType: "application/x-ndjson",
+      buffer: Buffer.from(
+        JSON.stringify({ ...RECORDS[0], record_id: "second-00001", work: "Glas" }),
+      ),
+    });
+    await expect(page.getByText("Loaded 1 records")).toBeVisible();
+    await expect(loadedScopeButton).toContainText("4", { timeout: 5000 });
+  });
 });
