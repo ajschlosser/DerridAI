@@ -848,6 +848,14 @@ const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
 const selectedProfile = computed(
   () => providerProfiles.value.find((profile) => profile.id === selectedProviderId.value) || null,
 );
+const selectableProviderProfiles = computed(() =>
+  providerProfiles.value.filter(
+    (profile) =>
+      profile.available !== false ||
+      profile.id === selectedProviderId.value ||
+      profile.id === selectedReviewProviderId.value,
+  ),
+);
 const activeCorpusProfile = computed(
   () =>
     corpusProfiles.value.find(
@@ -1367,24 +1375,67 @@ async function refreshProviders() {
   // runtime bootstrap has completed. Prefer the richer runtime copy on conflicts.
   for (const profile of serverProfiles) merged.set(profile.id, profile);
   for (const profile of runtimeProfiles) merged.set(profile.id, profile);
-  providerProfiles.value = Array.from(merged.values());
+  const mergedProfiles = Array.from(merged.values());
+  const availability = await Promise.all(
+    mergedProfiles.map(async (profile) => {
+      try {
+        if (serverProviderIds.value.has(profile.id)) {
+          const status = await systemApi.researcherProviderAvailability(profile.id);
+          return {
+            ...profile,
+            available: Boolean(status.available && status.model_available),
+            availability_error:
+              status.error ||
+              (!status.model_available
+                ? `Configured model "${status.configured_model || profile.model || "unknown"}" was not found.`
+                : ""),
+          };
+        }
+        const config = directProfilePayload(profile.id);
+        if (!config) return { ...profile, available: false, availability_error: "Provider configuration is unavailable." };
+        const status = await systemApi.llmStatus({
+          provider: config.provider,
+          base_url: config.base_url,
+          api_key: config.api_key,
+        });
+        const names = new Set((status.models || []).map((model) => String(model.name || "")));
+        const modelAvailable = Boolean(config.model && names.has(String(config.model)));
+        return {
+          ...profile,
+          available: Boolean(status.available && modelAvailable),
+          availability_error:
+            status.error ||
+            (!modelAvailable
+              ? `Configured model "${String(config.model || "unknown")}" was not found.`
+              : ""),
+        };
+      } catch (exc) {
+        return {
+          ...profile,
+          available: false,
+          availability_error: exc instanceof Error ? exc.message : String(exc),
+        };
+      }
+    }),
+  );
+  providerProfiles.value = availability;
   const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
   const activeBuildProfile = String(
     (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id || "",
   );
   if (
     activeBuildProfile &&
-    providerProfiles.value.some((profile) => profile.id === activeBuildProfile)
+    selectableProviderProfiles.value.some((profile) => profile.id === activeBuildProfile)
   ) {
     selectedProviderId.value = activeBuildProfile;
   } else if (
     !currentBuild.value ||
     !selectedProviderId.value ||
-    !providerProfiles.value.some((profile) => profile.id === selectedProviderId.value)
+    !selectableProviderProfiles.value.some((profile) => profile.id === selectedProviderId.value)
   ) {
     selectedProviderId.value =
-      providerProfiles.value.find((profile) => profile.id === defaultId)?.id ||
-      providerProfiles.value[0]?.id ||
+      selectableProviderProfiles.value.find((profile) => profile.id === defaultId)?.id ||
+      selectableProviderProfiles.value[0]?.id ||
       "";
   }
 }
@@ -3771,7 +3822,7 @@ onBeforeUnmount(() => {
           <div class="provider-area">
             <ProviderProfileSelect
               v-model="selectedProviderId"
-              :profiles="providerProfiles"
+              :profiles="selectableProviderProfiles"
               :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
               :label="i18n.t('pdf_corpus.provider_profile', 'Primary LLM provider')"
               :help="
@@ -4498,7 +4549,7 @@ onBeforeUnmount(() => {
         <template v-if="showReviewWorkspace">
           <CorpusProviderSwitcher
             v-if="currentBuild && providerProfiles.length"
-            :profiles="providerProfiles"
+            :profiles="selectableProviderProfiles"
             :active-profile-id="activeBuildProfileId"
             :active-model="activeModelLabel"
             :history="currentBuild.provider_profile_history || []"
@@ -5303,7 +5354,7 @@ onBeforeUnmount(() => {
                     <LlmExecutionControl
                       :model-value="llmActionProviderId || selectedProviderId"
                       :model-override="llmActionModel"
-                      :profiles="providerProfiles"
+                      :profiles="selectableProviderProfiles"
                       :disabled="busy !== ''"
                       :task="
                         i18n.t(
@@ -5489,7 +5540,7 @@ onBeforeUnmount(() => {
                       :can-previous="canMergePrevious"
                       :can-next="canMergeNext"
                       :busy="busy !== ''"
-                      :profiles="providerProfiles"
+                      :profiles="selectableProviderProfiles"
                       :provider-profile-id="llmActionProviderId || selectedProviderId"
                       :model-override="llmActionModel"
                       :concurrency-risk="
@@ -5689,7 +5740,7 @@ onBeforeUnmount(() => {
       :no-change="llmTouchupResult.no_change"
       :error="llmTouchupError"
       :busy="busy === 'text-touchup'"
-      :profiles="providerProfiles"
+      :profiles="selectableProviderProfiles"
       :provider-profile-id="llmActionProviderId"
       :model-override="llmActionModel"
       :concurrency-risk="
@@ -5764,7 +5815,7 @@ onBeforeUnmount(() => {
       @close="schemaEditorOpen = false"
     >
       <MetadataSchemaEditor
-        :provider-profiles="providerProfiles"
+        :provider-profiles="selectableProviderProfiles"
         :default-provider-id="runtime.getDefaultProviderProfileId?.() || ''"
         @changed="loadSchemaChoices"
         @saved="
@@ -5799,7 +5850,7 @@ onBeforeUnmount(() => {
     <MetadataEnrichmentDialog
       :groups="currentBuild?.schema?.groups?.map((g) => ({ key: g.key, label: g.label }))"
       :open="metadataEnrichmentOpen"
-      :profiles="providerProfiles"
+      :profiles="selectableProviderProfiles"
       :provider-profile-id="llmActionProviderId"
       :model-override="llmActionModel"
       :busy="busy === 'metadata-enrichment'"
@@ -5844,7 +5895,7 @@ onBeforeUnmount(() => {
           selectedRecordIndex >= 0 &&
           (selectedRecordIndex < records.length - 1 || recordOffset + pageSize < recordTotal)
         "
-        :provider-profiles="providerProfiles"
+        :provider-profiles="selectableProviderProfiles"
         :llm-provider-profile-id="llmActionProviderId || selectedProviderId"
         :llm-model-override="llmActionModel"
         @close="focusView = false"

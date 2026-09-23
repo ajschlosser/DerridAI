@@ -44,7 +44,13 @@ function contextWindow(profile: ProviderProfile){const raw=Number(profile.num_ct
       <label class="provider-select-field">
         <span class="sr-only">{{ props.label }}</span>
         <select class="control provider-select" :value="props.modelValue" @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)">
-          <option v-for="profile in props.profiles" :key="profile.id" :value="profile.id">
+          <option
+            v-for="profile in props.profiles"
+            :key="profile.id"
+            :value="profile.id"
+            :disabled="profile.available === false"
+            :title="profile.availability_error"
+          >
             {{ profile.name || profile.id }} · {{ profile.model || props.modelNotSetLabel }}
           </option>
         </select>
