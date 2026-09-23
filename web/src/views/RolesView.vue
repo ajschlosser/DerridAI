@@ -104,6 +104,16 @@ function displayName(item: RoleDefinition) {
   return item.name;
 }
 
+function displayDescription(item: RoleDefinition) {
+  if (item.id === "admin") {
+    return i18n.t("roles.admin_description", item.description);
+  }
+  if (item.id === "researcher") {
+    return i18n.t("roles.researcher_description", item.description);
+  }
+  return item.description;
+}
+
 function assignedLabel(count: number) {
   if (count === 0) return i18n.t("roles.assigned_none", "No accounts use this role.");
   if (count === 1)
@@ -411,7 +421,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 :tone="role.locked ? 'warning' : role.builtin ? 'info' : 'success'"
               />
             </div>
-            <p class="role-editor-copy">{{ role.description }}</p>
+            <p class="role-editor-copy">{{ displayDescription(role) }}</p>
             <p class="note">{{ assignedLabel(assignedCount) }}</p>
           </div>
           <div class="role-editor-tools">
