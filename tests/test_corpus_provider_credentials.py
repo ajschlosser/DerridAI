@@ -53,3 +53,13 @@ def test_a_blank_request_key_uses_the_key_stored_with_the_profile(monkeypatch):
     })
     assert resolved["api_key"] == "sk-stored"
     assert resolved["base_url"] == "https://stored.example/v1"
+
+
+def test_missing_selected_profile_fails_explicitly(monkeypatch):
+    monkeypatch.setattr("app.main.system_store.researcher_profile", lambda profile_id: None)
+    try:
+        _resolve_pdf_corpus_provider({"provider_profile_id": "removed-profile"})
+    except ValueError as exc:
+        assert str(exc) == "The selected LLM provider profile is not available."
+    else:
+        raise AssertionError("A missing provider profile must not produce a success-shaped request.")

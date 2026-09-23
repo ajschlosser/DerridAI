@@ -76,6 +76,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(lastEmission(wrapper,"update:modelValue")[0]).toBe("source");
     await wrapper.get('[data-review-queue="issues"]').trigger("keydown",{key:"ArrowRight"});
     expect(lastEmission(wrapper,"update:modelValue")[0]).toBe("accepted");
+    expect(wrapper.get(".queue-count-help").text()).toContain("counts may overlap");
   });
 
   it("routes a ready corpus to publication", async () => {

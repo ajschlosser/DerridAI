@@ -31,4 +31,56 @@ describe("Corpus run guidance", () => {
       },
     });
   });
+
+  it("keeps spaces in a phrase while it is being typed", async () => {
+    const wrapper = mount(CorpusRunGuidance, {
+      props: {
+        fields: [{ name: "persons", label: "People", group: "indexing" }],
+        modelValue: {},
+      },
+    });
+
+    await wrapper.findAll("textarea")[1].setValue("First ");
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
+      persons: {
+        instructions: "",
+        look_for: ["First "],
+      },
+    });
+  });
+
+  it("imports guidance for matching schema fields", async () => {
+    const wrapper = mount(CorpusRunGuidance, {
+      props: {
+        fields: [
+          { name: "persons", label: "People", group: "indexing" },
+          { name: "work", label: "Work", group: "bibliography" },
+        ],
+        modelValue: {},
+      },
+    });
+    const input = wrapper.find('input[type="file"]');
+    const file = new File(
+      [
+        JSON.stringify({
+          format: "derridai-run-guidance",
+          version: 1,
+          guidance: {
+            persons: { instructions: "Check attribution.", look_for: ["First Name Last Name"] },
+            obsolete: { instructions: "Ignore this field.", look_for: [] },
+          },
+        }),
+      ],
+      "guidance.json",
+      { type: "application/json" },
+    );
+    Object.defineProperty(input.element, "files", { value: [file] });
+    await input.trigger("change");
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
+      persons: { instructions: "Check attribution.", look_for: ["First Name Last Name"] },
+    });
+    expect(wrapper.find('[role="status"]').text()).toContain("imported");
+  });
 });

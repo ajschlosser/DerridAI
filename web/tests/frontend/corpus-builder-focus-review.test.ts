@@ -81,4 +81,23 @@ describe("Corpus Builder focus review interactions",()=>{
     expect(buttonByText(wrapper,"Send back through current LLM run").attributes("disabled")).toBeDefined();
     wrapper.unmount();
   });
+
+  it("exposes noise status and linked queue context", async () => {
+    const wrapper=mount(CorpusRecordFocusReview,{
+      props:{
+        record:{...record,text_noise:{score:52,unusable:true}},
+        justProcessedRecordId:"record-00013",
+        nextRecordId:"record-00015",
+      },
+      global:{stubs},
+    });
+    expect(wrapper.get(".record-noise-summary").text()).toContain("52% noise");
+    const links=wrapper.findAll(".queue-context .text-link");
+    expect(links).toHaveLength(3);
+    await links[0].trigger("click");
+    expect(lastEmission(wrapper,"navigateRecord")[0]).toBe("record-00013");
+    await links[2].trigger("click");
+    expect(lastEmission(wrapper,"navigateRecord")[0]).toBe("record-00015");
+    wrapper.unmount();
+  });
 });

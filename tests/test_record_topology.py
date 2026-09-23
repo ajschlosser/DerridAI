@@ -19,6 +19,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app.corpus_segmentation import _best_safety_boundary
 from app.models import PdfCorpusBuildCreate
 
 POLICY={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
@@ -44,6 +45,10 @@ def test_profile_and_default_record_sizing():
     assert body.profile_id=="derrida-scholarly-v12"
     assert body.record_sizing.preferred_record_chars==1750
     assert body.record_sizing.absolute_record_chars==6000
+
+
+def test_empty_safety_boundary_is_a_non_split_instead_of_an_index_error():
+    assert _best_safety_boundary([], 6000) == (None, False)
 
 
 def test_normalizer_targets_preferred_range_without_removing_semantic_boundary():

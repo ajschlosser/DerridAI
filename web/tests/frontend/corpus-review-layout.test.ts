@@ -86,7 +86,12 @@ describe("CorpusActionMenu", () => {
   });
 });
 
-function harness(options: { edge: "start" | "end"; dir?: "ltr" | "rtl"; width?: number }) {
+function harness(options: {
+  edge: "start" | "end";
+  dir?: "ltr" | "rtl";
+  width?: number;
+  axis?: "horizontal" | "vertical";
+}) {
   const container = document.createElement("div");
   container.style.direction = options.dir ?? "ltr";
   container.getBoundingClientRect = () =>
@@ -111,6 +116,7 @@ function harness(options: { edge: "start" | "end"; dir?: "ltr" | "rtl"; width?: 
         max: 500,
         initial: 300,
         edge: options.edge,
+        axis: options.axis,
         container: () => container,
       });
       return () =>
@@ -198,5 +204,15 @@ describe("useSplitter", () => {
     await press(wrapper, "End");
     api.reset();
     expect(api.size.value).toBe(300);
+  });
+
+  it("supports vertical resizing with down/up keys and pointer distance", async () => {
+    const vertical = harness({ edge: "start", axis: "vertical" });
+    await press(vertical.wrapper, "ArrowDown");
+    expect(vertical.api.size.value).toBe(316);
+    await vertical.wrapper.get("[role=separator]").trigger("pointerdown", { button: 0, pointerId: 1 });
+    window.dispatchEvent(new MouseEvent("pointermove", { clientY: 700 }));
+    expect(vertical.api.size.value).toBe(500);
+    window.dispatchEvent(new MouseEvent("pointerup"));
   });
 });

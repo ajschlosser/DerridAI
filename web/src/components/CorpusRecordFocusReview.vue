@@ -11,6 +11,7 @@ import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
+import CorpusReviewQueueContext from "./CorpusReviewQueueContext.vue";
 import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
@@ -37,6 +38,8 @@ const props = defineProps<{
   providerProfiles?: ProviderProfile[];
   llmProviderProfileId?: string;
   llmModelOverride?: string;
+  justProcessedRecordId?: string;
+  nextRecordId?: string;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -62,6 +65,7 @@ const emit = defineEmits<{
   metadataDirty: [dirty: boolean];
   previewJsonl: [];
   llmTouchup: [text: string];
+  navigateRecord: [recordId: string];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLElement | null>(null);
@@ -340,6 +344,32 @@ watch(
             </button>
           </div>
         </div>
+        <p
+          v-if="record.text_noise?.score != null"
+          class="record-noise-summary"
+          role="status"
+        >
+          {{
+            i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+              score: Math.round(Number(record.text_noise.score)),
+            })
+          }}
+          <span v-if="record.text_noise.unusable">
+            ·
+            {{
+              i18n.t(
+                "pdf_corpus.text_noise.unusable",
+                "This record is above the unusable-noise threshold.",
+              )
+            }}
+          </span>
+        </p>
+        <CorpusReviewQueueContext
+          :current-record-id="record.record_id"
+          :just-processed-record-id="justProcessedRecordId"
+          :next-record-id="nextRecordId"
+          @navigate-record="emit('navigateRecord', $event)"
+        />
         <div
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
           class="touchup-proposal"
@@ -834,6 +864,11 @@ watch(
 .focus-record-heading h3 {
   margin: 3px 0 0;
   font-size: 1rem;
+}
+.record-noise-summary {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .heading-actions {
   display: flex;

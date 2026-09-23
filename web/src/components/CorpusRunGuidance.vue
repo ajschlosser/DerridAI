@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiButton from "./ui/UiButton.vue";
 
 export interface RunGuidanceEntry {
   instructions: string;
@@ -23,6 +24,9 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ "update:modelValue": [value: Record<string, RunGuidanceEntry>] }>();
 const i18n = useI18nStore();
+const importInput = ref<HTMLInputElement | null>(null);
+const notice = ref("");
+const error = ref("");
 const populated = computed(
   () =>
     Object.values(props.modelValue).filter(
@@ -41,8 +45,9 @@ function update(field: string, patch: Partial<RunGuidanceEntry>) {
 function updateTerms(field: string, value: string) {
   const terms = value
     .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean)
+    // Keep the edit buffer lossless so a trailing space does not disappear
+    // while a multi-word phrase is being typed. Submission trims each term.
+    .filter((item) => item.trim())
     .slice(0, 40);
   update(field, { look_for: terms });
 }
@@ -50,14 +55,84 @@ function updateTerms(field: string, value: string) {
 function termText(field: string) {
   return (props.modelValue[field]?.look_for || []).join("\n");
 }
+
+function openImport() {
+  importInput.value?.click();
+}
+
+function exportGuidance() {
+  const payload = {
+    format: "derridai-run-guidance",
+    version: 1,
+    guidance: props.modelValue,
+  };
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "derridai-run-guidance.json";
+  link.click();
+  URL.revokeObjectURL(url);
+  error.value = "";
+  notice.value = i18n.t("pdf_corpus.run_guidance_exported", "Field guidance exported.");
+}
+
+function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidanceEntry> {
+  const source =
+    payload && typeof payload === "object" && !Array.isArray(payload) && "guidance" in payload
+      ? (payload as { guidance?: unknown }).guidance
+      : payload;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    throw new Error(
+      i18n.t("pdf_corpus.run_guidance_import_invalid", "That file does not contain field guidance."),
+    );
+  }
+  const fields = new Map(props.fields.map((field) => [field.name, field]));
+  const imported: Record<string, RunGuidanceEntry> = {};
+  for (const [field, raw] of Object.entries(source)) {
+    if (!fields.has(field) || !raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const entry = raw as { instructions?: unknown; look_for?: unknown };
+    const instructions = typeof entry.instructions === "string" ? entry.instructions : "";
+    const lookFor = Array.isArray(entry.look_for)
+      ? entry.look_for
+          .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
+          .slice(0, 40)
+      : [];
+    if (instructions.trim() || lookFor.length) imported[field] = { instructions, look_for: lookFor };
+  }
+  if (!Object.keys(imported).length) {
+    throw new Error(
+      i18n.t("pdf_corpus.run_guidance_import_no_fields", "No current schema fields were found."),
+    );
+  }
+  return imported;
+}
+
+async function importGuidance(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const imported = normaliseImportedGuidance(JSON.parse(await file.text()));
+    emit("update:modelValue", { ...props.modelValue, ...imported });
+    error.value = "";
+    notice.value = i18n.t("pdf_corpus.run_guidance_imported", "Field guidance imported.");
+  } catch (exc) {
+    notice.value = "";
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
 </script>
 
 <template>
   <section
     class="run-guidance"
     :aria-label="i18n.t('pdf_corpus.run_guidance_title', 'Run-specific field guidance')"
+    aria-describedby="run-guidance-help"
   >
-    <p class="run-guidance-help">
+    <p id="run-guidance-help" class="run-guidance-help">
       {{
         i18n.t(
           "pdf_corpus.run_guidance_help",
@@ -72,6 +147,41 @@ function termText(field: string) {
         })
       }}
     </p>
+    <p class="run-guidance-file-help">
+      {{
+        i18n.t(
+          "pdf_corpus.run_guidance_file_help",
+          "JSON files only. Import merges matching fields into the current draft.",
+        )
+      }}
+    </p>
+    <div class="run-guidance-actions">
+      <UiButton
+        size="small"
+        icon="download"
+        :label="i18n.t('pdf_corpus.run_guidance_export', 'Export guidance')"
+        :disabled="disabled"
+        @click="exportGuidance"
+      />
+      <UiButton
+        size="small"
+        icon="upload"
+        :label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
+        :disabled="disabled"
+        @click="openImport"
+      />
+      <input
+        ref="importInput"
+        type="file"
+        accept="application/json,.json"
+        class="sr-only"
+        :aria-label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
+        :disabled="disabled"
+        @change="importGuidance"
+      />
+    </div>
+    <p v-if="notice" class="run-guidance-notice" role="status">{{ notice }}</p>
+    <p v-if="error" class="run-guidance-error" role="alert">{{ error }}</p>
     <details v-for="field in fields" :key="field.name" class="run-guidance-field">
       <summary>
         <span>{{ field.label }}</span>
@@ -137,14 +247,35 @@ function termText(field: string) {
   min-width: 0;
 }
 .run-guidance-help,
-.run-guidance-count {
+.run-guidance-count,
+.run-guidance-file-help {
   margin: 0;
   color: var(--text-2);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+.run-guidance-file-help {
+  margin-top: -4px;
+  font-size: 0.75rem;
+}
 .run-guidance-count {
   font-weight: 700;
+}
+.run-guidance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.run-guidance-notice,
+.run-guidance-error {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+.run-guidance-notice {
+  color: var(--success);
+}
+.run-guidance-error {
+  color: var(--danger);
 }
 .run-guidance-field {
   min-width: 0;

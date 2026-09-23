@@ -17,6 +17,8 @@ export interface SplitterOptions {
   max: number;
   initial: number;
   edge: "start" | "end";
+  /** The axis being resized. Width is the default for existing splitters. */
+  axis?: "horizontal" | "vertical";
   /** The element whose edges the size is measured from. */
   container: () => HTMLElement | null;
   step?: number;
@@ -35,6 +37,7 @@ function remembered(key: string, fallback: number): number {
 
 export function useSplitter(options: SplitterOptions) {
   const { min, max, edge } = options;
+  const axis = options.axis ?? "horizontal";
   const step = options.step ?? 16;
   const size: Ref<number> = ref(clamp(remembered(options.key, options.initial), min, max));
   const dragging = ref(false);
@@ -56,6 +59,12 @@ export function useSplitter(options: SplitterOptions) {
     const container = options.container();
     if (!container) return;
     const box = container.getBoundingClientRect();
+    if (axis === "vertical") {
+      // A top pane uses the distance from the container's top edge; a bottom
+      // pane uses the distance from its bottom edge.
+      commit(edge === "start" ? event.clientY - box.top : box.bottom - event.clientY);
+      return;
+    }
     // The pane's width is the distance from its own outer edge to the pointer.
     commit(paneIsOnLeft(container) ? event.clientX - box.left : box.right - event.clientX);
   }
@@ -66,6 +75,7 @@ export function useSplitter(options: SplitterOptions) {
     window.removeEventListener("pointerup", stop);
     window.removeEventListener("pointercancel", stop);
     document.body.classList.remove("splitter-dragging");
+    document.body.classList.remove("splitter-dragging-vertical");
   }
 
   function onPointerDown(event: PointerEvent) {
@@ -74,6 +84,7 @@ export function useSplitter(options: SplitterOptions) {
     dragging.value = true;
     (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
     document.body.classList.add("splitter-dragging");
+    if (axis === "vertical") document.body.classList.add("splitter-dragging-vertical");
     window.addEventListener("pointermove", fromPointer);
     window.addEventListener("pointerup", stop);
     window.addEventListener("pointercancel", stop);
@@ -83,6 +94,18 @@ export function useSplitter(options: SplitterOptions) {
     const container = options.container();
     if (!container) return;
     const amount = event.shiftKey ? step * 4 : step;
+    if (axis === "vertical") {
+      const down = edge === "start" ? 1 : -1;
+      let next = size.value;
+      if (event.key === "ArrowDown") next += amount * down;
+      else if (event.key === "ArrowUp") next -= amount * down;
+      else if (event.key === "Home") next = min;
+      else if (event.key === "End") next = max;
+      else return;
+      event.preventDefault();
+      commit(next);
+      return;
+    }
     // Moving the separator to the right grows a pane on its left and shrinks one on its right.
     const right = paneIsOnLeft(container) ? 1 : -1;
     let next = size.value;

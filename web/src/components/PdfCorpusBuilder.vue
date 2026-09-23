@@ -121,6 +121,7 @@ const recordOffset = ref(0);
 const pageSize = 50;
 const selectedRecordId = ref("");
 const selectedRecord = ref<CorpusRecord | null>(null);
+const justProcessedRecordId = ref("");
 const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
 const selectedPdfPage = ref(1);
@@ -626,6 +627,10 @@ const canPublish = computed(() => Boolean(currentBuild.value?.publication_readin
 const selectedRecordIndex = computed(() =>
   records.value.findIndex((row) => row.record_id === selectedRecordId.value),
 );
+const nextQueueRecordId = computed(() => {
+  const index = selectedRecordIndex.value;
+  return index >= 0 ? records.value[index + 1]?.record_id || "" : "";
+});
 const canMergePrevious = computed(() => {
   const topo = Number(selectedRecord.value?.topology_index ?? -1);
   return topo >= 0 ? topo > 0 : recordOffset.value + Math.max(0, selectedRecordIndex.value) > 0;
@@ -665,6 +670,15 @@ const inspectorSplitter = useSplitter({
   max: 640,
   initial: 368,
   edge: "end",
+  container: () => reviewGridEl.value,
+});
+const reviewHeightSplitter = useSplitter({
+  key: "derridai.review.height",
+  min: 420,
+  max: 1200,
+  initial: 680,
+  edge: "start",
+  axis: "vertical",
   container: () => reviewGridEl.value,
 });
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
@@ -716,12 +730,21 @@ const recordActionItems = computed<CorpusActionMenuItem[]>(() => [
     reason: sliceUnavailable(),
   },
   { id: "preview", label: i18n.t("pdf_corpus.preview_jsonl", "Preview JSONL") },
+  {
+    id: "requeue",
+    label: i18n.t("pdf_corpus.requeue_metadata", "Send back through current LLM run"),
+    reason:
+      busy.value !== ""
+        ? i18n.t("pdf_corpus.reason.busy", "Wait for the current action to finish.")
+        : undefined,
+  },
 ]);
 function runRecordAction(id: string) {
   if (id === "previous") merge("previous");
   else if (id === "next") merge("next");
   else if (id === "slice") boundarySliceOpen.value = true;
   else if (id === "preview") openJsonlPreview();
+  else if (id === "requeue") requeueCurrentRecord();
 }
 const bulkActionItems = computed<CorpusActionMenuItem[]>(() => {
   const rejectReason =
@@ -2194,6 +2217,14 @@ async function advanceFrom(recordId: string) {
   }
   await refreshRecords();
 }
+async function navigateToQueueRecord(recordId: string) {
+  const existing = records.value.find((row) => row.record_id === recordId);
+  if (existing) {
+    selectRecord(existing);
+    return;
+  }
+  await refreshRecords(true, recordId);
+}
 async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
   if (reviewLocked.value) {
     setMessage(
@@ -2206,6 +2237,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
   }
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  if (disposition !== "pending") justProcessedRecordId.value = id;
   const viewport = captureReviewViewport();
   busy.value = "record";
   try {
@@ -2783,11 +2815,18 @@ async function requeueCurrentRecord() {
   if (!currentBuild.value || !selectedRecord.value) return;
   busy.value = "record";
   try {
+    const availableProfileIds = new Set(providerProfiles.value.map((profile) => profile.id));
+    const profileId =
+      [llmActionProviderId.value, selectedProviderId.value]
+        .find((id) => Boolean(id) && availableProfileIds.has(id)) ||
+      providerProfiles.value[0]?.id ||
+      "";
+    if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile", "No available LLM provider profile is configured."));
     await pdfCorpusApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       {
-        provider_profile_id: llmActionProviderId.value || selectedProviderId.value,
+        provider_profile_id: profileId,
         model: llmActionModel.value || undefined,
       },
     );
@@ -4690,6 +4729,7 @@ onBeforeUnmount(() => {
               :style="{
                 '--rw-queue': `${queueSplitter.size.value}px`,
                 '--rw-inspector': `${inspectorSplitter.size.value}px`,
+                height: `${reviewHeightSplitter.size.value}px`,
               }"
               :class="{
                 'queue-collapsed': reviewQueueCollapsed,
@@ -4993,6 +5033,26 @@ onBeforeUnmount(() => {
                       "
                     ></textarea>
                     <div v-else class="record-primary-text">{{ selectedRecord.text }}</div>
+                    <p
+                      v-if="selectedRecord.text_noise?.score != null"
+                      class="record-noise-summary"
+                      role="status"
+                    >
+                      {{
+                        i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+                          score: Math.round(Number(selectedRecord.text_noise.score)),
+                        })
+                      }}
+                      <span v-if="selectedRecord.text_noise.unusable">
+                        ·
+                        {{
+                          i18n.t(
+                            "pdf_corpus.text_noise.unusable",
+                            "This record is above the unusable-noise threshold.",
+                          )
+                        }}
+                      </span>
+                    </p>
                     <div
                       v-if="editingText && selectedRecord.source_quality_issues?.length"
                       class="text-review-actions"
@@ -5574,6 +5634,18 @@ onBeforeUnmount(() => {
                 </div>
               </aside>
             </section>
+            <div
+              class="review-height-splitter"
+              data-splitter="review-height"
+              role="separator"
+              tabindex="0"
+              aria-orientation="horizontal"
+              :aria-label="i18n.t('pdf_corpus.resize_review_height', 'Resize record review area')"
+              v-bind="reviewHeightSplitter.aria()"
+              @pointerdown="reviewHeightSplitter.onPointerDown"
+              @keydown="reviewHeightSplitter.onKeydown"
+              @dblclick="reviewHeightSplitter.reset"
+            ></div>
           </div>
         </template>
 
@@ -5842,6 +5914,9 @@ onBeforeUnmount(() => {
         @update-llm-model="(value) => (llmActionModel = value)"
         @adjudicate-boundary="adjudicateBoundary"
         @open-source-viewer="sourceTranscriptionOpen = true"
+        :just-processed-record-id="justProcessedRecordId"
+        :next-record-id="nextQueueRecordId"
+        @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
 </template>
@@ -6783,6 +6858,11 @@ summary:focus-visible {
   font:
     17px/1.72 Georgia,
     serif;
+}
+.record-noise-summary {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .review-reason {
   display: grid;
@@ -8159,9 +8239,43 @@ summary:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: -2px;
 }
+.review-height-splitter {
+  position: relative;
+  z-index: 2;
+  height: 0.5rem;
+  cursor: row-resize;
+  touch-action: none;
+  background: var(--card);
+  border-block: 1px solid var(--line);
+}
+.review-height-splitter::before {
+  content: "";
+  position: absolute;
+  inset-block: -0.5rem;
+  inset-inline: 0;
+}
+.review-height-splitter::after {
+  content: "";
+  position: absolute;
+  inset-block: 0.1875rem;
+  inset-inline: calc(50% - 1.5rem);
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.review-height-splitter:hover::after,
+.review-height-splitter:focus-visible::after {
+  background: var(--accent-fg);
+}
+.review-height-splitter:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -2px;
+}
 :global(body.splitter-dragging) {
   cursor: col-resize;
   user-select: none;
+}
+:global(body.splitter-dragging-vertical) {
+  cursor: row-resize;
 }
 /* Wide and medium screens: the frame fills the screen under the top bar. */
 @media (min-width: 800px) and (min-height: 34rem) {

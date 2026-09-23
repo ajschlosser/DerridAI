@@ -133,6 +133,20 @@ def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_
     assert result["record"]["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
 
 
+def test_queue_counts_follow_search_filter_without_being_limited_to_selected_queue(tmp_path: Path):
+    first = ready_record("r1", "b1")
+    second = ready_record("r2", "b2")
+    second["text"] = "Only searchable record"
+    repo, build = install_repo(tmp_path, [first, second])
+
+    result = repo.page_records(build["build_id"], review_queue="ready", query="searchable")
+
+    assert result["total"] == 1
+    assert result["queue_counts"]["all"] == 1
+    assert result["queue_counts"]["ready"] == 1
+    assert result["queue_counts"]["accepted"] == 0
+
+
 def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Path):
     """From the "all" queue, "next" skips records that are already accepted.
 
@@ -237,7 +251,6 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
     result=manager.bulk_disposition(build["build_id"],"accepted",review_queue="ready")
     assert result["changed"] == 1
     assert result["queue_counts"]["issues"] == 3
-
 
 
 

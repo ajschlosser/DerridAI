@@ -514,7 +514,7 @@ def _topology_quality_report(records:list[dict[str,Any]], source_blocks:list[dic
     }
 
 
-def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[dict[str, Any], bool]:
+def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[dict[str, Any] | None, bool]:
     """Choose the strongest safe seam near the preferred size target."""
     target=hard_max*0.72
     cumulative=0
@@ -533,6 +533,8 @@ def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[di
         protected=_is_protected_transition(left,right)
         score=structural-(distance*0.55)-(3.0 if protected else 0.0)
         scored.append((score,not protected,left))
+    if not scored:
+        return None, False
     safe=[item for item in scored if item[1]]
     if safe:
         return max(safe,key=lambda x:x[0])[2],False
@@ -767,4 +769,3 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     ]
     if confidences:
         record["extraction_quality"] = round(sum(confidences) / len(confidences), 4)
-
