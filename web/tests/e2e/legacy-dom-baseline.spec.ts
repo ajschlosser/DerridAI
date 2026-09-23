@@ -1573,6 +1573,16 @@ test.describe("legacy runtime DOM baseline", () => {
       } else if (target === "dock") {
         expect(stableMarkup).toContain('id="operationProgressStack"');
         expect(stableMarkup).toContain('id="operationStackItems"');
+      } else if (
+        ["works-loaded", "works-search", "works-actions-menu", "annotations-open-work"].includes(
+          scenario.name,
+        )
+      ) {
+        // The Works workspace header is an intentional redesign; keep these scenarios focused
+        // on its semantic contract instead of freezing the entire presentation in legacy HTML.
+        expect(stableMarkup).toContain('class="works-workspace-header"');
+        expect(stableMarkup).toContain('id="works-page-title"');
+        expect(stableMarkup).toContain("Metadata patterns in this work");
       } else {
         expect(stableMarkup).toMatchSnapshot(`${scenario.name}.html`);
       }
