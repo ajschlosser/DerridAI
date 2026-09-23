@@ -23,7 +23,7 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
   (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
   audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
   small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
-- **`api/app/corpus_builder.py`: 4,109 lines**, down from 8,236 when this effort started (50.1% removed so far). All
+- **`api/app/corpus_builder.py`: 3,606 lines**, down from 8,236 when this effort started (56.2% removed so far). All
   seven originally-planned clusters are extracted (publication/touchup, record-quality, segmentation, review-state
   derivation, human review's stateful mutation methods, enrichment reruns, build lifecycle/provider session
   management), plus the smaller supporting clusters found after them: operations/job tracking
@@ -36,17 +36,24 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
   `pydantic` and `corpus_metadata`'s closed vocabularies). That unblocked `create`, `preview_schema_group`,
   `_edit_model`, `_profile_of_build`, `_profile_for`, `_refresh_workflow_fields`, `validate_records`,
   `regenerate_manifest`, and `patch_manifest`, all now moved verbatim into a new `corpus_manifest_workflow.py`
-  (`ManifestWorkflowMixin`). Plus three cross-cutting sets of pure helpers found by scanning the whole file's
-  decorator list rather than any one planned cluster: LLM request/response handling (`corpus_llm_helpers.py`),
-  reviewer-facing blind-review helpers (`corpus_reviewer_helpers.py`), and enrichment/editorial bookkeeping
-  (`corpus_enrichment_helpers.py`). `PdfCorpusBuildManager` now inherits from six mixins
-  (`class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestWorkflowMixin, OperationsMixin,
-  ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin):`) -- see "The mixin technique" below,
-  **including its `TYPE_CHECKING`-guard requirement, which is not optional**: an earlier version of this
-  extraction shipped without it and silently broke `rerun_metadata_enrichment` (see "Concluded, do not re-open"
-  below). What remains of `corpus_builder.py` is now mostly `PdfCorpusRepository` (the separate, lower-level class
-  in the same file, not yet surveyed for its own decomposition potential) plus whatever smaller pure/stateful
-  fragments a fresh top-to-bottom skim turns up.
+  (`ManifestWorkflowMixin`). The ten LLM-driven boundary-segmentation execution methods (`_compact_segment_prompt`
+  through `_segment`, the recursive windowed pass, pairwise/batch classification, and boundary adjudication) moved
+  into a new `corpus_segmentation_execution.py` (`BuildSegmentationExecutionMixin`) -- see "Gotchas learned" below
+  for the monkeypatch fix this required in three test files. Plus three cross-cutting sets of pure helpers found by
+  scanning the whole file's decorator list rather than any one planned cluster: LLM request/response handling
+  (`corpus_llm_helpers.py`), reviewer-facing blind-review helpers (`corpus_reviewer_helpers.py`), and
+  enrichment/editorial bookkeeping (`corpus_enrichment_helpers.py`). `PdfCorpusBuildManager` now inherits from
+  seven mixins (`class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestWorkflowMixin,
+  OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin,
+  BuildSegmentationExecutionMixin):`) -- see "The mixin technique" below, **including its `TYPE_CHECKING`-guard
+  requirement, which is not optional**: an earlier version of this extraction shipped without it and silently broke
+  `rerun_metadata_enrichment` (see "Concluded, do not re-open" below). What remains of `PdfCorpusBuildManager`
+  itself is mostly the metadata-enrichment execution pipeline (`_enrich_record`, `_prepare_metadata_tasks`,
+  `_execute_metadata_tasks`, `_reconcile_metadata_results` -- the largest single method left, ~450 lines) and build
+  orchestration (`_run`, `_prepare_build_scope`, `_construct_build_topology`, `_schedule_build_enrichment`,
+  `_rewrite_and_validate`, `publish`, and related). `PdfCorpusRepository` (the separate, lower-level class in the
+  same file, ~540 lines of asset/build/record persistence, no static/classmethods -- already a cohesive
+  single-responsibility class) has been surveyed and does not look like a good decomposition candidate on its own.
 - **Release:** 0.70.0 "Amesbury" is tagged (`v0.70.0`) and current. See `docs/notes/0.70.0.md`.
 - **Assertion-status vocabulary** matches `SPECIFICATION.md` exactly (`model_inferred`, `confirmed_absent`); a
   lazy read-time migration in `corpus_builder.py`'s `PdfCorpusRepository` upgrades any build/record/checkpoint still
@@ -81,13 +88,17 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
 
 ## Next steps
 
-1. **All seven originally-planned `corpus_builder.py` clusters, plus every method the circular-import blocker had
-   deferred, are done.** What's left is `PdfCorpusRepository` (the separate, lower-level class in the same file --
-   not yet surveyed for its own decomposition potential) and whatever remains of `PdfCorpusBuildManager` after a
-   fresh top-to-bottom skim (grep the decorator list first, see "How to find the next pure cluster" below; do not
-   be surprised if what is left is entirely stateful, and if it is, follow "The mixin technique" including its
-   `TYPE_CHECKING` guard). `metric_stage_of`/`annotate_boundary_suspects`, two pure functions sitting near where
-   the old models block used to be, have not yet been investigated for extraction.
+1. **All seven originally-planned `corpus_builder.py` clusters, every method the circular-import blocker had
+   deferred, and boundary-segmentation execution are done.** `PdfCorpusRepository` was surveyed and does not look
+   worth decomposing on its own (537 lines, no static/classmethods, already single-responsibility persistence
+   code). What's left in `PdfCorpusBuildManager` is the metadata-enrichment execution pipeline (`_enrich_record`,
+   `_prepare_metadata_tasks`, `_execute_metadata_tasks`, `_reconcile_metadata_results`) and build orchestration
+   (`_run` through `publish`) -- both entirely stateful, zero `@staticmethod`/`@classmethod` candidates, same shape
+   as the segmentation-execution cluster just extracted. Follow "The mixin technique" including its
+   `TYPE_CHECKING` guard, and expect the same monkeypatch-module gotcha (see "Gotchas learned"): any test that
+   patches `cb.some_free_function` where `some_free_function` is called bare from inside the *new* mixin module
+   needs to patch that new module instead, not `cb`. `metric_stage_of`/`annotate_boundary_suspects`, two pure
+   functions sitting near where the old models block used to be, have not yet been investigated for extraction.
 2. **`PdfCorpusBuilder.vue`'s composables/CSS extraction has a real blocker: no test coverage exists for this file at
    all** (no `.stories.ts`, no dedicated Vitest file, not in the 131-scenario DOM baseline) -- confirmed by checking
    before starting, not assumed. Every other decomposition in this effort had a full test suite to verify "no
@@ -179,6 +190,13 @@ decorator used by 20+ methods across multiple clusters) moves into whichever mix
   import time. **Grep every cluster's target names for `monkeypatch.setattr(manager,` / `monkeypatch.setattr(self,`
   in `tests/` before extracting, not after** -- the test does not error until its assertion fails, so this is easy
   to miss.
+- **`monkeypatch.setattr(cb, "name", fake)` also silently stops working** if a mixin extraction moves the *caller*
+  of `name` (a bare free function, e.g. `_deterministic_boundary_candidates`) into a new module -- the caller now
+  resolves `name` against the new module's own globals, not `corpus_builder`'s. Caught by three tests going from
+  pass to a wrong-value assertion failure (not an error) when `_segment`/`_segment_candidate_batch` moved into
+  `corpus_segmentation_execution.py`. Fix: `monkeypatch.setattr(<new_module>, "name", fake)` and import that module
+  in the test (`from app import corpus_segmentation_execution as cse`) -- run the **full** pytest suite after every
+  mixin extraction, not just `compileall`/`mypy`/`ruff`, since this class of bug produces no import or type error.
 - **A test or another module accessing `PdfCorpusBuildManager._name` or `manager.instance._name` directly** breaks
   the same way once `_name` is a module function, but under a different alias than `cb.PdfCorpusBuildManager.` (seen
   once as `from app.corpus_builder import PdfCorpusBuildManager as M`, once as `pdf_corpus_builds._name(...)` in
