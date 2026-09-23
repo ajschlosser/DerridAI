@@ -101,7 +101,9 @@ async function submit() {
           i18n.t("auth.assigned_account", "Use your assigned DerridAI account.")
         }}</span>
       </div>
-      <div v-if="auth.error" class="auth-error auth-connect-error">{{ auth.error }}</div>
+      <div v-if="auth.error" class="auth-error auth-connect-error" role="alert">
+        {{ auth.error }}
+      </div>
       <form class="auth-form" @submit.prevent="submit">
         <label
           >{{ i18n.t("auth.username", "Username")
@@ -130,7 +132,7 @@ async function submit() {
             required
             minlength="6"
         /></label>
-        <div v-if="error" class="auth-error">{{ error }}</div>
+        <div v-if="error" class="auth-error" role="alert">{{ error }}</div>
         <button class="btn primary auth-submit" :disabled="busy">
           {{
             busy
