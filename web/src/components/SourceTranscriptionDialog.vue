@@ -1,13 +1,18 @@
 <script setup lang="ts">
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { ref, watch } from "vue";
 import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
+import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
 const props = withDefaults(
   defineProps<{
     open: boolean;
+    mediaKind?: string;
+    audioUrl?: string;
+    imageUrl?: string;
     pdfUrl: string;
     page: number;
     pageCount: number;
@@ -37,6 +42,7 @@ function move(delta: number) {
 <template>
   <UiDialog
     :open="open"
+    :close-label="i18n.t('ui.close')"
     size="xlarge"
     :title="i18n.t('pdf_corpus.source_transcription_title')"
     :description="
@@ -44,7 +50,7 @@ function move(delta: number) {
     "
     @close="emit('close')"
   >
-    <div class="source-toolbar">
+    <div v-if="hasPages(mediaKind)" class="source-toolbar">
       <div>
         <b>{{ i18n.tf("pdf_corpus.pdf_page", { page }) }}</b
         ><span v-if="printedPage !== null && printedPage !== undefined">
@@ -68,8 +74,13 @@ function move(delta: number) {
       </div>
     </div>
     <div class="transcription-grid">
-      <section class="source-pane" :aria-label="i18n.t('pdf_corpus.source_pdf')">
+      <section
+        class="source-pane"
+        tabindex="0"
+        :aria-label="i18n.t('pdf_corpus.source_context')"
+      >
         <PdfEvidenceViewer
+          v-if="pdfUrl"
           :pdf-url="pdfUrl"
           :page="page"
           :page-width="pageWidth"
@@ -78,8 +89,24 @@ function move(delta: number) {
           :evidence-block-ids="blocks.map((b) => b.block_id)"
           :zoomable="true"
         />
+        <img
+          v-if="imageUrl"
+          :src="imageUrl"
+          :alt="i18n.t('pdf_corpus.source_context')"
+        />
+        <audio
+          v-if="audioUrl"
+          controls
+          preload="metadata"
+          :src="audioUrl"
+          :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
+        />
+        <article v-for="block in pdfUrl ? [] : blocks" :key="block.block_id">
+          <b>{{ timeLabel(block.start, block.end) }} {{ block.speaker }}</b>
+          <p>{{ block.text }}</p>
+        </article>
       </section>
-      <section class="transcription-pane">
+      <section class="transcription-pane" :aria-busy="busy">
         <label
           ><span>{{ i18n.t("pdf_corpus.reviewed_record_text") }}</span
           ><textarea v-model="draft" :disabled="busy"></textarea>
@@ -115,6 +142,10 @@ function move(delta: number) {
   </UiDialog>
 </template>
 <style scoped>
+img,
+audio {
+  max-inline-size: 100%;
+}
 .source-toolbar {
   display: flex;
   justify-content: space-between;
@@ -126,6 +157,7 @@ function move(delta: number) {
 .footer-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   align-items: center;
 }
 .transcription-grid {
@@ -137,13 +169,14 @@ function move(delta: number) {
 .source-pane,
 .transcription-pane {
   min-width: 0;
+  padding: 12px;
+  overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: auto;
   background: var(--soft);
 }
 .transcription-pane {
-  padding: 12px;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -154,6 +187,7 @@ function move(delta: number) {
   font-weight: 800;
 }
 .transcription-pane textarea {
+  box-sizing: border-box;
   width: 100%;
   min-height: 48vh;
   resize: vertical;
@@ -172,11 +206,13 @@ function move(delta: number) {
 }
 .transcription-pane pre {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 5px 0 0;
   font:
     13px/1.45 ui-monospace,
     monospace;
 }
+.source-pane:focus-visible,
 .transcription-pane :is(textarea, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;

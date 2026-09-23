@@ -100,9 +100,9 @@ def detect_media_kind(filename: str, data: bytes, content_type: str = "") -> str
         return "html"
     if suffix in TEXT_SUFFIXES or kind.startswith("text/"):
         return "text"
-    if _looks_like_text(data):
+    if not suffix and _looks_like_text(data):
         return "text"
-    return "pdf"
+    raise ValueError("Unsupported source format.")
 
 
 def content_suffix_for(kind: str, filename: str) -> str:
@@ -148,6 +148,11 @@ def extract_non_pdf(
     kind: str,
     catalog: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from .source_safety import check_size
+
+    check_size(data)
+    if kind not in {"audio", "docx", "doc", "rtf", "html", "image", "text", "gutenberg", "url"}:
+        raise ValueError("Unsupported source format.")
     if kind == "audio":
         return extract_audio(data, filename=filename, catalog=catalog)
     if kind == "docx":

@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props = withDefaults(
   defineProps<{
+    mediaKind?: string;
+    audioUrl?: string;
+    imageUrl?: string;
     pdfUrl?: string;
     page: number;
     pageCount?: number;
@@ -42,7 +46,7 @@ const i18n = useI18nStore();
     <header class="source-summary-head">
       <div>
         <b>{{ i18n.t("pdf_corpus.source_context") }}</b
-        ><span>{{
+        ><span v-if="hasPages(mediaKind)">{{
           pageCount
             ? i18n.tf("pdf_corpus.pdf_page_of", {
                 page,
@@ -53,7 +57,7 @@ const i18n = useI18nStore();
       </div>
     </header>
     <div
-      v-if="pageCount > 1"
+      v-if="hasPages(mediaKind) && pageCount > 1"
       class="source-page-nav"
       :aria-label="i18n.t('pdf_corpus.source_page_navigation')"
     >
@@ -67,6 +71,7 @@ const i18n = useI18nStore();
     </div>
     <div v-if="pdfUrl" class="source-thumbnail">
       <PdfEvidenceViewer
+        v-if="pdfUrl"
         :pdf-url="pdfUrl"
         :page="page"
         :page-width="pageWidth"
@@ -75,6 +80,24 @@ const i18n = useI18nStore();
         :evidence-block-ids="evidenceBlockIds"
         :zoomable="zoomable"
       />
+    </div>
+    <div v-else-if="!hasPages(mediaKind) || imageUrl">
+      <img
+        v-if="imageUrl"
+        :src="imageUrl"
+        :alt="i18n.t('pdf_corpus.source_context')"
+      />
+      <audio
+        v-if="audioUrl"
+        controls
+        preload="metadata"
+        :src="audioUrl"
+        :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
+      />
+      <article v-for="block in blocks" :key="block.block_id">
+        <b>{{ timeLabel(block.start, block.end) }} {{ block.speaker }}</b>
+        <p>{{ block.text }}</p>
+      </article>
     </div>
     <div v-else class="source-unavailable">
       {{
@@ -85,15 +108,25 @@ const i18n = useI18nStore();
       <button type="button" class="btn primary" @click="emit('openViewer')">
         {{ i18n.t("pdf_corpus.open_source_viewer") }}
       </button>
-      <button v-if="showPdfExplorer" type="button" class="btn" @click="emit('openPdfExplorer')">
+      <button
+        v-if="showPdfExplorer && mediaKind !== 'audio' && pdfUrl"
+        type="button"
+        class="btn"
+        @click="emit('openPdfExplorer')"
+      >
         {{ i18n.t("pdf_corpus.open_pdf_explorer") }}
       </button>
     </div>
   </section>
 </template>
 <style scoped>
+img,
+audio {
+  max-inline-size: 100%;
+}
 .source-summary {
   min-width: 0;
+  overflow-wrap: anywhere;
   display: grid;
   gap: 10px;
   padding: 12px;

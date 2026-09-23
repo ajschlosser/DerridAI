@@ -66,3 +66,13 @@ export function commonWorkValue(rows: Loose[], field: string) {
 export function workCoverUrl(rows: Loose[]) {
   return String(rows.map((row) => row.record?.cover_url).find(Boolean) || "").trim();
 }
+
+export function parseProposedMetadataValue(raw: unknown, original: unknown) {
+  if (typeof original === "number") {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) throw new Error("Expected a number.");
+    return value;
+  }
+  if (typeof original === "boolean") return String(raw).toLowerCase() === "true";
+  return raw;
+}

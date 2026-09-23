@@ -36,8 +36,12 @@ import { FIELD_LABELS, SEARCH_AUTOCOMPLETE_EXCLUDED, SEARCH_FACET_FIELDS, SEARCH
 import { esc, icon } from "../domain/html";
 import { annotationMatches, jsonPretty, llmDiffSides, ragAnswerHtml, reviewDiffSides } from "../domain/reviewPresentation";
 import { touchupFieldsForRecord } from "../domain/touchupFields";
-import { commonWorkValue, representativeWorkMetadata, workCoverUrl, workOverviewMetadataRows } from "../domain/workMetadata";
-import { compactRecordHistory, normalizePdfLinkChanges, pdfLinks, recordPayload } from "../domain/recordPayloads";
+import { commonWorkValue, parseProposedMetadataValue, representativeWorkMetadata, workCoverUrl, workOverviewMetadataRows } from "../domain/workMetadata";
+import { compactNumber } from "../domain/numberFormatting";
+import { normalizeResearcherToken } from "../domain/researcherContentFilter";
+import { filterOpsForField } from "../domain/searchFilterSchema";
+import { stripLigaturesAndArtifacts } from "../domain/textCleanup";
+import { compactRecordHistory, isResponseCacheStore, normalizePdfLinkChanges, pdfLinks, ragEvidenceRecordPayload, recordPayload, touchupRecordPayload, upsertRecordPayload } from "../domain/recordPayloads";
 import { highlight, highlightTerms, modelOptionLabel, openAiModelMatchesKind, semanticSimilarity, snippet } from "../domain/recordFormatting";
 import { fullHttpErrorDetail } from "../domain/httpErrors";
 import { parsePastedRecord } from "../domain/pastedRecord";
@@ -1127,43 +1131,6 @@ function serializableFile(file){
 }
 
 
-// 0.30.11 packet discipline: API boundaries receive only fields required by
-// the operation. Audit history is intentionally opt-in because it can dwarf
-// the rest of a record after repeated edits.
-const TOUCHUP_TRANSPORT_CONTEXT_FIELDS=[
-  "record_id","work","document_author","edition","year","page_start","page_end",
-  "region_type","region_author","primary_text","speaker","position_holder","target",
-  "discourse_role","proposition_status","semantic_function","stance","claim_scope",
-  "text","topics","concepts","persons","works_referenced","is_direct_quote",
-  "quoted_speaker","quoted_author","quoted_work","quoted_position_holder",
-  "quoted_addressee","quoted_referent","quotation_chain","inline_citation",
-  "full_citation","needs_review","review_reason"
-];
-const RAG_EVIDENCE_TRANSPORT_FIELDS=[
-  "record_id","canonical_work_id","work","document_author","edition","year",
-  "page_start","page_end","translator","speaker","position_holder","target",
-  "discourse_role","proposition_status","stance","text","topics","concepts",
-  "persons","document_language","document_languages","quoted_speaker",
-  "quoted_author","quoted_work","quoted_position_holder"
-];
-function upsertRecordPayload(record,chromaId=null){
-  const out=recordPayload(record,{includeChromaId:false});
-  if(chromaId)out._chroma_id=chromaId;
-  return out;
-}
-function touchupRecordPayload(record,fields=[]){
-  return recordPayload(record,{fields:[...fields,...TOUCHUP_TRANSPORT_CONTEXT_FIELDS]});
-}
-function ragEvidenceRecordPayload(record){
-  return recordPayload(record,{fields:RAG_EVIDENCE_TRANSPORT_FIELDS});
-}
-
-
-
-
-function isResponseCacheStore(store){
-  return Boolean(store&&(store.name==="_response_cache"||store.storage_name==="derridai_response_cache"||store.metadata?.derridai_system_collection==="response_cache"));
-}
 function recordStores(){
   return state.stores.filter(store=>!isResponseCacheStore(store));
 }
@@ -1313,7 +1280,6 @@ function setActiveStore(name){
 
 
 
-function compactNumber(value){const n=Number(value)||0;if(n>=1000000)return `${(n/1000000).toFixed(n>=10000000?0:1)}M`;if(n>=1000)return `${(n/1000).toFixed(n>=100000?0:1)}K`;return n.toLocaleString()}
 function relativeTime(value){return relativeTimeLabel(value,Date.now(),{tr,trf,locale:state.translations?.locale})}
 
 
@@ -1413,12 +1379,6 @@ function workflowProviderSummaryHtml(profile){
   return `<span class="workflow-provider-mark">${profile.type==="ollama"?"O":"AI"}</span><span><b>${esc(providerDisplayName(profile))}</b><small>${profile.type==="ollama"?"Ollama":"OpenAI-compatible"} · ${esc(profile.model||tr("language.model_not_set"))}</small><small>${Number(profile.max_concurrent_requests??1)} ${esc(tr("works.concurrent_requests"))}</small></span>${profile.id===state.appConfig.default_provider_profile?`<span class="provider-default-chip">${esc(tr("ui.default"))}</span>`:""}`;
 }
 
-function parseProposedMetadataValue(raw,original){
-  if(typeof original==="number"){const value=Number(raw);if(!Number.isFinite(value))throw new Error("Expected a number.");return value}
-  if(typeof original==="boolean")return String(raw).toLowerCase()==="true";
-  return raw;
-}
-
 function bulkEditRowsForScope(scope){
   if(scope==="selected")return selectedReviewItems();
   if(scope==="active"){
@@ -1455,15 +1415,6 @@ function dbSearchWhere(){return Object.fromEntries(Object.entries(state.dbSearch
 
 
 
-const numericFilterFields=new Set(["page_start","page_end","year","publication_year","text_length","extraction_quality","attribution_confidence","semantic_classification_confidence"]);
-const collectionFilterFields=new Set(["topics","concepts","persons","works_referenced","institutions_referenced","locations_referenced","events_referenced","groups_referenced","languages_referenced","document_language","quoted_speaker","quotation_chain"]);
-function filterOpsForField(field){
-  if(numericFilterFields.has(field))return [["eq","equals"],["neq","not equal"],["gte","greater than or equal"],["lte","less than or equal"],["empty","is empty"],["notempty","is not empty"]];
-  if(collectionFilterFields.has(field))return [["has","contains"],["nhas","does not contain"],["eq","equals exactly"],["neq","does not equal"],["empty","is empty"],["notempty","is not empty"]];
-  return [["eq","equals"],["neq","not equal"],["has","contains"],["nhas","does not contain"],["empty","is empty"],["notempty","is not empty"]];
-}
-
-
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
 // selection, URL serialization, and the existing LLM review workflows.
@@ -1475,19 +1426,8 @@ function recordsListMetadataSearch(field,value,contains){
   return searchByMetadata(field,value,{contains:Boolean(contains)});
 }
 
-const ligatures={"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"};
-function cleanText(text){
-  let s=String(text??""),before=s;
-  s=s.replace(/[ﬀﬁﬂﬃﬄﬅﬆ]/g,c=>ligatures[c]||c)
-    .replace(/\u00ad/g,"")
-    // eslint-disable-next-line no-misleading-character-class -- SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics.
-    .replace(/[\u200b\u200c\u200d\u2060\ufeff\ufffe\uffff]/g,"")
-    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ])-[ \t]*\r?\n[ \t]*([a-zà-öø-ÿ])/g,"$1$2")
-    .replace(/\r\n/g,"\n");
-  return {text:s,changed:s!==before};
-}
 function cleanRecord(f,i){
-  const c=cleanText(f.records[i].text);if(!c.changed)return toast(tr("runtime.toast.no_ligatures"));
+  const c=stripLigaturesAndArtifacts(f.records[i].text);if(!c.changed)return toast(tr("runtime.toast.no_ligatures"));
   const changed=applyRecordChanges(f,i,{text:c.text},{source:"ocr_cleanup"});
   shell();renderView();toast(`${changed} tracked change${changed===1?"":"s"} applied`);
 }
@@ -1496,7 +1436,7 @@ function cleanRows(rows){
   const batchId=uid();let recordsChanged=0,fieldsChanged=0;
   for(const row of rows){
     const current=row.file.records[row.index];
-    const cleaned=cleanText(current?.text);
+    const cleaned=stripLigaturesAndArtifacts(current?.text);
     if(!cleaned.changed)continue;
     const n=applyRecordChanges(row.file,row.index,{text:cleaned.text},{source:"ocr_cleanup",batchId});
     if(n){recordsChanged++;fieldsChanged+=n}
@@ -2002,11 +1942,6 @@ document.addEventListener("click",event=>{
 });
 let researcherPolicy={ready:false,blocked:new Set(),contextual:[]};
 let researcherPolicyToastAt=0;
-const researcherLeet={"0":"o","1":"i","3":"e","4":"a","5":"s","7":"t","@":"a","$":"s"};
-function normalizeResearcherToken(value){
-  const text=String(value||"").normalize("NFKC").replace(/[013457@$]/g,ch=>researcherLeet[ch]||ch).toLocaleLowerCase();
-  return text.replace(/(?<=\w)[._*~-]+(?=\w)/g,"");
-}
 async function researcherTokenDigest(value){
   if(!globalThis.crypto?.subtle)return "";
   const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalizeResearcherToken(value)));

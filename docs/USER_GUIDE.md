@@ -426,6 +426,44 @@ Back to JSONL:
 
 Export removes Chroma's internal `_chroma_id` field.
 
+## Corpus Builder source formats
+
+Choose the source format before choosing a file. PDF and image sources offer OCR;
+PDF/image pagination controls are unavailable for text, Word, RTF, Gutenberg, and
+audio sources. The review pane shows source text, the source image, or audio
+playback with timed speaker spans. Audio citations use time ranges and available
+speaker labels, never synthetic page numbers. Correcting a transcript creates a
+record revision and retains the original transcription.
+
+For PDF and image sources, choose an OCR strategy before selecting the source:
+use embedded text when available, prefer OCR for difficult scans, or always OCR.
+The difficult-scan choice uses the existing intermediate OCR threshold; always
+OCR forces OCR for every page.
+
+Ingestion rejects malformed or unsupported files and embedded Word/RTF active
+content; it never runs document macros, fields, or linked objects. Non-PDF files
+are limited to 32 MiB (RTF to 8 MiB), Word archives to 2,048 entries and 64 MiB
+expanded, individual XML parts to 8 MiB, and expansion ratios to 200:1. Images
+must be single-frame PNG or JPEG, at most 20 million pixels. Extractor contract,
+Python/library versions, and source digest are saved with the asset.
+
+Audio is optional: install FFmpeg (including `ffprobe`) in the API environment
+and configure `OPENAI_API_KEY` for full-file Whisper transcription. The default
+API image does not install FFmpeg or whisperx. Install whisperx and its model
+runtime separately if speaker diarization is required, and configure `HF_TOKEN`
+where the diarization model requires access. Files must be at most 24 MiB and
+four hours. Unsupported codecs, probe timeouts, failed transcription, empty
+transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
+preserves the transcript with a visible warning and no invented speaker.
+The model, provider endpoint, duration, and diarization status are retained.
+
+Gutenberg search lists separate eBook IDs and languages. Choose an exact entry;
+imports retain its ID, edition label, catalog metadata, exact download URL,
+encoding, retrieval time, and original-byte digest. Missing text, mismatched
+identity, redirects, timeouts, and undecodable content fail visibly. The importer
+does not guess another download or substitute another edition. Two editions
+with identical text remain distinct assets.
+
 ## Corpus Builder metadata population
 
 The LLM returns each metadata field (or `null` when unsupported) together with a per-field confidence. The response schema requires every field, so a model cannot return confidence assessments without values.

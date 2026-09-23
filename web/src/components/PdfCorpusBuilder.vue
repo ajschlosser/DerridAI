@@ -17,6 +17,7 @@ import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
+import { hasPages, timeLabel } from "../domain/sourceMedia";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
@@ -242,7 +243,9 @@ const notice = ref("");
 const sourceIllegibility = ref(0);
 const sourceUrl = ref("");
 const gutenbergQuery = ref("");
-const gutenbergHits = ref<Array<{ etext_id: number; title: string; author: string; language: string }>>([]);
+const gutenbergHits = ref<
+  Array<{ etext_id: number; title: string; author: string; language: string }>
+>([]);
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const manualProvider = ref<"ollama" | "openai">("ollama");
@@ -759,6 +762,17 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
+const paginatedSource = computed(() => hasPages(selectedAsset.value?.media_kind));
+const imageSourceUrl = computed(() =>
+  selectedAsset.value?.media_kind === "image" && selectedAssetId.value
+    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    : "",
+);
+const audioSourceUrl = computed(() =>
+  selectedAsset.value?.media_kind === "audio" && selectedAssetId.value
+    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    : "",
+);
 const sourcePdfUrl = computed(() => {
   if (!selectedAssetId.value) return "";
   const kind = selectedAsset.value?.media_kind;
@@ -780,7 +794,9 @@ const selectedPageMeta = computed(
     ) || null,
 );
 const selectedPageBlocks = computed(() =>
-  visibleBlocks.value.filter((block) => Number(block.page) === Number(selectedPdfPage.value)),
+  visibleBlocks.value.filter(
+    (block) => !paginatedSource.value || Number(block.page) === Number(selectedPdfPage.value),
+  ),
 );
 const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
 const selectedProfile = computed(
@@ -923,6 +939,7 @@ const selectedStructureSummary = computed(() => {
 const setupWarnings = computed(() => {
   const warnings: string[] = [];
   if (
+    paginatedSource.value &&
     selectedAsset.value?.pages?.length &&
     !selectedAsset.value.document_layout?.main_text_pdf_start
   )
@@ -1079,7 +1096,7 @@ function registerBuildOperation(build: CorpusBuild) {
     build_id: build.build_id,
     type: "pdf_corpus",
     kind: "pdf_corpus",
-    label: `PDF corpus · ${build.source_filename || "source"}`,
+    label: `${i18n.t("pdf_corpus.corpus_builder")} · ${build.source_filename || ""}`,
     status: ["queued", "running"].includes(build.status)
       ? build.status
       : build.status === "blocked"
@@ -1746,7 +1763,9 @@ async function upload(file?: File | null) {
     selectedAssetId.value = asset.asset_id;
     maybeOpenIngestWarning(asset);
     setMessage(
-      i18n.tf("pdf_corpus.source_ingested", { pages: asset.page_count, blocks: asset.block_count, ocr: asset.ocr_pages || 0 }),
+      i18n.tf("pdf_corpus.source_ingested_blocks", {
+        blocks: asset.block_count,
+      }),
     );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1781,7 +1800,10 @@ async function searchGutenberg() {
   try {
     const result = await pdfCorpusApi.searchGutenberg(query);
     gutenbergHits.value = result.items || [];
-    if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty"));
+    if (!gutenbergHits.value.length)
+      setMessage(
+        i18n.t("pdf_corpus.gutenberg_empty"),
+      );
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
@@ -2647,11 +2669,15 @@ async function requeueCurrentRecord() {
   try {
     const availableProfileIds = new Set(providerProfiles.value.map((profile) => profile.id));
     const profileId =
-      [llmActionProviderId.value, selectedProviderId.value]
-        .find((id) => Boolean(id) && availableProfileIds.has(id)) ||
+      [llmActionProviderId.value, selectedProviderId.value].find(
+        (id) => Boolean(id) && availableProfileIds.has(id),
+      ) ||
       providerProfiles.value[0]?.id ||
       "";
-    if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile"));
+    if (!profileId)
+      throw new Error(
+        i18n.t("pdf_corpus.no_provider_profile"),
+      );
     await pdfCorpusApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
@@ -3519,7 +3545,7 @@ onBeforeUnmount(() => {
           @search-gutenberg="searchGutenberg"
           @import-gutenberg="importGutenberg"
         />
-        <div v-if="selectedAsset" class="source-facts">
+        <div v-if="selectedAsset && paginatedSource" class="source-facts">
           <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages") }}</span
           ><span
             >{{ selectedAsset.block_count }}
@@ -3532,7 +3558,7 @@ onBeforeUnmount(() => {
           ><span>SHA-256 {{ selectedAsset.sha256.slice(0, 16) }}…</span
           ><span>{{ formatDate(selectedAsset.created_at) }}</span>
         </div>
-        <p v-if="selectedAsset" class="source-facts-help">
+        <p v-if="selectedAsset && paginatedSource" class="source-facts-help">
           {{
             i18n.t("pdf_corpus.source_facts_help")
           }}
@@ -3540,7 +3566,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
-        v-if="selectedAsset?.pages?.length"
+        v-if="paginatedSource && selectedAsset?.pages?.length"
         class="setup-phase"
         aria-labelledby="pdf-corpus-structure-phase-title"
       >
@@ -3879,6 +3905,7 @@ onBeforeUnmount(() => {
       </div>
 
       <CorpusBuildReadiness
+        :media-kind="selectedAsset?.media_kind"
         :source-filename="selectedAsset?.filename || ''"
         :page-count="selectedAsset?.page_count || 0"
         :block-count="selectedAsset?.block_count || 0"
@@ -4227,6 +4254,7 @@ onBeforeUnmount(() => {
               {{ currentBuild.manifest_revision || 1 }}
             </summary>
             <DocumentManifestEditor
+              :media-kind="selectedAsset?.media_kind"
               :manifest="currentBuild.manifest || {}"
               :disabled="buildRunning || busy !== ''"
               @save="saveManifest"
@@ -4513,10 +4541,7 @@ onBeforeUnmount(() => {
                     <span class="record-row-main"
                       ><b>{{ record.record_id }}</b
                       ><small
-                        >{{ i18n.t("pdf_corpus.pages") }} {{ record.page_start }}–{{
-                          record.page_end
-                        }}
-                        · {{ record.text_length.toLocaleString() }}
+                        >{{ record.inline_citation }} · {{ record.text_length.toLocaleString() }}
                         {{ i18n.t("pdf_corpus.characters") }}</small
                       ><span class="record-row-status" :data-state="recordState(record)">{{
                         recordStateLabel(record)
@@ -4592,9 +4617,7 @@ onBeforeUnmount(() => {
                       }}</span>
                       <h3 id="review-record-title">{{ selectedRecord.record_id }}</h3>
                       <p>
-                        {{ i18n.t("pdf_corpus.pages") }} {{ selectedRecord.page_start }}–{{
-                          selectedRecord.page_end
-                        }}
+                        {{ selectedRecord.inline_citation }}
                         · {{ selectedRecord.text_length.toLocaleString() }}
                         {{ i18n.t("pdf_corpus.characters")
                         }}{{ selectedRecordActivitySummary }}
@@ -5128,7 +5151,16 @@ onBeforeUnmount(() => {
                     >
                       <header>
                         <span>{{ block.block_id }}</span
-                        ><span>PDF {{ block.page }} · {{ block.type }}</span>
+                        ><span
+                          >{{
+                            block.locator_kind === "time"
+                              ? timeLabel(block.start, block.end)
+                              : paginatedSource
+                                ? block.page
+                                : block.block_id
+                          }}
+                          · {{ block.speaker || block.type }}</span
+                        >
                       </header>
                       <p>{{ block.text }}</p>
                       <button
@@ -5160,6 +5192,10 @@ onBeforeUnmount(() => {
                   tabindex="0"
                 >
                   <CorpusSourceSummary
+                    :media-kind="selectedAsset?.media_kind"
+                    :audio-url="audioSourceUrl"
+                    :image-url="imageSourceUrl"
+                    :show-pdf-explorer="selectedAsset?.media_kind === 'pdf'"
                     :pdf-url="sourcePdfUrl"
                     :page="selectedPdfPage"
                     :page-count="selectedAsset?.page_count || 0"
@@ -5236,7 +5272,16 @@ onBeforeUnmount(() => {
                       >
                         <header>
                           <span>{{ block.block_id }}</span
-                          ><span>PDF {{ block.page }} · {{ block.type }}</span>
+                          ><span
+                            >{{
+                              block.locator_kind === "time"
+                                ? timeLabel(block.start, block.end)
+                                : paginatedSource
+                                  ? block.page
+                                  : block.block_id
+                            }}
+                            · {{ block.speaker || block.type }}</span
+                          >
                         </header>
                         <p>{{ block.text }}</p>
                         <button
@@ -5400,6 +5445,9 @@ onBeforeUnmount(() => {
       @dismiss="dismissLlmTouchup"
     />
     <SourceTranscriptionDialog
+      :media-kind="selectedAsset?.media_kind"
+      :audio-url="audioSourceUrl"
+      :image-url="imageSourceUrl"
       v-if="selectedRecord && selectedAsset"
       :open="sourceTranscriptionOpen"
       :pdf-url="sourcePdfUrl"

@@ -18,11 +18,21 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
 
 ## Current state
 
-- **`runtime.js`: 2,410 lines**, down from 10,472 at the start (77.0% removed). Sections A and B of the plan below
-  are done: every cluster that could move to a `domain/*.ts` factory has moved, and every legacy HTML-string view
-  (dashboard, PDF Explorer, response cache) is a real Vue component. `legacyCompat.js`/`translateLegacyDom` were
-  audited and found still load-bearing (see "Concluded, do not re-open" below) -- not dead code. What's left is
-  small glue plus whatever remaining pure helpers a skim turns up (see "Next steps").
+- **`runtime.js`: 2,351 lines**, down from 10,472 at the start (77.5% removed). Sections A and B of the plan below
+  are done: every cluster that could move to a `domain/*.ts` factory has moved, every legacy HTML-string view
+  (dashboard, PDF Explorer, response cache) is a real Vue component, and a full top-to-bottom pass (this session)
+  found and moved the last genuinely pure helpers with zero `state`/closure dependency: `compactNumber` (new
+  `domain/numberFormatting.ts`), `parseProposedMetadataValue` (`domain/workMetadata.ts`), `filterOpsForField` and
+  its two field-name sets (`domain/searchFilterSchema.ts`), `normalizeResearcherToken` (new
+  `domain/researcherContentFilter.ts`), the ligature/OCR-artifact cleaner (`domain/textCleanup.ts`, renamed
+  `stripLigaturesAndArtifacts` to avoid colliding with the existing multi-rule `cleanupText`), and
+  `upsertRecordPayload`/`touchupRecordPayload`/`ragEvidenceRecordPayload`/`isResponseCacheStore`
+  (`domain/recordPayloads.ts`, alongside the `recordPayload` they already wrapped). `legacyCompat.js`/
+  `translateLegacyDom` were audited and found still load-bearing (see "Concluded, do not re-open" below) -- not
+  dead code. **What remains in `runtime.js` is not further-extractable by this pattern**: every remaining function
+  either reads `state` directly, calls a closure produced by one of the `create*` factories (`tr`, `esc`, `label`,
+  `display`, `providerProfiles`, ...), or touches the DOM/`document` -- see "Next steps" for why Section C
+  (composables) and Section D (CSS) are a different kind of work, not more of this one.
 - **`api/app/corpus_builder.py`: 2,784 lines**, down from 8,236 when this effort started (66.2% removed so far). All
   seven originally-planned clusters are extracted (publication/touchup, record-quality, segmentation, review-state
   derivation, human review's stateful mutation methods, enrichment reruns, build lifecycle/provider session
@@ -118,13 +128,29 @@ New modules: `source_media.py`, `source_text.py`, `source_audio.py`, `source_gut
    characterization coverage** (at minimum a `.stories.ts` and/or a baseline scenario exercising its main paths), or
    accept and disclose the higher risk explicitly before touching it. This is why backend work (which has full
    coverage) took priority once the safe frontend wins ran out.
-3. **Frontend:** skim `runtime.js` top to bottom for any remaining pure helper still sitting next to
-   state-coupled code (the same way `recordTableHelpers.ts` was found -- see "How to find the next pure cluster").
-   Most of what's left is small glue (`tr`, `trf`, `shell()`, `setShellRefreshHook`, `getShellSnapshot`,
-   `translatedNavLabel`/`translatedSectionLabel`, `currentContext`) or DOM/render-coupled code that stays.
-4. **Section C/D from the original runtime.js plan, still not started:** turn the `*Workspace` factories into
-   composables reading Pinia stores instead of polling `runtime.get*Snapshot()` (per view, only where a probe shows
-   stale/wrong behavior); CSS unification per `docs/STYLE_AUDIT.md`.
+3. **Frontend pure-extraction (Sections A/B) is done.** A full top-to-bottom pass this session (checking every
+   remaining `function`/`const` for a `state.`/closure reference) found and moved the last six genuinely pure
+   helpers (see "Current state" above). What's left is small glue (`tr`, `trf`, `shell()`, `setShellRefreshHook`,
+   `getShellSnapshot`, `translatedNavLabel`/`translatedSectionLabel`, `currentContext`) or code that reads `state`,
+   calls a factory-produced closure (`label`, `display`, `providerProfiles`, ...), or touches `document`/DOM
+   directly -- none of it is a mechanical move by this pattern. Re-check only if a future extraction removes one of
+   those dependencies (e.g. if `label`/`display` themselves become importable pure functions instead of
+   closures -- they are not today, since they depend on the schema loaded into `state`).
+4. **Section C (composables) is deliberately not a to-do list item -- it is conditional, not scheduled.** The plan
+   was always "turn a `*Workspace` factory into a composable reading its Pinia store instead of polling
+   `runtime.get*Snapshot()`, but only where a probe shows stale/wrong behavior" (see `AGENTS.md`'s "no functionality
+   changes... a behavior change is allowed only to fix an obvious bug, and only after checking"). No such probe has
+   been run and no staleness bug has been found in this effort; converting a `*Workspace` factory without one would
+   be a speculative rewrite of working code, which `AGENTS.md` and this file's own "Goal and hard requirements"
+   explicitly rule out. If a real staleness bug surfaces (a view showing data that does not update after a runtime
+   mutation), fix that one view as its own investigation: reproduce it, add a regression test, then convert only
+   that view's factory.
+5. **Section D (CSS unification) is a separate, larger effort with its own document, script and methodology** --
+   see `docs/STYLE_AUDIT.md` in full before touching it. It is not part of "the runtime.js refactor": it operates on
+   `style.css` and component `<style scoped>` blocks, not on `runtime.js`, and it already has its own progress
+   record (207 of 3,382 rules moved as of `docs/STYLE_AUDIT.md`'s last update) and safety checklist. Continuing it
+   is a legitimate next initiative but a distinct one from this file's runtime.js effort; do not fold it into
+   "finishing runtime.js" without treating it as the multi-session effort `docs/STYLE_AUDIT.md` describes.
 
 ### How to find the next pure cluster (backend or frontend)
 
