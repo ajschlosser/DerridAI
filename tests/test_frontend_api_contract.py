@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "api"))
 
 from app.application import create_app  # noqa: E402
+
 from scripts.check_frontend_api_contract import contract_mismatches  # noqa: E402
 
 pytestmark = pytest.mark.contract
