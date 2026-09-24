@@ -15,14 +15,12 @@ from fastapi.responses import JSONResponse
 from .auth import SESSION_COOKIE, auth_store, role_has_capability
 from .config import app_version_label
 from .corpus_reviewer_helpers import _present_for_reviewer
-from .http_auth import request_user as _request_user
 from .reviewer_context import current_reviewer, reviewer_id
 from .routers.admin import router as admin_router
 from .routers.annotations import router as annotations_router
 from .routers.auth import router as auth_router
 from .routers.chroma import router as chroma_router
 from .routers.corpus import router as corpus_router
-from .routers.health import health  # noqa: F401
 from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
 from .routers.jobs import router as jobs_router
@@ -43,6 +41,8 @@ app.add_middleware(
 )
 
 
+# Route modules own endpoint behavior. This module keeps only application-wide
+# composition, middleware, and response policies.
 app.include_router(auth_router)
 app.include_router(annotations_router)
 app.include_router(system_router)
