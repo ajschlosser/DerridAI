@@ -275,8 +275,9 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.routers import corpus as corpus_routes
 
-    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
     monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
 
     async def run():
@@ -336,8 +337,9 @@ def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.routers import corpus as corpus_routes
 
-    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
     monkeypatch.setattr(
         main.auth_store,
         "user_for_session",

@@ -148,11 +148,11 @@ def test_chroma_nuke_removes_catalog_files(tmp_path: Path):
 
 def test_nuke_route_blocked_when_jobs_are_active(monkeypatch):
     """Active background work still returns HTTP 409 and does not reset state."""
-    from app import main
+    from app.routers import admin as admin_routes
 
-    monkeypatch.setattr(main.llm_jobs, "active_count", lambda: 1)
+    monkeypatch.setattr(admin_routes.llm_jobs, "active_count", lambda: 1)
     try:
-        main.nuke(Response())
+        admin_routes.nuke(Response())
         raise AssertionError("expected HTTP 409")
     except HTTPException as exc:
         assert exc.status_code == 409
@@ -160,7 +160,7 @@ def test_nuke_route_blocked_when_jobs_are_active(monkeypatch):
 
 def test_nuke_route_clears_session_and_reports_bootstrap(monkeypatch, tmp_path: Path):
     """The admin route wipes corpus trees, resets stores, and expires the session cookie."""
-    from app import main
+    from app.routers import admin as admin_routes
 
     data_root = tmp_path / "data"
     chroma_dir = data_root / "chroma"
@@ -192,20 +192,20 @@ def test_nuke_route_clears_session_and_reports_bootstrap(monkeypatch, tmp_path: 
         def reset_in_memory_state(self) -> None:
             self.reset = True
 
-    monkeypatch.setattr(main, "llm_jobs", IdleJobs())
-    monkeypatch.setattr(main, "llm_tool_jobs", IdleJobs())
-    monkeypatch.setattr(main, "rag_jobs", IdleJobs())
-    monkeypatch.setattr(main, "upsert_jobs", IdleJobs())
-    monkeypatch.setattr(main, "store", FakeChroma())
-    monkeypatch.setattr(main, "pdf_corpus_repository", FakeCorpusRepo())
+    monkeypatch.setattr(admin_routes, "llm_jobs", IdleJobs())
+    monkeypatch.setattr(admin_routes, "llm_tool_jobs", IdleJobs())
+    monkeypatch.setattr(admin_routes, "rag_jobs", IdleJobs())
+    monkeypatch.setattr(admin_routes, "upsert_jobs", IdleJobs())
+    monkeypatch.setattr(admin_routes, "store", FakeChroma())
+    monkeypatch.setattr(admin_routes, "pdf_corpus_repository", FakeCorpusRepo())
     builds = FakeCorpusBuilds()
-    monkeypatch.setattr(main, "pdf_corpus_builds", builds)
-    monkeypatch.setattr(main, "settings", replace(main.settings, chroma_data_root=str(data_root)))
+    monkeypatch.setattr(admin_routes, "pdf_corpus_builds", builds)
+    monkeypatch.setattr(admin_routes, "settings", replace(admin_routes.settings, chroma_data_root=str(data_root)))
 
     configure_auth(monkeypatch, tmp_path)
     auth_store = AuthStore()
     auth_store.bootstrap_admin("owner", "secret-password")
-    monkeypatch.setattr(main, "auth_store", auth_store)
+    monkeypatch.setattr(admin_routes, "auth_store", auth_store)
 
     repo = SQLiteSystemRepository(tmp_path / "system.sqlite3")
     monkeypatch.setattr(system_store_mod, "system_repository", repo)
@@ -213,10 +213,10 @@ def test_nuke_route_clears_session_and_reports_bootstrap(monkeypatch, tmp_path: 
     system.set_researcher_profiles([
         {"id": "local", "name": "Local", "type": "ollama", "base_url": "http://ollama", "model": "x"},
     ])
-    monkeypatch.setattr(main, "system_store", system)
+    monkeypatch.setattr(admin_routes, "system_store", system)
 
     response = Response()
-    payload = main.nuke(response)
+    payload = admin_routes.nuke(response)
 
     assert payload["ok"] is True
     assert payload["bootstrap_required"] is True
