@@ -51,5 +51,7 @@ export function matchesCapabilityFilter(
 ): boolean {
   const query = needle.trim().toLowerCase();
   if (!query) return true;
-  return [capability.id, capability.label, capability.description].some(value => value.toLowerCase().includes(query));
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+  return [capability.id, capability.label, capability.description].some((value) => pattern.test(value));
 }
