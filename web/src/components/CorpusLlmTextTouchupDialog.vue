@@ -186,25 +186,27 @@ function run() {
         }}</span
       >
     </p>
-    <div v-if="proposedText && !noChange" class="touchup-grid">
-      <section>
-        <h3>{{ i18n.t("pdf_corpus.cleanup_before") }}</h3>
-        <pre>{{ sourceText }}</pre>
-      </section>
-      <section>
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_proposed") }}</h3>
-        <div v-if="textDiff" class="touchup-diff" aria-live="polite">
-          <div class="touchup-diff-label">
-            {{ i18n.t("pdf_corpus.llm_touchup_diff_preview") }}
-          </div>
-          <div class="touchup-diff-columns">
-            <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
-            <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
-          </div>
+    <section v-if="proposedText && !noChange" class="touchup-review" aria-labelledby="touchup-review-title">
+      <div class="touchup-review-head">
+        <div>
+          <p class="eyebrow">{{ i18n.t("pdf_corpus.llm_touchup_review_eyebrow", "Review workspace") }}</p>
+          <h3 id="touchup-review-title">{{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}</h3>
         </div>
-        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed')"></textarea>
-      </section>
-    </div>
+        <span class="review-chip">{{ i18n.t("pdf_corpus.llm_touchup_not_applied", "Not applied") }}</span>
+      </div>
+      <div v-if="textDiff" class="touchup-diff" aria-live="polite">
+        <div class="touchup-diff-columns">
+          <div class="diff-pane-label">{{ i18n.t("pdf_corpus.cleanup_before", "Before") }}</div>
+          <div class="diff-pane-label proposed-label">{{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}</div>
+          <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
+          <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
+        </div>
+      </div>
+      <label class="proposal-editor">
+        <span>{{ i18n.t("pdf_corpus.llm_touchup_edit_label", "Editable proposal") }}</span>
+        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"></textarea>
+      </label>
+    </section>
     <p v-if="diffSummary" class="touchup-change-summary" role="status">
       {{
         i18n.tf("pdf_corpus.llm_touchup_change_summary", {
@@ -304,37 +306,77 @@ function run() {
   font-size: 0.8125rem;
   line-height: 1.45;
 }
-.touchup-grid {
+.touchup-review {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
 }
-.touchup-grid h3,
-.touchup-notes h3 {
-  font-size: 0.9375rem;
-  margin: 0 0 6px;
+.touchup-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.touchup-grid pre,
-.touchup-grid textarea {
+.touchup-review-head h3 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.review-chip {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.diff-pane-label {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.diff-pane-label + .proposed-label {
+  border-left: 1px solid var(--line);
+}
+.proposal-editor {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+.proposal-editor textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 360px;
-  margin: 0;
-  overflow: auto;
+  min-height: 180px;
+  resize: vertical;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--soft);
-  white-space: pre-wrap;
-  font:
-    15px/1.6 Georgia,
-    serif;
-}
-.touchup-grid textarea {
-  resize: vertical;
-  background: var(--card);
   color: var(--text);
+  font: 15px/1.6 Georgia, serif;
+}
+.touchup-notes h3 {
+  font-size: 0.9375rem;
+  margin: 0 0 6px;
 }
 .touchup-diff {
   margin-bottom: 8px;
@@ -352,6 +394,12 @@ function run() {
 .touchup-diff-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
+}
+.touchup-diff-columns .diff-pane-label:nth-child(2) {
+  border-left: 1px solid var(--line);
+}
+.touchup-diff-columns .change-diff {
+  min-width: 0;
 }
 .touchup-diff-columns pre {
   height: 180px;
@@ -388,20 +436,23 @@ function run() {
   padding-inline-start: 20px;
 }
 .touchup-controls :focus-visible,
-.touchup-grid textarea:focus-visible,
+.proposal-editor textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 @media (max-width: 760px) {
   .touchup-controls,
-  .touchup-grid,
   .touchup-notes {
     grid-template-columns: 1fr;
   }
-  .touchup-grid pre,
-  .touchup-grid textarea {
-    height: 260px;
+  .touchup-diff-columns {
+    grid-template-columns: 1fr;
+  }
+  .diff-pane-label + .proposed-label,
+  .touchup-diff-columns pre + pre {
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 }
 </style>
