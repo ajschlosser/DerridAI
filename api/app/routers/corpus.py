@@ -935,3 +935,4 @@ def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="Publication not found")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
+

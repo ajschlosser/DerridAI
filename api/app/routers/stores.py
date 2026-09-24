@@ -439,3 +439,4 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
         return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+

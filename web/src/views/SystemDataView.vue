@@ -98,7 +98,7 @@ async function clearCache() {
     title: t("runtime.help.clear_rag_response_cache", "Clear RAG response cache?"),
     message: i18n.tf(
       "runtime.help.clear_rag_response_cache_message",
-      "Delete all {count} cached RAG responses and saved grades? Corpus vector databases are not affected.",
+      "Delete all {count} cached RAG responses and saved grades? Research corpus data is not affected.",
       { count: Number(cachePayload.value.total || 0).toLocaleString() },
     ),
     tone: "danger",
@@ -305,7 +305,7 @@ onMounted(() => void load());
             {{
               t(
                 "runtime.system_data_help",
-                "Manage the response cache and durable application databases through a safe, backend-neutral interface.",
+                "Inspect progressive metadata, manage the response cache, and administer durable application databases through a safe, backend-neutral interface.",
               )
             }}
           </p>
@@ -322,7 +322,7 @@ onMounted(() => void load());
             {{
               t(
                 "runtime.help.system_cache_only",
-                "System cache only. This collection is excluded from corpus stores and source selection.",
+                "System cache only. It is excluded from research corpora and source selection.",
               )
             }}
           </p>

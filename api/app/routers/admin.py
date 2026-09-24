@@ -696,3 +696,4 @@ def nuke(response: Response) -> dict[str, Any]:
     except Exception as exc:
         logger.exception("Nuke operation failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
